@@ -14,6 +14,6 @@ $> ./gradlew clean build
 
 ```
 $> cd yaci-indexer
-$> edit application.properties //datasource, network details
+$> edit config/application.properties //datasource, network details
 $> java -jar build/libs/yaci-indexer-<version>-SNAPSHOT.jar 
 ```
