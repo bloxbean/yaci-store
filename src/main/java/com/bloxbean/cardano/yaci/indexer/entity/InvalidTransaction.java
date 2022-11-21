@@ -22,6 +22,6 @@ public class InvalidTransaction extends BaseEntity {
     private String txHash;
 
     @Type(type = "json")
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "json")
     private Transaction transaction;
 }

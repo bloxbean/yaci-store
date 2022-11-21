@@ -44,15 +44,15 @@ public class BlockEntity extends BaseEntity {
     private String vrfVkey;
 
     @Type(type = "json")
-    @Column(name = "nonce_vrf", columnDefinition = "jsonb")
+    @Column(name = "nonce_vrf")
     private Vrf nonceVrf;
 
     @Type(type = "json")
-    @Column(name="leader_vrf", columnDefinition = "jsonb")
+    @Column(name="leader_vrf")
     private Vrf leaderVrf;
 
     @Type(type = "json")
-    @Column(name="vrf_result", columnDefinition = "jsonb")
+    @Column(name="vrf_result")
     private Vrf vrfResult;
 
     @Column(name = "block_body_size")

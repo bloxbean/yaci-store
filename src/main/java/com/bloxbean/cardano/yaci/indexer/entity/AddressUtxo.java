@@ -37,7 +37,6 @@ public class AddressUtxo extends BaseEntity {
     private String blockHash;
 
     @Type(type = "json")
-    @Column(columnDefinition = "jsonb")
     private List<Amt> amounts;
 
     @Column(name = "data_hash")

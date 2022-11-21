@@ -71,7 +71,7 @@ create table transaction
     block                   bigint,
     collateral_inputs       jsonb,
     collateral_return       jsonb,
-    fee                     numeric(19, 2),
+    fee                     bigint,
     inputs                  jsonb,
     invalid                 boolean,
     network_id              integer,
@@ -80,7 +80,7 @@ create table transaction
     required_signers        jsonb,
     script_datahash         varchar(255),
     slot                    bigint,
-    total_collateral        numeric(19, 2),
+    total_collateral        bigint,
     ttl                     bigint,
     validity_interval_start bigint
 );

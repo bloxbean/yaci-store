@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -7,6 +8,7 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 
 @SpringBootApplication
+@Slf4j
 public class YaciIndexerApplication {
 
     public static void main(String[] args) {
@@ -15,7 +17,7 @@ public class YaciIndexerApplication {
 
     @PreDestroy
     public void onDestroy() throws Exception {
-        System.out.println("Spring Container is destroyed!");
+        log.info("Spring Container is destroyed!");
     }
 
     @PostConstruct

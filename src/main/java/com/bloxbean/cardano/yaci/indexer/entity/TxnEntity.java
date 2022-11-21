@@ -32,11 +32,11 @@ public class TxnEntity extends BaseEntity {
     private long slot;
 
     @Type(type = "json")
-    @Column(name = "inputs", columnDefinition = "jsonb")
+    @Column(name = "inputs")
     private List<UtxoId> inputs;
 
     @Type(type = "json")
-    @Column(name = "outputs", columnDefinition = "jsonb")
+    @Column(name = "outputs")
     private List<UtxoId> outputs;
 
     @Column(name = "fee")
@@ -55,25 +55,25 @@ public class TxnEntity extends BaseEntity {
     private String scriptDataHash;
 
     @Type(type = "json")
-    @Column(name = "collateral_inputs", columnDefinition = "jsonb")
+    @Column(name = "collateral_inputs")
     private List<UtxoId> collateralInputs;
 
     @Type(type = "json")
-    @Column(name = "required_signers", columnDefinition = "jsonb")
+    @Column(name = "required_signers")
     private Set<String> requiredSigners;
 
     @Column(name = "network_id")
     private int netowrkId;
 
     @Type(type = "json")
-    @Column(name = "collateral_return", columnDefinition = "jsonb")
+    @Column(name = "collateral_return")
     private UtxoId collateralReturn;
 
     @Column(name = "total_collateral")
     private BigInteger totalCollateral;
 
     @Type(type = "json")
-    @Column(name = "reference_inputs", columnDefinition = "jsonb")
+    @Column(name = "reference_inputs")
     private List<UtxoId> referenceInputs;
 
     @Column(name = "invalid")

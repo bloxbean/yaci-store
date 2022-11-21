@@ -1,29 +1,6 @@
-#cardano:
-#  host: 192.168.0.228
-#  port: 6000
-#  protocol_magic: 764824073
-#  known_slot: 16588737
-#  known_block_hash: "4e9bbbb67e3ae262133d94c3da5bffce7b1127fc436e7433b87668dba34c354a"
-#
-cardano:
-#  host: 192.168.0.228
-#  port: 6000
-#  protocol_magic: 764824073
-  host: localhost
-  port: 30000
-  protocol_magic: 1
-#  known_slot: 518360
-#  known_block_hash: "f9d8b6c77fedd60c3caf5de0ce63a0aeb9d1753269c9c07503d9aa09d5144481"
-#  first_block_slot: 2
-#  first_block_hash: "1d031daf47281f69cd95ab929c269fd26b1434a56a5bbbd65b7afe85ef96b233"
-#  sync_start_slot: 4492799
-#  sync_start_blockhash: f8084c61b6a238acec985b59310b6ecec49c0ab8352249afd7268da5cff2a457
-
-
 spring:
-  redis:
-    host: localhost
-    port: 6666
+  banner:
+    location: classpath:/banner.txt
   jpa:
     hibernate:
       ddl-auto: none
@@ -33,35 +10,11 @@ spring:
         generate_statistics: false
         jdbc:
           batch_size: 1000
-  datasource:
-    url: jdbc:postgresql://localhost:5432/satya
-    username: satya
-    password:
-  sql:
-    init:
-      mode: always
-
-#    url: jdbc:mysql://localhost:3306/yaci_indexer
-#    username: satya
-#    password: satya123
-
-#  ## Hibernate Properties
-#  # The SQL dialect makes Hibernate generate better SQL for the chosen database
-#  spring.jpa.properties.hibernate.dialect = org.hibernate.dialect.MySQL5InnoDBDialect
-#  data:
-#    cassandra:
-#      keyspace-name: cardano
-#      contact-points: 127.0.0.1
-#      port: 9042
-#      username: cardano
-#      password: cardano
-#      local-datacenter: datacenter1
-
-
+  flyway:
+    locations: classpath:db/migration/{vendor}
 
 logging:
   file:
-    name: yaci-indexer.log
-    path: ./logs
+    name: ./logs/yaci-indexer.log
 
 

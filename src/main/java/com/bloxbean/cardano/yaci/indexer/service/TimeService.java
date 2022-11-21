@@ -22,9 +22,4 @@ public class TimeService {
         return timeInMillis ;
     }
 
-    public static void main(String[] args) throws ParseException {
-        long timeInMillis = new TimeService().convertSlotToTime(null, 77268779);
-        System.out.println(timeInMillis);
-//        System.out.println(new LocalDateTime(timeInMillis));
-    }
 }

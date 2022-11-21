@@ -52,13 +52,13 @@ public class BlockProcessor {
 
         if (!blockHeaderEvent.getMetadata().isSyncMode()) {
             if (val == 0) {
-                log.info(this.toString() + "# of blocks written: " + count.get());
-                log.info(this.toString() + "Block No: " + blockHeader.getHeaderBody().getBlockNumber() + "  , Era: " + blockHeaderEvent.getMetadata().getEra());
+                log.info("# of blocks written: " + count.get());
+                log.info("Block No: " + blockHeader.getHeaderBody().getBlockNumber() + "  , Era: " + blockHeaderEvent.getMetadata().getEra());
             }
 
         } else {
-            log.info(this.toString() + "# of blocks written: " + count.get());
-            log.info(this.toString() + "Block No: " + blockHeader.getHeaderBody().getBlockNumber());
+            log.info("# of blocks written: " + count.get());
+            log.info("Block No: " + blockHeader.getHeaderBody().getBlockNumber());
         }
     }
 }
