@@ -1,0 +1,62 @@
+plugins {
+    id 'org.springframework.boot' version '2.7.3'
+ //   id 'org.springframework.experimental.aot' version '0.12.1'
+    id 'io.spring.dependency-management' version '1.0.13.RELEASE'
+    id 'java'
+//    id 'org.springframework.boot' version '2.7.3'
+//    id 'io.spring.dependency-management' version '1.0.13.RELEASE'
+//    id 'java'
+}
+
+group = 'com.bloxbean.cardano'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    maven { url 'https://repo.spring.io/release' }
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'com.bloxbean.cardano:cardano-client-lib:0.3.0'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    implementation 'org.rocksdb:rocksdbjni:7.5.3'
+//    implementation 'org.flywaydb:flyway-core'
+//    implementation 'org.springframework:spring-jdbc'
+
+//    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+   // implementation 'mysql:mysql-connector-java'
+    runtimeOnly 'org.postgresql:postgresql:42.5.0'
+    implementation 'com.vladmihalcea:hibernate-types-55:2.19.2'
+//    implementation 'org.xerial:sqlite-jdbc:3.39.3.0'
+    implementation 'org.codehaus.janino:janino:3.1.8'
+
+    implementation 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
+//    implementation 'com.bloxbean.cardano:yaci-helper:0.0.9-SNAPSHOT'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+//springAot {
+//    removeXmlSupport = false
+//    removeSpelSupport = false
+//    removeYamlSupport = false
+//}
