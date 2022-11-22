@@ -1,0 +1,13 @@
+plugins {
+    id 'org.springframework.boot' version '2.7.3'
+}
+
+dependencies {
+    implementation project(':components:yaci-indexer-core')
+    implementation project(':components:yaci-indexer-web')
+    implementation project(':components:yaci-indexer-events')
+    implementation project(':components:yaci-indexer-processors')
+    implementation project(':components:yaci-indexer-persistence')
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+}
+

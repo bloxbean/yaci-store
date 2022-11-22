@@ -7,3 +7,21 @@ pluginManagement {
 }
 
 rootProject.name = 'yaci-indexer'
+include 'application'
+findProject(':application')?.name = 'yaci-indexer-app'
+
+include 'components:core'
+findProject(':components:core')?.name = 'yaci-indexer-core'
+
+include 'components:events'
+findProject(':components:events')?.name = 'yaci-indexer-events'
+
+include 'components:persistence'
+findProject(':components:persistence')?.name = 'yaci-indexer-persistence'
+
+include 'components:processors'
+findProject(':components:processors')?.name = 'yaci-indexer-processors'
+
+include 'components:web'
+findProject(':components:web')?.name = 'yaci-indexer-web'
+

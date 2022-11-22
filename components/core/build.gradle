@@ -1,0 +1,30 @@
+dependencies {
+    implementation project(':components:yaci-indexer-events')
+    implementation project(':components:yaci-indexer-persistence')
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+//    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+//    implementation 'org.flywaydb:flyway-core'
+//    implementation "org.flywaydb:flyway-mysql"
+//
+//    runtimeOnly 'com.h2database:h2'
+//    runtimeOnly 'mysql:mysql-connector-java'
+//    runtimeOnly 'org.postgresql:postgresql'
+//
+//    implementation 'org.codehaus.janino:janino:'
+
+    implementation 'com.bloxbean.cardano:yaci'
+    implementation 'com.bloxbean.cardano:cardano-client-lib'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'yaci-indexer-core'
+                description = 'Yaci Indexer Core'
+            }
+        }
+    }
+}

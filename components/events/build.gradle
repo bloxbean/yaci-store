@@ -1,0 +1,14 @@
+dependencies {
+    implementation 'com.bloxbean.cardano:yaci'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'yaci-indexer-events'
+                description = 'Yaci Indexer Events'
+            }
+        }
+    }
+}

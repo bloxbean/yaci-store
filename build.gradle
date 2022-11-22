@@ -1,79 +1,68 @@
 plugins {
-    id 'org.springframework.boot' version '2.7.3'
     id 'io.spring.dependency-management' version '1.0.13.RELEASE'
-    id 'java'
 }
 
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'java-library'
+
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom("org.springframework.boot:spring-boot-dependencies:2.7.3")
+        }
+
+        dependencies {
+            dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
+            dependency 'com.bloxbean.cardano:cardano-client-lib:0.3.0'
+            dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
+
+            dependency 'com.vladmihalcea:hibernate-types-55:2.19.2'
+            dependency 'org.postgresql:postgresql:42.5.0'
+            dependency 'org.codehaus.janino:janino:3.1.8'
+        }
+    }
+
+    dependencies {
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'io.projectreactor:reactor-test'
+    }
+
+    compileJava {
+        sourceCompatibility = '11'
+        targetCompatibility = '11'
+
+        options.compilerArgs += ["-Aproject=${project.group}/${project.name}"]
+    }
+
+    tasks.withType(Javadoc) {
+        options.encoding = 'UTF-8'
+    }
+
+    task sourceJar(type: Jar) {
+        classifier "sources"
+        from sourceSets.main.allJava
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier "javadoc"
+        from javadoc.destinationDir
+    }
+
+    artifacts {
+        archives jar
+        archives sourceJar
+        archives javadocJar
+    }
+
+    test {
+        useJUnitPlatform()
     }
 }
-
-//repositories {
-//    maven { url 'https://repo.spring.io/release' }
-//    mavenCentral()
-//    mavenLocal()
-//}
-
-repositories {
-    mavenCentral()
-    mavenLocal()
-}
-
-compileJava {
-    sourceCompatibility = '11'
-    targetCompatibility = '11'
-
-    options.compilerArgs += ["-Aproject=${project.group}/${project.name}"]
-}
-
-tasks.withType(Javadoc) {
-    options.encoding = 'UTF-8'
-}
-
-task sourceJar(type: Jar) {
-    classifier "sources"
-    from sourceSets.main.allJava
-}
-
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier "javadoc"
-    from javadoc.destinationDir
-}
-
-artifacts {
-    archives jar
-    archives sourceJar
-    archives javadocJar
-}
-
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-
-    implementation 'org.flywaydb:flyway-core'
-    implementation "org.flywaydb:flyway-mysql"
-
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'com.vladmihalcea:hibernate-types-55:2.19.2'
-
-    runtimeOnly 'com.h2database:h2'
-    runtimeOnly 'mysql:mysql-connector-java'
-    runtimeOnly 'org.postgresql:postgresql:42.5.0'
-
-    implementation 'org.codehaus.janino:janino:3.1.8'
-
-    implementation 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
-    implementation 'com.bloxbean.cardano:cardano-client-lib:0.3.0'
-
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'io.projectreactor:reactor-test'
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
-}
-
