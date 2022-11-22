@@ -1,3 +1,5 @@
+[![Clean, Build](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml)
+
 # Yaci Indexer
 
 A Cardano Indexer implementation using [Yaci](https://github.com/bloxbean/yaci)
@@ -15,5 +17,5 @@ $> ./gradlew clean build
 ```
 $> cd yaci-indexer
 $> edit config/application.properties //datasource, network details
-$> java -jar build/libs/yaci-indexer-<version>-SNAPSHOT.jar 
+$> java -jar application/build/libs/yaci-indexer-app-<version>-SNAPSHOT.jar 
 ```
