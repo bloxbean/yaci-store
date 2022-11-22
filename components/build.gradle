@@ -32,8 +32,8 @@ subprojects {
                         }
                     }
                     scm {
-                        connection = 'scm:git:git://github.com/bloxbean/yaci-helper.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-helper.git'
+                        connection = 'scm:git:git://github.com/bloxbean/yaci-indexer.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-indexer.git'
                         url = 'https://github.com/bloxbean/yaci-helper'
                     }
                 }
