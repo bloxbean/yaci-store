@@ -1,6 +1,6 @@
 [![Clean, Build](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml)
 
-# Yaci Indexer
+# Yaci Indexer (WIP)
 
 A Cardano Indexer implementation using [Yaci](https://github.com/bloxbean/yaci)
 
