@@ -1,0 +1,14 @@
+dependencies {
+//    api project(":components:common")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Template Module'
+                description = 'Yaci Template Module'
+            }
+        }
+    }
+}

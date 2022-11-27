@@ -8,9 +8,17 @@ subprojects {
     apply plugin: 'java-library'
 
     repositories {
+        maven {
+            url "https://oss.sonatype.org/content/repositories/snapshots"
+        }
+    }
+
+    repositories {
         mavenCentral()
         mavenLocal()
     }
+
+    archivesBaseName = 'yaci-indexer-' + project.name
 
     dependencyManagement {
         imports {
@@ -19,8 +27,10 @@ subprojects {
 
         dependencies {
             dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
-            dependency 'com.bloxbean.cardano:cardano-client-lib:0.3.0'
+            dependency 'com.bloxbean.cardano:cardano-client-lib:0.3.1-SNAPSHOT'
+            dependency 'com.bloxbean.cardano:cardano-client-backend-blockfrost:0.3.1-SNAPSHOT'
             dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
+            dependency 'co.nstant.in:cbor:0.9'
 
             dependency 'com.vladmihalcea:hibernate-types-55:2.19.2'
             dependency 'org.postgresql:postgresql:42.5.0'

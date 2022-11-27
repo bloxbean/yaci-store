@@ -19,3 +19,12 @@ $> cd yaci-indexer
 $> edit config/application.properties //datasource, network details
 $> java -jar application/build/libs/yaci-indexer-app-<version>-SNAPSHOT.jar 
 ```
+
+## Modules
+- common
+- events
+- core
+- blocks
+- utxo
+- transaction
+- script

@@ -12,6 +12,7 @@ spring:
 #          batch_size: 1000
   flyway:
     locations: classpath:db/migration/{vendor}
+    out-of-order: true
 
 logging:
   file:

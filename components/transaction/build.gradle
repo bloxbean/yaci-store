@@ -1,0 +1,17 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+    api project(":components:utxo")
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Indexer Transaction'
+                description = 'Yaci Indexer Transaction Module'
+            }
+        }
+    }
+}
