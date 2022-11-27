@@ -9,6 +9,7 @@ dependencies {
     implementation project(':components:utxo')
     implementation project(':components:transaction')
     implementation project(':components:script')
+    implementation project(':components:protocolparams')
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
