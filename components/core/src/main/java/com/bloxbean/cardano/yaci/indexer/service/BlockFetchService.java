@@ -9,8 +9,11 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.indexer.events.*;
-import com.bloxbean.cardano.yaci.indexer.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.indexer.events.model.TxAuxData;
+import com.bloxbean.cardano.yaci.indexer.events.model.TxCertificates;
+import com.bloxbean.cardano.yaci.indexer.events.model.TxScripts;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -68,10 +72,41 @@ public class BlockFetchService implements BlockChainDataListener {
         cursorService.setSlot(eventMetadata.getSlot());
         cursorService.setBlockNumber(eventMetadata.getBlock());
         cursorService.setBlockHash(eventMetadata.getBlockHash());
+
         try {
             publisher.publishEvent(era);
             publisher.publishEvent(new BlockHeaderEvent(eventMetadata, blockHeader));
             publisher.publishEvent(new TransactionEvent(eventMetadata, transactions));
+
+            //Addtional events
+            //TxScript Event
+            List<TxScripts> txScriptsList = transactions.stream().map(transaction -> TxScripts.builder()
+                    .txHash(transaction.getTxHash())
+                    .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
+                    .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
+                    .nativeScripts(transaction.getWitnesses().getNativeScripts())
+                    .datums(transaction.getWitnesses().getDatums())
+                    .redeemers(transaction.getWitnesses().getRedeemers())
+                    .build()
+            ).collect(Collectors.toList());
+            publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
+
+            //AuxData event
+            List<TxAuxData> txAuxDataList = transactions.stream().map(transaction -> TxAuxData.builder()
+                    .txHash(transaction.getTxHash())
+                    .auxData(transaction.getAuxData())
+                    .build()
+            ).collect(Collectors.toList());
+            publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
+
+            //Certificate event
+            List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
+                    .txHash(transaction.getTxHash())
+                    .certificates(transaction.getBody().getCertificates())
+                    .build()
+            ).collect(Collectors.toList());
+            publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
+
         } catch (Exception e) {
             log.error("Error saving", e);
             log.error("Stopping fetcher");

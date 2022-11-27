@@ -3,11 +3,13 @@ plugins {
 }
 
 dependencies {
-    implementation project(':components:yaci-indexer-core')
-    implementation project(':components:yaci-indexer-web')
-    implementation project(':components:yaci-indexer-events')
-    implementation project(':components:yaci-indexer-processors')
-    implementation project(':components:yaci-indexer-persistence')
+    implementation project(':components:core')
+    implementation project(':components:events')
+    implementation project(':components:blocks')
+    implementation project(':components:utxo')
+    implementation project(':components:transaction')
+    implementation project(':components:script')
+
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
 

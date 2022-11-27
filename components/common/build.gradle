@@ -1,0 +1,27 @@
+dependencies {
+    api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework:spring-context'
+    api 'com.bloxbean.cardano:yaci'
+    api 'com.bloxbean.cardano:yaci-helper'
+    api 'com.bloxbean.cardano:cardano-client-lib'
+
+    api 'com.vladmihalcea:hibernate-types-55'
+
+    runtimeOnly 'com.h2database:h2'
+    runtimeOnly 'mysql:mysql-connector-java'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    implementation 'org.flywaydb:flyway-core'
+    implementation "org.flywaydb:flyway-mysql"
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'common'
+                description = 'Yaci Indexer Common Module'
+            }
+        }
+    }
+}

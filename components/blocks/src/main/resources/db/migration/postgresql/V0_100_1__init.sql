@@ -1,0 +1,18 @@
+create table block
+(
+    block_hash       varchar(255) not null
+        primary key,
+    block            bigint,
+    block_body_hash  varchar(255),
+    block_body_size  bigint,
+    epoch            bigint,
+    era              integer,
+    issuer_vkey      varchar(255),
+    leader_vrf       jsonb,
+    nonce_vrf        jsonb,
+    prev_hash        varchar(255),
+    protocol_version varchar(255),
+    slot             bigint,
+    vrf_result       jsonb,
+    vrf_vkey         varchar(255)
+);

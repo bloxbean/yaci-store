@@ -1,6 +1,7 @@
 dependencies {
-    implementation project(':components:yaci-indexer-events')
-    implementation project(':components:yaci-indexer-persistence')
+    implementation project(':components:events')
+    implementation project(':components:common')
+    api project(':components:blocks')
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
