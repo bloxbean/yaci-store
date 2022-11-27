@@ -15,4 +15,5 @@ include 'components:common'
 include 'components:utxo'
 include 'components:transaction'
 include 'components:script'
+include 'components:protocolparams'
 

@@ -10,3 +10,4 @@ GET http://localhost:8080/scripts/01446e630fe595ed4f0db66df8da3d66f55071347c7537
 ###
 GET http://localhost:8080/scripts/99027c7af372116f0716ee02008739ec51224bcfdd54398ec16217ef
 ###
+GET http://localhost:8080/epochs/parameters
