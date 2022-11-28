@@ -58,8 +58,8 @@ public class AddressUtxo extends BaseEntity {
     @Column(name = "spent_at_slot")
     private long spentAtSlot;
 
-//    @Column(name = "spent_tx_hash")
-//    private String spentTxHash;
+    @Column(name = "spent_tx_hash")
+    private String spentTxHash;
 
     @Column(name = "is_collateral_return")
     private boolean isCollateralReturn;
