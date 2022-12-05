@@ -19,6 +19,8 @@ create table transaction
     total_collateral        bigint,
     ttl                     bigint,
     validity_interval_start bigint,
-    collateral_return_json  json
+    collateral_return_json  json,
+    create_datetime         timestamp,
+    update_datetime         timestamp
 );
 

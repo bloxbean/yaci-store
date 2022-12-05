@@ -26,4 +26,5 @@ public class ProtocolParamsEntity extends BaseEntity {
     @Type(type = "json")
     @Column(name = "params")
     private ProtocolParams protocolParams;
+
 }

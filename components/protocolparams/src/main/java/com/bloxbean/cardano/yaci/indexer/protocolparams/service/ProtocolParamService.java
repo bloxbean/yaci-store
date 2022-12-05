@@ -4,7 +4,6 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
-import com.bloxbean.cardano.yaci.core.helpers.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
@@ -12,42 +11,47 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtoco
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
+import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.indexer.protocolparams.entity.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.indexer.protocolparams.repository.ProtocolParamsRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 @Component
-@ConditionalOnBean(LocalStateQueryClient.class)
+@Transactional
+@ConditionalOnBean(LocalClientProvider.class)
 public class ProtocolParamService {
+    private LocalClientProvider localClientProvider;
     private LocalStateQueryClient localStateQueryClient;
     private ProtocolParamsRepository protocolParamsRepository;
 
-    public ProtocolParamService(LocalStateQueryClient localStateQueryClient, ProtocolParamsRepository protocolParamsRepository) {
-        this.localStateQueryClient = localStateQueryClient;
+    public ProtocolParamService(LocalClientProvider localClientProvider, ProtocolParamsRepository protocolParamsRepository) {
+        this.localClientProvider = localClientProvider;
+        this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
     }
 
     @PostConstruct
     private void postConstruct() {
-        if (localStateQueryClient != null && !localStateQueryClient.isRunning())
-            localStateQueryClient.start();
+        if (localClientProvider != null && !localClientProvider.isRunning())
+            localClientProvider.start();
     }
 
     @PreDestroy
     private void destroy() {
-        if (localStateQueryClient != null)
-            localStateQueryClient.shutdown();
+        if (localClientProvider != null)
+            localClientProvider.shutdown();
     }
 
     public void fetchAndSetCurrentProtocolParams() {
@@ -67,16 +71,12 @@ public class ProtocolParamService {
     }
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNode() {
-        Mono<Point> monoPoint = localStateQueryClient.reAcquire();
-        monoPoint.block(Duration.ofSeconds(20)); //TODO -- Make it async call
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Alonzo));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
     }
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNodeAt(Point point) {
-        Mono<Point> monoPoint = localStateQueryClient.acquire(point);
-        monoPoint.block(Duration.ofSeconds(20)); //TODO -- Make it async call
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Alonzo));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());

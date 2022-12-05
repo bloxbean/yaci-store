@@ -11,4 +11,5 @@ public interface TxnEntityRepository extends JpaRepository<TxnEntity, String> {
 
     Optional<TxnEntity> findByTxHash(String txHash);
 
+    int deleteBySlotGreaterThan(long slot);
 }

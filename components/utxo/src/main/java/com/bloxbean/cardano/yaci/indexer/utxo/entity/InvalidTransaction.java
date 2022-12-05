@@ -22,6 +22,12 @@ public class InvalidTransaction extends BaseEntity {
     @Column(name = "tx_hash")
     private String txHash;
 
+    @Column(name = "slot")
+    private long slot;
+
+    @Column(name = "block_hash")
+    private String blockHash;
+
     @Type(type = "json")
     @Column(columnDefinition = "json")
     private Transaction transaction;

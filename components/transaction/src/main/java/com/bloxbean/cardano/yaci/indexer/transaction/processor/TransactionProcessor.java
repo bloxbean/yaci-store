@@ -9,10 +9,12 @@ import com.bloxbean.cardano.yaci.indexer.transaction.entity.TxnEntity;
 import com.bloxbean.cardano.yaci.indexer.transaction.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.indexer.utxo.entity.UtxoId;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,26 +22,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class TransactionProcessor {
 
-    private TxnEntityRepository txnEntityRepository;
-    private UtxoRepository utxoRepository;
-
-    public TransactionProcessor(TxnEntityRepository repository, UtxoRepository utxoRepository) {
-        this.txnEntityRepository = repository;
-        this.utxoRepository = utxoRepository;
-    }
+    private final TxnEntityRepository txnEntityRepository;
+    private final UtxoRepository utxoRepository;
 
     @EventListener
     @Order(3)
+    @Transactional
     public void handleTransactionEvent(TransactionEvent event) {
         List<Transaction> transactions = event.getTransactions();
-        //filter valid transactions
-//        var txs = transactions.stream()
-//                .filter(transactionEvent -> !transactionEvent.isInvalid())
-//                .collect(Collectors.toList());
-
         List<TxnEntity> txnEntities = new ArrayList<>();
 
         transactions.forEach(transaction -> {

@@ -26,13 +26,12 @@ subprojects {
         }
 
         dependencies {
-            dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
+            dependency 'com.bloxbean.cardano:yaci:0.1.1'
             dependency 'com.bloxbean.cardano:cardano-client-lib:0.3.1-SNAPSHOT'
             dependency 'com.bloxbean.cardano:cardano-client-backend-blockfrost:0.3.1-SNAPSHOT'
-            dependency 'com.bloxbean.cardano:yaci:0.0.9-SNAPSHOT'
             dependency 'co.nstant.in:cbor:0.9'
 
-            dependency 'com.vladmihalcea:hibernate-types-55:2.19.2'
+            dependency 'com.vladmihalcea:hibernate-types-55:2.20.0'
             dependency 'org.postgresql:postgresql:42.5.0'
             dependency 'org.codehaus.janino:janino:3.1.8'
         }

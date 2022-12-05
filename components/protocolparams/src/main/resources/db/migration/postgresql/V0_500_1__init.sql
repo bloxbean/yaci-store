@@ -2,6 +2,8 @@ create table protocol_params
 (
     id   bigint
         primary key,
-    params jsonb
+    params jsonb,
+    create_datetime  timestamp,
+    update_datetime  timestamp
 );
 

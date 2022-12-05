@@ -12,5 +12,7 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
     Optional<BlockEntity> findTopByOrderByBlockDesc();
 
     Optional<BlockEntity> findByBlockHash(String blockHash);
+
+    int deleteBySlotGreaterThan(long slot);
 }
 

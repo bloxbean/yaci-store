@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.indexer.blocks.repository.RollbackRepository;
 import com.bloxbean.cardano.yaci.indexer.events.*;
 import com.bloxbean.cardano.yaci.indexer.events.model.TxAuxData;
 import com.bloxbean.cardano.yaci.indexer.events.model.TxCertificates;
@@ -43,6 +44,9 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Autowired
     private BlockRepository blockRepository;
+
+    @Autowired
+    private RollbackRepository rollbackRepository;
 
     @Autowired
     private CursorService cursorService;
@@ -150,7 +154,14 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Override
     public void onRollback(Point point) {
-
+        RollbackEvent rollbackEvent = RollbackEvent
+                .builder()
+                .rollbackTo(point)
+                .currentPoint(new Point(cursorService.getSlot(), cursorService.getBlockHash()))
+                .currentBlock(cursorService.getBlockNumber())
+                .build();
+        log.info("Publishing rollback event : " + rollbackEvent);
+        publisher.publishEvent(rollbackEvent);
     }
 
     @Override

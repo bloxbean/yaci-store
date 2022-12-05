@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,6 +28,7 @@ public class ByronBlockProcessor {
 
     @EventListener
     @Order(1)
+    @Transactional
     public void handleByronMainBlockEvent(ByronMainBlockEvent event) {
         ByronMainBlock byronBlock = event.getByronMainBlock();
         BlockEntity block = BlockEntity.builder()
@@ -59,6 +61,7 @@ public class ByronBlockProcessor {
 
     @EventListener
     @Order(1)
+    @Transactional
     public void handleByronEbBlockEvent(ByronEbBlockEvent event) {
         ByronEbBlock byronEbBlock = event.getByronEbBlock();
         BlockEntity block = BlockEntity.builder()

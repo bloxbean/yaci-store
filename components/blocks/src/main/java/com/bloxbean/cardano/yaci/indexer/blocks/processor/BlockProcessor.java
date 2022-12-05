@@ -5,11 +5,14 @@ import com.bloxbean.cardano.yaci.indexer.blocks.entity.BlockEntity;
 import com.bloxbean.cardano.yaci.indexer.blocks.entity.Vrf;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.indexer.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.indexer.events.RollbackEvent;
+import com.sun.istack.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,6 +30,7 @@ public class BlockProcessor {
 
     @EventListener
     @Order(1)
+    @Transactional
     public void handleBlockHeaderEvent(@NonNull BlockHeaderEvent blockHeaderEvent) {
         BlockHeader blockHeader = blockHeaderEvent.getBlockHeader();
         BlockEntity block = BlockEntity.builder()
@@ -60,5 +64,15 @@ public class BlockProcessor {
             log.info("# of blocks written: " + count.get());
             log.info("Block No: " + blockHeader.getHeaderBody().getBlockNumber());
         }
+    }
+
+    @EventListener
+    @Order(1)
+    @Transactional
+    //TODO -- add test
+    public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
+        int count = blockRepository.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+
+        log.info("Rollback -- {} block records", count);
     }
 }
