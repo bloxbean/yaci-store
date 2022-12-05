@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.indexer.service;
 
-import com.bloxbean.cardano.yaci.core.helpers.TipFinder;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
+import com.bloxbean.cardano.yaci.helper.TipFinder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 

@@ -15,5 +15,14 @@ public interface UtxoRepository extends JpaRepository<AddressUtxo, UtxoId> {
     Optional<List<AddressUtxo>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, boolean spent, Pageable page);
 
     List<AddressUtxo> findAllById(Iterable<UtxoId> utxoIds);
+
+//    @Modifying
+//    @Query(value = "DELETE FROM AddressUtxo a WHERE a.slot > :slot")
+//    int deleteBySlotAfter(@Param("slot") long slot);
+
+    List<AddressUtxo> findBySlot(long slot);
+
+    int deleteBySlotGreaterThan(long slot);
+
 }
 

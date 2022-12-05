@@ -26,17 +26,20 @@ public class AddressUtxo extends BaseEntity {
     @Column(name = "output_index")
     private Integer outputIndex;
 
-    @Column(name = "owner_addr")
-    private String ownerAddr;
-
-    @Column(name = "owner_stake_addr")
-    private String ownerStakeAddr;
+    @Column(name = "slot")
+    private long slot;
 
     @Column(name = "block")
     private long block;
 
     @Column(name = "block_hash")
     private String blockHash;
+
+    @Column(name = "owner_addr")
+    private String ownerAddr;
+
+    @Column(name = "owner_stake_addr")
+    private String ownerStakeAddr;
 
     @Type(type = "json")
     private List<Amt> amounts;

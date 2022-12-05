@@ -1,11 +1,7 @@
 package com.bloxbean.cardano.yaci.indexer;
 
-import com.bloxbean.cardano.yaci.core.helpers.LocalStateQueryClient;
-import com.bloxbean.cardano.yaci.core.helpers.TipFinder;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
-import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
-import com.bloxbean.cardano.yaci.helper.BlockSync;
-import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
+import com.bloxbean.cardano.yaci.helper.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,7 +18,7 @@ public class YaciIndexerConfiguration {
     private int port;
     @Value("${cardano.protocol.magic}")
     private long protocolMagic;
-    @Value("${cardano.node.socket.path:''}")
+    @Value("${cardano.n2c.node.socket.path:''}")
     private String nodeSocketPath;
 
     @Bean
@@ -53,10 +49,10 @@ public class YaciIndexerConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "cardano", name = "node.socket.path")
-    public LocalStateQueryClient localStateQueryClient() {
+    @ConditionalOnProperty(prefix = "cardano", name = "n2c.node.socket.path")
+    public LocalClientProvider localClientProvider() {
         log.info("LocalStateQueryClient ---> Configured");
-        return new LocalStateQueryClient(nodeSocketPath, protocolMagic);
+        return new LocalClientProvider(nodeSocketPath, protocolMagic);
     }
 
 }

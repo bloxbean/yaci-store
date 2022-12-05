@@ -62,7 +62,7 @@ public class StartService {
         long blockNumber = 0;
         Optional<BlockEntity> optional = blockRepository.findTopByOrderByBlockDesc();
         if (optional.isPresent()) {
-            log.info(">>> Top Block >>> " + optional.get().getBlock());
+            log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
             era = optional.get().getEra();
             blockNumber = optional.get().getBlock();

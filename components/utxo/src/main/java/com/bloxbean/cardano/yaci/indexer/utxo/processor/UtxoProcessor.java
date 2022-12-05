@@ -15,17 +15,20 @@ import com.bloxbean.cardano.yaci.indexer.utxo.entity.UtxoId;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class UtxoProcessor {
     @Autowired
@@ -41,6 +44,7 @@ public class UtxoProcessor {
 
     @EventListener
     @Order(2)
+    @Transactional
     public void handleTransactionEvent(TransactionEvent event) {
         try {
             List<Transaction> transactions = event.getTransactions();
@@ -80,12 +84,13 @@ public class UtxoProcessor {
                         return addressUtxo;
                     }).collect(Collectors.toList());
 
-            //Update existing utxos as spent
-            if (existingAddressUtxos.size() > 0) //spent utxos
-                utxoRepository.saveAll(existingAddressUtxos);
             if (addressUtxos.size() > 0) //unspent utxos
                 utxoRepository.saveAll(addressUtxos);
 
+            //Update existing utxos as spent
+            //Update spentUtxos at the end to avoid incorrect spent during txn chaining
+            if (existingAddressUtxos.size() > 0) //spent utxos
+                utxoRepository.saveAll(existingAddressUtxos);
 
         } catch (Exception e) {
             log.error("Error saving", e);
@@ -102,6 +107,9 @@ public class UtxoProcessor {
             if (transaction.isInvalid()) {
                 InvalidTransaction invalidTransaction = InvalidTransaction.builder()
                         .txHash(transaction.getTxHash())
+                        .slot(event.getMetadata().getSlot())
+                        .blockHash(event.getMetadata().getBlockHash())
+                        .transaction(transaction)
                         .build();
                 invalidTransactionRepository.save(invalidTransaction);
 
@@ -163,6 +171,7 @@ public class UtxoProcessor {
         }
 
         return AddressUtxo.builder()
+                .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
                 .blockHash(eventMetadata.getBlockHash())
                 .txHash(utxo.getTxHash())

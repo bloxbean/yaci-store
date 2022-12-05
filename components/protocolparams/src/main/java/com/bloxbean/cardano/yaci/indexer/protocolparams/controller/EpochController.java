@@ -1,18 +1,21 @@
 package com.bloxbean.cardano.yaci.indexer.protocolparams.controller;
 
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
-import com.bloxbean.cardano.yaci.core.helpers.LocalStateQueryClient;
+import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.indexer.protocolparams.service.ProtocolParamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/epochs")
 @Slf4j
-@ConditionalOnBean(LocalStateQueryClient.class)
+@ConditionalOnBean(LocalClientProvider.class)
 public class EpochController {
 
     private final ProtocolParamService protocolParamService;
