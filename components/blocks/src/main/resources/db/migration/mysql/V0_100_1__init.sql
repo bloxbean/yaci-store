@@ -21,14 +21,13 @@ create table block
 
 create table rollback
 (
-    id bigint not null
-        primary key generated ALWAYS AS IDENTITY,
+    id bigint not null auto_increment
+        primary key,
     rollback_to_block_hash varchar(255),
---     rollback_to_block      bigint,
     rollback_to_slot       bigint,
     current_block_hash     varchar(255),
     current_slot           bigint,
     current_block          bigint,
     create_datetime        timestamp,
     update_datetime        timestamp
-)
+);
