@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.indexer.events.EventMetadata;
 import com.bloxbean.cardano.yaci.indexer.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.indexer.utxo.entity.AddressUtxo;
+import com.bloxbean.cardano.yaci.indexer.utxo.model.AddressUtxo;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
 import org.junit.jupiter.api.BeforeEach;

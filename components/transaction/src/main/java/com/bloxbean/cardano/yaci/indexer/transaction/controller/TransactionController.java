@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer.transaction.controller;
 
-import com.bloxbean.cardano.yaci.indexer.transaction.model.TransactionDetails;
+import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionDetails;
 import com.bloxbean.cardano.yaci.indexer.transaction.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

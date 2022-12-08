@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
-import com.bloxbean.cardano.yaci.indexer.blocks.entity.BlockEntity;
+import com.bloxbean.cardano.yaci.indexer.blocks.model.BlockEntity;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

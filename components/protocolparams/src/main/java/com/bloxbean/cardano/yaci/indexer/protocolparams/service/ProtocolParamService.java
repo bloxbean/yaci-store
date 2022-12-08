@@ -13,7 +13,7 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
-import com.bloxbean.cardano.yaci.indexer.protocolparams.entity.ProtocolParamsEntity;
+import com.bloxbean.cardano.yaci.indexer.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.indexer.protocolparams.repository.ProtocolParamsRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;

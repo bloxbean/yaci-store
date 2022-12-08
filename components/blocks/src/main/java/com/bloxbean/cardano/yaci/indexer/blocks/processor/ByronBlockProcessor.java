@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.indexer.blocks.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
-import com.bloxbean.cardano.yaci.indexer.blocks.entity.BlockEntity;
+import com.bloxbean.cardano.yaci.indexer.blocks.model.BlockEntity;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.indexer.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.indexer.events.ByronMainBlockEvent;

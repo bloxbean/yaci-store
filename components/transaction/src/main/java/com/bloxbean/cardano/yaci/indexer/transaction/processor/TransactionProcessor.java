@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.indexer.transaction.processor;
 
-import com.bloxbean.carano.yaci.indexer.common.model.Amt;
-import com.bloxbean.carano.yaci.indexer.common.model.TxOuput;
+import com.bloxbean.carano.yaci.indexer.common.domain.Amt;
+import com.bloxbean.carano.yaci.indexer.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.indexer.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.indexer.transaction.entity.TxnEntity;
+import com.bloxbean.cardano.yaci.indexer.transaction.model.TxnEntity;
 import com.bloxbean.cardano.yaci.indexer.transaction.repository.TxnEntityRepository;
-import com.bloxbean.cardano.yaci.indexer.utxo.entity.UtxoId;
+import com.bloxbean.cardano.yaci.indexer.utxo.model.UtxoId;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

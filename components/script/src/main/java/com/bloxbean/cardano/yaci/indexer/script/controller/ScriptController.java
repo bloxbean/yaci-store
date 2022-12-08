@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer.script.controller;
 
-import com.bloxbean.cardano.yaci.indexer.script.model.ScriptDto;
+import com.bloxbean.cardano.yaci.indexer.script.dto.ScriptDto;
 import com.bloxbean.cardano.yaci.indexer.script.service.ScriptService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
