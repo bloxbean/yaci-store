@@ -1,10 +1,10 @@
 package com.bloxbean.cardano.yaci.indexer.script.service;
 
 import com.bloxbean.cardano.client.util.JsonUtil;
-import com.bloxbean.cardano.yaci.indexer.script.entity.Script;
-import com.bloxbean.cardano.yaci.indexer.script.model.NativeScriptDto;
-import com.bloxbean.cardano.yaci.indexer.script.model.PlutusScriptDto;
-import com.bloxbean.cardano.yaci.indexer.script.model.ScriptDto;
+import com.bloxbean.cardano.yaci.indexer.script.model.Script;
+import com.bloxbean.cardano.yaci.indexer.script.dto.NativeScriptDto;
+import com.bloxbean.cardano.yaci.indexer.script.dto.PlutusScriptDto;
+import com.bloxbean.cardano.yaci.indexer.script.dto.ScriptDto;
 import com.bloxbean.cardano.yaci.indexer.script.repository.ScriptRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;

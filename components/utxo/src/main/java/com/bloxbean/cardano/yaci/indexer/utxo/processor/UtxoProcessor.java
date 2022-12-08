@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer.utxo.processor;
 
-import com.bloxbean.carano.yaci.indexer.common.model.Amt;
+import com.bloxbean.carano.yaci.indexer.common.domain.Amt;
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressService;
 import com.bloxbean.cardano.client.address.AddressType;
@@ -9,9 +9,9 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.indexer.events.EventMetadata;
 import com.bloxbean.cardano.yaci.indexer.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.indexer.utxo.entity.AddressUtxo;
-import com.bloxbean.cardano.yaci.indexer.utxo.entity.InvalidTransaction;
-import com.bloxbean.cardano.yaci.indexer.utxo.entity.UtxoId;
+import com.bloxbean.cardano.yaci.indexer.utxo.model.AddressUtxo;
+import com.bloxbean.cardano.yaci.indexer.utxo.model.InvalidTransaction;
+import com.bloxbean.cardano.yaci.indexer.utxo.model.UtxoId;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
 import lombok.NonNull;

@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.indexer.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
-import com.bloxbean.cardano.yaci.indexer.blocks.entity.BlockEntity;
-import com.bloxbean.cardano.yaci.indexer.blocks.entity.Vrf;
+import com.bloxbean.cardano.yaci.indexer.blocks.model.BlockEntity;
+import com.bloxbean.cardano.yaci.indexer.blocks.model.Vrf;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.indexer.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.indexer.events.RollbackEvent;

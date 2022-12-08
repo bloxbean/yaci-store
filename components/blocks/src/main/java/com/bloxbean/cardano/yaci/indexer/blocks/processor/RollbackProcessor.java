@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer.blocks.processor;
 
-import com.bloxbean.cardano.yaci.indexer.blocks.entity.RollbackEntity;
+import com.bloxbean.cardano.yaci.indexer.blocks.model.RollbackEntity;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.indexer.blocks.repository.RollbackRepository;
 import com.bloxbean.cardano.yaci.indexer.events.RollbackEvent;

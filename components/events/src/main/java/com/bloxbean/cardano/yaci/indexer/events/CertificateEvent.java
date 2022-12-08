@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.indexer.events;
 
-import com.bloxbean.cardano.yaci.indexer.events.model.TxCertificates;
+import com.bloxbean.cardano.yaci.indexer.events.domain.TxCertificates;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

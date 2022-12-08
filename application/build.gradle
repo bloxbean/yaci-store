@@ -11,6 +11,7 @@ dependencies {
     implementation project(':components:script')
     implementation project(':components:protocolparams')
 
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
 
