@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.indexer.transaction.controller;
 
 import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionDetails;
+import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionPage;
 import com.bloxbean.cardano.yaci.indexer.transaction.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -31,5 +32,12 @@ public class TransactionController {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Mono<TransactionDetails> notFound() {
         return Mono.empty();
+    }
+
+
+    @GetMapping
+    public Mono<TransactionPage> getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
+                                                 @RequestParam(name = "count", defaultValue = "10") int count) {
+        return Mono.just(transactionService.getTransactions(page, count));
     }
 }

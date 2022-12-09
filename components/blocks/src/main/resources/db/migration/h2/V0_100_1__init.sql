@@ -1,10 +1,10 @@
 create table block
 (
-    block_hash       varchar(255) not null
+    hash       varchar(255) not null
         primary key,
-    block            bigint       null,
-    block_body_hash  varchar(255) null,
-    block_body_size  bigint       null,
+    number            bigint       null,
+    body_hash  varchar(255) null,
+    body_size  bigint       null,
     epoch            bigint       null,
     era              int          null,
     issuer_vkey      varchar(255) null,
@@ -15,9 +15,14 @@ create table block
     slot             bigint       null,
     vrf_result       json         null,
     vrf_vkey         varchar(255) null,
+    no_of_txs        int,
     create_datetime  timestamp,
     update_datetime  timestamp
 );
+
+
+CREATE INDEX idx_block_number
+    ON block(number);
 
 create table rollback
 (

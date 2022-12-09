@@ -24,3 +24,5 @@ create table transaction
     update_datetime         timestamp
 );
 
+CREATE INDEX idx_transaction_slot
+    ON transaction(slot);

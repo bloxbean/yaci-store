@@ -20,10 +20,10 @@ import javax.persistence.Table;
 @Table(name = "block")
 public class BlockEntity extends BaseEntity {
     @Id
-    @Column(name = "block_hash")
+    @Column(name = "hash")
     private String blockHash;
 
-    @Column(name = "block")
+    @Column(name = "number")
     private long block;
 
     @Column(name = "slot")
@@ -56,12 +56,15 @@ public class BlockEntity extends BaseEntity {
     @Column(name="vrf_result")
     private Vrf vrfResult;
 
-    @Column(name = "block_body_size")
+    @Column(name = "body_size")
     private long blockBodySize;
 
-    @Column(name="block_body_hash")
+    @Column(name="body_hash")
     private String blockBodyHash;
 
     @Column(name = "protocol_version")
     private String protocolVersion;
+
+    @Column(name = "no_of_txs")
+    private int noOfTxs;
 }
