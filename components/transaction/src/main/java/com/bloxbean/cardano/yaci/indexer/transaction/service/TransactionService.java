@@ -4,6 +4,8 @@ import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionPage;
+import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionSummary;
 import com.bloxbean.cardano.yaci.indexer.transaction.model.TxnEntity;
 import com.bloxbean.cardano.yaci.indexer.transaction.dto.TransactionDetails;
 import com.bloxbean.cardano.yaci.indexer.transaction.dto.TxUtxo;
@@ -11,14 +13,20 @@ import com.bloxbean.cardano.yaci.indexer.transaction.repository.TxnEntityReposit
 import com.bloxbean.cardano.yaci.indexer.utxo.model.UtxoId;
 import com.bloxbean.cardano.yaci.indexer.utxo.repository.UtxoRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static java.util.stream.Collectors.groupingBy;
 
 @Component
@@ -117,5 +125,51 @@ public class TransactionService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public TransactionPage getTransactions(int page, int count) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, Sort.by("slot").descending());
+
+
+        Page<TxnEntity> txnEntityPage = txnEntityRepository.findAll(sortedBySlot);
+        long total = txnEntityPage.getTotalElements();
+        int totalPage = txnEntityPage.getTotalPages();
+
+        List<TransactionSummary> transactionSummaries = txnEntityPage.stream().map(txnEntity -> {
+            if (txnEntity.getTxHash().equals("61be299df325600a62ab3a025c5fc0ce529e2cd6f39536c96f25ca70ea776f59"))
+                System.out.println("Found");
+            List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
+            List<String> outputAddresses = outputUtxos.stream()
+                    .map(txUtxo -> txUtxo.getOwnerAddr())
+                    .collect(Collectors.toList());
+
+            BigInteger totalOutput = outputUtxos.stream()
+                    .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                    .filter(amt -> amt.getUnit().equals(LOVELACE))
+                    .map(amt -> amt.getQuantity())
+                    .reduce((qty1, qty2) -> qty1.add(qty2))
+                    .orElse(BigInteger.ZERO);
+
+            TransactionSummary summary = TransactionSummary
+                    .builder()
+                    .txHash(txnEntity.getTxHash())
+                    .blockNumber(txnEntity.getBlockNumber())
+                    .slot(txnEntity.getSlot())
+                    .outputAddresses(outputAddresses)
+                    .totalOutput(totalOutput)
+                    .fee(txnEntity.getFee())
+                    .build();
+
+            return summary;
+        }).collect(Collectors.toList());
+
+        return TransactionPage
+                .builder()
+                .total(total)
+                .totalPages(totalPage)
+                .transactionSummaries(transactionSummaries)
+                .build();
+
     }
 }

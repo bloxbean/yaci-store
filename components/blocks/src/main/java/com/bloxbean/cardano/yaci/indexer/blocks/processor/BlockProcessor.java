@@ -48,6 +48,7 @@ public class BlockProcessor {
                 .blockBodyHash(blockHeader.getHeaderBody().getBlockBodyHash())
                 .protocolVersion(blockHeader.getHeaderBody().getProtocolVersion().get_1()
                         + "." + blockHeader.getHeaderBody().getProtocolVersion().get_2())
+                .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
                 .build();
         blockRepository.save(block);
 

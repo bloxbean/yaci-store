@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.indexer.utxo.model;
 
-import com.bloxbean.carano.yaci.indexer.common.model.BaseEntity;
 import com.bloxbean.carano.yaci.indexer.common.domain.Amt;
+import com.bloxbean.carano.yaci.indexer.common.model.BaseEntity;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

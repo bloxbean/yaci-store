@@ -23,6 +23,12 @@ create table address_utxo
 CREATE INDEX idx_address_utxo_slot
     ON address_utxo(slot);
 
+CREATE INDEX idx_address_utxo_owner_addr
+    ON address_utxo(owner_addr);
+
+CREATE INDEX idx_address_utxo_owner_stake_addr
+    ON address_utxo(owner_stake_addr);
+
 create table invalid_transaction
 (
     tx_hash     varchar(255) not null

@@ -70,6 +70,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
                 .slot(blockHeader.getHeaderBody().getSlot())
+                .noOfTxs(transactions.size())
                 .isSyncMode(syncMode)
                 .build();
         cursorService.setEra(era.getValue());

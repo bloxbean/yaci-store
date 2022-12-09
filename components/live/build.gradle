@@ -1,0 +1,18 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+
+    implementation('com.google.guava:guava')
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Indexer Live Module'
+                description = 'Yaci Indexer Live Module'
+            }
+        }
+    }
+}

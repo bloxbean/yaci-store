@@ -15,5 +15,6 @@ public class EventMetadata {
     private long block;
     private String blockHash;
     private long slot;
+    private int noOfTxs;
     private boolean isSyncMode;
 }

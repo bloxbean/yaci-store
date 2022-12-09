@@ -10,6 +10,7 @@ dependencies {
     implementation project(':components:transaction')
     implementation project(':components:script')
     implementation project(':components:protocolparams')
+    implementation project(':components:live')
 
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
