@@ -13,8 +13,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'yaci-indexer-core'
-                description = 'Yaci Indexer Core'
+                name = 'Yaci Store Core'
+                description = 'Yaci Store Core Module'
             }
         }
     }

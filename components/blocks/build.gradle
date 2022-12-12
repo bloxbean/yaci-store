@@ -8,8 +8,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'Yaci Indexer Blocks'
-                description = 'Yaci Indexer Block Processing Module'
+                name = 'Yaci Store Blocks'
+                description = 'Yaci Store Block Processing Module'
             }
         }
     }

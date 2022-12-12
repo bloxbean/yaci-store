@@ -19,8 +19,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'common'
-                description = 'Yaci Indexer Common Module'
+                name = 'Yaci Store Common'
+                description = 'Yaci Store Common Module'
             }
         }
     }

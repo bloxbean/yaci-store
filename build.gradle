@@ -18,7 +18,7 @@ subprojects {
         mavenLocal()
     }
 
-    archivesBaseName = 'yaci-indexer-' + project.name
+    archivesBaseName = 'yaci-store-' + project.name
 
     dependencyManagement {
         imports {

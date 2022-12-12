@@ -7,8 +7,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'yaci-indexer-events'
-                description = 'Yaci Indexer Events'
+                name = 'Yaci Store Events'
+                description = 'Yaci Store Events Module'
             }
         }
     }
