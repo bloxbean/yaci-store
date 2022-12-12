@@ -26,7 +26,7 @@ public class TxUtxo {
     private List<Amt> amounts;
     private String dataHash;
     private String inlineDatum;
-    private String referenceScriptHash;
+    private String scriptRef;
 
     private JsonNode inlineDatumJson;
 }

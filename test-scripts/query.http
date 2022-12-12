@@ -23,3 +23,9 @@ GET http://localhost:8080/blocks/376120
 
 ###
 GET http://localhost:8080/blocks
+
+###
+GET http://localhost:8080/scripts/tx/936520b3011661ec2f8f1705f7ecc3e8bccb326f5a2311fd93a88d570ffc7917
+
+###
+GET http://localhost:8080/scripts/tx/0d66c70aa9efa6bc1a635191abef9a0cd386a42b3f43c3199f3b794986995865

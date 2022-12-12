@@ -82,7 +82,7 @@ public class TransactionService {
                                 .amounts(addressUtxo.getAmounts())
                                 .dataHash(addressUtxo.getDataHash())
                                 .inlineDatum(addressUtxo.getInlineDatum())
-                                .referenceScriptHash(addressUtxo.getReferenceScriptHash())
+                                .scriptRef(addressUtxo.getScriptRef())
                                 .build())
                 .orElse(TxUtxo.builder()
                         .txHash(utxoId.getTxHash())
@@ -104,7 +104,7 @@ public class TransactionService {
                         .amounts(addressUtxo.getAmounts())
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
-                        .referenceScriptHash(addressUtxo.getReferenceScriptHash())
+                        .scriptRef(addressUtxo.getScriptRef())
                         .inlineDatumJson(inlineDatumToJson(addressUtxo.getInlineDatum()))
                         .build())
                 .collect(groupingBy(txUtxo -> new UtxoId(txUtxo.getTxHash(), txUtxo.getOutputIndex())));

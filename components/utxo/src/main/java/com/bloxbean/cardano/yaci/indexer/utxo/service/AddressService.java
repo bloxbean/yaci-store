@@ -32,7 +32,7 @@ public class AddressService {
                                 .collect(Collectors.toList()))
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
-                        .referenceScriptHash(addressUtxo.getReferenceScriptHash())
+                        .referenceScriptHash(addressUtxo.getScriptRef())
                         .build()).collect(Collectors.toList());
     }
 }

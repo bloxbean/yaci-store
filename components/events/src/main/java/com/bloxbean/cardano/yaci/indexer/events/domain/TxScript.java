@@ -9,18 +9,15 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class TxScripts {
+public class TxScript {
     private String txHash;
-    private List<PlutusScript> plutusV1Scripts;
-    private List<Datum> datums;
-    private List<Redeemer> redeemers;
-    private List<PlutusScript> plutusV2Scripts;
-    private List<NativeScript> nativeScripts;
-    //private List<PlutusScript> scriptRef;
+    private String scriptHash;
+    private Redeemer redeemer;
+    private Datum datum;
+    private PlutusScript plutusScript;
+    private NativeScript nativeScript;
 }
