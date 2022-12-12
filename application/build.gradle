@@ -6,11 +6,11 @@ dependencies {
     implementation project(':components:core')
     implementation project(':components:events')
     implementation project(':components:blocks')
-    implementation project(':components:utxo')
-    implementation project(':components:transaction')
-    implementation project(':components:script')
-    implementation project(':components:protocolparams')
-    implementation project(':components:live')
+    implementation project(':components:stores:utxo')
+    implementation project(':components:stores:transaction')
+    implementation project(':components:stores:script')
+    implementation project(':components:stores:protocolparams')
+    implementation project(':components:stores:live')
 
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

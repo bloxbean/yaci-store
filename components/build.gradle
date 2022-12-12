@@ -18,7 +18,7 @@ subprojects {
                     classifier = 'javadoc'
                 }
                 pom {
-                    url = 'https://github.com/bloxbean/yaci-indexer'
+                    url = 'https://github.com/bloxbean/yaci-store'
                     licenses {
                         license {
                             name = 'The MIT License'
@@ -32,8 +32,8 @@ subprojects {
                         }
                     }
                     scm {
-                        connection = 'scm:git:git://github.com/bloxbean/yaci-indexer.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-indexer.git'
+                        connection = 'scm:git:git://github.com/bloxbean/yaci-store.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-store.git'
                         url = 'https://github.com/bloxbean/yaci-helper'
                     }
                 }

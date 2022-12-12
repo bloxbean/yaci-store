@@ -1,0 +1,16 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store ProtocolParams'
+                description = 'Yaci Store ProtocolParams Module'
+            }
+        }
+    }
+}
