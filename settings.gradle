@@ -6,7 +6,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'yaci-indexer'
+rootProject.name = 'yaci-store'
 include 'application'
 include 'components:core'
 include 'components:events'
