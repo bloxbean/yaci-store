@@ -23,6 +23,5 @@ public interface UtxoRepository extends JpaRepository<AddressUtxo, UtxoId> {
     List<AddressUtxo> findBySlot(long slot);
 
     int deleteBySlotGreaterThan(long slot);
-
 }
 

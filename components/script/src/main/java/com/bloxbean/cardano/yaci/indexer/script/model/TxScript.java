@@ -14,22 +14,39 @@ import javax.persistence.*;
 @Builder
 @Entity
 @Table(name = "transaction_scripts")
-@IdClass(TxScriptId.class)
 public class TxScript extends BaseEntity {
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
+    @Column(name = "id")
+    private Long id;
+
+//    @Id
     @Column(name = "tx_hash")
     private String txHash;
 
-    @Id
+//    @Id
     @Column(name = "script_hash")
     private String scriptHash;
 
-    @Column(name = "script_type")
-    private ScriptType type;
+    @Column(name = "slot")
+    private long slot;
 
     @Column(name = "block")
     private long block;
 
     @Column(name = "block_hash")
     private String blockHash;
+
+    @Column(name = "script_type")
+    private ScriptType type;
+
+    @Column(name = "redeemer")
+    private String redeemer;
+
+    @Column(name = "datum")
+    private String datum;
+
+    @Column(name = "datum_hash")
+    private String datumHash;
+
 }

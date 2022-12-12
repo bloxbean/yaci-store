@@ -1,11 +1,9 @@
 package com.bloxbean.cardano.yaci.indexer.script.processor;
 
 
-import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
-import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.indexer.events.ScriptEvent;
 import com.bloxbean.cardano.yaci.indexer.events.domain.TxScripts;
 import com.bloxbean.cardano.yaci.indexer.script.model.Script;
@@ -13,12 +11,14 @@ import com.bloxbean.cardano.yaci.indexer.script.model.ScriptType;
 import com.bloxbean.cardano.yaci.indexer.script.model.TxScript;
 import com.bloxbean.cardano.yaci.indexer.script.repository.ScriptRepository;
 import com.bloxbean.cardano.yaci.indexer.script.repository.TxScriptRepository;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static com.bloxbean.cardano.yaci.indexer.script.helper.ScriptUtil.getNativeScriptHash;
+import static com.bloxbean.cardano.yaci.indexer.script.helper.ScriptUtil.getPlutusScriptHash;
 
 @Component
 public class ScriptProcessor {
@@ -30,7 +30,7 @@ public class ScriptProcessor {
         this.txScriptRepository = txScriptRepository;
     }
 
-    @EventListener
+   // @EventListener
     public void handleScriptEvent(ScriptEvent scriptEvent) {
         List<TxScripts> txScriptList = scriptEvent.getTxScriptsList();
 
@@ -77,7 +77,7 @@ public class ScriptProcessor {
                 });
 
         scriptRepository.saveAll(scriptEntities);
-        txScriptRepository.saveAll(txScriptEntities);
+        //TODO -- txScriptRepository.saveAll(txScriptEntities);
     }
 
     private Tuple<Script, TxScript> getPlutusScriptEntities(TxScripts txScripts, PlutusScript plutusScript,
@@ -108,20 +108,5 @@ public class ScriptProcessor {
                 .scriptHash(scriptHash)
                 .build();
         return new Tuple(script, txScript);
-    }
-
-    private String getNativeScriptHash(NativeScript nativeScript) {
-        try {
-            com.bloxbean.cardano.client.transaction.spec.script.NativeScript nativeScript1
-                    = com.bloxbean.cardano.client.transaction.spec.script.NativeScript.deserializeJson(nativeScript.getContent());
-            return HexUtil.encodeHexString(nativeScript1.getScriptHash());
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private String getPlutusScriptHash(PlutusScript plutusScript) {
-        byte[] bytes = HexUtil.decodeHexString(plutusScript.getContent());
-        return HexUtil.encodeHexString(Blake2bUtil.blake2bHash224(bytes));
     }
 }

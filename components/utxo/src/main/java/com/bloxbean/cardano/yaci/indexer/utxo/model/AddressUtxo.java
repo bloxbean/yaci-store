@@ -41,6 +41,12 @@ public class AddressUtxo extends BaseEntity {
     @Column(name = "owner_stake_addr")
     private String ownerStakeAddr;
 
+    @Column(name = "owner_payment_key_hash")
+    private String ownerPaymentKeyHash;
+
+    @Column(name = "owner_stake_key_hash")
+    private String ownerStakeKeyHash;
+
     @Type(type = "json")
     private List<Amt> amounts;
 
@@ -52,8 +58,8 @@ public class AddressUtxo extends BaseEntity {
     private String inlineDatum;
 
     @Lob
-    @Column(name = "reference_script_hash")
-    private String referenceScriptHash;
+    @Column(name = "script_ref")
+    private String scriptRef;
 
     @Column(name = "spent")
     private boolean spent;

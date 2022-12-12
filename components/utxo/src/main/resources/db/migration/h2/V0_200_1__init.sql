@@ -10,7 +10,9 @@ create table address_utxo
     inline_datum          clob     null,
     owner_addr            varchar(255) null,
     owner_stake_addr      varchar(255) null,
-    reference_script_hash clob         null,
+    owner_payment_key_hash varchar(255),
+    owner_stake_key_hash  varchar(255),
+    script_ref            clob         null,
     spent                 bit          null,
     spent_at_slot         bigint       null,
     spent_tx_hash         varchar(255) null,
@@ -28,6 +30,12 @@ CREATE INDEX idx_address_utxo_owner_addr
 
 CREATE INDEX idx_address_utxo_owner_stake_addr
     ON address_utxo(owner_stake_addr);
+
+CREATE INDEX idx_address_utxo_owner_pkey_hash
+    ON address_utxo(owner_payment_key_hash);
+
+CREATE INDEX idx_address_utxo_owner_skey_hash
+    ON address_utxo(owner_stake_key_hash);
 
 create table invalid_transaction
 (

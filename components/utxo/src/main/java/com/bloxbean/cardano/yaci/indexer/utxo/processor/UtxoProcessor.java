@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.indexer.utxo.util.Util.getPaymentKeyHash;
+import static com.bloxbean.cardano.yaci.indexer.utxo.util.Util.getStakeKeyHash;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -158,10 +161,15 @@ public class UtxoProcessor {
                 .collect(Collectors.toList());
 
         String stakeAddress = null;
+        String paymentKeyHash = null;
+        String stakeKeyHash = null;
         try {
             Address addr = new Address(utxo.getAddress());
             if (addr.getAddressType() == AddressType.Base)
                 stakeAddress = AddressService.getInstance().getStakeAddress(addr).getAddress();
+
+            paymentKeyHash = getPaymentKeyHash(addr).orElse(null);
+            stakeKeyHash = getStakeKeyHash(addr).orElse(null);
         } catch (Exception e) {
             //TODO -- Store the address in db
             if (log.isTraceEnabled())
@@ -176,10 +184,12 @@ public class UtxoProcessor {
                 .outputIndex(utxo.getIndex())
                 .ownerAddr(utxo.getAddress())
                 .ownerStakeAddr(stakeAddress)
+                .ownerPaymentKeyHash(paymentKeyHash)
+                .ownerStakeKeyHash(stakeKeyHash)
                 .amounts(amounts)
                 .dataHash(utxo.getDatumHash())
                 .inlineDatum(utxo.getInlineDatum())
-                .referenceScriptHash(utxo.getScriptRef())
+                .scriptRef(utxo.getScriptRef())
                 .build();
     }
 

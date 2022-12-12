@@ -10,12 +10,20 @@ create table script
 
 create table transaction_scripts
 (
+    id              bigint       not null auto_increment
+        primary key,
+    slot                  bigint,
+    block                 bigint,
+    block_hash            varchar(255),
     tx_hash               varchar(255) not null,
     script_hash           varchar(255),
     script_type           integer,
-    block                 bigint,
-    block_hash            varchar(255),
+    redeemer              clob,
+    datum                 clob,
+    datum_hash            varchar(255),
     create_datetime       timestamp,
-    update_datetime       timestamp,
-    primary key (tx_hash, script_hash)
-)
+    update_datetime       timestamp
+);
+
+CREATE INDEX idx_txn_scripts_tx_hash
+    ON transaction_scripts(tx_hash);

@@ -85,15 +85,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             //Addtional events
             //TxScript Event
-            List<TxScripts> txScriptsList = transactions.stream().map(transaction -> TxScripts.builder()
-                    .txHash(transaction.getTxHash())
-                    .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
-                    .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
-                    .nativeScripts(transaction.getWitnesses().getNativeScripts())
-                    .datums(transaction.getWitnesses().getDatums())
-                    .redeemers(transaction.getWitnesses().getRedeemers())
-                    .build()
-            ).collect(Collectors.toList());
+            List<TxScripts> txScriptsList = getTxScripts(transactions);
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
 
             //AuxData event
@@ -122,6 +114,19 @@ public class BlockFetchService implements BlockChainDataListener {
                 blockSync.stop();
             throw e;
         }
+    }
+
+    private List<TxScripts> getTxScripts(List<Transaction> transactions) {
+        List<TxScripts> txScriptsList = transactions.stream().map(transaction -> TxScripts.builder()
+                .txHash(transaction.getTxHash())
+                .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
+                .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
+                .nativeScripts(transaction.getWitnesses().getNativeScripts())
+                .datums(transaction.getWitnesses().getDatums())
+                .redeemers(transaction.getWitnesses().getRedeemers())
+                .build()
+        ).collect(Collectors.toList());
+        return txScriptsList;
     }
 
     @Transactional
