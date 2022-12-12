@@ -17,6 +17,9 @@ subprojects {
                 artifact(javadocJar) {
                     classifier = 'javadoc'
                 }
+
+                artifactId 'yaci-store-' + project.name
+
                 pom {
                     url = 'https://github.com/bloxbean/yaci-store'
                     licenses {
