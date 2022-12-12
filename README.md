@@ -1,23 +1,23 @@
 [![Clean, Build](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml)
 
-# Yaci Indexer (WIP)
+# Yaci Store (WIP)
 
-A Cardano Indexer implementation using [Yaci](https://github.com/bloxbean/yaci)
+A Cardano datastore implementation using [Yaci](https://github.com/bloxbean/yaci)
 
 ## How to Build
 
 ```
-$> git clone https://github.com/bloxbean/yaci-indexer
-$> cd yaci-indexer
+$> git clone https://github.com/bloxbean/yaci-store
+$> cd yaci-store
 $> ./gradlew clean build
 ```
 
 ## Run
 
 ```
-$> cd yaci-indexer
+$> cd yaci-store
 $> edit config/application.properties //datasource, network details
-$> java -jar application/build/libs/yaci-indexer-app-<version>-SNAPSHOT.jar 
+$> java -jar application/build/libs/yaci-store-app-<version>-SNAPSHOT.jar 
 ```
 
 ## Modules
