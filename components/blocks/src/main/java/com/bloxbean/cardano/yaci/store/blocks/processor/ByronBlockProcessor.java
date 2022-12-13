@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blocks.model.BlockEntity;
 import com.bloxbean.cardano.yaci.store.blocks.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -24,6 +25,20 @@ public class ByronBlockProcessor {
     public ByronBlockProcessor(BlockRepository blockRepository) {
         this.blockRepository = blockRepository;
         this.count = new AtomicInteger(0);
+    }
+
+    @EventListener
+    @Transactional
+    public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        BlockEntity block = BlockEntity.builder()
+                .era(Era.Byron.getValue())
+                .blockHash(genesisBlockEvent.getBlockHash())
+                .slot(genesisBlockEvent.getSlot())
+                .block(0L)
+                .prevHash(null)
+                .build();
+
+        blockRepository.save(block);
     }
 
     @EventListener

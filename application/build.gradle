@@ -10,6 +10,8 @@ dependencies {
     implementation project(':components:stores:transaction')
     implementation project(':components:stores:script')
     implementation project(':components:stores:protocolparams')
+    implementation project(':components:stores:metadata')
+    implementation project(':components:stores:assets')
     implementation project(':components:stores:live')
 
     implementation 'org.springframework.boot:spring-boot-starter-webflux'

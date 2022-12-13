@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getNativeScriptHash;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutusScriptHash;
 
+//Not used
 @Component
 public class ScriptProcessor {
     private TxScriptRepository txScriptRepository;
@@ -73,7 +74,6 @@ public class ScriptProcessor {
                             txScriptEntities.addAll(nativeScripts.stream().map(tuple -> tuple._2).collect(Collectors.toList()));
                         }
                     }
-
                 });
 
         scriptRepository.saveAll(scriptEntities);

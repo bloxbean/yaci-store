@@ -20,11 +20,9 @@ public class TxScript extends BaseEntity {
     @Column(name = "id")
     private Long id;
 
-//    @Id
     @Column(name = "tx_hash")
     private String txHash;
 
-//    @Id
     @Column(name = "script_hash")
     private String scriptHash;
 

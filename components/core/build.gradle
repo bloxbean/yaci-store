@@ -1,7 +1,6 @@
 dependencies {
     implementation project(':components:events')
     implementation project(':components:common')
-    api project(':components:blocks')
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
