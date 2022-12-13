@@ -32,16 +32,9 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoProcessor {
-    @Autowired
-    private UtxoRepository utxoRepository;
 
-    @Autowired
-    private InvalidTransactionRepository invalidTransactionRepository;
-
-    public UtxoProcessor(UtxoRepository utxoRepository, InvalidTransactionRepository invalidTransactionRepository) {
-        this.utxoRepository = utxoRepository;
-        this.invalidTransactionRepository = invalidTransactionRepository;
-    }
+    private final UtxoRepository utxoRepository;
+    private final InvalidTransactionRepository invalidTransactionRepository;
 
     @EventListener
     @Order(2)

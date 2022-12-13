@@ -4,35 +4,27 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
-import com.bloxbean.cardano.yaci.store.blocks.model.BlockEntity;
-import com.bloxbean.cardano.yaci.store.blocks.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class StartService {
-
-    @Autowired
-    private BlockRepository blockRepository;
-
-    @Autowired
-    private BlockFetchService blockFetchService;
-
-    @Autowired
-    private TipFinderService tipFinderService;
-
-    @Autowired
-    private GenesisBlockFinder genesisBlockFinder;
-
-    @Autowired
-    private CursorService cursorService;
+    private final ApplicationEventPublisher publisher;
+    private final BlockFetchService blockFetchService;
+    private final TipFinderService tipFinderService;
+    private final GenesisBlockFinder genesisBlockFinder;
+    private final CursorService cursorService;
 
     @Value("${cardano.sync_start_slot:0}")
     private long syncStartSlot;
@@ -51,8 +43,6 @@ public class StartService {
 //    @Value("${cardano.first_block_hash}")
 //    private String firstBlockHash;
 
-    public StartService() {
-    }
 
     @EventListener
     public void initialize(ApplicationReadyEvent applicationReadyEvent) {
@@ -60,11 +50,13 @@ public class StartService {
         Point from = null;
         Integer era = null;
         long blockNumber = 0;
-        Optional<BlockEntity> optional = blockRepository.findTopByOrderByBlockDesc();
+//        Optional<BlockEntity> optional = blockRepository.findTopByOrderByBlockDesc();
+        Optional<Cursor> optional = cursorService.getCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
-            era = optional.get().getEra();
+           // era = optional.get().getEra();
+            era = null;
             blockNumber = optional.get().getBlock();
         } else {
             if (syncStartSlot == 0 || syncStartBlockHash == null || syncStartBlockHash.isEmpty()) {
@@ -72,12 +64,12 @@ public class StartService {
                 Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
                 if (startPoint.isPresent()) {
                     //Save genesis block
-                    BlockEntity genesisBlock = new BlockEntity();
-                    genesisBlock.setBlock(0);
-                    genesisBlock.setBlockHash(startPoint.get().getGenesisBlock().getHash());
-                    genesisBlock.setSlot(startPoint.get().getGenesisBlock().getSlot());
-                    blockRepository.save(genesisBlock);
-
+                    GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
+                            .blockHash(startPoint.get().getGenesisBlock().getHash())
+                            .slot(startPoint.get().getGenesisBlock().getSlot())
+                            .block(0)
+                            .build();
+                    publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();
                 } else
                     throw new IllegalStateException("Genesis points not found. From point could not be decided.");
@@ -87,10 +79,7 @@ public class StartService {
         }
 
         //Reset cursor
-        cursorService.setEra(era);
-        cursorService.setSlot(from.getSlot());
-        cursorService.setBlockNumber(blockNumber);
-        cursorService.setBlockHash(from.getHash());
+        cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber));
 
         Tip tip = tipFinderService.getTip().block();
         Point to = tip.getPoint();

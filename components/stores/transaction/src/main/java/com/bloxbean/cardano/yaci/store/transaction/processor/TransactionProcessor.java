@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 public class TransactionProcessor {
 
     private final TxnEntityRepository txnEntityRepository;
-    private final UtxoRepository utxoRepository;
 
     @EventListener
     @Order(3)

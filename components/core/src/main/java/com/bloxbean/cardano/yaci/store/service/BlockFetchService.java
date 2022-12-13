@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.service;
 
+import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
@@ -9,11 +10,11 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.blocks.repository.BlockRepository;
-import com.bloxbean.cardano.yaci.store.blocks.repository.RollbackRepository;
+import com.bloxbean.cardano.yaci.store.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
+import com.bloxbean.cardano.yaci.store.events.domain.TxMintBurn;
 import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -23,7 +24,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -41,12 +44,6 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Autowired
     private BlockSync blockSync;
-
-    @Autowired
-    private BlockRepository blockRepository;
-
-    @Autowired
-    private RollbackRepository rollbackRepository;
 
     @Autowired
     private CursorService cursorService;
@@ -73,10 +70,6 @@ public class BlockFetchService implements BlockChainDataListener {
                 .noOfTxs(transactions.size())
                 .isSyncMode(syncMode)
                 .build();
-        cursorService.setEra(era.getValue());
-        cursorService.setSlot(eventMetadata.getSlot());
-        cursorService.setBlockNumber(eventMetadata.getBlock());
-        cursorService.setBlockHash(eventMetadata.getBlockHash());
 
         try {
             publisher.publishEvent(era);
@@ -89,11 +82,13 @@ public class BlockFetchService implements BlockChainDataListener {
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
 
             //AuxData event
-            List<TxAuxData> txAuxDataList = transactions.stream().map(transaction -> TxAuxData.builder()
-                    .txHash(transaction.getTxHash())
-                    .auxData(transaction.getAuxData())
-                    .build()
-            ).collect(Collectors.toList());
+            List<TxAuxData> txAuxDataList = transactions.stream()
+                    .filter(transaction -> transaction.getAuxData() != null)
+                    .map(transaction -> TxAuxData.builder()
+                            .txHash(transaction.getTxHash())
+                            .auxData(transaction.getAuxData())
+                            .build()
+                    ).collect(Collectors.toList());
             publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
 
             //Certificate event
@@ -104,6 +99,16 @@ public class BlockFetchService implements BlockChainDataListener {
             ).collect(Collectors.toList());
             publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
 
+            //Mints
+            List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
+                            transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
+                    .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
+                    .collect(Collectors.toList());
+            publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
+
+            //Finally Set the cursor
+            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock()));
         } catch (Exception e) {
             log.error("Error saving", e);
             log.error("Stopping fetcher");
@@ -114,6 +119,19 @@ public class BlockFetchService implements BlockChainDataListener {
                 blockSync.stop();
             throw e;
         }
+    }
+
+    //Replace asset name contains \u0000 -- postgres can't convert this to text. so replace
+    private List<Amount> sanitizeAmounts(List<Amount> amounts) {
+        if (amounts == null) return Collections.EMPTY_LIST;
+        //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
+        return amounts.stream().map(amount ->
+                Amount.builder()
+                        .unit(amount.getUnit())
+                        .policyId(amount.getPolicyId())
+                        .assetName(amount.getAssetName().replace('\u0000', ' '))
+                        .quantity(amount.getQuantity())
+                        .build()).collect(Collectors.toList());
     }
 
     private List<TxScripts> getTxScripts(List<Transaction> transactions) {
@@ -142,6 +160,10 @@ public class BlockFetchService implements BlockChainDataListener {
 
         ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
         publisher.publishEvent(byronMainBlockEvent);
+
+        //Finally Set the cursor
+        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                eventMetadata.getBlock()));
     }
 
     @Transactional
@@ -160,11 +182,26 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Override
     public void onRollback(Point point) {
+        Optional<Cursor> cursorOptional = cursorService.getCursor();
+        Point currentPoint = cursorOptional
+                .map(cursor -> new Point(cursor.getSlot(), cursor.getBlockHash()))
+                .orElse(null);
+        long currentBlockNum = cursorOptional.map(cursor -> cursor.getBlock())
+                .orElse(null);
+
+        //Reset cursor
+        cursorService.setCursor(Cursor.builder()
+                .slot(point.getSlot())
+                .blockHash(point.getHash())
+                .block(null)
+                .build());
+
+        //Publish rollback event
         RollbackEvent rollbackEvent = RollbackEvent
                 .builder()
                 .rollbackTo(point)
-                .currentPoint(new Point(cursorService.getSlot(), cursorService.getBlockHash()))
-                .currentBlock(cursorService.getBlockNumber())
+                .currentPoint(currentPoint)
+                .currentBlock(currentBlockNum)
                 .build();
         log.info("Publishing rollback event : " + rollbackEvent);
         publisher.publishEvent(rollbackEvent);
@@ -176,12 +213,12 @@ public class BlockFetchService implements BlockChainDataListener {
         if (!syncMode) {
             log.info("Batch Done >>>");
             //start sync
-            blockRepository.findTopByOrderByBlockDesc()
-                    .ifPresent(blockEntity -> {
-                        String blockHash = blockEntity.getBlockHash();
-                        long slot = blockEntity.getSlot();
+            cursorService.getCursor()
+                    .ifPresent(cursor -> {
+                        String blockHash = cursor.getBlockHash();
+                        long slot = cursor.getSlot();
 
-                        log.info("Start N2N sync from block >> " + blockEntity.getBlock());
+                        log.info("Start N2N sync from block >> " + cursor.getBlock());
                         //Start sync
                         startSync(new Point(slot, blockHash));
                     });

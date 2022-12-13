@@ -1,43 +1,38 @@
 package com.bloxbean.cardano.yaci.store.service;
 
+import com.bloxbean.cardano.yaci.store.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.model.CursorEntity;
+import com.bloxbean.cardano.yaci.store.repository.CursorRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Component
+@RequiredArgsConstructor
+@Slf4j
 public class CursorService {
-    private Integer era;
-    private long blockNumber;
-    private String blockHash;
-    private long slot;
+    private final CursorRepository cursorRepository;
 
-    public Integer getEra() {
-        return era;
+    public void setCursor(Cursor cursor) {
+        CursorEntity cursorEntity = CursorEntity
+                .builder()
+                .id(1L)
+                .slot(cursor.getSlot())
+                .blockHash(cursor.getBlockHash())
+                .block(cursor.getBlock())
+                .build();
+
+        cursorRepository.save(cursorEntity);
     }
 
-    public void setEra(Integer era) {
-        this.era = era;
-    }
-
-    public long getBlockNumber() {
-        return blockNumber;
-    }
-
-    public void setBlockNumber(long blockNumber) {
-        this.blockNumber = blockNumber;
-    }
-
-    public String getBlockHash() {
-        return blockHash;
-    }
-
-    public void setBlockHash(String blockHash) {
-        this.blockHash = blockHash;
-    }
-
-    public long getSlot() {
-        return slot;
-    }
-
-    public void setSlot(long slot) {
-        this.slot = slot;
+    public Optional<Cursor> getCursor() {
+        return cursorRepository.findById(1L)
+                .map(cursorEntity -> Cursor.builder()
+                        .slot(cursorEntity.getSlot())
+                        .blockHash(cursorEntity.getBlockHash())
+                        .block(cursorEntity.getBlock())
+                        .build());
     }
 }
