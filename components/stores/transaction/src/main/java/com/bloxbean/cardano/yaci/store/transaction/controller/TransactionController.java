@@ -6,9 +6,7 @@ import com.bloxbean.cardano.yaci.store.transaction.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
-
-import java.util.Optional;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/txs")
@@ -21,23 +19,15 @@ public class TransactionController {
     }
 
     @GetMapping("{txHash}")
-    public Mono<TransactionDetails> getTransaction(@PathVariable String txHash) {
-        Optional<TransactionDetails> txDtlsOptional = transactionService.getTransaction(txHash);
-        if (txDtlsOptional.isPresent())
-            return Mono.just(txDtlsOptional.get());
-         else
-             return notFound();
-    }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<TransactionDetails> notFound() {
-        return Mono.empty();
+    public TransactionDetails getTransaction(@PathVariable String txHash) {
+        return transactionService.getTransaction(txHash)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
 
     @GetMapping
-    public Mono<TransactionPage> getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
-                                                 @RequestParam(name = "count", defaultValue = "10") int count) {
-        return Mono.just(transactionService.getTransactions(page, count));
+    public TransactionPage getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
+                                           @RequestParam(name = "count", defaultValue = "10") int count) {
+        return transactionService.getTransactions(page, count);
     }
 }

@@ -11,5 +11,5 @@ public interface TxnEntityRepository extends PagingAndSortingRepository<TxnEntit
 
     Optional<TxnEntity> findByTxHash(String txHash);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }

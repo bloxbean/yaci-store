@@ -9,7 +9,8 @@ spring:
 #        show_sql: false
 #        generate_statistics: false
 #        jdbc:
-#          batch_size: 1000
+#          batch_size: 30
+#          order_inserts: true
   flyway:
     locations: classpath:db/migration/{vendor}
     out-of-order: true

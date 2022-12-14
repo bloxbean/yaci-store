@@ -6,10 +6,9 @@ import com.bloxbean.cardano.yaci.store.script.service.ScriptService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/scripts")
@@ -22,17 +21,9 @@ public class ScriptController {
     }
 
     @GetMapping("{scriptHash}")
-    public Mono<ScriptDto> getScriptByHash(@PathVariable String scriptHash) {
-        Optional<ScriptDto> scriptOptional = scriptService.getScriptByHash(scriptHash);
-        if (scriptOptional.isPresent())
-            return Mono.just(scriptOptional.get());
-        else
-            return notFound();
-    }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<ScriptDto> notFound() {
-        return Mono.empty();
+    public ScriptDto getScriptByHash(@PathVariable String scriptHash) {
+        return scriptService.getScriptByHash(scriptHash)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
     @GetMapping("/tx/{txHash}")

@@ -6,6 +6,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface InvalidTransactionRepository extends JpaRepository<InvalidTransaction, String> {
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }
 
