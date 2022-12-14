@@ -57,7 +57,7 @@ public class ProtocolParamService {
     public void fetchAndSetCurrentProtocolParams() {
         getCurrentProtocolParamsFromNode().subscribe(protocolParamUpdate -> {
             ProtocolParamsEntity entity = new ProtocolParamsEntity();
-            entity.setId(1);
+            entity.setId(1L);
             entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
 
             protocolParamsRepository.save(entity);

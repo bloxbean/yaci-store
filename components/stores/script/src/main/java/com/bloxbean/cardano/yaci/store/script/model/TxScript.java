@@ -27,10 +27,10 @@ public class TxScript extends BaseEntity {
     private String scriptHash;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "block")
-    private long block;
+    private Long block;
 
     @Column(name = "block_hash")
     private String blockHash;

@@ -2,7 +2,7 @@ create table address_utxo
 (
     output_index          int          not null,
     tx_hash               varchar(255) not null,
-    slot                  bigint       not null,
+    slot                  bigint,
     block                 bigint ,
     block_hash            varchar(255),
     amounts               json         null,

@@ -27,14 +27,14 @@ public class RollbackEntity extends BaseEntity {
 //    private long rollbackToBlock;
 
     @Column(name = "rollback_to_slot")
-    private long rollbackToSlot;
+    private Long rollbackToSlot;
 
     @Column(name = "current_block_hash")
     private String currentBlockHash;
 
     @Column(name = "current_slot")
-    private long currentSlot;
+    private Long currentSlot;
 
     @Column(name = "current_block")
-    private long currentBlock;
+    private Long currentBlock;
 }

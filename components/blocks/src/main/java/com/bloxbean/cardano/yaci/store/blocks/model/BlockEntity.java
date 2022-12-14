@@ -24,13 +24,13 @@ public class BlockEntity extends BaseEntity {
     private String blockHash;
 
     @Column(name = "number")
-    private long block;
+    private Long block;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "epoch")
-    private long epoch;
+    private Long epoch;
 
     @Column(name = "era")
     private Integer era;
@@ -57,7 +57,7 @@ public class BlockEntity extends BaseEntity {
     private Vrf vrfResult;
 
     @Column(name = "body_size")
-    private long blockBodySize;
+    private Long blockBodySize;
 
     @Column(name="body_hash")
     private String blockBodyHash;
@@ -66,5 +66,5 @@ public class BlockEntity extends BaseEntity {
     private String protocolVersion;
 
     @Column(name = "no_of_txs")
-    private int noOfTxs;
+    private Integer noOfTxs;
 }

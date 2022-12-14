@@ -1,6 +1,6 @@
-create table cursor
+create table cursor_
 (
-    id          integer not null
+    id          int not null
             primary key,
     slot        bigint,
     block_hash  varchar(255),

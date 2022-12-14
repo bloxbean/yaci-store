@@ -16,7 +16,7 @@ import javax.persistence.Table;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "cursor")
+@Table(name = "cursor_")
 public class CursorEntity extends BaseEntity {
     @Id
     @Column(name = "id")

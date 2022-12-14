@@ -110,14 +110,11 @@ public class BlockFetchService implements BlockChainDataListener {
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock()));
         } catch (Exception e) {
-            log.error("Error saving", e);
+            log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
-            if (blockRangeSync != null)
-                blockRangeSync.stop();
-            if (blockSync != null)
-                blockSync.stop();
-            throw e;
+            stopSync();
+            throw new RuntimeException(e);
         }
     }
 
@@ -150,36 +147,60 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
-        EventMetadata eventMetadata = EventMetadata.builder()
-                .era(Era.Byron)
-                .block(-1)
-                .blockHash(byronBlock.getHeader().getBlockHash())
-                .slot(byronBlock.getHeader().getConsensusData().getSlotId().getSlot())
-                .isSyncMode(syncMode)
-                .build();
+        try {
+            EventMetadata eventMetadata = EventMetadata.builder()
+                    .era(Era.Byron)
+                    .block(-1)
+                    .blockHash(byronBlock.getHeader().getBlockHash())
+                    .slot(byronBlock.getHeader().getConsensusData().getSlotId().getSlot())
+                    .isSyncMode(syncMode)
+                    .build();
 
-        ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
-        publisher.publishEvent(byronMainBlockEvent);
+            ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
+            publisher.publishEvent(byronMainBlockEvent);
 
-        //Finally Set the cursor
-        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                eventMetadata.getBlock()));
+            //Finally Set the cursor
+            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock()));
+        } catch (Exception e) {
+            log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
+            log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
+            log.error("Stopping fetcher");
+            stopSync();
+            throw new RuntimeException(e);
+        }
     }
 
     @Transactional
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
-        EventMetadata eventMetadata = EventMetadata.builder()
-                .era(Era.Byron)
-                .block(-1)
-                .blockHash(byronEbBlock.getHeader().getBlockHash())
-                .slot(0)
-                .isSyncMode(syncMode)
-                .build();
+        try {
+            EventMetadata eventMetadata = EventMetadata.builder()
+                    .era(Era.Byron)
+                    .block(-1)
+                    .blockHash(byronEbBlock.getHeader().getBlockHash())
+                    .slot(0)
+                    .isSyncMode(syncMode)
+                    .build();
 
-        publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
+            publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
+        } catch (Exception e) {
+            log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
+            log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
+            log.error("Stopping fetcher");
+            stopSync();
+            throw new RuntimeException(e);
+        }
     }
 
+    private void stopSync() {
+        if (blockRangeSync != null)
+            blockRangeSync.stop();
+        if (blockSync != null)
+            blockSync.stop();
+    }
+
+    @Transactional
     @Override
     public void onRollback(Point point) {
         Optional<Cursor> cursorOptional = cursorService.getCursor();
@@ -187,7 +208,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 .map(cursor -> new Point(cursor.getSlot(), cursor.getBlockHash()))
                 .orElse(null);
         long currentBlockNum = cursorOptional.map(cursor -> cursor.getBlock())
-                .orElse(null);
+                .orElse(-1L);
 
         //Reset cursor
         cursorService.setCursor(Cursor.builder()

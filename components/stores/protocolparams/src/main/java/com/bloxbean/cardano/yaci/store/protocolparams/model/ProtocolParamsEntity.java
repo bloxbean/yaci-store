@@ -21,7 +21,7 @@ import javax.persistence.Table;
 @Table(name = "protocol_params")
 public class ProtocolParamsEntity extends BaseEntity {
     @Id
-    private long id;
+    private Long id;
 
     @Type(type = "json")
     @Column(name = "params")

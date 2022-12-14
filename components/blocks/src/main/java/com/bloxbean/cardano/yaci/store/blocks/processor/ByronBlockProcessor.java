@@ -82,7 +82,7 @@ public class ByronBlockProcessor {
         BlockEntity block = BlockEntity.builder()
                 .era(Era.Byron.getValue())
                 .blockHash(byronEbBlock.getHeader().getBlockHash())
-                .slot(0)
+                .slot(0L)
                 .epoch(byronEbBlock.getHeader().getConsensusData().getEpoch())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
                 .build();
