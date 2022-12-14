@@ -8,9 +8,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/epochs")
@@ -26,15 +25,10 @@ public class EpochController {
 
     //TODO -- This is a workaround for now. As we keep only the current protocol params now
     @GetMapping("/parameters")
-    public Mono<ProtocolParams> getProtocolParams() {
+    public ProtocolParams getProtocolParams() {
        return protocolParamService.getCurrentProtocolParams()
-               .map(protocolParams -> Mono.just(protocolParams))
-               .orElse(notFound());
-    }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<ProtocolParams> notFound() {
-        return Mono.empty();
+               .map(protocolParams -> protocolParams)
+               .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 
 }

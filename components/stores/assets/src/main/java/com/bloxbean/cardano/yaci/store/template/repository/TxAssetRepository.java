@@ -19,5 +19,5 @@ public interface TxAssetRepository extends PagingAndSortingRepository<TxAsset, L
     List<TxAsset> findByPolicyAndAssetName(String policy, String assetName);
 //    Page<TxAsset> findByPolicyAndAssetName(String policy, String assetName, Pageable page);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }

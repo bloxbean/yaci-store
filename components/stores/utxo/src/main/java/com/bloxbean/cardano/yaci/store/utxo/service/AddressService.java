@@ -21,7 +21,7 @@ public class AddressService {
 
     public List<Utxo> getUnspentUtxos(String address, int page, int count, String order) {
         Pageable pageable = PageRequest.of(page, count);
-        return utxoRepository.findAddressUtxoByOwnerAddrAndSpent(address, false, pageable)
+        return utxoRepository.findAddressUtxoByOwnerAddrAndSpent(address, null, pageable)
                 .orElseGet(() -> new ArrayList<>())
                 .stream()
                 .map(addressUtxo -> Utxo.builder()

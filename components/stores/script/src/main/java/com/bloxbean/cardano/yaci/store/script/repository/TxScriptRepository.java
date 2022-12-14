@@ -10,5 +10,5 @@ import java.util.List;
 public interface TxScriptRepository extends JpaRepository<TxScript, Long> {
     List<TxScript> findByTxHash(String txHash);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }

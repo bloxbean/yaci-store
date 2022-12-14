@@ -13,8 +13,8 @@ public interface BlockRepository extends PagingAndSortingRepository<BlockEntity,
 
     Optional<BlockEntity> findByBlockHash(String blockHash);
 
-    Optional<BlockEntity> findByBlock(long block);
+    Optional<BlockEntity> findByBlock(Long block);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }
 

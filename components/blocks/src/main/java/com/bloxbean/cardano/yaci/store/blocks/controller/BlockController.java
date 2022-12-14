@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.service.BlockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/blocks")
@@ -20,21 +20,15 @@ public class BlockController {
     }
 
     @GetMapping("{number}")
-    public Mono<BlockDetails> getBlockByNumber(@PathVariable long number) {
+    public BlockDetails getBlockByNumber(@PathVariable long number) {
         return blockService.getBlockByNumber(number)
-                .map(blockDetails -> Mono.just(blockDetails))
-                .orElse(notFound());
-    }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Mono<BlockDetails> notFound() {
-        return Mono.empty();
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
     }
 
     @GetMapping
-    public Mono<BlocksPage> getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
+    public BlocksPage getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
                                             @RequestParam(name = "count", defaultValue = "10") int count) {
-        return Mono.just(blockService.getBlocks(page, count));
+        return blockService.getBlocks(page, count);
     }
 
 }

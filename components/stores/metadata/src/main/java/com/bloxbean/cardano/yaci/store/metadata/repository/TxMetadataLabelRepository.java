@@ -10,5 +10,5 @@ import java.util.List;
 public interface TxMetadataLabelRepository extends PagingAndSortingRepository<TxMetadataLabel, Long> {
     List<TxMetadataLabel> findByTxHash(String txHash);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }

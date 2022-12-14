@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface UtxoRepository extends JpaRepository<AddressUtxo, UtxoId> {
 
-    Optional<List<AddressUtxo>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, boolean spent, Pageable page);
+    Optional<List<AddressUtxo>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
 
     List<AddressUtxo> findAllById(Iterable<UtxoId> utxoIds);
 
@@ -20,8 +20,8 @@ public interface UtxoRepository extends JpaRepository<AddressUtxo, UtxoId> {
 //    @Query(value = "DELETE FROM AddressUtxo a WHERE a.slot > :slot")
 //    int deleteBySlotAfter(@Param("slot") long slot);
 
-    List<AddressUtxo> findBySlot(long slot);
+    List<AddressUtxo> findBySlot(Long slot);
 
-    int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(Long slot);
 }
 

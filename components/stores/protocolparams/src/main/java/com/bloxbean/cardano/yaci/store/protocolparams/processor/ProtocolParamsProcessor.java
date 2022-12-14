@@ -5,8 +5,10 @@ import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.protocolparams.service.ProtocolParamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.TimeUnit;
 
@@ -21,8 +23,8 @@ public class ProtocolParamsProcessor {
         this.protocolParamService = protocolParamService;
     }
 
-//    @EventListener
-//    @Transactional
+    @EventListener
+    @Transactional
     public void handleBlockEvent(BlockHeaderEvent blockHeaderEvent) {
         long currentSlot = blockHeaderEvent.getBlockHeader().getHeaderBody().getSlot();
         if (currentSlot - slot < 5000) //Calculate slots in every 1000 slots
