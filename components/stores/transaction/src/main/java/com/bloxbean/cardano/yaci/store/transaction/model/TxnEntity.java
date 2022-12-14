@@ -32,10 +32,10 @@ public class TxnEntity extends BaseEntity {
     private String blockHash;
 
     @Column(name = "block")
-    private long blockNumber;
+    private Long blockNumber;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Type(type = "json")
     @Column(name = "inputs")
@@ -49,13 +49,13 @@ public class TxnEntity extends BaseEntity {
     private BigInteger fee;
 
     @Column(name = "ttl")
-    private long ttl;
+    private Long ttl;
 
     @Column(name = "auxiliary_datahash")
     private String auxiliaryDataHash;
 
     @Column(name = "validity_interval_start")
-    private long validityIntervalStart;
+    private Long validityIntervalStart;
 
     @Column(name = "script_datahash")
     private String scriptDataHash;
@@ -69,7 +69,7 @@ public class TxnEntity extends BaseEntity {
     private Set<String> requiredSigners;
 
     @Column(name = "network_id")
-    private int netowrkId;
+    private Integer netowrkId;
 
     @Type(type = "json")
     @Column(name = "collateral_return")
@@ -87,5 +87,5 @@ public class TxnEntity extends BaseEntity {
     private List<UtxoId> referenceInputs;
 
     @Column(name = "invalid")
-    private boolean invalid;
+    private Boolean invalid;
 }

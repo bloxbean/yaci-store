@@ -54,9 +54,9 @@ public class UtxoProcessor {
                         }
                     });
         } catch (Exception e) {
-            log.error("Error saving", e);
+            log.error("Error saving : " + event.getMetadata(), e);
             log.error("Stopping fetcher");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
@@ -81,7 +81,7 @@ public class UtxoProcessor {
                 .map(utxo -> getAddressUtxo(metadata, utxo))
                 .map(addressUtxo -> { //Check if utxo is already there, only possible in a multi-instance environment
                     utxoRepository.findById(new UtxoId(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()))
-                            .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.isSpent()));
+                            .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
                     return addressUtxo;
                 })
                 .collect(Collectors.toList());
@@ -132,7 +132,7 @@ public class UtxoProcessor {
         //Only possible in multi-instance environment.
         if (collateralOutputUtxo != null) {
             utxoRepository.findById(new UtxoId(collateralOutputUtxo.getTxHash(), collateralOutputUtxo.getOutputIndex()))
-                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.isSpent()));
+                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
         }
 
 
@@ -188,7 +188,7 @@ public class UtxoProcessor {
 
     private AddressUtxo getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
         AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo);
-        addressUtxo.setCollateralReturn(true);
+        addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }
 

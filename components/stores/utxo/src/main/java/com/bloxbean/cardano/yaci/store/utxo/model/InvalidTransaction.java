@@ -23,7 +23,7 @@ public class InvalidTransaction extends BaseEntity {
     private String txHash;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "block_hash")
     private String blockHash;

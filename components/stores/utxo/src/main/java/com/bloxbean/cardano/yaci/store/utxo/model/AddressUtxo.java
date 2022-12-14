@@ -27,10 +27,10 @@ public class AddressUtxo extends BaseEntity {
     private Integer outputIndex;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "block")
-    private long block;
+    private Long block;
 
     @Column(name = "block_hash")
     private String blockHash;
@@ -62,14 +62,14 @@ public class AddressUtxo extends BaseEntity {
     private String scriptRef;
 
     @Column(name = "spent")
-    private boolean spent;
+    private Boolean spent;
 
     @Column(name = "spent_at_slot")
-    private long spentAtSlot;
+    private Long spentAtSlot;
 
     @Column(name = "spent_tx_hash")
     private String spentTxHash;
 
     @Column(name = "is_collateral_return")
-    private boolean isCollateralReturn;
+    private Boolean isCollateralReturn;
 }

@@ -83,7 +83,7 @@ public class UtxoProcessorTest {
 
         assertThat(spentUtxos.stream().map(addressUtxo -> addressUtxo.getOutputIndex()))
                 .contains(1, 2, 0);
-        assertThat(spentUtxos.stream().map(addressUtxo -> addressUtxo.isSpent()))
+        assertThat(spentUtxos.stream().map(addressUtxo -> addressUtxo.getSpent()))
                 .contains(true, true, true);
         assertThat(spentUtxos.get(0).getSpentTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(1).getSpentTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
@@ -94,8 +94,8 @@ public class UtxoProcessorTest {
         assertThat(unspentUtxos.get(1).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(unspentUtxos.get(0).getSpentTxHash()).isNull();
         assertThat(unspentUtxos.get(1).getSpentTxHash()).isNull();
-        assertThat(unspentUtxos.get(0).isSpent()).isFalse();
-        assertThat(unspentUtxos.get(1).isSpent()).isFalse();
+        assertThat(unspentUtxos.get(0).getSpent()).isFalse();
+        assertThat(unspentUtxos.get(1).getSpent()).isFalse();
         assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getBody().getOutputs().get(0).getAmounts().get(0).getQuantity());
     }
 
@@ -126,14 +126,14 @@ public class UtxoProcessorTest {
         assertThat(spentUtxos).hasSize(2);
         assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(0).getOutputIndex()).isEqualTo(4);
-        assertThat(spentUtxos.get(0).isSpent()).isTrue();
+        assertThat(spentUtxos.get(0).getSpent()).isTrue();
         assertThat(spentUtxos.get(1).getTxHash()).isEqualTo("eeee529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(1).getOutputIndex()).isEqualTo(0);
-        assertThat(spentUtxos.get(1).isSpent()).isTrue();
+        assertThat(spentUtxos.get(1).getSpent()).isTrue();
 
         assertThat(unspentUtxos.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(unspentUtxos.get(0).getSpentTxHash()).isNull();
-        assertThat(unspentUtxos.get(0).isSpent()).isFalse();
+        assertThat(unspentUtxos.get(0).getSpent()).isFalse();
         assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getCollateralReturnUtxo().get().getAmounts().get(0).getQuantity());
     }
 

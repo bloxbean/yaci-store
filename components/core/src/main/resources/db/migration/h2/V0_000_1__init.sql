@@ -1,4 +1,4 @@
-create table cursor
+create table cursor_
 (
     id          integer not null
             primary key,
