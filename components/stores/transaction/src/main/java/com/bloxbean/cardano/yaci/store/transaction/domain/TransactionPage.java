@@ -1,27 +1,24 @@
-package com.bloxbean.cardano.yaci.store.transaction.dto;
+package com.bloxbean.cardano.yaci.store.transaction.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigInteger;
 import java.util.List;
 
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class TransactionSummary {
-    private String txHash;
-    private long blockNumber;
-    private long slot;
-    private List<String> outputAddresses;
-    private BigInteger totalOutput;
-    private BigInteger fee;
+public class TransactionPage {
+    private long total;
+    private int totalPages;
+
+    private List<TransactionSummary> transactionSummaries;
 }

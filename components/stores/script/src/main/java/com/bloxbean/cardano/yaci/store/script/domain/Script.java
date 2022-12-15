@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.dto;
+package com.bloxbean.cardano.yaci.store.script.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -6,11 +6,9 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @SuperBuilder
-public class PlutusScriptDto extends ScriptDto {
+public class Script {
     private String scriptHash;
-    private String content;
-    private String type;
 }

@@ -32,3 +32,12 @@ GET http://localhost:8080/scripts/tx/0d66c70aa9efa6bc1a635191abef9a0cd386a42b3f4
 
 ###
 GET http://localhost:8080/scripts/tx/132ac2876a1822fbaf8df2a417a05c94f19b704fe7ced4f88a86c19df849822b
+
+###
+GET http://localhost:8080/tx/a5dbf6eacf522a1a065476bdf75dfe45db64d9d667f483220e208431b441a44d/metadata
+
+###
+GET http://localhost:8080/tx/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/assets
+
+###
+GET http://localhost:8080/tx/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/metadata

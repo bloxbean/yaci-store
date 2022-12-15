@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.controller;
 
-import com.bloxbean.cardano.yaci.store.transaction.dto.TransactionDetails;
-import com.bloxbean.cardano.yaci.store.transaction.dto.TransactionPage;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
 import com.bloxbean.cardano.yaci.store.transaction.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

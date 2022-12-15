@@ -19,7 +19,7 @@ import java.util.List;
 @Entity
 @Table(name = "address_utxo")
 @IdClass(UtxoId.class)
-public class AddressUtxo extends BaseEntity {
+public class AddressUtxoEntity extends BaseEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

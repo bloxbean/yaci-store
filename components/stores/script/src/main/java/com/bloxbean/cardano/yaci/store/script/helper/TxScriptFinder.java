@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
 import lombok.AllArgsConstructor;
@@ -54,7 +54,7 @@ public class TxScriptFinder {
                             utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex())))
                     .filter(Optional::isPresent)
                     .forEach(addressUtxoOptional -> {
-                        AddressUtxo addressUtxo = addressUtxoOptional.get();
+                        AddressUtxoEntity addressUtxo = addressUtxoOptional.get();
                         if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
                             PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
                             if (plutusScript != null)
@@ -72,7 +72,7 @@ public class TxScriptFinder {
                         utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex())))
                 .filter(Optional::isPresent)
                 .forEach(addressUtxoOptional -> {
-                    AddressUtxo addressUtxo = addressUtxoOptional.get();
+                    AddressUtxoEntity addressUtxo = addressUtxoOptional.get();
                     if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
                         PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
                         if (plutusScript != null)

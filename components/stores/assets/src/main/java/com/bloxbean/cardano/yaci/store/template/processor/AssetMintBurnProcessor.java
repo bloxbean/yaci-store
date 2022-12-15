@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.template.processor;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.MintBurnEvent;
 import com.bloxbean.cardano.yaci.store.template.domain.MintType;
-import com.bloxbean.cardano.yaci.store.template.model.TxAsset;
+import com.bloxbean.cardano.yaci.store.template.model.TxAssetEntity;
 import com.bloxbean.cardano.yaci.store.template.repository.TxAssetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,11 +26,11 @@ public class AssetMintBurnProcessor {
     public void handleAssetMintBurn(MintBurnEvent mintBurnEvent) {
         EventMetadata eventMetadata = mintBurnEvent.getMetadata();
 
-        List<TxAsset> txAssetList = mintBurnEvent.getTxMintBurns().stream()
+        List<TxAssetEntity> txAssetList = mintBurnEvent.getTxMintBurns().stream()
                 .filter(txMintBurn -> txMintBurn.getAmounts() != null)
                 .flatMap(txMintBurn ->
                     txMintBurn.getAmounts()
-                            .stream().map(amount -> TxAsset.builder()
+                            .stream().map(amount -> TxAssetEntity.builder()
                                     .slot(eventMetadata.getSlot())
                                     .txHash(txMintBurn.getTxHash())
                                     .policy(amount.getPolicyId())

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.transaction.dto;
+package com.bloxbean.cardano.yaci.store.transaction.domain;
 
 import com.bloxbean.carano.yaci.store.common.domain.Amt;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
