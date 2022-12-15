@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.script.model;
 
+import jakarta.persistence.Column;
 import lombok.*;
 
-import javax.persistence.Column;
 import java.io.Serializable;
 
 @Getter

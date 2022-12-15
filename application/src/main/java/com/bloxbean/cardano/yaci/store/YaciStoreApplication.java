@@ -1,11 +1,10 @@
 package com.bloxbean.cardano.yaci.store;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 
 @SpringBootApplication
 @Slf4j

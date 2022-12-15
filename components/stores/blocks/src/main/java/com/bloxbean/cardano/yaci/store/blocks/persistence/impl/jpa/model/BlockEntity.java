@@ -2,16 +2,17 @@ package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model;
 
 import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
+import com.vladmihalcea.hibernate.type.json.JsonType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
 
 @Data
 @NoArgsConstructor
@@ -45,15 +46,15 @@ public class BlockEntity extends BaseEntity {
     @Column(name = "vrf_vkey")
     private String vrfVkey;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "nonce_vrf")
     private Vrf nonceVrf;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name="leader_vrf")
     private Vrf leaderVrf;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name="vrf_result")
     private Vrf vrfResult;
 

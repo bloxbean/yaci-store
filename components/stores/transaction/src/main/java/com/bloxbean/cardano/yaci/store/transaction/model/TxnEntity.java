@@ -1,18 +1,19 @@
 package com.bloxbean.cardano.yaci.store.transaction.model;
 
-import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.carano.yaci.store.common.domain.TxOuput;
+import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
+import com.vladmihalcea.hibernate.type.json.JsonType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Set;
@@ -37,11 +38,11 @@ public class TxnEntity extends BaseEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "inputs")
     private List<UtxoId> inputs;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "outputs")
     private List<UtxoId> outputs;
 
@@ -60,29 +61,29 @@ public class TxnEntity extends BaseEntity {
     @Column(name = "script_datahash")
     private String scriptDataHash;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "collateral_inputs")
     private List<UtxoId> collateralInputs;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "required_signers")
     private Set<String> requiredSigners;
 
     @Column(name = "network_id")
     private Integer netowrkId;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "collateral_return")
     private UtxoId collateralReturn;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "collateral_return_json")
     private TxOuput collateralReturnJson;
 
     @Column(name = "total_collateral")
     private BigInteger totalCollateral;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     @Column(name = "reference_inputs")
     private List<UtxoId> referenceInputs;
 

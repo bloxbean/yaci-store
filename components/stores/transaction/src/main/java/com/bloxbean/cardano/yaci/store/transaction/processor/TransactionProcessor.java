@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
 import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

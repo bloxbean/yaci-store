@@ -2,8 +2,6 @@ package com.bloxbean.cardano.yaci.store.script.helper;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class RedeemerMatcherTest {
 
     @Test

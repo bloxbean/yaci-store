@@ -17,7 +17,7 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.script.model.ScriptType;
 import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxo;
-import com.sun.istack.NotNull;
+import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
