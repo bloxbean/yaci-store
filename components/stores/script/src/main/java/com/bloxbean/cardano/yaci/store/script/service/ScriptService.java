@@ -73,7 +73,7 @@ public class ScriptService {
             Redeemer redeemerDto = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
                     .map(redeemer -> Redeemer.builder()
                             .tag(redeemer.getTag())
-                            .getIndex(redeemer.getIndex())
+                            .index(redeemer.getIndex())
                             .exUnits(redeemer.getExUnits())
                             .data(redeemer.getData() != null? redeemer.getData().serializeToHex(): null)
                             .build())
