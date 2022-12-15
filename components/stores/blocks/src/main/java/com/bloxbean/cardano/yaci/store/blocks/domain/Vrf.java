@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blocks.model;
+package com.bloxbean.cardano.yaci.store.blocks.domain;
 
 import com.bloxbean.cardano.yaci.core.model.VrfCert;
 import lombok.AllArgsConstructor;
