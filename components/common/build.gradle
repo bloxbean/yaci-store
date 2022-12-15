@@ -6,6 +6,7 @@ dependencies {
     api 'com.bloxbean.cardano:cardano-client-lib'
 
     api 'com.vladmihalcea:hibernate-types-55'
+    api 'org.springdoc:springdoc-openapi-ui'
 
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'mysql:mysql-connector-java'
