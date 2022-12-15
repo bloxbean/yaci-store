@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
-import com.bloxbean.cardano.yaci.store.blocks.model.BlockEntity;
-import com.bloxbean.cardano.yaci.store.blocks.model.Vrf;
-import com.bloxbean.cardano.yaci.store.blocks.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
+import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.sun.istack.NotNull;
@@ -20,11 +20,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class BlockProcessor {
 
-    private BlockRepository blockRepository;
+    private BlockPersistence blockPersistence;
     private AtomicInteger count;
 
-    public BlockProcessor(BlockRepository blockRepository) {
-        this.blockRepository = blockRepository;
+    public BlockProcessor(BlockPersistence blockPersistence) {
+        this.blockPersistence = blockPersistence;
         count = new AtomicInteger(0);
     }
 
@@ -33,7 +33,7 @@ public class BlockProcessor {
     @Transactional
     public void handleBlockHeaderEvent(@NonNull BlockHeaderEvent blockHeaderEvent) {
         BlockHeader blockHeader = blockHeaderEvent.getBlockHeader();
-        BlockEntity block = BlockEntity.builder()
+        Block block = Block.builder()
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .slot(blockHeader.getHeaderBody().getSlot())
@@ -50,7 +50,7 @@ public class BlockProcessor {
                         + "." + blockHeader.getHeaderBody().getProtocolVersion().get_2())
                 .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
                 .build();
-        blockRepository.save(block);
+        blockPersistence.save(block);
 
         count.incrementAndGet();
         double val = count.get() % 5000;
@@ -72,7 +72,7 @@ public class BlockProcessor {
     @Transactional
     //TODO -- add test
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
-        int count = blockRepository.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        int count = blockPersistence.deleteAllBeforeSlot(rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} block records", count);
     }

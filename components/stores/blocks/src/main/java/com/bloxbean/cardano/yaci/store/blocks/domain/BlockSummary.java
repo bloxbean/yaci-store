@@ -1,6 +1,5 @@
-package com.bloxbean.cardano.yaci.store.blocks.dto;
+package com.bloxbean.cardano.yaci.store.blocks.domain;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -8,17 +7,17 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Getter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
+@Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class BlocksPage {
-    private long total;
-    private int totalPages;
-
-    private List<BlockSummary> blocks;
+public class BlockSummary {
+    private long block;
+    private long slot;
+   // private long epoch;
+    private String era;
+    private String issuerVkey;
+    private long blockBodySize;
+    private int noOfTxs;
 }

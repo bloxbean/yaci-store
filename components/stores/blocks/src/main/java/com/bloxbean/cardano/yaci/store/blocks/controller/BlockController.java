@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.controller;
 
-import com.bloxbean.cardano.yaci.store.blocks.dto.BlockDetails;
-import com.bloxbean.cardano.yaci.store.blocks.dto.BlocksPage;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.service.BlockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -20,7 +20,7 @@ public class BlockController {
     }
 
     @GetMapping("{number}")
-    public BlockDetails getBlockByNumber(@PathVariable long number) {
+    public Block getBlockByNumber(@PathVariable long number) {
         return blockService.getBlockByNumber(number)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
     }
