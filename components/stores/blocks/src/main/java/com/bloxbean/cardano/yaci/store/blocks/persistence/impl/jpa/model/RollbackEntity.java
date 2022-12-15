@@ -1,12 +1,11 @@
 package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model;
 
 import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import javax.persistence.*;
 
 @Data
 @NoArgsConstructor

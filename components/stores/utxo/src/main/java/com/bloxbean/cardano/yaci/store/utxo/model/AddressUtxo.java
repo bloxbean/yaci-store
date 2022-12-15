@@ -2,13 +2,14 @@ package com.bloxbean.cardano.yaci.store.utxo.model;
 
 import com.bloxbean.carano.yaci.store.common.domain.Amt;
 import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
+import com.vladmihalcea.hibernate.type.json.JsonType;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
-import javax.persistence.*;
 import java.util.List;
 
 @Data
@@ -47,7 +48,7 @@ public class AddressUtxo extends BaseEntity {
     @Column(name = "owner_stake_key_hash")
     private String ownerStakeKeyHash;
 
-    @Type(type = "json")
+    @Type(JsonType.class)
     private List<Amt> amounts;
 
     @Column(name = "data_hash")

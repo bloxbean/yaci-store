@@ -3,13 +3,13 @@ package com.bloxbean.cardano.yaci.store.template.repository;
 import com.bloxbean.cardano.yaci.store.template.model.TxAsset;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.repository.PagingAndSortingRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface TxAssetRepository extends PagingAndSortingRepository<TxAsset, Long> {
+public interface TxAssetRepository extends JpaRepository<TxAsset, Long> {
     List<TxAsset> findByTxHash(String txHash);
 
     List<TxAsset> findByPolicy(String policy);

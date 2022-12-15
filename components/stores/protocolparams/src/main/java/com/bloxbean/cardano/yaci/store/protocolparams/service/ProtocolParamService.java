@@ -15,13 +15,13 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.protocolparams.repository.ProtocolParamsRepository;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;

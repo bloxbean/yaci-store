@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.sun.istack.NotNull;
+import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
