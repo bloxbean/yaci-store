@@ -1,7 +1,7 @@
 dependencies {
     api project(":components:common")
     api project(":components:events")
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 
 publishing {
