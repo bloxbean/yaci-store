@@ -21,8 +21,8 @@ public class YaciStoreApplication {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .components(new Components())
-                .info(new Info().title("Customer accounts API").version("1.0")
-                        .license(new License().name("Apache 2.0").url("http://springdoc.org")));
+                .info(new Info().title("Yaci Store API").version("1.0")
+                        .license(new License().name("MIT").url("https://github.com/bloxbean/yaci-store")));
     }
 
 }

@@ -19,7 +19,7 @@ import java.util.List;
 public class AssetController {
     private final AssetService assetService;
 
-    @GetMapping("/tx/{txHash}/assets")
+    @GetMapping("/txs/{txHash}/assets")
     public List<TxAsset> getAssetsByTx(@PathVariable String txHash) {
         return assetService.getAssetsByTx(txHash);
     }
