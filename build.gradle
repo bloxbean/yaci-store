@@ -51,7 +51,7 @@ subprojects {
         sourceCompatibility = '17'
         targetCompatibility = '17'
 
-        options.compilerArgs += ["-Aproject=${project.group}/${project.name}"]
+        options.compilerArgs += ["-Aproject=${project.group}/${project.name}", "-parameters"]
     }
 
     tasks.withType(Javadoc) {
