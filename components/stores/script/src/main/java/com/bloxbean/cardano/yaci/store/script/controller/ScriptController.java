@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.controller;
 
-import com.bloxbean.cardano.yaci.store.script.dto.ScriptDto;
-import com.bloxbean.cardano.yaci.store.script.dto.TxContractDetails;
+import com.bloxbean.cardano.yaci.store.script.domain.Script;
+import com.bloxbean.cardano.yaci.store.script.domain.TxContractDetails;
 import com.bloxbean.cardano.yaci.store.script.service.ScriptService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -24,7 +24,7 @@ public class ScriptController {
     }
 
     @GetMapping("{scriptHash}")
-    public ScriptDto getScriptByHash(@PathVariable String scriptHash) {
+    public Script getScriptByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }

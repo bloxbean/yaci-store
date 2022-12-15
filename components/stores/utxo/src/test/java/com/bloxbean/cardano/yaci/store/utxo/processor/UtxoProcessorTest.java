@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,7 @@ public class UtxoProcessorTest {
     private UtxoProcessor utxoProcessor;
 
     @Captor
-    ArgumentCaptor<List<AddressUtxo>> argCaptor;
+    ArgumentCaptor<List<AddressUtxoEntity>> argCaptor;
 
 
     @BeforeEach
@@ -70,8 +70,8 @@ public class UtxoProcessorTest {
         utxoProcessor.handleTransactionEvent(transactionEvent);
         verify(utxoRepository, times(2)).saveAll(argCaptor.capture());
 
-        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
-        List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
+        List<AddressUtxoEntity> spentUtxos = argCaptor.getAllValues().get(0);
+        List<AddressUtxoEntity> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(3);
         assertThat(unspentUtxos).hasSize(2);
@@ -120,8 +120,8 @@ public class UtxoProcessorTest {
         utxoProcessor.handleTransactionEvent(transactionEvent);
         verify(utxoRepository, times(2)).saveAll(argCaptor.capture());
 
-        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
-        List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
+        List<AddressUtxoEntity> spentUtxos = argCaptor.getAllValues().get(0);
+        List<AddressUtxoEntity> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(2);
         assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.dto;
+package com.bloxbean.cardano.yaci.store.script.domain;
 
 import com.bloxbean.cardano.yaci.store.script.model.ScriptType;
 import lombok.AllArgsConstructor;
@@ -15,7 +15,7 @@ public class TxContractDetails {
     private String scriptHash;
     private String scriptContent;
     private ScriptType type;
-    private RedeemerDto redeemer;
+    private Redeemer redeemer;
     private String datum;
     private String datumHash;
 }

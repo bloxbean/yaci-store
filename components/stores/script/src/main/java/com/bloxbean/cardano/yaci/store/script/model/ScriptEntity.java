@@ -20,7 +20,7 @@ import org.hibernate.annotations.Type;
 @Builder
 @Entity
 @Table(name = "script")
-public class Script extends BaseEntity {
+public class ScriptEntity extends BaseEntity {
     @Id
     @Column(name = "script_hash")
     private String scriptHash;

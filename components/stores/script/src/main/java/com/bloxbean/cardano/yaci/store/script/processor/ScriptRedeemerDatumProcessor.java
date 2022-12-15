@@ -9,8 +9,8 @@ import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
-import com.bloxbean.cardano.yaci.store.script.model.Script;
-import com.bloxbean.cardano.yaci.store.script.model.TxScript;
+import com.bloxbean.cardano.yaci.store.script.model.ScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.repository.ScriptRepository;
 import com.bloxbean.cardano.yaci.store.script.repository.TxScriptRepository;
 import lombok.AllArgsConstructor;
@@ -67,7 +67,7 @@ public class ScriptRedeemerDatumProcessor {
         Map<String, String> datumHashToDatumMap = findWitnessDatum(transaction);
 
         //Convert to TxScript objects
-        List<TxScript> txScripts = scriptContexts.stream()
+        List<TxScriptEntity> txScripts = scriptContexts.stream()
                 .map(scriptContext -> {
                     //Try to set datum
                     if (StringUtil.isEmpty(scriptContext.getDatum())) {
@@ -79,7 +79,7 @@ public class ScriptRedeemerDatumProcessor {
                     if (StringUtil.isEmpty(scriptContext.getDatumHash()) && !StringUtil.isEmpty(scriptContext.getDatum()))
                         scriptContext.setDatumHash(ScriptUtil.getDatumHash(scriptContext.getDatum()));
 
-                    return TxScript.builder()
+                    return TxScriptEntity.builder()
                             .txHash(transaction.getTxHash())
                             .slot(metadata.getSlot())
                             .block(metadata.getBlock())
@@ -93,8 +93,8 @@ public class ScriptRedeemerDatumProcessor {
                 }).collect(Collectors.toList());
 
         //Create TxScript entities to save
-        List<Script> plutusScripts = scriptsMap.values().stream()
-                        .map(plutusScript -> Script.builder()
+        List<ScriptEntity> plutusScripts = scriptsMap.values().stream()
+                        .map(plutusScript -> ScriptEntity.builder()
                                 .scriptHash(getPlutusScriptHash(plutusScript))
                                 .plutusScript(plutusScript)
                                 .build()).collect(Collectors.toList());
@@ -103,8 +103,8 @@ public class ScriptRedeemerDatumProcessor {
 
         //Get all native scripts  and save
         if (transaction.getWitnesses().getNativeScripts() != null) {
-            List<Script> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
-                    .map(nativeScript -> Script.builder()
+            List<ScriptEntity> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
+                    .map(nativeScript -> ScriptEntity.builder()
                             .scriptHash(ScriptUtil.getNativeScriptHash(nativeScript))
                             .nativeScript(nativeScript)
                             .build()).collect(Collectors.toList());

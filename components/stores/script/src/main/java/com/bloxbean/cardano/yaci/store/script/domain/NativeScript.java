@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.dto;
+package com.bloxbean.cardano.yaci.store.script.domain;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
@@ -10,6 +10,6 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-public class NativeScriptDto extends ScriptDto {
+public class NativeScript extends Script {
     private JsonNode content;
 }

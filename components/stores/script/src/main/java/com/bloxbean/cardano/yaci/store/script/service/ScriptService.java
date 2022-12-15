@@ -1,11 +1,10 @@
 package com.bloxbean.cardano.yaci.store.script.service;
 
 import com.bloxbean.cardano.client.util.JsonUtil;
-import com.bloxbean.cardano.yaci.core.model.PlutusScript;
-import com.bloxbean.cardano.yaci.store.script.dto.*;
+import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
-import com.bloxbean.cardano.yaci.store.script.model.Script;
-import com.bloxbean.cardano.yaci.store.script.model.TxScript;
+import com.bloxbean.cardano.yaci.store.script.model.ScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.repository.ScriptRepository;
 import com.bloxbean.cardano.yaci.store.script.repository.TxScriptRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,10 +22,10 @@ public class ScriptService {
     private ScriptRepository scriptRepository;
     private TxScriptRepository txScriptRepository;
 
-    public Optional<ScriptDto> getScriptByHash(String scriptHash) {
-        Optional<Script> scriptOptional = scriptRepository.findById(scriptHash);
+    public Optional<Script> getScriptByHash(String scriptHash) {
+        Optional<ScriptEntity> scriptOptional = scriptRepository.findById(scriptHash);
         if (scriptOptional.isPresent()) {
-            Script script = scriptOptional.get();
+            ScriptEntity script = scriptOptional.get();
             if (script.getNativeScript() != null) {
                 JsonNode jsonNode;
                 try {
@@ -35,12 +34,12 @@ public class ScriptService {
                     throw new IllegalStateException("NativeScript content cannot be parsed");
                 }
 
-                return Optional.of(NativeScriptDto.builder()
+                return Optional.of(NativeScript.builder()
                         .scriptHash(script.getScriptHash())
                         .content(jsonNode)
                         .build());
             } else if (script.getPlutusScript() != null) {
-                return Optional.of(PlutusScriptDto.builder()
+                return Optional.of(PlutusScript.builder()
                         .scriptHash(script.getScriptHash())
                         .content(script.getPlutusScript().getContent())
                         .type(script.getPlutusScript().getType())
@@ -54,14 +53,14 @@ public class ScriptService {
     }
 
     public List<TxContractDetails> getTransactionScripts(String txHash) {
-        List<TxScript> txScripts = txScriptRepository.findByTxHash(txHash);
+        List<TxScriptEntity> txScripts = txScriptRepository.findByTxHash(txHash);
 
         if (txScripts == null || txScripts.size() == 0)
             return Collections.EMPTY_LIST;
 
         return txScripts.stream().map(txScript -> {
             String scriptHash = txScript.getScriptHash();
-            PlutusScript plutusScript = null;
+            com.bloxbean.cardano.yaci.core.model.PlutusScript plutusScript = null;
 
             if (scriptHash != null && !scriptHash.isEmpty()) {
                 plutusScript = scriptRepository.findById(scriptHash)
@@ -71,8 +70,8 @@ public class ScriptService {
 
             String content = plutusScript != null? plutusScript.getContent(): null;
 
-            RedeemerDto redeemerDto = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
-                    .map(redeemer -> RedeemerDto.builder()
+            Redeemer redeemerDto = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
+                    .map(redeemer -> Redeemer.builder()
                             .tag(redeemer.getTag())
                             .getIndex(redeemer.getIndex())
                             .exUnits(redeemer.getExUnits())

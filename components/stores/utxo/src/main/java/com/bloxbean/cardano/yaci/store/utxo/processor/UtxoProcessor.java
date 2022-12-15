@@ -8,8 +8,8 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.utxo.model.InvalidTransaction;
+import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.model.InvalidTransactionEntity;
 import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
@@ -64,11 +64,11 @@ public class UtxoProcessor {
             return;
 
         //set spent for input
-        List<AddressUtxo> inputAddressUtxos = transaction.getBody().getInputs().stream()
+        List<AddressUtxoEntity> inputAddressUtxos = transaction.getBody().getInputs().stream()
                 .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
                 .map(utxoId -> {
-                    AddressUtxo addressUtxo = utxoRepository.findById(utxoId)
-                            .orElse(AddressUtxo.builder()        //If not present, then create a record with pk
+                    AddressUtxoEntity addressUtxo = utxoRepository.findById(utxoId)
+                            .orElse(AddressUtxoEntity.builder()        //If not present, then create a record with pk
                                     .txHash(utxoId.getTxHash())
                                     .outputIndex(utxoId.getOutputIndex()).build());
                     addressUtxo.setSpent(true);
@@ -76,7 +76,7 @@ public class UtxoProcessor {
                     return addressUtxo;
                 }).collect(Collectors.toList());
 
-        List<AddressUtxo> outputAddressUtxos = transaction.getUtxos().stream()
+        List<AddressUtxoEntity> outputAddressUtxos = transaction.getUtxos().stream()
                 .map(utxo -> getAddressUtxo(metadata, utxo))
                 .map(addressUtxo -> { //Check if utxo is already there, only possible in a multi-instance environment
                     utxoRepository.findById(new UtxoId(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()))
@@ -98,7 +98,7 @@ public class UtxoProcessor {
             return;
 
         //insert invalid transactions and collateral return utxo if any
-        InvalidTransaction invalidTransaction = InvalidTransaction.builder()
+        InvalidTransactionEntity invalidTransaction = InvalidTransactionEntity.builder()
                 .txHash(transaction.getTxHash())
                 .slot(metadata.getSlot())
                 .blockHash(metadata.getBlockHash())
@@ -107,15 +107,15 @@ public class UtxoProcessor {
         invalidTransactionRepository.save(invalidTransaction);
 
         //collateral output
-        AddressUtxo collateralOutputUtxo = transaction.getCollateralReturnUtxo()
+        AddressUtxoEntity collateralOutputUtxo = transaction.getCollateralReturnUtxo()
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
 
         //collateral inputs will be marked as spent
-        List<AddressUtxo> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
+        List<AddressUtxoEntity> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
                 .map(transactionInput -> {
-                    AddressUtxo addressUtxo = utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
-                            .orElse(AddressUtxo.builder()
+                    AddressUtxoEntity addressUtxo = utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
+                            .orElse(AddressUtxoEntity.builder()
                                     .txHash(transactionInput.getTransactionId())
                                     .outputIndex(transactionInput.getIndex())
                                     .build()
@@ -141,7 +141,7 @@ public class UtxoProcessor {
             utxoRepository.saveAll(collateralInputUtxos);
     }
 
-    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
+    private AddressUtxoEntity getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
@@ -168,7 +168,7 @@ public class UtxoProcessor {
                 log.error("Unable to get stake address for address : " + utxo.getAddress(), e);
         }
 
-        return AddressUtxo.builder()
+        return AddressUtxoEntity.builder()
                 .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
                 .blockHash(eventMetadata.getBlockHash())
@@ -185,8 +185,8 @@ public class UtxoProcessor {
                 .build();
     }
 
-    private AddressUtxo getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
-        AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo);
+    private AddressUtxoEntity getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
+        AddressUtxoEntity addressUtxo = getAddressUtxo(metadata, utxo);
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }

@@ -1,10 +1,13 @@
 package com.bloxbean.cardano.yaci.store;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
 
 @SpringBootApplication
 @Slf4j
@@ -14,14 +17,12 @@ public class YaciStoreApplication {
         SpringApplication.run(YaciStoreApplication.class, args);
     }
 
-    @PreDestroy
-    public void onDestroy() throws Exception {
-        log.info("Spring Container is destroyed!");
-    }
-
-    @PostConstruct
-    public void postConstruct() {
-
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .components(new Components())
+                .info(new Info().title("Customer accounts API").version("1.0")
+                        .license(new License().name("Apache 2.0").url("http://springdoc.org")));
     }
 
 }

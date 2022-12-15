@@ -6,9 +6,9 @@ import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.store.events.ScriptEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
-import com.bloxbean.cardano.yaci.store.script.model.Script;
+import com.bloxbean.cardano.yaci.store.script.model.ScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.model.ScriptType;
-import com.bloxbean.cardano.yaci.store.script.model.TxScript;
+import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.repository.ScriptRepository;
 import com.bloxbean.cardano.yaci.store.script.repository.TxScriptRepository;
 import org.springframework.stereotype.Component;
@@ -35,12 +35,12 @@ public class ScriptProcessor {
     public void handleScriptEvent(ScriptEvent scriptEvent) {
         List<TxScripts> txScriptList = scriptEvent.getTxScriptsList();
 
-        List<Script> scriptEntities = new ArrayList<>();
-        List<TxScript> txScriptEntities = new ArrayList<>();
+        List<ScriptEntity> scriptEntities = new ArrayList<>();
+        List<TxScriptEntity> txScriptEntities = new ArrayList<>();
         txScriptList.stream()
                 .forEach(txScripts -> {
                     if (txScripts.getPlutusV1Scripts() != null) {
-                        List<Tuple<Script, TxScript>> plutusV1Scripts = txScripts.getPlutusV1Scripts().stream()
+                        List<Tuple<ScriptEntity, TxScriptEntity>> plutusV1Scripts = txScripts.getPlutusV1Scripts().stream()
                                 .map(plutusScript -> {
                                     return getPlutusScriptEntities(txScripts, plutusScript, ScriptType.PLUTUS_V1);
                                 }).collect(Collectors.toList());
@@ -52,7 +52,7 @@ public class ScriptProcessor {
                     }
 
                     if (txScripts.getPlutusV2Scripts() != null) {
-                        List<Tuple<Script, TxScript>> plutusV2Scripts = txScripts.getPlutusV2Scripts().stream()
+                        List<Tuple<ScriptEntity, TxScriptEntity>> plutusV2Scripts = txScripts.getPlutusV2Scripts().stream()
                                 .map(plutusScript -> {
                                     return getPlutusScriptEntities(txScripts, plutusScript, ScriptType.PLUTUS_V2);
                                 }).collect(Collectors.toList());
@@ -64,7 +64,7 @@ public class ScriptProcessor {
                     }
 
                     if (txScripts.getNativeScripts() != null) {
-                        List<Tuple<Script, TxScript>> nativeScripts = txScripts.getNativeScripts().stream()
+                        List<Tuple<ScriptEntity, TxScriptEntity>> nativeScripts = txScripts.getNativeScripts().stream()
                                 .map(nativeScript -> {
                                     return getNativeScriptEntities(txScripts, nativeScript, ScriptType.NATIVE_SCRIPT);
                                 }).collect(Collectors.toList());
@@ -80,14 +80,14 @@ public class ScriptProcessor {
         //TODO -- txScriptRepository.saveAll(txScriptEntities);
     }
 
-    private Tuple<Script, TxScript> getPlutusScriptEntities(TxScripts txScripts, PlutusScript plutusScript,
-                                                            ScriptType type) {
+    private Tuple<ScriptEntity, TxScriptEntity> getPlutusScriptEntities(TxScripts txScripts, PlutusScript plutusScript,
+                                                                        ScriptType type) {
         String scriptHash = getPlutusScriptHash(plutusScript);
-        Script script = Script.builder()
+        ScriptEntity script = ScriptEntity.builder()
                 .scriptHash(scriptHash)
                 .plutusScript(plutusScript)
                 .build();
-        TxScript txScript = TxScript.builder()
+        TxScriptEntity txScript = TxScriptEntity.builder()
                 .txHash(txScripts.getTxHash())
                 .type(type)
                 .scriptHash(scriptHash)
@@ -95,14 +95,14 @@ public class ScriptProcessor {
         return new Tuple(script, txScript);
     }
 
-    private Tuple<Script, TxScript> getNativeScriptEntities(TxScripts txScripts, NativeScript nativeScript,
-                                                            ScriptType type) {
+    private Tuple<ScriptEntity, TxScriptEntity> getNativeScriptEntities(TxScripts txScripts, NativeScript nativeScript,
+                                                                        ScriptType type) {
         String scriptHash = getNativeScriptHash(nativeScript);
-        Script script = Script.builder()
+        ScriptEntity script = ScriptEntity.builder()
                 .scriptHash(scriptHash)
                 .nativeScript(nativeScript)
                 .build();
-        TxScript txScript = TxScript.builder()
+        TxScriptEntity txScript = TxScriptEntity.builder()
                 .txHash(txScripts.getTxHash())
                 .type(type)
                 .scriptHash(scriptHash)

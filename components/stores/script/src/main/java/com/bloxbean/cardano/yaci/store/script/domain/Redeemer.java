@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.dto;
+package com.bloxbean.cardano.yaci.store.script.domain;
 
 import com.bloxbean.cardano.client.transaction.spec.ExUnits;
 import com.bloxbean.cardano.client.transaction.spec.RedeemerTag;
@@ -13,7 +13,7 @@ import java.math.BigInteger;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class RedeemerDto {
+public class Redeemer {
     private RedeemerTag tag;
     private BigInteger getIndex;
     private String data;

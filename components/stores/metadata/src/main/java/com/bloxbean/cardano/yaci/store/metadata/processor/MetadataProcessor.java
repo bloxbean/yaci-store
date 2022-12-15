@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.metadata.processor;
 import com.bloxbean.carano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.metadata.model.TxMetadataLabel;
+import com.bloxbean.cardano.yaci.store.metadata.model.TxMetadataLabelEntity;
 import com.bloxbean.cardano.yaci.store.metadata.repository.TxMetadataLabelRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -32,7 +32,7 @@ public class MetadataProcessor {
             log.debug("Received AuxDataEvent");
 
         EventMetadata eventMetadata = auxDataEvent.getMetadata();
-        List<TxMetadataLabel> txMetadataLabelEntities = auxDataEvent.getTxAuxDataList().stream()
+        List<TxMetadataLabelEntity> txMetadataLabelEntities = auxDataEvent.getTxAuxDataList().stream()
                 .filter(txAuxDataEvent -> txAuxDataEvent.getAuxData() != null
                         && !StringUtil.isEmpty(txAuxDataEvent.getAuxData().getMetadataJson()))
                 .map(txAuxData -> {
@@ -44,9 +44,9 @@ public class MetadataProcessor {
                         throw new IllegalStateException(e);
                     }
 
-                    List<TxMetadataLabel> txMetadataLabels = new ArrayList<>();
+                    List<TxMetadataLabelEntity> txMetadataLabels = new ArrayList<>();
                     jsonNode.fieldNames().forEachRemaining(fieldName -> {
-                        TxMetadataLabel txMetadataLabel = TxMetadataLabel.builder()
+                        TxMetadataLabelEntity txMetadataLabel = TxMetadataLabelEntity.builder()
                                 .slot(eventMetadata.getSlot())
                                 .txHash(txAuxData.getTxHash())
                                 .label(fieldName)

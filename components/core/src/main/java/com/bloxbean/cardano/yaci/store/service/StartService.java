@@ -49,7 +49,7 @@ public class StartService {
         log.info("Application is ready. Let's start the sync process ...");
         Point from = null;
         Integer era = null;
-        long blockNumber = 0;
+        Long blockNumber = 0L;
 //        Optional<BlockEntity> optional = blockRepository.findTopByOrderByBlockDesc();
         Optional<Cursor> optional = cursorService.getCursor();
         if (optional.isPresent()) {

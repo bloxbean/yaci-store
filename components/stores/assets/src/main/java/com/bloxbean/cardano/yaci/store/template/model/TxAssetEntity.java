@@ -16,7 +16,7 @@ import java.math.BigInteger;
 @Builder
 @Entity
 @Table(name = "assets")
-public class TxAsset extends BaseEntity {
+public class TxAssetEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
     @Column(name = "id")

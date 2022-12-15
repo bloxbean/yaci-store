@@ -6,6 +6,7 @@ import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,7 +18,8 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @Entity
-public class InvalidTransaction extends BaseEntity {
+@Table(name = "invalid_transaction")
+public class InvalidTransactionEntity extends BaseEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;
