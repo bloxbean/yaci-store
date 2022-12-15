@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/scripts")
+@RequestMapping
 @Slf4j
 public class ScriptController {
     private ScriptService scriptService;
@@ -23,13 +23,13 @@ public class ScriptController {
         this.scriptService = scriptService;
     }
 
-    @GetMapping("{scriptHash}")
+    @GetMapping("/scripts/{scriptHash}")
     public Script getScriptByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
-    @GetMapping("/tx/{txHash}")
+    @GetMapping("/txs/{txHash}/scripts")
     public List<TxContractDetails> getTxContractDetails(@PathVariable String txHash) {
         return scriptService.getTransactionScripts(txHash);
     }

@@ -24,7 +24,6 @@ public class TransactionController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
-
     @GetMapping
     public TransactionPage getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
                                            @RequestParam(name = "count", defaultValue = "10") int count) {

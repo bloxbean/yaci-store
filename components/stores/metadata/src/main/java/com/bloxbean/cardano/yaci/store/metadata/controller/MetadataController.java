@@ -12,13 +12,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/")
+@RequestMapping
 @RequiredArgsConstructor
 @Slf4j
 public class MetadataController {
     private final MetadataService metadataService;
 
-    @GetMapping("/tx/{txHash}/metadata")
+    @GetMapping("/txs/{txHash}/metadata")
     public List<TxMetadata> getMetadataByTxHash(@PathVariable String txHash) {
         return metadataService.getMetadataForTx(txHash);
     }

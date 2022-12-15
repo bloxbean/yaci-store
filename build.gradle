@@ -34,7 +34,7 @@ subprojects {
             dependency 'org.postgresql:postgresql:42.5.0'
             dependency 'org.codehaus.janino:janino:3.1.8'
             dependency 'com.google.guava:guava:31.1-jre'
-            dependency 'org.springdoc:springdoc-openapi-starter-webmvc-api:2.0.0'
+            dependency 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0'
         }
     }
 
