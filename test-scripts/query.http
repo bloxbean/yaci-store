@@ -16,7 +16,7 @@ GET http://localhost:8080/epochs/parameters
 GET http://localhost:8080/txs
 
 ###
-GET http://localhost:8080/txs?page=10&count=10
+GET http://localhost:8080/txs?page=0&count=10
 
 ###
 GET http://localhost:8080/blocks/376120
