@@ -30,6 +30,7 @@ Modules are divided into following categories
 1. **Core Modules**
 2. **Stores**
 
+--
 
 1. **Core Modules**
 
