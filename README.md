@@ -17,14 +17,47 @@ $> ./gradlew clean build
 ```
 $> cd yaci-store
 $> edit config/application.properties //datasource, network details
-$> java -jar application/build/libs/yaci-store-app-<version>-SNAPSHOT.jar 
+$> java application/build/libs/yaci-store-application-<version>.jar
 ```
 
-## Modules
-- common
-- events
-- core
-- blocks
-- utxo
-- transaction
-- script
+## Overview
+
+It provides loosely coupled modules which can be used to compose your own application. Out of box, it provides a default application
+which consists of all the modules.
+
+Modules are divided into following categories
+
+1. **Core Modules**
+2. **Stores**
+
+
+1. **Core Modules**
+
+Core modules are responsible to fetch data from a Cardano node and publish different types of events.
+
+core, common, events are some of the major core modules. Only local events are currently supported.
+
+But in future, the remote events will be supported through different pluggable messaging infrastructure.
+
+2. **Stores**
+
+A store is a loosely coupled module specific to one type of data/usecase. 
+A store has ability 
+- to listen to events published by the core module
+- process data 
+- store data to a persistence store
+- provides REST endpoints to retrieve data (optional)
+
+Currently, the following store implementations are available.
+
+- **blocks**   : Process block events and store blocks in database
+- **utxo**     : Process transaction events, resolve utxos and store in database
+- **transaction** : Process transaction events and store transactions in database
+- **script**   : Process transaction events, resolve script redeemer, datum and store 
+- **metadata** : Process aux data events to store metadata in database
+- **assets**   : Process events to store mint/burn assets in database
+- **protocolparams** :  Retrieve protocol params through n2c and store
+
+**Note:** With remote eventing support, there will be option to deploy each store independently.
+
+Yaci Store also has a "**submit**" module to support transaction submission.
