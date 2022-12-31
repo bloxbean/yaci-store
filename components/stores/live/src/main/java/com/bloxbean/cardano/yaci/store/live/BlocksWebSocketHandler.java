@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.live;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.live.cache.BlockCache;
 import com.bloxbean.cardano.yaci.store.live.dto.BlockData;
+import com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs;
 import com.bloxbean.cardano.yaci.store.live.dto.OnJoinData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,13 @@ public class BlocksWebSocketHandler extends TextWebSocketHandler {
 
     public void broadcastBlockData(BlockData blockData) throws IOException {
         TextMessage content = new TextMessage(JsonUtil.getPrettyJson(blockData));
+        for (WebSocketSession session: sessions) {
+            session.sendMessage(content);
+        }
+    }
+
+    public void broadcastMempoolTxs(MempoolTxs mempoolTxs) throws IOException {
+        TextMessage content = new TextMessage(JsonUtil.getPrettyJson(mempoolTxs));
         for (WebSocketSession session: sessions) {
             session.sendMessage(content);
         }
