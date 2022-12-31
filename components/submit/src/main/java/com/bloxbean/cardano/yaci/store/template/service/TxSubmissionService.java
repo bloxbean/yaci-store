@@ -5,8 +5,6 @@ import com.bloxbean.cardano.yaci.core.protocol.localtx.model.TxSubmissionRequest
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalTxSubmissionClient;
 import com.bloxbean.cardano.yaci.helper.model.TxResult;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
@@ -24,18 +22,6 @@ public class TxSubmissionService {
     private TxSubmissionService(LocalClientProvider localClientProvider) {
         this.localClientProvider = localClientProvider;
         this.txSubmissionClient = localClientProvider.getTxSubmissionClient();
-    }
-
-    @PostConstruct
-    private void postConstruct() {
-        if (localClientProvider != null && !localClientProvider.isRunning())
-            localClientProvider.start();
-    }
-
-    @PreDestroy
-    private void destroy() {
-        if (localClientProvider != null)
-            localClientProvider.shutdown();
     }
 
     public TxResult submitTx(TxBodyType txBodyType, byte[] txBytes) {
