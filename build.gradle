@@ -7,15 +7,15 @@ subprojects {
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'java-library'
 
-    repositories {
-        maven {
-            url "https://oss.sonatype.org/content/repositories/snapshots"
-        }
-    }
+//    repositories {
+//        maven {
+//            url "https://oss.sonatype.org/content/repositories/snapshots"
+//        }
+//    }
 
     repositories {
-        mavenCentral()
         mavenLocal()
+        mavenCentral()
     }
 
     archivesBaseName = 'yaci-store-' + project.name
@@ -26,8 +26,8 @@ subprojects {
         }
 
         dependencies {
-            dependency 'com.bloxbean.cardano:yaci:0.1.4'
-            dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.0'
+            dependency 'com.bloxbean.cardano:yaci:0.1.5'
+            dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.2'
             dependency 'co.nstant.in:cbor:0.9'
 
             dependency 'com.vladmihalcea:hibernate-types-60:2.20.0'
