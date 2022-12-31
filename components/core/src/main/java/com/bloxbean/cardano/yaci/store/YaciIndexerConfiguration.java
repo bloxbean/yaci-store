@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store;
 
-import com.bloxbean.carano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
 import lombok.extern.slf4j.Slf4j;
@@ -70,7 +69,7 @@ public class YaciIndexerConfiguration {
     @ConditionalOnProperty(prefix = "cardano", name = "n2c.host")
     public LocalClientProvider localClientProviderNodeSocketPort() {
         if (n2cNodeSocketPort == 0)
-            throw new IllegalArgumentException("Invalid cardano.n2c.port. " + n2cNodeSocketPort);
+            throw new IllegalArgumentException("Invalid cardano.n2c.port " + n2cNodeSocketPort);
         log.info("LocalStateQueryClient ---> Configured (n2c host/port)--> " + n2cNodeSocketHost + ", " + n2cNodeSocketPort);
         return new LocalClientProvider(n2cNodeSocketHost, n2cNodeSocketPort);
 
