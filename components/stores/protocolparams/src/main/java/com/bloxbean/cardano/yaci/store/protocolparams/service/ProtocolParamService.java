@@ -15,8 +15,6 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.protocolparams.repository.ProtocolParamsRepository;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,18 +38,6 @@ public class ProtocolParamService {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
-    }
-
-    @PostConstruct
-    private void postConstruct() {
-        if (localClientProvider != null && !localClientProvider.isRunning())
-            localClientProvider.start();
-    }
-
-    @PreDestroy
-    private void destroy() {
-        if (localClientProvider != null)
-            localClientProvider.shutdown();
     }
 
     public void fetchAndSetCurrentProtocolParams() {
