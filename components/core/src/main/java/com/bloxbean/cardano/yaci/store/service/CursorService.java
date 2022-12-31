@@ -16,6 +16,9 @@ public class CursorService {
     private final CursorRepository cursorRepository;
 
     public void setCursor(Cursor cursor) {
+        if (cursor.getBlockHash() == null)
+            throw new RuntimeException("BlockHash can't be null.");
+
         CursorEntity cursorEntity = CursorEntity
                 .builder()
                 .id(1L)
