@@ -1,3 +1,4 @@
+drop table if exists address_utxo;
 create table address_utxo
 (
     output_index          int          not null,
@@ -37,6 +38,8 @@ CREATE INDEX idx_address_utxo_owner_pkey_hash
 CREATE INDEX idx_address_utxo_owner_skey_hash
     ON address_utxo(owner_stake_key_hash);
 
+
+drop table if exists invalid_transaction;
 create table invalid_transaction
 (
     tx_hash     varchar(255) not null

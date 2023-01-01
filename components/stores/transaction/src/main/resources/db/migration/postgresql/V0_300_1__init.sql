@@ -1,3 +1,4 @@
+drop table if exists transaction;
 create table transaction
 (
     tx_hash                 varchar(255) not null

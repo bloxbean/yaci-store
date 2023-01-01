@@ -1,3 +1,4 @@
+drop table if exists block;
 create table block
 (
     hash       varchar(255) not null
@@ -23,6 +24,7 @@ create table block
 CREATE INDEX idx_block_number
     ON block(number);
 
+drop table if exists rollback;
 create table rollback
 (
     id bigint not null auto_increment
