@@ -27,6 +27,8 @@ spring:
     locations: classpath:db/migration/{vendor}
     out-of-order: true
 
+apiPrefix: /api/v1
+
 #LOGGING CONFIGURATION
 logging:
   level:

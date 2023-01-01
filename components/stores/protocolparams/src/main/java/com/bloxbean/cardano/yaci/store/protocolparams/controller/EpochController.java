@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("/epochs")
+@RequestMapping("${apiPrefix}/epochs")
 @Slf4j
 @ConditionalOnBean(LocalClientProvider.class)
 public class EpochController {
