@@ -1,3 +1,4 @@
+drop table if exists assets;
 create table assets
 (
     id bigint not null auto_increment

@@ -1,3 +1,4 @@
+drop table if exists transaction_metadata;
 create table transaction_metadata
 (
     id bigint not null
