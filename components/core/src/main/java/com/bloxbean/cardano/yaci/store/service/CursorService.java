@@ -3,17 +3,24 @@ package com.bloxbean.cardano.yaci.store.service;
 import com.bloxbean.cardano.yaci.store.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.model.CursorEntity;
 import com.bloxbean.cardano.yaci.store.repository.CursorRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class CursorService {
     private final CursorRepository cursorRepository;
+
+    @Value("${event.publisher.id:1}")
+    private long eventPublisherId;
+
+    public CursorService(CursorRepository cursorRepository) {
+        this.cursorRepository = cursorRepository;
+    }
 
     public void setCursor(Cursor cursor) {
         if (cursor.getBlockHash() == null)
@@ -21,7 +28,7 @@ public class CursorService {
 
         CursorEntity cursorEntity = CursorEntity
                 .builder()
-                .id(1L)
+                .id(eventPublisherId)
                 .slot(cursor.getSlot())
                 .blockHash(cursor.getBlockHash())
                 .block(cursor.getBlock())
@@ -31,11 +38,20 @@ public class CursorService {
     }
 
     public Optional<Cursor> getCursor() {
-        return cursorRepository.findById(1L)
-                .map(cursorEntity -> Cursor.builder()
-                        .slot(cursorEntity.getSlot())
-                        .blockHash(cursorEntity.getBlockHash())
-                        .block(cursorEntity.getBlock())
-                        .build());
+        //Get last 50 blocks and select the lowest block number
+        List<CursorEntity> cursorEntities =
+                cursorRepository.findTop50ByIdOrderByBlockDesc(eventPublisherId);
+
+        if (cursorEntities == null || cursorEntities.size() == 0)
+            return Optional.empty();
+
+        CursorEntity cursorEntity = cursorEntities.get(cursorEntities.size() - 1);
+
+        return Optional.of(Cursor.builder()
+                .slot(cursorEntity.getSlot())
+                .blockHash(cursorEntity.getBlockHash())
+                .block(cursorEntity.getBlock())
+                .build());
     }
+
 }

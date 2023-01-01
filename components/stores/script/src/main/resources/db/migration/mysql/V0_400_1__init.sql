@@ -1,4 +1,5 @@
-create table if not exists script
+drop table if exists script;
+create table script
 (
     script_hash     varchar(255) not null
         primary key,
@@ -8,7 +9,8 @@ create table if not exists script
     update_datetime timestamp
 );
 
-create table if not exists transaction_scripts
+drop table if exists transaction_scripts;
+create table transaction_scripts
 (
     id              bigint       not null auto_increment
         primary key,
@@ -25,5 +27,5 @@ create table if not exists transaction_scripts
     update_datetime       timestamp
 );
 
-CREATE INDEX if not exists idx_txn_scripts_tx_hash
+CREATE INDEX idx_txn_scripts_tx_hash
     ON transaction_scripts(tx_hash);
