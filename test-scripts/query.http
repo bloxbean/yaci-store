@@ -1,43 +1,42 @@
 
 ###
-GET http://localhost:8080/addresses/addr_test1qzx9hu8j4ah3auytk0mwcupd69hpc52t0cw39a65ndrah86djs784u92a3m5w475w3w35tyd6v3qumkze80j8a6h5tuqq5xe8y/utxos?page=0&count=100
+GET http://localhost:8080/api/v1/addresses/addr_test1qzx9hu8j4ah3auytk0mwcupd69hpc52t0cw39a65ndrah86djs784u92a3m5w475w3w35tyd6v3qumkze80j8a6h5tuqq5xe8y/utxos?page=0&count=100
 
 ###
-GET http://localhost:8080/txs/297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47
+GET http://localhost:8080/api/v1/txs/297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47
 ###
 
-GET http://localhost:8080/scripts/01446e630fe595ed4f0db66df8da3d66f55071347c75373e9b6b145d
+GET http://localhost:8080/api/v1/scripts/9abe3db2c7b40203b62e24a8978dc8a4aa56b325a3686d20676d067b
 ###
-GET http://localhost:8080/scripts/99027c7af372116f0716ee02008739ec51224bcfdd54398ec16217ef
-###
-GET http://localhost:8080/epochs/parameters
+
+GET http://localhost:8080/api/v1/epochs/parameters
 
 ###
-GET http://localhost:8080/txs
+GET http://localhost:8080/api/v1/txs
 
 ###
-GET http://localhost:8080/txs?page=0&count=10
+GET http://localhost:8080/api/v1/txs?page=0&count=10
 
 ###
-GET http://localhost:8080/blocks/376120
+GET http://localhost:8080/api/v1/blocks/376120
 
 ###
-GET http://localhost:8080/blocks
+GET http://localhost:8080/api/v1/blocks
 
 ###
-GET http://localhost:8080/txs/936520b3011661ec2f8f1705f7ecc3e8bccb326f5a2311fd93a88d570ffc7917/scripts
+GET http://localhost:8080/api/v1/txs/936520b3011661ec2f8f1705f7ecc3e8bccb326f5a2311fd93a88d570ffc7917/scripts
 
 ###
-GET http://localhost:8080/txs/0d66c70aa9efa6bc1a635191abef9a0cd386a42b3f43c3199f3b794986995865/scripts
+GET http://localhost:8080/api/v1/txs/0d66c70aa9efa6bc1a635191abef9a0cd386a42b3f43c3199f3b794986995865/scripts
 
 ###
-GET http://localhost:8080/scripts/txs/132ac2876a1822fbaf8df2a417a05c94f19b704fe7ced4f88a86c19df849822b
+GET http://localhost:8080/api/v1/txs/a922efa2fcda9d64b33d88e83a3ce53943240955450dfca49cd033f9e38e4b80/scripts
 
 ###
-GET http://localhost:8080/txs/a5dbf6eacf522a1a065476bdf75dfe45db64d9d667f483220e208431b441a44d/metadata
+GET http://localhost:8080/api/v1/txs/a5dbf6eacf522a1a065476bdf75dfe45db64d9d667f483220e208431b441a44d/metadata
 
 ###
-GET http://localhost:8080/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/assets
+GET http://localhost:8080/api/v1/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/assets
 
 ###
-GET http://localhost:8080/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/metadata
+GET http://localhost:8080/api/v1/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/metadata

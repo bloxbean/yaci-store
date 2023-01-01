@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("/txs")
+@RequestMapping("${apiPrefix}/txs")
 @Slf4j
 public class TransactionController {
     private TransactionService transactionService;

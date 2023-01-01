@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 @RestController
-@RequestMapping
+@RequestMapping("${apiPrefix}")
 @Slf4j
 public class ScriptController {
     private ScriptService scriptService;

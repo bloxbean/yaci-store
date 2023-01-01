@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping
+@RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @ConditionalOnBean(LocalClientProvider.class)
 @Slf4j

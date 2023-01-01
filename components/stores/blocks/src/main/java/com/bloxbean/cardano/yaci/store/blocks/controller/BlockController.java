@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("/blocks")
+@RequestMapping("${apiPrefix}/blocks")
 @Slf4j
 public class BlockController {
 

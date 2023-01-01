@@ -15,6 +15,8 @@ spring:
     locations: classpath:db/migration/{vendor}
     out-of-order: true
 
+apiPrefix: /api/v1
+
 logging:
   file:
     name: ./logs/yaci-indexer.log
