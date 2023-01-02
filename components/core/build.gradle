@@ -2,8 +2,6 @@ dependencies {
     implementation project(':components:events')
     implementation project(':components:common')
 
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-
     implementation 'com.bloxbean.cardano:yaci'
     implementation 'com.bloxbean.cardano:cardano-client-lib'
 }
