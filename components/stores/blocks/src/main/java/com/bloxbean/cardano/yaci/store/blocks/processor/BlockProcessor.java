@@ -21,11 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class BlockProcessor {
 
     private BlockPersistence blockPersistence;
-    private AtomicInteger count;
 
     public BlockProcessor(BlockPersistence blockPersistence) {
         this.blockPersistence = blockPersistence;
-        count = new AtomicInteger(0);
     }
 
     @EventListener
@@ -51,20 +49,6 @@ public class BlockProcessor {
                 .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
                 .build();
         blockPersistence.save(block);
-
-        count.incrementAndGet();
-        double val = count.get() % 1000;
-
-        if (!blockHeaderEvent.getMetadata().isSyncMode()) {
-            if (val == 0) {
-                log.info("# of blocks written: " + count.get());
-                log.info("Block No: " + blockHeader.getHeaderBody().getBlockNumber() + "  , Era: " + blockHeaderEvent.getMetadata().getEra());
-            }
-
-        } else {
-            log.info("# of blocks written: " + count.get());
-            log.info("Block No: " + blockHeader.getHeaderBody().getBlockNumber());
-        }
     }
 
     @EventListener

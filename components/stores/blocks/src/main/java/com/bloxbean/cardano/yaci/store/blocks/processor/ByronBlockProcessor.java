@@ -20,11 +20,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class ByronBlockProcessor {
     private BlockPersistence blockPersistence;
-    private AtomicInteger count;
 
     public ByronBlockProcessor(BlockPersistence blockPersistence) {
         this.blockPersistence = blockPersistence;
-        this.count = new AtomicInteger(0);
     }
 
     @EventListener
@@ -56,20 +54,6 @@ public class ByronBlockProcessor {
         blockPersistence.findByBlockHash(byronBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
             block.setNumber(preBlock.getNumber() + 1);
         });
-
-        count.incrementAndGet();
-        double val = count.get() % 5000;
-
-        if (!event.getEventMetadata().isSyncMode()) {
-            if (val == 0) {
-                log.info("# of blocks written: " + count.get());
-                log.info("Block No: " + block.getNumber() + "  , Era: " + block.getEra());
-            }
-
-        } else {
-            log.info("# of blocks written: " + count.get());
-            log.info("Block No: " + block.getNumber() + "  , Era: " + block.getEra());
-        }
 
         blockPersistence.save(block);
     }
