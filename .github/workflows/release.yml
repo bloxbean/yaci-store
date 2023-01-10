@@ -30,6 +30,15 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: yaci-store-all
+          path: |
+            applications/all/build/libs/yaci-store-all-*.jar
+            !applications/all/build/libs/yaci-store-all-*-sources.jar
+            !applications/all/build/libs/yaci-store-all-*-plain.jar
+            !applications/all/build/libs/yaci-store-all-*-javadoc.jar
 #      - name: Close And Release Repository
 #        run: ./gradlew closeAndReleaseRepository
 #        env:
