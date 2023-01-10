@@ -31,17 +31,17 @@ jobs:
 #          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
 #          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
       - name: Release
-          uses: softprops/action-gh-release@v1
-          if: startsWith(github.ref, 'refs/tags/')
-          with:
-            files: |
-              applications/all/build/libs/yaci-store-all-*.jar
-              !applications/all/build/libs/yaci-store-all-*-sources.jar
-              !applications/all/build/libs/yaci-store-all-*-plain.jar
-              !applications/all/build/libs/yaci-store-all-*-javadoc.jar
-            prerelease: true
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            applications/all/build/libs/yaci-store-all-*.jar
+            !applications/all/build/libs/yaci-store-all-*-sources.jar
+            !applications/all/build/libs/yaci-store-all-*-plain.jar
+            !applications/all/build/libs/yaci-store-all-*-javadoc.jar
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #      - name: Close And Release Repository
 #        run: ./gradlew closeAndReleaseRepository
 #        env:
