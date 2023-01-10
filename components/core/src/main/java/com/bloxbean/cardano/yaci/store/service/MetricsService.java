@@ -21,7 +21,7 @@ public class MetricsService {
     }
 
     private Supplier<Number> getTopBlockNo() {
-        return () -> cursorRepository.findTopByIdOrderByBlockDesc(eventPublisherId)
+        return () -> cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId)
                 .map(cursorEntity -> cursorEntity.getBlock())
                 .orElse(0L);
     }

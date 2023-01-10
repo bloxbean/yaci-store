@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class BlockSummary {
-    private long block;
+    private long number;
     private long slot;
    // private long epoch;
     private String era;

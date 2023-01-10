@@ -4,14 +4,12 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
+import com.bloxbean.cardano.yaci.store.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -25,42 +23,27 @@ public class StartService {
     private final TipFinderService tipFinderService;
     private final GenesisBlockFinder genesisBlockFinder;
     private final CursorService cursorService;
+    private final StoreConfig storeConfig;
 
-    @Value("${cardano.sync_start_slot:0}")
-    private long syncStartSlot;
+    private boolean alreadyStarted;
 
-    @Value("${cardano.sync_start_blockhash:null}")
-    private String syncStartBlockHash;
-
-//    @Value("${cardano.known_slot}")
-//    private long knownSlot;
-//    @Value("${cardano.known_block_hash}")
-//    private String knownBlockHash;
-//
-//    @Value("${cardano.first_block_slot}")
-//    private long firstBlockSlot;
-//
-//    @Value("${cardano.first_block_hash}")
-//    private String firstBlockHash;
-
-
-    @EventListener
-    public void initialize(ApplicationReadyEvent applicationReadyEvent) {
+    public void start() {
+        if (alreadyStarted)
+            throw new RuntimeException("StartService has already been started");
+        alreadyStarted = true;
         log.info("Application is ready. Let's start the sync process ...");
         Point from = null;
         Integer era = null;
         Long blockNumber = 0L;
-//        Optional<BlockEntity> optional = blockRepository.findTopByOrderByBlockDesc();
         Optional<Cursor> optional = cursorService.getCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
-           // era = optional.get().getEra();
             era = null;
             blockNumber = optional.get().getBlock();
         } else {
-            if (syncStartSlot == 0 || syncStartBlockHash == null || syncStartBlockHash.isEmpty()) {
-                // from = new Point(firstBlockSlot, firstBlockHash);
+            if (storeConfig.getSyncStartSlot() == 0 || storeConfig.getSyncStartBlockHash() == null
+                    || storeConfig.getSyncStartBlockHash().isEmpty()) {
                 Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
                 if (startPoint.isPresent()) {
                     //Save genesis block
@@ -74,26 +57,36 @@ public class StartService {
                 } else
                     throw new IllegalStateException("Genesis points not found. From point could not be decided.");
             } else {
-                from = new Point(syncStartSlot, syncStartBlockHash);
+                from = new Point(storeConfig.getSyncStartSlot(), storeConfig.getSyncStartBlockHash());
             }
         }
 
         //Reset cursor
         cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber));
-
         Tip tip = tipFinderService.getTip().block();
-        Point to = tip.getPoint();
+
+        Point to = null;
+        if (storeConfig.getSyncStopSlot() != 0) {
+            to = new Point(storeConfig.getSyncStopSlot(), storeConfig.getSyncStopBlockHash());
+        } else {
+            to = tip.getPoint();
+            storeConfig.setPrimaryInstance(true);
+        }
 
         log.info("From >> " + from);
         log.info("TO >> " + to);
 
         long diff = tip.getPoint().getSlot() - from.getSlot();
-        if (diff > 7200) {
-            log.info("Start BlockRangeSync");
-            blockFetchService.startFetch(from, to);
+        if (storeConfig.getPrimaryInstance()) {
+            if (diff > 7200) {
+                log.info("Start BlockRangeSync");
+                blockFetchService.startFetch(from, to);
+            } else {
+                log.info("Start BlockSync");
+                blockFetchService.startSync(from);
+            }
         } else {
-            log.info("Start BlockSync");
-            blockFetchService.startSync(from);
+            blockFetchService.startFetch(from, to);
         }
     }
 }

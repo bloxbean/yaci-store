@@ -18,4 +18,8 @@ public class GenesisConfig {
         return totalSecsIn5DaysEpoch / slotDuration(era);
     }
 
+    public long absoluteSlot(Era era, long epoch, long slotInEpoch) {
+        return (slotsPerEpoch(era) * epoch) + slotInEpoch;
+    }
+
 }

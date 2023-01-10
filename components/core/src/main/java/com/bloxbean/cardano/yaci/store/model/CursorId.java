@@ -13,6 +13,6 @@ import java.io.Serializable;
 public class CursorId implements Serializable {
     @Column(name = "id")
     private Long id;
-    @Column(name = "block_number")
-    private Long block;
+    @Column(name = "slot")
+    private Long slot;
 }
