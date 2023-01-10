@@ -37,7 +37,7 @@ subprojects {
                     scm {
                         connection = 'scm:git:git://github.com/bloxbean/yaci-store.git'
                         developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-store.git'
-                        url = 'https://github.com/bloxbean/yaci-helper'
+                        url = 'https://github.com/bloxbean/yaci-store'
                     }
                 }
             }
