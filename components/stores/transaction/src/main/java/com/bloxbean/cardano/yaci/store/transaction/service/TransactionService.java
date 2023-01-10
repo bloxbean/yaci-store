@@ -131,14 +131,11 @@ public class TransactionService {
         Pageable sortedBySlot =
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
-
         Page<TxnEntity> txnEntityPage = txnEntityRepository.findAll(sortedBySlot);
         long total = txnEntityPage.getTotalElements();
         int totalPage = txnEntityPage.getTotalPages();
 
         List<TransactionSummary> transactionSummaries = txnEntityPage.stream().map(txnEntity -> {
-            if (txnEntity.getTxHash().equals("61be299df325600a62ab3a025c5fc0ce529e2cd6f39536c96f25ca70ea776f59"))
-                System.out.println("Found");
             List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
                     .map(txUtxo -> txUtxo.getOwnerAddr())
