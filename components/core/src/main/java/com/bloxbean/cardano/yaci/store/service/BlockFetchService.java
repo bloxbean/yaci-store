@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Component
@@ -40,7 +40,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private MeterRegistry meterRegistry;
 
-    private AtomicInteger count;
+    private AtomicLong count;
 
     @Autowired
     private BlockRangeSync blockRangeSync;
@@ -65,7 +65,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
         this.publisher = applicationEventPublisher;
         Counter counter = this.meterRegistry.counter("blocks.processed");
-        count = new AtomicInteger(0);
+        count = new AtomicLong(0);
     }
 
     @Transactional
@@ -118,6 +118,8 @@ public class BlockFetchService implements BlockChainDataListener {
             //Finally Set the cursor
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock()));
+
+            printLog(eventMetadata);
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -175,6 +177,8 @@ public class BlockFetchService implements BlockChainDataListener {
             //Finally Set the cursor
             cursorService.setByronEraCursor(byronBlock.getHeader().getPrevBlock(), new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
                     eventMetadata.getBlock()));
+
+            printLog(eventMetadata);
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
@@ -204,6 +208,7 @@ public class BlockFetchService implements BlockChainDataListener {
             //Finally Set the cursor
             cursorService.setByronEraCursor(byronEbBlock.getHeader().getPrevBlock(), new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock()));
+            printLog(eventMetadata);
         } catch (Exception e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
@@ -291,5 +296,21 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public void shutdownSync() {
         blockSync.stop();
+    }
+
+    private void printLog(EventMetadata eventMetadata) {
+        count.incrementAndGet();
+        double val = count.get() % 1000;
+
+        if (!syncMode) {
+            if (val == 0) {
+                log.info("# of blocks written: " + count.get());
+                log.info("Block No: " + eventMetadata.getBlock() + "  , Era: " + eventMetadata.getEra());
+            }
+
+        } else {
+            log.info("# of blocks written: " + count.get());
+            log.info("Block No: " + eventMetadata.getBlock());
+        }
     }
 }
