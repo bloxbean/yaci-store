@@ -17,7 +17,7 @@ $> ./gradlew clean build
 ```
 $> cd yaci-store
 $> edit config/application.properties //datasource, network details
-$> java application/build/libs/yaci-store-application-<version>.jar
+$> java -jar applications/all/build/libs/yaci-store-all-<version>.jar
 ```
 
 ## Overview
