@@ -63,7 +63,7 @@ public class CursorService {
                 .build();
 
         cursorRepository.save(cursorEntity);
-        printLog(cursor.getBlock(), cursor.getEra());
+        printLog(block.get(), cursor.getEra());
     }
 
     public Optional<Cursor> getCursor() {
