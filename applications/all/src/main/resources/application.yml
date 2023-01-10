@@ -19,6 +19,6 @@ apiPrefix: /api/v1
 
 logging:
   file:
-    name: ./logs/yaci-indexer.log
+    name: ./logs/yaci-store.log
 
 

@@ -7,7 +7,7 @@ pluginManagement {
 }
 
 rootProject.name = 'yaci-store'
-include 'application'
+include 'applications:all'
 include 'components:core'
 include 'components:events'
 include 'components:common'
