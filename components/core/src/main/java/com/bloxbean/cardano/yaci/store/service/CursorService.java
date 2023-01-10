@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.model.CursorEntity;
 import com.bloxbean.cardano.yaci.store.repository.CursorRepository;
@@ -16,12 +17,16 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class CursorService {
     private final CursorRepository cursorRepository;
+    private AtomicLong count;
 
     @Value("${event.publisher.id:1}")
     private long eventPublisherId;
 
+    private boolean syncMode;
+
     public CursorService(CursorRepository cursorRepository) {
         this.cursorRepository = cursorRepository;
+        this.count = new AtomicLong(0);
     }
 
     public void setCursor(Cursor cursor) {
@@ -37,6 +42,7 @@ public class CursorService {
                 .build();
 
         cursorRepository.save(cursorEntity);
+        printLog(cursor.getBlock(), cursor.getEra());
     }
 
     public void setByronEraCursor(String prevBlockHash, Cursor cursor) {
@@ -57,6 +63,7 @@ public class CursorService {
                 .build();
 
         cursorRepository.save(cursorEntity);
+        printLog(cursor.getBlock(), cursor.getEra());
     }
 
     public Optional<Cursor> getCursor() {
@@ -85,6 +92,30 @@ public class CursorService {
         CursorEntity cursorEntity
                 = cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId).orElse(new CursorEntity());
         log.info("Cursor : Slot=" + cursorEntity.getSlot() + ", Hash=" + cursorEntity.getBlockHash());
+    }
+
+    public boolean isSyncMode() {
+        return syncMode;
+    }
+
+    public void setSyncMode(boolean syncMode) {
+        this.syncMode = syncMode;
+    }
+
+    private void printLog(long block, Era era) {
+        count.incrementAndGet();
+        double val = count.get() % 1000;
+
+        if (!syncMode) {
+            if (val == 0) {
+                log.info("# of blocks written: " + count.get());
+                log.info("Block No: " + block + "  , Era: " + era);
+            }
+
+        } else {
+            log.info("# of blocks written: " + count.get());
+            log.info("Block No: " + block);
+        }
     }
 
 }
