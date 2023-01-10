@@ -7,53 +7,55 @@ subprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
-                artifact(sourceJar) {
-                    classifier = 'sources'
-                }
-                artifact(javadocJar) {
-                    classifier = 'javadoc'
-                }
-
-                artifactId 'yaci-store-' + project.name
-
-                pom {
-                    url = 'https://github.com/bloxbean/yaci-store'
-                    licenses {
-                        license {
-                            name = 'The MIT License'
-                            url = 'https://opensource.org/licenses/mit-license.php'
-                        }
+    if (!name.equalsIgnoreCase("stores")) {
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                    artifact(sourceJar) {
+                        classifier = 'sources'
                     }
-                    developers {
-                        developer {
-                            id = 'satran004'
-                            name = 'Satya'
-                        }
+                    artifact(javadocJar) {
+                        classifier = 'javadoc'
                     }
-                    scm {
-                        connection = 'scm:git:git://github.com/bloxbean/yaci-store.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-store.git'
+
+                    artifactId 'yaci-store-' + project.name
+
+                    pom {
                         url = 'https://github.com/bloxbean/yaci-store'
+                        licenses {
+                            license {
+                                name = 'The MIT License'
+                                url = 'https://opensource.org/licenses/mit-license.php'
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = 'satran004'
+                                name = 'Satya'
+                            }
+                        }
+                        scm {
+                            connection = 'scm:git:git://github.com/bloxbean/yaci-store.git'
+                            developerConnection = 'scm:git:ssh://git@github.com/bloxbean/yaci-store.git'
+                            url = 'https://github.com/bloxbean/yaci-store'
+                        }
                     }
                 }
             }
-        }
 
-        repositories {
-            String ossrhUsername = System.getenv('MAVEN_USERNAME')
-            String ossrhPassword = System.getenv('MAVEN_PASSWORD')
+            repositories {
+                String ossrhUsername = System.getenv('MAVEN_USERNAME')
+                String ossrhPassword = System.getenv('MAVEN_PASSWORD')
 
-            maven {
-                def releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
-                def snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
-                url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
-                credentials {
-                    username ossrhUsername
-                    password ossrhPassword
+                maven {
+                    def releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+                    def snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
+                    url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+                    credentials {
+                        username ossrhUsername
+                        password ossrhPassword
+                    }
                 }
             }
         }
