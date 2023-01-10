@@ -62,7 +62,7 @@ public class StartService {
         }
 
         //Reset cursor
-        cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber));
+        cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, null));
         Tip tip = tipFinderService.getTip().block();
 
         Point to = null;
