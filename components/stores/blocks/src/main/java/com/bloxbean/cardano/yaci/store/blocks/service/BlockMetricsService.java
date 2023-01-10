@@ -20,7 +20,7 @@ public class BlockMetricsService {
 
     private Supplier<Number> getLastBlock() {
         return () -> blockPersistence.findRecentBlock()
-                .map(block -> block.getBlock())
+                .map(block -> block.getNumber())
                 .orElse(0L);
     }
 }

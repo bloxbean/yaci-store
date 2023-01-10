@@ -10,6 +10,8 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
@@ -21,6 +23,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +50,12 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Autowired
     private CursorService cursorService;
+
+    @Autowired
+    private StoreConfig storeConfig;
+
+    @Autowired
+    private GenesisConfig genesisConfig;
 
     private boolean syncMode;
 
@@ -148,11 +157,15 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
         try {
+            long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
+                    byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
+                    byronBlock.getHeader().getConsensusData().getSlotId().getSlot());
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
-                    .slot(byronBlock.getHeader().getConsensusData().getSlotId().getSlot())
+                    .slot(absoluteSlot)
                     .isSyncMode(syncMode)
                     .build();
 
@@ -160,7 +173,7 @@ public class BlockFetchService implements BlockChainDataListener {
             publisher.publishEvent(byronMainBlockEvent);
 
             //Finally Set the cursor
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+            cursorService.setByronEraCursor(byronBlock.getHeader().getPrevBlock(), new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
                     eventMetadata.getBlock()));
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
@@ -175,15 +188,22 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
         try {
+            long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
+                    byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
-                    .slot(0)
+                    .slot(absoluteSlot)
                     .isSyncMode(syncMode)
                     .build();
 
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
+
+            //Finally Set the cursor
+            cursorService.setByronEraCursor(byronEbBlock.getHeader().getPrevBlock(), new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock()));
         } catch (Exception e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
@@ -191,6 +211,13 @@ public class BlockFetchService implements BlockChainDataListener {
             stopSync();
             throw new RuntimeException(e);
         }
+    }
+
+    @EventListener
+    @Transactional
+    public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        log.info("Writing genesis block to cursor -->");
+        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L));
     }
 
     private void stopSync() {
@@ -210,12 +237,7 @@ public class BlockFetchService implements BlockChainDataListener {
         long currentBlockNum = cursorOptional.map(cursor -> cursor.getBlock())
                 .orElse(-1L);
 
-        //Reset cursor
-        cursorService.setCursor(Cursor.builder()
-                .slot(point.getSlot())
-                .blockHash(point.getHash())
-                .block(null)
-                .build());
+        cursorService.rollback(point.getSlot());
 
         //Publish rollback event
         RollbackEvent rollbackEvent = RollbackEvent
@@ -233,16 +255,22 @@ public class BlockFetchService implements BlockChainDataListener {
 
         if (!syncMode) {
             log.info("Batch Done >>>");
-            //start sync
-            cursorService.getCursor()
-                    .ifPresent(cursor -> {
-                        String blockHash = cursor.getBlockHash();
-                        long slot = cursor.getSlot();
 
-                        log.info("Start N2N sync from block >> " + cursor.getBlock());
-                        //Start sync
-                        startSync(new Point(slot, blockHash));
-                    });
+            if (storeConfig.getPrimaryInstance()) {
+                //If primary instance, start sync
+                //start sync
+                cursorService.getCursor()
+                        .ifPresent(cursor -> {
+                            String blockHash = cursor.getBlockHash();
+                            long slot = cursor.getSlot();
+
+                            log.info("Start N2N sync from block >> " + cursor.getBlock());
+                            //Start sync
+                            startSync(new Point(slot, blockHash));
+                        });
+            } else {
+                log.info("Blockfetch done");
+            }
         }
     }
 

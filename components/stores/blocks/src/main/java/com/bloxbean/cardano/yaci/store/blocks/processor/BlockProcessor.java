@@ -34,8 +34,8 @@ public class BlockProcessor {
     public void handleBlockHeaderEvent(@NonNull BlockHeaderEvent blockHeaderEvent) {
         BlockHeader blockHeader = blockHeaderEvent.getBlockHeader();
         Block block = Block.builder()
-                .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                .block(blockHeader.getHeaderBody().getBlockNumber())
+                .hash(blockHeader.getHeaderBody().getBlockHash())
+                .number(blockHeader.getHeaderBody().getBlockNumber())
                 .slot(blockHeader.getHeaderBody().getSlot())
                 .era(blockHeaderEvent.getMetadata().getEra().getValue())
                 .prevHash(blockHeader.getHeaderBody().getPrevHash())
@@ -53,7 +53,7 @@ public class BlockProcessor {
         blockPersistence.save(block);
 
         count.incrementAndGet();
-        double val = count.get() % 5000;
+        double val = count.get() % 1000;
 
         if (!blockHeaderEvent.getMetadata().isSyncMode()) {
             if (val == 0) {

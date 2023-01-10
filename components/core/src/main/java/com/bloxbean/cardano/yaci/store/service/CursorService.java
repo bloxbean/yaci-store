@@ -6,9 +6,11 @@ import com.bloxbean.cardano.yaci.store.repository.CursorRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @Slf4j
@@ -37,10 +39,30 @@ public class CursorService {
         cursorRepository.save(cursorEntity);
     }
 
+    public void setByronEraCursor(String prevBlockHash, Cursor cursor) {
+        if (cursor.getBlockHash() == null)
+            throw new RuntimeException("BlockHash can't be null.");
+
+        AtomicLong block = new AtomicLong();
+        cursorRepository.findByBlockHash(prevBlockHash).ifPresent(preBlock -> {
+            block.set(preBlock.getBlock() + 1);
+        });
+
+        CursorEntity cursorEntity = CursorEntity
+                .builder()
+                .id(eventPublisherId)
+                .slot(cursor.getSlot())
+                .blockHash(cursor.getBlockHash())
+                .block(block.get())
+                .build();
+
+        cursorRepository.save(cursorEntity);
+    }
+
     public Optional<Cursor> getCursor() {
         //Get last 50 blocks and select the lowest block number
         List<CursorEntity> cursorEntities =
-                cursorRepository.findTop50ByIdOrderByBlockDesc(eventPublisherId);
+                cursorRepository.findTop50ByIdOrderBySlotDesc(eventPublisherId);
 
         if (cursorEntities == null || cursorEntities.size() == 0)
             return Optional.empty();
@@ -52,6 +74,17 @@ public class CursorService {
                 .blockHash(cursorEntity.getBlockHash())
                 .block(cursorEntity.getBlock())
                 .build());
+    }
+
+
+    @Transactional
+    public void rollback(long slot) {
+        int count = cursorRepository.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} cursor records", count);
+
+        CursorEntity cursorEntity
+                = cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId).orElse(new CursorEntity());
+        log.info("Cursor : Slot=" + cursorEntity.getSlot() + ", Hash=" + cursorEntity.getBlockHash());
     }
 
 }

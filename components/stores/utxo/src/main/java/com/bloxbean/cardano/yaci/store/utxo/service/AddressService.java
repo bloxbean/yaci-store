@@ -27,6 +27,7 @@ public class AddressService {
                 .map(addressUtxo -> Utxo.builder()
                         .txHash(addressUtxo.getTxHash())
                         .outputIndex(addressUtxo.getOutputIndex())
+                        .address(addressUtxo.getOwnerAddr())
                         .amount(addressUtxo.getAmounts().stream()
                                 .map(amt -> new Amount(amt.getUnit(), amt.getQuantity()))
                                 .collect(Collectors.toList()))

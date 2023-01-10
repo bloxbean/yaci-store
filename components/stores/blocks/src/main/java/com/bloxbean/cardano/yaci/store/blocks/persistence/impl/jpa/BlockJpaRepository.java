@@ -9,11 +9,11 @@ import java.util.Optional;
 @Repository
 public interface BlockJpaRepository extends JpaRepository<BlockEntity, String> {
 
-    Optional<BlockEntity> findTopByOrderByBlockDesc();
+    Optional<BlockEntity> findTopByOrderByNumberDesc();
 
-    Optional<BlockEntity> findByBlockHash(String blockHash);
+    Optional<BlockEntity> findByHash(String hash);
 
-    Optional<BlockEntity> findByBlock(Long block);
+    Optional<BlockEntity> findByNumber(Long number);
 
     int deleteBySlotGreaterThan(Long slot);
 }

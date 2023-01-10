@@ -25,14 +25,14 @@ public class BlockJpaPersistence implements BlockPersistence {
 
     @Override
     public Optional<Block> findRecentBlock() {
-        return blockJpaRepository.findTopByOrderByBlockDesc()
+        return blockJpaRepository.findTopByOrderByNumberDesc()
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 
     @Override
     public BlocksPage findBlocks(int page, int count) {
         Pageable sortedByBlock =
-                PageRequest.of(page, count, Sort.by("block").descending());
+                PageRequest.of(page, count, Sort.by("number").descending());
 
         Page<BlockEntity> blocksEntityPage = blockJpaRepository.findAll(sortedByBlock);
         long total = blocksEntityPage.getTotalElements();
@@ -51,13 +51,13 @@ public class BlockJpaPersistence implements BlockPersistence {
 
     @Override
     public Optional<Block> findByBlockHash(String blockHash) {
-        return blockJpaRepository.findByBlockHash(blockHash)
+        return blockJpaRepository.findByHash(blockHash)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 
     @Override
     public Optional<Block> findByBlock(long block) {
-        return blockJpaRepository.findByBlock(block)
+        return blockJpaRepository.findByNumber(block)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 

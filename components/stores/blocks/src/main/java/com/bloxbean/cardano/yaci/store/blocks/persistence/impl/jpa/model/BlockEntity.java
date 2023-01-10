@@ -23,10 +23,10 @@ import org.hibernate.annotations.Type;
 public class BlockEntity extends BaseEntity {
     @Id
     @Column(name = "hash")
-    private String blockHash;
+    private String hash;
 
     @Column(name = "number")
-    private Long block;
+    private Long number;
 
     @Column(name = "slot")
     private Long slot;

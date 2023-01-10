@@ -32,9 +32,9 @@ public class ByronBlockProcessor {
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
-                .blockHash(genesisBlockEvent.getBlockHash())
+                .hash(genesisBlockEvent.getBlockHash())
                 .slot(genesisBlockEvent.getSlot())
-                .block(0L)
+                .number(0L)
                 .prevHash(null)
                 .build();
 
@@ -48,13 +48,13 @@ public class ByronBlockProcessor {
         ByronMainBlock byronBlock = event.getByronMainBlock();
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
-                .blockHash(byronBlock.getHeader().getBlockHash())
-                .slot(byronBlock.getHeader().getConsensusData().getSlotId().getSlot())
+                .hash(byronBlock.getHeader().getBlockHash())
+                .slot(event.getEventMetadata().getSlot())
                 .prevHash(byronBlock.getHeader().getPrevBlock())
                 .build();
 
         blockPersistence.findByBlockHash(byronBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
-            block.setBlock(preBlock.getBlock() + 1);
+            block.setNumber(preBlock.getNumber() + 1);
         });
 
         count.incrementAndGet();
@@ -63,12 +63,12 @@ public class ByronBlockProcessor {
         if (!event.getEventMetadata().isSyncMode()) {
             if (val == 0) {
                 log.info("# of blocks written: " + count.get());
-                log.info("Block No: " + block.getBlock() + "  , Era: " + block.getEra());
+                log.info("Block No: " + block.getNumber() + "  , Era: " + block.getEra());
             }
 
         } else {
             log.info("# of blocks written: " + count.get());
-            log.info("Block No: " + block.getBlock() + "  , Era: " + block.getEra());
+            log.info("Block No: " + block.getNumber() + "  , Era: " + block.getEra());
         }
 
         blockPersistence.save(block);
@@ -81,14 +81,14 @@ public class ByronBlockProcessor {
         ByronEbBlock byronEbBlock = event.getByronEbBlock();
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
-                .blockHash(byronEbBlock.getHeader().getBlockHash())
-                .slot(0L)
+                .hash(byronEbBlock.getHeader().getBlockHash())
+                .slot(event.getEventMetadata().getSlot())
                // .epoch(byronEbBlock.getHeader().getConsensusData().getEpoch())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
                 .build();
 
         blockPersistence.findByBlockHash(byronEbBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
-            block.setBlock(preBlock.getBlock() + 1);
+            block.setNumber(preBlock.getNumber() + 1);
         });
 
         blockPersistence.save(block);
