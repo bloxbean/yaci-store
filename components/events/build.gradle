@@ -1,5 +1,4 @@
 dependencies {
-    implementation project(":components")
     implementation 'com.bloxbean.cardano:yaci'
 }
 
