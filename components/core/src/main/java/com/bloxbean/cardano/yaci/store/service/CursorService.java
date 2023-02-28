@@ -104,7 +104,7 @@ public class CursorService {
 
     private void printLog(long block, Era era) {
         count.incrementAndGet();
-        double val = count.get() % 1000;
+        double val = count.get() % 100;
 
         if (!syncMode) {
             if (val == 0) {

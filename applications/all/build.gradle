@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation project(':components:common')
     implementation project(':components:core')
     implementation project(':components:events')
     implementation project(':components:stores:blocks')
