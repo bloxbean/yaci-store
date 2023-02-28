@@ -4,9 +4,9 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
@@ -58,13 +58,13 @@ public class ProtocolParamService {
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNode() {
         Mono<CurrentProtocolParamQueryResult> mono =
-                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Alonzo));
+                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
     }
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNodeAt(Point point) {
         Mono<CurrentProtocolParamQueryResult> mono =
-                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Alonzo));
+                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
     }
 
