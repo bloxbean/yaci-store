@@ -26,8 +26,8 @@ subprojects {
         }
 
         dependencies {
-            dependency 'com.bloxbean.cardano:yaci:0.1.8'
-            dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.2'
+            dependency 'com.bloxbean.cardano:yaci:0.1.9'
+            dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.3'
             dependency 'co.nstant.in:cbor:0.9'
 
             dependency 'com.vladmihalcea:hibernate-types-60:2.20.0'

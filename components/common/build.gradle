@@ -2,7 +2,6 @@ dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'org.springframework:spring-context'
     api 'com.bloxbean.cardano:yaci'
-    api 'com.bloxbean.cardano:yaci-helper'
     api 'com.bloxbean.cardano:cardano-client-lib'
 
     api 'com.vladmihalcea:hibernate-types-60'

@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
 @Entity
 @Table(name = "address_utxo")
 @IdClass(UtxoId.class)
+@DynamicUpdate
 public class AddressUtxoEntity extends BaseEntity {
     @Id
     @Column(name = "tx_hash")
