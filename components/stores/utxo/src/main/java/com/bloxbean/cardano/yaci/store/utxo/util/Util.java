@@ -33,11 +33,12 @@ public class Util {
         switch (addressType) {
             case Base:
             case Enterprise:
+            case Ptr:
                 paymentKeyHash = new byte[28];
                 System.arraycopy(addressBytes, 1, paymentKeyHash, 0, paymentKeyHash.length);
                 break;
             default: {
-                log.error("Unsupported address type: " + addressType);
+                log.error("Unsupported address type: " + addressType + ", address=" + address.toBech32());
                 return Optional.empty();
             }
         }
