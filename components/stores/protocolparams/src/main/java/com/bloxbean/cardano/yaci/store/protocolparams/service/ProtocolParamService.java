@@ -114,10 +114,10 @@ public class ProtocolParamService {
     private Map<String, Long> cborToCostModel(String costModelCbor) {
         Array array = (Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(costModelCbor));
         Map<String, Long> costModel = new HashMap<>();
-        int index = 1;
+        int index = 0;
         for (DataItem di : array.getDataItems()) {
             BigInteger val = ((UnsignedInteger) di).getValue();
-            costModel.put(String.valueOf(index++), val.longValue());
+            costModel.put(String.format("%03d", index++), val.longValue());
         }
 
         return costModel;
