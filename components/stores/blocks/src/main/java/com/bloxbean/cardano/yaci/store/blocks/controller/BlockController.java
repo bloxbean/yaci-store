@@ -31,7 +31,11 @@ public class BlockController {
     @Operation(description = "Get blocks by page number and count")
     public BlocksPage getBlocks(@RequestParam(name = "page", defaultValue = "0") int page,
                                 @RequestParam(name = "count", defaultValue = "10") int count) {
-        return blockService.getBlocks(page, count);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return blockService.getBlocks(p, count);
     }
 
 }

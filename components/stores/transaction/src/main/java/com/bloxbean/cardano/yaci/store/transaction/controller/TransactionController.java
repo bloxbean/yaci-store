@@ -27,6 +27,10 @@ public class TransactionController {
     @GetMapping
     public TransactionPage getTransactions(@RequestParam(name = "page", defaultValue = "0") int page,
                                            @RequestParam(name = "count", defaultValue = "10") int count) {
-        return transactionService.getTransactions(page, count);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return transactionService.getTransactions(p, count);
     }
 }
