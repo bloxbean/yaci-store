@@ -20,12 +20,14 @@ import java.util.Set;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TransactionDetails {
-    private String txHash;
-    private long blockNumber;
+    private String hash;
+    private long blockHeight;
     private long slot;
     private List<TxUtxo> inputs;
     private List<TxUtxo> outputs;
-    private BigInteger fee;
+    private int utxoCount; //TransactionContent field
+    private BigInteger totalOutput;
+    private BigInteger fees;
     private long ttl;
     private String auxiliaryDataHash;
     private long validityIntervalStart;

@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -48,13 +49,23 @@ public class TransactionService {
                 List<TxUtxo> collateralInputs = resolveInputs(txnEntity.getCollateralInputs());
                 List<TxUtxo> referenceInputs = resolveInputs(txnEntity.getReferenceInputs());
 
+                BigInteger totalOutput = outputUtxos
+                        .stream()
+                        .filter(txUtxo -> txUtxo.getAmounts() != null)
+                        .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                        .filter(amount -> LOVELACE.equals(amount.getAssetName()) && !StringUtils.hasLength(amount.getPolicyId()))
+                        .map(amount -> amount.getQuantity())
+                        .reduce(BigInteger.ZERO, BigInteger::add);
+
                 return TransactionDetails.builder()
-                        .txHash(txnEntity.getTxHash())
-                        .blockNumber(txnEntity.getBlockNumber())
+                        .hash(txnEntity.getTxHash())
+                        .blockHeight(txnEntity.getBlockNumber())
                         .slot(txnEntity.getSlot())
                         .inputs(inputUtxos)
                         .outputs(outputUtxos)
-                        .fee(txnEntity.getFee())
+                        .utxoCount(inputUtxos.size())
+                        .totalOutput(totalOutput)
+                        .fees(txnEntity.getFee())
                         .ttl(txnEntity.getTtl())
                         .auxiliaryDataHash(txnEntity.getAuxiliaryDataHash())
                         .validityIntervalStart(txnEntity.getValidityIntervalStart())
