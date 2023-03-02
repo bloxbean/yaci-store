@@ -2,9 +2,8 @@ package com.bloxbean.cardano.yaci.store.live;
 
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.live.cache.BlockCache;
-import com.bloxbean.cardano.yaci.store.live.dto.BlockData;
-import com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs;
-import com.bloxbean.cardano.yaci.store.live.dto.OnJoinData;
+import com.bloxbean.cardano.yaci.store.live.cache.RecentTxCache;
+import com.bloxbean.cardano.yaci.store.live.dto.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -22,6 +21,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class BlocksWebSocketHandler extends TextWebSocketHandler {
     @Autowired
     private BlockCache blockCache;
+    @Autowired
+    private RecentTxCache recentTxCache;
 
     private List<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
 
@@ -41,6 +42,7 @@ public class BlocksWebSocketHandler extends TextWebSocketHandler {
             log.info("Connection Established --- " + session);
         OnJoinData onJoinData = OnJoinData.builder()
                 .blocks(blockCache.getBlocks())
+                .recentTxs(recentTxCache.getRecentTxs())
                 .build();
 
         TextMessage content = new TextMessage(JsonUtil.getPrettyJson(onJoinData));
@@ -62,6 +64,13 @@ public class BlocksWebSocketHandler extends TextWebSocketHandler {
 
     public void broadcastMempoolTxs(MempoolTxs mempoolTxs) throws IOException {
         TextMessage content = new TextMessage(JsonUtil.getPrettyJson(mempoolTxs));
+        for (WebSocketSession session: sessions) {
+            session.sendMessage(content);
+        }
+    }
+
+    public void broadcastRecentTxs(RecentTxs recentTxs) throws IOException{
+        TextMessage content = new TextMessage(JsonUtil.getPrettyJson(recentTxs));
         for (WebSocketSession session: sessions) {
             session.sendMessage(content);
         }
