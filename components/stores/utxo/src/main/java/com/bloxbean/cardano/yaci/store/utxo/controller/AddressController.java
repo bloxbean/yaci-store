@@ -20,7 +20,10 @@ public class AddressController {
     @GetMapping("{address}/utxos")
     public List<Utxo> getUtxos(@PathVariable String address, @RequestParam(required = false, defaultValue = "10")  int count,
                                @RequestParam(required = false, defaultValue = "0")  int page, @RequestParam(required = false, defaultValue = "asc") String order) {
-
-        return addressService.getUnspentUtxos(address, page, count, order);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return addressService.getUnspentUtxos(address, p, count, order);
     }
 }
