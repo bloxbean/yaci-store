@@ -6,6 +6,7 @@ dependencies {
         exclude group: "com.bloxbean.cardano", module: "cardano-client-lib"
     }
     api 'com.bloxbean.cardano:cardano-client-lib'
+    api 'com.bloxbean.cardano:cardano-client-backend'
 
     api 'com.vladmihalcea:hibernate-types-60'
     api 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
