@@ -7,22 +7,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AggregateData {
+public class RecentTxs {
     @Builder.Default
-    private ResType resType = ResType.AGGR_DATA;
-    private int durationMin;
-    private long time;
-    private long totalFee;
-    private long totalBlockSize;
-    private long avgBlockSize;
-    private int blockSizePerct;
-    private double tps;
-    private double tops;
-    private long nMintTokens;
-    private long nTxs;
+    private ResType resType = ResType.RECENT_TXS_DATA;
+
+    private List<RecentTx> recentTxs;
 }
