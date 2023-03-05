@@ -63,6 +63,11 @@ Currently, the following store implementations are available.
 
 Yaci Store also has a "**submit**" module to support transaction submission.
 
+## Known Limitations:
+
+- Currently it doesn't store the genesis balances and Byron era transactions.
+
+
 # Support from YourKit
 
 YourKit has generously granted the BloxBean projects an Open Source licence to use their excellent Java Profiler.
