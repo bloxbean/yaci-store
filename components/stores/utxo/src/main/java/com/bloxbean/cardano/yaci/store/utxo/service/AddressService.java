@@ -29,7 +29,12 @@ public class AddressService {
                         .outputIndex(addressUtxo.getOutputIndex())
                         .address(addressUtxo.getOwnerAddr())
                         .amount(addressUtxo.getAmounts().stream()
-                                .map(amt -> new Amount(amt.getUnit(), amt.getQuantity()))
+                                .map(amt -> {
+                                    String unit = amt.getUnit();
+                                    if (unit != null && unit.contains("."))
+                                        unit = unit.replace(".", "");//TODO -- Done to make it compatible with Blockfrost or CCL backend
+                                    return new Amount(unit, amt.getQuantity());
+                                })
                                 .collect(Collectors.toList()))
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
