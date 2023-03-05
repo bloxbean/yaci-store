@@ -1,8 +1,12 @@
 package com.bloxbean.cardano.yaci.store.utxo.service;
 
+import com.bloxbean.carano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.client.api.model.Amount;
 import com.bloxbean.cardano.client.api.model.Utxo;
+import com.bloxbean.cardano.client.transaction.spec.PlutusData;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -12,6 +16,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class AddressService {
     private UtxoRepository utxoRepository;
 
@@ -24,7 +29,19 @@ public class AddressService {
         return utxoRepository.findAddressUtxoByOwnerAddrAndSpent(address, null, pageable)
                 .orElseGet(() -> new ArrayList<>())
                 .stream()
-                .map(addressUtxo -> Utxo.builder()
+                .map(addressUtxo -> {
+                        //If datahash is not set but inline datum is there, set datahash
+                        String dataHash = addressUtxo.getDataHash();
+                        try {
+                            if (StringUtil.isEmpty(dataHash) && !StringUtil.isEmpty(addressUtxo.getInlineDatum())) {
+                                byte[] inlineDatumBytes = HexUtil.decodeHexString(addressUtxo.getInlineDatum());
+                                dataHash = PlutusData.deserialize(inlineDatumBytes).getDatumHash();
+                            }
+                        } catch (Exception e) {
+                            log.error("Invalid inline datum found in utxo tx : {}, index: {}, inline_datum: {}", addressUtxo.getTxHash(), addressUtxo.getOutputIndex(), addressUtxo.getInlineDatum());
+                        }
+
+                        Utxo utxo = Utxo.builder()
                         .txHash(addressUtxo.getTxHash())
                         .outputIndex(addressUtxo.getOutputIndex())
                         .address(addressUtxo.getOwnerAddr())
@@ -36,9 +53,11 @@ public class AddressService {
                                     return new Amount(unit, amt.getQuantity());
                                 })
                                 .collect(Collectors.toList()))
-                        .dataHash(addressUtxo.getDataHash())
+                        .dataHash(dataHash)
                         .inlineDatum(addressUtxo.getInlineDatum())
                         .referenceScriptHash(addressUtxo.getScriptRef())
-                        .build()).collect(Collectors.toList());
+                        .build();
+                        return utxo;
+                }).collect(Collectors.toList());
     }
 }
