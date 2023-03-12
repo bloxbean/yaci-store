@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -73,6 +74,11 @@ public class YaciIndexerConfiguration {
         log.info("LocalStateQueryClient ---> Configured (n2c host/port)--> " + n2cNodeSocketHost + ", " + n2cNodeSocketPort);
         return new LocalClientProvider(n2cNodeSocketHost, n2cNodeSocketPort);
 
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 
 }
