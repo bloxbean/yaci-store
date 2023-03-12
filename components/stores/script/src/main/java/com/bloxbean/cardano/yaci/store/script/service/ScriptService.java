@@ -1,14 +1,19 @@
 package com.bloxbean.cardano.yaci.store.script.service;
 
+import com.bloxbean.cardano.client.transaction.spec.PlutusData;
+import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.model.ScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.repository.ScriptRepository;
 import com.bloxbean.cardano.yaci.store.script.repository.TxScriptRepository;
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -17,10 +22,12 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class ScriptService {
-    private ScriptRepository scriptRepository;
-    private TxScriptRepository txScriptRepository;
+    private final ScriptRepository scriptRepository;
+    private final TxScriptRepository txScriptRepository;
+    private final DatumStorage datumStorage;
+    private final ObjectMapper objectMapper;
 
     public Optional<Script> getScriptByHash(String scriptHash) {
         Optional<ScriptEntity> scriptOptional = scriptRepository.findById(scriptHash);
@@ -68,14 +75,14 @@ public class ScriptService {
                         .orElse(null);
             }
 
-            String content = plutusScript != null? plutusScript.getContent(): null;
+            String content = plutusScript != null ? plutusScript.getContent() : null;
 
             Redeemer redeemerDto = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
                     .map(redeemer -> Redeemer.builder()
                             .tag(redeemer.getTag())
                             .index(redeemer.getIndex())
                             .exUnits(redeemer.getExUnits())
-                            .data(redeemer.getData() != null? redeemer.getData().serializeToHex(): null)
+                            .data(redeemer.getData() != null ? redeemer.getData().serializeToHex() : null)
                             .build())
                     .orElse(null);
 
@@ -89,5 +96,22 @@ public class ScriptService {
                     .datumHash(txScript.getDatumHash())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    public Optional<Datum> getDatum(String datumHash) {
+        return datumStorage.getDatum(datumHash)
+                .filter(datum -> datum.getDatum() != null);
+    }
+
+    public Optional<JsonNode> getDatumAsJson(String datumHash) {
+        return getDatum(datumHash)
+                .map(datum -> {
+                    try {
+                        PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(datum.getDatum()));
+                        return objectMapper.readTree(PlutusDataJsonConverter.toJson(plutusData));
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Unable to parse plutus data : " + datum.getDatum());
+                    }
+                });
     }
 }
