@@ -11,14 +11,9 @@ import java.util.Optional;
 
 @Repository
 public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId> {
-
     Optional<List<AddressUtxoEntity>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
 
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
-
-//    @Modifying
-//    @Query(value = "DELETE FROM AddressUtxo a WHERE a.slot > :slot")
-//    int deleteBySlotAfter(@Param("slot") long slot);
 
     List<AddressUtxoEntity> findBySlot(Long slot);
 
