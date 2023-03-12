@@ -2,17 +2,17 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.carano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.client.address.Address;
-import com.bloxbean.cardano.client.address.AddressService;
+import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +31,8 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoProcessor {
-
-    private final UtxoRepository utxoRepository;
-    private final InvalidTransactionRepository invalidTransactionRepository;
+    private final UtxoStorage utxoStorage;
+    private final InvalidTransactionStorage invalidTransactionStorage;
 
     @EventListener
     @Order(2)
@@ -64,11 +63,11 @@ public class UtxoProcessor {
             return;
 
         //set spent for input
-        List<AddressUtxoEntity> inputAddressUtxos = transaction.getBody().getInputs().stream()
+        List<AddressUtxo> inputAddressUtxos = transaction.getBody().getInputs().stream()
                 .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
                 .map(utxoId -> {
-                    AddressUtxoEntity addressUtxo = utxoRepository.findById(utxoId)
-                            .orElse(AddressUtxoEntity.builder()        //If not present, then create a record with pk
+                    AddressUtxo addressUtxo = utxoStorage.findById(utxoId.getTxHash(), utxoId.getOutputIndex())
+                            .orElse(AddressUtxo.builder()        //If not present, then create a record with pk
                                     .txHash(utxoId.getTxHash())
                                     .outputIndex(utxoId.getOutputIndex()).build());
                     addressUtxo.setSpent(true);
@@ -76,21 +75,21 @@ public class UtxoProcessor {
                     return addressUtxo;
                 }).collect(Collectors.toList());
 
-        List<AddressUtxoEntity> outputAddressUtxos = transaction.getUtxos().stream()
+        List<AddressUtxo> outputAddressUtxos = transaction.getUtxos().stream()
                 .map(utxo -> getAddressUtxo(metadata, utxo))
                 .map(addressUtxo -> { //Check if utxo is already there, only possible in a multi-instance environment
-                    utxoRepository.findById(new UtxoId(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()))
+                    utxoStorage.findById(addressUtxo.getTxHash(), addressUtxo.getOutputIndex())
                             .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
                     return addressUtxo;
                 })
                 .collect(Collectors.toList());
 
         if (outputAddressUtxos.size() > 0) //unspent utxos
-            utxoRepository.saveAll(outputAddressUtxos);
+            utxoStorage.saveAll(outputAddressUtxos);
 
         //Update existing utxos as spent
         if (inputAddressUtxos.size() > 0) //spent utxos
-            utxoRepository.saveAll(inputAddressUtxos);
+            utxoStorage.saveAll(inputAddressUtxos);
     }
 
     private void handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
@@ -98,24 +97,24 @@ public class UtxoProcessor {
             return;
 
         //insert invalid transactions and collateral return utxo if any
-        InvalidTransactionEntity invalidTransaction = InvalidTransactionEntity.builder()
+        InvalidTransaction invalidTransaction = InvalidTransaction.builder()
                 .txHash(transaction.getTxHash())
                 .slot(metadata.getSlot())
                 .blockHash(metadata.getBlockHash())
                 .transaction(transaction)
                 .build();
-        invalidTransactionRepository.save(invalidTransaction);
+        invalidTransactionStorage.save(invalidTransaction);
 
         //collateral output
-        AddressUtxoEntity collateralOutputUtxo = transaction.getCollateralReturnUtxo()
+        AddressUtxo collateralOutputUtxo = transaction.getCollateralReturnUtxo()
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
 
         //collateral inputs will be marked as spent
-        List<AddressUtxoEntity> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
+        List<AddressUtxo> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
                 .map(transactionInput -> {
-                    AddressUtxoEntity addressUtxo = utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
-                            .orElse(AddressUtxoEntity.builder()
+                    AddressUtxo addressUtxo = utxoStorage.findById(transactionInput.getTransactionId(), transactionInput.getIndex())
+                            .orElse(AddressUtxo.builder()
                                     .txHash(transactionInput.getTransactionId())
                                     .outputIndex(transactionInput.getIndex())
                                     .build()
@@ -130,18 +129,18 @@ public class UtxoProcessor {
         //Check if collateral utxos are already present. If yes, then update everything except spent field
         //Only possible in multi-instance environment.
         if (collateralOutputUtxo != null) {
-            utxoRepository.findById(new UtxoId(collateralOutputUtxo.getTxHash(), collateralOutputUtxo.getOutputIndex()))
+            utxoStorage.findById(collateralOutputUtxo.getTxHash(), collateralOutputUtxo.getOutputIndex())
                     .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
         }
 
 
         if (collateralOutputUtxo != null)
-            utxoRepository.save(collateralOutputUtxo);
+            utxoStorage.save(collateralOutputUtxo);
         if (collateralInputUtxos != null && collateralInputUtxos.size() > 0)
-            utxoRepository.saveAll(collateralInputUtxos);
+            utxoStorage.saveAll(collateralInputUtxos);
     }
 
-    private AddressUtxoEntity getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
+    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
@@ -158,7 +157,7 @@ public class UtxoProcessor {
         try {
             Address addr = new Address(utxo.getAddress());
             if (addr.getAddressType() == AddressType.Base)
-                stakeAddress = AddressService.getInstance().getStakeAddress(addr).getAddress();
+                stakeAddress = AddressProvider.getStakeAddress(addr).getAddress();
 
             paymentKeyHash = getPaymentKeyHash(addr).orElse(null);
             stakeKeyHash = getStakeKeyHash(addr).orElse(null);
@@ -168,7 +167,7 @@ public class UtxoProcessor {
                 log.error("Unable to get stake address for address : " + utxo.getAddress(), e);
         }
 
-        return AddressUtxoEntity.builder()
+        return AddressUtxo.builder()
                 .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
                 .blockHash(eventMetadata.getBlockHash())
@@ -185,8 +184,8 @@ public class UtxoProcessor {
                 .build();
     }
 
-    private AddressUtxoEntity getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
-        AddressUtxoEntity addressUtxo = getAddressUtxo(metadata, utxo);
+    private AddressUtxo getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
+        AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo);
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }

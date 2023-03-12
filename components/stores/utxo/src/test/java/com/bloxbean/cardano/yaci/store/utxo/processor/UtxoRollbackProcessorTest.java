@@ -2,8 +2,8 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +16,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class UtxoRollbackProcessorTest {
 
     @Mock
-    private UtxoRepository utxoRepository;
+    private UtxoStorage utxoStorage;
 
     @Mock
-    private InvalidTransactionRepository invalidTransactionRepository;
+    private InvalidTransactionStorage invalidTransactionStorage;
 
     @InjectMocks
     private UtxoRollbackProcessor utxoRollbackProcessor;
@@ -38,7 +38,7 @@ class UtxoRollbackProcessorTest {
 
         utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
-        Mockito.verify(utxoRepository, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-        Mockito.verify(invalidTransactionRepository, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verify(utxoStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verify(invalidTransactionStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
     }
 }

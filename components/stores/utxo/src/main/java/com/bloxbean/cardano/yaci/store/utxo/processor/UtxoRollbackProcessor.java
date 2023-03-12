@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoRollbackProcessor {
-    private final UtxoRepository utxoRepository;
-    private final InvalidTransactionRepository invalidTransactionRepository;
+    private final UtxoStorage utxoStorage;
+    private final InvalidTransactionStorage invalidTransactionStorage;
 
     @EventListener
     @Transactional
@@ -22,7 +22,7 @@ public class UtxoRollbackProcessor {
         long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
         String rollBackToBlockHash = rollbackEvent.getRollbackTo().getHash();
 
-        utxoRepository.findBySlot(rollBackToSlot)
+        utxoStorage.findBySlot(rollBackToSlot)
                         .stream()
                                 .forEach(addressUtxo -> {
                                     if (!addressUtxo.getBlockHash().equals(rollBackToBlockHash)) {
@@ -33,11 +33,10 @@ public class UtxoRollbackProcessor {
 
                                 });
 
-        int deleted = utxoRepository.deleteBySlotGreaterThan(rollBackToSlot);
-        int invalidTxnDeleted = invalidTransactionRepository.deleteBySlotGreaterThan(rollBackToSlot);
+        int deleted = utxoStorage.deleteBySlotGreaterThan(rollBackToSlot);
+        int invalidTxnDeleted = invalidTransactionStorage.deleteBySlotGreaterThan(rollBackToSlot);
 
         log.info("Rollback -- {} address_utxos records", deleted);
         log.info("Rollback -- {} invalid_transactions records", invalidTxnDeleted);
-
     }
 }

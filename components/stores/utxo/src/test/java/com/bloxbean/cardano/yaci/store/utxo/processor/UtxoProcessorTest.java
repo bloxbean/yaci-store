@@ -5,9 +5,9 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -34,22 +34,22 @@ import static org.mockito.Mockito.verify;
 public class UtxoProcessorTest {
 
     @Mock
-    private UtxoRepository utxoRepository;
+    private UtxoStorage utxoStorage;
 
     @Mock
-    private InvalidTransactionRepository invalidTransactionRepository;
+    private InvalidTransactionStorage invalidTransactionStorage;
 
     @InjectMocks
     private UtxoProcessor utxoProcessor;
 
     @Captor
-    ArgumentCaptor<List<AddressUtxoEntity>> argCaptor;
+    ArgumentCaptor<List<AddressUtxo>> argCaptor;
 
 
     @BeforeEach
     public void setup() {
 //        openMocks(this);
-        utxoProcessor = new UtxoProcessor(utxoRepository, invalidTransactionRepository);
+        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage);
     }
 
     @Test
@@ -68,10 +68,10 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoRepository, times(2)).saveAll(argCaptor.capture());
+        verify(utxoStorage, times(2)).saveAll(argCaptor.capture());
 
-        List<AddressUtxoEntity> spentUtxos = argCaptor.getAllValues().get(0);
-        List<AddressUtxoEntity> unspentUtxos = argCaptor.getAllValues().get(1);
+        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
+        List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(3);
         assertThat(unspentUtxos).hasSize(2);
@@ -118,10 +118,10 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoRepository, times(2)).saveAll(argCaptor.capture());
+        verify(utxoStorage, times(2)).saveAll(argCaptor.capture());
 
-        List<AddressUtxoEntity> spentUtxos = argCaptor.getAllValues().get(0);
-        List<AddressUtxoEntity> unspentUtxos = argCaptor.getAllValues().get(1);
+        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
+        List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(2);
         assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
@@ -192,14 +192,12 @@ public class UtxoProcessorTest {
     private List<Utxo> utxos(String txHash, List<TransactionOutput> txOutputs) {
         AtomicInteger index = new AtomicInteger();
         return txOutputs.stream()
-                .map(txOut -> {
-                    return Utxo.builder()
-                            .address(txOut.getAddress())
-                            .txHash(txHash)
-                            .index(index.getAndIncrement())
-                            .amounts(txOut.getAmounts())
-                            .build();
-                }).collect(Collectors.toList());
+                .map(txOut -> Utxo.builder()
+                        .address(txOut.getAddress())
+                        .txHash(txHash)
+                        .index(index.getAndIncrement())
+                        .amounts(txOut.getAmounts())
+                        .build()).collect(Collectors.toList());
     }
 
     private Utxo collateralReturnUtxo(String txHash, TransactionOutput txOut) {
