@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 public class MetricsService {
     private final CursorRepository cursorRepository;
 
-    @Value("${event.publisher.id:1}")
+    @Value("${store.event-publisher-id:1}")
     private long eventPublisherId;
 
     public MetricsService(CursorRepository cursorRepository, MeterRegistry meterRegistry) {

@@ -2,11 +2,10 @@ package com.bloxbean.cardano.yaci.store.protocolparams.controller;
 
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
-import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.protocolparams.service.ProtocolParamService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,12 +16,13 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("${apiPrefix}/epochs")
 @Slf4j
-@ConditionalOnBean(LocalClientProvider.class)
+@DependsOn({"localClientProvider"})
 public class EpochController {
 
     private final ProtocolParamService protocolParamService;
 
     public EpochController(ProtocolParamService protocolParamService) {
+        log.info("Epoch Controller initialized >>>>>>>");
         this.protocolParamService = protocolParamService;
     }
 
@@ -30,7 +30,6 @@ public class EpochController {
     @GetMapping("parameters")
     public ProtocolParams getProtocolParams() {
        return protocolParamService.getCurrentProtocolParams()
-               .map(protocolParams -> protocolParams)
                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 

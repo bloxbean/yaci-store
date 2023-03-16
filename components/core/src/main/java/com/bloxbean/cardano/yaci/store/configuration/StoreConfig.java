@@ -5,14 +5,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class StoreConfig {
-    @Value("${cardano.sync_start_slot:0}")
+    @Value("${store.cardano.sync-start-slot:0}")
     private long syncStartSlot;
-    @Value("${cardano.sync_start_blockhash:null}")
+    @Value("${store.cardano.sync-start-blockhash:null}")
     private String syncStartBlockHash;
 
-    @Value("${cardano.sync_stop_slot:0}")
+    @Value("${store.cardano.sync-stop-slot:0}")
     private long syncStopSlot;
-    @Value("${cardano.sync_stop_blockhash:null}")
+    @Value("${store.cardano.sync-stop-blockhash:null}")
     private String syncStopBlockHash;
 
     private boolean primaryInstance;

@@ -6,14 +6,14 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalTxSubmissionClient;
 import com.bloxbean.cardano.yaci.helper.model.TxResult;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 
 @Service
-@ConditionalOnBean(LocalClientProvider.class)
+@DependsOn("localClientProvider")
 @Slf4j
 public class TxSubmissionService {
     private final LocalClientProvider localClientProvider;

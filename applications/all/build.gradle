@@ -3,9 +3,8 @@ plugins {
 }
 
 dependencies {
-    implementation project(':components:common')
-    implementation project(':components:core')
-    implementation project(':components:events')
+    implementation project(':starters:spring-boot-starter')
+
     implementation project(':components:stores:blocks')
     implementation project(':components:stores:utxo')
     implementation project(':components:stores:transaction')

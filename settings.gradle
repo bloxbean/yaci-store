@@ -20,4 +20,5 @@ include 'components:stores:assets'
 include 'components:stores:protocolparams'
 include 'components:stores:live'
 include 'components:submit'
+include ':starters:spring-boot-starter'
 
