@@ -15,7 +15,7 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.protocolparams.repository.ProtocolParamsRepository;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -28,10 +28,10 @@ import java.util.Optional;
 
 @Component
 @Transactional
-@ConditionalOnBean(LocalClientProvider.class)
+@DependsOn({"localClientProvider"})
 public class ProtocolParamService {
-    private LocalClientProvider localClientProvider;
-    private LocalStateQueryClient localStateQueryClient;
+    private final LocalClientProvider localClientProvider;
+    private final LocalStateQueryClient localStateQueryClient;
     private ProtocolParamsRepository protocolParamsRepository;
 
     public ProtocolParamService(LocalClientProvider localClientProvider, ProtocolParamsRepository protocolParamsRepository) {

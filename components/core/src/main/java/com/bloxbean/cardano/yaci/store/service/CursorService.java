@@ -19,7 +19,7 @@ public class CursorService {
     private final CursorRepository cursorRepository;
     private AtomicLong count;
 
-    @Value("${event.publisher.id:1}")
+    @Value("${store.event-publisher-id:1}")
     private long eventPublisherId;
 
     private boolean syncMode;

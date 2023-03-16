@@ -1,0 +1,35 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    api project(":components:common")
+    api project(':components:core')
+    api project(":components:events")
+
+    api 'com.bloxbean.cardano:yaci:0.1.9'
+    api 'com.bloxbean.cardano:cardano-client-lib:0.4.3'
+    api 'com.bloxbean.cardano:cardano-client-backend:0.4.3'
+    api 'co.nstant.in:cbor:0.9'
+
+    api 'com.vladmihalcea:hibernate-types-60:2.20.0'
+    api 'mysql:mysql-connector-java:8.0.32'
+    api 'org.postgresql:postgresql:42.5.0'
+    api 'org.codehaus.janino:janino:3.1.8'
+    api 'com.google.guava:guava:31.1-jre'
+    api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0'
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Spring Boot Starter'
+                description = 'Yaci Store Spring Boot Starter'
+            }
+        }
+    }
+}

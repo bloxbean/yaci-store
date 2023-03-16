@@ -3,15 +3,11 @@ package com.bloxbean.cardano.yaci.store.service;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConditionalOnBean(LocalClientProvider.class)
 @RequiredArgsConstructor
 @Slf4j
 public class ApplicationStartListener {
