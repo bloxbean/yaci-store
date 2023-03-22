@@ -2,6 +2,8 @@ dependencies {
     api project(":components:common")
     api project(":components:events")
     implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation  project(':starters:spring-boot-starter')
 }
 
 publishing {
