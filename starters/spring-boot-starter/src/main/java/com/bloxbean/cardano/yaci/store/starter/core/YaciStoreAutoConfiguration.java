@@ -76,8 +76,9 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(LocalClientProvider.class)
+    @ConditionalOnBean(name = {"localClientProvider"})
     public ApplicationStartListener applicationStartListener(LocalClientProvider localClientProvider) {
+        log.info("ApplicationStartListener with LocalClientProvider created >>");
         return new ApplicationStartListener(localClientProvider);
     }
 

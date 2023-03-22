@@ -15,7 +15,8 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.protocolparams.repository.ProtocolParamsRepository;
-import org.springframework.context.annotation.DependsOn;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -27,8 +28,8 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
-@Transactional
-@DependsOn({"localClientProvider"})
+@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
+@Slf4j
 public class ProtocolParamService {
     private final LocalClientProvider localClientProvider;
     private final LocalStateQueryClient localStateQueryClient;
@@ -38,8 +39,10 @@ public class ProtocolParamService {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
+        log.info("ProtocolParamService initialized >>>");
     }
 
+    @Transactional
     public void fetchAndSetCurrentProtocolParams() {
         getCurrentProtocolParamsFromNode().subscribe(protocolParamUpdate -> {
             ProtocolParamsEntity entity = new ProtocolParamsEntity();
