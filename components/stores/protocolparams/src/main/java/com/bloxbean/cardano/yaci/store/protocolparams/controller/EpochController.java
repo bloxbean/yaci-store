@@ -5,7 +5,7 @@ import com.bloxbean.cardano.client.backend.model.EpochContent;
 import com.bloxbean.cardano.yaci.store.protocolparams.service.ProtocolParamService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.DependsOn;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,13 +16,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("${apiPrefix}/epochs")
 @Slf4j
-@DependsOn({"localClientProvider"})
+@ConditionalOnBean(ProtocolParamService.class)
 public class EpochController {
 
     private final ProtocolParamService protocolParamService;
 
     public EpochController(ProtocolParamService protocolParamService) {
-        log.info("Epoch Controller initialized >>>>>>>");
         this.protocolParamService = protocolParamService;
     }
 
