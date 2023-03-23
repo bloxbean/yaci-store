@@ -1,0 +1,18 @@
+dependencies {
+    implementation project(':components:events')
+    implementation project(':components:common')
+
+//    implementation 'com.bloxbean.cardano:yaci'
+    implementation 'com.bloxbean.cardano:cardano-client-lib'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Client'
+                description = 'Yaci Store Client Module'
+            }
+        }
+    }
+}

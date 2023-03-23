@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.carano.yaci.store.common.util.Util;
 import com.bloxbean.cardano.client.transaction.spec.Redeemer;
 import com.bloxbean.cardano.client.transaction.spec.RedeemerTag;
 import com.bloxbean.cardano.client.util.Tuple;
@@ -7,9 +9,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.model.TransactionInput;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
-import com.bloxbean.cardano.yaci.store.utxo.util.Util;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class RedeemerDatumMatcher {
 
-    private UtxoRepository utxoRepository;
+    private UtxoClient utxoClient;
 
     /**
      * Find scripts for redeemers in a transaction
@@ -95,7 +95,7 @@ public class RedeemerDatumMatcher {
         TransactionInput input = getScriptInputFromRedeemer(redeemer, inputs);
 
         //Find out if any script addressed inputs
-        Optional<ScriptContext> scriptContext = utxoRepository.findById(new UtxoId(input.getTransactionId(), input.getIndex()))
+        Optional<ScriptContext> scriptContext = utxoClient.getUtxoById(new UtxoKey(input.getTransactionId(), input.getIndex()))
                 .map(addressUtxo -> {
                     String paymentKeyHash = addressUtxo.getOwnerPaymentKeyHash();
                     String stakeKeyHash = addressUtxo.getOwnerStakeKeyHash();

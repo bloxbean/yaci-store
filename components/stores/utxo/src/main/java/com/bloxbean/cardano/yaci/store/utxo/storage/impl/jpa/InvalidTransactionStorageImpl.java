@@ -1,9 +1,10 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.utxo.mapper.UtxoMapper;
-import com.bloxbean.cardano.yaci.store.utxo.model.InvalidTransactionEntity;
-import com.bloxbean.cardano.yaci.store.utxo.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper.UtxoMapper;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class InvalidTransactionStorageImpl implements InvalidTransactionStorage{
+public class InvalidTransactionStorageImpl implements InvalidTransactionStorage {
     private final InvalidTransactionRepository repository;
     private final UtxoMapper mapper;
 

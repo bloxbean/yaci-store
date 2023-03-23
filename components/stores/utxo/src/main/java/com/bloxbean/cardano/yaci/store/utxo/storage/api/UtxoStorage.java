@@ -1,6 +1,7 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage;
+package com.bloxbean.cardano.yaci.store.utxo.storage.api;
 
-import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -10,6 +11,7 @@ public interface UtxoStorage {
     Optional<AddressUtxo> findById(String txHash, int outputIndex);
     Optional<List<AddressUtxo>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
     List<AddressUtxo> findBySlot(Long slot);
+    List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys);
     int deleteBySlotGreaterThan(Long slot);
 
     Optional<AddressUtxo> save(AddressUtxo addressUtxo);

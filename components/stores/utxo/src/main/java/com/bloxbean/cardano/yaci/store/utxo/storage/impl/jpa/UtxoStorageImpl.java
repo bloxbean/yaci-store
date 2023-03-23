@@ -1,10 +1,12 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa;
 
-import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.utxo.mapper.UtxoMapper;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper.UtxoMapper;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.UtxoId;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +41,17 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     public List<AddressUtxo> findBySlot(Long slot) {
         return utxoRepository.findBySlot(slot)
+                .stream().map(mapper::toAddressUtxo)
+                .toList();
+    }
+
+    @Override
+    public List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys) {
+        List<UtxoId> utxoIds = utxoKeys.stream()
+                .map(utxoKey -> new UtxoId(utxoKey.getTxHash(), utxoKey.getOutputIndex()))
+                .toList();
+
+        return utxoRepository.findAllById(utxoIds)
                 .stream().map(mapper::toAddressUtxo)
                 .toList();
     }

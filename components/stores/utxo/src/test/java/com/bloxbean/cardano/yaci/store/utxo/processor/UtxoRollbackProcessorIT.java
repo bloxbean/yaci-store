@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage;
+package com.bloxbean.cardano.yaci.store.utxo.storage.api;
 
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 
