@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.carano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
@@ -8,11 +9,10 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
+import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,12 +64,12 @@ public class UtxoProcessor {
 
         //set spent for input
         List<AddressUtxo> inputAddressUtxos = transaction.getBody().getInputs().stream()
-                .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
-                .map(utxoId -> {
-                    AddressUtxo addressUtxo = utxoStorage.findById(utxoId.getTxHash(), utxoId.getOutputIndex())
+                .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
+                .map(utxoKey -> {
+                    AddressUtxo addressUtxo = utxoStorage.findById(utxoKey.getTxHash(), utxoKey.getOutputIndex())
                             .orElse(AddressUtxo.builder()        //If not present, then create a record with pk
-                                    .txHash(utxoId.getTxHash())
-                                    .outputIndex(utxoId.getOutputIndex()).build());
+                                    .txHash(utxoKey.getTxHash())
+                                    .outputIndex(utxoKey.getOutputIndex()).build());
                     addressUtxo.setSpent(true);
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;

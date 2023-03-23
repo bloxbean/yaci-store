@@ -1,10 +1,10 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -17,7 +17,7 @@ import java.util.Optional;
 @AllArgsConstructor
 @Slf4j
 public class TxScriptFinder {
-    private UtxoRepository utxoRepository;
+    private UtxoClient utxoClient;
 
     /**
      * Find all involved scripts from a transaction
@@ -51,10 +51,10 @@ public class TxScriptFinder {
                 && transaction.getBody().getReferenceInputs().size() > 0) {
             transaction.getBody().getReferenceInputs()
                     .stream().map(transactionInput ->
-                            utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex())))
+                            utxoClient.getUtxoById(new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex())))
                     .filter(Optional::isPresent)
                     .forEach(addressUtxoOptional -> {
-                        AddressUtxoEntity addressUtxo = addressUtxoOptional.get();
+                        AddressUtxo addressUtxo = addressUtxoOptional.get();
                         if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
                             PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
                             if (plutusScript != null)
@@ -69,10 +69,10 @@ public class TxScriptFinder {
         //Check if any of the input has script ref set
         transaction.getBody().getInputs()
                 .stream().map(transactionInput ->
-                        utxoRepository.findById(new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex())))
+                        utxoClient.getUtxoById(new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex())))
                 .filter(Optional::isPresent)
                 .forEach(addressUtxoOptional -> {
-                    AddressUtxoEntity addressUtxo = addressUtxoOptional.get();
+                    AddressUtxo addressUtxo = addressUtxoOptional.get();
                     if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
                         PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
                         if (plutusScript != null)

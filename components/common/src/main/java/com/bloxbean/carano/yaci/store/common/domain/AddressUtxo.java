@@ -1,6 +1,5 @@
-package com.bloxbean.cardano.yaci.store.utxo.domain;
+package com.bloxbean.carano.yaci.store.common.domain;
 
-import com.bloxbean.carano.yaci.store.common.domain.Amt;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

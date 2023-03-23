@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;

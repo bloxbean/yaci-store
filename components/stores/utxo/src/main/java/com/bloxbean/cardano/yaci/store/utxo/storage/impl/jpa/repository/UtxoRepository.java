@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.utxo.repository;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository;
 
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.UtxoId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

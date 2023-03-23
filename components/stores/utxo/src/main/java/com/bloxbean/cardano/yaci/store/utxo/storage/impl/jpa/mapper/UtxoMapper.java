@@ -1,9 +1,9 @@
-package com.bloxbean.cardano.yaci.store.utxo.mapper;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper;
 
-import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxo;
+import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.InvalidTransactionEntity;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.utxo.model;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model;
 
 import jakarta.persistence.Column;
 import lombok.*;
