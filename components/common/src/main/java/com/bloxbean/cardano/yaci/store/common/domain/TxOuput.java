@@ -1,4 +1,4 @@
-package com.bloxbean.carano.yaci.store.common.domain;
+package com.bloxbean.cardano.yaci.store.common.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,11 +13,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TxResolvedInput implements Serializable {
-    private String txHash;
-    private Integer outputIndex;
+public class TxOuput implements Serializable {
     private String address;
-    //private String ownerStakeAddr;
 
     private List<Amt> amounts;
     private String dataHash;

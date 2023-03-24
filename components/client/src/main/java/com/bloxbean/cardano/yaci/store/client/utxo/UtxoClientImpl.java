@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.client.utxo;
 
-import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

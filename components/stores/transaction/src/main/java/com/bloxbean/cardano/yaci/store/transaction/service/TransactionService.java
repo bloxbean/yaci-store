@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.service;
 
-import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
@@ -34,8 +34,8 @@ import static java.util.stream.Collectors.groupingBy;
 @Component
 @RequiredArgsConstructor
 public class TransactionService {
-    private TxnEntityRepository txnEntityRepository;
-    private UtxoClient utxoClient;
+    private final TxnEntityRepository txnEntityRepository;
+    private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
         Optional<TxnEntity> txnEntityOptional = txnEntityRepository.findByTxHash(txHash);

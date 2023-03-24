@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.metadata.processor;
 
-import com.bloxbean.carano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.metadata.model.TxMetadataLabelEntity;

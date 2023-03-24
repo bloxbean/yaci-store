@@ -1,4 +1,4 @@
-package com.bloxbean.carano.yaci.store.common.domain;
+package com.bloxbean.cardano.yaci.store.common.domain;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
