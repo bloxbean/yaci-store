@@ -1,5 +1,6 @@
 package com.bloxbean.carano.yaci.store.common.util;
 
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;

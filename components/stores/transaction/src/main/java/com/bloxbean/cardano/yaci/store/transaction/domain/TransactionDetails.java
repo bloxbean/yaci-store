@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.domain;
 
-import com.bloxbean.carano.yaci.store.common.domain.TxOuput;
+import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;

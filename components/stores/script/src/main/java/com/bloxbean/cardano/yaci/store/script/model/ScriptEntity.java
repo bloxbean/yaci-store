@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.model;
 
-import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.vladmihalcea.hibernate.type.json.JsonType;

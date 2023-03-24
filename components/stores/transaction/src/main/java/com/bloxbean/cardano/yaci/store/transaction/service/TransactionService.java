@@ -1,18 +1,19 @@
 package com.bloxbean.cardano.yaci.store.transaction.service;
 
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionSummary;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxUtxo;
 import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
 import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,14 +32,10 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static java.util.stream.Collectors.groupingBy;
 
 @Component
+@RequiredArgsConstructor
 public class TransactionService {
-    private TxnEntityRepository txnEntityRepository;
-    private UtxoRepository utxoRepository;
-
-    public TransactionService(TxnEntityRepository txnEntityRepository, UtxoRepository utxoRepository) {
-        this.txnEntityRepository = txnEntityRepository;
-        this.utxoRepository = utxoRepository;
-    }
+    private final TxnEntityRepository txnEntityRepository;
+    private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
         Optional<TxnEntity> txnEntityOptional = txnEntityRepository.findByTxHash(txHash);
@@ -84,8 +81,8 @@ public class TransactionService {
         }
     }
 
-    private TxUtxo resolveInput(UtxoId utxoId) {
-        return utxoRepository.findById(utxoId)
+    private TxUtxo resolveInput(UtxoKey utxoId) {
+        return utxoClient.getUtxoById(utxoId)
                 .map(addressUtxo ->
                         TxUtxo.builder()
                                 .txHash(addressUtxo.getTxHash())
@@ -101,11 +98,11 @@ public class TransactionService {
                         .build());
     }
 
-    private List<TxUtxo> resolveInputs(List<UtxoId> utxoIds) {
+    private List<TxUtxo> resolveInputs(List<UtxoKey> utxoIds) {
         if (utxoIds == null || utxoIds.isEmpty())
             return Collections.EMPTY_LIST;
 
-        Map<UtxoId, List<TxUtxo>> txUtxosMap = utxoRepository.findAllById(utxoIds)
+        Map<UtxoKey, List<TxUtxo>> txUtxosMap = utxoClient.getUtxosByIds(utxoIds)
                 .stream()
                 .map(addressUtxo -> TxUtxo.builder()
                         .txHash(addressUtxo.getTxHash())
@@ -118,7 +115,7 @@ public class TransactionService {
                         .scriptRef(addressUtxo.getScriptRef())
                         .inlineDatumJson(inlineDatumToJson(addressUtxo.getInlineDatum()))
                         .build())
-                .collect(groupingBy(txUtxo -> new UtxoId(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
+                .collect(groupingBy(txUtxo -> new UtxoKey(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
 
         return utxoIds.stream()
                 .map(utxoId -> txUtxosMap.containsKey(utxoId) ? txUtxosMap.get(utxoId).get(0)

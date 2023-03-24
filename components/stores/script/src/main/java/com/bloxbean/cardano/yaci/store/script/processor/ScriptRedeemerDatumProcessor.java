@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
-import com.bloxbean.carano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
