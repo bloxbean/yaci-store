@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.transaction.model;
 
-import com.bloxbean.carano.yaci.store.common.domain.TxOuput;
-import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
+import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -40,11 +40,11 @@ public class TxnEntity extends BaseEntity {
 
     @Type(JsonType.class)
     @Column(name = "inputs")
-    private List<UtxoId> inputs;
+    private List<UtxoKey> inputs;
 
     @Type(JsonType.class)
     @Column(name = "outputs")
-    private List<UtxoId> outputs;
+    private List<UtxoKey> outputs;
 
     @Column(name = "fee")
     private BigInteger fee;
@@ -63,7 +63,7 @@ public class TxnEntity extends BaseEntity {
 
     @Type(JsonType.class)
     @Column(name = "collateral_inputs")
-    private List<UtxoId> collateralInputs;
+    private List<UtxoKey> collateralInputs;
 
     @Type(JsonType.class)
     @Column(name = "required_signers")
@@ -74,7 +74,7 @@ public class TxnEntity extends BaseEntity {
 
     @Type(JsonType.class)
     @Column(name = "collateral_return")
-    private UtxoId collateralReturn;
+    private UtxoKey collateralReturn;
 
     @Type(JsonType.class)
     @Column(name = "collateral_return_json")
@@ -85,7 +85,7 @@ public class TxnEntity extends BaseEntity {
 
     @Type(JsonType.class)
     @Column(name = "reference_inputs")
-    private List<UtxoId> referenceInputs;
+    private List<UtxoKey> referenceInputs;
 
     @Column(name = "invalid")
     private Boolean invalid;
