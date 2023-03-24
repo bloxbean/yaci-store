@@ -1,4 +1,4 @@
-package com.bloxbean.carano.yaci.store.common.domain;
+package com.bloxbean.cardano.yaci.store.common.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

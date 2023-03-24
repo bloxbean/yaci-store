@@ -1,4 +1,4 @@
-package com.bloxbean.carano.yaci.store.common.util;
+package com.bloxbean.cardano.yaci.store.common.util;
 
 public class StringUtil {
 

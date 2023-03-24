@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.transaction.model;
 
-import com.bloxbean.carano.yaci.store.common.domain.TxOuput;
-import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.carano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

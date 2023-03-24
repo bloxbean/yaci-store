@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa;
 
-import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.UtxoId;

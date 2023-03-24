@@ -1,4 +1,4 @@
-package com.bloxbean.carano.yaci.store.common.model;
+package com.bloxbean.cardano.yaci.store.common.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;

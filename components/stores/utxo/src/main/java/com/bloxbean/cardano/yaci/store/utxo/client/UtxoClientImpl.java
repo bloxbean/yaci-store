@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.utxo.client;
 
-import com.bloxbean.carano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.carano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import jakarta.validation.constraints.NotNull;
