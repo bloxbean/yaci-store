@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
+import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
+import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
-import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
-import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
+import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -25,14 +25,14 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TransactionProcessor {
 
-    private final TxnEntityRepository txnEntityRepository;
+    private final TransactionStorage transactionStorage;
 
     @EventListener
     @Order(3)
     @Transactional
     public void handleTransactionEvent(TransactionEvent event) {
         List<Transaction> transactions = event.getTransactions();
-        List<TxnEntity> txnEntities = new ArrayList<>();
+        List<Txn> txList = new ArrayList<>();
 
         transactions.forEach(transaction -> {
             List<UtxoKey> inputs = transaction.getBody().getInputs().stream()
@@ -61,7 +61,7 @@ public class TransactionProcessor {
                         .collect(Collectors.toList());
             }
 
-            TxnEntity txnEntity = TxnEntity.builder()
+            Txn txn = Txn.builder()
                     .txHash(transaction.getTxHash())
                     .blockHash(event.getMetadata().getBlockHash())
                     .blockNumber(transaction.getBlockNumber())
@@ -82,10 +82,10 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            txnEntities.add(txnEntity);
+            txList.add(txn);
         });
 
-        txnEntityRepository.saveAll(txnEntities);
+        transactionStorage.saveAll(txList);
     }
 
 

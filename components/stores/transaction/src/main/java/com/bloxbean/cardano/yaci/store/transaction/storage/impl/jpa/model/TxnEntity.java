@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.transaction.model;
+package com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
