@@ -6,12 +6,8 @@ import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonCo
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionSummary;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TxUtxo;
-import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
-import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
+import com.bloxbean.cardano.yaci.store.transaction.domain.*;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,17 +30,17 @@ import static java.util.stream.Collectors.groupingBy;
 @Component
 @RequiredArgsConstructor
 public class TransactionService {
-    private final TxnEntityRepository txnEntityRepository;
+    private final TransactionStorage transactionStorage;
     private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
-        Optional<TxnEntity> txnEntityOptional = txnEntityRepository.findByTxHash(txHash);
-        if (txnEntityOptional.isPresent()) {
-            return txnEntityOptional.map(txnEntity -> {
-                List<TxUtxo> inputUtxos = resolveInputs(txnEntity.getInputs());
-                List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
-                List<TxUtxo> collateralInputs = resolveInputs(txnEntity.getCollateralInputs());
-                List<TxUtxo> referenceInputs = resolveInputs(txnEntity.getReferenceInputs());
+        Optional<Txn> txnOptional = transactionStorage.findByTxHash(txHash);
+        if (txnOptional.isPresent()) {
+            return txnOptional.map(txn -> {
+                List<TxUtxo> inputUtxos = resolveInputs(txn.getInputs());
+                List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
+                List<TxUtxo> collateralInputs = resolveInputs(txn.getCollateralInputs());
+                List<TxUtxo> referenceInputs = resolveInputs(txn.getReferenceInputs());
 
                 BigInteger totalOutput = outputUtxos
                         .stream()
@@ -55,23 +51,23 @@ public class TransactionService {
                         .reduce(BigInteger.ZERO, BigInteger::add);
 
                 return TransactionDetails.builder()
-                        .hash(txnEntity.getTxHash())
-                        .blockHeight(txnEntity.getBlockNumber())
-                        .slot(txnEntity.getSlot())
+                        .hash(txn.getTxHash())
+                        .blockHeight(txn.getBlockNumber())
+                        .slot(txn.getSlot())
                         .inputs(inputUtxos)
                         .outputs(outputUtxos)
                         .utxoCount(inputUtxos.size())
                         .totalOutput(totalOutput)
-                        .fees(txnEntity.getFee())
-                        .ttl(txnEntity.getTtl())
-                        .auxiliaryDataHash(txnEntity.getAuxiliaryDataHash())
-                        .validityIntervalStart(txnEntity.getValidityIntervalStart())
-                        .scriptDataHash(txnEntity.getScriptDataHash())
+                        .fees(txn.getFee())
+                        .ttl(txn.getTtl())
+                        .auxiliaryDataHash(txn.getAuxiliaryDataHash())
+                        .validityIntervalStart(txn.getValidityIntervalStart())
+                        .scriptDataHash(txn.getScriptDataHash())
                         .collateralInputs(collateralInputs)
-                        .requiredSigners(txnEntity.getRequiredSigners())
-                        .netowrkId(txnEntity.getNetowrkId())
-                        .collateralReturn(txnEntity.getCollateralReturnJson())
-                        .totalCollateral(txnEntity.getTotalCollateral())
+                        .requiredSigners(txn.getRequiredSigners())
+                        .netowrkId(txn.getNetowrkId())
+                        .collateralReturn(txn.getCollateralReturnJson())
+                        .totalCollateral(txn.getTotalCollateral())
                         .referenceInputs(referenceInputs)
                         .build();
             });
@@ -139,12 +135,12 @@ public class TransactionService {
         Pageable sortedBySlot =
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
-        Page<TxnEntity> txnEntityPage = txnEntityRepository.findAll(sortedBySlot);
-        long total = txnEntityPage.getTotalElements();
-        int totalPage = txnEntityPage.getTotalPages();
+        Page<Txn> txnPage = transactionStorage.findAll(sortedBySlot);
+        long total = txnPage.getTotalElements();
+        int totalPage = txnPage.getTotalPages();
 
-        List<TransactionSummary> transactionSummaries = txnEntityPage.stream().map(txnEntity -> {
-            List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
+        List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
+            List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
                     .map(txUtxo -> txUtxo.getOwnerAddr())
                     .collect(Collectors.toList());
@@ -158,12 +154,12 @@ public class TransactionService {
 
             TransactionSummary summary = TransactionSummary
                     .builder()
-                    .txHash(txnEntity.getTxHash())
-                    .blockNumber(txnEntity.getBlockNumber())
-                    .slot(txnEntity.getSlot())
+                    .txHash(txn.getTxHash())
+                    .blockNumber(txn.getBlockNumber())
+                    .slot(txn.getSlot())
                     .outputAddresses(outputAddresses)
                     .totalOutput(totalOutput)
-                    .fee(txnEntity.getFee())
+                    .fee(txn.getFee())
                     .build();
 
             return summary;
