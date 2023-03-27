@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.metadata.repository;
+package com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.repository;
 
-import com.bloxbean.cardano.yaci.store.metadata.model.TxMetadataLabelEntity;
+import com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.model.TxMetadataLabelEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

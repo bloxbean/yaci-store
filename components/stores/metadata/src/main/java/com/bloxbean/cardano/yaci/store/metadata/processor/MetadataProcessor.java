@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.metadata.processor;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.metadata.model.TxMetadataLabelEntity;
-import com.bloxbean.cardano.yaci.store.metadata.repository.TxMetadataLabelRepository;
+import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
+import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class MetadataProcessor {
-    private final TxMetadataLabelRepository metadataLabelRepository;
+    private final TxMetadataStorage metadataStorage;
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @EventListener
@@ -32,7 +32,7 @@ public class MetadataProcessor {
             log.debug("Received AuxDataEvent");
 
         EventMetadata eventMetadata = auxDataEvent.getMetadata();
-        List<TxMetadataLabelEntity> txMetadataLabelEntities = auxDataEvent.getTxAuxDataList().stream()
+        List<TxMetadataLabel> txMetadataLabelList = auxDataEvent.getTxAuxDataList().stream()
                 .filter(txAuxDataEvent -> txAuxDataEvent.getAuxData() != null
                         && !StringUtil.isEmpty(txAuxDataEvent.getAuxData().getMetadataJson()))
                 .map(txAuxData -> {
@@ -44,9 +44,9 @@ public class MetadataProcessor {
                         throw new IllegalStateException(e);
                     }
 
-                    List<TxMetadataLabelEntity> txMetadataLabels = new ArrayList<>();
+                    List<TxMetadataLabel> txMetadataLabels = new ArrayList<>();
                     jsonNode.fieldNames().forEachRemaining(fieldName -> {
-                        TxMetadataLabelEntity txMetadataLabel = TxMetadataLabelEntity.builder()
+                        TxMetadataLabel txMetadataLabel = TxMetadataLabel.builder()
                                 .slot(eventMetadata.getSlot())
                                 .txHash(txAuxData.getTxHash())
                                 .label(fieldName)
@@ -58,13 +58,13 @@ public class MetadataProcessor {
 
                     return txMetadataLabels;
                 })
-                .flatMap(txMetadataLabelList -> txMetadataLabelList.stream())
+                .flatMap(txMetadataLabels -> txMetadataLabels.stream())
                 .collect(Collectors.toList());
 
-                if (txMetadataLabelEntities.size() > 0) {
+                if (txMetadataLabelList.size() > 0) {
                     if (log.isDebugEnabled())
-                        log.debug("Saving metadata >> Length : " + txMetadataLabelEntities.size());
-                    metadataLabelRepository.saveAll(txMetadataLabelEntities);
+                        log.debug("Saving metadata >> Length : " + txMetadataLabelList.size());
+                    metadataStorage.saveAll(txMetadataLabelList);
                 }
     }
 }
