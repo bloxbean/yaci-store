@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.script.domain;
+package com.bloxbean.cardano.yaci.store.script.controller;
 
+import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -15,6 +16,8 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class NativeScript extends Script {
+public class ScriptDto {
+    private String scriptHash;
+    private ScriptType scriptType;
     private JsonNode content;
 }

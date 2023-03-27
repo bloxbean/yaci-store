@@ -16,4 +16,6 @@ import lombok.experimental.SuperBuilder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Script {
     private String scriptHash;
+    private ScriptType scriptType;
+    private String content;
 }
