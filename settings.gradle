@@ -23,4 +23,5 @@ include 'components:stores:live'
 include 'components:submit'
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
+include ':starters:transaction-spring-boot-starter'
 

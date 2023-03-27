@@ -5,9 +5,9 @@ plugins {
 dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
+    implementation project(':starters:transaction-spring-boot-starter')
 
     implementation project(':components:stores:blocks')
-    implementation project(':components:stores:transaction')
     implementation project(':components:stores:script')
     implementation project(':components:stores:protocolparams')
     implementation project(':components:stores:metadata')
