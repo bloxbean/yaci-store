@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.script.repository;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository;
 
-import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.TxScriptEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

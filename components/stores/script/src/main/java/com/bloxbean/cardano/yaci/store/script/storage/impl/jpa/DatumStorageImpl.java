@@ -1,8 +1,9 @@
-package com.bloxbean.cardano.yaci.store.script.storage;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
-import com.bloxbean.cardano.yaci.store.script.model.DatumEntity;
-import com.bloxbean.cardano.yaci.store.script.repository.DatumRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.DatumEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.DatumRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class DatumStorageImpl implements DatumStorage{
+public class DatumStorageImpl implements DatumStorage {
     private final DatumRepository datumRepository;
 
     @Override
