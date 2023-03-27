@@ -1,13 +1,9 @@
-package com.bloxbean.cardano.yaci.store.script.model;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
-import com.bloxbean.cardano.yaci.core.model.NativeScript;
-import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.vladmihalcea.hibernate.type.json.JsonType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,11 +21,11 @@ public class ScriptEntity extends BaseEntity {
     @Column(name = "script_hash")
     private String scriptHash;
 
-    @Type(JsonType.class)
-    @Column(name = "plutus_script")
-    private PlutusScript plutusScript;
+    @Column(name = "script_type")
+    @Enumerated(EnumType.STRING)
+    private ScriptType scriptType;
 
     @Type(JsonType.class)
-    @Column(name = "native_script")
-    private NativeScript nativeScript;
+    @Column(name = "content")
+    private String content;
 }
