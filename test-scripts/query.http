@@ -8,16 +8,16 @@ Content-Type: application/json
 
 [
   {
-    "txHash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
-    "outputIndex": 0
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 0
   },
   {
-    "txHash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
-    "outputIndex": 1
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 1
   },
   {
-    "txHash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
-    "outputIndex": 2
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 2
   }
 
 ]
