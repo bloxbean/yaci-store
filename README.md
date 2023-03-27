@@ -65,7 +65,7 @@ Yaci Store also has a "**submit**" module to support transaction submission.
 
 ## Known Limitations:
 
-- Currently it doesn't store the genesis balances and Byron era transactions.
+- Currently it doesn't store the genesis balances and Byron era transactions
 
 
 # Support from YourKit
