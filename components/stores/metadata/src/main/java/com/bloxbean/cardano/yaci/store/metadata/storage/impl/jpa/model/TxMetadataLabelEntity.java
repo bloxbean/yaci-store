@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.metadata.model;
+package com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.*;
