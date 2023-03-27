@@ -1,10 +1,10 @@
-package com.bloxbean.cardano.yaci.store.template.processor;
+package com.bloxbean.cardano.yaci.store.assets.processor;
 
+import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
+import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
+import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.MintBurnEvent;
-import com.bloxbean.cardano.yaci.store.template.domain.MintType;
-import com.bloxbean.cardano.yaci.store.template.model.TxAssetEntity;
-import com.bloxbean.cardano.yaci.store.template.repository.TxAssetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -19,18 +19,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class AssetMintBurnProcessor {
-    private final TxAssetRepository txAssetRepository;
+    private final AssetStorage assetStorage;
 
     @EventListener
     @Transactional
     public void handleAssetMintBurn(MintBurnEvent mintBurnEvent) {
         EventMetadata eventMetadata = mintBurnEvent.getMetadata();
 
-        List<TxAssetEntity> txAssetList = mintBurnEvent.getTxMintBurns().stream()
+        List<TxAsset> txAssetList = mintBurnEvent.getTxMintBurns().stream()
                 .filter(txMintBurn -> txMintBurn.getAmounts() != null)
                 .flatMap(txMintBurn ->
                     txMintBurn.getAmounts()
-                            .stream().map(amount -> TxAssetEntity.builder()
+                            .stream().map(amount -> TxAsset.builder()
                                     .slot(eventMetadata.getSlot())
                                     .txHash(txMintBurn.getTxHash())
                                     .policy(amount.getPolicyId())
@@ -44,7 +44,7 @@ public class AssetMintBurnProcessor {
         if (txAssetList.size() > 0) {
             if (log.isDebugEnabled())
                 log.debug("Save assets : " + txAssetList.size());
-            txAssetRepository.saveAll(txAssetList);
+            assetStorage.saveAll(txAssetList);
         }
     }
 }

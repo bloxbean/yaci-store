@@ -9,7 +9,7 @@ create table assets
     asset_name            varchar(255),
     unit                  varchar(255),
     quantity              bigint,
-    mint_type             integer,
+    mint_type             varchar(4),
     create_datetime       timestamp,
     update_datetime       timestamp
 );

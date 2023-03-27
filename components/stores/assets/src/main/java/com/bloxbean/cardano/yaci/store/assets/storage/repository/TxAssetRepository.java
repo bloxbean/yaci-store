@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.template.repository;
+package com.bloxbean.cardano.yaci.store.assets.storage.repository;
 
-import com.bloxbean.cardano.yaci.store.template.model.TxAssetEntity;
+import com.bloxbean.cardano.yaci.store.assets.storage.model.TxAssetEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
