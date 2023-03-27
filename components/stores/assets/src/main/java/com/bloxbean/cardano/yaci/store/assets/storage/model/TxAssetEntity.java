@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.template.model;
+package com.bloxbean.cardano.yaci.store.assets.storage.model;
 
+import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
-import com.bloxbean.cardano.yaci.store.template.domain.MintType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,5 +41,6 @@ public class TxAssetEntity extends BaseEntity {
     private BigInteger quantity;
 
     @Column(name = "mint_type")
+    @Enumerated(EnumType.STRING)
     private MintType mintType;
 }
