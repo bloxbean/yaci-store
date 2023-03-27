@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.model;
+package com.bloxbean.cardano.yaci.store.script.domain;
 
 public enum ScriptType {
     NATIVE_SCRIPT, PLUTUS_V1, PLUTUS_V2

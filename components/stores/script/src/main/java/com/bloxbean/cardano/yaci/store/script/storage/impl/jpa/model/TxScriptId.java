@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.model;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
 import jakarta.persistence.Column;
 import lombok.*;

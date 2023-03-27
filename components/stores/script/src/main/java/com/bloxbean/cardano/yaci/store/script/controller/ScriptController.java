@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.script.controller;
 
-import com.bloxbean.cardano.yaci.store.script.domain.Script;
+import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.TxContractDetails;
 import com.bloxbean.cardano.yaci.store.script.service.ScriptService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,8 +28,24 @@ public class ScriptController {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @GetMapping("/scripts/{scriptHash}")
-    public Script getScriptByHash(@PathVariable String scriptHash) {
+    public ScriptDto getScriptByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
+                .map(script -> {
+                    try {
+                        return ScriptDto.builder()
+                                .scriptHash(script.getScriptHash())
+                                .scriptType(script.getScriptType())
+                                .content(!StringUtil.isEmpty(script.getContent())? JsonUtil.parseJson(script.getContent()): null)
+                                .build();
+                    } catch (JsonProcessingException e) {
+                        log.error("Error while parsing script content", e);
+                        return ScriptDto.builder()
+                                .scriptHash(script.getScriptHash())
+                                .scriptType(script.getScriptType())
+                                .content(null)
+                                .build();
+                    }
+                })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
