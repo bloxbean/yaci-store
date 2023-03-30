@@ -11,8 +11,8 @@ dependencies {
     implementation project(':starters:assets-spring-boot-starter')
     implementation project(':starters:blocks-spring-boot-starter')
     implementation project(':starters:protocolparams-spring-boot-starter')
+    implementation project(':starters:live-spring-boot-starter')
 
-    implementation project(':components:stores:live')
     implementation project(':components:submit')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'

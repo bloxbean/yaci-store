@@ -30,4 +30,5 @@ include ':starters:metadata-spring-boot-starter'
 include ':starters:assets-spring-boot-starter'
 include ':starters:blocks-spring-boot-starter'
 include ':starters:protocolparams-spring-boot-starter'
+include ':starters:live-spring-boot-starter'
 
