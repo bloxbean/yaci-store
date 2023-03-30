@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(
-        value="sync.auto.start",
+        value="store.sync-auto-start",
         havingValue = "true",
         matchIfMissing = true
 )
