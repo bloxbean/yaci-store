@@ -8,10 +8,10 @@ dependencies {
     implementation project(':starters:transaction-spring-boot-starter')
     implementation project(':starters:script-spring-boot-starter')
     implementation project(':starters:metadata-spring-boot-starter')
+    implementation project(':starters:assets-spring-boot-starter')
 
     implementation project(':components:stores:blocks')
     implementation project(':components:stores:protocolparams')
-    implementation project(':components:stores:assets')
     implementation project(':components:stores:live')
     implementation project(':components:submit')
 
