@@ -12,6 +12,7 @@ public class YaciStoreProperties {
 
     private Cardano cardano = new Cardano();
     private int eventPublisherId = 1;
+    private boolean syncAutoStart = true;
 
     public Cardano getCardano() {
         return cardano;
