@@ -26,7 +26,7 @@ subprojects {
         }
 
         dependencies {
-            dependency 'com.bloxbean.cardano:yaci:0.1.9'
+            dependency 'com.bloxbean.cardano:yaci:0.1.10-beta'
             dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.3'
             dependency 'com.bloxbean.cardano:cardano-client-backend:0.4.3'
             dependency 'co.nstant.in:cbor:0.9'
