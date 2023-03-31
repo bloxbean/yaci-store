@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.starter.core;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
-import com.bloxbean.cardano.yaci.store.service.ApplicationStartListener;
+import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -22,9 +22,9 @@ import org.springframework.web.client.RestTemplate;
 
 @AutoConfiguration
 @EnableConfigurationProperties(YaciStoreProperties.class)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store"})
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.core", "com.bloxbean.cardano.yaci.store.common", "com.bloxbean.cardano.yaci.store.events"})
+@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.core", "com.bloxbean.cardano.yaci.store.common", "com.bloxbean.cardano.yaci.store.events"})
+@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.core", "com.bloxbean.cardano.yaci.store.common", "com.bloxbean.cardano.yaci.store.events"})
 @EnableTransactionManagement
 @EnableScheduling
 @Slf4j
