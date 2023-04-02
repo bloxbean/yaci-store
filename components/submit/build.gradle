@@ -6,7 +6,7 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'Yaci Store Sumbmit'
+                name = 'Yaci Store Submit'
                 description = 'Yaci Store Submit Module'
             }
         }
