@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.metadata.controller;
 
-import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadata;
+import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
+import com.bloxbean.cardano.yaci.store.metadata.dto.MetadataDtoMapper;
+import com.bloxbean.cardano.yaci.store.metadata.dto.TxMetadataLabelDto;
 import com.bloxbean.cardano.yaci.store.metadata.service.MetadataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -17,10 +20,18 @@ import java.util.List;
 @Slf4j
 public class MetadataController {
     private final MetadataService metadataService;
+    private final MetadataDtoMapper metadataDtoMapper;
 
     @GetMapping("/txs/{txHash}/metadata")
-    public List<TxMetadata> getMetadataByTxHash(@PathVariable String txHash) {
-        return metadataService.getMetadataForTx(txHash);
+    public List<TxMetadataLabelDto> getMetadataByTxHash(@PathVariable String txHash) {
+        List<TxMetadataLabel> txMetadataLabels = metadataService.getMetadataForTx(txHash);
+        if (txMetadataLabels == null || txMetadataLabels.isEmpty())
+            return Collections.emptyList();
+        else {
+            return txMetadataLabels.stream()
+                    .map(metadataDtoMapper::toTxMetadataLabelDto)
+                    .toList();
+        }
     }
 
 }

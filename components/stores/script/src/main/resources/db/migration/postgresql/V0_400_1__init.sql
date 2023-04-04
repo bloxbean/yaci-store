@@ -3,8 +3,8 @@ create table script
 (
     script_hash     varchar(255) not null
         primary key,
-    plutus_script   jsonb,
-    native_script   jsonb,
+    script_type     varchar(30),
+    content   jsonb,
     create_datetime timestamp,
     update_datetime timestamp
 );

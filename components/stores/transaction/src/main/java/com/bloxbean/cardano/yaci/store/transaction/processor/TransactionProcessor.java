@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
-import com.bloxbean.carano.yaci.store.common.domain.Amt;
-import com.bloxbean.carano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
-import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
+import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -25,43 +25,43 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TransactionProcessor {
 
-    private final TxnEntityRepository txnEntityRepository;
+    private final TransactionStorage transactionStorage;
 
     @EventListener
     @Order(3)
     @Transactional
     public void handleTransactionEvent(TransactionEvent event) {
         List<Transaction> transactions = event.getTransactions();
-        List<TxnEntity> txnEntities = new ArrayList<>();
+        List<Txn> txList = new ArrayList<>();
 
         transactions.forEach(transaction -> {
-            List<UtxoId> inputs = transaction.getBody().getInputs().stream()
-                    .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
+            List<UtxoKey> inputs = transaction.getBody().getInputs().stream()
+                    .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
                     .collect(Collectors.toList());
 
 
             AtomicInteger index = new AtomicInteger(0);
-            List<UtxoId> outputs = transaction.getBody().getOutputs().stream()
-                    .map(transactionOutput -> new UtxoId(transaction.getTxHash(), index.getAndIncrement()))
+            List<UtxoKey> outputs = transaction.getBody().getOutputs().stream()
+                    .map(transactionOutput -> new UtxoKey(transaction.getTxHash(), index.getAndIncrement()))
                     .collect(Collectors.toList());
             //reset
             index.set(0);
 
-            List<UtxoId> collateralInputs = null;
+            List<UtxoKey> collateralInputs = null;
             if (transaction.getBody().getCollateralInputs() != null) {
                 collateralInputs = transaction.getBody().getCollateralInputs().stream()
-                        .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
+                        .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
                         .collect(Collectors.toList());
             }
 
-            List<UtxoId> referenceInputs = null;
+            List<UtxoKey> referenceInputs = null;
             if (transaction.getBody().getReferenceInputs() != null) {
                 referenceInputs = transaction.getBody().getReferenceInputs().stream()
-                        .map(transactionInput -> new UtxoId(transactionInput.getTransactionId(), transactionInput.getIndex()))
+                        .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
                         .collect(Collectors.toList());
             }
 
-            TxnEntity txnEntity = TxnEntity.builder()
+            Txn txn = Txn.builder()
                     .txHash(transaction.getTxHash())
                     .blockHash(event.getMetadata().getBlockHash())
                     .blockNumber(transaction.getBlockNumber())
@@ -77,15 +77,15 @@ public class TransactionProcessor {
                     .collateralReturnJson(convertOutput(transaction.getBody().getCollateralReturn()))
                     .netowrkId(transaction.getBody().getNetowrkId())
                     .totalCollateral(transaction.getBody().getTotalCollateral())
-                    .collateralReturn(new UtxoId(transaction.getTxHash(), outputs.size()))
+                    .collateralReturn(new UtxoKey(transaction.getTxHash(), outputs.size()))
                     .referenceInputs(referenceInputs)
                     .invalid(transaction.isInvalid())
                     .build();
 
-            txnEntities.add(txnEntity);
+            txList.add(txn);
         });
 
-        txnEntityRepository.saveAll(txnEntities);
+        transactionStorage.saveAll(txList);
     }
 
 

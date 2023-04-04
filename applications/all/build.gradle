@@ -4,16 +4,15 @@ plugins {
 
 dependencies {
     implementation project(':starters:spring-boot-starter')
-
-    implementation project(':components:stores:blocks')
-    implementation project(':components:stores:utxo')
-    implementation project(':components:stores:transaction')
-    implementation project(':components:stores:script')
-    implementation project(':components:stores:protocolparams')
-    implementation project(':components:stores:metadata')
-    implementation project(':components:stores:assets')
-    implementation project(':components:stores:live')
-    implementation project(':components:submit')
+    implementation project(':starters:utxo-spring-boot-starter')
+    implementation project(':starters:transaction-spring-boot-starter')
+    implementation project(':starters:script-spring-boot-starter')
+    implementation project(':starters:metadata-spring-boot-starter')
+    implementation project(':starters:assets-spring-boot-starter')
+    implementation project(':starters:blocks-spring-boot-starter')
+    implementation project(':starters:protocolparams-spring-boot-starter')
+    implementation project(':starters:live-spring-boot-starter')
+    implementation project(':starters:submit-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
