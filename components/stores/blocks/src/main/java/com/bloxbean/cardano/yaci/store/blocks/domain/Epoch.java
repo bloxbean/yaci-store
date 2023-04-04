@@ -17,12 +17,11 @@ import java.util.Date;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Epoch {
-    private String hash;
     private long number;
     private int blockCount;
     private int transactionCount;
     private long totalOutput;
-    private Date startTime;
-    private Date endTime;
-    private int maxSlot;
+    private long startTime;
+    private long endTime;
+    private long maxSlot;
 }

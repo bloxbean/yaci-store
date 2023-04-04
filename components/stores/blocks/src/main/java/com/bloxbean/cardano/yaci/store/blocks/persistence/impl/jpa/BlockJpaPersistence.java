@@ -50,6 +50,14 @@ public class BlockJpaPersistence implements BlockPersistence {
     }
 
     @Override
+    public List<Block> findBlocksByEpoch(int epochNumber) {
+        return blockJpaRepository.findByEpochNumber(epochNumber)
+                .stream()
+                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public Optional<Block> findByBlockHash(String blockHash) {
         return blockJpaRepository.findByHash(blockHash)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
