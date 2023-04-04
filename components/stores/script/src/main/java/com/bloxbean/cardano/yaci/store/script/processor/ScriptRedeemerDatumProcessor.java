@@ -1,18 +1,20 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
-import com.bloxbean.carano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.script.domain.Script;
+import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
+import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
-import com.bloxbean.cardano.yaci.store.script.model.ScriptEntity;
-import com.bloxbean.cardano.yaci.store.script.model.TxScriptEntity;
-import com.bloxbean.cardano.yaci.store.script.repository.ScriptRepository;
-import com.bloxbean.cardano.yaci.store.script.repository.TxScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
+import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -32,8 +34,8 @@ import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutus
 @AllArgsConstructor
 @Slf4j
 public class ScriptRedeemerDatumProcessor {
-    private TxScriptRepository txScriptRepository;
-    private ScriptRepository scriptRepository;
+    private TxScriptStorage txScriptStorage;
+    private ScriptStorage scriptStorage;
     private RedeemerDatumMatcher redeemerMatcher;
     private TxScriptFinder txScriptFinder;
 
@@ -67,7 +69,7 @@ public class ScriptRedeemerDatumProcessor {
         Map<String, String> datumHashToDatumMap = findWitnessDatum(transaction);
 
         //Convert to TxScript objects
-        List<TxScriptEntity> txScripts = scriptContexts.stream()
+        List<TxScript> txScripts = scriptContexts.stream()
                 .map(scriptContext -> {
                     //Try to set datum
                     if (StringUtil.isEmpty(scriptContext.getDatum())) {
@@ -79,7 +81,7 @@ public class ScriptRedeemerDatumProcessor {
                     if (StringUtil.isEmpty(scriptContext.getDatumHash()) && !StringUtil.isEmpty(scriptContext.getDatum()))
                         scriptContext.setDatumHash(ScriptUtil.getDatumHash(scriptContext.getDatum()));
 
-                    return TxScriptEntity.builder()
+                    return TxScript.builder()
                             .txHash(transaction.getTxHash())
                             .slot(metadata.getSlot())
                             .block(metadata.getBlock())
@@ -93,27 +95,29 @@ public class ScriptRedeemerDatumProcessor {
                 }).collect(Collectors.toList());
 
         //Create TxScript entities to save
-        List<ScriptEntity> plutusScripts = scriptsMap.values().stream()
-                        .map(plutusScript -> ScriptEntity.builder()
+        List<Script> plutusScripts = scriptsMap.values().stream()
+                        .map(plutusScript -> Script.builder()
                                 .scriptHash(getPlutusScriptHash(plutusScript))
-                                .plutusScript(plutusScript)
+                                .scriptType(ScriptUtil.toPlutusScriptType(plutusScript.getType()))
+                                .content(JsonUtil.getJson(plutusScript))
                                 .build()).collect(Collectors.toList());
         if (plutusScripts != null && plutusScripts.size() > 0)
-            scriptRepository.saveAll(plutusScripts);
+            scriptStorage.saveScripts(plutusScripts);
 
         //Get all native scripts  and save
         if (transaction.getWitnesses().getNativeScripts() != null) {
-            List<ScriptEntity> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
-                    .map(nativeScript -> ScriptEntity.builder()
+            List<Script> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
+                    .map(nativeScript -> Script.builder()
                             .scriptHash(ScriptUtil.getNativeScriptHash(nativeScript))
-                            .nativeScript(nativeScript)
+                            .scriptType(ScriptType.NATIVE_SCRIPT)
+                            .content(JsonUtil.getJson(nativeScript))
                             .build()).collect(Collectors.toList());
             if (nativeScripts != null && nativeScripts.size() > 0)
-                scriptRepository.saveAll(nativeScripts);
+                scriptStorage.saveScripts(nativeScripts);
         }
 
         if (txScripts.size() > 0)
-         txScriptRepository.saveAll(txScripts);
+         txScriptStorage.saveAll(txScripts);
     }
 
     private Map<String, String> findWitnessDatum(Transaction transaction) {

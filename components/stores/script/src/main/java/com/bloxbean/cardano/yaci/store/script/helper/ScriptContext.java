@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
-import com.bloxbean.cardano.yaci.store.script.model.ScriptType;
+import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

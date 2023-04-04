@@ -1,18 +1,15 @@
 package com.bloxbean.cardano.yaci.store.transaction.service;
 
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionSummary;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TxUtxo;
-import com.bloxbean.cardano.yaci.store.transaction.model.TxnEntity;
-import com.bloxbean.cardano.yaci.store.transaction.repository.TxnEntityRepository;
-import com.bloxbean.cardano.yaci.store.utxo.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.transaction.domain.*;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,23 +28,19 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static java.util.stream.Collectors.groupingBy;
 
 @Component
+@RequiredArgsConstructor
 public class TransactionService {
-    private TxnEntityRepository txnEntityRepository;
-    private UtxoRepository utxoRepository;
-
-    public TransactionService(TxnEntityRepository txnEntityRepository, UtxoRepository utxoRepository) {
-        this.txnEntityRepository = txnEntityRepository;
-        this.utxoRepository = utxoRepository;
-    }
+    private final TransactionStorage transactionStorage;
+    private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
-        Optional<TxnEntity> txnEntityOptional = txnEntityRepository.findByTxHash(txHash);
-        if (txnEntityOptional.isPresent()) {
-            return txnEntityOptional.map(txnEntity -> {
-                List<TxUtxo> inputUtxos = resolveInputs(txnEntity.getInputs());
-                List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
-                List<TxUtxo> collateralInputs = resolveInputs(txnEntity.getCollateralInputs());
-                List<TxUtxo> referenceInputs = resolveInputs(txnEntity.getReferenceInputs());
+        Optional<Txn> txnOptional = transactionStorage.findByTxHash(txHash);
+        if (txnOptional.isPresent()) {
+            return txnOptional.map(txn -> {
+                List<TxUtxo> inputUtxos = resolveInputs(txn.getInputs());
+                List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
+                List<TxUtxo> collateralInputs = resolveInputs(txn.getCollateralInputs());
+                List<TxUtxo> referenceInputs = resolveInputs(txn.getReferenceInputs());
 
                 BigInteger totalOutput = outputUtxos
                         .stream()
@@ -58,23 +51,23 @@ public class TransactionService {
                         .reduce(BigInteger.ZERO, BigInteger::add);
 
                 return TransactionDetails.builder()
-                        .hash(txnEntity.getTxHash())
-                        .blockHeight(txnEntity.getBlockNumber())
-                        .slot(txnEntity.getSlot())
+                        .hash(txn.getTxHash())
+                        .blockHeight(txn.getBlockNumber())
+                        .slot(txn.getSlot())
                         .inputs(inputUtxos)
                         .outputs(outputUtxos)
                         .utxoCount(inputUtxos.size())
                         .totalOutput(totalOutput)
-                        .fees(txnEntity.getFee())
-                        .ttl(txnEntity.getTtl())
-                        .auxiliaryDataHash(txnEntity.getAuxiliaryDataHash())
-                        .validityIntervalStart(txnEntity.getValidityIntervalStart())
-                        .scriptDataHash(txnEntity.getScriptDataHash())
+                        .fees(txn.getFee())
+                        .ttl(txn.getTtl())
+                        .auxiliaryDataHash(txn.getAuxiliaryDataHash())
+                        .validityIntervalStart(txn.getValidityIntervalStart())
+                        .scriptDataHash(txn.getScriptDataHash())
                         .collateralInputs(collateralInputs)
-                        .requiredSigners(txnEntity.getRequiredSigners())
-                        .netowrkId(txnEntity.getNetowrkId())
-                        .collateralReturn(txnEntity.getCollateralReturnJson())
-                        .totalCollateral(txnEntity.getTotalCollateral())
+                        .requiredSigners(txn.getRequiredSigners())
+                        .netowrkId(txn.getNetowrkId())
+                        .collateralReturn(txn.getCollateralReturnJson())
+                        .totalCollateral(txn.getTotalCollateral())
                         .referenceInputs(referenceInputs)
                         .build();
             });
@@ -84,8 +77,8 @@ public class TransactionService {
         }
     }
 
-    private TxUtxo resolveInput(UtxoId utxoId) {
-        return utxoRepository.findById(utxoId)
+    private TxUtxo resolveInput(UtxoKey utxoId) {
+        return utxoClient.getUtxoById(utxoId)
                 .map(addressUtxo ->
                         TxUtxo.builder()
                                 .txHash(addressUtxo.getTxHash())
@@ -101,11 +94,11 @@ public class TransactionService {
                         .build());
     }
 
-    private List<TxUtxo> resolveInputs(List<UtxoId> utxoIds) {
+    private List<TxUtxo> resolveInputs(List<UtxoKey> utxoIds) {
         if (utxoIds == null || utxoIds.isEmpty())
             return Collections.EMPTY_LIST;
 
-        Map<UtxoId, List<TxUtxo>> txUtxosMap = utxoRepository.findAllById(utxoIds)
+        Map<UtxoKey, List<TxUtxo>> txUtxosMap = utxoClient.getUtxosByIds(utxoIds)
                 .stream()
                 .map(addressUtxo -> TxUtxo.builder()
                         .txHash(addressUtxo.getTxHash())
@@ -118,7 +111,7 @@ public class TransactionService {
                         .scriptRef(addressUtxo.getScriptRef())
                         .inlineDatumJson(inlineDatumToJson(addressUtxo.getInlineDatum()))
                         .build())
-                .collect(groupingBy(txUtxo -> new UtxoId(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
+                .collect(groupingBy(txUtxo -> new UtxoKey(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
 
         return utxoIds.stream()
                 .map(utxoId -> txUtxosMap.containsKey(utxoId) ? txUtxosMap.get(utxoId).get(0)
@@ -142,12 +135,12 @@ public class TransactionService {
         Pageable sortedBySlot =
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
-        Page<TxnEntity> txnEntityPage = txnEntityRepository.findAll(sortedBySlot);
-        long total = txnEntityPage.getTotalElements();
-        int totalPage = txnEntityPage.getTotalPages();
+        Page<Txn> txnPage = transactionStorage.findAll(sortedBySlot);
+        long total = txnPage.getTotalElements();
+        int totalPage = txnPage.getTotalPages();
 
-        List<TransactionSummary> transactionSummaries = txnEntityPage.stream().map(txnEntity -> {
-            List<TxUtxo> outputUtxos = resolveInputs(txnEntity.getOutputs());
+        List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
+            List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
                     .map(txUtxo -> txUtxo.getOwnerAddr())
                     .collect(Collectors.toList());
@@ -161,12 +154,12 @@ public class TransactionService {
 
             TransactionSummary summary = TransactionSummary
                     .builder()
-                    .txHash(txnEntity.getTxHash())
-                    .blockNumber(txnEntity.getBlockNumber())
-                    .slot(txnEntity.getSlot())
+                    .txHash(txn.getTxHash())
+                    .blockNumber(txn.getBlockNumber())
+                    .slot(txn.getSlot())
                     .outputAddresses(outputAddresses)
                     .totalOutput(totalOutput)
-                    .fee(txnEntity.getFee())
+                    .fee(txn.getFee())
                     .build();
 
             return summary;

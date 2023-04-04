@@ -3,6 +3,33 @@
 GET http://localhost:8080/api/v1/addresses/addr_test1qzx9hu8j4ah3auytk0mwcupd69hpc52t0cw39a65ndrah86djs784u92a3m5w475w3w35tyd6v3qumkze80j8a6h5tuqq5xe8y/utxos?page=0&count=100
 
 ###
+POST http://localhost:8080/api/v1/utxos
+Content-Type: application/json
+
+[
+  {
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 0
+  },
+  {
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 1
+  },
+  {
+    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
+    "output_index": 2
+  }
+
+]
+
+###
+GET http://localhost:8080/api/v1/utxos/a6fa627de15337fe4a6c935a2dcee7d3b990b8b8a0dc4ee6ef5e4595f25f6d9f/1
+
+###
+GET http://localhost:8080/api/v1/utxos?tx_hash=297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47&output_index=0
+
+
+###
 GET http://localhost:8080/api/v1/txs/297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47
 ###
 

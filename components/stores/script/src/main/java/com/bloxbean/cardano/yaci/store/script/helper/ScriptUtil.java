@@ -4,6 +4,7 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.client.exception.CborDeserializationException;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
@@ -15,8 +16,7 @@ import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.script.model.ScriptType;
-import com.bloxbean.cardano.yaci.store.utxo.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -96,7 +96,7 @@ public class ScriptUtil {
         }
     }
 
-    public static PlutusScript deserializeScriptRef(@NonNull AddressUtxoEntity addressUtxo) {
+    public static PlutusScript deserializeScriptRef(@NonNull AddressUtxo addressUtxo) {
         try {
             com.bloxbean.cardano.client.transaction.spec.PlutusScript cclPlutusScript
                     = ScriptUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
