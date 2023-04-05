@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 public class BlockSummary {
     private long number;
     private long slot;
-   // private long epoch;
+    private int epochNumber;
     private String era;
     private String issuerVkey;
     private long blockBodySize;

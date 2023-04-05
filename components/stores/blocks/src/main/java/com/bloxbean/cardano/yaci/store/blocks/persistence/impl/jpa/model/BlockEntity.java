@@ -13,6 +13,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
+import java.math.BigInteger;
+
 
 @Data
 @NoArgsConstructor
@@ -32,7 +34,13 @@ public class BlockEntity extends BaseEntity {
     private Long slot;
 
     @Column(name = "epoch")
-    private Long epoch;
+    private int epochNumber;
+
+    @Column(name = "total_output")
+    private BigInteger totalOutput;
+
+    @Column(name = "block_time")
+    private long blockTime;
 
     @Column(name = "era")
     private Integer era;
