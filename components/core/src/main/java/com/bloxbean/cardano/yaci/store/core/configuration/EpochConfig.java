@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.core.configuration;
 
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import org.springframework.stereotype.Component;
 
+@Component("EpochConfig")
 public class EpochConfig {
     private final Long shellyEpochLength = 432000L;
     private final Long shellySlotLength = 1L;

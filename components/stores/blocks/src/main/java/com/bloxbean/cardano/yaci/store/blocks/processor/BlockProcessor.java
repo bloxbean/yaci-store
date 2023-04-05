@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
+import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -60,13 +61,19 @@ public class BlockProcessor {
         long blockNumber = blockHeader.getHeaderBody().getBlockNumber();
         long slot = blockHeader.getHeaderBody().getSlot();
 
+        long time = blockConfig.getStartTime(protocolMagic);
+        long lastByronBlock = blockConfig.getLastByronBlock(protocolMagic);
+        long byronProcessingTime = blockConfig.getByronProcessTime();
+        long shellyProcessingTime = blockConfig.getShellyProcessTime();
+
         Block block = Block.builder()
                 .hash(blockHeader.getHeaderBody().getBlockHash())
                 .number(blockNumber)
                 .slot(slot)
                 .totalOutput(BigInteger.valueOf(0))
                 .epochNumber(blockHeaderEvent.getMetadata().getEpochNumber())
-                .blockTime(calculateBlockTime(blockNumber, slot))
+                .blockTime(BlockUtil.calculateBlockTime(blockNumber, slot, time,
+                        lastByronBlock, byronProcessingTime, shellyProcessingTime))
                 .era(blockHeaderEvent.getMetadata().getEra().getValue())
                 .prevHash(blockHeader.getHeaderBody().getPrevHash())
                 .issuerVkey(blockHeader.getHeaderBody().getIssuerVkey())
@@ -83,25 +90,6 @@ public class BlockProcessor {
         blockPersistence.save(block);
     }
 
-    public long calculateBlockTime(long blockNumber, long slot) {
-        long time = blockConfig.getStartTime(protocolMagic);
-        long lastByronBlock = blockConfig.getLastByronBlock(protocolMagic);
-
-        final long actualSlot = slot - 1;
-        if (blockNumber > lastByronBlock) {
-            final long otherBlocks = actualSlot - lastByronBlock;
-            time += time + (lastByronBlock * blockConfig.getByronProcessTime());
-            time += time + (otherBlocks * blockConfig.getShellyProcessTime());
-        } else {
-            time = time + (actualSlot * blockConfig.getByronProcessTime());
-        }
-        return time;
-    }
-
-    private boolean amountIsInADA(Amount amount) {
-        return amount.getPolicyId() == "" && amount.getAssetName() == "";
-    }
-
     @EventListener
     @Async
     public void handleTransactionEvent(TransactionEvent transactionEvent) {
@@ -116,7 +104,7 @@ public class BlockProcessor {
             for (TransactionOutput output : outputs) {
                 List<Amount> amounts = output.getAmounts();
                 for (Amount amount : amounts) {
-                    if (amountIsInADA((amount))) {
+                    if (BlockUtil.amountIsInADA((amount))) {
                         transactionOutputInLovelace.add(amount.getQuantity());
                     }
                 }

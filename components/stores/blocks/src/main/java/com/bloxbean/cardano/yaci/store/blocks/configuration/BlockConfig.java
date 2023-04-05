@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.blocks.configuration;
 
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import org.springframework.stereotype.Component;
 
+@Component("BlockConfig")
 public class BlockConfig {
 
     private final long mainnetStartTime = 1_506_203_091;
