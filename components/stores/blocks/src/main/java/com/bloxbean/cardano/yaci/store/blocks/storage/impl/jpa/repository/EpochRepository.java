@@ -1,12 +1,12 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.EpochEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.EpochEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface EpochJpaRepository extends JpaRepository<EpochEntity, String> {
+public interface EpochRepository extends JpaRepository<EpochEntity, String> {
 
     Optional<EpochEntity> findTopByOrderByNumberDesc();
 

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

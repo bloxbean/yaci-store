@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence;
+package com.bloxbean.cardano.yaci.store.blocks.storage.api;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import java.util.List;
 import java.util.Optional;
 
-public interface BlockPersistence {
+public interface BlockStorage {
     Optional<Block> findRecentBlock();
 
     void save(Block block);

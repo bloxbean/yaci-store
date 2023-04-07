@@ -1,13 +1,11 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa;
 
-import com.bloxbean.cardano.yaci.store.blocks.domain.BlockSummary;
-import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.blocks.domain.EpochsPage;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.EpochPersistence;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.mapper.EpochMapper;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.BlockEntity;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.EpochEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.api.EpochStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.EpochMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.EpochEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.EpochRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,26 +19,26 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class EpochJpaPersistence  implements EpochPersistence {
+public class EpochStorageImpl implements EpochStorage {
 
-    private final EpochJpaRepository epochJpaRepository;
+    private final EpochRepository epochRepository;
     private final EpochMapper epochMapper;
 
     @Override
     public Optional<Epoch> findRecentEpoch() {
-        return epochJpaRepository.findTopByOrderByNumberDesc()
+        return epochRepository.findTopByOrderByNumberDesc()
                 .map(epochEntity -> epochMapper.toEpoch(epochEntity));
     }
 
     @Override
     public void save(Epoch epoch) {
         EpochEntity epochEntity = epochMapper.toEpochEntity(epoch);
-        epochJpaRepository.save(epochEntity);
+        epochRepository.save(epochEntity);
     }
 
     @Override
     public Optional<Epoch> findByNumber(int number) {
-        return epochJpaRepository.findByNumber(number);
+        return epochRepository.findByNumber(number);
     }
 
     @Override
@@ -48,7 +46,7 @@ public class EpochJpaPersistence  implements EpochPersistence {
         Pageable sortedByEpoch =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Page<EpochEntity> epochsEntityPage = epochJpaRepository.findAll(sortedByEpoch);
+        Page<EpochEntity> epochsEntityPage = epochRepository.findAll(sortedByEpoch);
         long total = epochsEntityPage.getTotalElements();
         int totalPage = epochsEntityPage.getTotalPages();
 

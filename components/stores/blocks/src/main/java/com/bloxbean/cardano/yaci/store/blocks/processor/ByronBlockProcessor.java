@@ -1,12 +1,11 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
-import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.store.blocks.configuration.BlockConfig;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
+import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
@@ -20,12 +19,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 @Slf4j
 public class ByronBlockProcessor {
-    private BlockPersistence blockPersistence;
+    private BlockStorage blockStorage;
 
     @Autowired
     private BlockConfig blockConfig;
@@ -33,8 +31,8 @@ public class ByronBlockProcessor {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
-    public ByronBlockProcessor(BlockPersistence blockPersistence) {
-        this.blockPersistence = blockPersistence;
+    public ByronBlockProcessor(BlockStorage blockStorage) {
+        this.blockStorage = blockStorage;
     }
 
     @EventListener
@@ -50,7 +48,7 @@ public class ByronBlockProcessor {
                 .prevHash(null)
                 .build();
 
-        blockPersistence.save(block);
+        blockStorage.save(block);
     }
 
     @EventListener
@@ -69,7 +67,7 @@ public class ByronBlockProcessor {
                 .prevHash(byronBlock.getHeader().getPrevBlock())
                 .build();
 
-        blockPersistence.findByBlockHash(byronBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
+        blockStorage.findByBlockHash(byronBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
             long blockNumber = preBlock.getNumber() + 1;
             long time = blockConfig.getStartTime(protocolMagic);
             long lastByronBlock = blockConfig.getLastByronBlock(protocolMagic);
@@ -81,7 +79,7 @@ public class ByronBlockProcessor {
                     lastByronBlock, byronProcessingTime, shellyProcessingTime));
         });
 
-        blockPersistence.save(block);
+        blockStorage.save(block);
     }
 
     @EventListener
@@ -97,10 +95,10 @@ public class ByronBlockProcessor {
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
                 .build();
 
-        blockPersistence.findByBlockHash(byronEbBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
+        blockStorage.findByBlockHash(byronEbBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
             block.setNumber(preBlock.getNumber() + 1);
         });
 
-        blockPersistence.save(block);
+        blockStorage.save(block);
     }
 }

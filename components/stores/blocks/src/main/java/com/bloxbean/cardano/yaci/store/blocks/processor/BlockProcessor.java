@@ -4,12 +4,10 @@ import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.blocks.configuration.BlockConfig;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
+import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -24,24 +22,16 @@ import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
-import java.io.IOException;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-
-import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 
 @Component
 @Slf4j
 public class BlockProcessor {
 
-    private BlockPersistence blockPersistence;
+    private BlockStorage blockStorage;
 
     @Autowired
     private BlockConfig blockConfig;
@@ -49,8 +39,8 @@ public class BlockProcessor {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
-    public BlockProcessor(BlockPersistence blockPersistence) {
-        this.blockPersistence = blockPersistence;
+    public BlockProcessor(BlockStorage blockStorage) {
+        this.blockStorage = blockStorage;
     }
 
     @EventListener
@@ -87,7 +77,7 @@ public class BlockProcessor {
                         + "." + blockHeader.getHeaderBody().getProtocolVersion().get_2())
                 .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
                 .build();
-        blockPersistence.save(block);
+        blockStorage.save(block);
     }
 
     @EventListener
@@ -111,11 +101,11 @@ public class BlockProcessor {
             }
         }
 
-        Optional<Block> block = blockPersistence.findByBlockHash(transactionEvent.getMetadata().getBlockHash());
+        Optional<Block> block = blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash());
         if (block.isPresent()) {
             Block transactionBlock = block.get();
             transactionBlock.setTotalOutput(transactionBlock.getTotalOutput().add(transactionOutputInLovelace));
-            blockPersistence.save(transactionBlock);
+            blockStorage.save(transactionBlock);
         } else {
             log.warn(String.format("Block {} is not present and a calculated output will be ignored in aggregation which will result in incorrect output values in the future.", transactionEvent.getMetadata().getBlock()));
         }
@@ -126,7 +116,7 @@ public class BlockProcessor {
     @Transactional
     //TODO -- add test
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
-        int count = blockPersistence.deleteAllBeforeSlot(rollbackEvent.getRollbackTo().getSlot());
+        int count = blockStorage.deleteAllBeforeSlot(rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} block records", count);
     }

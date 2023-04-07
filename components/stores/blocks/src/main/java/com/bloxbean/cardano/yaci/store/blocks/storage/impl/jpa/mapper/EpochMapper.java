@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.mapper;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.EpochEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.EpochEntity;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
