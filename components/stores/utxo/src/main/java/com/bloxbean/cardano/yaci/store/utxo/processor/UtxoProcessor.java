@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getPaymentKeyHash;
@@ -106,7 +107,7 @@ public class UtxoProcessor {
         invalidTransactionStorage.save(invalidTransaction);
 
         //collateral output
-        AddressUtxo collateralOutputUtxo = transaction.getCollateralReturnUtxo()
+        AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
 

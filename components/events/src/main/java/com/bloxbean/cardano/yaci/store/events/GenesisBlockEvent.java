@@ -8,9 +8,11 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class GenesisBlockEvent {
     private String blockHash;
     private long block;
     private long slot;
+
+    private boolean remotePublish; //Is published by a remote publisher
 }

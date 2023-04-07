@@ -23,6 +23,7 @@ include 'components:stores:assets'
 include 'components:stores:protocolparams'
 include 'components:stores:live'
 include 'components:submit'
+include 'components:remote'
 
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
@@ -34,4 +35,5 @@ include ':starters:blocks-spring-boot-starter'
 include ':starters:protocolparams-spring-boot-starter'
 include ':starters:live-spring-boot-starter'
 include ':starters:submit-spring-boot-starter'
+include ':starters:remote-spring-boot-starter'
 
