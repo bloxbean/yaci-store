@@ -1,11 +1,12 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockSummary;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.mapper.BlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.BlockEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.BlockEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -19,13 +20,13 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class BlockJpaPersistence implements BlockPersistence {
-    private final BlockJpaRepository blockJpaRepository;
+public class BlockStorageImpl implements BlockStorage {
+    private final BlockRepository blockRepository;
     private final BlockMapper blockDetailsMapper;
 
     @Override
     public Optional<Block> findRecentBlock() {
-        return blockJpaRepository.findTopByOrderByNumberDesc()
+        return blockRepository.findTopByOrderByNumberDesc()
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 
@@ -34,7 +35,7 @@ public class BlockJpaPersistence implements BlockPersistence {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Page<BlockEntity> blocksEntityPage = blockJpaRepository.findAll(sortedByBlock);
+        Page<BlockEntity> blocksEntityPage = blockRepository.findAll(sortedByBlock);
         long total = blocksEntityPage.getTotalElements();
         int totalPage = blocksEntityPage.getTotalPages();
 
@@ -51,7 +52,7 @@ public class BlockJpaPersistence implements BlockPersistence {
 
     @Override
     public List<Block> findBlocksByEpoch(int epochNumber) {
-        return blockJpaRepository.findByEpochNumber(epochNumber)
+        return blockRepository.findByEpochNumber(epochNumber)
                 .stream()
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity))
                 .collect(Collectors.toList());
@@ -59,24 +60,24 @@ public class BlockJpaPersistence implements BlockPersistence {
 
     @Override
     public Optional<Block> findByBlockHash(String blockHash) {
-        return blockJpaRepository.findByHash(blockHash)
+        return blockRepository.findByHash(blockHash)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 
     @Override
     public Optional<Block> findByBlock(long block) {
-        return blockJpaRepository.findByNumber(block)
+        return blockRepository.findByNumber(block)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
     }
 
     @Override
     public int deleteAllBeforeSlot(long slot) {
-        return blockJpaRepository.deleteBySlotGreaterThan(slot);
+        return blockRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     public void save(Block block) {
         BlockEntity blockEntity = blockDetailsMapper.toBlockEntity(block);
-        blockJpaRepository.save(blockEntity);
+        blockRepository.save(blockEntity);
     }
 }

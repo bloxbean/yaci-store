@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence;
+package com.bloxbean.cardano.yaci.store.blocks.storage.api;
 
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 
-public interface RollbackPersistence {
+public interface RollbackStorage {
     void save(RollbackEvent rollbackEvent);
 }
