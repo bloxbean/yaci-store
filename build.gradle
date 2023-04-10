@@ -8,14 +8,11 @@ subprojects {
     apply plugin: 'java-library'
 
     repositories {
+        mavenLocal()
+        mavenCentral()
         maven {
             url "https://oss.sonatype.org/content/repositories/snapshots"
         }
-    }
-
-    repositories {
-        mavenLocal()
-        mavenCentral()
     }
 
     archivesBaseName = 'yaci-store-' + project.name
