@@ -129,7 +129,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         return amounts.stream().map(amount ->
                 Amount.builder()
-                        .unit(amount.getUnit())
+                        .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null)
                         .policyId(amount.getPolicyId())
                         .assetName(amount.getAssetName().replace('\u0000', ' '))
                         .quantity(amount.getQuantity())
