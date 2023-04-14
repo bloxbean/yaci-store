@@ -32,6 +32,11 @@ public class EpochController {
                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 
+    @GetMapping("latest/parameters")
+    public ProtocolParams getLatestProtocolParams() {
+        return getProtocolParams();
+    }
+
     @Operation(summary = "Get protocol parameters. The {number} path variable is ignored. So any value can be passed. It always returns current protocol parameters")
     @GetMapping("{number}/parameters")
     public ProtocolParams getProtocolParams(@PathVariable Integer number) {
