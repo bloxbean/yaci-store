@@ -19,8 +19,8 @@ public class AddressUtxo {
     private String blockHash;
     private String ownerAddr;
     private String ownerStakeAddr;
-    private String ownerPaymentKeyHash;
-    private String ownerStakeKeyHash;
+    private String ownerPaymentCredential;
+    private String ownerStakeCredential;
     private List<Amt> amounts;
     private String dataHash;
     private String inlineDatum;
