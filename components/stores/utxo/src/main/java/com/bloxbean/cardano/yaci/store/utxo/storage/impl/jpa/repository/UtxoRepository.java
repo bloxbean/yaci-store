@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId> {
     Optional<List<AddressUtxoEntity>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
 
+    Optional<List<AddressUtxoEntity>> findByOwnerPaymentCredentialAndSpent(String paymentKeyHash, Boolean spent, Pageable page);
+
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
 
     List<AddressUtxoEntity> findBySlot(Long slot);

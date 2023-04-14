@@ -97,8 +97,8 @@ public class RedeemerDatumMatcher {
         //Find out if any script addressed inputs
         Optional<ScriptContext> scriptContext = utxoClient.getUtxoById(new UtxoKey(input.getTransactionId(), input.getIndex()))
                 .map(addressUtxo -> {
-                    String paymentKeyHash = addressUtxo.getOwnerPaymentKeyHash();
-                    String stakeKeyHash = addressUtxo.getOwnerStakeKeyHash();
+                    String paymentKeyHash = addressUtxo.getOwnerPaymentCredential();
+                    String stakeKeyHash = addressUtxo.getOwnerStakeCredential();
 
                     PlutusScript script = scriptsMap.get(paymentKeyHash);
                     if (script == null) { //Check if stake key hash is matching //TODO -- need to check if required

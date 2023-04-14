@@ -1,11 +1,15 @@
 plugins {
     id 'maven-publish'
     id 'signing'
+    id 'org.flywaydb.flyway' version '9.7.0'
+    id 'nu.studer.jooq' version '8.2'
 }
 
 subprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
+    apply plugin: 'org.flywaydb.flyway'
+    apply plugin: 'nu.studer.jooq'
 
     if (!name.equalsIgnoreCase("stores")) {
         publishing {
@@ -58,6 +62,93 @@ subprojects {
                     }
                 }
             }
+        }
+    }
+
+    //JOOQ generator
+    //Add store modules to this array
+    def jooq_modules = ['utxo', 'transaction']
+    if (jooq_modules.contains(name)) {
+        configurations {
+            flywayMigration
+        }
+
+        dependencies {
+            flywayMigration 'com.h2database:h2'
+            jooqGenerator 'com.h2database:h2'
+        }
+
+        flyway {
+            configurations = ['flywayMigration']
+            url = 'jdbc:h2:' + project.buildDir.absolutePath + File.separator  + 'testdb;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;INIT=CREATE SCHEMA IF NOT EXISTS \"PUBLIC\"\\;'
+            user = 'sa'
+            password = ''
+            locations = ['filesystem:src/main/resources/db/migration/h2']
+            createSchemas=true
+            schemas = ['PUBLIC']
+//            cleanOnValidationError = true
+//            cleanDisabled = false
+        }
+
+        jooq {
+            configurations {
+                main {
+                    generationTool {
+                        logging = org.jooq.meta.jaxb.Logging.WARN
+                        jdbc {
+                            driver = 'org.h2.Driver'
+                            url = flyway.url
+                            user = flyway.user
+                            password = flyway.password
+                        }
+                        generator {
+                            name = 'org.jooq.codegen.DefaultGenerator'
+                            database {
+                                name = 'org.jooq.meta.h2.H2Database'
+                                includes = 'PUBLIC.*'
+                                excludes = 'FLYWAY_SCHEMA_HISTORY | UNUSED_TABLE | PREFIX_.* | SECRET_SCHEMA.SECRET_TABLE | SECRET_ROUTINE'
+
+                                schemata {
+                                    schema {
+                                        inputSchema = 'PUBLIC'
+                                        outputSchemaToDefault = true
+                                    }
+                                }
+                            }
+                            target {
+                                packageName = 'com.bloxbean.cardano.yaci.store.' + project.name + ".jooq";
+                            }
+
+                            generate {
+                                // Generate the DAO classes
+                                daos = true
+                                // Annotate DAOs (and other types) with spring annotations, such as @Repository and @Autowired
+                                // for auto-wiring the Configuration instance, e.g. from Spring Boot's jOOQ starter
+                                springAnnotations = true
+                                // Generate Spring-specific DAOs containing @Transactional annotations
+                                springDao = true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // configure jOOQ task such that it only executes when something has changed that potentially affects the generated JOOQ sources
+        // - the jOOQ configuration has changed (Jdbc, Generator, Strategy, etc.)
+        // - the classpath used to execute the jOOQ generation tool has changed (jOOQ library, database driver, strategy classes, etc.)
+        // - the schema files from which the schema is generated and which is used by jOOQ to generate the sources have changed (scripts added, modified, etc.)
+        tasks.named('generateJooq').configure {
+            // ensure database schema has been prepared by Flyway before generating the jOOQ sources
+            dependsOn tasks.named('flywayMigrate')
+
+            // declare Flyway migration scripts as inputs on the jOOQ task
+            inputs.files(fileTree('src/main/resources/db/migration/h2'))
+                    .withPropertyName('migrations')
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+
+            // make jOOQ task participate in incremental builds (and build caching)
+            allInputsDeclared = true
         }
     }
 
