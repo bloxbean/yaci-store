@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
+import com.bloxbean.cardano.yaci.store.script.domain.TxScriptEvent;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
@@ -17,6 +18,7 @@ import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +40,7 @@ public class ScriptRedeemerDatumProcessor {
     private ScriptStorage scriptStorage;
     private RedeemerDatumMatcher redeemerMatcher;
     private TxScriptFinder txScriptFinder;
+    private ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -116,8 +119,12 @@ public class ScriptRedeemerDatumProcessor {
                 scriptStorage.saveScripts(nativeScripts);
         }
 
-        if (txScripts.size() > 0)
-         txScriptStorage.saveAll(txScripts);
+        if (txScripts.size() > 0) {
+            txScriptStorage.saveAll(txScripts);
+
+            //biz event
+            publisher.publishEvent(new TxScriptEvent(metadata, txScripts));
+        }
     }
 
     private Map<String, String> findWitnessDatum(Transaction transaction) {
