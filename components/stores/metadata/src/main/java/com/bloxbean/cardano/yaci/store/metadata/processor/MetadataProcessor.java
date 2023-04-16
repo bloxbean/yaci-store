@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.metadata.processor;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataEvent;
+import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class MetadataProcessor {
+
     private final TxMetadataStorage metadataStorage;
     private final ApplicationEventPublisher publisher;
 
@@ -70,8 +71,7 @@ public class MetadataProcessor {
                         log.debug("Saving metadata >> Length : " + txMetadataLabelList.size());
                     metadataStorage.saveAll(txMetadataLabelList);
 
-                    //biz event
-                    publisher.publishEvent(new TxMetadataEvent(eventMetadata, txMetadataLabelList));
+                    publisher.publishEvent(new TxMetadataEvent(this, eventMetadata, txMetadataLabelList));
                 }
     }
 }
