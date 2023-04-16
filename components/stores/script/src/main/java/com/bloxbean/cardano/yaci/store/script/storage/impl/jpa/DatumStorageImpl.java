@@ -1,19 +1,17 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.DatumEntity;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.DatumEntity;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.DatumRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class DatumStorageImpl implements DatumStorage {
