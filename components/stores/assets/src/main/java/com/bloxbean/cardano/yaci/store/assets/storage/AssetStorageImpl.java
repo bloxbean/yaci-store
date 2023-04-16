@@ -4,11 +4,9 @@ import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.storage.model.TxAssetEntity;
 import com.bloxbean.cardano.yaci.store.assets.storage.repository.TxAssetRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Component
 @RequiredArgsConstructor
 public class AssetStorageImpl implements AssetStorage {
     private final TxAssetRepository txAssetRepository;
