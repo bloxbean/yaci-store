@@ -11,8 +11,8 @@ create table address_utxo
     inline_datum          longtext     null,
     owner_addr            varchar(255) null,
     owner_stake_addr      varchar(255) null,
-    owner_payment_key_hash varchar(255),
-    owner_stake_key_hash  varchar(255),
+    owner_payment_credential varchar(255),
+    owner_stake_credential  varchar(255),
     script_ref            longtext     null,
     spent                 bit          null,
     spent_at_slot         bigint       null,
@@ -33,10 +33,10 @@ CREATE INDEX idx_address_utxo_owner_stake_addr
     ON address_utxo(owner_stake_addr);
 
 CREATE INDEX idx_address_utxo_owner_paykey_hash
-    ON address_utxo(owner_payment_key_hash);
+    ON address_utxo(owner_payment_credential);
 
 CREATE INDEX idx_address_utxo_owner_stakekey_hash
-    ON address_utxo(owner_stake_key_hash);
+    ON address_utxo(owner_stake_credential);
 
 drop table if exists invalid_transaction;
 create table invalid_transaction
