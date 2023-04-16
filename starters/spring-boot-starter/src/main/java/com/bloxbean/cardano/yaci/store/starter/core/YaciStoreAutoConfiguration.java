@@ -4,12 +4,15 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.conf.RenderQuotedNames;
+import org.jooq.impl.DefaultConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -91,6 +94,14 @@ public class YaciStoreAutoConfiguration {
     @ConditionalOnMissingBean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    @Bean
+    public DefaultConfigurationCustomizer configurationCustomiser() {
+        return (DefaultConfiguration c) -> c.settings()
+                .withRenderQuotedNames(
+                        RenderQuotedNames.NEVER
+                );
     }
 
 }

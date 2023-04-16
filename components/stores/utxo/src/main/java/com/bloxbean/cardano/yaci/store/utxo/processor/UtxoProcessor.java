@@ -144,7 +144,7 @@ public class UtxoProcessor {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
-                                .unit(amount.getUnit())
+                                .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null) //remove . from unit as yaci provides policy.assetName as unit
                                 .policyId(amount.getPolicyId())
                                 .assetName(amount.getAssetName().replace('\u0000', ' '))
                                 .quantity(amount.getQuantity())
@@ -175,8 +175,8 @@ public class UtxoProcessor {
                 .outputIndex(utxo.getIndex())
                 .ownerAddr(utxo.getAddress())
                 .ownerStakeAddr(stakeAddress)
-                .ownerPaymentKeyHash(paymentKeyHash)
-                .ownerStakeKeyHash(stakeKeyHash)
+                .ownerPaymentCredential(paymentKeyHash)
+                .ownerStakeCredential(stakeKeyHash)
                 .amounts(amounts)
                 .dataHash(utxo.getDatumHash())
                 .inlineDatum(utxo.getInlineDatum())
