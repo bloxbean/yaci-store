@@ -19,8 +19,6 @@ dependencies {
     runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'
 
     runtimeOnly 'com.h2database:h2'
-    runtimeOnly 'mysql:mysql-connector-java'
-    runtimeOnly 'org.postgresql:postgresql'
 
     implementation 'org.flywaydb:flyway-core'
     implementation "org.flywaydb:flyway-mysql"
