@@ -85,7 +85,9 @@ public class TransactionProcessor {
             txList.add(txn);
         });
 
-        transactionStorage.saveAll(txList);
+        if (txList.size() > 0) {
+            transactionStorage.saveAll(txList);
+        }
     }
 
 
