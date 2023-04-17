@@ -17,7 +17,6 @@ import org.jooq.DSLContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +24,6 @@ import java.util.Optional;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static org.jooq.impl.DSL.field;
 
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
