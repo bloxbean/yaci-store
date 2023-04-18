@@ -73,7 +73,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
                 .slot(blockHeader.getHeaderBody().getSlot())
                 .noOfTxs(transactions.size())
-                .isSyncMode(syncMode)
+                .syncMode(syncMode)
                 .build();
 
         try {
@@ -162,7 +162,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
                     .slot(absoluteSlot)
-                    .isSyncMode(syncMode)
+                    .syncMode(syncMode)
                     .build();
 
             ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
@@ -192,7 +192,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
                     .slot(absoluteSlot)
-                    .isSyncMode(syncMode)
+                    .syncMode(syncMode)
                     .build();
 
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
