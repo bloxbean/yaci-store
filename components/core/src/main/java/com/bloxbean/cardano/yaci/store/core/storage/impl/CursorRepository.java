@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.core.repository;
+package com.bloxbean.cardano.yaci.store.core.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.core.model.CursorEntity;
-import com.bloxbean.cardano.yaci.store.core.model.CursorId;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.model.CursorEntity;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.model.CursorId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,6 +13,6 @@ public interface CursorRepository extends JpaRepository<CursorEntity, CursorId> 
     List<CursorEntity> findTop50ByIdOrderBySlotDesc(Long id);
     Optional<CursorEntity> findTopByIdOrderBySlotDesc(Long id);
 
-    Optional<CursorEntity> findByBlockHash(String blockHash);
-    int deleteBySlotGreaterThan(Long slot);
+    Optional<CursorEntity> findByIdAndBlockHash(Long id, String blockHash);
+    int deleteByIdAndSlotGreaterThan(Long id, Long slot);
 }

@@ -9,18 +9,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class YaciStoreProperties {
-
+    private Core core = new Core();
     private Cardano cardano = new Cardano();
-    private int eventPublisherId = 1;
+    private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
-
-    public Cardano getCardano() {
-        return cardano;
-    }
-
-    public void setCardano(Cardano cardano) {
-        this.cardano = cardano;
-    }
 
     @Getter
     @Setter
@@ -40,4 +32,9 @@ public class YaciStoreProperties {
         private String syncStopBlockhash;
     }
 
+    @Getter
+    @Setter
+    public static final class Core {
+        private boolean enabled = true;
+    }
 }
