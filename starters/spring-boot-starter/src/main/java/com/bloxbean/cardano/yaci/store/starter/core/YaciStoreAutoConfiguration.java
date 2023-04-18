@@ -126,10 +126,4 @@ public class YaciStoreAutoConfiguration {
         return storeProperties;
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
-
 }
