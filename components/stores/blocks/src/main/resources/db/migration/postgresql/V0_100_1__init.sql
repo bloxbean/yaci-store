@@ -7,6 +7,8 @@ create table block
     body_hash  varchar(255),
     body_size  bigint,
     epoch            bigint,
+    total_output     bigint       null,
+    block_time       bigint       null,
     era              integer,
     issuer_vkey      varchar(255),
     leader_vrf       jsonb,
@@ -19,6 +21,19 @@ create table block
     no_of_txs        integer,
     create_datetime  timestamp,
     update_datetime  timestamp
+);
+
+create table epoch
+(
+    number bigint       not null primary key,
+    block_count         int             null,
+    transaction_count   int             null,
+    total_output        bigint          null,
+    start_time          bigint          null,
+    end_time            bigint          null,
+    max_slot            bigint          null,
+    create_datetime     timestamp,
+    update_datetime     timestamp
 );
 
 CREATE INDEX idx_block_number

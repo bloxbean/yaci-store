@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
+
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,6 +20,7 @@ public class BlockSummary {
     private long number;
     private long slot;
     private int epochNumber;
+    private BigInteger totalOutput;
     private String era;
     private String issuerVkey;
     private long blockBodySize;

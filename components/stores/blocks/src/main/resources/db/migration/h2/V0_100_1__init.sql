@@ -7,6 +7,8 @@ create table block
     body_hash  varchar(255) null,
     body_size  bigint       null,
     epoch            bigint       null,
+    total_output     bigint       null,
+    block_time       bigint       null,
     era              int          null,
     issuer_vkey      varchar(255) null,
     leader_vrf       json         null,
@@ -19,6 +21,19 @@ create table block
     no_of_txs        int,
     create_datetime  timestamp,
     update_datetime  timestamp
+);
+
+create table epoch
+(
+    number bigint       not null primary key,
+    block_count         int             null,
+    transaction_count   int             null,
+    total_output        bigint          null,
+    start_time          bigint          null,
+    end_time            bigint          null,
+    max_slot            bigint          null,
+    create_datetime     timestamp,
+    update_datetime     timestamp
 );
 
 

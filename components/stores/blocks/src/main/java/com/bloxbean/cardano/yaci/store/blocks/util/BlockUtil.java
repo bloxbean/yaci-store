@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.util;
 
 import com.bloxbean.cardano.yaci.core.model.Amount;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 
 public class BlockUtil {
     public static long calculateBlockTime(long blockNumber, long slot, long time, long lastByronBlock, long byronProcessingTime, long shellyProcessingTime) {
@@ -16,7 +17,7 @@ public class BlockUtil {
     }
 
     public static boolean amountIsInADA(Amount amount) {
-        return amount.getPolicyId() == "" && amount.getAssetName() == "";
+        return StringUtil.isEmpty(amount.getPolicyId()) && amount.getAssetName().equals("lovelace");
     }
 
 }
