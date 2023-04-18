@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @Data
@@ -44,11 +45,14 @@ public class AddressUtxoEntity extends BaseEntity {
     @Column(name = "owner_stake_addr")
     private String ownerStakeAddr;
 
-    @Column(name = "owner_payment_key_hash")
-    private String ownerPaymentKeyHash;
+    @Column(name = "owner_payment_credential")
+    private String ownerPaymentCredential;
 
-    @Column(name = "owner_stake_key_hash")
-    private String ownerStakeKeyHash;
+    @Column(name = "owner_stake_credential")
+    private String ownerStakeCredential;
+
+    @Column(name = "lovelace_amount")
+    private BigInteger lovelaceAmount;
 
     @Type(JsonType.class)
     private List<Amt> amounts;
