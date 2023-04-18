@@ -4,16 +4,14 @@ dependencies {
     api project(':components:core')
     api project(":components:events")
 
-    api 'com.bloxbean.cardano:yaci'
-    api 'com.bloxbean.cardano:cardano-client-lib'
-    api 'com.bloxbean.cardano:cardano-client-backend'
-    api 'co.nstant.in:cbor'
-
-    api 'com.vladmihalcea:hibernate-types-60'
-
-    api 'org.codehaus.janino:janino'
-    api 'com.google.guava:guava'
-    api 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
+    api(libs.yaci)
+    api(libs.cardano.client.lib)
+    api(libs.cardano.client.backend)
+    api(libs.cbor)
+    api(libs.hibernate.types)
+    api(libs.codehaus.janino)
+    api(libs.guava)
+    api(libs.springdoc.openapi.starter.webmvc.ui)
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
