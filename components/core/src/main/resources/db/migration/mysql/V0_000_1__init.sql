@@ -2,12 +2,12 @@ drop table if exists cursor_;
 create table cursor_
 (
     id          int not null,
+    block_hash  varchar(255),
     slot        bigint,
     block_number bigint,
-    block_hash  varchar(255),
     create_datetime  timestamp,
     update_datetime  timestamp,
-    primary key (id, slot)
+    primary key (id, block_hash)
 );
 
 CREATE INDEX idx_cursor_id
