@@ -83,7 +83,7 @@ public class BlockProcessor {
     @EventListener
     @Async
     public void handleTransactionEvent(TransactionEvent transactionEvent) {
-        if (!transactionEvent.getMetadata().isSyncMode() || transactionEvent.getTransactions().size() == 0)
+        if (transactionEvent.getTransactions().size() == 0)
             return;
 
         BigInteger transactionOutputInLovelace = BigInteger.valueOf(0);
