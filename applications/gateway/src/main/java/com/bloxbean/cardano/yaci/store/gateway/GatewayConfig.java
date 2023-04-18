@@ -10,6 +10,7 @@ public class GatewayConfig {
 
     @Bean
     public RouteLocator myRoutes(RouteLocatorBuilder builder) {
+        //Sample route
         return builder.routes()
                 .route(p -> p
                         .path("/get")
