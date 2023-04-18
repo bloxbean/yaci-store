@@ -5,9 +5,11 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
+import com.bloxbean.cardano.yaci.store.script.domain.DatumEvent;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumH
 @Slf4j
 public class OutputDatumProcessor {
     private final DatumStorage datumStorage;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -59,6 +62,9 @@ public class OutputDatumProcessor {
                 log.trace("Found datumList >> " + datumList.size());
 
             datumStorage.saveAll(datumList);
+
+            //biz event
+            publisher.publishEvent(new DatumEvent(metadata, datumList.stream().toList()));
         }
     }
 

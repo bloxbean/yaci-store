@@ -17,6 +17,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -39,6 +40,9 @@ public class UtxoProcessorTest {
     @Mock
     private InvalidTransactionStorage invalidTransactionStorage;
 
+    @Mock
+    private ApplicationEventPublisher publisher;
+
     @InjectMocks
     private UtxoProcessor utxoProcessor;
 
@@ -49,7 +53,7 @@ public class UtxoProcessorTest {
     @BeforeEach
     public void setup() {
 //        openMocks(this);
-        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage);
+        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage, publisher);
     }
 
     @Test

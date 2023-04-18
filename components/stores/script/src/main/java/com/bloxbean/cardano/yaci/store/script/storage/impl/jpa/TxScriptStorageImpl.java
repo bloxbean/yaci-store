@@ -1,17 +1,15 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
+import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.ScriptMapper;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.TxScriptEntity;
-import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.TxScriptRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Component
 @RequiredArgsConstructor
 public class TxScriptStorageImpl implements TxScriptStorage {
     private final TxScriptRepository txScriptRepository;
