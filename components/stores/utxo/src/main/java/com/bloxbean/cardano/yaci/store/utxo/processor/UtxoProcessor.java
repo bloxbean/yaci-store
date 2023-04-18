@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
@@ -115,7 +116,7 @@ public class UtxoProcessor {
         invalidTransactionStorage.save(invalidTransaction);
 
         //collateral output
-        AddressUtxo collateralOutputUtxo = transaction.getCollateralReturnUtxo()
+        AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
 
