@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @Data
@@ -21,6 +22,7 @@ public class AddressUtxo {
     private String ownerStakeAddr;
     private String ownerPaymentCredential;
     private String ownerStakeCredential;
+    private BigInteger lovelaceAmount;
     private List<Amt> amounts;
     private String dataHash;
     private String inlineDatum;

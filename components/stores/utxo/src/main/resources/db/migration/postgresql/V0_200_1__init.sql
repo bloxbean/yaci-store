@@ -6,6 +6,7 @@ create table address_utxo
     slot                  bigint,
     block                 bigint,
     block_hash            varchar(255),
+    lovelace_amount       bigint       null,
     amounts               jsonb,
     data_hash             varchar(255),
     inline_datum          oid,
