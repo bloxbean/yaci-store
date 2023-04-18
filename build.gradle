@@ -24,27 +24,13 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:3.0.0")
         }
-
-        dependencies {
-            dependency 'com.bloxbean.cardano:yaci:0.1.10-beta'
-            dependency 'com.bloxbean.cardano:cardano-client-lib:0.4.3'
-            dependency 'com.bloxbean.cardano:cardano-client-backend:0.4.3'
-            dependency 'co.nstant.in:cbor:0.9'
-
-            dependency 'com.vladmihalcea:hibernate-types-60:2.20.0'
-            dependency 'mysql:mysql-connector-java:8.0.32'
-            dependency 'org.postgresql:postgresql:42.5.0'
-            dependency 'org.codehaus.janino:janino:3.1.8'
-            dependency 'com.google.guava:guava:31.1-jre'
-            dependency 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0'
-        }
     }
 
     dependencies {
         compileOnly 'org.projectlombok:lombok'
-        implementation 'org.mapstruct:mapstruct:1.5.3.Final'
+        implementation(libs.mapstruct)
         annotationProcessor 'org.projectlombok:lombok'
-        annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.3.Final'
+        annotationProcessor(libs.mapstruct.processor)
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testImplementation 'io.projectreactor:reactor-test'
     }

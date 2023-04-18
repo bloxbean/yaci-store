@@ -12,3 +12,9 @@ create table cursor_
 
 CREATE INDEX idx_cursor_id
     ON cursor_(id);
+CREATE INDEX idx_cursor_slot
+    ON cursor_(slot);
+CREATE INDEX idx_cursor_block_number
+    ON cursor_(block_number);
+CREATE INDEX idx_cursor_block_hash
+    ON cursor_(block_hash);

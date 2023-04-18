@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'com.bloxbean.cardano:yaci'
+    implementation libs.yaci
 }
 
 publishing {
