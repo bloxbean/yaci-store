@@ -1,0 +1,11 @@
+[libraries]
+yaci = "com.bloxbean.cardano:yaci:0.1.11-SNAPSHOT"
+cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.4.3"
+cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.4.3"
+cbor = "co.nstant.in:cbor:0.9"
+hibernate-types = "com.vladmihalcea:hibernate-types-60:2.20.0"
+codehaus-janino = "org.codehaus.janino:janino:3.1.8"
+guava = "com.google.guava:guava:31.1-jre"
+springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0"
+mapstruct="org.mapstruct:mapstruct:1.5.3.Final"
+mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.3.Final"

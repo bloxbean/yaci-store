@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
-import com.bloxbean.cardano.yaci.store.core.repository.CursorRepository;
+import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.function.Supplier;
@@ -11,17 +11,17 @@ import java.util.function.Supplier;
 @Component
 public class MetricsService {
     private final CursorRepository cursorRepository;
+    private final StoreProperties storeProperties;
 
-    @Value("${store.event-publisher-id:1}")
-    private long eventPublisherId;
-
-    public MetricsService(CursorRepository cursorRepository, MeterRegistry meterRegistry) {
+    public MetricsService(CursorRepository cursorRepository, StoreProperties storeProperties,
+                          MeterRegistry meterRegistry) {
         this.cursorRepository = cursorRepository;
+        this.storeProperties = storeProperties;
         Gauge.builder("yaci.store.cursor.pos", getTopBlockNo()).register(meterRegistry);
     }
 
     private Supplier<Number> getTopBlockNo() {
-        return () -> cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId)
+        return () -> cursorRepository.findTopByIdOrderBySlotDesc(storeProperties.getEventPublisherId())
                 .map(cursorEntity -> cursorEntity.getBlock())
                 .orElse(0L);
     }

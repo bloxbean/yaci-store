@@ -2,7 +2,8 @@ dependencies {
     api project(":components:common")
     api project(":components:events")
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'com.bloxbean.cardano:cardano-client-backend'
+
+    implementation libs.cardano.client.backend
 }
 
 publishing {
