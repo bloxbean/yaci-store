@@ -2,8 +2,8 @@ dependencies {
     implementation project(':components:events')
     implementation project(':components:common')
 
-    implementation 'com.bloxbean.cardano:yaci'
-    implementation 'com.bloxbean.cardano:cardano-client-lib'
+    implementation libs.yaci
+    implementation libs.cardano.client.lib
 }
 
 publishing {

@@ -2,15 +2,15 @@ dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'org.springframework.boot:spring-boot-starter-jooq'
     api 'org.springframework:spring-context'
-    api('com.bloxbean.cardano:yaci') {
+    api(libs.yaci) {
         exclude group: "io.netty", module: "netty-all"
         exclude group: "com.bloxbean.cardano", module: "cardano-client-lib"
     }
-    api 'com.bloxbean.cardano:cardano-client-lib'
-    api 'com.bloxbean.cardano:cardano-client-backend'
+    api libs.cardano.client.lib
+    api libs.cardano.client.backend
+    api libs.hibernate.types
+    api libs.springdoc.openapi.starter.webmvc.ui
 
-    api 'com.vladmihalcea:hibernate-types-60'
-    api 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     api 'org.springframework.boot:spring-boot-starter-actuator'
