@@ -1,8 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.domain;
 
-import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -18,15 +16,8 @@ import java.util.List;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class TxUtxo {
-    private String txHash;
-    private Integer outputIndex;
-    private String address;
-    private String stakeAddress;
-    private List<Amt> amount;
-    private String dataHash;
-    private String inlineDatum;
-    private String scriptRef;
-
-    private JsonNode inlineDatumJson;
+public class TxInputsOutputs {
+    private String hash;
+    private List<TxUtxo> inputs;
+    private List<TxUtxo> outputs;
 }

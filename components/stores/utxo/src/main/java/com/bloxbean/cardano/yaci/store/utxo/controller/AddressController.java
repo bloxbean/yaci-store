@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.controller;
 
-
-import com.bloxbean.cardano.client.api.model.Utxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.service.AddressService;
 import org.springframework.web.bind.annotation.*;
