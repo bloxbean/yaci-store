@@ -44,8 +44,8 @@ public class TransactionService {
 
                 BigInteger totalOutput = outputUtxos
                         .stream()
-                        .filter(txUtxo -> txUtxo.getAmounts() != null)
-                        .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                        .filter(txUtxo -> txUtxo.getAmount() != null)
+                        .flatMap(txUtxo -> txUtxo.getAmount().stream())
                         .filter(amount -> LOVELACE.equals(amount.getAssetName()) && !StringUtils.hasLength(amount.getPolicyId()))
                         .map(amount -> amount.getQuantity())
                         .reduce(BigInteger.ZERO, BigInteger::add);
@@ -83,7 +83,7 @@ public class TransactionService {
                         TxUtxo.builder()
                                 .txHash(addressUtxo.getTxHash())
                                 .outputIndex(addressUtxo.getOutputIndex())
-                                .amounts(addressUtxo.getAmounts())
+                                .amount(addressUtxo.getAmounts())
                                 .dataHash(addressUtxo.getDataHash())
                                 .inlineDatum(addressUtxo.getInlineDatum())
                                 .scriptRef(addressUtxo.getScriptRef())
@@ -103,9 +103,9 @@ public class TransactionService {
                 .map(addressUtxo -> TxUtxo.builder()
                         .txHash(addressUtxo.getTxHash())
                         .outputIndex(addressUtxo.getOutputIndex())
-                        .ownerAddr(addressUtxo.getOwnerAddr())
-                        .ownerStakeAddr(addressUtxo.getOwnerStakeAddr())
-                        .amounts(addressUtxo.getAmounts())
+                        .address(addressUtxo.getOwnerAddr())
+                        .stakeAddress(addressUtxo.getOwnerStakeAddr())
+                        .amount(addressUtxo.getAmounts())
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
                         .scriptRef(addressUtxo.getScriptRef())
@@ -142,11 +142,11 @@ public class TransactionService {
         List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
             List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
-                    .map(txUtxo -> txUtxo.getOwnerAddr())
+                    .map(txUtxo -> txUtxo.getAddress())
                     .collect(Collectors.toList());
 
             BigInteger totalOutput = outputUtxos.stream()
-                    .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                    .flatMap(txUtxo -> txUtxo.getAmount().stream())
                     .filter(amt -> amt.getUnit().equals(LOVELACE))
                     .map(amt -> amt.getQuantity())
                     .reduce((qty1, qty2) -> qty1.add(qty2))
