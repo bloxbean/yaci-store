@@ -27,6 +27,7 @@ public class TxUtxo {
     private String dataHash;
     private String inlineDatum;
     private String scriptRef;
+    private String referenceScriptHash;
 
     private JsonNode inlineDatumJson;
 }
