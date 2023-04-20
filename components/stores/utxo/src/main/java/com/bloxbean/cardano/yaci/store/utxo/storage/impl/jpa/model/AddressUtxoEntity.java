@@ -60,11 +60,9 @@ public class AddressUtxoEntity extends BaseEntity {
     @Column(name = "data_hash")
     private String dataHash;
 
-    @Lob
     @Column(name = "inline_datum")
     private String inlineDatum;
 
-    @Lob
     @Column(name = "script_ref")
     private String scriptRef;
 

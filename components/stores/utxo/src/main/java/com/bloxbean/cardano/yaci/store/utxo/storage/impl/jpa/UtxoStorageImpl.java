@@ -26,7 +26,6 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static org.jooq.impl.DSL.field;
 
 @RequiredArgsConstructor
-@Transactional
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoRepository utxoRepository;
