@@ -16,8 +16,8 @@ Content-Type: application/json
     "output_index": 1
   },
   {
-    "tx_hash": "297f6e4d0fe4483aeeb0e9017efdc8a3e65a4e7f5a562a52cae5254a552fff47",
-    "output_index": 2
+    "tx_hash": "93e43aa2e11dec72a28ac8c9692bdf91a6b5bd995106fcc90a3c45af57c7ea70",
+    "output_index": 0
   }
 
 ]
@@ -45,6 +45,9 @@ GET http://localhost:8080/api/v1/txs
 GET http://localhost:8080/api/v1/txs?page=0&count=10
 
 ###
+GET http://localhost:8080/api/v1/txs/52dcb5409c1d49d5b3434e1efac13dfbb947e47711b68006e0ee28092f78fc8e/utxos
+
+###
 GET http://localhost:8080/api/v1/blocks/376120
 
 ###
@@ -67,3 +70,11 @@ GET http://localhost:8080/api/v1/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd99
 
 ###
 GET http://localhost:8080/api/v1/txs/112ddf9a10147b83d613d8a1425af9d06375bbccd994fb35d94c245aa26be5f8/metadata
+
+###
+GET http://localhost:8080/api/v1/addresses/addr_test1wzcppsyg36f65jydjsd6fqu3xm7whxu6nmp3pftn9xfgd4ckah4da/utxos
+
+###
+GET http://localhost:8080/api/v1/txs/93e43aa2e11dec72a28ac8c9692bdf91a6b5bd995106fcc90a3c45af57c7ea70/utxos
+
+###

@@ -32,6 +32,7 @@ public class AddressUtxo {
     private String dataHash;
     private String inlineDatum;
     private String scriptRef;
+    private String referenceScriptHash;
     private Boolean spent;
     private Long spentAtSlot;
     private String spentTxHash;

@@ -33,12 +33,12 @@ class UtxoUtil {
                             String unit = amt.getUnit();
                             if (unit != null && unit.contains("."))
                                 unit = unit.replace(".", "");//TODO -- Done to make it compatible with Blockfrost or CCL backend
-                            return amt.toBuilder().unit(unit).build();
+                            return new Utxo.Amount(unit, amt.getQuantity());
                         })
                         .collect(Collectors.toList()))
                 .dataHash(dataHash)
                 .inlineDatum(addressUtxo.getInlineDatum())
-                .referenceScriptHash(addressUtxo.getScriptRef())
+                .referenceScriptHash(addressUtxo.getReferenceScriptHash())
                 .build();
         return utxo;
     }

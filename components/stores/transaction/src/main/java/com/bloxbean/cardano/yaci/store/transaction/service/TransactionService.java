@@ -109,6 +109,7 @@ public class TransactionService {
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
                         .scriptRef(addressUtxo.getScriptRef())
+                        .referenceScriptHash(addressUtxo.getReferenceScriptHash())
                         .inlineDatumJson(inlineDatumToJson(addressUtxo.getInlineDatum()))
                         .build())
                 .collect(groupingBy(txUtxo -> new UtxoKey(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
