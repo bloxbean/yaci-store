@@ -21,12 +21,13 @@ import java.util.List;
 public class TxUtxo {
     private String txHash;
     private Integer outputIndex;
-    private String ownerAddr;
-    private String ownerStakeAddr;
-    private List<Amt> amounts;
+    private String address;
+    private String stakeAddress;
+    private List<Amt> amount;
     private String dataHash;
     private String inlineDatum;
     private String scriptRef;
+    private String referenceScriptHash;
 
     private JsonNode inlineDatumJson;
 }
