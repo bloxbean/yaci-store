@@ -68,6 +68,9 @@ public class AddressUtxoEntity extends BaseEntity {
     @Column(name = "script_ref")
     private String scriptRef;
 
+    @Column(name = "reference_script_hash")
+    private String referenceScriptHash;
+
     @Column(name = "spent")
     private Boolean spent;
 

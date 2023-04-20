@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.common.domain;
+package com.bloxbean.cardano.yaci.store.transaction.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -8,18 +8,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
-import java.math.BigInteger;
+import java.util.List;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder(toBuilder = true)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Amt implements Serializable {
-    private String unit;
-    private String policyId;
-    private String assetName;
-    private BigInteger quantity;
+public class TxInputsOutputs {
+    private String hash;
+    private List<TxUtxo> inputs;
+    private List<TxUtxo> outputs;
 }

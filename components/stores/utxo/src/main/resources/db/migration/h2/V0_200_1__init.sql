@@ -15,6 +15,7 @@ create table address_utxo
     owner_payment_credential varchar(255),
     owner_stake_credential  varchar(255),
     script_ref            clob         null,
+    reference_script_hash varchar(255) null,
     spent                 bit          null,
     spent_at_slot         bigint       null,
     spent_tx_hash         varchar(255) null,
@@ -38,6 +39,9 @@ CREATE INDEX idx_address_utxo_owner_pkey_hash
 
 CREATE INDEX idx_address_utxo_owner_skey_hash
     ON address_utxo(owner_stake_credential);
+
+CREATE INDEX idx_reference_script_hash
+    ON address_utxo(reference_script_hash);
 
 
 drop table if exists invalid_transaction;

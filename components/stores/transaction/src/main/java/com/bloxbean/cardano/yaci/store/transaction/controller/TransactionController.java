@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction.controller;
 
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxInputsOutputs;
 import com.bloxbean.cardano.yaci.store.transaction.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,18 @@ public class TransactionController {
     public TransactionDetails getTransaction(@PathVariable String txHash) {
         return transactionService.getTransaction(txHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+    }
+
+    @GetMapping("{txHash}/utxos")
+    public TxInputsOutputs getTransactionInputsOutputs(@PathVariable String txHash) {
+        return transactionService.getTransaction(txHash)
+                .map(transactionDetails -> {
+                    TxInputsOutputs txInputsOutputs = new TxInputsOutputs();
+                    txInputsOutputs.setHash(txHash);
+                    txInputsOutputs.setInputs(transactionDetails.getInputs());
+                    txInputsOutputs.setOutputs(transactionDetails.getOutputs());
+                    return txInputsOutputs;
+                }).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
     @GetMapping

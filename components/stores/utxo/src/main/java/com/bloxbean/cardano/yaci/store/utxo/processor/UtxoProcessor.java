@@ -1,17 +1,20 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
-import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.NonNull;
@@ -186,6 +189,18 @@ public class UtxoProcessor {
                 log.error("Unable to get stake address for address : " + utxo.getAddress(), e);
         }
 
+        //Derive reference script hash if scriptRef is present
+        String referenceScriptHash = null;
+        if (!StringUtil.isEmpty(utxo.getScriptRef())) {
+            try {
+                referenceScriptHash = ScriptReferenceUtil.getReferenceScriptHash(HexUtil.decodeHexString(utxo.getScriptRef()));
+            } catch (Exception e) {
+                log.error("Unable to get reference script hash for script ref. Block: {}, TxHash:  {}", eventMetadata.getBlock(), utxo.getTxHash());
+                log.error("Unable to get reference script hash for script ref : " + utxo.getScriptRef(), e);
+                //throw new IllegalArgumentException("Unable to get reference script hash for script ref : " + utxo.getScriptRef());
+            }
+        }
+
         return AddressUtxo.builder()
                 .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
@@ -200,6 +215,7 @@ public class UtxoProcessor {
                 .amounts(amounts)
                 .dataHash(utxo.getDatumHash())
                 .inlineDatum(utxo.getInlineDatum())
+                .referenceScriptHash(referenceScriptHash)
                 .scriptRef(utxo.getScriptRef())
                 .build();
     }
