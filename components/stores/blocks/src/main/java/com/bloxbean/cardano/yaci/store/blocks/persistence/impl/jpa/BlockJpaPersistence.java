@@ -7,10 +7,7 @@ import com.bloxbean.cardano.yaci.store.blocks.persistence.BlockPersistence;
 import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.mapper.BlockMapper;
 import com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model.BlockEntity;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,17 +31,18 @@ public class BlockJpaPersistence implements BlockPersistence {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Page<BlockEntity> blocksEntityPage = blockJpaRepository.findAll(sortedByBlock);
-        long total = blocksEntityPage.getTotalElements();
-        int totalPage = blocksEntityPage.getTotalPages();
+        //TODO -- Fix once the count query is fixed
+        Slice<BlockEntity> blocksEntityPage = blockJpaRepository.findAllBlocks(sortedByBlock);
+//        long total = blocksEntityPage.getTotalElements();
+//        int totalPage = blocksEntityPage.getTotalPages();
 
         List<BlockSummary> blockSummaryList = blocksEntityPage.stream()
                 .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
                 .collect(Collectors.toList());
 
         return BlocksPage.builder()
-                .total(total)
-                .totalPages(totalPage)
+//                .total(total)
+//                .totalPages(totalPage)
                 .blocks(blockSummaryList)
                 .build();
     }
