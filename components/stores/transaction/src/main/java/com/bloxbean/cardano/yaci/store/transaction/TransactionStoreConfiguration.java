@@ -4,6 +4,8 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorag
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.TransactionStorageImpl;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.repository.TxnEntityRepository;
+import org.jooq.DSLContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -26,9 +28,12 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 public class TransactionStoreConfiguration {
 
+    @Autowired
+    private DSLContext dslContext;
+
     @Bean
     @ConditionalOnMissingBean
     public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository, TxnMapper txnMapper) {
-        return new TransactionStorageImpl(txnEntityRepository, txnMapper);
+        return new TransactionStorageImpl(txnEntityRepository, txnMapper, dslContext);
     }
 }
