@@ -1,19 +1,16 @@
 package com.bloxbean.cardano.yaci.store.transaction.service;
 
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.transaction.domain.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -34,7 +31,7 @@ public class TransactionService {
     private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
-        Optional<Txn> txnOptional = transactionStorage.findByTxHash(txHash);
+        Optional<Txn> txnOptional = transactionStorage.getTransactionByTxHash(txHash);
         if (txnOptional.isPresent()) {
             return txnOptional.map(txn -> {
                 List<TxUtxo> inputUtxos = resolveInputs(txn.getInputs());
@@ -133,12 +130,10 @@ public class TransactionService {
     }
 
     public TransactionPage getTransactions(int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
-
-        Page<Txn> txnPage = transactionStorage.findAll(sortedBySlot);
-        long total = txnPage.getTotalElements();
-        int totalPage = txnPage.getTotalPages();
+        List<Txn> txnPage = transactionStorage.getTransactions(page, count, Order.desc);
+        //TODO -- Find total and totalPage in TransactionPage. Currently disabled as count query takes too long
+//        long total = txnPage.getTotalElements();
+//        int totalPage = txnPage.getTotalPages();
 
         List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
             List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
@@ -168,8 +163,8 @@ public class TransactionService {
 
         return TransactionPage
                 .builder()
-                .total(total)
-                .totalPages(totalPage)
+//                .total(total)
+//                .totalPages(totalPage)
                 .transactionSummaries(transactionSummaries)
                 .build();
 
