@@ -1,10 +1,8 @@
 package com.bloxbean.cardano.yaci.store.script.controller;
 
-import com.bloxbean.cardano.client.util.JsonUtil;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.TxContractDetails;
+import com.bloxbean.cardano.yaci.store.script.dto.*;
 import com.bloxbean.cardano.yaci.store.script.service.ScriptService;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -25,27 +23,34 @@ import java.util.List;
 @Slf4j
 public class ScriptController {
     private final ScriptService scriptService;
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ScriptDtoMapper scriptDtoMapper;
+    private final ObjectMapper objectMapper;
+
+    @GetMapping("/scripts/{scriptHash}/details")
+    public ScriptDetailDto getScriptDetailsByHash(@PathVariable String scriptHash) {
+        return scriptService.getScriptByHash(scriptHash)
+                .map(script -> scriptDtoMapper.toScriptDetailDto(script))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
+    }
 
     @GetMapping("/scripts/{scriptHash}")
     public ScriptDto getScriptByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
-                .map(script -> {
-                    try {
-                        return ScriptDto.builder()
-                                .scriptHash(script.getScriptHash())
-                                .scriptType(script.getScriptType())
-                                .content(!StringUtil.isEmpty(script.getContent())? JsonUtil.parseJson(script.getContent()): null)
-                                .build();
-                    } catch (JsonProcessingException e) {
-                        log.error("Error while parsing script content", e);
-                        return ScriptDto.builder()
-                                .scriptHash(script.getScriptHash())
-                                .scriptType(script.getScriptType())
-                                .content(null)
-                                .build();
-                    }
-                })
+                .map(script -> scriptDtoMapper.toScriptDto(script))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
+    }
+
+    @GetMapping("/scripts/{scriptHash}/cbor")
+    public ScriptCborDto getScriptCborByHash(@PathVariable String scriptHash) {
+        return scriptService.getScriptByHash(scriptHash)
+                .map(script -> scriptDtoMapper.toScriptCbor(script))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
+    }
+
+    @GetMapping("/scripts/{scriptHash}/json")
+    public ScriptJsonDto getScriptJsonByHash(@PathVariable String scriptHash) {
+        return scriptService.getScriptByHash(scriptHash)
+                .map(script -> scriptDtoMapper.toScriptJson(script))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
