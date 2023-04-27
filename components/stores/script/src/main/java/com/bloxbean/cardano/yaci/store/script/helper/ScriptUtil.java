@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import co.nstant.in.cbor.CborException;
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.client.exception.CborDeserializationException;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
@@ -16,7 +18,10 @@ import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -146,5 +151,20 @@ public class ScriptUtil {
             return null;
 
         return plutusData.serializeToHex();
+    }
+
+    public static byte[] removeDoubleEncoding(Script script) throws JsonProcessingException, CborException {
+        if (script.getContent() == null && script.getScriptType() == ScriptType.NATIVE_SCRIPT)
+            return null;
+
+        JsonNode contentNode = JsonUtil.parseJson(script.getContent());
+        String content = contentNode.get("content").asText();
+        byte[] bytes = com.bloxbean.cardano.client.util.HexUtil.decodeHexString(content);
+        DataItem dataItem = com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(bytes);
+        if (dataItem instanceof ByteString) { //double encoding
+            dataItem = com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(((ByteString) dataItem).getBytes());
+            return com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.serialize(dataItem);
+        }
+        return bytes;
     }
 }
