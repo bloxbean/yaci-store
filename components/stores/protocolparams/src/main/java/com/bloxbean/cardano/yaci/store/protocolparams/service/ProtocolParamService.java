@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.protocolparams.model.ProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.protocolparams.repository.ProtocolParamsRepository;
+import com.bloxbean.cardano.yaci.store.protocolparams.util.PlutusOps;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
@@ -23,9 +24,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Component
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
@@ -93,10 +92,12 @@ public class ProtocolParamService {
         protocolParams.setMinPoolCost(String.valueOf(protocolParamUpdate.getMinPoolCost()));
 //        protocolParams.setNonce(currentProtocolParameters.getProtocolParameters().getNonce()); //TODO
 
-        Map<String, Long> plutusV1CostModel = cborToCostModel(protocolParamUpdate.getCostModels().get(0));
-        Map<String, Long> plutusV2CostModel = cborToCostModel(protocolParamUpdate.getCostModels().get(1));
+        Map<String, Long> plutusV1CostModel
+                = cborToCostModel(protocolParamUpdate.getCostModels().get(0), PlutusOps.getOperations(1));
+        Map<String, Long> plutusV2CostModel
+                = cborToCostModel(protocolParamUpdate.getCostModels().get(1), PlutusOps.getOperations(2));
 
-        Map<String, Map<String, Long>> costModels = new HashMap<>();
+        LinkedHashMap<String, Map<String, Long>> costModels = new LinkedHashMap<>();
         costModels.put("PlutusV1", plutusV1CostModel);
         costModels.put("PlutusV2", plutusV2CostModel);
         protocolParams.setCostModels(costModels);
@@ -114,13 +115,22 @@ public class ProtocolParamService {
         return protocolParams;
     }
 
-    private Map<String, Long> cborToCostModel(String costModelCbor) {
+    private Map<String, Long> cborToCostModel(String costModelCbor, List<String> ops) {
         Array array = (Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(costModelCbor));
-        Map<String, Long> costModel = new HashMap<>();
-        int index = 0;
-        for (DataItem di : array.getDataItems()) {
-            BigInteger val = ((UnsignedInteger) di).getValue();
-            costModel.put(String.format("%03d", index++), val.longValue());
+        Map<String, Long> costModel = new LinkedHashMap<>();
+
+        if (ops.size() == array.getDataItems().size()) {
+            int index = 0;
+            for (DataItem di : array.getDataItems()) {
+                BigInteger val = ((UnsignedInteger) di).getValue();
+                costModel.put(ops.get(index++), val.longValue());
+            }
+        } else {
+            int index = 0;
+            for (DataItem di : array.getDataItems()) {
+                BigInteger val = ((UnsignedInteger) di).getValue();
+                costModel.put(String.format("%03d", index++), val.longValue());
+            }
         }
 
         return costModel;
