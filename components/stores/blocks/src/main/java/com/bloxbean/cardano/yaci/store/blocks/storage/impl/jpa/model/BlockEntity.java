@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blocks.persistence.impl.jpa.model;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
@@ -12,6 +12,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
+
+import java.math.BigInteger;
 
 
 @Data
@@ -32,7 +34,13 @@ public class BlockEntity extends BaseEntity {
     private Long slot;
 
     @Column(name = "epoch")
-    private Long epoch;
+    private int epochNumber;
+
+    @Column(name = "total_output")
+    private BigInteger totalOutput;
+
+    @Column(name = "block_time")
+    private long blockTime;
 
     @Column(name = "era")
     private Integer era;

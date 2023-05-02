@@ -5,24 +5,23 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigInteger;
+import java.util.Date;
 
-@Getter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class BlockSummary {
+public class Epoch {
     private long number;
-    private long slot;
-    private int epochNumber;
-    private BigInteger totalOutput;
-    private String era;
-    private String issuerVkey;
-    private long blockBodySize;
-    private int noOfTxs;
+    private int blockCount;
+    private int transactionCount;
+    private long totalOutput;
+    private long startTime;
+    private long endTime;
+    private long maxSlot;
 }

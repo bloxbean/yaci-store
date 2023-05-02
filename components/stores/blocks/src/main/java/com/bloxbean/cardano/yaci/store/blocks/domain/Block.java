@@ -8,6 +8,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
+import java.util.Date;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,7 +21,9 @@ public class Block {
     private String hash;
     private long number;
     private long slot;
-   // private long epoch;
+    private BigInteger totalOutput;
+    private long blockTime;
+    private int epochNumber;
     private int era;
     private String prevHash;
     private String issuerVkey;

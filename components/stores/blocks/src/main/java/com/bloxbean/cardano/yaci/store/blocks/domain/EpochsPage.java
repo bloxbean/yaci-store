@@ -8,21 +8,17 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigInteger;
+import java.util.List;
 
 @Getter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class BlockSummary {
-    private long number;
-    private long slot;
-    private int epochNumber;
-    private BigInteger totalOutput;
-    private String era;
-    private String issuerVkey;
-    private long blockBodySize;
-    private int noOfTxs;
+public class EpochsPage {
+    private long total;
+    private int totalPages;
+
+    private List<Epoch> epochs;
 }

@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder(toBuilder = true)
 public class GenesisBlockEvent {
     private String blockHash;
+    private long blockTime;
     private long block;
     private long slot;
 

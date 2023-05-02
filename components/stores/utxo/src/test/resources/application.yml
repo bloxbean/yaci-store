@@ -36,4 +36,8 @@ logging:
       hibernate:
         sql: info
 
+store:
+  cardano:
+    protocol-magic: 764824073
+
 

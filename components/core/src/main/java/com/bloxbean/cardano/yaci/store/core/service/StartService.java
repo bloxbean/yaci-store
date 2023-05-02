@@ -4,11 +4,13 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,11 @@ public class StartService {
     private final GenesisBlockFinder genesisBlockFinder;
     private final CursorService cursorService;
     private final StoreConfig storeConfig;
+
+    private final GenesisConfig genesisConfig;
+
+    @Value("${store.cardano.protocol-magic}")
+    private long protocolMagic;
 
     private boolean alreadyStarted;
 
@@ -50,6 +57,7 @@ public class StartService {
                     GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
                             .blockHash(startPoint.get().getGenesisBlock().getHash())
                             .slot(startPoint.get().getGenesisBlock().getSlot())
+                            .blockTime(genesisConfig.getStartTime(protocolMagic))
                             .block(0)
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
