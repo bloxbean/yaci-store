@@ -32,9 +32,8 @@ public class BlockStorageImpl implements BlockStorage {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-
         //TODO -- Fix once the count query is fixed
-        Slice<BlockEntity> blocksEntityPage = blockJpaRepository.findAllBlocks(sortedByBlock);
+        Slice<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
 //      long total = blocksEntityPage.getTotalElements();
 //      int totalPage = blocksEntityPage.getTotalPages();
 
