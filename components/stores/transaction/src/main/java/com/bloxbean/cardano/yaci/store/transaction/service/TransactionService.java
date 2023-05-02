@@ -1,19 +1,16 @@
 package com.bloxbean.cardano.yaci.store.transaction.service;
 
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.client.transaction.spec.PlutusData;
 import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.transaction.domain.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -34,7 +31,7 @@ public class TransactionService {
     private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
-        Optional<Txn> txnOptional = transactionStorage.findByTxHash(txHash);
+        Optional<Txn> txnOptional = transactionStorage.getTransactionByTxHash(txHash);
         if (txnOptional.isPresent()) {
             return txnOptional.map(txn -> {
                 List<TxUtxo> inputUtxos = resolveInputs(txn.getInputs());
@@ -44,8 +41,8 @@ public class TransactionService {
 
                 BigInteger totalOutput = outputUtxos
                         .stream()
-                        .filter(txUtxo -> txUtxo.getAmounts() != null)
-                        .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                        .filter(txUtxo -> txUtxo.getAmount() != null)
+                        .flatMap(txUtxo -> txUtxo.getAmount().stream())
                         .filter(amount -> LOVELACE.equals(amount.getAssetName()) && !StringUtils.hasLength(amount.getPolicyId()))
                         .map(amount -> amount.getQuantity())
                         .reduce(BigInteger.ZERO, BigInteger::add);
@@ -83,7 +80,7 @@ public class TransactionService {
                         TxUtxo.builder()
                                 .txHash(addressUtxo.getTxHash())
                                 .outputIndex(addressUtxo.getOutputIndex())
-                                .amounts(addressUtxo.getAmounts())
+                                .amount(addressUtxo.getAmounts())
                                 .dataHash(addressUtxo.getDataHash())
                                 .inlineDatum(addressUtxo.getInlineDatum())
                                 .scriptRef(addressUtxo.getScriptRef())
@@ -103,12 +100,13 @@ public class TransactionService {
                 .map(addressUtxo -> TxUtxo.builder()
                         .txHash(addressUtxo.getTxHash())
                         .outputIndex(addressUtxo.getOutputIndex())
-                        .ownerAddr(addressUtxo.getOwnerAddr())
-                        .ownerStakeAddr(addressUtxo.getOwnerStakeAddr())
-                        .amounts(addressUtxo.getAmounts())
+                        .address(addressUtxo.getOwnerAddr())
+                        .stakeAddress(addressUtxo.getOwnerStakeAddr())
+                        .amount(addressUtxo.getAmounts())
                         .dataHash(addressUtxo.getDataHash())
                         .inlineDatum(addressUtxo.getInlineDatum())
                         .scriptRef(addressUtxo.getScriptRef())
+                        .referenceScriptHash(addressUtxo.getReferenceScriptHash())
                         .inlineDatumJson(inlineDatumToJson(addressUtxo.getInlineDatum()))
                         .build())
                 .collect(groupingBy(txUtxo -> new UtxoKey(txUtxo.getTxHash(), txUtxo.getOutputIndex())));
@@ -132,21 +130,19 @@ public class TransactionService {
     }
 
     public TransactionPage getTransactions(int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
-
-        Page<Txn> txnPage = transactionStorage.findAll(sortedBySlot);
-        long total = txnPage.getTotalElements();
-        int totalPage = txnPage.getTotalPages();
+        List<Txn> txnPage = transactionStorage.getTransactions(page, count, Order.desc);
+        //TODO -- Find total and totalPage in TransactionPage. Currently disabled as count query takes too long
+//        long total = txnPage.getTotalElements();
+//        int totalPage = txnPage.getTotalPages();
 
         List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
             List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
-                    .map(txUtxo -> txUtxo.getOwnerAddr())
+                    .map(txUtxo -> txUtxo.getAddress())
                     .collect(Collectors.toList());
 
             BigInteger totalOutput = outputUtxos.stream()
-                    .flatMap(txUtxo -> txUtxo.getAmounts().stream())
+                    .flatMap(txUtxo -> txUtxo.getAmount().stream())
                     .filter(amt -> amt.getUnit().equals(LOVELACE))
                     .map(amt -> amt.getQuantity())
                     .reduce((qty1, qty2) -> qty1.add(qty2))
@@ -167,8 +163,8 @@ public class TransactionService {
 
         return TransactionPage
                 .builder()
-                .total(total)
-                .totalPages(totalPage)
+//                .total(total)
+//                .totalPages(totalPage)
                 .transactionSummaries(transactionSummaries)
                 .build();
 

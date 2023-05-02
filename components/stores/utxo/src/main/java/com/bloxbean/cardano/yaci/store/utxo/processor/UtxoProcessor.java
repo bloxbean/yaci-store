@@ -1,29 +1,37 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
-import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getPaymentKeyHash;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 
@@ -33,6 +41,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
     private final InvalidTransactionStorage invalidTransactionStorage;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Order(2)
@@ -90,6 +99,10 @@ public class UtxoProcessor {
         //Update existing utxos as spent
         if (inputAddressUtxos.size() > 0) //spent utxos
             utxoStorage.saveAll(inputAddressUtxos);
+
+        //publish event
+        if (outputAddressUtxos.size() > 0)
+            publisher.publishEvent(new AddressUtxoEvent(metadata, outputAddressUtxos));
     }
 
     private void handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
@@ -106,7 +119,7 @@ public class UtxoProcessor {
         invalidTransactionStorage.save(invalidTransaction);
 
         //collateral output
-        AddressUtxo collateralOutputUtxo = transaction.getCollateralReturnUtxo()
+        AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
 
@@ -138,18 +151,27 @@ public class UtxoProcessor {
             utxoStorage.save(collateralOutputUtxo);
         if (collateralInputUtxos != null && collateralInputUtxos.size() > 0)
             utxoStorage.saveAll(collateralInputUtxos);
+
+        //publish event
+        if (collateralOutputUtxo != null)
+            publisher.publishEvent(new AddressUtxoEvent(metadata, List.of(collateralOutputUtxo)));
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
-                                .unit(amount.getUnit())
+                                .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null) //remove . from unit as yaci provides policy.assetName as unit
                                 .policyId(amount.getPolicyId())
                                 .assetName(amount.getAssetName().replace('\u0000', ' '))
                                 .quantity(amount.getQuantity())
                                 .build())
                 .collect(Collectors.toList());
+
+        BigInteger lovelaceAmount = amounts.stream()
+                .filter(amount -> LOVELACE.equals(amount.getUnit()))
+                .findFirst()
+                .map(Amt::getQuantity).orElse(BigInteger.ZERO);
 
         String stakeAddress = null;
         String paymentKeyHash = null;
@@ -167,6 +189,18 @@ public class UtxoProcessor {
                 log.error("Unable to get stake address for address : " + utxo.getAddress(), e);
         }
 
+        //Derive reference script hash if scriptRef is present
+        String referenceScriptHash = null;
+        if (!StringUtil.isEmpty(utxo.getScriptRef())) {
+            try {
+                referenceScriptHash = ScriptReferenceUtil.getReferenceScriptHash(HexUtil.decodeHexString(utxo.getScriptRef()));
+            } catch (Exception e) {
+                log.error("Unable to get reference script hash for script ref. Block: {}, TxHash:  {}", eventMetadata.getBlock(), utxo.getTxHash());
+                log.error("Unable to get reference script hash for script ref : " + utxo.getScriptRef(), e);
+                //throw new IllegalArgumentException("Unable to get reference script hash for script ref : " + utxo.getScriptRef());
+            }
+        }
+
         return AddressUtxo.builder()
                 .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
@@ -175,11 +209,13 @@ public class UtxoProcessor {
                 .outputIndex(utxo.getIndex())
                 .ownerAddr(utxo.getAddress())
                 .ownerStakeAddr(stakeAddress)
-                .ownerPaymentKeyHash(paymentKeyHash)
-                .ownerStakeKeyHash(stakeKeyHash)
+                .ownerPaymentCredential(paymentKeyHash)
+                .ownerStakeCredential(stakeKeyHash)
+                .lovelaceAmount(lovelaceAmount)
                 .amounts(amounts)
                 .dataHash(utxo.getDatumHash())
                 .inlineDatum(utxo.getInlineDatum())
+                .referenceScriptHash(referenceScriptHash)
                 .scriptRef(utxo.getScriptRef())
                 .build();
     }

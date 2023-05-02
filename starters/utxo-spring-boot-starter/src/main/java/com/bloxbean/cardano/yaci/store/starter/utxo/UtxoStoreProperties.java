@@ -9,13 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class UtxoStoreProperties {
     private Utxo utxo;
-    public Utxo getUtxo() {
-        return utxo;
-    }
-
-    public void setUtxo(Utxo utxo) {
-        this.utxo = utxo;
-    }
 
     @Getter
     @Setter

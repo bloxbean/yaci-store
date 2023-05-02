@@ -1,0 +1,21 @@
+dependencies {
+    api project(":components:remote")
+
+    implementation 'org.springframework.cloud:spring-cloud-stream'
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Remote Spring Boot Starter'
+                description = 'Yaci Store Remote Spring Boot Starter'
+            }
+        }
+    }
+}

@@ -8,6 +8,8 @@ pluginManagement {
 
 rootProject.name = 'yaci-store'
 include 'applications:all'
+include 'applications:gateway'
+
 include 'components:core'
 include 'components:events'
 include 'components:common'
@@ -21,6 +23,7 @@ include 'components:stores:assets'
 include 'components:stores:protocolparams'
 include 'components:stores:live'
 include 'components:submit'
+include 'components:remote'
 
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
@@ -32,4 +35,5 @@ include ':starters:blocks-spring-boot-starter'
 include ':starters:protocolparams-spring-boot-starter'
 include ':starters:live-spring-boot-starter'
 include ':starters:submit-spring-boot-starter'
+include ':starters:remote-spring-boot-starter'
 

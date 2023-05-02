@@ -1,18 +1,16 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
+import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.ScriptMapper;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.ScriptEntity;
-import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.ScriptRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Component
 @RequiredArgsConstructor
 public class ScriptStorageImpl implements ScriptStorage {
     private final ScriptRepository scriptRepository;
