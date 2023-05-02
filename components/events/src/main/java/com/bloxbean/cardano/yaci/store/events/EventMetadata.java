@@ -1,16 +1,13 @@
 package com.bloxbean.cardano.yaci.store.events;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@Builder(toBuilder=true)
 @ToString
 public class EventMetadata {
     private Era era;
@@ -19,5 +16,7 @@ public class EventMetadata {
     private String blockHash;
     private long slot;
     private int noOfTxs;
-    private boolean isSyncMode;
+    private boolean syncMode;
+
+    private boolean remotePublish; //Is published by a remote publisher
 }

@@ -29,7 +29,6 @@ public class Error extends BaseEntity {
     @Column(name = "error_code")
     private String errorCode;
 
-    @Lob
     @Column(name = "reason")
     private String reason;
 }

@@ -6,14 +6,16 @@ create table address_utxo
     slot                  bigint,
     block                 bigint,
     block_hash            varchar(255),
+    lovelace_amount       bigint       null,
     amounts               jsonb,
     data_hash             varchar(255),
-    inline_datum          oid,
+    inline_datum          text,
     owner_addr            varchar(255),
     owner_stake_addr      varchar(255),
-    owner_payment_key_hash varchar(255),
-    owner_stake_key_hash  varchar(255),
-    script_ref            oid,
+    owner_payment_credential varchar(255),
+    owner_stake_credential  varchar(255),
+    script_ref            text,
+    reference_script_hash varchar(255) null,
     spent                 boolean,
     spent_at_slot         bigint,
     spent_tx_hash         varchar(255) null,
@@ -33,11 +35,13 @@ CREATE INDEX idx_address_utxo_owner_stake_addr
     ON address_utxo(owner_stake_addr);
 
 CREATE INDEX idx_address_utxo_owner_paykey_hash
-    ON address_utxo(owner_payment_key_hash);
+    ON address_utxo(owner_payment_credential);
 
 CREATE INDEX idx_address_utxo_owner_stakekey_hash
-    ON address_utxo(owner_stake_key_hash);
+    ON address_utxo(owner_stake_credential);
 
+CREATE INDEX idx_reference_script_hash
+    ON address_utxo(reference_script_hash);
 
 drop table if exists invalid_transaction;
 create table invalid_transaction

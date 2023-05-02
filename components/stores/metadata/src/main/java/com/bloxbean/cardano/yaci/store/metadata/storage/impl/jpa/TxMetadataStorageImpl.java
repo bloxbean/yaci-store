@@ -6,11 +6,9 @@ import com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.model.TxMetadat
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.repository.TxMetadataLabelRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Component
 @RequiredArgsConstructor
 public class TxMetadataStorageImpl implements TxMetadataStorage {
     private final TxMetadataLabelRepository metadataLabelRepository;

@@ -17,6 +17,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -39,6 +40,9 @@ public class UtxoProcessorTest {
     @Mock
     private InvalidTransactionStorage invalidTransactionStorage;
 
+    @Mock
+    private ApplicationEventPublisher publisher;
+
     @InjectMocks
     private UtxoProcessor utxoProcessor;
 
@@ -49,7 +53,7 @@ public class UtxoProcessorTest {
     @BeforeEach
     public void setup() {
 //        openMocks(this);
-        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage);
+        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage, publisher);
     }
 
     @Test
@@ -62,7 +66,7 @@ public class UtxoProcessorTest {
                         .blockHash("c2f69d97f3a11684f2a97f7c75bc50dcb18c4a01a17625d32561a7ebc219aa5e")
                         .slot(200000)
                         .era(Era.Shelley)
-                        .isSyncMode(true)
+                        .syncMode(true)
                         .build())
                 .transactions(transactions)
                 .build();
@@ -104,15 +108,15 @@ public class UtxoProcessorTest {
     public void givenTransactionEvent_whenInvalidTxn_createBothSpentAndUnspentOutputsFromCollateral() {
         List<Transaction> transactions = transactions();
         transactions.get(0).setInvalid(true);
-        transactions.get(0).setCollateralReturnUtxo(Optional.of(collateralReturnUtxo(transactions.get(0).getTxHash(),
-                transactions.get(0).getBody().getCollateralReturn()))); //Set collateral return utxos
+        transactions.get(0).setCollateralReturnUtxo(collateralReturnUtxo(transactions.get(0).getTxHash(),
+                transactions.get(0).getBody().getCollateralReturn())); //Set collateral return utxos
         TransactionEvent transactionEvent = TransactionEvent.builder()
                 .metadata(EventMetadata.builder()
                         .block(100)
                         .blockHash("c2f69d97f3a11684f2a97f7c75bc50dcb18c4a01a17625d32561a7ebc219aa5e")
                         .slot(200000)
                         .era(Era.Shelley)
-                        .isSyncMode(true)
+                        .syncMode(true)
                         .build())
                 .transactions(transactions)
                 .build();
@@ -134,7 +138,7 @@ public class UtxoProcessorTest {
         assertThat(unspentUtxos.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(unspentUtxos.get(0).getSpentTxHash()).isNull();
         assertThat(unspentUtxos.get(0).getSpent()).isFalse();
-        assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getCollateralReturnUtxo().get().getAmounts().get(0).getQuantity());
+        assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getCollateralReturnUtxo().getAmounts().get(0).getQuantity());
     }
 
     private List<Transaction> transactions() {

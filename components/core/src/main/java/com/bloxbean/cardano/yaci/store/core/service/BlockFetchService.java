@@ -87,7 +87,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
                 .slot(slot)
                 .noOfTxs(transactions.size())
-                .isSyncMode(syncMode)
+                .syncMode(syncMode)
                 .build();
 
         try {
@@ -143,7 +143,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         return amounts.stream().map(amount ->
                 Amount.builder()
-                        .unit(amount.getUnit())
+                        .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null)
                         .policyId(amount.getPolicyId())
                         .assetName(amount.getAssetName().replace('\u0000', ' '))
                         .quantity(amount.getQuantity())
@@ -176,7 +176,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
                     .slot(absoluteSlot)
-                    .isSyncMode(syncMode)
+                    .syncMode(syncMode)
                     .build();
 
             ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
@@ -206,7 +206,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
                     .slot(absoluteSlot)
-                    .isSyncMode(syncMode)
+                    .syncMode(syncMode)
                     .build();
 
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));

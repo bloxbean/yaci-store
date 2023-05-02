@@ -1,0 +1,21 @@
+dependencies {
+    api project(":components:common")
+    api project(':components:events')
+    compileOnly project(':components:core')
+
+    implementation 'org.springframework.cloud:spring-cloud-stream'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.cloud:spring-cloud-stream-test-binder'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Remote Publisher'
+                description = 'Yaci Store Remote Publisher Module'
+            }
+        }
+    }
+}
