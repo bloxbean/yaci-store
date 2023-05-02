@@ -11,6 +11,7 @@ import lombok.experimental.SuperBuilder;
 @ToString
 public class EventMetadata {
     private Era era;
+    private int epochNumber;
     private long block;
     private String blockHash;
     private long slot;

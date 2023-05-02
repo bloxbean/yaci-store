@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
@@ -22,6 +23,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -54,6 +56,13 @@ public class BlockFetchService implements BlockChainDataListener {
     @Autowired
     private GenesisConfig genesisConfig;
 
+    @Autowired
+    private EpochConfig epochConfig;
+
+    @Value("${store.cardano.protocol-magic}")
+    private long protocolMagic;
+
+
     private boolean syncMode;
 
 
@@ -67,11 +76,16 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onTransactions(Era era, BlockHeader blockHeader, List<Transaction> transactions) {
+        final long slot = blockHeader.getHeaderBody().getSlot();
+        final long eraSlot = slot - epochConfig.getShelleyKnownSlot(protocolMagic);
+        final int epochNumber = (int) (eraSlot * epochConfig.getShellySlotLength() / epochConfig.getShellyEpochLength());
+
         EventMetadata eventMetadata = EventMetadata.builder()
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
+                .epochNumber(epochNumber)
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                .slot(blockHeader.getHeaderBody().getSlot())
+                .slot(slot)
                 .noOfTxs(transactions.size())
                 .syncMode(syncMode)
                 .build();
