@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -24,10 +26,10 @@ public class EpochEntity {
     private int blockCount;
 
     @Column(name = "transaction_count")
-    private int transactionCount;
+    private long transactionCount;
 
     @Column(name = "total_output")
-    private long totalOutput;
+    private BigInteger totalOutput;
 
     @Column(name = "start_time")
     private long startTime;

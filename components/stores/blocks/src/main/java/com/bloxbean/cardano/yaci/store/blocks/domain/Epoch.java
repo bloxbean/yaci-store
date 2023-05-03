@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.math.BigInteger;
 
 @Data
 @NoArgsConstructor
@@ -19,8 +19,8 @@ import java.util.Date;
 public class Epoch {
     private long number;
     private int blockCount;
-    private int transactionCount;
-    private long totalOutput;
+    private long transactionCount;
+    private BigInteger totalOutput;
     private long startTime;
     private long endTime;
     private long maxSlot;
