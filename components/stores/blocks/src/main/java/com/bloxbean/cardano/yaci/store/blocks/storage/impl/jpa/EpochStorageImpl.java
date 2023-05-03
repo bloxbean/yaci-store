@@ -32,13 +32,19 @@ public class EpochStorageImpl implements EpochStorage {
 
     @Override
     public void save(Epoch epoch) {
-        EpochEntity epochEntity = epochMapper.toEpochEntity(epoch);
-        epochRepository.save(epochEntity);
+        EpochEntity updatedEpochEntity = epochRepository.findById(epoch.getNumber())
+                .map(epochEntity -> {
+                    epochMapper.updateEntity(epoch, epochEntity);
+                    return epochEntity;
+                }).orElse(epochMapper.toEpochEntity(epoch));
+
+        epochRepository.save(updatedEpochEntity);
     }
 
     @Override
     public Optional<Epoch> findByNumber(int number) {
-        return epochRepository.findByNumber(number);
+        return epochRepository.findById((long)number)
+                .map(epochEntity -> epochMapper.toEpoch(epochEntity));
     }
 
     @Override
