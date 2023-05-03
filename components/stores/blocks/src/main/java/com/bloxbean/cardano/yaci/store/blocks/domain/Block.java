@@ -22,6 +22,7 @@ public class Block {
     private long number;
     private long slot;
     private BigInteger totalOutput;
+    private BigInteger totalFees;
     private long blockTime;
     private int epochNumber;
     private int era;

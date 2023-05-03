@@ -39,6 +39,9 @@ public class BlockEntity extends BaseEntity {
     @Column(name = "total_output")
     private BigInteger totalOutput;
 
+    @Column(name = "total_fees")
+    private BigInteger totalFees;
+
     @Column(name = "block_time")
     private long blockTime;
 

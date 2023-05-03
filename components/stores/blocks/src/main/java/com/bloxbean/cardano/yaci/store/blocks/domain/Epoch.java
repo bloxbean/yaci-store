@@ -21,6 +21,7 @@ public class Epoch {
     private int blockCount;
     private long transactionCount;
     private BigInteger totalOutput;
+    private BigInteger totalFees;
     private long startTime;
     private long endTime;
     private long maxSlot;
