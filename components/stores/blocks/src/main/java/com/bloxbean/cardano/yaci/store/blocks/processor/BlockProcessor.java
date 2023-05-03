@@ -1,9 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
-import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
-import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
-import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.blocks.configuration.BlockConfig;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
@@ -19,13 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
-import java.util.List;
-import java.util.Optional;
 
 @Component
 @Slf4j
@@ -81,34 +75,27 @@ public class BlockProcessor {
     }
 
     @EventListener
-    @Async
     public void handleTransactionEvent(TransactionEvent transactionEvent) {
         if (transactionEvent.getTransactions().size() == 0)
             return;
 
-        BigInteger transactionOutputInLovelace = BigInteger.valueOf(0);
-        for (Transaction transaction : transactionEvent.getTransactions()) {
+        BigInteger transactionOutputInLovelace = transactionEvent.getTransactions()
+                .parallelStream()
+                .flatMap(transaction -> transaction.getBody().getOutputs().stream())
+                .flatMap(transactionOutput -> transactionOutput.getAmounts().stream())
+                .filter(amount -> BlockUtil.amountIsInADA(amount))
+                .map(amount -> amount.getQuantity())
+                .reduce((a, b) -> a.add(b)).orElse(BigInteger.ZERO);
 
-            List<TransactionOutput> outputs = transaction.getBody().getOutputs();
-
-            for (TransactionOutput output : outputs) {
-                List<Amount> amounts = output.getAmounts();
-                for (Amount amount : amounts) {
-                    if (BlockUtil.amountIsInADA((amount))) {
-                        transactionOutputInLovelace.add(amount.getQuantity());
-                    }
-                }
-            }
-        }
-
-        Optional<Block> block = blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash());
-        if (block.isPresent()) {
-            Block transactionBlock = block.get();
-            transactionBlock.setTotalOutput(transactionBlock.getTotalOutput().add(transactionOutputInLovelace));
-            blockStorage.save(transactionBlock);
-        } else {
-            log.warn(String.format("Block {} is not present and a calculated output will be ignored in aggregation which will result in incorrect output values in the future.", transactionEvent.getMetadata().getBlock()));
-        }
+       blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash())
+                .ifPresentOrElse(block -> {
+                    Block transactionBlock = block;
+                    transactionBlock.setTotalOutput(transactionBlock.getTotalOutput().add(transactionOutputInLovelace));
+                    blockStorage.save(transactionBlock);
+                }, () -> {
+                    log.warn(String.format("Block {} is not present and a calculated output will be ignored in aggregation" +
+                            " which will result in incorrect output values in the future.", transactionEvent.getMetadata().getBlock()));
+                });
     }
 
     @EventListener

@@ -7,7 +7,9 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.api.EpochStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +27,7 @@ public class EpochService {
         return epochStorage.findEpochs(page, count);
     }
 
+    @Transactional
     public void aggregateData() {
         Optional<Block> recentBlock = blockStorage.findRecentBlock();
 
@@ -55,11 +58,14 @@ public class EpochService {
                     .endTime(blocks.get(blocks.size() - 1).getBlockTime())
                     .blockCount(blocks.size())
                     .maxSlot(blocks.get(blocks.size() - 1).getSlot())
+                    .totalOutput(BigInteger.ZERO)
                     .build();
             for (Block block : blocks) {
                 epoch.setTransactionCount(epoch.getTransactionCount() + block.getNoOfTxs());
-                epoch.setTotalOutput(epoch.getTotalOutput());
+                epoch.setTotalOutput(epoch.getTotalOutput().add(block.getTotalOutput()));
             }
+
+            epochStorage.save(epoch);
         }
     }
 }
