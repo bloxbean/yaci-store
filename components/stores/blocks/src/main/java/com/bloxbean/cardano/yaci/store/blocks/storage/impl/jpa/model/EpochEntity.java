@@ -31,6 +31,9 @@ public class EpochEntity {
     @Column(name = "total_output")
     private BigInteger totalOutput;
 
+    @Column(name = "total_fees")
+    private BigInteger totalFees;
+
     @Column(name = "start_time")
     private long startTime;
 
