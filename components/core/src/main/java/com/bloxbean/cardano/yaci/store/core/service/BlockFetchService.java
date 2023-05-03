@@ -77,8 +77,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onTransactions(Era era, BlockHeader blockHeader, List<Transaction> transactions) {
         final long slot = blockHeader.getHeaderBody().getSlot();
-        final long eraSlot = slot - epochConfig.getShelleyKnownSlot(protocolMagic);
-        final int epochNumber = (int) (eraSlot * epochConfig.getShellySlotLength() / epochConfig.getShellyEpochLength());
+        final int epochNumber = epochConfig.epochFromSlot(protocolMagic, era, slot);
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .era(era)
@@ -170,11 +169,13 @@ public class BlockFetchService implements BlockChainDataListener {
             long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
                     byronBlock.getHeader().getConsensusData().getSlotId().getSlot());
+            final int epochNumber = epochConfig.epochFromSlot(protocolMagic, Era.Byron, absoluteSlot);
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
+                    .epochNumber(epochNumber)
                     .slot(absoluteSlot)
                     .syncMode(syncMode)
                     .build();
@@ -200,11 +201,13 @@ public class BlockFetchService implements BlockChainDataListener {
         try {
             long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
+            final int epochNumber = epochConfig.epochFromSlot(protocolMagic, Era.Byron, absoluteSlot);
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
+                    .epochNumber(epochNumber)
                     .slot(absoluteSlot)
                     .syncMode(syncMode)
                     .build();

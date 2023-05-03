@@ -9,6 +9,8 @@ public class GenesisConfig {
 
     private final long mainnetStartTime = 1_506_203_091;
     private final long testnetStartTime = 1_564_020_236;
+    private final long preprodStartTime = 1_654_041_600;
+    private final long previewStartTime = 1_666_656_000;
 
     public long slotDuration(Era era) {
         if (era == Era.Byron)
@@ -28,12 +30,18 @@ public class GenesisConfig {
             return mainnetStartTime;
         } else if (networkType == NetworkType.LEGACY_TESTNET) {
             return testnetStartTime;
+        } else if (networkType == NetworkType.PREPROD) {
+            return preprodStartTime;
+        } else if (networkType == NetworkType.PREVIEW) {
+            return previewStartTime;
         }
+
         return 0;
     }
 
     public long absoluteSlot(Era era, long epoch, long slotInEpoch) {
         return (slotsPerEpoch(era) * epoch) + slotInEpoch;
     }
+
 
 }

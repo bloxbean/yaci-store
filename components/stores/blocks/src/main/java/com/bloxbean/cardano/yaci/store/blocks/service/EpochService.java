@@ -59,10 +59,16 @@ public class EpochService {
                     .blockCount(blocks.size())
                     .maxSlot(blocks.get(blocks.size() - 1).getSlot())
                     .totalOutput(BigInteger.ZERO)
+                    .totalFees(BigInteger.ZERO)
                     .build();
             for (Block block : blocks) {
                 epoch.setTransactionCount(epoch.getTransactionCount() + block.getNoOfTxs());
-                epoch.setTotalOutput(epoch.getTotalOutput().add(block.getTotalOutput()));
+
+                if (block.getTotalOutput() != null)
+                    epoch.setTotalOutput(epoch.getTotalOutput().add(block.getTotalOutput()));
+
+                if (block.getTotalFees() != null)
+                    epoch.setTotalFees(epoch.getTotalFees().add(block.getTotalFees()));
             }
 
             epochStorage.save(epoch);

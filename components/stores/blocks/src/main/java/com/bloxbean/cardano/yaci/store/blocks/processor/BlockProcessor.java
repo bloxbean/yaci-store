@@ -54,7 +54,8 @@ public class BlockProcessor {
                 .hash(blockHeader.getHeaderBody().getBlockHash())
                 .number(blockNumber)
                 .slot(slot)
-                .totalOutput(BigInteger.valueOf(0))
+                .totalOutput(BigInteger.ZERO)
+                .totalFees(BigInteger.ZERO)
                 .epochNumber(blockHeaderEvent.getMetadata().getEpochNumber())
                 .blockTime(BlockUtil.calculateBlockTime(blockNumber, slot, time,
                         lastByronBlock, byronProcessingTime, shellyProcessingTime))
@@ -75,6 +76,8 @@ public class BlockProcessor {
     }
 
     @EventListener
+    @Order(2)
+    @Transactional
     public void handleTransactionEvent(TransactionEvent transactionEvent) {
         if (transactionEvent.getTransactions().size() == 0)
             return;
@@ -87,11 +90,16 @@ public class BlockProcessor {
                 .map(amount -> amount.getQuantity())
                 .reduce((a, b) -> a.add(b)).orElse(BigInteger.ZERO);
 
-       blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash())
+        BigInteger totalFees = transactionEvent.getTransactions()
+                .parallelStream()
+                .map(transaction -> transaction.getBody().getFee())
+                .reduce((a, b) -> a.add(b)).orElse(BigInteger.ZERO);
+
+        blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash())
                 .ifPresentOrElse(block -> {
-                    Block transactionBlock = block;
-                    transactionBlock.setTotalOutput(transactionBlock.getTotalOutput().add(transactionOutputInLovelace));
-                    blockStorage.save(transactionBlock);
+                    block.setTotalOutput(transactionOutputInLovelace == null ? BigInteger.ZERO : transactionOutputInLovelace);
+                    block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
+                    blockStorage.save(block);
                 }, () -> {
                     log.warn(String.format("Block {} is not present and a calculated output will be ignored in aggregation" +
                             " which will result in incorrect output values in the future.", transactionEvent.getMetadata().getBlock()));
