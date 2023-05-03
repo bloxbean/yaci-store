@@ -43,6 +43,7 @@ public class ByronBlockProcessor {
                 .hash(genesisBlockEvent.getBlockHash())
                 .slot(genesisBlockEvent.getSlot())
                 .number(0L)
+                .epochNumber(0)
                 .totalOutput(BigInteger.valueOf(0))
                 .blockTime(genesisBlockEvent.getBlockTime())
                 .prevHash(null)
@@ -63,6 +64,7 @@ public class ByronBlockProcessor {
                 .era(Era.Byron.getValue())
                 .hash(byronBlock.getHeader().getBlockHash())
                 .slot(slot)
+                .epochNumber(event.getEventMetadata().getEpochNumber())
                 .totalOutput(BigInteger.valueOf(0))
                 .prevHash(byronBlock.getHeader().getPrevBlock())
                 .build();
@@ -91,7 +93,7 @@ public class ByronBlockProcessor {
                 .era(Era.Byron.getValue())
                 .hash(byronEbBlock.getHeader().getBlockHash())
                 .slot(event.getEventMetadata().getSlot())
-               // .epoch(byronEbBlock.getHeader().getConsensusData().getEpoch())
+                .epochNumber(event.getEventMetadata().getEpochNumber())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
                 .build();
 
