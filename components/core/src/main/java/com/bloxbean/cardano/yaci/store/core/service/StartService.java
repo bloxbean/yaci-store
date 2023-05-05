@@ -40,12 +40,13 @@ public class StartService {
             throw new RuntimeException("StartService has already been started");
 
         log.info("###### Genesis Config ######");
-        log.info("ByronEra Slot Duration: " + genesisConfig.slotDuration(Era.Byron));
-        log.info("ShelleyEra Slot Length: " + genesisConfig.slotDuration(Era.Shelley));
-        log.info("Byron Slots per Epoch       : " + genesisConfig.slotsPerEpoch(Era.Byron));
-        log.info("Shelley Slots per Epoch       : " + genesisConfig.slotsPerEpoch(Era.Shelley));
-        log.info("Start time : " + genesisConfig.getStartTime(protocolMagic));
-        log.info("Max Lovelace Supply: " + genesisConfig.getMaxLovelaceSupply());
+        log.info("Epoch Length            : " + genesisConfig.getEpochLength());
+        log.info("ByronEra Slot Duration  : " + genesisConfig.slotDuration(Era.Byron));
+        log.info("ShelleyEra Slot Length  : " + genesisConfig.slotDuration(Era.Shelley));
+        log.info("Byron Slots per Epoch   : " + genesisConfig.slotsPerEpoch(Era.Byron));
+        log.info("Shelley Slots per Epoch : " + genesisConfig.slotsPerEpoch(Era.Shelley));
+        log.info("Start time              : " + genesisConfig.getStartTime(protocolMagic));
+        log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
         alreadyStarted = true;
@@ -72,10 +73,11 @@ public class StartService {
                             .slot(startPoint.get().getGenesisBlock().getSlot())
                             .blockTime(genesisConfig.getStartTime(protocolMagic))
                             .block(0)
+                            .era(startPoint.get().getGenesisBlockEra())
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();
-                    era = Era.Byron;
+                    era = startPoint.get().getFirstBlockEra();
                 } else
                     throw new IllegalStateException("Genesis points not found. From point could not be decided.");
             } else {

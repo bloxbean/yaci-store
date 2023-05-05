@@ -39,7 +39,7 @@ public class ByronBlockProcessor {
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         Block block = Block.builder()
-                .era(Era.Byron.getValue())
+                .era(genesisBlockEvent.getEra().getValue())
                 .hash(genesisBlockEvent.getBlockHash())
                 .slot(genesisBlockEvent.getSlot())
                 .number(0L)

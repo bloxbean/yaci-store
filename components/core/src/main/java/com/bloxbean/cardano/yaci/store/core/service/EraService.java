@@ -21,7 +21,7 @@ public class EraService {
     private final StoreProperties storeProperties;
 
     private Era prevEra;
-    private long shelleyStartSlot;
+    private long shelleyStartSlot = -1;
 
     public void checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
@@ -37,14 +37,7 @@ public class EraService {
 
         if (prevEra == Era.Byron && era != Era.Byron) { //Save shelley slot info, it could be babbage for local devenet
             log.info("Era change detected at block {} from {} to {}", blockHeader.getHeaderBody().getBlockNumber(), prevEra.getValue(), era.getValue());
-            CardanoEra cardanoEra = CardanoEra.builder()
-                    .era(era)
-                    .startSlot(blockHeader.getHeaderBody().getSlot())
-                    .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                    .block(blockHeader.getHeaderBody().getBlockNumber())
-                    .build();
-
-            eraStorage.saveEra(cardanoEra);
+            saveEra(era, blockHeader.getHeaderBody().getSlot(), blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getBlockNumber());
             prevEra = era;
         }
 
@@ -85,12 +78,21 @@ public class EraService {
         } **/
     }
 
+    public void saveEra(Era era, long slot, String blockHash, long blockNumber) {
+        CardanoEra cardanoEra = CardanoEra.builder()
+                .era(era)
+                .startSlot(slot)
+                .blockHash(blockHash)
+                .block(blockNumber)
+                .build();
+
+        eraStorage.saveEra(cardanoEra);
+    }
+
     public int getEpochNo(Era era, long slot) {
-        if (shelleyStartSlot == 0) {
+        if (shelleyStartSlot == -1) {
             shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
                     .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
-
-            log.info("Shelley Start Slot : {}", shelleyStartSlot);
         }
 
         final int epochNumber = epochConfig.epochFromSlot(shelleyStartSlot, era, slot);
