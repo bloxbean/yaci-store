@@ -234,7 +234,10 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         log.info("Writing genesis block to cursor -->");
-        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, Era.Byron));
+        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, genesisBlockEvent.getEra()));
+        if (genesisBlockEvent.getEra().getValue() > Era.Byron.getValue()) { //If Genesis block is not byron era. Possible for preview and local devnet
+            eraService.saveEra(genesisBlockEvent.getEra(), genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), genesisBlockEvent.getBlock());
+        }
     }
 
     private void stopSync() {
