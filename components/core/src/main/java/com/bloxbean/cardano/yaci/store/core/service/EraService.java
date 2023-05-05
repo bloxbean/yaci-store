@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
@@ -18,10 +19,15 @@ public class EraService {
     private final EraStorage eraStorage;
     private final CursorStorage cursorStorage;
     private final EpochConfig epochConfig;
+    private final GenesisConfig genesisConfig;
     private final StoreProperties storeProperties;
 
     private Era prevEra;
     private long shelleyStartSlot = -1;
+
+    //Don't use these variable directly. Use firstShelleySlot(), shelleyEraStartTime() method
+    private long _firstShelleySlot;
+    private long _shelleyStartTime;
 
     public void checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
@@ -40,42 +46,6 @@ public class EraService {
             saveEra(era, blockHeader.getHeaderBody().getSlot(), blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getBlockNumber());
             prevEra = era;
         }
-
-        /** Just save shelley start point for now
-        if (prevEra == null) {
-            boolean eraChanged = cursorStorage.findByBlockHash(storeProperties.getEventPublisherId(),
-                            blockHeader.getHeaderBody().getPrevHash())
-                    .map(prevBlock -> {
-                        if (era.getValue() > prevBlock.getEra().getValue()) {
-                            log.info("Era change detected at block {} from {} to {}", blockHeader.getHeaderBody().getBlockNumber(), prevBlock.getEra(), era.getValue());
-                            return true;
-                        } else
-                            return false;
-                    }).orElse(false);
-
-            if (eraChanged) {
-                CardanoEra cardanoEra = CardanoEra.builder()
-                        .era(era)
-                        .startSlot(blockHeader.getHeaderBody().getSlot())
-                        .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                        .block(blockHeader.getHeaderBody().getBlockNumber())
-                        .build();
-                eraStorage.saveEra(cardanoEra);
-            }
-
-            prevEra = era;
-        } else if (era.getValue() > prevEra.getValue()) {
-            log.info("Era change detected at block {} from {} to {}", blockHeader.getHeaderBody().getBlockNumber(), prevEra.getValue(), era.getValue());
-            CardanoEra cardanoEra = CardanoEra.builder()
-                    .era(era)
-                    .startSlot(blockHeader.getHeaderBody().getSlot())
-                    .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                    .block(blockHeader.getHeaderBody().getBlockNumber())
-                    .build();
-
-            eraStorage.saveEra(cardanoEra);
-            prevEra = era;
-        } **/
     }
 
     public void saveEra(Era era, long slot, String blockHash, long blockNumber) {
@@ -97,5 +67,51 @@ public class EraService {
 
         final int epochNumber = epochConfig.epochFromSlot(shelleyStartSlot, era, slot);
         return epochNumber;
+    }
+
+    public long shelleyEraStartTime() {
+        if (_shelleyStartTime != 0)
+            return _shelleyStartTime;
+        firstShelleySlot();
+
+        long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
+        _shelleyStartTime = startTime + firstShelleySlot() * (long)genesisConfig.slotDuration(Era.Byron);
+
+        return _shelleyStartTime;
+    }
+
+    private long firstShelleySlot() {
+        //calculate Byron Era last slot time
+        if (_firstShelleySlot == 0) {
+            _firstShelleySlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot())
+                    .orElse(0L);
+        }
+
+        return _firstShelleySlot;
+    }
+
+    /**
+     * Find the block time for a given slot for shelley and post shelley era
+     * @param era
+     * @param slot
+     * @return block time
+     */
+    public long blockTime(Era era, long slot) {
+        if (era == Era.Byron) {
+            return byronBlockTime(slot);
+        } else {
+            long slotsFromShelleyStart = slot - firstShelleySlot();
+            return (shelleyEraStartTime() + slotsFromShelleyStart * (long) genesisConfig.slotDuration(Era.Shelley));
+        }
+    }
+
+    /**
+     * Find the block time for a given slot for byron era
+     * @param slot
+     * @return block time
+     */
+    private long byronBlockTime(long slot) {
+        long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
+        return startTime + slot * (long)genesisConfig.slotDuration(Era.Byron);
     }
 }
