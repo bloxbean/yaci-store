@@ -8,14 +8,15 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.BlockMappe
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.BlockEntity;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
-import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Service
 @RequiredArgsConstructor
 public class BlockStorageImpl implements BlockStorage {
     private final BlockRepository blockRepository;

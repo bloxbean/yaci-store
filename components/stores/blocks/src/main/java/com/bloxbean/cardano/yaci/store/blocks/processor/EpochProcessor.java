@@ -19,7 +19,7 @@ public class EpochProcessor {
 
     private final EpochService epochService;
 
-    @Scheduled(fixedRate = 20, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedRate = 60, timeUnit = TimeUnit.SECONDS)
     public void scheduleEpochDataAggregation() {
         log.info("Start epoch data aggregation ....");
         epochService.aggregateData();

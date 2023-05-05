@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
@@ -51,13 +50,13 @@ public class BlockFetchService implements BlockChainDataListener {
     private CursorService cursorService;
 
     @Autowired
+    private EraService eraService;
+
+    @Autowired
     private StoreConfig storeConfig;
 
     @Autowired
     private GenesisConfig genesisConfig;
-
-    @Autowired
-    private EpochConfig epochConfig;
 
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
@@ -77,13 +76,16 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onTransactions(Era era, BlockHeader blockHeader, List<Transaction> transactions) {
         final long slot = blockHeader.getHeaderBody().getSlot();
-        final int epochNumber = epochConfig.epochFromSlot(protocolMagic, era, slot);
+        eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
+        final int epochNumber = eraService.getEpochNo(era, slot);
+
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .epochNumber(epochNumber)
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
+                .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
                 .slot(slot)
                 .noOfTxs(transactions.size())
                 .syncMode(syncMode)
@@ -126,7 +128,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             //Finally Set the cursor
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getEra()));
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -169,13 +171,14 @@ public class BlockFetchService implements BlockChainDataListener {
             long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
                     byronBlock.getHeader().getConsensusData().getSlotId().getSlot());
-            final int epochNumber = epochConfig.epochFromSlot(protocolMagic, Era.Byron, absoluteSlot);
+            final long epochNumber = byronBlock.getHeader().getConsensusData().getSlotId().getEpoch();
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
-                    .epochNumber(epochNumber)
+                    .prevBlockHash(byronBlock.getHeader().getPrevBlock())
+                    .epochNumber((int) epochNumber)
                     .slot(absoluteSlot)
                     .syncMode(syncMode)
                     .build();
@@ -185,7 +188,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             //Finally Set the cursor
             cursorService.setByronEraCursor(byronBlock.getHeader().getPrevBlock(), new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getEra()));
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
@@ -199,15 +202,16 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
         try {
-            long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
+            final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
-            final int epochNumber = epochConfig.epochFromSlot(protocolMagic, Era.Byron, absoluteSlot);
+            final long epochNumber = byronEbBlock.getHeader().getConsensusData().getEpoch();
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
-                    .epochNumber(epochNumber)
+                    .prevBlockHash(byronEbBlock.getHeader().getPrevBlock())
+                    .epochNumber((int) epochNumber)
                     .slot(absoluteSlot)
                     .syncMode(syncMode)
                     .build();
@@ -216,7 +220,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             //Finally Set the cursor
             cursorService.setByronEraCursor(byronEbBlock.getHeader().getPrevBlock(), new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getEra()));
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
@@ -230,7 +234,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         log.info("Writing genesis block to cursor -->");
-        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null));
+        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, Era.Byron));
     }
 
     private void stopSync() {

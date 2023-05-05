@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
@@ -37,16 +38,28 @@ public class StartService {
     public void start() {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
+
+        log.info("###### Genesis Config ######");
+        log.info("ByronEra Slot Duration: " + genesisConfig.slotDuration(Era.Byron));
+        log.info("ShelleyEra Slot Length: " + genesisConfig.slotDuration(Era.Shelley));
+        log.info("Byron Slots per Epoch       : " + genesisConfig.slotsPerEpoch(Era.Byron));
+        log.info("Shelley Slots per Epoch       : " + genesisConfig.slotsPerEpoch(Era.Shelley));
+        log.info("Start time : " + genesisConfig.getStartTime(protocolMagic));
+        log.info("Max Lovelace Supply: " + genesisConfig.getMaxLovelaceSupply());
+        log.info("###########################");
+
         alreadyStarted = true;
         log.info("Application is ready. Let's start the sync process ...");
         Point from = null;
-        Integer era = null;
+        String prevBlockHash = null;
+        Era era = null;
         Long blockNumber = 0L;
         Optional<Cursor> optional = cursorService.getCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
-            era = null;
+            prevBlockHash = optional.get().getBlockHash();
+            era = optional.get().getEra();
             blockNumber = optional.get().getBlock();
         } else {
             if (storeConfig.getSyncStartSlot() == 0 || storeConfig.getSyncStartBlockHash() == null
@@ -62,6 +75,7 @@ public class StartService {
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();
+                    era = Era.Byron;
                 } else
                     throw new IllegalStateException("Genesis points not found. From point could not be decided.");
             } else {
@@ -70,7 +84,7 @@ public class StartService {
         }
 
         //Reset cursor
-        cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, null));
+        cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, prevBlockHash, era));
         Tip tip = tipFinderService.getTip().block();
 
         Point to = null;

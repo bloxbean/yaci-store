@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.core;
 
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
-import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorRepository;
-import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorStorageImpl;
+import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,5 +32,11 @@ public class StoreConfiguration {
     @ConditionalOnMissingBean
     public CursorStorage cursorStorage(CursorRepository cursorRepository) {
         return new CursorStorageImpl(cursorRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public EraStorage eraStorage(EraRepository eraRepository, EraMapper eraMapper) {
+        return new EraStorageImpl(eraRepository, eraMapper);
     }
 }

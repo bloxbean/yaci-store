@@ -5,9 +5,7 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.RollbackEnt
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.RollbackRepository;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
-@Service
 @RequiredArgsConstructor
 public class RollbackStorageImpl implements RollbackStorage {
     private final RollbackRepository rollbackRepository;
