@@ -13,5 +13,6 @@ public class Cursor {
     private Long slot;
     private String blockHash;
     private Long block;
+    private String prevBlockHash;
     private Era era;
 }

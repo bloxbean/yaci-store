@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.events;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
 
 @Getter
 @NoArgsConstructor
@@ -14,6 +13,7 @@ public class EventMetadata {
     private int epochNumber;
     private long block;
     private String blockHash;
+    private String prevBlockHash;
     private long slot;
     private int noOfTxs;
     private boolean syncMode;

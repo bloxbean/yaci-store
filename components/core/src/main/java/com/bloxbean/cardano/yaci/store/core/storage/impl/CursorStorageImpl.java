@@ -22,6 +22,8 @@ public class CursorStorageImpl implements CursorStorage {
                 .slot(cursor.getSlot())
                 .blockHash(cursor.getBlockHash())
                 .block(cursor.getBlock())
+                .prevBlockHash(cursor.getPrevBlockHash())
+                .era(cursor.getEra().getValue())
                 .build();
 
         cursorRepository.save(cursorEntity);
@@ -62,6 +64,8 @@ public class CursorStorageImpl implements CursorStorage {
                 .slot(cursorEntity.getSlot())
                 .blockHash(cursorEntity.getBlockHash())
                 .block(cursorEntity.getBlock())
+                .prevBlockHash(cursorEntity.getPrevBlockHash())
+                .era(EraMapper.intToEra(cursorEntity.getEra()))
                 .build();
     }
 }

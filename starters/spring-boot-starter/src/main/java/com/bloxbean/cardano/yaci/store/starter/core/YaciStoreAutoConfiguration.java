@@ -5,7 +5,6 @@ import com.bloxbean.cardano.yaci.helper.*;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
@@ -122,6 +121,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setSyncStartSlot(properties.getCardano().getSyncStartSlot());
         storeProperties.setSyncStartBlockhash(properties.getCardano().getSyncStartBlockhash());
         storeProperties.setSyncStopBlockhash(properties.getCardano().getSyncStopBlockhash());
+        storeProperties.setByronGenesisFile(properties.getCardano().getByronGenesisFile());
+        storeProperties.setShelleyGenesisFile(properties.getCardano().getShelleyGenesisFile());
 
         return storeProperties;
     }

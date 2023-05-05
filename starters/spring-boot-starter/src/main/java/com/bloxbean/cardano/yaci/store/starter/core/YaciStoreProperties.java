@@ -30,6 +30,9 @@ public class YaciStoreProperties {
         private long syncStartSlot;
         private String syncStartBlockhash;
         private String syncStopBlockhash;
+
+        private String byronGenesisFile;
+        private String shelleyGenesisFile;
     }
 
     @Getter

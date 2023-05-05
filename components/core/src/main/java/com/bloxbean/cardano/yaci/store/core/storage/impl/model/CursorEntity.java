@@ -28,4 +28,10 @@ public class CursorEntity extends BaseEntity {
 
     @Column(name = "block_number")
     private Long block;
+
+    @Column(name = "prev_block_hash")
+    private String prevBlockHash;
+
+    @Column(name = "era")
+    private Integer era;
 }
