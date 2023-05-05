@@ -13,6 +13,7 @@ public class EventMetadata {
     private int epochNumber;
     private long block;
     private String blockHash;
+    private long blockTime;
     private String prevBlockHash;
     private long slot;
     private int noOfTxs;

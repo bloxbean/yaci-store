@@ -16,8 +16,9 @@ import java.nio.file.Paths;
 
 @Component
 public class GenesisConfig {
+    public static final int PREVIEW_EPOCH_LENGTH = 86400;
+    private final long DEFAULT_EPOCH_LENGTH = 432000; //5 days
 
-    public static final int TOTAL_SECS_IN_5_DAYS_EPOCH = 432000;
     private final long mainnetStartTime = 1_506_203_091;
     private final long testnetStartTime = 1_564_020_236;
     private final long preprodStartTime = 1_654_041_600;
@@ -28,6 +29,7 @@ public class GenesisConfig {
 
     private long startTime;
     private String shelleyStartTime;
+    private long epochLength;
 
     private long byronSlotLength;
     private double shelleySlotLength;
@@ -57,7 +59,21 @@ public class GenesisConfig {
     }
 
     public long slotsPerEpoch(Era era) {
-        return  (long)(TOTAL_SECS_IN_5_DAYS_EPOCH / slotDuration(era));
+        return  (long)(getEpochLength() / slotDuration(era));
+    }
+
+    public long getEpochLength() {
+        if (epochLength > 0)
+            return epochLength;
+
+        NetworkType networkType = NetworkType.fromProtocolMagic(storeProperties.getProtocolMagic());
+        if (networkType == NetworkType.MAINNET || networkType == NetworkType.PREPROD) {
+            return DEFAULT_EPOCH_LENGTH;
+        } else if (networkType == NetworkType.PREVIEW) {
+            return PREVIEW_EPOCH_LENGTH;
+        } else {
+            return DEFAULT_EPOCH_LENGTH;
+        }
     }
 
     public long getStartTime(long protocolMagic) {
@@ -115,6 +131,7 @@ public class GenesisConfig {
         shelleySlotLength = shelleyJsonNode.get("slotLength").asDouble();
         activeSlotsCoeff = shelleyJsonNode.get("activeSlotsCoeff").asDouble();
         maxLovelaceSupply = new BigInteger(shelleyJsonNode.get("maxLovelaceSupply").asText());
+        epochLength = shelleyJsonNode.get("epochLength").asLong();
 
         long networkMagic = shelleyJsonNode.get("networkMagic").asLong();
         if (networkMagic != storeProperties.getProtocolMagic())
