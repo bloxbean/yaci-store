@@ -78,13 +78,14 @@ public class BlockFetchService implements BlockChainDataListener {
         final long slot = blockHeader.getHeaderBody().getSlot();
         eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
-
+        final long blockTime = eraService.blockTime(era, slot);
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .epochNumber(epochNumber)
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
+                .blockTime(blockTime)
                 .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
                 .slot(slot)
                 .noOfTxs(transactions.size())
@@ -168,15 +169,17 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
         try {
-            long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
+            final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
                     byronBlock.getHeader().getConsensusData().getSlotId().getSlot());
             final long epochNumber = byronBlock.getHeader().getConsensusData().getSlotId().getEpoch();
+            final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronBlock.getHeader().getBlockHash())
+                    .blockTime(blockTime)
                     .prevBlockHash(byronBlock.getHeader().getPrevBlock())
                     .epochNumber((int) epochNumber)
                     .slot(absoluteSlot)
@@ -205,11 +208,13 @@ public class BlockFetchService implements BlockChainDataListener {
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
             final long epochNumber = byronEbBlock.getHeader().getConsensusData().getEpoch();
+            final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
                     .block(-1)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
+                    .blockTime(blockTime)
                     .prevBlockHash(byronEbBlock.getHeader().getPrevBlock())
                     .epochNumber((int) epochNumber)
                     .slot(absoluteSlot)
@@ -234,7 +239,10 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         log.info("Writing genesis block to cursor -->");
-        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, Era.Byron));
+        cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, genesisBlockEvent.getEra()));
+        if (genesisBlockEvent.getEra().getValue() > Era.Byron.getValue()) { //If Genesis block is not byron era. Possible for preview and local devnet
+            eraService.saveEra(genesisBlockEvent.getEra(), genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), genesisBlockEvent.getBlock());
+        }
     }
 
     private void stopSync() {
