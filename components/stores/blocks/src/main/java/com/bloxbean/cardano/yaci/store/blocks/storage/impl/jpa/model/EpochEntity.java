@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -17,7 +18,7 @@ import java.math.BigInteger;
 @Builder
 @Entity
 @Table(name = "epoch")
-public class EpochEntity {
+public class EpochEntity extends BaseEntity {
     @Id
     @Column(name = "number")
     private long number;
