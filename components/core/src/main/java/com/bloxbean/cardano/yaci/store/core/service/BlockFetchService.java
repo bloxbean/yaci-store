@@ -10,8 +10,8 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
-import com.bloxbean.cardano.yaci.store.core.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
@@ -53,7 +53,7 @@ public class BlockFetchService implements BlockChainDataListener {
     private EraService eraService;
 
     @Autowired
-    private StoreConfig storeConfig;
+    private StoreProperties storeProperties;
 
     @Autowired
     private GenesisConfig genesisConfig;
@@ -175,9 +175,11 @@ public class BlockFetchService implements BlockChainDataListener {
             final long epochNumber = byronBlock.getHeader().getConsensusData().getSlotId().getEpoch();
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
+            long blockNumber = deriveByronBlockNumber(byronBlock.getHeader().getPrevBlock());
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
-                    .block(-1)
+                    .block(blockNumber)
                     .blockHash(byronBlock.getHeader().getBlockHash())
                     .blockTime(blockTime)
                     .prevBlockHash(byronBlock.getHeader().getPrevBlock())
@@ -210,9 +212,11 @@ public class BlockFetchService implements BlockChainDataListener {
             final long epochNumber = byronEbBlock.getHeader().getConsensusData().getEpoch();
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
+            long blockNumber = deriveByronBlockNumber(byronEbBlock.getHeader().getPrevBlock());
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
-                    .block(-1)
+                    .block(blockNumber)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
                     .blockTime(blockTime)
                     .prevBlockHash(byronEbBlock.getHeader().getPrevBlock())
@@ -233,6 +237,22 @@ public class BlockFetchService implements BlockChainDataListener {
             stopSync();
             throw new RuntimeException(e);
         }
+    }
+
+    private long deriveByronBlockNumber(String prevBlockHash) {
+        long blockNumber = -1;
+        if (prevBlockHash != null) {
+            blockNumber = cursorService.getCursorByBlockHash(prevBlockHash)
+                    .map(cursor -> cursor.getBlock() + 1)
+                    .orElse(-1L);
+        }
+
+        //only possible when a custom byron start point with blk number is provided
+        if (blockNumber == -1 && prevBlockHash != null && storeProperties.getSyncStartByronBlockNumber() > 0){
+            blockNumber = storeProperties.getSyncStartByronBlockNumber();
+        }
+
+        return blockNumber;
     }
 
     @EventListener
@@ -281,7 +301,7 @@ public class BlockFetchService implements BlockChainDataListener {
         if (!syncMode) {
             log.info("Batch Done >>>");
 
-            if (storeConfig.getPrimaryInstance()) {
+            if (storeProperties.isPrimaryInstance()) {
                 //If primary instance, start sync
                 //start sync
                 cursorService.getCursor()
