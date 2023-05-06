@@ -52,19 +52,25 @@ public class ByronBlockProcessor {
 
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
+                .number(event.getEventMetadata().getBlock())
                 .hash(byronBlock.getHeader().getBlockHash())
                 .slot(slot)
                 .epochNumber(event.getEventMetadata().getEpochNumber())
-                .totalOutput(BigInteger.valueOf(0))
+                .totalOutput(BigInteger.ZERO)
                 .prevHash(byronBlock.getHeader().getPrevBlock())
+                .blockTime(event.getEventMetadata().getBlockTime())
                 .build();
 
-        blockStorage.findByBlockHash(byronBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
-            long blockNumber = preBlock.getNumber() + 1;
+        //Find total tx output
+        BigInteger totalTxOutput = byronBlock.getBody().getTxPayload().stream()
+                .flatMap(tx -> tx.getTransaction().getOutputs().stream())
+                .map(output -> output.getAmount())
+                .reduce(BigInteger::add)
+                .orElse(BigInteger.ZERO);
+        block.setTotalOutput(totalTxOutput);
 
-            block.setNumber(blockNumber);
-            block.setBlockTime(event.getEventMetadata().getBlockTime());
-        });
+        //TODO Find total fee ??
+        //fee = totalInput - totalOutput
 
         blockStorage.save(block);
     }
@@ -76,15 +82,13 @@ public class ByronBlockProcessor {
         ByronEbBlock byronEbBlock = event.getByronEbBlock();
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
+                .number(event.getEventMetadata().getBlock())
                 .hash(byronEbBlock.getHeader().getBlockHash())
                 .slot(event.getEventMetadata().getSlot())
                 .epochNumber(event.getEventMetadata().getEpochNumber())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
+                .blockTime(event.getEventMetadata().getBlockTime())
                 .build();
-
-        blockStorage.findByBlockHash(byronEbBlock.getHeader().getPrevBlock()).ifPresent(preBlock -> {
-            block.setNumber(preBlock.getNumber() + 1);
-        });
 
         blockStorage.save(block);
     }

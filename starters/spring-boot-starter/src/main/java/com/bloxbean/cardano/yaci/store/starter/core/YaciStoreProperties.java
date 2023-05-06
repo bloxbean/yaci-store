@@ -29,6 +29,9 @@ public class YaciStoreProperties {
 
         private long syncStartSlot;
         private String syncStartBlockhash;
+        private long syncStartByronBlockNumber;
+
+        private long syncStopSlot;
         private String syncStopBlockhash;
 
         private String byronGenesisFile;

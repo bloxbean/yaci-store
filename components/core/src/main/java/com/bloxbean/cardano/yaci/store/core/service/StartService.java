@@ -5,8 +5,8 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
+import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
-import com.bloxbean.cardano.yaci.store.core.configuration.StoreConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ public class StartService {
     private final TipFinderService tipFinderService;
     private final GenesisBlockFinder genesisBlockFinder;
     private final CursorService cursorService;
-    private final StoreConfig storeConfig;
+    private final StoreProperties storeProperties;
 
     private final GenesisConfig genesisConfig;
 
@@ -39,7 +39,7 @@ public class StartService {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
-        log.info("###### Genesis Config ######");
+        log.info("###### Genesis Config #####");
         log.info("Epoch Length            : " + genesisConfig.getEpochLength());
         log.info("ByronEra Slot Duration  : " + genesisConfig.slotDuration(Era.Byron));
         log.info("ShelleyEra Slot Length  : " + genesisConfig.slotDuration(Era.Shelley));
@@ -63,8 +63,8 @@ public class StartService {
             era = optional.get().getEra();
             blockNumber = optional.get().getBlock();
         } else {
-            if (storeConfig.getSyncStartSlot() == 0 || storeConfig.getSyncStartBlockHash() == null
-                    || storeConfig.getSyncStartBlockHash().isEmpty()) {
+            if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
+                    || storeProperties.getSyncStartBlockhash().isEmpty()) {
                 Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
                 if (startPoint.isPresent()) {
                     //Save genesis block
@@ -81,7 +81,8 @@ public class StartService {
                 } else
                     throw new IllegalStateException("Genesis points not found. From point could not be decided.");
             } else {
-                from = new Point(storeConfig.getSyncStartSlot(), storeConfig.getSyncStartBlockHash());
+                from = new Point(storeProperties.getSyncStartSlot(), storeProperties.getSyncStartBlockhash());
+                blockNumber = storeProperties.getSyncStartByronBlockNumber();
             }
         }
 
@@ -89,19 +90,19 @@ public class StartService {
         cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, prevBlockHash, era));
         Tip tip = tipFinderService.getTip().block();
 
-        Point to = null;
-        if (storeConfig.getSyncStopSlot() != 0) {
-            to = new Point(storeConfig.getSyncStopSlot(), storeConfig.getSyncStopBlockHash());
+        Point to;
+        if (storeProperties.getSyncStopSlot() != 0) {
+            to = new Point(storeProperties.getSyncStopSlot(), storeProperties.getSyncStopBlockhash());
         } else {
             to = tip.getPoint();
-            storeConfig.setPrimaryInstance(true);
+            storeProperties.setPrimaryInstance(true);
         }
 
         log.info("From >> " + from);
         log.info("TO >> " + to);
 
         long diff = tip.getPoint().getSlot() - from.getSlot();
-        if (storeConfig.getPrimaryInstance()) {
+        if (storeProperties.isPrimaryInstance()) {
             if (diff > 7200) {
                 log.info("Start BlockRangeSync");
                 blockFetchService.startFetch(from, to);
