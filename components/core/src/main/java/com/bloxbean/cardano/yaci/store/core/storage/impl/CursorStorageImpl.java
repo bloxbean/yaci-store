@@ -23,7 +23,7 @@ public class CursorStorageImpl implements CursorStorage {
                 .blockHash(cursor.getBlockHash())
                 .block(cursor.getBlock())
                 .prevBlockHash(cursor.getPrevBlockHash())
-                .era(cursor.getEra().getValue())
+                .era(cursor.getEra() != null? cursor.getEra().getValue(): null)
                 .build();
 
         cursorRepository.save(cursorEntity);

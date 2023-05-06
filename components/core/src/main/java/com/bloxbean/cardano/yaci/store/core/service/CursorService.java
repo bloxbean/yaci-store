@@ -43,6 +43,9 @@ public class CursorService {
             block.set(preBlock.getBlock() + 1);
         });
 
+        if (block.get() == 0 && storeProperties.getSyncStartByronBlockNumber() > 0) //only possible if a custom byron start point is set
+            block.set(storeProperties.getSyncStartByronBlockNumber());
+
         Cursor updatedCursor = cursor.toBuilder().block(block.get()).build();
         cursorStorage.saveCursor(storeProperties.getEventPublisherId(), updatedCursor);
         printLog(block.get(), updatedCursor.getEra());
@@ -53,6 +56,9 @@ public class CursorService {
         return cursorStorage.getCursorAtCurrentMinusOffset(storeProperties.getEventPublisherId(), 50);
     }
 
+    public Optional<Cursor> getCursorByBlockHash(String blockHash) {
+        return cursorStorage.findByBlockHash(storeProperties.getEventPublisherId(), blockHash);
+    }
 
     @Transactional
     public void rollback(long slot) {
