@@ -9,9 +9,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class StoreProperties {
+public class StoreProperties { //TODO - replace this with YaciStoreProperties from starter
     private Long eventPublisherId;
     private boolean syncAutoStart;
+    private boolean primaryInstance;
 
     private String cardanoHost;
     private int cardanoPort;
@@ -25,6 +26,9 @@ public class StoreProperties {
 
     private long syncStartSlot;
     private String syncStartBlockhash;
+    private long syncStartByronBlockNumber;
+
+    private long syncStopSlot;
     private String syncStopBlockhash;
 
     private String byronGenesisFile;
