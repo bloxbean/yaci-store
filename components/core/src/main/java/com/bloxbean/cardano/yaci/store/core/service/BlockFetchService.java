@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Component
@@ -64,6 +65,8 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private boolean syncMode;
 
+    private AtomicBoolean isError = new AtomicBoolean(false);
+
 
     public BlockFetchService(ApplicationEventPublisher applicationEventPublisher, MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
@@ -75,6 +78,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onTransactions(Era era, BlockHeader blockHeader, List<Transaction> transactions) {
+        checkError();
         final long slot = blockHeader.getHeaderBody().getSlot();
         eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
@@ -134,7 +138,8 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
-            stopSync();
+            setError();
+            stopSyncOnError();
             throw new RuntimeException(e);
         }
     }
@@ -168,6 +173,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
+        checkError();
         try {
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
@@ -198,7 +204,7 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
-            stopSync();
+            stopSyncOnError();
             throw new RuntimeException(e);
         }
     }
@@ -206,6 +212,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+        checkError();
         try {
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
@@ -234,7 +241,7 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
-            stopSync();
+            stopSyncOnError();
             throw new RuntimeException(e);
         }
     }
@@ -250,6 +257,8 @@ public class BlockFetchService implements BlockChainDataListener {
         //only possible when a custom byron start point with blk number is provided
         if (blockNumber == -1 && prevBlockHash != null && storeProperties.getSyncStartByronBlockNumber() > 0){
             blockNumber = storeProperties.getSyncStartByronBlockNumber();
+        } else if (blockNumber == -1 && prevBlockHash != null) {
+            throw new IllegalStateException("Block number not found for prev block hash " + prevBlockHash);
         }
 
         return blockNumber;
@@ -258,6 +267,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @EventListener
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        checkError();
         log.info("Writing genesis block to cursor -->");
         cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, genesisBlockEvent.getEra()));
         if (genesisBlockEvent.getEra().getValue() > Era.Byron.getValue()) { //If Genesis block is not byron era. Possible for preview and local devnet
@@ -265,7 +275,8 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    private void stopSync() {
+    private void stopSyncOnError() {
+        setError();
         if (blockRangeSync != null)
             blockRangeSync.stop();
         if (blockSync != null)
@@ -319,24 +330,34 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    public void startFetch(Point from, Point to) {
+    public synchronized void startFetch(Point from, Point to) {
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
         syncMode = false;
         cursorService.setSyncMode(syncMode);
     }
 
-    public void startSync(Point from) {
+    public synchronized void startSync(Point from) {
         blockSync.startSync(from, this);
         syncMode = true;
         cursorService.setSyncMode(syncMode);
     }
 
-    public void shutdown() {
+    public synchronized  void shutdown() {
         blockRangeSync.stop();
     }
 
-    public void shutdownSync() {
+    public synchronized void shutdownSync() {
         blockSync.stop();
     }
+
+    private void setError() {
+        isError.set(true);
+    }
+
+    private void checkError() {
+        if (isError.get())
+            throw new IllegalStateException("Fetcher has already been stopped due to error.");
+    }
+
 }
