@@ -180,7 +180,7 @@ public class BlockFetchService implements BlockChainDataListener {
             final long epochNumber = byronBlock.getHeader().getConsensusData().getSlotId().getEpoch();
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
-            long blockNumber = deriveByronBlockNumber(byronBlock.getHeader().getPrevBlock());
+            long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
@@ -197,7 +197,7 @@ public class BlockFetchService implements BlockChainDataListener {
             publisher.publishEvent(byronMainBlockEvent);
 
             //Finally Set the cursor
-            cursorService.setByronEraCursor(byronBlock.getHeader().getPrevBlock(), new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
+            cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
                     eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
@@ -218,7 +218,7 @@ public class BlockFetchService implements BlockChainDataListener {
             final long epochNumber = byronEbBlock.getHeader().getConsensusData().getEpoch();
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
-            long blockNumber = deriveByronBlockNumber(byronEbBlock.getHeader().getPrevBlock());
+            long blockNumber = byronEbBlock.getHeader().getConsensusData().getDifficulty().longValue();
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .era(Era.Byron)
@@ -234,7 +234,7 @@ public class BlockFetchService implements BlockChainDataListener {
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
             //Finally Set the cursor
-            cursorService.setByronEraCursor(byronEbBlock.getHeader().getPrevBlock(), new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
@@ -243,24 +243,6 @@ public class BlockFetchService implements BlockChainDataListener {
             stopSyncOnError();
             throw new RuntimeException(e);
         }
-    }
-
-    private long deriveByronBlockNumber(String prevBlockHash) {
-        long blockNumber = -1;
-        if (prevBlockHash != null) {
-            blockNumber = cursorService.getCursorByBlockHash(prevBlockHash)
-                    .map(cursor -> cursor.getBlock() + 1)
-                    .orElse(-1L);
-        }
-
-        //only possible when a custom byron start point with blk number is provided
-        if (blockNumber == -1 && prevBlockHash != null && storeProperties.getSyncStartByronBlockNumber() > 0){
-            blockNumber = storeProperties.getSyncStartByronBlockNumber();
-        } else if (blockNumber == -1 && prevBlockHash != null) {
-            throw new IllegalStateException("Block number not found for prev block hash " + prevBlockHash);
-        }
-
-        return blockNumber;
     }
 
     @EventListener
