@@ -17,7 +17,6 @@ import org.jooq.DSLContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,8 +28,8 @@ import static org.jooq.impl.DSL.field;
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoRepository utxoRepository;
-    private final UtxoMapper mapper;
     private final DSLContext dsl;
+    private final UtxoMapper mapper = UtxoMapper.INSTANCE;
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
