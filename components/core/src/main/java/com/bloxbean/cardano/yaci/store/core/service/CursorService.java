@@ -34,23 +34,6 @@ public class CursorService {
         printLog(cursor.getBlock(), cursor.getEra());
     }
 
-    public void setByronEraCursor(String prevBlockHash, Cursor cursor) {
-        if (cursor.getBlockHash() == null)
-            throw new RuntimeException("BlockHash can't be null.");
-
-        AtomicLong block = new AtomicLong();
-        cursorStorage.findByBlockHash(storeProperties.getEventPublisherId(), prevBlockHash).ifPresent(preBlock -> {
-            block.set(preBlock.getBlock() + 1);
-        });
-
-        if (block.get() == 0 && storeProperties.getSyncStartByronBlockNumber() > 0) //only possible if a custom byron start point is set
-            block.set(storeProperties.getSyncStartByronBlockNumber());
-
-        Cursor updatedCursor = cursor.toBuilder().block(block.get()).build();
-        cursorStorage.saveCursor(storeProperties.getEventPublisherId(), updatedCursor);
-        printLog(block.get(), updatedCursor.getEra());
-    }
-
     public Optional<Cursor> getCursor() {
         //Get last 50 blocks and select the lowest block number
         return cursorStorage.getCursorAtCurrentMinusOffset(storeProperties.getEventPublisherId(), 50);
