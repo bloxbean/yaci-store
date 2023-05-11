@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorag
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.InvalidTransactionStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.UtxoStorageImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
 import org.jooq.DSLContext;
@@ -32,14 +31,13 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, UtxoMapper utxoMapper, DSLContext dslContext) {
-        return new UtxoStorageImpl(utxoRepository, utxoMapper, dslContext);
+    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, DSLContext dslContext) {
+        return new UtxoStorageImpl(utxoRepository, dslContext);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository,
-                                                               UtxoMapper utxoMapper) {
-        return new InvalidTransactionStorageImpl(invalidTransactionRepository, utxoMapper);
+    public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository) {
+        return new InvalidTransactionStorageImpl(invalidTransactionRepository);
     }
 }

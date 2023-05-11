@@ -42,6 +42,10 @@ public class AddressUtxoEntity extends BaseEntity {
     @Column(name = "owner_addr")
     private String ownerAddr;
 
+    //Only set if address doesn't fit in ownerAddr field. Required for few Byron Era addr
+    @Column(name = "owner_addr_full")
+    private String ownerAddrFull;
+
     @Column(name = "owner_stake_addr")
     private String ownerStakeAddr;
 
