@@ -138,7 +138,6 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
-            setError();
             stopSyncOnError();
             throw new RuntimeException(e);
         }
