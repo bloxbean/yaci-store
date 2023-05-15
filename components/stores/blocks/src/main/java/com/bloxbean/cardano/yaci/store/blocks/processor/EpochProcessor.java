@@ -25,7 +25,7 @@ public class EpochProcessor {
     private final EpochService epochService;
     private int prevEpoch = -1;
 
-    @Scheduled(fixedRate = 60, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedRateString = "${store.blocks.epoch-calculation-interval:120}", timeUnit = TimeUnit.SECONDS)
     public void scheduleEpochDataAggregation() {
         log.info("Start epoch data aggregation ....");
         epochService.aggregateData();
