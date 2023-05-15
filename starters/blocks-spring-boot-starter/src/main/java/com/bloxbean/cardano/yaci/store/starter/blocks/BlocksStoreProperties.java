@@ -14,6 +14,7 @@ public class BlocksStoreProperties {
     @Setter
     public static final class Blocks  {
        private boolean enabled = true;
+       private int epochCalculationInterval = 120; //in seconds
     }
 
 }
