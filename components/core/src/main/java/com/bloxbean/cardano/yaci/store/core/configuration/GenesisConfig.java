@@ -5,14 +5,16 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.genesis.ByronGenesis;
+import com.bloxbean.cardano.yaci.store.core.genesis.ShelleyGenesis;
+import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
+import java.io.File;
 import java.math.BigInteger;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class GenesisConfig {
@@ -115,43 +117,50 @@ public class GenesisConfig {
     }
 
     private void parseByronGenesisFile(String byronGenesisFile) {
-        ObjectNode byronJsonNode = parseJson(byronGenesisFile);
-        startTime = byronJsonNode.get("startTime").asLong();
-        byronSlotLength = byronJsonNode.get("blockVersionData").get("slotDuration").asLong() / 1000; //in second
+        ByronGenesis byronGenesis = new ByronGenesis(new File(byronGenesisFile));
+        startTime = byronGenesis.getStartTime();
+        byronSlotLength = byronGenesis.getByronSlotLength(); //in second
+        long protocolMagic = byronGenesis.getProtocolMagic();
 
-        long protocolMagic = byronJsonNode.get("protocolConsts").get("protocolMagic").asLong();
         if (protocolMagic != storeProperties.getProtocolMagic())
             throw new StoreRuntimeException("Protocol magic mismatch. Expected : " + storeProperties.getProtocolMagic() +
                     ", found in byron genesis file : " + protocolMagic);
     }
 
     private void parseShelleyGenesisFile(String shelleyGenesisFile) {
-        ObjectNode shelleyJsonNode = parseJson(shelleyGenesisFile);
-        shelleyStartTime = shelleyJsonNode.get("systemStart").asText();
-        shelleySlotLength = shelleyJsonNode.get("slotLength").asDouble();
-        activeSlotsCoeff = shelleyJsonNode.get("activeSlotsCoeff").asDouble();
-        maxLovelaceSupply = new BigInteger(shelleyJsonNode.get("maxLovelaceSupply").asText());
-        epochLength = shelleyJsonNode.get("epochLength").asLong();
+        ShelleyGenesis shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
 
-        long networkMagic = shelleyJsonNode.get("networkMagic").asLong();
+        shelleyStartTime = shelleyGenesis.getSystemStart();
+        shelleySlotLength = shelleyGenesis.getSlotLength();
+        activeSlotsCoeff = shelleyGenesis.getActiveSlotsCoeff();
+        maxLovelaceSupply = shelleyGenesis.getMaxLovelaceSupply();
+        epochLength = shelleyGenesis.getEpochLength();
+
+        long networkMagic = shelleyGenesis.getNetworkMagic();
         if (networkMagic != storeProperties.getProtocolMagic())
             throw new StoreRuntimeException("Protocol magic mismatch. Expected : " + storeProperties.getProtocolMagic() +
                     ", found in shelley genesis file : " + networkMagic);
     }
 
-    private ObjectNode parseJson(String genesisFile) {
-        Path path = Paths.get(genesisFile);
-        if (!path.toFile().exists()) {
-            throw new IllegalArgumentException("Genesis file not found at " + genesisFile);
+    public List<GenesisBalance> getGenesisBalances() {
+        //Parsing on-demand, as we don't want to keep the balances in memory
+        List<GenesisBalance> genesisBalances = new ArrayList<>();
+        if (!StringUtil.isEmpty(storeProperties.getByronGenesisFile())) {
+            ByronGenesis byronGenesis = new ByronGenesis(new File(storeProperties.getByronGenesisFile()));
+            if (byronGenesis.getAvvmGenesisBalances() != null && byronGenesis.getAvvmGenesisBalances().size() > 0)
+                genesisBalances.addAll(byronGenesis.getAvvmGenesisBalances());
+            if (byronGenesis.getNonAvvmGenesisBalances() != null && byronGenesis.getNonAvvmBalances().size() > 0)
+                genesisBalances.addAll(byronGenesis.getNonAvvmGenesisBalances());
         }
 
-        ObjectNode jsonNode;
-        try {
-            jsonNode = (ObjectNode)objectMapper.readTree(path.toFile());
-        } catch (IOException e) {
-            throw new StoreRuntimeException("Error parsing genesis file : " + genesisFile, e);
+        if (!StringUtil.isEmpty(storeProperties.getShelleyGenesisFile())) {
+          ShelleyGenesis shelleyGenesis = new ShelleyGenesis(new File(storeProperties.getShelleyGenesisFile()));
+
+          if (shelleyGenesis.getInitialFunds() != null && shelleyGenesis.getInitialFunds().size() > 0)
+              genesisBalances.addAll(shelleyGenesis.getInitialFunds());
         }
-        return jsonNode;
+
+        return genesisBalances;
     }
 
 }

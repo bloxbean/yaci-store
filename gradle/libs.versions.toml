@@ -9,3 +9,5 @@ guava = "com.google.guava:guava:31.1-jre"
 springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0"
 mapstruct="org.mapstruct:mapstruct:1.5.3.Final"
 mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.3.Final"
+
+assertj-core="org.assertj:assertj-core:3.24.2"

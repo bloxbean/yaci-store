@@ -4,6 +4,8 @@ dependencies {
 
     implementation libs.yaci
     implementation libs.cardano.client.lib
+
+    testImplementation libs.assertj.core
 }
 
 publishing {

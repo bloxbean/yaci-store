@@ -74,6 +74,7 @@ public class StartService {
                             .blockTime(genesisConfig.getStartTime(protocolMagic))
                             .block(0)
                             .era(startPoint.get().getGenesisBlockEra())
+                            .genesisBalances(genesisConfig.getGenesisBalances())
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();
