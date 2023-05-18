@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,6 +18,8 @@ public class GenesisBlockEvent {
     private long block;
     private long slot;
     private Era era;
+
+    private List<GenesisBalance> genesisBalances;
 
     private boolean remotePublish; //Is published by a remote publisher
 }
