@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.protocolparams.service;
 
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.DataItem;
+import co.nstant.in.cbor.model.Special;
 import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
@@ -122,12 +123,16 @@ public class ProtocolParamService {
         if (ops.size() == array.getDataItems().size()) {
             int index = 0;
             for (DataItem di : array.getDataItems()) {
+                if (di == Special.BREAK)
+                    continue;
                 BigInteger val = ((UnsignedInteger) di).getValue();
                 costModel.put(ops.get(index++), val.longValue());
             }
         } else {
             int index = 0;
             for (DataItem di : array.getDataItems()) {
+                if (di == Special.BREAK)
+                    continue;
                 BigInteger val = ((UnsignedInteger) di).getValue();
                 costModel.put(String.format("%03d", index++), val.longValue());
             }
