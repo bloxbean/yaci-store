@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.Util;
 import com.bloxbean.cardano.client.transaction.spec.Redeemer;
@@ -14,10 +16,8 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.math.BigInteger;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -76,7 +76,8 @@ public class RedeemerDatumMatcher {
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
                         return scriptContext;
                     } else if (deRedeemer.getTag() == RedeemerTag.Reward) {
-                        log.info("Redeemer Reward : " + transaction.getTxHash());
+                        if (log.isDebugEnabled())
+                            log.info("Redeemer Reward : " + transaction.getTxHash());
                         ScriptContext scriptContext = findRewardScriptForRedeemer(deRedeemer, transaction, scriptsMap).orElse(new ScriptContext());
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
                         return scriptContext;
@@ -120,8 +121,28 @@ public class RedeemerDatumMatcher {
     }
 
     public Optional<ScriptContext> findRewardScriptForRedeemer(Redeemer redeemer, Transaction transaction, Map<String, PlutusScript> scriptMap) {
-        //TODO -- pending
-        return Optional.empty();
+        Map<String, BigInteger> withdrawals = transaction.getBody().getWithdrawals();
+        if (withdrawals == null || withdrawals.size() == 0)
+            return Optional.empty();
+
+        List<String> rewardAddresses = withdrawals.entrySet().stream()
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toList());
+
+        int index = redeemer.getIndex().intValue();
+        String rewardAddress = rewardAddresses.get(index);
+
+        Address address = new Address(HexUtil.decodeHexString(rewardAddress));
+        String delegationHash = HexUtil.encodeHexString(address.getDelegationHash().get());
+
+        PlutusScript plutusScript = null;
+        if (delegationHash != null)
+            plutusScript = scriptMap.get(delegationHash);
+
+        ScriptContext scriptContext = new ScriptContext();
+        scriptContext.setPlutusScript(plutusScript);
+
+        return Optional.of(scriptContext);
     }
 
     public Optional<ScriptContext> findCertScriptForRedeemer(Redeemer redeemer, List<Certificate> certificates, Map<String, PlutusScript> scriptMap) {
@@ -143,6 +164,7 @@ public class RedeemerDatumMatcher {
             stakeCredential = ((StakeDeregistration) certificate).getStakeCredential();
 
         //TODO -- For other certificate types ??
+        //PoolRegistration, PoolRetirement, GenesisKeyDelegation, MoveInstantaneousRewardsCert
 
         PlutusScript plutusScript = null;
         if (stakeCredential != null)
