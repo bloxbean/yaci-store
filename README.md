@@ -1,8 +1,10 @@
-[![Clean, Build](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-indexer/actions/workflows/build.yml)
+<div align="center">
+<img src="static/YaciStore.png" width="200">
 
-# Yaci Store (WIP)
+<h4>A Cardano datastore Java library using [Yaci](https://github.com/bloxbean/yaci)</h4>
 
-A Cardano datastore implementation using [Yaci](https://github.com/bloxbean/yaci)
+[![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
+</div>
 
 ## How to Build
 
