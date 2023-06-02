@@ -1,7 +1,7 @@
 <div align="center">
 <img src="static/YaciStore.png" width="200">
 
-<h4>A Cardano datastore Java library using [Yaci](https://github.com/bloxbean/yaci)</h4>
+<h4>A Cardano datastore Java library using Yaci</h4>
 
 [![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
 </div>
