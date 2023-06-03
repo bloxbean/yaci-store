@@ -1,0 +1,15 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Staking Module'
+                description = 'Yaci Store Staking Module'
+            }
+        }
+    }
+}
