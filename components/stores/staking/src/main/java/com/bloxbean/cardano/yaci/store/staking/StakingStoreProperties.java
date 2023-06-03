@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.starter.staking;
+package com.bloxbean.cardano.yaci.store.staking;
 
 import lombok.Getter;
 import lombok.Setter;
