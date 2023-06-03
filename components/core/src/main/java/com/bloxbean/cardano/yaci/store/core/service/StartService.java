@@ -26,6 +26,7 @@ public class StartService {
     private final TipFinderService tipFinderService;
     private final GenesisBlockFinder genesisBlockFinder;
     private final CursorService cursorService;
+    private final InitService initService;
     private final StoreProperties storeProperties;
 
     private final GenesisConfig genesisConfig;
@@ -48,6 +49,8 @@ public class StartService {
         log.info("Start time              : " + genesisConfig.getStartTime(protocolMagic));
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
+
+        initService.init();
 
         alreadyStarted = true;
         log.info("Application is ready. Let's start the sync process ...");
