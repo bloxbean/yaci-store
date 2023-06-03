@@ -85,6 +85,7 @@ public class BlockFetchService implements BlockChainDataListener {
         final long blockTime = eraService.blockTime(era, slot);
 
         EventMetadata eventMetadata = EventMetadata.builder()
+                .mainnet(storeProperties.isMainnet())
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .epochNumber(epochNumber)
@@ -183,6 +184,7 @@ public class BlockFetchService implements BlockChainDataListener {
             long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
 
             EventMetadata eventMetadata = EventMetadata.builder()
+                    .mainnet(storeProperties.isMainnet())
                     .era(Era.Byron)
                     .block(blockNumber)
                     .blockHash(byronBlock.getHeader().getBlockHash())
@@ -221,6 +223,7 @@ public class BlockFetchService implements BlockChainDataListener {
             long blockNumber = byronEbBlock.getHeader().getConsensusData().getDifficulty().longValue();
 
             EventMetadata eventMetadata = EventMetadata.builder()
+                    .mainnet(storeProperties.isMainnet())
                     .era(Era.Byron)
                     .block(blockNumber)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
