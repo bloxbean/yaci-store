@@ -23,9 +23,12 @@ public class YaciStoreProperties {
         private String n2cNodeSocketPath;
         private String n2cHost;
         private int n2cPort;
-
         private String submitApiUrl;
         private String mempoolMonitoringEnabled;
+
+        private long shelleyStartSlot;
+        private String shelleyStartBlockhash;
+        private long shelleyStartBlock;
 
         private long syncStartSlot;
         private String syncStartBlockhash;
