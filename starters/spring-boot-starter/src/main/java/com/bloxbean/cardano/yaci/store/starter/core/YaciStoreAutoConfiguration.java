@@ -119,6 +119,10 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setSubmitApiUrl(properties.getCardano().getSubmitApiUrl());
         storeProperties.setMempoolMonitoringEnabled(properties.getCardano().getMempoolMonitoringEnabled());
 
+        storeProperties.setShelleyStartSlot(properties.getCardano().getShelleyStartSlot());
+        storeProperties.setShelleyStartBlockhash(properties.getCardano().getShelleyStartBlockhash());
+        storeProperties.setShelleyStartBlock(properties.getCardano().getShelleyStartBlock());
+
         storeProperties.setSyncStartSlot(properties.getCardano().getSyncStartSlot());
         storeProperties.setSyncStartBlockhash(properties.getCardano().getSyncStartBlockhash());
         storeProperties.setSyncStartByronBlockNumber(properties.getCardano().getSyncStartByronBlockNumber());

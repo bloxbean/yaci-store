@@ -21,6 +21,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String n2cHost;
     private int n2cPort;
 
+    private long shelleyStartSlot;
+    private String shelleyStartBlockhash;
+    private long shelleyStartBlock;
+
     private String submitApiUrl;
     private String mempoolMonitoringEnabled;
 
@@ -33,4 +37,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private String byronGenesisFile;
     private String shelleyGenesisFile;
+
+    //derived from protocol magic. No need to set
+    private boolean mainnet;
 }

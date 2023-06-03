@@ -9,6 +9,7 @@ import lombok.*;
 @Builder(toBuilder=true)
 @ToString
 public class EventMetadata {
+    private boolean mainnet;
     private Era era;
     private int epochNumber;
     private long block;
