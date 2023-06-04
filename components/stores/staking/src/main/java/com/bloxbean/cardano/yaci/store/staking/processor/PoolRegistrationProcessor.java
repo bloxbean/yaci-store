@@ -9,7 +9,6 @@ import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.mapper.PoolMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -24,7 +23,6 @@ import java.util.List;
 @Slf4j
 public class PoolRegistrationProcessor {
     private final PoolStorage poolStorage;
-    private final PoolMapper mapper;
 
     @EventListener
     @Transactional

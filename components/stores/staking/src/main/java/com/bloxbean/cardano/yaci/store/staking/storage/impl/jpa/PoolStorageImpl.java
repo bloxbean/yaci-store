@@ -9,6 +9,9 @@ import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.model.PoolRetire
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.PoolRegistrationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.PoolRetirementRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,7 +21,6 @@ public class PoolStorageImpl implements PoolStorage {
     private final PoolRegistrationRepository poolRegistrationRepository;
     private final PoolRetirementRepository poolRetirementRepository;
     private final PoolMapper mapper;
-
 
     @Override
     public void savePoolRegistrations(List<PoolRegistration> poolRegistrations) {
@@ -36,6 +38,28 @@ public class PoolStorageImpl implements PoolStorage {
                 .collect(Collectors.toList());
 
         poolRetirementRepository.saveAll(poolRetirementEntities);
+    }
+
+    @Override
+    public List<PoolRegistration> findPoolRegistrations(int page, int count) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, Sort.by("slot").descending());
+
+        return poolRegistrationRepository.findAllPools(sortedBySlot)
+                .stream()
+                .map(mapper::toPoolRegistration)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PoolRetirement> findPoolRetirements(int page, int count) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, Sort.by("slot").descending());
+
+        return poolRetirementRepository.findAllPools(sortedBySlot)
+                .stream()
+                .map(mapper::toPoolRetirement)
+                .collect(Collectors.toList());
     }
 
     @Override

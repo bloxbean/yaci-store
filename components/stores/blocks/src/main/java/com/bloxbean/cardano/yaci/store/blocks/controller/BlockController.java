@@ -2,12 +2,15 @@ package com.bloxbean.cardano.yaci.store.blocks.controller;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
+import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import com.bloxbean.cardano.yaci.store.blocks.service.BlockService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @RestController("BlockController")
 @RequestMapping("${apiPrefix}/blocks")
@@ -36,6 +39,12 @@ public class BlockController {
         if (p > 0)
             p = p - 1;
         return blockService.getBlocks(p, count);
+    }
+
+    @GetMapping("pool/{poolId}")
+    @Operation(description = "Get block by slot leader and epoch")
+    public List<PoolBlock> getBlocksBySlotLeaderEpoch(@PathVariable String poolId, @RequestParam int epoch) {
+        return blockService.getBlocksBySlotLeaderEpoch(poolId, epoch);
     }
 
 }

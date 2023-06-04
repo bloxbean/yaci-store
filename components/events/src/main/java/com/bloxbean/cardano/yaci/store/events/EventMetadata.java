@@ -11,6 +11,7 @@ import lombok.*;
 public class EventMetadata {
     private boolean mainnet;
     private Era era;
+    private String slotLeader;
     private int epochNumber;
     private long block;
     private String blockHash;

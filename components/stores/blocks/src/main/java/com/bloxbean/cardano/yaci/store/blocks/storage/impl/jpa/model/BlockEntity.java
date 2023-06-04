@@ -80,4 +80,7 @@ public class BlockEntity extends BaseEntity {
 
     @Column(name = "no_of_txs")
     private Integer noOfTxs;
+
+    @Column(name = "slot_leader")
+    private String slotLeader;
 }
