@@ -23,6 +23,7 @@ public class BlockSummary {
     private BigInteger totalOutput;
     private String era;
     private String issuerVkey;
+    private String slotLeader;
     private long blockBodySize;
     private int noOfTxs;
 }

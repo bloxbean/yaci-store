@@ -25,6 +25,18 @@ create table block
     update_datetime  timestamp
 );
 
+CREATE INDEX idx_block_number
+    ON block(number);
+
+CREATE INDEX idx_block_epoch
+    ON block(epoch);
+
+CREATE INDEX idx_block_slot_leader
+    ON block(slot_leader);
+
+CREATE INDEX idx_block_slot
+    ON block(slot);
+
 create table epoch
 (
     number bigint       not null primary key,
@@ -39,8 +51,6 @@ create table epoch
     update_datetime     timestamp
 );
 
-CREATE INDEX idx_block_number
-    ON block(number);
 
 drop table if exists rollback;
 create table rollback
