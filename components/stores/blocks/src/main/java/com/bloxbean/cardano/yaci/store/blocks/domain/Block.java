@@ -36,4 +36,5 @@ public class Block {
     private String blockBodyHash;
     private String protocolVersion;
     private int noOfTxs;
+    private String slotLeader;
 }

@@ -59,6 +59,7 @@ public class ByronBlockProcessor {
                 .totalOutput(BigInteger.ZERO)
                 .prevHash(byronBlock.getHeader().getPrevBlock())
                 .blockTime(event.getEventMetadata().getBlockTime())
+                .slotLeader(event.getEventMetadata().getSlotLeader())
                 .build();
 
         //Find total tx output
@@ -88,6 +89,7 @@ public class ByronBlockProcessor {
                 .epochNumber(event.getEventMetadata().getEpochNumber())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
                 .blockTime(event.getEventMetadata().getBlockTime())
+                .slotLeader(event.getEventMetadata().getSlotLeader())
                 .build();
 
         blockStorage.save(block);

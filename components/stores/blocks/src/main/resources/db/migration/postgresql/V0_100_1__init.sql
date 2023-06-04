@@ -20,6 +20,7 @@ create table block
     vrf_result       jsonb,
     vrf_vkey         varchar(255),
     no_of_txs        integer,
+    slot_leader      varchar(255),
     create_datetime  timestamp,
     update_datetime  timestamp
 );
