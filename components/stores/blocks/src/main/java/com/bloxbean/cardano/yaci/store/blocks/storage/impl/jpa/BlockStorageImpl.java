@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockSummary;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
+import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.BlockMapper;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.BlockEntity;
@@ -67,6 +68,20 @@ public class BlockStorageImpl implements BlockStorage {
     public Optional<Block> findByBlock(long block) {
         return blockRepository.findByNumber(block)
                 .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+    }
+
+    @Override
+    public List<PoolBlock> findBlocksBySlotLeaderAndEpoch(String slotLeader, int epoch) {
+        return blockRepository.getBlockEntitiesBySlotLeaderAndEpochNumber(slotLeader, epoch)
+                .stream()
+                .map(blockEntity -> {
+                    return PoolBlock.builder()
+                            .blockHash(blockEntity.getHash())
+                            .blockNumber(blockEntity.getNumber())
+                            .epoch(blockEntity.getEpochNumber())
+                            .poolId(blockEntity.getSlotLeader())
+                            .build();
+                }).collect(Collectors.toList());
     }
 
     @Override

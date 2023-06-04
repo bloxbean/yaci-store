@@ -24,6 +24,8 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
     @Query("select b from BlockEntity b")
     Slice<BlockEntity> findAllBlocks(Pageable pageable);
 
+    List<BlockEntity> getBlockEntitiesBySlotLeaderAndEpochNumber(String slotLeader, int epochNumber);
+
     int deleteBySlotGreaterThan(Long slot);
 }
 

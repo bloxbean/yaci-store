@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
@@ -83,12 +84,14 @@ public class BlockFetchService implements BlockChainDataListener {
         eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
         final long blockTime = eraService.blockTime(era, slot);
+        final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .mainnet(storeProperties.isMainnet())
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .epochNumber(epochNumber)
+                .slotLeader(slotLeader)
                 .blockHash(blockHeader.getHeaderBody().getBlockHash())
                 .blockTime(blockTime)
                 .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
@@ -182,6 +185,8 @@ public class BlockFetchService implements BlockChainDataListener {
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
+            final String slotLeader = SlotLeaderUtil
+                    .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
@@ -191,6 +196,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .blockTime(blockTime)
                     .prevBlockHash(byronBlock.getHeader().getPrevBlock())
                     .epochNumber((int) epochNumber)
+                    .slotLeader(slotLeader)
                     .slot(absoluteSlot)
                     .syncMode(syncMode)
                     .build();

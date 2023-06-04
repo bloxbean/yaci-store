@@ -9,6 +9,11 @@ public interface StakingStorage {
     void saveRegistrations(List<StakeRegistrationDetail> stakeRegistrations);
     void saveDelegations(List<Delegation> delegations);
 
+    List<StakeRegistrationDetail> findRegistrations(int page, int count);
+    List<StakeRegistrationDetail> findDeregistrations(int page, int count);
+
+    List<Delegation> findDelegations(int page, int count);
+
     int deleteRegistrationsBySlotGreaterThan(Long slot);
     int deleteDelegationsBySlotGreaterThan(Long slot);
 }

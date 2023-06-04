@@ -51,6 +51,10 @@ GET http://localhost:8080/api/v1/txs/52dcb5409c1d49d5b3434e1efac13dfbb947e47711b
 GET http://localhost:8080/api/v1/blocks/376120
 
 ###
+GET http://localhost:8080/api/v1/blocks/pool/42946a3fe080dd99af599bfff10a05cd3de19bd38ed85b25dee35dd5?epoch=8
+
+
+###
 GET http://localhost:8080/api/v1/blocks
 
 ###
@@ -78,3 +82,21 @@ GET http://localhost:8080/api/v1/addresses/addr_test1wzcppsyg36f65jydjsd6fqu3xm7
 GET http://localhost:8080/api/v1/txs/93e43aa2e11dec72a28ac8c9692bdf91a6b5bd995106fcc90a3c45af57c7ea70/utxos
 
 ###
+
+### pools ###
+GET http://localhost:8080/api/v1/pools/registrations?page=0&count=10
+
+###
+GET http://localhost:8080/api/v1/pools/retirements?page=0&count=10
+
+###
+## Staking ##
+
+GET http://localhost:8080/api/v1/stake/registrations
+###
+
+GET http://localhost:8080/api/v1/stake/deregistrations
+
+###
+GET http://localhost:8080/api/v1/stake/delegations
+##

@@ -56,6 +56,7 @@ public class BlockProcessor {
                 .protocolVersion(blockHeader.getHeaderBody().getProtocolVersion().get_1()
                         + "." + blockHeader.getHeaderBody().getProtocolVersion().get_2())
                 .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
+                .slotLeader(blockHeaderEvent.getMetadata().getSlotLeader())
                 .build();
         blockStorage.save(block);
     }
