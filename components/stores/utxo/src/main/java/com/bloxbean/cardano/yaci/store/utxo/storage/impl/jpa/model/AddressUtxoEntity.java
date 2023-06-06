@@ -39,6 +39,9 @@ public class AddressUtxoEntity extends BaseEntity {
     @Column(name = "block_hash")
     private String blockHash;
 
+    @Column(name = "epoch")
+    private Integer epoch;
+
     @Column(name = "owner_addr")
     private String ownerAddr;
 
@@ -78,6 +81,9 @@ public class AddressUtxoEntity extends BaseEntity {
 
     @Column(name = "spent_at_slot")
     private Long spentAtSlot;
+
+    @Column(name = "spent_epoch")
+    private Integer spentEpoch;
 
     @Column(name = "spent_tx_hash")
     private String spentTxHash;

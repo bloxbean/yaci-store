@@ -7,4 +7,6 @@ import java.util.List;
 public interface TxMetadataStorage {
     List<TxMetadataLabel> saveAll(List<TxMetadataLabel> txMetadataLabelList);
     List<TxMetadataLabel> findByTxHash(String txHash);
+
+    int deleteBySlotGreaterThan(long slot);
 }

@@ -34,4 +34,9 @@ public class TxMetadataStorageImpl implements TxMetadataStorage {
                 .toList();
     }
 
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return metadataLabelRepository.deleteBySlotGreaterThan(slot);
+    }
+
 }

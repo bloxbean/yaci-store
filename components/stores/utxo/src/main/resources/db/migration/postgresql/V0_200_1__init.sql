@@ -6,6 +6,7 @@ create table address_utxo
     slot                  bigint,
     block                 bigint,
     block_hash            varchar(255),
+    epoch                 integer,
     lovelace_amount       bigint       null,
     amounts               jsonb,
     data_hash             varchar(255),
@@ -19,6 +20,7 @@ create table address_utxo
     reference_script_hash varchar(255) null,
     spent                 boolean,
     spent_at_slot         bigint,
+    spent_epoch           integer,
     spent_tx_hash         varchar(255) null,
     is_collateral_return  boolean,
     create_datetime       timestamp,
@@ -43,6 +45,12 @@ CREATE INDEX idx_address_utxo_owner_stakekey_hash
 
 CREATE INDEX idx_reference_script_hash
     ON address_utxo(reference_script_hash);
+
+CREATE INDEX idx_address_utxo_epoch
+    ON address_utxo(epoch);
+
+CREATE INDEX idx_address_utxo_spent_epoch
+    ON address_utxo(spent_epoch);
 
 drop table if exists invalid_transaction;
 create table invalid_transaction

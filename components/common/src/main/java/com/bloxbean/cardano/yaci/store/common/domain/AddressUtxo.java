@@ -23,6 +23,7 @@ public class AddressUtxo {
     private Long slot;
     private Long block;
     private String blockHash;
+    private Integer epoch;
     private String ownerAddr;
     private String ownerStakeAddr;
     private String ownerPaymentCredential;
@@ -35,6 +36,7 @@ public class AddressUtxo {
     private String referenceScriptHash;
     private Boolean spent;
     private Long spentAtSlot;
+    private Integer spentEpoch;
     private String spentTxHash;
     private Boolean isCollateralReturn;
 }
