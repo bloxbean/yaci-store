@@ -80,6 +80,8 @@ public class UtxoProcessor {
                                     .txHash(utxoKey.getTxHash())
                                     .outputIndex(utxoKey.getOutputIndex()).build());
                     addressUtxo.setSpent(true);
+                    addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
                 }).collect(Collectors.toList());
@@ -134,6 +136,8 @@ public class UtxoProcessor {
                             );
 
                     addressUtxo.setSpent(true);
+                    addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
                 }).collect(Collectors.toList());
@@ -205,6 +209,7 @@ public class UtxoProcessor {
                 .slot(eventMetadata.getSlot())
                 .block(eventMetadata.getBlock())
                 .blockHash(eventMetadata.getBlockHash())
+                .epoch(eventMetadata.getEpochNumber())
                 .txHash(utxo.getTxHash())
                 .outputIndex(utxo.getIndex())
                 .ownerAddr(utxo.getAddress())

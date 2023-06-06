@@ -51,6 +51,7 @@ public class GenesisUtxoProcessor {
                     .slot(genesisBlockEvent.getSlot())
                     .block(genesisBlockEvent.getBlock())
                     .blockHash(genesisBlockEvent.getBlockHash())
+                    .epoch(0)
                     .txHash(genesisBalance.getTxnHash())
                     .outputIndex(0)
                     .ownerAddr(genesisBalance.getAddress())
