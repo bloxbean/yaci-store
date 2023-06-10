@@ -100,3 +100,11 @@ GET http://localhost:8080/api/v1/stake/deregistrations
 ###
 GET http://localhost:8080/api/v1/stake/delegations
 ##
+###
+http://localhost:8080/api/v1/stake/registrations?page=0&count=20
+
+###
+#-- Test Data (Preprod)
+#Contract tx
+#Tx : 9f60322a6aa2841196cb56b573ba7abefe6d8cfe6cf6cdb2320e97a5b43e32ac for script
+#RefInput: 11b8e9293d6fd63e4da589f7db03e20e7295db0472b047d8367959965b8ca204#0

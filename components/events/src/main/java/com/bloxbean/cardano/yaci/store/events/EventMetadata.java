@@ -18,6 +18,7 @@ public class EventMetadata {
     private long blockTime;
     private String prevBlockHash;
     private long slot;
+    private long epochSlot;
     private int noOfTxs;
     private boolean syncMode;
 

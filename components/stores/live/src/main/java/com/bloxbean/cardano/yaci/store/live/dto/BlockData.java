@@ -17,13 +17,16 @@ public class BlockData {
     private ResType resType = ResType.BLOCK_DATA;
     private long time;
     private long number;
-   // private long epoch;
+    private long epoch;
+    private String era;
     private long slot;
-    private String mintedBy;
+    private long epochSlot;
+    private long slotsPerEpoch;
+    private String slotLeader;
     private String hash;
     private long size; //block size in bytes
     private int sizePerct;
     private int nTx;
     private long fee;
-
+    private long blockTime;
 }
