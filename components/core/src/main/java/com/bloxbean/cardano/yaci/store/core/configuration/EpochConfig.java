@@ -20,4 +20,16 @@ public class EpochConfig {
             return (int) (shelleyStartEpoch + epochsAfterShelley);
         }
     }
+
+    public int shelleyEpochSlot(long shelleyStartSlot, long absoluteSlot) {
+        int epoch = epochFromSlot(shelleyStartSlot, Era.Shelley, absoluteSlot);
+        long shelleyStartEpoch = shelleyStartSlot / genesisConfig.slotsPerEpoch(Era.Byron);
+
+        long epochsFroShelleyStart = epoch - shelleyStartEpoch;
+        long currentEpochStartSlot = epochsFroShelleyStart * genesisConfig.slotsPerEpoch(Era.Shelley);
+
+        long epochSlot = absoluteSlot - (currentEpochStartSlot + shelleyStartSlot);
+
+        return (int) epochSlot;
+    }
 }
