@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.live.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.live.BlocksWebSocketHandler;
@@ -11,8 +12,8 @@ import com.bloxbean.cardano.yaci.store.live.dto.BlockData;
 import com.bloxbean.cardano.yaci.store.live.dto.RecentTx;
 import com.bloxbean.cardano.yaci.store.live.dto.RecentTxs;
 import com.bloxbean.cardano.yaci.store.live.mapper.BlockDataMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -29,27 +30,18 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class LiveEventProcessor {
     private DecimalFormat df = new DecimalFormat("0.00");
 
-    @Autowired
-    private BlockDataMapper blockDataMapper;
+    private final BlockDataMapper blockDataMapper;
+    private final BlocksWebSocketHandler socketHandler;
+    private final EraService eraService;
+    private final BlockCache blockCache;
+    private final RecentTxCache recentTxCache;
 
-    @Autowired
-    private BlocksWebSocketHandler socketHandler;
-
-    private BlockCache blockCache;
-
-    private RecentTxCache recentTxCache;
-
-
-    public LiveEventProcessor(BlockCache blockCache, RecentTxCache recentTxCache) {
-        this.blockCache = blockCache;
-        this.recentTxCache = recentTxCache;
-        if (log.isDebugEnabled())
-            log.debug("LiveBlockEventProcessor started !!!");
-    }
+    private long slotsPerEpoch;
 
     @EventListener
     @Async
@@ -66,8 +58,18 @@ public class LiveEventProcessor {
             log.debug("Live Blk # : " + blockHeader.getHeaderBody().getBlockNumber() + ",  Size : " + df.format(blockHeader.getHeaderBody().getBlockBodySize() / 1024.0) + " KB");
         }
 
+        if (slotsPerEpoch == 0)
+            slotsPerEpoch = eraService.slotsPerEpoch(blockHeaderEvent.getMetadata().getEra());
+
         BlockData blockData = blockDataMapper.blockHeaderToBlockData(blockHeader);
         blockData.setNTx(blockHeaderEvent.getMetadata().getNoOfTxs());
+        blockData.setBlockTime(blockHeaderEvent.getMetadata().getBlockTime());
+        blockData.setSlotLeader(blockHeaderEvent.getMetadata().getSlotLeader());
+        blockData.setEpoch(blockHeaderEvent.getMetadata().getEpochNumber());
+        blockData.setEra(blockHeaderEvent.getMetadata().getEra().toString());
+        blockData.setSlot(blockHeaderEvent.getMetadata().getSlot());
+        blockData.setEpochSlot(blockHeaderEvent.getMetadata().getEpochSlot());
+        blockData.setSlotsPerEpoch(slotsPerEpoch);
 //        blockData.setFee(); //TODO -- Get total fee from somewhere
         blockCache.addBlock(blockData);
         try {
