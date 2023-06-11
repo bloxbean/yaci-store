@@ -8,6 +8,7 @@ pluginManagement {
 
 rootProject.name = 'yaci-store'
 include 'applications:all'
+include 'applications:utxo-indexer'
 include 'applications:gateway'
 
 include 'components:core'
