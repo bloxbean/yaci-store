@@ -4,8 +4,9 @@ import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.live.cache.BlockCache;
 import com.bloxbean.cardano.yaci.store.live.cache.RecentTxCache;
 import com.bloxbean.cardano.yaci.store.live.dto.*;
+import com.bloxbean.cardano.yaci.store.live.service.InitialDataProviderService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -17,12 +18,12 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class BlocksWebSocketHandler extends TextWebSocketHandler {
-    @Autowired
-    private BlockCache blockCache;
-    @Autowired
-    private RecentTxCache recentTxCache;
+    private final BlockCache blockCache;
+    private final RecentTxCache recentTxCache;
+    private final InitialDataProviderService initialDataProvider;
 
     private List<WebSocketSession> sessions = new CopyOnWriteArrayList<>();
 
@@ -40,9 +41,24 @@ public class BlocksWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         if (log.isDebugEnabled())
             log.info("Connection Established --- " + session);
+
+        List<RecentTx> recentTxList;
+        if (recentTxCache.getRecentTxs().size() == 0) {
+            recentTxList = initialDataProvider.getRecentTransactions();
+        } else {
+            recentTxList = recentTxCache.getRecentTxs();
+        }
+
+        List<BlockData> blocks;
+        if (blockCache.getBlocks().size() == 0) {
+            blocks = initialDataProvider.getRecentBlocks();
+        } else {
+            blocks = blockCache.getBlocks();
+        }
+
         OnJoinData onJoinData = OnJoinData.builder()
-                .blocks(blockCache.getBlocks())
-                .recentTxs(recentTxCache.getRecentTxs())
+                .blocks(blocks)
+                .recentTxs(recentTxList)
                 .build();
 
         TextMessage content = new TextMessage(JsonUtil.getPrettyJson(onJoinData));

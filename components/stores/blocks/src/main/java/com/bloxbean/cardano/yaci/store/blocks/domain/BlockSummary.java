@@ -26,4 +26,5 @@ public class BlockSummary {
     private String slotLeader;
     private long blockBodySize;
     private int noOfTxs;
+    private long blockTime;
 }
