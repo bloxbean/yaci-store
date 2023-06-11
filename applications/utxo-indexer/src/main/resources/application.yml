@@ -1,0 +1,24 @@
+spring:
+  banner:
+    location: classpath:/banner.txt
+#  jpa:
+#    hibernate:
+#      ddl-auto: none
+#    properties:
+#      hibernate:
+#        show_sql: false
+#        generate_statistics: false
+#        jdbc:
+#          batch_size: 30
+#          order_inserts: true
+  flyway:
+    locations: classpath:db/migration/{vendor}
+    out-of-order: true
+
+apiPrefix: /api/v1
+
+logging:
+  file:
+    name: ./logs/yaci-store.log
+
+
