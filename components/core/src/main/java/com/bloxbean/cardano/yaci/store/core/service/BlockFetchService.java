@@ -83,6 +83,7 @@ public class BlockFetchService implements BlockChainDataListener {
         final long slot = blockHeader.getHeaderBody().getSlot();
         eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
+        final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
         final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
 
@@ -96,6 +97,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 .blockTime(blockTime)
                 .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
                 .slot(slot)
+                .epochSlot(epochSlot)
                 .noOfTxs(transactions.size())
                 .syncMode(syncMode)
                 .build();
@@ -178,9 +180,10 @@ public class BlockFetchService implements BlockChainDataListener {
     public void onByronBlock(ByronMainBlock byronBlock) {
         checkError();
         try {
+            long epochSlot = byronBlock.getHeader().getConsensusData().getSlotId().getSlot();
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronBlock.getHeader().getConsensusData().getSlotId().getEpoch(),
-                    byronBlock.getHeader().getConsensusData().getSlotId().getSlot());
+                    epochSlot);
             final long epochNumber = byronBlock.getHeader().getConsensusData().getSlotId().getEpoch();
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
@@ -198,6 +201,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .epochNumber((int) epochNumber)
                     .slotLeader(slotLeader)
                     .slot(absoluteSlot)
+                    .epochSlot(epochSlot)
                     .syncMode(syncMode)
                     .build();
 
@@ -237,6 +241,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .prevBlockHash(byronEbBlock.getHeader().getPrevBlock())
                     .epochNumber((int) epochNumber)
                     .slot(absoluteSlot)
+                    .epochSlot(0)
                     .syncMode(syncMode)
                     .build();
 

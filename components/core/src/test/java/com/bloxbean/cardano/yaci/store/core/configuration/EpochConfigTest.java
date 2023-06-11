@@ -86,5 +86,26 @@ class EpochConfigTest {
             int epoch = epochConfig.epochFromSlot(mainnetShellyStartSlot, Era.Shelley, 24791234);
             assertEquals(254, epoch);
         }
+
+        @Test
+        void epochSlot_1() {
+            long absoluteSlot = 94807439L;
+            long epochSlot = epochConfig.shelleyEpochSlot(mainnetShellyStartSlot, absoluteSlot);
+            assertEquals(26639, epochSlot);
+        }
+
+        @Test
+        void epochSlot_2() {
+            long absoluteSlot = 94348799L;
+            long epochSlot = epochConfig.shelleyEpochSlot(mainnetShellyStartSlot, absoluteSlot);
+            assertEquals(431999, epochSlot);
+        }
+
+        @Test
+        void epochSlot_3() {
+            long absoluteSlot = 94348926L;
+            long epochSlot = epochConfig.shelleyEpochSlot(mainnetShellyStartSlot, absoluteSlot);
+            assertEquals(126, epochSlot);
+        }
     }
 }

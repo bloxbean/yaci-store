@@ -1,5 +1,6 @@
 dependencies {
     api project(":components:common")
+    api project(":components:core")
     api project(":components:events")
 
     implementation(libs.guava)
