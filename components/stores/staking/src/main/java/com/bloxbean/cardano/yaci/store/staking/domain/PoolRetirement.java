@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.domain;
 
+import com.bloxbean.cardano.client.crypto.Bech32;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -26,4 +28,10 @@ public class PoolRetirement {
     private long block;
     private String blockHash;
     private long blockTime;
+
+    public String getPoolIdBech32() {
+        if (poolId == null)
+            return "";
+        return Bech32.encode(HexUtil.decodeHexString(poolId), "pool");
+    }
 }

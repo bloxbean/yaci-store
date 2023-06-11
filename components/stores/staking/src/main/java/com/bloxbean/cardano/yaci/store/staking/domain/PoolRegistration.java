@@ -1,5 +1,8 @@
 package com.bloxbean.cardano.yaci.store.staking.domain;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.crypto.Bech32;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.Relay;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -40,4 +43,19 @@ public class PoolRegistration {
     private long block;
     private String blockHash;
     private long blockTime;
+
+    //derived
+    public String getRewardAccountBech32() {
+        if (rewardAccount == null)
+            return "";
+
+        Address address = new Address(HexUtil.decodeHexString(rewardAccount));
+        return address.toBech32();
+    }
+
+    public String getPoolIdBech32() {
+        if (poolId == null)
+            return "";
+        return Bech32.encode(HexUtil.decodeHexString(poolId), "pool");
+    }
 }
