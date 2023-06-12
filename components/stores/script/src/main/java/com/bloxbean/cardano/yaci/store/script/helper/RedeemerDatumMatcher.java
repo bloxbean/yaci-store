@@ -1,11 +1,11 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.plutus.spec.Redeemer;
+import com.bloxbean.cardano.client.plutus.spec.RedeemerTag;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.Util;
-import com.bloxbean.cardano.client.transaction.spec.Redeemer;
-import com.bloxbean.cardano.client.transaction.spec.RedeemerTag;
 import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.model.TransactionInput;
@@ -52,7 +52,7 @@ public class RedeemerDatumMatcher {
                 .filter(Optional::isPresent)
                 .map(redeemerTuple -> {
                     com.bloxbean.cardano.yaci.core.model.Redeemer orgRedeemer = redeemerTuple.get()._1;
-                    com.bloxbean.cardano.client.transaction.spec.Redeemer deRedeemer = redeemerTuple.get()._2;
+                    com.bloxbean.cardano.client.plutus.spec.Redeemer deRedeemer = redeemerTuple.get()._2;
 
                     if (deRedeemer.getTag() == RedeemerTag.Spend) {
                         ScriptContext scriptContext = findSpendScriptFromRedeemer(deRedeemer, inputs, scriptsMap)
@@ -133,7 +133,7 @@ public class RedeemerDatumMatcher {
         String rewardAddress = rewardAddresses.get(index);
 
         Address address = new Address(HexUtil.decodeHexString(rewardAddress));
-        String delegationHash = HexUtil.encodeHexString(address.getDelegationHash().get());
+        String delegationHash = HexUtil.encodeHexString(address.getDelegationCredential().get());
 
         PlutusScript plutusScript = null;
         if (delegationHash != null)

@@ -85,7 +85,7 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         } else if (address.startsWith("addr")) {
             Address _address = new Address(address);
-            paymentCredential = _address.getPaymentKeyHash()
+            paymentCredential = _address.getPaymentCredential()
                     .map(bytes -> HexUtil.encodeHexString(bytes))
                     .orElse(null);
         }

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.service;
 
-import com.bloxbean.cardano.client.transaction.spec.PlutusData;
-import com.bloxbean.cardano.client.transaction.spec.serializers.PlutusDataJsonConverter;
+import com.bloxbean.cardano.client.plutus.spec.PlutusData;
+import com.bloxbean.cardano.client.plutus.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
