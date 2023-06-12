@@ -5,7 +5,7 @@ import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.client.common.model.Network;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.exception.AddressRuntimeException;
-import com.bloxbean.cardano.client.transaction.spec.NetworkId;
+import com.bloxbean.cardano.client.spec.NetworkId;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredential;
 import lombok.NonNull;
