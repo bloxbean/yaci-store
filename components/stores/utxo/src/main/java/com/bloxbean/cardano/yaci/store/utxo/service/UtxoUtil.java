@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.service;
 
-import com.bloxbean.cardano.client.transaction.spec.PlutusData;
+import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;

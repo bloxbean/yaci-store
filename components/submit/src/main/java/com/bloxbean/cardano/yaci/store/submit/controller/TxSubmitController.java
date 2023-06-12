@@ -36,9 +36,11 @@ public class TxSubmitController {
             if (log.isDebugEnabled())
                 log.debug(String.valueOf(txResult));
 
-            if (txResult.isAccepted())
-                return ResponseEntity.ok(txResult.getTxHash());
-            else
+            if (txResult.isAccepted()) {
+                return ResponseEntity.accepted()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("\"" + txResult.getTxHash() + "\"");
+            } else
                 return ResponseEntity.badRequest()
                         .body(txResult.getErrorCbor());
         } else {

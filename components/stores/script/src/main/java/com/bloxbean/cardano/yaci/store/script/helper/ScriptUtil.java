@@ -5,14 +5,14 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.client.plutus.spec.PlutusData;
+import com.bloxbean.cardano.client.plutus.spec.PlutusV1Script;
+import com.bloxbean.cardano.client.plutus.spec.PlutusV2Script;
+import com.bloxbean.cardano.client.plutus.spec.Redeemer;
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.client.exception.CborDeserializationException;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
-import com.bloxbean.cardano.client.transaction.spec.PlutusData;
-import com.bloxbean.cardano.client.transaction.spec.PlutusV1Script;
-import com.bloxbean.cardano.client.transaction.spec.PlutusV2Script;
-import com.bloxbean.cardano.client.transaction.spec.Redeemer;
 import com.bloxbean.cardano.yaci.core.model.Datum;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
@@ -79,7 +79,7 @@ public class ScriptUtil {
      * @param serializedPlutusScript
      * @return PlutusV1Script or PlutusV2Script
      */
-    public static com.bloxbean.cardano.client.transaction.spec.PlutusScript deserializeScriptRef(byte[] serializedPlutusScript) {
+    public static com.bloxbean.cardano.client.plutus.spec.PlutusScript deserializeScriptRef(byte[] serializedPlutusScript) {
         Array plutusScriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedPlutusScript);
         List<DataItem> dataItemList = plutusScriptArray.getDataItems();
         if (dataItemList == null || dataItemList.size() == 0) {
@@ -103,7 +103,7 @@ public class ScriptUtil {
 
     public static PlutusScript deserializeScriptRef(@NonNull AddressUtxo addressUtxo) {
         try {
-            com.bloxbean.cardano.client.transaction.spec.PlutusScript cclPlutusScript
+            com.bloxbean.cardano.client.plutus.spec.PlutusScript cclPlutusScript
                     = ScriptUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
             PlutusScript plutusScript = new PlutusScript(String.valueOf(cclPlutusScript.getScriptType()), cclPlutusScript.getCborHex());
             return plutusScript;
