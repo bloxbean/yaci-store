@@ -25,6 +25,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.*;
 
 @Component
@@ -60,6 +61,12 @@ public class ProtocolParamService {
     }
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNode() {
+        //Try to release first before a new query to avoid stale data
+        try {
+            localStateQueryClient.release().block(Duration.ofSeconds(5));
+        } catch (Exception e) {
+            //Ignore the error
+        }
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
