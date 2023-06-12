@@ -41,9 +41,9 @@ public class GenesisUtxoProcessor {
             if (genesisBalance.getAddress() != null &&
                     genesisBalance.getAddress().startsWith("addr")) { //If shelley address
                 Address address = new Address(genesisBalance.getAddress());
-                ownerPaymentCredential = address.getPaymentKeyHash().map(paymentKeyHash -> HexUtil.encodeHexString(paymentKeyHash))
+                ownerPaymentCredential = address.getPaymentCredential().map(paymentKeyHash -> HexUtil.encodeHexString(paymentKeyHash))
                         .orElse(null);
-                ownerStakeCredential = address.getDelegationHash().map(delegationHash -> HexUtil.encodeHexString(delegationHash))
+                ownerStakeCredential = address.getDelegationCredential().map(delegationHash -> HexUtil.encodeHexString(delegationHash))
                         .orElse(null);
             }
 
