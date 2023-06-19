@@ -6,6 +6,8 @@
 [![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
 </div>
 
+🔧 **Under Active Development:** This project is in the pre-alpha phase and is actively being developed. Please note that the APIs are subject to change as we continue to improve and expand the project. Your feedback and contributions are highly appreciated. Join us on this exciting journey!
+
 ## How to Build
 
 ```
