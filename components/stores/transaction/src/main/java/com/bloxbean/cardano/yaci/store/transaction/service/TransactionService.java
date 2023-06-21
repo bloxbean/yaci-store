@@ -169,4 +169,43 @@ public class TransactionService {
                 .build();
 
     }
+
+    public List<TransactionSummary> getTransactionsByBlockNumber(long blockNumber) {
+        List<Txn> txns = transactionStorage.getTransactionsByBlockNumber(blockNumber);
+        return getTransactionSummaries(txns);
+    }
+
+    public List<TransactionSummary> getTransactionsByBlockHash(String blockHash) {
+        List<Txn> txns = transactionStorage.getTransactionsByBlockHash(blockHash);
+        return getTransactionSummaries(txns);
+    }
+
+    private List<TransactionSummary> getTransactionSummaries(List<Txn> txns) {
+        return txns.stream().map(txn -> {
+            List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
+            List<String> outputAddresses = outputUtxos.stream()
+                    .map(txUtxo -> txUtxo.getAddress())
+                    .collect(Collectors.toList());
+
+            BigInteger totalOutput = outputUtxos.stream()
+                    .flatMap(txUtxo -> txUtxo.getAmount().stream())
+                    .filter(amt -> amt.getUnit().equals(LOVELACE))
+                    .map(amt -> amt.getQuantity())
+                    .reduce((qty1, qty2) -> qty1.add(qty2))
+                    .orElse(BigInteger.ZERO);
+
+            TransactionSummary summary = TransactionSummary
+                    .builder()
+                    .txHash(txn.getTxHash())
+                    .blockNumber(txn.getBlockNumber())
+                    .slot(txn.getSlot())
+                    .outputAddresses(outputAddresses)
+                    .totalOutput(totalOutput)
+                    .fee(txn.getFee())
+                    .build();
+
+            return summary;
+        }).collect(Collectors.toList());
+    }
+
 }

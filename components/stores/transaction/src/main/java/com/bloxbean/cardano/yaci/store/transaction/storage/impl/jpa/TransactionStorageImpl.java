@@ -61,6 +61,20 @@ public class TransactionStorageImpl implements TransactionStorage {
     }
 
     @Override
+    public List<Txn> getTransactionsByBlockHash(String blockHash) {
+        return txnEntityRepository.findAllByBlockHash(blockHash)
+                .stream()
+                .map(mapper::toTxn).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Txn> getTransactionsByBlockNumber(long blockNumber) {
+        return txnEntityRepository.findAllByBlockNumber(blockNumber)
+                .stream()
+                .map(mapper::toTxn).collect(Collectors.toList());
+    }
+
+    @Override
     public int deleteBySlotGreaterThan(long slot) {
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
     }
