@@ -82,6 +82,10 @@ GET http://localhost:8080/api/v1/addresses/addr_test1wzcppsyg36f65jydjsd6fqu3xm7
 GET http://localhost:8080/api/v1/txs/93e43aa2e11dec72a28ac8c9692bdf91a6b5bd995106fcc90a3c45af57c7ea70/utxos
 
 ###
+GET http://localhost:8080/api/v1/blocks/404198/txs
+
+###
+GET http://localhost:8080/api/v1/blocks/546600341251701b439b701199847b0329f07f49da37edf7b83afb5150303cfb/txs
 
 ### pools ###
 GET http://localhost:8080/api/v1/pools/registrations?page=0&count=10

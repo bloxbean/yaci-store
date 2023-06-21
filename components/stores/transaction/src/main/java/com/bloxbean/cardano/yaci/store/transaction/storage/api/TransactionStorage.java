@@ -10,5 +10,7 @@ public interface TransactionStorage {
     void saveAll(List<Txn> txList);
     Optional<Txn> getTransactionByTxHash(String txHash);
     List<Txn> getTransactions(int page, int count, Order order);
+    List<Txn> getTransactionsByBlockHash(String blockHash);
+    List<Txn> getTransactionsByBlockNumber(long blockNumber);
     int deleteBySlotGreaterThan(long slot);
 }
