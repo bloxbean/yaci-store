@@ -1,6 +1,6 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    api project(":components:stores:utxo")
+    api project(":stores:utxo")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
