@@ -8,7 +8,21 @@
 
 🔧 **Under Active Development:** This project is in the pre-alpha phase and is actively being developed. Please note that the APIs are subject to change as we continue to improve and expand the project. Your feedback and contributions are highly appreciated. Join us on this exciting journey!
 
-## How to Build
+## How to Run 
+
+**Pre-requisites:** Java 17
+
+1. Download the latest binary and property file from [release page](https://github.com/bloxbean/yaci-store/releases)
+2. You need to download ``yaci-store-all-<version>.jar`` and ``application.properties`` files
+3. Create a sub folder ``config`` and copy ``application.properties`` file to ``config`` directory
+4. Edit ``application.properties`` file to configure your datasource and network details
+5. Run ``java -jar yaci-store-all-<version>.jar`` from the directory where you have copied the jar file.
+
+## Build from source and Run 
+
+**Pre-requisites:** Java 17
+
+### Build
 
 ```
 $> git clone https://github.com/bloxbean/yaci-store
@@ -16,7 +30,7 @@ $> cd yaci-store
 $> ./gradlew clean build
 ```
 
-## Run
+### Run
 
 ```
 $> cd yaci-store
