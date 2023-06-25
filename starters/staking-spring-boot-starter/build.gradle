@@ -1,6 +1,6 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    api project(":components:stores:staking")
+    api project(":stores:staking")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }

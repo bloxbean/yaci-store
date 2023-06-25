@@ -1,6 +1,6 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    api project(":components:stores:blocks")
+    api project(":stores:blocks")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
