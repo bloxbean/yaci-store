@@ -104,7 +104,7 @@ public class UtxoProcessor {
 
         //publish event
         if (outputAddressUtxos.size() > 0)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, outputAddressUtxos));
+            publisher.publishEvent(new AddressUtxoEvent(metadata, inputAddressUtxos, outputAddressUtxos));
     }
 
     private void handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
@@ -124,6 +124,9 @@ public class UtxoProcessor {
         AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
                 .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
                 .orElse(null);
+
+        //Also, change in Yaci to return collateral output index as size of tx outputs
+        collateralOutputUtxo.setOutputIndex(transaction.getBody().getOutputs().size());
 
         //collateral inputs will be marked as spent
         List<AddressUtxo> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
@@ -158,7 +161,7 @@ public class UtxoProcessor {
 
         //publish event
         if (collateralOutputUtxo != null)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, List.of(collateralOutputUtxo)));
+            publisher.publishEvent(new AddressUtxoEvent(metadata, collateralInputUtxos, List.of(collateralOutputUtxo)));
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {

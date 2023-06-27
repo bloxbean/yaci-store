@@ -77,7 +77,7 @@ public class ByronUtxoProcessor {
 
             //publish event
             if (outputAddressUtxos.size() > 0)
-                publisher.publishEvent(new AddressUtxoEvent(metadata, outputAddressUtxos));
+                publisher.publishEvent(new AddressUtxoEvent(metadata, inputAddressUtxos, outputAddressUtxos));
         }
     }
 

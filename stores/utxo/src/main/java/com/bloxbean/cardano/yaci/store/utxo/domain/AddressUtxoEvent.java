@@ -18,5 +18,6 @@ import java.util.List;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class AddressUtxoEvent {
     private EventMetadata eventMetadata;
-    private List<AddressUtxo> addressUtxoList;
+    private List<AddressUtxo> inputs;
+    private List<AddressUtxo> outputs;
 }
