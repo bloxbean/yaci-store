@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
+import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.NonNull;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -52,14 +54,22 @@ public class UtxoProcessor {
             if (transactions == null)
                 return;
 
+            List<TxInputOutput> txInputOutputs = new ArrayList<>();
             transactions.stream().forEach(
                     transaction -> {
+                        Optional<TxInputOutput> txInputOutputOptional;
                         if (transaction.isInvalid()) {
-                            handleInvalidTransaction(event.getMetadata(), transaction);
+                            txInputOutputOptional = handleInvalidTransaction(event.getMetadata(), transaction);
                         } else {
-                            handleValidTransaction(event.getMetadata(), transaction);
+                            txInputOutputOptional = handleValidTransaction(event.getMetadata(), transaction);
                         }
+
+                        //Add to list if i/o is present
+                        txInputOutputOptional.ifPresent(txInputOutput -> txInputOutputs.add(txInputOutput));
                     });
+
+            if(txInputOutputs.size() > 0)
+                publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
         } catch (Exception e) {
             log.error("Error saving : " + event.getMetadata(), e);
             log.error("Stopping fetcher");
@@ -67,9 +77,9 @@ public class UtxoProcessor {
         }
     }
 
-    private void handleValidTransaction(EventMetadata metadata, Transaction transaction) {
+    private Optional<TxInputOutput> handleValidTransaction(EventMetadata metadata, Transaction transaction) {
         if (transaction.isInvalid())
-            return;
+            return Optional.empty();
 
         //set spent for input
         List<AddressUtxo> inputAddressUtxos = transaction.getBody().getInputs().stream()
@@ -104,12 +114,14 @@ public class UtxoProcessor {
 
         //publish event
         if (outputAddressUtxos.size() > 0)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, inputAddressUtxos, outputAddressUtxos));
+            return Optional.of(new TxInputOutput(transaction.getTxHash(), inputAddressUtxos, outputAddressUtxos));
+        else
+            return Optional.empty();
     }
 
-    private void handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
+    private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
         if (!transaction.isInvalid())
-            return;
+            return Optional.empty();
 
         //insert invalid transactions and collateral return utxo if any
         InvalidTransaction invalidTransaction = InvalidTransaction.builder()
@@ -126,7 +138,8 @@ public class UtxoProcessor {
                 .orElse(null);
 
         //Also, change in Yaci to return collateral output index as size of tx outputs
-        collateralOutputUtxo.setOutputIndex(transaction.getBody().getOutputs().size());
+        if (collateralOutputUtxo != null)
+            collateralOutputUtxo.setOutputIndex(transaction.getBody().getOutputs().size());
 
         //collateral inputs will be marked as spent
         List<AddressUtxo> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
@@ -161,7 +174,9 @@ public class UtxoProcessor {
 
         //publish event
         if (collateralOutputUtxo != null)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, collateralInputUtxos, List.of(collateralOutputUtxo)));
+            return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, List.of(collateralOutputUtxo)));
+        else
+            return Optional.empty();
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
@@ -233,5 +248,4 @@ public class UtxoProcessor {
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }
-
 }

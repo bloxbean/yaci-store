@@ -28,6 +28,8 @@ include 'stores:protocolparams'
 include 'stores:staking'
 include 'stores:live'
 
+include 'aggregates:account'
+
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
 include ':starters:transaction-spring-boot-starter'
@@ -40,4 +42,5 @@ include ':starters:staking-spring-boot-starter'
 include ':starters:live-spring-boot-starter'
 include ':starters:submit-spring-boot-starter'
 include ':starters:remote-spring-boot-starter'
+include ':starters:account-spring-boot-starter'
 

@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,6 +105,14 @@ public class StartService {
 
         log.info("From >> " + from);
         log.info("TO >> " + to);
+
+        //TODO -- Tests
+        RollbackEvent rollbackEvent = RollbackEvent.builder()
+                .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                .currentBlock(tip.getBlock())
+                .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                .build();
+        publisher.publishEvent(rollbackEvent);
 
         long diff = tip.getPoint().getSlot() - from.getSlot();
         if (storeProperties.isPrimaryInstance()) {
