@@ -15,6 +15,8 @@ dependencies {
     implementation project(':starters:live-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
 
+    implementation project(':starters:account-spring-boot-starter')
+
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
