@@ -32,7 +32,7 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class AddressUtxoProcessor {
+public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
     private boolean warmedUp = false;
 
