@@ -13,8 +13,8 @@ public class AccountStoreProperties {
     @Getter
     @Setter
     public static final class Account {
-       private boolean enabled = true;
-       private boolean historyCleanupEnabled = true;
+       private boolean enabled = false;
+       private boolean historyCleanupEnabled = false;
     }
 
 }

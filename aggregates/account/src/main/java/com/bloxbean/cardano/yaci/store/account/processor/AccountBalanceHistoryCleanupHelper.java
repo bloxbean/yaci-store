@@ -36,8 +36,9 @@ public class AccountBalanceHistoryCleanupHelper {
             deleteCountAddrBal.addAndGet(delCount);
         });
 
-        if (deleteCountAddrBal.get() % 10000 == 0)
-            log.info("Total address balances deleted: " + deleteCountAddrBal.get());
+        long count = deleteCountAddrBal.get();
+        if (count > 0 && count % 10000 == 0)
+            log.info("Total address balances deleted: " + count);
     }
 
     @Transactional
@@ -54,7 +55,8 @@ public class AccountBalanceHistoryCleanupHelper {
             deleteCountStakeBal.addAndGet(delCount);
         });
 
-        if (deleteCountStakeBal.get() % 10000 == 0)
-            log.info("Total stake addr balances deleted: " + deleteCountStakeBal.get());
+        long count = deleteCountStakeBal.get();
+        if (count > 0 && count % 10000 == 0)
+            log.info("Total stake addr balances deleted: " + count);
     }
 }
