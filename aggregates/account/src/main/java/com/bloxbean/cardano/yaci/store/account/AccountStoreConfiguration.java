@@ -18,8 +18,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @ConditionalOnProperty(
         prefix = "store.account",
         name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
+        havingValue = "true"
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.account"})
 @EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.account"})

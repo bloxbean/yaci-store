@@ -107,12 +107,15 @@ public class StartService {
         log.info("TO >> " + to);
 
         //TODO -- Tests
-        RollbackEvent rollbackEvent = RollbackEvent.builder()
-                .rollbackTo(new Point(from.getSlot(), from.getHash()))
-                .currentBlock(tip.getBlock())
-                .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
-                .build();
-        publisher.publishEvent(rollbackEvent);
+        //Send a rollback event to rollback data after this slot.
+        if (from.getSlot() > 0) {
+            RollbackEvent rollbackEvent = RollbackEvent.builder()
+                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                    .currentBlock(tip.getBlock())
+                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                    .build();
+            publisher.publishEvent(rollbackEvent);
+        }
 
         long diff = tip.getPoint().getSlot() - from.getSlot();
         if (storeProperties.isPrimaryInstance()) {
