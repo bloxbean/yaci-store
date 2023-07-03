@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class ByronUtxoProcessor {
                 .map(byronTxPayload -> byronTxPayload.getTransaction())
                 .collect(Collectors.toList());
 
+        List<TxInputOutput> txInputOutputList = new ArrayList<>();
         for (ByronTx byronTx : byronTxList) {
             //set spent for input
             List<AddressUtxo> inputAddressUtxos = byronTx.getInputs().stream()
@@ -77,8 +79,11 @@ public class ByronUtxoProcessor {
 
             //publish event
             if (outputAddressUtxos.size() > 0)
-                publisher.publishEvent(new AddressUtxoEvent(metadata, outputAddressUtxos));
+                txInputOutputList.add(new TxInputOutput(byronTx.getTxHash(), inputAddressUtxos, outputAddressUtxos));
         }
+
+        if (txInputOutputList.size() > 0)
+            publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
     }
 
     private List<Utxo> getUtxosFromByronOutput(ByronTx byronTx) {
