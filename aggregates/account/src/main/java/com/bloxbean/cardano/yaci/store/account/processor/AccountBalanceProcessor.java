@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
@@ -12,10 +13,10 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -34,10 +35,12 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 @Slf4j
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
+    private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
     private boolean warmedUp = false;
 
     @EventListener
     @Transactional
+    @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
         if (addressUtxoEvent.getTxInputOutputs() == null || addressUtxoEvent.getTxInputOutputs().size() == 0)
             return;
@@ -52,16 +55,32 @@ public class AccountBalanceProcessor {
         }
 
         CompletableFuture<Void> addressBalancesFuture = CompletableFuture.supplyAsync(() -> handleAddressBalance(addressUtxoEvent))
-                .thenAcceptAsync(addressBalances -> accountBalanceStorage.saveAddressBalances(addressBalances));
+                .thenAcceptAsync(addressBalances -> {
+                    accountBalanceStorage.saveAddressBalances(addressBalances);
+
+                    if (addressBalances != null && addressBalances.size() > 0) {
+                        List<Tuple<String, String>> addresseUnitList =
+                                addressBalances.stream().map(addressBalance -> new Tuple<>(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
+                        accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, metadata.getSlot());
+                    }
+                });
+
 
         CompletableFuture<Void> stakeBalancesFuture = CompletableFuture.supplyAsync(() -> handleStakeAddressBalance(addressUtxoEvent))
-                .thenAcceptAsync(stakeBalances -> accountBalanceStorage.saveStakeAddressBalances(stakeBalances));
+                .thenAcceptAsync(stakeBalances -> {
+                    accountBalanceStorage.saveStakeAddressBalances(stakeBalances);
+
+                    if (stakeBalances != null && stakeBalances.size() > 0) {
+                        List<Tuple<String, String>> stakeAddrUnitList =
+                                stakeBalances.stream().map(stakeAddrBalance -> new Tuple<>(stakeAddrBalance.getAddress(), stakeAddrBalance.getUnit())).distinct().toList();
+                        accountBalanceCleanupHelper.deleteStakeBalanceBeforeConfirmedSlot(stakeAddrUnitList, metadata.getSlot());
+                    }
+                });
 
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(addressBalancesFuture, stakeBalancesFuture);
 
         // Wait for both steps to complete
         combinedFuture.join();
-
     }
 
     private List<AddressBalance> handleAddressBalance(AddressUtxoEvent addressUtxoEvent) {
@@ -107,7 +126,8 @@ public class AccountBalanceProcessor {
                                     addressBalanceMap.put(key, newAddressBalance);
 
                                 }, () -> {
-                                    log.error("No balance found for address: " + input.getOwnerAddr());
+                                    log.error("No balance found for address: " + input.getOwnerAddr() + ", unit: " + amount.getUnit()
+                                            + ", block: " + metadata.getBlock() + ", slot: " + metadata.getSlot());
                                     log.error("Input AddressUtxo: " + input);
                                     log.error("Current OutputTx: " + (outputs.size() > 0 ? outputs.get(0).getTxHash() : null));
                                     throw new IllegalStateException("Error in address balance calculation");
@@ -127,7 +147,6 @@ public class AccountBalanceProcessor {
                     } else {
                         accountBalanceStorage.getAddressBalance(output.getOwnerAddr(), amount.getUnit(), metadata.getSlot() - 1)
                                 .ifPresentOrElse(addressBalance -> {
-                                    // BigInteger newBalance = addressBalance.getQuantity().add(output.getLovelaceAmount());
                                     BigInteger newBalance = addressBalance.getQuantity().add(amount.getQuantity());
                                     if (newBalance.compareTo(BigInteger.ZERO) < 0) {
                                         log.error("[Outputs] Negative balance for address: " + output.getOwnerAddr() + " : " + newBalance);
@@ -239,12 +258,10 @@ public class AccountBalanceProcessor {
                     String key = getKey(output.getOwnerStakeAddr(), amount.getUnit());
                     if (stakeBalanceMap.get(key) != null) {
                         StakeAddressBalance stakeAddrBalance = stakeBalanceMap.get(key);
-                        //addressBalance.setQuantity(addressBalance.getQuantity().add(output.getLovelaceAmount()));
                         stakeAddrBalance.setQuantity(stakeAddrBalance.getQuantity().add(amount.getQuantity()));
                     } else {
                         accountBalanceStorage.getAddressStakeBalance(output.getOwnerStakeAddr(), amount.getUnit(), metadata.getSlot() - 1)
                                 .ifPresentOrElse(stakeAddrBalance -> {
-                                    // BigInteger newBalance = addressBalance.getQuantity().add(output.getLovelaceAmount());
                                     BigInteger newBalance = stakeAddrBalance.getQuantity().add(amount.getQuantity());
                                     if (newBalance.compareTo(BigInteger.ZERO) < 0) {
                                         log.error("[Outputs] Negative balance for address: " + output.getOwnerStakeAddr() + " : " + newBalance);
@@ -354,16 +371,5 @@ public class AccountBalanceProcessor {
 
     private String getKey(String address, String unit) {
         return address + "-" + unit;
-    }
-
-    @EventListener
-    @Transactional
-    public void handleRollback(RollbackEvent rollbackEvent) {
-        //Check rollbackTo blockHash
-        int addressBalanceDeleted = accountBalanceStorage.deleteAddressBalanceBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-        int stakeBalanceDeleted = accountBalanceStorage.deleteStakeAddressBalanceBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-
-        log.info("Rollback -- {} address_balance records", addressBalanceDeleted);
-        log.info("Rollback -- {} stake_balance records", stakeBalanceDeleted);
     }
 }

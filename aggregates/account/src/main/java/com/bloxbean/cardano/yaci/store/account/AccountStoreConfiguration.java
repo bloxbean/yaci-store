@@ -2,9 +2,9 @@ package com.bloxbean.cardano.yaci.store.account;
 
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.AccountBalanceStorageImpl;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.mapper.AccountMapper;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository.StakeBalanceRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -27,10 +27,17 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 public class AccountStoreConfiguration {
 
+    @Value("${store.account.history-cleanup-enabled:true}")
+    private boolean historyCleanupEnabled = true;
+
     @Bean
     @ConditionalOnMissingBean
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
                                                        StakeBalanceRepository stakeBalanceRepository) {
         return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository);
+    }
+
+    public boolean isHistoryCleanupEnabled() {
+        return historyCleanupEnabled;
     }
 }

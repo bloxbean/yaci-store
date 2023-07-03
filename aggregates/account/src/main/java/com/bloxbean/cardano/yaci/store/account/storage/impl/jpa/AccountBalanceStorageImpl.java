@@ -43,6 +43,13 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
+    public int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
+        //Find the latest address balance before the slot and delete all address balances before that
+        return addressBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
+                .map(addressBalanceEntity -> addressBalanceRepository.deleteAllBeforeSlot(address, unit, addressBalanceEntity.getSlot() - 1)).orElse(0);
+    }
+
+    @Override
     public int deleteAddressBalanceBySlotGreaterThan(Long slot) {
         return addressBalanceRepository.deleteBySlotGreaterThan(slot);
     }
@@ -65,6 +72,13 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         List<StakeAddressBalanceEntity> entities = stakeBalances.stream().map(mapper::toStakeBalanceEntity)
                 .toList();
         stakeBalanceRepository.saveAll(entities);
+    }
+
+    @Override
+    public int deleteStakeBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
+        //Find the latest stake address balance before the slot and delete all address balances before that
+        return stakeBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
+                .map(addressBalanceEntity -> stakeBalanceRepository.deleteAllBeforeSlot(address, unit, addressBalanceEntity.getSlot() - 1)).orElse(0);
     }
 
     @Override
