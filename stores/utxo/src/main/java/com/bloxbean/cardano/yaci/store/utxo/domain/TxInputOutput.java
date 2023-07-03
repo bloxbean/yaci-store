@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.domain;
 
-import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -15,7 +15,8 @@ import java.util.List;
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AddressUtxoEvent {
-    private EventMetadata eventMetadata;
-    private List<TxInputOutput> txInputOutputs;
+public class TxInputOutput {
+    private String txHash;
+    private List<AddressUtxo> inputs;
+    private List<AddressUtxo> outputs;
 }
