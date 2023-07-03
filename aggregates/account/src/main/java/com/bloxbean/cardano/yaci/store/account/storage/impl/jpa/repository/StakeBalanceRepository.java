@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AddressBalanceId;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.StakeAddressBalanceEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -22,6 +23,13 @@ public interface StakeBalanceRepository extends JpaRepository<StakeAddressBalanc
             "  AND a.unit = b.unit" +
             ")")
     List<StakeAddressBalanceEntity> findLatestAddressBalanceByAddress(String address);
+
+    @Modifying
+    @Query("DELETE FROM StakeAddressBalanceEntity sb " +
+            "WHERE sb.address = :address " +
+            "AND sb.unit = :unit " +
+            "AND sb.slot < :slot")
+    int deleteAllBeforeSlot(String address, String unit, Long slot);
 
     int deleteBySlotGreaterThan(Long slot);
 }
