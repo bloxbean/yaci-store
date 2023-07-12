@@ -51,4 +51,7 @@ public class StakeAddressBalanceEntity extends BaseEntity {
 
     @Column(name = "epoch")
     private Integer epoch;
+
+    @Column(name = "is_history")
+    private Boolean isHistory;
 }

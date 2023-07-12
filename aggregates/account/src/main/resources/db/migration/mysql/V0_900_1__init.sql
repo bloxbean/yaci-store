@@ -13,6 +13,7 @@ create table address_balance
     block_hash         varchar(255),
     block              bigint,
     epoch              integer,
+    is_history         bit,
     create_datetime    timestamp,
     update_datetime    timestamp,
     primary key (address, unit, slot)
@@ -56,6 +57,7 @@ create table stake_address_balance
     block_hash       varchar(255),
     block            bigint,
     epoch            integer,
+    is_history       bit,
     create_datetime  timestamp,
     update_datetime  timestamp,
     primary key (address, unit, slot)

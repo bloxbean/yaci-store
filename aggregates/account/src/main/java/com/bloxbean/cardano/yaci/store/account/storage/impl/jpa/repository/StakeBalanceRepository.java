@@ -31,5 +31,12 @@ public interface StakeBalanceRepository extends JpaRepository<StakeAddressBalanc
             "AND sb.slot < :slot")
     int deleteAllBeforeSlot(String address, String unit, Long slot);
 
+    @Modifying
+    @Query("UPDATE StakeAddressBalanceEntity sb SET sb.isHistory = true " +
+            "WHERE sb.address = :address " +
+            "AND sb.unit = :unit " +
+            "AND sb.slot < :slot")
+    int setHistoryFlagBeforeSlot(String address, String unit, Long slot);
+
     int deleteBySlotGreaterThan(Long slot);
 }

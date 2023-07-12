@@ -32,5 +32,12 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
             "AND ab.slot < :slot")
     int deleteAllBeforeSlot(String address, String unit, Long slot);
 
+    @Modifying
+    @Query("UPDATE AddressBalanceEntity ab SET ab.isHistory = true " +
+            "WHERE ab.address = :address " +
+            "AND ab.unit = :unit " +
+            "AND ab.slot < :slot")
+    int setHistoryFlagBeforeSlot(String address, String unit, Long slot);
+
     int deleteBySlotGreaterThan(Long slot);
 }
