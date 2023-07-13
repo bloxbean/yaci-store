@@ -321,7 +321,7 @@ public class AccountBalanceProcessor {
                     String stakeAddress = null;
                     try {
                         Address address = new Address(genesisBalance.getAddress());
-                        paymentCredential = address.getPaymentCredential().map(credential -> HexUtil.encodeHexString(credential))
+                        paymentCredential = address.getPaymentCredential().map(credential -> HexUtil.encodeHexString(credential.getBytes()))
                                 .orElse(null);
                         stakeAddress = address.getDelegationCredential().map(delegCred -> AddressProvider.getStakeAddress(address).toBech32())
                                 .orElse(null);
@@ -363,7 +363,7 @@ public class AccountBalanceProcessor {
                             .unit(LOVELACE)
                             .assetName(LOVELACE)
                             .quantity(genesisBalance.getBalance())
-                            .stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get()))
+                            .stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get().getBytes()))
                             .build();
                 }).toList();
         accountBalanceStorage.saveStakeAddressBalances(stakeAddrBalances);

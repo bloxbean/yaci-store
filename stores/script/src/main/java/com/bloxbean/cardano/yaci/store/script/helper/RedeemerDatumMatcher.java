@@ -133,7 +133,7 @@ public class RedeemerDatumMatcher {
         String rewardAddress = rewardAddresses.get(index);
 
         Address address = new Address(HexUtil.decodeHexString(rewardAddress));
-        String delegationHash = HexUtil.encodeHexString(address.getDelegationCredential().get());
+        String delegationHash = HexUtil.encodeHexString(address.getDelegationCredential().get().getBytes());
 
         PlutusScript plutusScript = null;
         if (delegationHash != null)
