@@ -47,4 +47,11 @@ public class BlockController {
         return blockService.getBlocksBySlotLeaderEpoch(poolId, epoch);
     }
 
+    @GetMapping("latest")
+    @Operation(description = "Get latest block")
+    public Block getLatestBlock() {
+        return blockService.getLatestBlock()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+    }
+
 }
