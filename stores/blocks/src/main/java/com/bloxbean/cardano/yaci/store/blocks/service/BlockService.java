@@ -26,4 +26,8 @@ public class BlockService {
     public List<PoolBlock> getBlocksBySlotLeaderEpoch(String slotLeader, int epoch) {
         return blockStorage.findBlocksBySlotLeaderAndEpoch(slotLeader, epoch);
     }
+
+    public Optional<Block> getLatestBlock() {
+        return blockStorage.findRecentBlock();
+    }
 }
