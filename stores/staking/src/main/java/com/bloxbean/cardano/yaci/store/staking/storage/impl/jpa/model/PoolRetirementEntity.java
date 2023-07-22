@@ -1,22 +1,22 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "pool_retirement")
 @IdClass(PoolRetirementId.class)
 @DynamicUpdate
-public class PoolRetirementEntity extends BaseEntity {
+public class PoolRetirementEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;
@@ -37,12 +37,6 @@ public class PoolRetirementEntity extends BaseEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "block")
-    private Long block;
-
     @Column(name = "block_hash")
     private String blockHash;
-
-    @Column(name = "block_time")
-    private long blockTime;
 }
