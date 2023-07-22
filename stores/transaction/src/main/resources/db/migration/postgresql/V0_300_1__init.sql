@@ -5,7 +5,6 @@ create table transaction
         primary key,
     auxiliary_datahash      varchar(255),
     block_hash            varchar(255),
-    block                   bigint,
     collateral_inputs       jsonb,
     collateral_return       jsonb,
     fee                     bigint,
@@ -21,8 +20,9 @@ create table transaction
     ttl                     bigint,
     validity_interval_start bigint,
     collateral_return_json  jsonb,
-    create_datetime        timestamp,
-    update_datetime        timestamp
+    block                   bigint,
+    block_time              bigint,
+    update_datetime         timestamp
 );
 
 CREATE INDEX idx_transaction_slot

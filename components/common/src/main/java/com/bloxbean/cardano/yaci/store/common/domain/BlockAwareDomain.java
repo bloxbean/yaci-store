@@ -14,6 +14,6 @@ import lombok.experimental.SuperBuilder;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class BlockAwareDomain {
-    private Long block;
+    private Long blockNumber;
     private Long blockTime;
 }
