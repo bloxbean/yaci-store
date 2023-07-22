@@ -1,22 +1,22 @@
 package com.bloxbean.cardano.yaci.store.assets.storage.model;
 
 import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 import java.math.BigInteger;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "assets")
-public class TxAssetEntity extends BaseEntity {
+public class TxAssetEntity extends BlockAwareEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
     @Column(name = "id")
