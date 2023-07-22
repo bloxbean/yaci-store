@@ -15,7 +15,6 @@ create table transaction_scripts
     id              bigint       not null auto_increment
         primary key,
     slot                  bigint,
-    block                 bigint,
     block_hash            varchar(255),
     tx_hash               varchar(255) not null,
     script_hash           varchar(255),
@@ -23,7 +22,8 @@ create table transaction_scripts
     redeemer              clob,
     datum                 clob,
     datum_hash            varchar(255),
-    create_datetime       timestamp,
+    block                 bigint,
+    block_time            bigint,
     update_datetime       timestamp
 );
 

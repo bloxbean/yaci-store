@@ -1,20 +1,20 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "delegation")
 @IdClass(DelegationId.class)
-public class DelegationEntity extends BaseEntity {
+public class DelegationEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;
@@ -38,12 +38,6 @@ public class DelegationEntity extends BaseEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "block")
-    private Long block;
-
     @Column(name = "block_hash")
     private String blockHash;
-
-    @Column(name = "block_time")
-    private long blockTime;
 }

@@ -39,6 +39,7 @@ public class GenesisTransactionProcessor {
                     .txHash(genesisBalance.getTxnHash())
                     .blockHash(genesisBlockEvent.getBlockHash())
                     .blockNumber(genesisBlockEvent.getBlock())
+                    .blockTime(genesisBlockEvent.getBlockTime())
                     .slot(genesisBlockEvent.getSlot())
                     .inputs(Collections.emptyList())
                     .outputs(List.of(output))

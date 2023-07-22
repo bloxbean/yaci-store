@@ -8,10 +8,9 @@ create table stake_registration
     address         varchar(255), -- bech32 stake address
     epoch           int,
     slot            bigint,
-    block            bigint,
     block_hash      varchar(255),
+    block            bigint,
     block_time      bigint,
-    create_datetime timestamp,
     update_datetime timestamp,
     primary key (tx_hash, cert_index)
 );
@@ -41,10 +40,9 @@ create table delegation
     address         varchar(255), -- bech32 stake address
     epoch           int,
     slot            bigint,
-    block            bigint,
     block_hash      varchar(255),
+    block            bigint,
     block_time      bigint,
-    create_datetime timestamp,
     update_datetime timestamp,
     primary key (tx_hash, cert_index)
 );
@@ -78,10 +76,9 @@ create table pool_registration
     metadata_hash   varchar(255),
     epoch           int,
     slot            bigint,
-    block            bigint,
     block_hash      varchar(255),
+    block           bigint,
     block_time      bigint,
-    create_datetime timestamp,
     update_datetime timestamp,
     primary key (tx_hash, cert_index)
 );
@@ -107,10 +104,9 @@ create table pool_retirement
     retirement_epoch int,
     epoch            int,
     slot             bigint,
-    block            bigint,
     block_hash      varchar(255),
-    block_time      bigint,
-    create_datetime  timestamp,
+    block            bigint,
+    block_time       bigint,
     update_datetime  timestamp,
     primary key (tx_hash, cert_index)
 );

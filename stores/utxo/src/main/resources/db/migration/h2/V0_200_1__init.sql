@@ -4,7 +4,6 @@ create table address_utxo
     output_index          int          not null,
     tx_hash               varchar(255) not null,
     slot                  bigint,
-    block                 bigint,
     block_hash            varchar(255),
     epoch                 int,
     lovelace_amount       bigint       null,
@@ -23,7 +22,8 @@ create table address_utxo
     spent_epoch           int          null,
     spent_tx_hash         varchar(255) null,
     is_collateral_return  bit          null,
-    create_datetime       timestamp,
+    block                 bigint,
+    block_time            bigint,
     update_datetime       timestamp,
     primary key (output_index, tx_hash)
 );

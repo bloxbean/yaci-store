@@ -53,6 +53,8 @@ public class MetadataProcessor {
                         TxMetadataLabel txMetadataLabel = TxMetadataLabel.builder()
                                 .slot(eventMetadata.getSlot())
                                 .txHash(txAuxData.getTxHash())
+                                .blockNumber(eventMetadata.getBlock())
+                                .blockTime(eventMetadata.getBlockTime())
                                 .label(fieldName)
                                 .body((jsonNode.get(fieldName)).toString())
                                 .build();
