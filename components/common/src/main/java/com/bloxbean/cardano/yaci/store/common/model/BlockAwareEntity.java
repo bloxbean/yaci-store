@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class BlockAwareEntity {
 
     @Column(name = "block")
-    private Long block;
+    private Long blockNumber;
 
     @Column(name = "block_time")
     private Long blockTime;

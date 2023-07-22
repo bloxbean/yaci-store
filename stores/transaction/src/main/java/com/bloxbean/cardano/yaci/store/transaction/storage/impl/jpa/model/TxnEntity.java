@@ -2,16 +2,16 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.Type;
 
 import java.math.BigInteger;
@@ -21,19 +21,16 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "transaction")
-public class TxnEntity extends BaseEntity {
+public class TxnEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;
 
     @Column(name = "block_hash")
     private String blockHash;
-
-    @Column(name = "block")
-    private Long blockNumber;
 
     @Column(name = "slot")
     private Long slot;

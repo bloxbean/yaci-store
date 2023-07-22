@@ -65,6 +65,7 @@ public class TransactionProcessor {
                     .txHash(transaction.getTxHash())
                     .blockHash(event.getMetadata().getBlockHash())
                     .blockNumber(transaction.getBlockNumber())
+                    .blockTime(event.getMetadata().getBlockTime())
                     .slot(transaction.getSlot())
                     .inputs(inputs)
                     .outputs(outputs)
