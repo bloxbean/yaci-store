@@ -57,7 +57,7 @@ public class PoolRegistrationProcessor {
                             .metadataHash(poolRegistrationCert.getPoolParams().getPoolMetadataHash())
                             .epoch(eventMetadata.getEpochNumber())
                             .slot(eventMetadata.getSlot())
-                            .block(eventMetadata.getBlock())
+                            .blockNumber(eventMetadata.getBlock())
                             .blockHash(eventMetadata.getBlockHash())
                             .blockTime(eventMetadata.getBlockTime())
                             .build();
@@ -73,7 +73,7 @@ public class PoolRegistrationProcessor {
                             .retirementEpoch((int)poolRetirementCert.getEpoch())
                             .epoch(eventMetadata.getEpochNumber())
                             .slot(eventMetadata.getSlot())
-                            .block(eventMetadata.getBlock())
+                            .blockNumber(eventMetadata.getBlock())
                             .blockHash(eventMetadata.getBlockHash())
                             .blockTime(eventMetadata.getBlockTime())
                             .build();
