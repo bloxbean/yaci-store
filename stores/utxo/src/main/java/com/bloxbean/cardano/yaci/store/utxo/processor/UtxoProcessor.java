@@ -225,8 +225,9 @@ public class UtxoProcessor {
 
         return AddressUtxo.builder()
                 .slot(eventMetadata.getSlot())
-                .block(eventMetadata.getBlock())
+                .blockNumber(eventMetadata.getBlock())
                 .blockHash(eventMetadata.getBlockHash())
+                .blockTime(eventMetadata.getBlockTime())
                 .epoch(eventMetadata.getEpochNumber())
                 .txHash(utxo.getTxHash())
                 .outputIndex(utxo.getIndex())

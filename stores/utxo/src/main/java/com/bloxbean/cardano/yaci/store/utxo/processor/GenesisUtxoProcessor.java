@@ -49,8 +49,9 @@ public class GenesisUtxoProcessor {
 
             AddressUtxo addressUtxo = AddressUtxo.builder()
                     .slot(genesisBlockEvent.getSlot())
-                    .block(genesisBlockEvent.getBlock())
+                    .blockNumber(genesisBlockEvent.getBlock())
                     .blockHash(genesisBlockEvent.getBlockHash())
+                    .blockTime(genesisBlockEvent.getBlockTime())
                     .epoch(0)
                     .txHash(genesisBalance.getTxnHash())
                     .outputIndex(0)

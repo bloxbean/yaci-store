@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-@Getter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
