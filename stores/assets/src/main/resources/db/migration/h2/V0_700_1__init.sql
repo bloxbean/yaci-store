@@ -10,7 +10,8 @@ create table assets
     unit                  varchar(255),
     quantity              bigint,
     mint_type             varchar(4),
-    create_datetime       timestamp,
+    block                 bigint,
+    block_time            bigint,
     update_datetime       timestamp
 );
 

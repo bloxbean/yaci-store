@@ -4,13 +4,14 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.Relay;
+import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -19,10 +20,10 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder(toBuilder = true)
+@SuperBuilder(toBuilder = true)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class PoolRegistration {
+public class PoolRegistration extends BlockAwareDomain {
     private String txHash;
     private int certIndex;
     private String poolId;
@@ -39,10 +40,7 @@ public class PoolRegistration {
 
     private int epoch;
     private long slot;
-
-    private long block;
     private String blockHash;
-    private long blockTime;
 
     //derived
     public String getRewardAccountBech32() {

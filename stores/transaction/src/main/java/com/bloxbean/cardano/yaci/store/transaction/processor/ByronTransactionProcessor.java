@@ -51,6 +51,7 @@ public class ByronTransactionProcessor {
                     .txHash(byronTx.getTxHash())
                     .blockHash(event.getEventMetadata().getBlockHash())
                     .blockNumber(event.getEventMetadata().getBlock())
+                    .blockTime(event.getEventMetadata().getBlockTime())
                     .slot(event.getEventMetadata().getSlot())
                     .inputs(inputs)
                     .outputs(outputs)

@@ -1,20 +1,20 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "transaction_scripts")
-public class TxScriptEntity extends BaseEntity {
+public class TxScriptEntity extends BlockAwareEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
     @Column(name = "id")
@@ -28,9 +28,6 @@ public class TxScriptEntity extends BaseEntity {
 
     @Column(name = "slot")
     private Long slot;
-
-    @Column(name = "block")
-    private Long block;
 
     @Column(name = "block_hash")
     private String blockHash;

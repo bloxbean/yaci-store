@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
 
@@ -17,12 +17,12 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 @Entity
 @Table(name = "address_utxo")
 @IdClass(UtxoId.class)
 @DynamicUpdate
-public class AddressUtxoEntity extends BaseEntity {
+public class AddressUtxoEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;
@@ -32,9 +32,6 @@ public class AddressUtxoEntity extends BaseEntity {
 
     @Column(name = "slot")
     private Long slot;
-
-    @Column(name = "block")
-    private Long block;
 
     @Column(name = "block_hash")
     private String blockHash;

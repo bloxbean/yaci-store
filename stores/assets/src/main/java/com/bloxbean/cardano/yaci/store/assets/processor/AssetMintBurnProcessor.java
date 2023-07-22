@@ -41,6 +41,8 @@ public class AssetMintBurnProcessor {
                                     .unit(amount.getUnit())
                                     .quantity(amount.getQuantity())
                                     .mintType(amount.getQuantity().compareTo(BigInteger.ZERO) == 1? MintType.MINT : MintType.BURN)
+                                    .blockNumber(eventMetadata.getBlock())
+                                    .blockTime(eventMetadata.getBlockTime())
                                     .build()))
                 .collect(Collectors.toList());
 

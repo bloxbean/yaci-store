@@ -53,7 +53,7 @@ public class StakeRegProcessor {
                             .type(CertificateType.STAKE_REGISTRATION)
                             .epoch(eventMetadata.getEpochNumber())
                             .slot(eventMetadata.getSlot())
-                            .block(eventMetadata.getBlock())
+                            .blockNumber(eventMetadata.getBlock())
                             .blockHash(eventMetadata.getBlockHash())
                             .blockTime(eventMetadata.getBlockTime())
                             .build();
@@ -72,7 +72,7 @@ public class StakeRegProcessor {
                             .type(CertificateType.STAKE_DEREGISTRATION)
                             .epoch(eventMetadata.getEpochNumber())
                             .slot(eventMetadata.getSlot())
-                            .block(eventMetadata.getBlock())
+                            .blockNumber(eventMetadata.getBlock())
                             .blockHash(eventMetadata.getBlockHash())
                             .blockTime(eventMetadata.getBlockTime())
                             .build();
@@ -91,7 +91,7 @@ public class StakeRegProcessor {
                             .poolId(stakeDelegation.getStakePoolId().getPoolKeyHash())
                             .epoch(eventMetadata.getEpochNumber())
                             .slot(eventMetadata.getSlot())
-                            .block(eventMetadata.getBlock())
+                            .blockNumber(eventMetadata.getBlock())
                             .blockHash(eventMetadata.getBlockHash())
                             .blockTime(eventMetadata.getBlockTime())
                             .build();
