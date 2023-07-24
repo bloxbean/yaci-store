@@ -107,10 +107,11 @@ public class StartService {
         log.info("TO >> " + to);
 
         //TODO -- Tests
-        //Send a rollback event to rollback data after this slot.
+        //Send a rollback event to rollback data at and after this slot.
+        //This is because, during start up the from block will be processed again.
         if (from.getSlot() > 0) {
             RollbackEvent rollbackEvent = RollbackEvent.builder()
-                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                    .rollbackTo(new Point(from.getSlot()-1, null))
                     .currentBlock(tip.getBlock())
                     .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
                     .build();
