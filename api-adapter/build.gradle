@@ -1,0 +1,16 @@
+apply from: "../publish-common.gradle"
+
+dependencies {
+    api project(":components:common")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Api-adapter module'
+                description = 'Yaci Store Api Adapter Module'
+            }
+        }
+    }
+}

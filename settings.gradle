@@ -31,6 +31,8 @@ include 'stores:live'
 
 include 'aggregates:account'
 
+include 'api-adapter'
+
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
 include ':starters:transaction-spring-boot-starter'
