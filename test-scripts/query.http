@@ -115,3 +115,9 @@ http://localhost:8080/api/v1/stake/registrations?page=0&count=20
 
 ###
 http://localhost:8080/api/v1/accounts/stake_test1upfjudlteayz2ayenwkyqy77zxf92k69f28g0vur0rqmg3sjr95v7
+
+### MIR
+http://localhost:8080/api/v1/mir?page=0&count=10
+
+### MIR by tx hash
+http://localhost:8080/api/v1/txs/d61cf65f7f4dd40f48b30a02cdce13a089eb73e86ecc1a99eb6e7389045fa334/mir

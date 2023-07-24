@@ -20,18 +20,6 @@ public class UtxoRollbackProcessor {
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
-        String rollBackToBlockHash = rollbackEvent.getRollbackTo().getHash();
-
-        utxoStorage.findBySlot(rollBackToSlot)
-                        .stream()
-                                .forEach(addressUtxo -> {
-                                    if (!addressUtxo.getBlockHash().equals(rollBackToBlockHash)) {
-                                        log.error("Slot: " + rollBackToSlot + ", blockHash = " + rollBackToBlockHash);
-                                        throw new RuntimeException("Rollback slot and blockhash are not matching as expected. Expected Slot: "
-                                                + rollBackToSlot + ", blockHash: " + rollBackToBlockHash);
-                                    }
-
-                                });
 
         int deleted = utxoStorage.deleteBySlotGreaterThan(rollBackToSlot);
         int invalidTxnDeleted = invalidTransactionStorage.deleteBySlotGreaterThan(rollBackToSlot);
