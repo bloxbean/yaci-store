@@ -4,7 +4,9 @@ dependencies {
     api project(':components:core')
     api project(":components:events")
 
-    api(libs.yaci)
+    api(libs.yaci){
+        exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
+    }
     api(libs.cardano.client.lib)
     api(libs.cardano.client.backend)
     api(libs.cbor)

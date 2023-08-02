@@ -4,7 +4,7 @@ dependencies {
     api 'org.springframework:spring-context'
     api(libs.yaci) {
         exclude group: "io.netty", module: "netty-all"
-        exclude group: "com.bloxbean.cardano", module: "cardano-client-lib"
+        exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
     }
     api libs.cardano.client.lib
     api libs.cardano.client.backend
