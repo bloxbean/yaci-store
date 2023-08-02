@@ -30,4 +30,7 @@ public class TxMetadataLabelEntity extends BlockAwareEntity {
 
     @Column(name = "body")
     private String body;
+
+    @Column(name = "cbor")
+    private String cbor;
 }

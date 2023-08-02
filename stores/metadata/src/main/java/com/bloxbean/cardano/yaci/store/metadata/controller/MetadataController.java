@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.metadata.controller;
 
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.dto.MetadataDtoMapper;
+import com.bloxbean.cardano.yaci.store.metadata.dto.TxMetadataLabelCBORDto;
 import com.bloxbean.cardano.yaci.store.metadata.dto.TxMetadataLabelDto;
 import com.bloxbean.cardano.yaci.store.metadata.service.MetadataService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,18 @@ public class MetadataController {
         else {
             return txMetadataLabels.stream()
                     .map(metadataDtoMapper::toTxMetadataLabelDto)
+                    .toList();
+        }
+    }
+
+    @GetMapping("/txs/{txHash}/metadata/cbor")
+    public List<TxMetadataLabelCBORDto> getMetadataCborByTxHash(@PathVariable String txHash) {
+        List<TxMetadataLabel> txMetadataLabels = metadataService.getMetadataForTx(txHash);
+        if (txMetadataLabels == null || txMetadataLabels.isEmpty())
+            return Collections.emptyList();
+        else {
+            return txMetadataLabels.stream()
+                    .map(metadataDtoMapper::toTxMetadataLabelCBORDto)
                     .toList();
         }
     }
