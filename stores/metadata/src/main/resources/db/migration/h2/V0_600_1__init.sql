@@ -7,6 +7,7 @@ create table transaction_metadata
     tx_hash               varchar(255) not null,
     label                 varchar(255),
     body                  clob,
+    cbor                  clob,
     block                 bigint,
     block_time            bigint,
     update_datetime       timestamp

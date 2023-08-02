@@ -19,4 +19,5 @@ public class TxMetadataLabel extends BlockAwareDomain {
     private Long slot;
     private String label;
     private String body;
+    private String cbor;
 }

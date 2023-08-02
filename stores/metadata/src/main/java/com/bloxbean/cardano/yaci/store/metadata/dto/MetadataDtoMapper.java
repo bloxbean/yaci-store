@@ -21,6 +21,20 @@ public abstract class MetadataDtoMapper {
         return TxMetadataLabelDto.builder()
                 .label(txMetadataLabel.getLabel())
                 .body(jsonNode)
+                .jsonMetadata(jsonNode)
+                .slot(txMetadataLabel.getSlot())
+                .blockNumber(txMetadataLabel.getBlockNumber())
+                .blockTime(txMetadataLabel.getBlockTime())
+                .build();
+    }
+
+    public TxMetadataLabelCBORDto toTxMetadataLabelCBORDto(@NonNull TxMetadataLabel txMetadataLabel) {
+        return TxMetadataLabelCBORDto.builder()
+                .label(txMetadataLabel.getLabel())
+                .metadata(txMetadataLabel.getCbor())
+                .slot(txMetadataLabel.getSlot())
+                .blockNumber(txMetadataLabel.getBlockNumber())
+                .blockTime(txMetadataLabel.getBlockTime())
                 .build();
     }
 }
