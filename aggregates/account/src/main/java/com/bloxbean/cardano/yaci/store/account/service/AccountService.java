@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ import java.util.Set;
 public class AccountService {
     private final LocalStateQueryClient localStateQueryClient;
 
-    public AccountService(LocalClientProvider localClientProvider) {
+    public AccountService(@Nullable LocalClientProvider localClientProvider) {
         if (localClientProvider != null) {
             this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
             log.info("Account Controller initialized >>>");
