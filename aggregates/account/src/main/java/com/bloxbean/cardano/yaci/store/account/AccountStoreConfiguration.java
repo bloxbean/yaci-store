@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account;
 
+import com.bloxbean.cardano.yaci.store.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.AccountBalanceStorageImpl;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository.AddressBalanceRepository;
@@ -34,6 +35,12 @@ public class AccountStoreConfiguration {
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
                                                        StakeBalanceRepository stakeBalanceRepository) {
         return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AccountService accountService() {
+        return new AccountService(null);
     }
 
     public boolean isHistoryCleanupEnabled() {
