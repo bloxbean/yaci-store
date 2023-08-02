@@ -19,6 +19,10 @@ public class BlockService {
         return blockStorage.findByBlock(blockNumber);
     }
 
+    public Optional<Block> getBlockByHash(String blockHash) {
+        return blockStorage.findByBlockHash(blockHash);
+    }
+
     public BlocksPage getBlocks(int page, int count) {
         return blockStorage.findBlocks(page, count);
     }
