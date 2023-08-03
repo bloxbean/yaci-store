@@ -138,10 +138,12 @@ public class TransactionService {
         List<TransactionSummary> transactionSummaries = txnPage.stream().map(txn -> {
             List<TxUtxo> outputUtxos = resolveInputs(txn.getOutputs());
             List<String> outputAddresses = outputUtxos.stream()
+                    .filter(txUtxo -> txUtxo.getAddress() != null)
                     .map(txUtxo -> txUtxo.getAddress())
                     .collect(Collectors.toList());
 
             BigInteger totalOutput = outputUtxos.stream()
+                    .filter(txUtxo -> txUtxo.getAmount() != null)
                     .flatMap(txUtxo -> txUtxo.getAmount().stream())
                     .filter(amt -> amt.getUnit().equals(LOVELACE))
                     .map(amt -> amt.getQuantity())
