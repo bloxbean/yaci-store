@@ -27,11 +27,11 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 public class AccountStoreConfiguration {
 
-    @Value("${store.account.history-cleanup-enabled:true}")
-    private boolean historyCleanupEnabled = true;
+    @Value("${store.account.history-cleanup-enabled:false}")
+    private boolean historyCleanupEnabled;
 
-    @Value("${store.account.balance-aggregation-enabled:true}")
-    private boolean balanceAggregationEnabled = true;
+    @Value("${store.account.balance-aggregation-enabled:false}")
+    private boolean balanceAggregationEnabled;
 
     @Bean
     @ConditionalOnMissingBean

@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction;
 
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.TransactionStorageImpl;
@@ -60,6 +61,11 @@ public class TransactionStoreConfiguration {
             @Override
             public Optional<AddressUtxo> getUtxoById(UtxoKey utxoId) {
                 return Optional.empty();
+            }
+
+            @Override
+            public List<Utxo> getUtxoByAddress(String address, int page, int count) {
+                return Collections.emptyList();
             }
         };
     }
