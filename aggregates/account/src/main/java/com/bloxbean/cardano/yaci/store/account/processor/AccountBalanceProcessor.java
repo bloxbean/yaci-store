@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
@@ -36,12 +37,17 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
+    private final AccountStoreConfiguration accountStoreConfiguration;
+
     private boolean warmedUp = false;
 
     @EventListener
     @Transactional
     @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
+        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+            return; //Balance aggregation is disabled
+
         if (addressUtxoEvent.getTxInputOutputs() == null || addressUtxoEvent.getTxInputOutputs().size() == 0)
             return;
 
@@ -311,6 +317,9 @@ public class AccountBalanceProcessor {
     @EventListener
     @Transactional
     public void handleGenesisBalanceEvent(GenesisBlockEvent genesisBlockEvent) {
+        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+            return; //Balance aggregation is disabled
+
         List<GenesisBalance> genesisBalanceList = genesisBlockEvent.getGenesisBalances();
         if (genesisBalanceList == null || genesisBalanceList.size() == 0)
             return;
