@@ -14,6 +14,7 @@ public class AccountStoreProperties {
     @Setter
     public static final class Account {
        private boolean enabled = false;
+       private boolean balanceAggregationEnabled = false;
        private boolean historyCleanupEnabled = false;
     }
 

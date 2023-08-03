@@ -30,6 +30,9 @@ public class AccountStoreConfiguration {
     @Value("${store.account.history-cleanup-enabled:true}")
     private boolean historyCleanupEnabled = true;
 
+    @Value("${store.account.balance-aggregation-enabled:true}")
+    private boolean balanceAggregationEnabled = true;
+
     @Bean
     @ConditionalOnMissingBean
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
@@ -45,5 +48,9 @@ public class AccountStoreConfiguration {
 
     public boolean isHistoryCleanupEnabled() {
         return historyCleanupEnabled;
+    }
+
+    public boolean isBalanceAggregationEnabled() {
+        return balanceAggregationEnabled;
     }
 }
