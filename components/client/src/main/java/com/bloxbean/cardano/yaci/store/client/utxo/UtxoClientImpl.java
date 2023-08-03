@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.client.utxo;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,13 @@ public class UtxoClientImpl implements UtxoClient {
         String url = getBaseUrl() + "/utxos/" + utxoId.getTxHash() + "/" + utxoId.getOutputIndex();
         AddressUtxo utxo = restTemplate.getForObject(url, AddressUtxo.class);
         return Optional.ofNullable(utxo);
+    }
+
+    @Override
+    public List<Utxo> getUtxoByAddress(String address, int page, int count)  {
+        String url = getBaseUrl() + "/addresses/" + address + "/utxos?page=" + page + "&count=" + count;
+        Utxo[] utxos = restTemplate.getForObject(url, Utxo[].class);
+        return Arrays.asList(utxos);
     }
 
     private String getBaseUrl() {

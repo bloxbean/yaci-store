@@ -98,6 +98,11 @@ public class AccountBalanceProcessor {
 
             //Update inputs
             for (AddressUtxo input : inputs) {
+                if (input.getAmounts() == null) {
+                    log.error("Input amounts are null for tx: " + txInputOutput.getTxHash());
+                    log.error("Input: " + input);
+                }
+
                 for (Amt amount : input.getAmounts()) {
                     String key = getKey(input.getOwnerAddr(), amount.getUnit());
                     if (addressBalanceMap.get(key) != null) {

@@ -121,3 +121,44 @@ http://localhost:8080/api/v1/mir?page=0&count=10
 
 ### MIR by tx hash
 http://localhost:8080/api/v1/txs/d61cf65f7f4dd40f48b30a02cdce13a089eb73e86ecc1a99eb6e7389045fa334/mir
+
+### Utxo endpoints
+### By address
+http://localhost:8080/api/v1/addresses/addr_test1qqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5v9frnmht7uwrl073q4jvq20z82kh4rksyns540azhndqexqpvhgqr/utxos
+
+### By ent address
+http://localhost:8080/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/utxos?page=0&count=100
+
+### By stake address
+http://localhost:8080/api/v1/addresses/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs/utxos?page=0&count=100
+
+### By address verification key
+http://localhost:8080/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos?page=0&count=1000
+
+
+### By address and asset
+http://localhost:8080/api/v1/addresses/addr_test1qrzqexq9rm5h5t7pqu7zvw2qlgqp80m0mwzttrkzzpt3nvafrnmht7uwrl073q4jvq20z82kh4rksyns540azhndqexqw6t2sa/utxos/749482b2fe4ac715bdeadc67db1f42600483ebb1913fa80a26411a63506c757475734d696e74546f6b656e2d32
+
+### By ent address
+http://localhost:8080/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/utxos/4be3ff6f6ac1303b65adaa8c31b73395f488a6c3370b9694e6df21da4275726e546f6b656e54657374
+
+### By stake address
+http://localhost:8080/api/v1/addresses/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs/utxos/749482b2fe4ac715bdeadc67db1f42600483ebb1913fa80a26411a63506c757475734d696e74546f6b656e2d32
+
+### By address verification key
+http://localhost:8080/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos?page=0&count=1000
+
+### Account balance by address
+http://localhost:8080/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/amounts
+
+### Account balance by address
+http://localhost:8080/api/v1/addresses/addr_test1qqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5v9frnmht7uwrl073q4jvq20z82kh4rksyns540azhndqexqpvhgqr/amounts
+
+### Account balance by stake address
+http://localhost:8080/api/v1/addresses/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs/amounts
+
+###
+http://localhost:8080/api/v1/accounts/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/balance
+
+###
+http://localhost:8080/api/v1/accounts/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs
