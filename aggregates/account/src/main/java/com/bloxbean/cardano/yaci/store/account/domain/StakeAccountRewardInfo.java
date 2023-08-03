@@ -1,23 +1,21 @@
-package com.bloxbean.cardano.yaci.store.metadata.domain;
+package com.bloxbean.cardano.yaci.store.account.domain;
 
-import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
+
+import java.math.BigInteger;
 
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@Builder
 @ToString
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class TxMetadataLabel extends BlockAwareDomain {
-    private String txHash;
-    private Long slot;
-    private String label;
-    private String body;
-    private String cbor;
+public class StakeAccountRewardInfo {
+    private String stakeAddress;
+    private String poolId;
+    private BigInteger withdrawableAmount;
 }

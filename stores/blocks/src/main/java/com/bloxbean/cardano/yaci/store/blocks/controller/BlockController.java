@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import com.bloxbean.cardano.yaci.store.blocks.service.BlockService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,11 +24,16 @@ public class BlockController {
         this.blockService = blockService;
     }
 
-    @GetMapping("{number}")
-    @Operation(description = "Get block by number")
-    public Block getBlockByNumber(@PathVariable long number) {
-        return blockService.getBlockByNumber(number)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+    @GetMapping("{numberOrHash}")
+    @Operation(description = "Get block by number or hash")
+    public Block getBlockByNumber(@PathVariable String numberOrHash) {
+        if (NumberUtils.isParsable(numberOrHash)) {
+            return blockService.getBlockByNumber(Long.parseLong(numberOrHash))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+        } else {
+            return blockService.getBlockByHash(numberOrHash)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+        }
     }
 
     @GetMapping

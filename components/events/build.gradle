@@ -1,5 +1,7 @@
 dependencies {
-    implementation libs.yaci
+    implementation(libs.yaci) {
+        exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
+    }
 }
 
 publishing {

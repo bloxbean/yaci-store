@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.staking.service;
+package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.crypto.Bech32;
@@ -7,7 +7,8 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DelegationsAnd
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
-import com.bloxbean.cardano.yaci.store.staking.dto.StakeAccountInfo;
+import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
@@ -24,9 +25,12 @@ import java.util.Set;
 public class AccountService {
     private final LocalStateQueryClient localStateQueryClient;
 
-    private AccountService(LocalClientProvider localClientProvider) {
-        this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
-        log.info("Account Controller initialized >>>");
+    public AccountService(@Nullable LocalClientProvider localClientProvider) {
+        if (localClientProvider != null) {
+            this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
+            log.info("Account Controller initialized >>>");
+        } else
+            localStateQueryClient = null;
     }
 
     /**
@@ -35,9 +39,13 @@ public class AccountService {
      * @param stakeAddress
      * @return StakeAccountInfo
      */
-    public Optional<StakeAccountInfo> getAccountInfo(String stakeAddress) {
-        Address address = new Address(stakeAddress);
+    public Optional<StakeAccountRewardInfo> getAccountInfo(String stakeAddress) {
+        if (localStateQueryClient == null) {
+            log.info("LocalStateQueryClient is not initialized. Please check if n2c-node-socket-path or n2c-host is configured properly.");
+            return Optional.empty();
+        }
 
+        Address address = new Address(stakeAddress);
         DelegationsAndRewardAccountsResult delegationsAndRewardAccountsResult = null;
         //TODO -- This is a temporary impelementation. It is not scalable with synchronized block
         synchronized (this) {
@@ -65,6 +73,6 @@ public class AccountService {
         BigInteger rewards = delegationsAndRewardAccountsResult.getRewards() != null ?
                 delegationsAndRewardAccountsResult.getRewards().getOrDefault(address, BigInteger.ZERO) : BigInteger.ZERO;
 
-        return Optional.of(new StakeAccountInfo(stakeAddress, poolId, rewards));
+        return Optional.of(new StakeAccountRewardInfo(stakeAddress, poolId, rewards));
     }
 }

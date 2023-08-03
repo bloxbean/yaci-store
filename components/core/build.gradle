@@ -2,7 +2,9 @@ dependencies {
     implementation project(':components:events')
     implementation project(':components:common')
 
-    implementation libs.yaci
+    implementation(libs.yaci){
+        exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
+    }
     implementation libs.cardano.client.lib
 
     testImplementation libs.assertj.core
