@@ -2,6 +2,9 @@ package com.bloxbean.cardano.yaci.store.starter.core;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
+import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
@@ -88,6 +91,15 @@ public class YaciStoreAutoConfiguration {
     public ApplicationStartListener applicationStartListener(LocalClientProvider localClientProvider) {
         log.info("ApplicationStartListener with LocalClientProvider created >>");
         return new ApplicationStartListener(localClientProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "utxoClient")
+    public UtxoClient utxoClient(RestTemplate restTemplate) {
+        if (properties.getUtxoClientUrl() != null && !properties.getUtxoClientUrl().isEmpty())
+            return new UtxoClientImpl(restTemplate, properties.getUtxoClientUrl().trim());
+        else
+            return new DummyUtxoClient();
     }
 
     @Bean
