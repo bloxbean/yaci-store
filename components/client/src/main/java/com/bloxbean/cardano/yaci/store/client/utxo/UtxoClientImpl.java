@@ -5,28 +5,24 @@ import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-@Component
-@ConditionalOnMissingBean(name = "utxoClient")
 @Slf4j
 public class UtxoClientImpl implements UtxoClient {
     private final RestTemplate restTemplate;
 
     @Value("${server.port:8080}")
     private int serverPort;
-    @Value("${store.utxo.base.url:#{null}}")
     private String utxoStoreBaseUrl;
 
-    public UtxoClientImpl(RestTemplate restTemplate) {
+    public UtxoClientImpl(RestTemplate restTemplate, String utxoStoreBaseUrl) {
         this.restTemplate = restTemplate;
-        log.info("Enabled Remote UtxoClient >>>");
+        this.utxoStoreBaseUrl = utxoStoreBaseUrl;
+        log.info("Enabled Remote UtxoClient >>>>>>>> " + utxoStoreBaseUrl);
     }
 
     @Override

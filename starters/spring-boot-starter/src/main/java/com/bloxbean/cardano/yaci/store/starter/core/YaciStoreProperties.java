@@ -13,6 +13,7 @@ public class YaciStoreProperties {
     private Cardano cardano = new Cardano();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
+    private String utxoClientUrl;
 
     @Getter
     @Setter

@@ -1,9 +1,5 @@
 package com.bloxbean.cardano.yaci.store.transaction;
 
-import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
-import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.TransactionStorageImpl;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.mapper.TxnMapper;
@@ -18,10 +14,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
 
 @Configuration
 @ConditionalOnProperty(
@@ -43,30 +35,5 @@ public class TransactionStoreConfiguration {
     @ConditionalOnMissingBean
     public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository, TxnMapper txnMapper) {
         return new TransactionStorageImpl(txnEntityRepository, txnMapper, dslContext);
-    }
-
-    /**
-     * This is a dummy utxo client. This will be used when no UtxoClient implementation is provided.
-     * @return UtxoClient
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public UtxoClient utxoClient() {
-        return new UtxoClient() {
-            @Override
-            public List<AddressUtxo> getUtxosByIds(List<UtxoKey> utxoIds) {
-                return Collections.emptyList();
-            }
-
-            @Override
-            public Optional<AddressUtxo> getUtxoById(UtxoKey utxoId) {
-                return Optional.empty();
-            }
-
-            @Override
-            public List<Utxo> getUtxoByAddress(String address, int page, int count) {
-                return Collections.emptyList();
-            }
-        };
     }
 }
