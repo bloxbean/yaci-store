@@ -36,6 +36,7 @@ jobs:
         with:
           files: |
             applications/all/build/libs/yaci-store-all-*.jar
+            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-*.jar
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
