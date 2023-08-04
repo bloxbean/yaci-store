@@ -15,6 +15,7 @@ public class BlocksStoreProperties {
     public static final class Blocks  {
        private boolean enabled = true;
        private int epochCalculationInterval = 120; //in seconds
+       private boolean epochCalculationEnabled;
     }
 
 }

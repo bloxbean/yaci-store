@@ -11,9 +11,13 @@ import java.util.Optional;
 
 @Repository
 public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId> {
-    Optional<List<AddressUtxoEntity>> findAddressUtxoByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
+    Optional<List<AddressUtxoEntity>> findByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
+    Optional<List<AddressUtxoEntity>> findByOwnerStakeAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
+
 
     Optional<List<AddressUtxoEntity>> findByOwnerPaymentCredentialAndSpent(String paymentKeyHash, Boolean spent, Pageable page);
+
+    Optional<List<AddressUtxoEntity>> findByOwnerStakeCredentialAndSpent(String paymentKeyHash, Boolean spent, Pageable page);
 
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
 
