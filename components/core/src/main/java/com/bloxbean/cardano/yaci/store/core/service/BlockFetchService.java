@@ -35,6 +35,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
+
 @Component
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {
@@ -287,6 +289,13 @@ public class BlockFetchService implements BlockChainDataListener {
                 .orElse(null);
         long currentBlockNum = cursorOptional.map(cursor -> cursor.getBlock())
                 .orElse(-1L);
+
+        log.info("Current cursor point >> " + currentPoint);
+        if ((point.getSlot() == 0 && point.getHash() == null)
+                || (currentPoint.getSlot() - point.getSlot()) > DEFAULT_SECURITY_PARAM) {
+            log.error("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+            return;
+        }
 
         cursorService.rollback(point.getSlot());
 
