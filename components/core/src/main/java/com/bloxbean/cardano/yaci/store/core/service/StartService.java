@@ -118,9 +118,10 @@ public class StartService {
             publisher.publishEvent(rollbackEvent);
         }
 
+        log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
         long diff = tip.getPoint().getSlot() - from.getSlot();
         if (storeProperties.isPrimaryInstance()) {
-            if (diff > 7200) {
+            if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
                 log.info("Start BlockRangeSync");
                 blockFetchService.startFetch(from, to);
             } else {

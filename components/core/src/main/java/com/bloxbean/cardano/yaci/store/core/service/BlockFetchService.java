@@ -288,6 +288,13 @@ public class BlockFetchService implements BlockChainDataListener {
         long currentBlockNum = cursorOptional.map(cursor -> cursor.getBlock())
                 .orElse(-1L);
 
+        log.info("Current cursor point >> " + currentPoint);
+        if ((point.getSlot() == 0 && point.getHash() == null)
+                || (currentPoint.getSlot() - point.getSlot()) > 2160) { //TODO -- Use constant
+            log.error("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+            return;
+        }
+
         cursorService.rollback(point.getSlot());
 
         //Publish rollback event

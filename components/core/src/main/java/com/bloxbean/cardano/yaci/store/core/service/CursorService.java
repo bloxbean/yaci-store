@@ -45,6 +45,7 @@ public class CursorService {
 
     @Transactional
     public void rollback(long slot) {
+        log.info("Rollback cursor_ to slot : " + slot);
         int count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
         log.info("Rollback -- {} cursor records", count);
 
