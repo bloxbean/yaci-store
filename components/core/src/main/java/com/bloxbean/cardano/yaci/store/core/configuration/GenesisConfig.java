@@ -19,8 +19,8 @@ import java.util.List;
 @Component
 public class GenesisConfig {
     public static final int PREVIEW_EPOCH_LENGTH = 86400;
+    public static final int DEFAULT_SECURITY_PARAM = 2160;
     private final long DEFAULT_EPOCH_LENGTH = 432000; //5 days
-    public final static int DEFAULT_SECURITY_PARAM = 2160;
 
     private final long mainnetStartTime = 1_506_203_091;
     private final long testnetStartTime = 1_564_020_236;
