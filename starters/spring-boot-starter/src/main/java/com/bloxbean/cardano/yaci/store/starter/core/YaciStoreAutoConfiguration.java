@@ -145,6 +145,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setByronGenesisFile(properties.getCardano().getByronGenesisFile());
         storeProperties.setShelleyGenesisFile(properties.getCardano().getShelleyGenesisFile());
 
+        storeProperties.setBlockDiffToStartSyncProtocol(properties.getCardano().getBlockDiffToStartSyncProtocol());
         return storeProperties;
     }
 

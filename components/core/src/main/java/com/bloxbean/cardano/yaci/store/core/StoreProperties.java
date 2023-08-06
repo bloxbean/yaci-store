@@ -38,6 +38,8 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String byronGenesisFile;
     private String shelleyGenesisFile;
 
+    private int blockDiffToStartSyncProtocol = 3600;
+
     //derived from protocol magic. No need to set
     private boolean mainnet;
 }
