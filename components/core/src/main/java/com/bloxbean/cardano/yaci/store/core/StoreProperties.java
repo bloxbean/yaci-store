@@ -26,6 +26,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private long shelleyStartBlock;
 
     private String submitApiUrl;
+    private String ogmiosUrl;
     private String mempoolMonitoringEnabled;
 
     private long syncStartSlot;

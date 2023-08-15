@@ -1,5 +1,6 @@
 dependencies {
     api project(":components:common")
+    implementation libs.cardano.client.backend.ogmios
 }
 
 publishing {
