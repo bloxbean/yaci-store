@@ -1,39 +1,47 @@
-package com.bloxbean.cardano.yaci.store.blocks.domain;
+package com.bloxbean.cardano.yaci.store.blocks.dto;
 
+import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigInteger;
 
-@Data
+@Getter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Block {
-    private String hash;
+public class BlockDto {
+    private long time;
+    private long height;
     private long number;
+    private String hash;
     private long slot;
-    private BigInteger totalOutput;
-    private BigInteger totalFees;
-    private long blockTime;
-    private int epochNumber;
+    private int epoch;
     private int era;
-    private String prevHash;
+   // private int epochSlot; //TODO
+    private String slotLeader;
+    private long size;
+    private int txCount;
+    private BigInteger output;
+    private BigInteger fees;
+    private String blockVrf;
+  //  private String opCert;
+  //  private int opCertCount; //TODO
+    private String previousBlock;
+  //  private String nextBlock; //TODO
+  //  private long confirmations; //TODO
+
     private String issuerVkey;
-    private String vrfVkey;
     private Vrf nonceVrf;
     private Vrf leaderVrf;
     private Vrf vrfResult;
-    private long blockBodySize;
     private String blockBodyHash;
     private String protocolVersion;
-    private int noOfTxs;
-    private String slotLeader;
 }
