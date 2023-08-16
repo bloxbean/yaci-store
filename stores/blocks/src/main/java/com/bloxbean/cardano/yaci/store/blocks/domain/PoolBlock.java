@@ -15,8 +15,8 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class PoolBlock {
-    private String blockHash;
-    private long blockNumber;
+    private String hash;
+    private long number;
     private int epoch;
     private String poolId;
 }

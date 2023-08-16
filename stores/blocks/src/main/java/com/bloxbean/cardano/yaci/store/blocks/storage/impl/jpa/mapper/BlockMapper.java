@@ -8,8 +8,23 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public abstract class BlockMapper {
     public abstract Block toBlock(BlockEntity blockEntity);
-    public abstract BlockSummary toBlockSummary(BlockEntity blockEntity);
     public abstract BlockEntity toBlockEntity(Block blockDetails);
+
+    public BlockSummary toBlockSummary(BlockEntity blockEntity) {
+        return BlockSummary.builder()
+                .time(blockEntity.getBlockTime())
+                .number(blockEntity.getNumber())
+                .slot(blockEntity.getSlot())
+                .epoch(blockEntity.getEpochNumber())
+                .era(blockEntity.getEra())
+                .output(blockEntity.getTotalOutput())
+                .fees(blockEntity.getTotalFees())
+                .slotLeader(blockEntity.getSlotLeader())
+                .size(blockEntity.getBlockBodySize())
+                .txCount(blockEntity.getNoOfTxs())
+                .issuerVkey(blockEntity.getIssuerVkey())
+                .build();
+    }
 
     private String getEra(Integer era) {
         switch (era) {

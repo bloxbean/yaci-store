@@ -34,7 +34,7 @@ public class InitialDataProviderService {
                 .map(blockSummary -> {
                     long epochSlot = 0;
                     long slotsPerEpoch = 0;
-                    if (blockSummary.getEra() != Era.Byron.name()) {
+                    if (blockSummary.getEra() != Era.Byron.getValue()) {
                         epochSlot = eraService.getShelleyEpochSlot(blockSummary.getSlot());
                         slotsPerEpoch = eraService.slotsPerEpoch(Era.Shelley);
                     }
@@ -42,15 +42,15 @@ public class InitialDataProviderService {
                     BlockData blockData = new BlockData();
                     blockData.setTime(System.currentTimeMillis());
                     blockData.setNumber(blockSummary.getNumber());
-                    blockData.setEpoch(blockSummary.getEpochNumber());
+                    blockData.setEpoch(blockSummary.getEpoch());
                     blockData.setEra(blockSummary.getEra());
                     blockData.setSlot(blockSummary.getSlot());
                     blockData.setEpochSlot(epochSlot);
-                    blockData.setNTx(blockSummary.getNoOfTxs());
-                    blockData.setBlockTime(blockSummary.getBlockTime());
+                    blockData.setNTx(blockSummary.getTxCount());
+                    blockData.setBlockTime(blockSummary.getTime());
                     blockData.setSlotLeader(blockSummary.getSlotLeader());
                     blockData.setSlotsPerEpoch(slotsPerEpoch);
-//        blockData.setFee(); //TODO -- Get total fee from somewhere
+                    blockData.setFee(blockSummary.getFees());
                     return blockData;
                 }).collect(Collectors.toList());
     }

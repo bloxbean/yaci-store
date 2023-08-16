@@ -76,8 +76,8 @@ public class BlockStorageImpl implements BlockStorage {
                 .stream()
                 .map(blockEntity -> {
                     return PoolBlock.builder()
-                            .blockHash(blockEntity.getHash())
-                            .blockNumber(blockEntity.getNumber())
+                            .hash(blockEntity.getHash())
+                            .number(blockEntity.getNumber())
                             .epoch(blockEntity.getEpochNumber())
                             .poolId(blockEntity.getSlotLeader())
                             .build();

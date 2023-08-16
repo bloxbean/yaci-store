@@ -66,7 +66,7 @@ public class LiveEventProcessor {
         blockData.setBlockTime(blockHeaderEvent.getMetadata().getBlockTime());
         blockData.setSlotLeader(blockHeaderEvent.getMetadata().getSlotLeader());
         blockData.setEpoch(blockHeaderEvent.getMetadata().getEpochNumber());
-        blockData.setEra(blockHeaderEvent.getMetadata().getEra().toString());
+        blockData.setEra(blockHeaderEvent.getMetadata().getEra() != null ? blockHeaderEvent.getMetadata().getEra().getValue() : null);
         blockData.setSlot(blockHeaderEvent.getMetadata().getSlot());
         blockData.setEpochSlot(blockHeaderEvent.getMetadata().getEpochSlot());
         blockData.setSlotsPerEpoch(slotsPerEpoch);

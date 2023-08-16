@@ -17,14 +17,15 @@ import java.math.BigInteger;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class BlockSummary {
+    private long time;
     private long number;
     private long slot;
-    private int epochNumber;
-    private BigInteger totalOutput;
-    private String era;
-    private String issuerVkey;
+    private int epoch;
+    private int era;
+    private BigInteger output;
+    private BigInteger fees;
     private String slotLeader;
-    private long blockBodySize;
-    private int noOfTxs;
-    private long blockTime;
+    private long size;
+    private int txCount;
+    private String issuerVkey;
 }
