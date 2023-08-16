@@ -22,6 +22,7 @@ public class TxAsset extends BlockAwareDomain {
     private String policy;
     private String assetName;
     private String unit;
+    private String fingerprint;
     private BigInteger quantity;
     private MintType mintType;
 }

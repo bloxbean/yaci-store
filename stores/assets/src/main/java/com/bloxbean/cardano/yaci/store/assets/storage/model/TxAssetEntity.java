@@ -37,6 +37,9 @@ public class TxAssetEntity extends BlockAwareEntity {
     @Column(name = "unit")
     private String unit;
 
+    @Column(name = "fingerprint")
+    private String fingerprint;
+
     @Column(name = "quantity")
     private BigInteger quantity;
 
