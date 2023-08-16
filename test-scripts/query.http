@@ -171,3 +171,23 @@ accept: */*
 
 ###
 
+# Assets tx by policy
+GET http://localhost:8080/api/v1/assets/txs/policy/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb337999
+
+###  Assets tx fingerprint
+GET http://localhost:8080/api/v1/assets/txs/fingerprint/asset14p0rxzq3wc2a8tuftzkvjt5xt067rteaf8wqr3
+
+### Assets tx by unit
+GET http://localhost:8080/api/v1/assets/txs/unit/39086ef91d452d1b6ea9c8c92a2f3243467ddf93bf7c142d370e7d6443617264616e6f4275647a483253363434
+
+### Unit
+GET http://localhost:8080/api/v1/assets/txs/unit/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb33799953554d4d495441574152445344656669
+
+### supply unit
+GET http://localhost:8080/api/v1/assets/supply/unit/42f0e3706d2e0a0761db8da21387aadabe609a7cf328d249ebc2eeff96f0ab7cec670d934f369bfecab402f0387983733238b93be6213e61c94ea16f
+
+### supply by policy
+GET http://localhost:8080/api/v1/assets/supply/policy/39086ef91d452d1b6ea9c8c92a2f3243467ddf93bf7c142d370e7d64
+
+### supply by fingerprint
+GET http://localhost:8080/api/v1/assets/supply/fingerprint/asset14p0rxzq3wc2a8tuftzkvjt5xt067rteaf8wqr3
