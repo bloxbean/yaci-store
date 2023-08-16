@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -18,7 +20,7 @@ public class BlockData {
     private long time;
     private long number;
     private long epoch;
-    private String era;
+    private int era;
     private long slot;
     private long epochSlot;
     private long slotsPerEpoch;
@@ -27,6 +29,6 @@ public class BlockData {
     private long size; //block size in bytes
     private int sizePerct;
     private int nTx;
-    private long fee;
+    private BigInteger fee;
     private long blockTime;
 }
