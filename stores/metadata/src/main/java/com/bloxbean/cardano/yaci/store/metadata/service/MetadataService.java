@@ -17,4 +17,8 @@ public class MetadataService {
     public List<TxMetadataLabel> getMetadataForTx(String txHash) {
         return metadataStorage.findByTxHash(txHash);
     }
+
+    public List<TxMetadataLabel> getMetadataByLabel(String label, int page, int count) {
+        return metadataStorage.findByLabel(label, page, count);
+    }
 }
