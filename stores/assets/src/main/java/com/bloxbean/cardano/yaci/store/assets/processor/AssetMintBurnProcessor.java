@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.assets.processor;
 
+import com.bloxbean.cardano.client.api.util.AssetUtil;
+import com.bloxbean.cardano.client.transaction.spec.Asset;
 import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAssetEvent;
@@ -39,6 +41,7 @@ public class AssetMintBurnProcessor {
                                     .policy(amount.getPolicyId())
                                     .assetName(amount.getAssetName())
                                     .unit(amount.getUnit())
+                                    .fingerprint(getFingerprint(amount.getPolicyId(), amount.getAssetName()))
                                     .quantity(amount.getQuantity())
                                     .mintType(amount.getQuantity().compareTo(BigInteger.ZERO) == 1? MintType.MINT : MintType.BURN)
                                     .blockNumber(eventMetadata.getBlock())
@@ -53,6 +56,15 @@ public class AssetMintBurnProcessor {
 
             //biz events
             publisher.publishEvent(new TxAssetEvent(eventMetadata, txAssetList));
+        }
+    }
+
+    private String getFingerprint(String policyId, String assetName) {
+        try {
+            return AssetUtil.calculateFingerPrint(policyId, new Asset(assetName, BigInteger.ZERO).getNameAsHex());
+        } catch (Exception e) {
+            log.error("Error calculating fingerprint for policy: " + policyId + ", asset: " + assetName, e);
+            return null;
         }
     }
 }
