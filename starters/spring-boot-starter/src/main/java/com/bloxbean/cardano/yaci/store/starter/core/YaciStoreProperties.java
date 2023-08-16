@@ -25,6 +25,7 @@ public class YaciStoreProperties {
         private String n2cHost;
         private int n2cPort;
         private String submitApiUrl;
+        private String ogmiosUrl;
         private String mempoolMonitoringEnabled;
 
         private long shelleyStartSlot;

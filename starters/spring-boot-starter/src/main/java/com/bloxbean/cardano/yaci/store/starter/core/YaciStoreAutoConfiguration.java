@@ -82,7 +82,7 @@ public class YaciStoreAutoConfiguration {
         if (properties.getCardano().getN2cPort() == 0)
             throw new IllegalArgumentException("Invalid cardano.n2c.port " + properties.getCardano().getN2cPort() );
         log.info("LocalStateQueryClient ---> Configured (n2c host/port)--> " + properties.getCardano().getN2cHost() + ", " + properties.getCardano().getN2cPort());
-        return new LocalClientProvider(properties.getCardano().getN2cHost(), properties.getCardano().getN2cPort());
+        return new LocalClientProvider(properties.getCardano().getN2cHost(), properties.getCardano().getN2cPort(), properties.getCardano().getProtocolMagic());
 
     }
 
@@ -129,6 +129,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setN2cHost(properties.getCardano().getN2cHost());
         storeProperties.setN2cPort(properties.getCardano().getN2cPort());
         storeProperties.setSubmitApiUrl(properties.getCardano().getSubmitApiUrl());
+        storeProperties.setOgmiosUrl(properties.getCardano().getOgmiosUrl());
         storeProperties.setMempoolMonitoringEnabled(properties.getCardano().getMempoolMonitoringEnabled());
 
         storeProperties.setShelleyStartSlot(properties.getCardano().getShelleyStartSlot());
