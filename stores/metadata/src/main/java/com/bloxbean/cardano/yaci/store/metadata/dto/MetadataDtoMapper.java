@@ -37,4 +37,22 @@ public abstract class MetadataDtoMapper {
                 .blockTime(txMetadataLabel.getBlockTime())
                 .build();
     }
+
+    public MetadataLabelDto toMetadataLabelDto(@NonNull TxMetadataLabel txMetadataLabel) {
+        JsonNode jsonNode = null;
+        try {
+            jsonNode = JsonUtil.parseJson(txMetadataLabel.getBody());
+        } catch (Exception e) {
+            log.error("error parsing metadata : " + txMetadataLabel.getBody());
+        }
+
+        return MetadataLabelDto.builder()
+                .txHash(txMetadataLabel.getTxHash())
+                .jsonMetadata(jsonNode)
+                .cborMetadata(txMetadataLabel.getCbor())
+                .slot(txMetadataLabel.getSlot())
+                .blockNumber(txMetadataLabel.getBlockNumber())
+                .blockTime(txMetadataLabel.getBlockTime())
+                .build();
+    }
 }
