@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.api;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetHolder;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,4 +27,6 @@ public interface UtxoStorage {
 
     Optional<AddressUtxo> save(AddressUtxo addressUtxo);
     Optional<List<AddressUtxo>> saveAll(List<AddressUtxo> addressUtxoList);
+
+    List<AssetHolder> findAssetHoldersByUnit(String unit, int page, int count);
 }

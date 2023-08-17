@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId> {
+public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>, CustomUtxoRepository {
     Optional<List<AddressUtxoEntity>> findByOwnerAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
     Optional<List<AddressUtxoEntity>> findByOwnerStakeAddrAndSpent(String ownerAddress, Boolean spent, Pageable page);
 

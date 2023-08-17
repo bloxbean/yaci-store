@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetHolder;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,17 @@ import java.util.List;
 @Table(name = "address_utxo")
 @IdClass(UtxoId.class)
 @DynamicUpdate
+@SqlResultSetMapping(
+        name = "AssetHolderMapping",
+        classes = @ConstructorResult(
+                targetClass = AssetHolder.class,
+                columns = {
+                        @ColumnResult(name = "owner_addr", type = String.class),
+                        @ColumnResult(name = "owner_stake_addr", type = String.class),
+                        @ColumnResult(name = "quantity", type = String.class)
+                }
+        )
+)
 public class AddressUtxoEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")

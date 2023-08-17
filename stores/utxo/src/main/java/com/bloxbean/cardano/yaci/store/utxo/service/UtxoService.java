@@ -2,11 +2,11 @@ package com.bloxbean.cardano.yaci.store.utxo.service;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetHolder;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,5 +23,9 @@ public class UtxoService {
 
     public List<AddressUtxo> getUtxos(List<UtxoKey> utxoIds) {
         return utxoStorage.findAllByIds(utxoIds);
+    }
+
+    public List<AssetHolder> findAssetHoldersByUnit(String unit, int page, int count) {
+        return utxoStorage.findAssetHoldersByUnit(unit, page, count);
     }
 }

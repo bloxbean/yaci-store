@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetHolder;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
@@ -12,6 +13,9 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.JSON;
+import org.jooq.Table;
+import org.jooq.impl.DSL;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -20,7 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
-import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -182,4 +186,15 @@ public class UtxoStorageImpl implements UtxoStorage {
                 .map(entity -> mapper.toAddressUtxo(entity))
                 .toList());
     }
+
+    @Override
+    public List<AssetHolder> findAssetHoldersByUnit(String unit, int page, int count) {
+        Pageable pageable = PageRequest.of(page, count)
+                .withSort(Sort.Direction.DESC, "slot");
+
+        return utxoRepository.findUtxosByUnit(unit)
+                .stream()
+                .toList();
+    }
+
 }
