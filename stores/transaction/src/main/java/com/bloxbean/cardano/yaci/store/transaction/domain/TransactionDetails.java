@@ -21,20 +21,20 @@ import java.util.Set;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TransactionDetails {
     private String hash;
-    private long blockHeight;
-    private long slot;
+    private Long blockHeight;
+    private Long slot;
     private List<TxUtxo> inputs;
     private List<TxUtxo> outputs;
     private int utxoCount; //TransactionContent field
     private BigInteger totalOutput;
     private BigInteger fees;
-    private long ttl;
+    private Long ttl;
     private String auxiliaryDataHash;
-    private long validityIntervalStart;
+    private Long validityIntervalStart;
     private String scriptDataHash;
     private List<TxUtxo> collateralInputs;
     private Set<String> requiredSigners;
-    private int netowrkId;
+    private Integer netowrkId;
     private TxOuput collateralReturn;
     private BigInteger totalCollateral;
     private List<TxUtxo> referenceInputs;
