@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes;
 import com.bloxbean.cardano.yaci.store.utxo.domain.Amount;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import java.util.Optional;
 @RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "(Experimental) Account API", description = "APIs for account related operations. This is an experimental module. Some apis may not be stable.")
 public class AccountController {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountService accountService;
