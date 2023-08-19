@@ -1,8 +1,8 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.2.0-beta4"
-cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.5.0-alpha.4"
-cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.5.0-alpha.4"
-cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.5.0-alpha.4"
+yaci = "com.bloxbean.cardano:yaci:0.2.0"
+cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.5.0-beta1"
+cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.5.0-beta1"
+cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.5.0-beta1"
 cbor = "co.nstant.in:cbor:0.9"
 hibernate-types = "com.vladmihalcea:hibernate-types-60:2.20.0"
 codehaus-janino = "org.codehaus.janino:janino:3.1.8"
