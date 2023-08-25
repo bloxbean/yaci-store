@@ -6,8 +6,8 @@ import java.util.Optional;
 
 public interface CursorStorage {
     void saveCursor(long eventPublisherId, Cursor cursor);
-    Optional<Cursor> getCursorAtCurrentMinusOffset(long eventPublisherId, int offset);
     Optional<Cursor> getCurrentCursor(long eventPublisherId);
+    Optional<Cursor> getPreviousCursor(long eventPublisherId, long slot);
     Optional<Cursor> findByBlockHash(long eventPublisherId, String blockHash);
     int deleteBySlotGreaterThan(long eventPublisherId, long slot);
 }

@@ -10,9 +10,11 @@ import java.util.Optional;
 
 @Repository
 public interface CursorRepository extends JpaRepository<CursorEntity, CursorId> {
-    List<CursorEntity> findTop50ByIdOrderBySlotDesc(Long id);
     Optional<CursorEntity> findTopByIdOrderBySlotDesc(Long id);
 
+    Optional<CursorEntity> findTopByIdAndSlotBeforeOrderBySlotDesc(Long id, Long slot);
+
     Optional<CursorEntity> findByIdAndBlockHash(Long id, String blockHash);
+
     int deleteByIdAndSlotGreaterThan(Long id, Long slot);
 }

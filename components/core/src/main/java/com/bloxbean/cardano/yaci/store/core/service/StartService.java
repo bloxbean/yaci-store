@@ -59,7 +59,7 @@ public class StartService {
         String prevBlockHash = null;
         Era era = null;
         Long blockNumber = 0L;
-        Optional<Cursor> optional = cursorService.getCursor();
+        Optional<Cursor> optional = cursorService.getStartCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
@@ -110,11 +110,21 @@ public class StartService {
         //Send a rollback event to rollback data at and after this slot.
         //This is because, during start up the from block will be processed again.
         if (from.getSlot() > 0) {
-            RollbackEvent rollbackEvent = RollbackEvent.builder()
-                    .rollbackTo(new Point(from.getSlot()-1, null))
-                    .currentBlock(tip.getBlock())
-                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
-                    .build();
+            RollbackEvent rollbackEvent = cursorService.getPreviousCursor(from.getSlot())
+                    .map(prevCursor -> RollbackEvent.builder()
+                            .rollbackTo(new Point(prevCursor.getSlot(), prevCursor.getBlockHash()))
+                            .currentBlock(tip.getBlock())
+                            .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                            .build())
+                    .orElse(
+                            RollbackEvent.builder()
+                                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                                    .currentBlock(tip.getBlock())
+                                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                                    .build()
+                    );
+
+            log.info("Publishing rollback event to clean data after restart >>> " + rollbackEvent);
             publisher.publishEvent(rollbackEvent);
         }
 

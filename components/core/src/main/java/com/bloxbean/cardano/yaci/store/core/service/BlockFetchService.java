@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.Amount;
+import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
@@ -65,6 +66,8 @@ public class BlockFetchService implements BlockChainDataListener {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
+    @Value("${store.enable-block-event-listener:false}")
+    private boolean enableBlockEventListener;
 
     private boolean syncMode;
 
@@ -81,6 +84,9 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onTransactions(Era era, BlockHeader blockHeader, List<Transaction> transactions) {
+        if (enableBlockEventListener) //No need to process if block event listener is enabled
+            return;
+
         checkError();
         final long slot = blockHeader.getHeaderBody().getSlot();
         eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
@@ -175,6 +181,48 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build()
         ).collect(Collectors.toList());
         return txScriptsList;
+    }
+
+    @Transactional
+    public void onBlock(Block block) {
+        if (!enableBlockEventListener)
+            return;
+
+        checkError();
+        final long slot = block.getHeader().getHeaderBody().getSlot();
+        final Era era = block.getEra();
+        eraService.checkIfNewEra(era, block.getHeader()); //Currently it only looks for Byron to Shelley transition
+        final int epochNumber = eraService.getEpochNo(era, slot);
+        final int epochSlot = eraService.getShelleyEpochSlot(slot);
+        final long blockTime = eraService.blockTime(era, slot);
+        final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(block.getHeader().getHeaderBody().getIssuerVkey());
+
+        EventMetadata eventMetadata = EventMetadata.builder()
+                .mainnet(storeProperties.isMainnet())
+                .era(era)
+                .block(block.getHeader().getHeaderBody().getBlockNumber())
+                .epochNumber(epochNumber)
+                .slotLeader(slotLeader)
+                .blockHash(block.getHeader().getHeaderBody().getBlockHash())
+                .blockTime(blockTime)
+                .prevBlockHash(block.getHeader().getHeaderBody().getPrevHash())
+                .slot(slot)
+                .epochSlot(epochSlot)
+                .noOfTxs(block.getTransactionBodies().size())
+                .syncMode(syncMode)
+                .build();
+        try {
+            publisher.publishEvent(new BlockEvent(eventMetadata, block));
+            //Finally Set the cursor
+            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+        } catch (Exception e) {
+            log.error("Error saving : " + eventMetadata, e);
+            log.error("Stopping fetcher");
+            log.error("Error at block no #" + block.getHeader().getHeaderBody().getBlockNumber());
+            stopSyncOnError();
+            throw new RuntimeException(e);
+        }
     }
 
     @Transactional

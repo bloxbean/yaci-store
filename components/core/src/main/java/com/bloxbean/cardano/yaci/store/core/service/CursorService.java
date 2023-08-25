@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
@@ -16,13 +17,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class CursorService {
     private final CursorStorage cursorStorage;
     private final StoreProperties storeProperties;
+    private final BlockFinder blockFinder;
 
     private AtomicLong count;
     private boolean syncMode;
 
-    public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties) {
+    public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
         this.cursorStorage = cursorStorage;
         this.storeProperties = storeProperties;
+        this.blockFinder = blockFinder;
         this.count = new AtomicLong(0);
     }
 
@@ -34,9 +37,46 @@ public class CursorService {
         printLog(cursor.getBlock(), cursor.getEra());
     }
 
+    public Optional<Cursor> getStartCursor() {
+        Cursor _currentCursor = null;
+
+        while (true) {
+            Optional<Cursor> currentCursor;
+            if (_currentCursor == null) {
+                currentCursor = cursorStorage.getCurrentCursor(storeProperties.getEventPublisherId());
+            } else {
+                currentCursor = cursorStorage.getPreviousCursor(storeProperties.getEventPublisherId(), _currentCursor.getSlot());
+            }
+
+            if (currentCursor.isPresent()) {
+                //check if cursor exists
+                boolean blockExists = blockFinder.blockExists(new Point(currentCursor.get().getSlot(), currentCursor.get().getBlockHash()));
+                if (blockExists) {
+                    log.info("Valid block. slot:" + currentCursor.get().getSlot() + ", blockHash: " + currentCursor.get().getBlockHash()
+                            + ", block : " + currentCursor.get().getBlock());
+
+                    //Delete all invalid cursors
+                    cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), currentCursor.get().getSlot());
+                    return currentCursor;
+                } else {
+                    log.info("InValid block. slot:" + currentCursor.get().getSlot() + ", blockHash: " + currentCursor.get().getBlockHash()
+                            + ", block : " + currentCursor.get().getBlock());
+                    _currentCursor = currentCursor.get();
+                }
+            } else {
+                log.info("No cursor found.");
+                return Optional.empty();
+            }
+
+        }
+    }
+
     public Optional<Cursor> getCursor() {
-        //Get last 50 blocks and select the lowest block number
-        return cursorStorage.getCursorAtCurrentMinusOffset(storeProperties.getEventPublisherId(), 50);
+        return cursorStorage.getCurrentCursor(storeProperties.getEventPublisherId());
+    }
+
+    public Optional<Cursor> getPreviousCursor(long slot) {
+        return cursorStorage.getPreviousCursor(storeProperties.getEventPublisherId(), slot);
     }
 
     public Optional<Cursor> getCursorByBlockHash(String blockHash) {
@@ -77,5 +117,4 @@ public class CursorService {
             log.info("Block No: " + block);
         }
     }
-
 }
