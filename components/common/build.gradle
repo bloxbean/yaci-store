@@ -8,7 +8,6 @@ dependencies {
     }
     api libs.cardano.client.lib
     api libs.cardano.client.backend
-    api libs.hibernate.types
     api libs.springdoc.openapi.starter.webmvc.ui
 
     implementation 'org.springframework.boot:spring-boot-starter-validation'

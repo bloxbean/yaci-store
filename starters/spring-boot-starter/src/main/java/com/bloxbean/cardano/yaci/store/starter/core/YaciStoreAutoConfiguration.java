@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
+import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
@@ -66,6 +67,12 @@ public class YaciStoreAutoConfiguration {
     public GenesisBlockFinder genesisBlockFinder() {
         GenesisBlockFinder genesisBlockFinder = new GenesisBlockFinder(properties.getCardano().getHost(), properties.getCardano().getPort(), properties.getCardano().getProtocolMagic());
         return genesisBlockFinder;
+    }
+
+    @Bean
+    public BlockFinder blockFinder(BlockRangeSync blockRangeSync) {
+        BlockFinder blockFinder = new BlockFinder(blockRangeSync);
+        return blockFinder;
     }
 
     @Bean(name = "localClientProvider")

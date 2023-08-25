@@ -22,5 +22,5 @@ public interface BlockStorage {
 
     List<PoolBlock> findBlocksBySlotLeaderAndEpoch(String slotLeader, int epoch);
 
-    int deleteAllBeforeSlot(long slot);
+    int deleteBySlotGreaterThan(long slot);
 }
