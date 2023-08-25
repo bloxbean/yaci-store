@@ -85,7 +85,7 @@ public class BlockStorageImpl implements BlockStorage {
     }
 
     @Override
-    public int deleteAllBeforeSlot(long slot) {
+    public int deleteBySlotGreaterThan(long slot) {
         return blockRepository.deleteBySlotGreaterThan(slot);
     }
 

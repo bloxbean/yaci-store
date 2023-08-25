@@ -97,7 +97,7 @@ public class BlockProcessor {
     @Transactional
     //TODO -- add test
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
-        int count = blockStorage.deleteAllBeforeSlot(rollbackEvent.getRollbackTo().getSlot());
+        int count = blockStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} block records", count);
     }

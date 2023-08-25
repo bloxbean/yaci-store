@@ -11,7 +11,6 @@ dependencies {
     api(libs.cardano.client.lib)
     api(libs.cardano.client.backend)
     api(libs.cbor)
-    api(libs.hibernate.types)
     api(libs.codehaus.janino)
     api(libs.guava)
     api(libs.springdoc.openapi.starter.webmvc.ui)
