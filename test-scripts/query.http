@@ -191,3 +191,12 @@ GET http://localhost:8080/api/v1/assets/supply/policy/39086ef91d452d1b6ea9c8c92a
 
 ### supply by fingerprint
 GET http://localhost:8080/api/v1/assets/supply/fingerprint/asset14p0rxzq3wc2a8tuftzkvjt5xt067rteaf8wqr3
+
+### Get redeemer by tx hash
+GET http://localhost:8080/api/v1/txs/85dd9fe734810b311610b2c313e85cd1348d5c42bb3f35155322deb346ac40d4/redeemers
+
+### Get datum by datum hash
+GET http://localhost:8080/api/v1/scripts/datum/ee4a6a499024cae6b4d632c07fcad84dfdf0243381cd57fd8a15e6a42158a39f
+
+### Get datum by hash
+GET http://localhost:8080/api/v1/scripts/datum/ee4a6a499024cae6b4d632c07fcad84dfdf0243381cd57fd8a15e6a42158a39f/cbor
