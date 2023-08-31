@@ -106,24 +106,14 @@ public class StartService {
         log.info("From >> " + from);
         log.info("TO >> " + to);
 
-        //TODO -- Tests
         //Send a rollback event to rollback data at and after this slot.
-        //This is because, during start up the from block will be processed again.
+        //This is because, during start up the from block will be processed again (For BlockFetch).
         if (from.getSlot() > 0) {
-            RollbackEvent rollbackEvent = cursorService.getPreviousCursor(from.getSlot())
-                    .map(prevCursor -> RollbackEvent.builder()
-                            .rollbackTo(new Point(prevCursor.getSlot(), prevCursor.getBlockHash()))
-                            .currentBlock(tip.getBlock())
-                            .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
-                            .build())
-                    .orElse(
-                            RollbackEvent.builder()
-                                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
-                                    .currentBlock(tip.getBlock())
-                                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
-                                    .build()
-                    );
-
+            RollbackEvent rollbackEvent = RollbackEvent.builder()
+                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                    .currentBlock(tip.getBlock())
+                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                    .build();
             log.info("Publishing rollback event to clean data after restart >>> " + rollbackEvent);
             publisher.publishEvent(rollbackEvent);
         }
