@@ -59,6 +59,11 @@ public class ScriptController {
         return scriptService.getTransactionScripts(txHash);
     }
 
+    @GetMapping("/txs/{txHash}/redeemers")
+    public List<TxRedeemerDto> getTxRedeemers(@PathVariable String txHash) {
+        return scriptService.getTransactionRedeemers(txHash);
+    }
+
     @GetMapping("/scripts/datum/{datumHash}")
     public JsonNode getDatumJsonByHash(@PathVariable String datumHash) {
         return scriptService.getDatumAsJson(datumHash)
