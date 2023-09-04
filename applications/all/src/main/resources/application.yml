@@ -12,7 +12,7 @@ spring:
 #          batch_size: 30
 #          order_inserts: true
   flyway:
-    locations: classpath:db/migration/{vendor}
+    locations: classpath:db/store/{vendor}
     out-of-order: true
 
 apiPrefix: /api/v1
