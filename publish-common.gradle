@@ -75,7 +75,7 @@ if (jooq_modules.contains(name)) {
         url = 'jdbc:h2:' + project.buildDir.absolutePath + File.separator + 'testdb;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;INIT=CREATE SCHEMA IF NOT EXISTS \"PUBLIC\"\\;'
         user = 'sa'
         password = ''
-        locations = ['filesystem:src/main/resources/db/migration/h2']
+        locations = ['filesystem:src/main/resources/db/store/h2']
         createSchemas = true
         schemas = ['PUBLIC']
 //            cleanOnValidationError = true
@@ -135,7 +135,7 @@ if (jooq_modules.contains(name)) {
         dependsOn tasks.named('flywayMigrate')
 
         // declare Flyway migration scripts as inputs on the jOOQ task
-        inputs.files(fileTree('src/main/resources/db/migration/h2'))
+        inputs.files(fileTree('src/main/resources/db/store/h2'))
                 .withPropertyName('migrations')
                 .withPathSensitivity(PathSensitivity.RELATIVE)
 
