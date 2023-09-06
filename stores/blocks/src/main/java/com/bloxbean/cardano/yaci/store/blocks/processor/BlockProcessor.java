@@ -43,6 +43,7 @@ public class BlockProcessor {
                 .totalOutput(BigInteger.ZERO)
                 .totalFees(BigInteger.ZERO)
                 .epochNumber(blockHeaderEvent.getMetadata().getEpochNumber())
+                .epochSlot((int) blockHeaderEvent.getMetadata().getEpochSlot())
                 .blockTime(blockHeaderEvent.getMetadata().getBlockTime())
                 .era(blockHeaderEvent.getMetadata().getEra().getValue())
                 .prevHash(blockHeader.getHeaderBody().getPrevHash())
@@ -58,6 +59,14 @@ public class BlockProcessor {
                 .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
                 .slotLeader(blockHeaderEvent.getMetadata().getSlotLeader())
                 .build();
+
+        if (blockHeader.getHeaderBody().getOperationalCert() != null) {
+            block.setOpCertHotVKey(blockHeader.getHeaderBody().getOperationalCert().getHotVKey());
+            block.setOpCertSeqNumber(blockHeader.getHeaderBody().getOperationalCert().getSequenceNumber());
+            block.setOpcertKesPeriod(blockHeader.getHeaderBody().getOperationalCert().getKesPeriod());
+            block.setOpCertSigma(blockHeader.getHeaderBody().getOperationalCert().getSigma());
+        }
+
         blockStorage.save(block);
     }
 

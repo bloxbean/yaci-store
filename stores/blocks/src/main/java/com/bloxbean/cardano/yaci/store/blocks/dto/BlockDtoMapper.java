@@ -25,15 +25,17 @@ public class BlockDtoMapper {
                 .slot(block.getSlot())
                 .epoch(block.getEpochNumber())
                 .era(block.getEra())
-                //.epochSlot(block.getEpochSlot()) TODO -- Epoch slot
+                .epochSlot(block.getEpochSlot())
                 .slotLeader(block.getSlotLeader())
                 .size(block.getBlockBodySize())
                 .txCount(block.getNoOfTxs())
                 .output(block.getTotalOutput())
                 .fees(block.getTotalFees())
                 .blockVrf(vrfVkey)
-                //.opCert(block.getLeaderVrf().getOutput())
-                // .opCertCount(block.getLeaderVrf().getCounter()) TODO -- OpCertCount
+                .opCert(block.getOpCertHotVKey())
+                .opCertCounter(block.getOpCertSeqNumber())
+                .opCertKesPeriod(block.getOpcertKesPeriod())
+                .opCertSigma(block.getOpCertSigma())
                 .previousBlock(block.getPrevHash())
                 //.nextBlock(block.getNextBlock()) TODO -- next block
                 //.confirmations(block.getConfirmations()) TODO -- confirmations
