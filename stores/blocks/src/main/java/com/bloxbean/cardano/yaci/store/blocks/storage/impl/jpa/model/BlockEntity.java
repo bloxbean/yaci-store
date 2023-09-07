@@ -34,7 +34,10 @@ public class BlockEntity extends BaseEntity {
     private Long slot;
 
     @Column(name = "epoch")
-    private int epochNumber;
+    private Integer epochNumber;
+
+    @Column(name = "epoch_slot")
+    private Integer epochSlot;
 
     @Column(name = "total_output")
     private BigInteger totalOutput;
@@ -43,7 +46,7 @@ public class BlockEntity extends BaseEntity {
     private BigInteger totalFees;
 
     @Column(name = "block_time")
-    private long blockTime;
+    private Long blockTime;
 
     @Column(name = "era")
     private Integer era;
@@ -68,6 +71,18 @@ public class BlockEntity extends BaseEntity {
     @Type(JsonType.class)
     @Column(name="vrf_result")
     private Vrf vrfResult;
+
+    @Column(name = "op_cert_hot_vkey")
+    private String opCertHotVKey;
+
+    @Column(name = "op_cert_seq_number")
+    private Integer opCertSeqNumber;
+
+    @Column(name = "op_cert_kes_period")
+    private Integer opcertKesPeriod;
+
+    @Column(name = "op_cert_sigma")
+    private String opCertSigma;
 
     @Column(name = "body_size")
     private Long blockBodySize;

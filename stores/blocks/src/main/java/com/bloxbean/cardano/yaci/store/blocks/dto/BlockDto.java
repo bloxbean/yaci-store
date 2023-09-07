@@ -18,22 +18,24 @@ import java.math.BigInteger;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class BlockDto {
-    private long time;
-    private long height;
-    private long number;
+    private Long time;
+    private Long height;
+    private Long number;
     private String hash;
-    private long slot;
-    private int epoch;
-    private int era;
-   // private int epochSlot; //TODO
+    private Long slot;
+    private Integer epoch;
+    private Integer era;
+    private Integer epochSlot;
     private String slotLeader;
     private long size;
     private int txCount;
     private BigInteger output;
     private BigInteger fees;
     private String blockVrf;
-  //  private String opCert;
-  //  private int opCertCount; //TODO
+    private String opCert;
+    private Integer opCertCounter;
+    private Integer opCertKesPeriod;
+    private String opCertSigma;
     private String previousBlock;
   //  private String nextBlock; //TODO
   //  private long confirmations; //TODO
