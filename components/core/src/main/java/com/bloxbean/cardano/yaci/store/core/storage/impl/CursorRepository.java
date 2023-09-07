@@ -5,7 +5,6 @@ import com.bloxbean.cardano.yaci.store.core.storage.impl.model.CursorId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -17,4 +16,7 @@ public interface CursorRepository extends JpaRepository<CursorEntity, CursorId> 
     Optional<CursorEntity> findByIdAndBlockHash(Long id, String blockHash);
 
     int deleteByIdAndSlotGreaterThan(Long id, Long slot);
+
+    //Required for history cleanup
+    int deleteByIdAndBlockLessThan(Long id, Long block);
 }
