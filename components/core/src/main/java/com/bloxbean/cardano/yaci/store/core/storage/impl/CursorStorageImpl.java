@@ -53,6 +53,11 @@ public class CursorStorageImpl implements CursorStorage {
         return cursorRepository.deleteByIdAndSlotGreaterThan(eventPublisherId, slot);
     }
 
+    @Override
+    public int deleteCursorBefore(long eventPublisherId, long blockNumber) {
+        return cursorRepository.deleteByIdAndBlockLessThan(eventPublisherId, blockNumber);
+    }
+
     private static Cursor cursorEntityToCursor(CursorEntity cursorEntity) {
         return Cursor.builder()
                 .slot(cursorEntity.getSlot())

@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.core;
 
+import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -38,5 +40,14 @@ public class StoreConfiguration {
     @ConditionalOnMissingBean
     public EraStorage eraStorage(EraRepository eraRepository, EraMapper eraMapper) {
         return new EraStorageImpl(eraRepository, eraMapper);
+    }
+
+    @Bean
+    @ConditionalOnExpression("${store.cardano.cursor-no-of-blocks-to-keep:1} > 0")
+    public CursorCleanupScheduler cursorCleanupScheduler(CursorStorage cursorStorage, StoreProperties storeProperties) {
+        log.info("<<< Enable CursorCleanupScheduler >>>");
+        log.info("CursorCleanupScheduler will run every {} sec", storeProperties.getCursorCleanupInterval());
+        log.info("CursorCleanupScheduler will keep {} blocks in cursor", storeProperties.getCursorNoOfBlocksToKeep());
+        return new CursorCleanupScheduler(cursorStorage, storeProperties);
     }
 }
