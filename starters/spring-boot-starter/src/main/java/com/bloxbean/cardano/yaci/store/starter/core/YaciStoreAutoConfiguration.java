@@ -154,6 +154,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setShelleyGenesisFile(properties.getCardano().getShelleyGenesisFile());
 
         storeProperties.setBlockDiffToStartSyncProtocol(properties.getCardano().getBlockDiffToStartSyncProtocol());
+        storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
+        storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
         return storeProperties;
     }
 

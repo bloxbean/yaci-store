@@ -43,6 +43,9 @@ public class YaciStoreProperties {
         private String shelleyGenesisFile;
 
         private int blockDiffToStartSyncProtocol = 2000;
+
+        private int cursorNoOfBlocksToKeep = 2160;
+        private int cursorCleanupInterval = 3600;
     }
 
     @Getter
