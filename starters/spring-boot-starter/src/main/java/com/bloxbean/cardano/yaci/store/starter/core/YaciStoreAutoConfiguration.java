@@ -70,8 +70,8 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
-    public BlockFinder blockFinder(BlockRangeSync blockRangeSync) {
-        BlockFinder blockFinder = new BlockFinder(blockRangeSync);
+    public BlockFinder blockFinder(BlockSync blockSync) {
+        BlockFinder blockFinder = new BlockFinder(blockSync);
         return blockFinder;
     }
 

@@ -1,5 +1,5 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.2.1"
+yaci = "com.bloxbean.cardano:yaci:0.2.2"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.5.0-beta2"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.5.0-beta2"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.5.0-beta2"
