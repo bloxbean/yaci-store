@@ -46,6 +46,10 @@ public class YaciStoreProperties {
 
         private int cursorNoOfBlocksToKeep = 2160;
         private int cursorCleanupInterval = 3600;
+
+        //This is only required when the genesis hash can't be fetched from the network.
+        // In that case, the default genesis hash will be used
+        private String defaultGenesisHash = "Genesis";
     }
 
     @Getter

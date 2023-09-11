@@ -156,6 +156,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setBlockDiffToStartSyncProtocol(properties.getCardano().getBlockDiffToStartSyncProtocol());
         storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
+
+        storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
         return storeProperties;
     }
 
