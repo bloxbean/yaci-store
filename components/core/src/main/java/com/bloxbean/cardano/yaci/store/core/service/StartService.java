@@ -71,14 +71,21 @@ public class StartService {
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
                 Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
                 if (startPoint.isPresent()) {
+                    String genesisHash = startPoint.get().getGenesisHash();
+                    if (genesisHash == null) {
+                        log.info("Genesis hash is null. So genesis block's hash will be set from " +
+                                "store.cardano.default-genesis-hash property");
+                        genesisHash = storeProperties.getDefaultGenesisHash();
+                    }
+
                     //Save genesis block
                     GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
-                            .blockHash(startPoint.get().getGenesisBlock().getHash())
-                            .slot(startPoint.get().getGenesisBlock().getSlot())
+                            .blockHash(genesisHash)
                             .blockTime(genesisConfig.getStartTime(protocolMagic))
-                            .block(0)
-                            .era(startPoint.get().getGenesisBlockEra())
                             .genesisBalances(genesisConfig.getGenesisBalances())
+                            .era(startPoint.get().getFirstBlockEra()) //Set first block era to set start era
+                            .slot(-1) //dummy value
+                            .block(-1) //dummy value
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();

@@ -45,6 +45,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int cursorNoOfBlocksToKeep = 2160;
     private int cursorCleanupInterval = 3600;
 
+    //Only required if the genesis hash can't be fetched
+    private String defaultGenesisHash = "Genesis";
+
     //derived from protocol magic. No need to set
     private boolean mainnet;
 }
