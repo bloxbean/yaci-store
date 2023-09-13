@@ -39,7 +39,7 @@ public class AccountBalanceProcessor {
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
     private final AccountStoreConfiguration accountStoreConfiguration;
 
-    private boolean warmedUp = false;
+//    private boolean warmedUp = false;
 
     @EventListener
     @Transactional
@@ -52,13 +52,13 @@ public class AccountBalanceProcessor {
             return;
 
         EventMetadata metadata = addressUtxoEvent.getEventMetadata();
-        if (!warmedUp) {//Probably a restart, so delete all state after this slot no
-            int noOfDeleted = accountBalanceStorage.deleteAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
-            log.info("Deleted {} address balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
-            noOfDeleted = accountBalanceStorage.deleteStakeAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
-            log.info("Deleted {} stake balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
-            warmedUp = true;
-        }
+//        if (!warmedUp) {//Probably a restart, so delete all state after this slot no
+//            int noOfDeleted = accountBalanceStorage.deleteAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
+//            log.info("Deleted {} address balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
+//            noOfDeleted = accountBalanceStorage.deleteStakeAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
+//            log.info("Deleted {} stake balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
+//            warmedUp = true;
+//        }
 
         CompletableFuture<Void> addressBalancesFuture = CompletableFuture.supplyAsync(() -> handleAddressBalance(addressUtxoEvent))
                 .thenAcceptAsync(addressBalances -> {
@@ -125,7 +125,8 @@ public class AccountBalanceProcessor {
                                             .address(input.getOwnerAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .paymentCredential(input.getOwnerPaymentCredential())
                                             .stakeAddress(input.getOwnerStakeAddr())
@@ -171,7 +172,8 @@ public class AccountBalanceProcessor {
                                             .address(output.getOwnerAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .paymentCredential(output.getOwnerPaymentCredential())
                                             .stakeAddress(output.getOwnerStakeAddr())
@@ -187,7 +189,8 @@ public class AccountBalanceProcessor {
                                             .address(output.getOwnerAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .paymentCredential(output.getOwnerPaymentCredential())
                                             .stakeAddress(output.getOwnerStakeAddr())
@@ -240,7 +243,8 @@ public class AccountBalanceProcessor {
                                             .address(input.getOwnerStakeAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .stakeCredential(input.getOwnerStakeCredential())
                                             .unit(amount.getUnit())
@@ -286,7 +290,8 @@ public class AccountBalanceProcessor {
                                             .address(output.getOwnerStakeAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .stakeCredential(output.getOwnerStakeCredential())
                                             .unit(amount.getUnit())
@@ -301,7 +306,8 @@ public class AccountBalanceProcessor {
                                             .address(output.getOwnerStakeAddr())
                                             .blockHash(metadata.getBlockHash())
                                             .slot(metadata.getSlot())
-                                            .block(metadata.getBlock())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockTime(metadata.getBlockTime())
                                             .epoch(metadata.getEpochNumber())
                                             .stakeCredential(output.getOwnerStakeCredential())
                                             .unit(amount.getUnit())
@@ -343,17 +349,19 @@ public class AccountBalanceProcessor {
                         //Not a valid shelley address
                     }
 
-                    return AddressBalance.builder()
+                    AddressBalance addressBalance =  AddressBalance.builder()
                             .address(genesisBalance.getAddress())
                             .blockHash(genesisBlockEvent.getBlockHash())
                             .slot(genesisBlockEvent.getSlot())
-                            .block(genesisBlockEvent.getBlock())
+                            .blockNumber(genesisBlockEvent.getBlock())
+                            .blockTime(genesisBlockEvent.getBlockTime())
                             .unit(LOVELACE)
                             .assetName(LOVELACE)
                             .quantity(genesisBalance.getBalance())
                             .paymentCredential(paymentCredential)
                             .stakeAddress(stakeAddress)
                             .build();
+                    return addressBalance;
                 }).toList();
         accountBalanceStorage.saveAddressBalances(addressBalances);
 
@@ -369,16 +377,18 @@ public class AccountBalanceProcessor {
                 }).map(genesisBalance -> {
                     Address address = new Address(genesisBalance.getAddress());
                     Address stakeAddress = AddressProvider.getStakeAddress(address);
-                    return StakeAddressBalance.builder()
+                    StakeAddressBalance stakeAddrBalance = StakeAddressBalance.builder()
                             .address(stakeAddress.toBech32())
                             .blockHash(genesisBlockEvent.getBlockHash())
                             .slot(genesisBlockEvent.getSlot())
-                            .block(genesisBlockEvent.getBlock())
+                            .blockNumber(genesisBlockEvent.getBlock())
+                            .blockTime(genesisBlockEvent.getBlockTime())
                             .unit(LOVELACE)
                             .assetName(LOVELACE)
                             .quantity(genesisBalance.getBalance())
                             .stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get().getBytes()))
                             .build();
+                    return stakeAddrBalance;
                 }).toList();
         accountBalanceStorage.saveStakeAddressBalances(stakeAddrBalances);
     }
