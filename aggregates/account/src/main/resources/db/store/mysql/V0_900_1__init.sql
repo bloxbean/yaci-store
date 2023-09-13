@@ -3,7 +3,7 @@ create table address_balance
 (
     address            varchar(500),
     unit               varchar(255),
-    slot               int unsigned,
+    slot               bigint,
     quantity           numeric(38)  null,
     addr_full          longtext null,
     policy             varchar(128),
@@ -12,8 +12,8 @@ create table address_balance
     stake_address      varchar(255),
     block_hash         varchar(255),
     block              bigint,
+    block_time         bigint,
     epoch              integer,
-    create_datetime    timestamp,
     update_datetime    timestamp,
     primary key (address, unit, slot)
 );
@@ -26,6 +26,9 @@ CREATE INDEX idx_address_balance_slot
 
 CREATE INDEX idx_address_balance_block
     ON address_balance (block);
+
+CREATE INDEX idx_address_balance_block_time
+    ON address_balance (block_time);
 
 CREATE INDEX idx_address_balance_epoch
     ON address_balance (epoch);
@@ -48,15 +51,15 @@ create table stake_address_balance
 (
     address          varchar(255),
     unit             varchar(255),
-    slot             int unsigned,
+    slot             bigint,
     quantity         numeric(38)  null,
     policy           varchar(128),
     asset_name       varchar(255),
     stake_credential varchar(255),
     block_hash       varchar(255),
     block            bigint,
+    block_time       bigint,
     epoch            integer,
-    create_datetime  timestamp,
     update_datetime  timestamp,
     primary key (address, unit, slot)
 );
@@ -69,6 +72,9 @@ CREATE INDEX idx_stake_addr_balance_slot
 
 CREATE INDEX idx_stake_addr_balance_block
     ON stake_address_balance (block);
+
+CREATE INDEX idx_stake_addr_balance_block_time
+    ON stake_address_balance (block_time);
 
 CREATE INDEX idx_stake_addr_balance_epoch
     ON stake_address_balance (epoch);
