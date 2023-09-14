@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
