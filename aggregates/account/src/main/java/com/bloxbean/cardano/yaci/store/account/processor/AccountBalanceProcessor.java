@@ -227,7 +227,7 @@ public class AccountBalanceProcessor {
                         StakeAddressBalance addressBalance = stakeBalanceMap.get(key);
                         addressBalance.setQuantity(addressBalance.getQuantity().subtract(amount.getQuantity()));
                     } else {
-                        accountBalanceStorage.getAddressStakeBalance(input.getOwnerStakeAddr(), amount.getUnit(), metadata.getSlot() - 1)
+                        accountBalanceStorage.getStakeAddressBalance(input.getOwnerStakeAddr(), amount.getUnit(), metadata.getSlot() - 1)
                                 .ifPresentOrElse(stakeAddrBalance -> {
                                     BigInteger newBalance = stakeAddrBalance.getQuantity().subtract(amount.getQuantity());
                                     if (newBalance.compareTo(BigInteger.ZERO) < 0) {
@@ -275,7 +275,7 @@ public class AccountBalanceProcessor {
                         StakeAddressBalance stakeAddrBalance = stakeBalanceMap.get(key);
                         stakeAddrBalance.setQuantity(stakeAddrBalance.getQuantity().add(amount.getQuantity()));
                     } else {
-                        accountBalanceStorage.getAddressStakeBalance(output.getOwnerStakeAddr(), amount.getUnit(), metadata.getSlot() - 1)
+                        accountBalanceStorage.getStakeAddressBalance(output.getOwnerStakeAddr(), amount.getUnit(), metadata.getSlot() - 1)
                                 .ifPresentOrElse(stakeAddrBalance -> {
                                     BigInteger newBalance = stakeAddrBalance.getQuantity().add(amount.getQuantity());
                                     if (newBalance.compareTo(BigInteger.ZERO) < 0) {
