@@ -29,6 +29,14 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
+    public Optional<AddressBalance> getAddressBalanceByTime(String address, String unit, long time) {
+        if (time == 0)
+            throw new IllegalArgumentException("Time cannot be 0");
+        return addressBalanceRepository.findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address, unit, time)
+                .map(mapper::toAddressBalance);
+    }
+
+    @Override
     public List<AddressBalance> getAddressBalance(String address) {
         return addressBalanceRepository.findLatestAddressBalanceByAddress(address).stream()
                 .map(mapper::toAddressBalance)
@@ -55,8 +63,17 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public Optional<StakeAddressBalance> getAddressStakeBalance(String address, String unit, long slot) {
+    public Optional<StakeAddressBalance> getStakeAddressBalance(String address, String unit, long slot) {
         return stakeBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
+                .map(mapper::toStakeBalance);
+    }
+
+    @Override
+    public Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, String unit, long time) {
+        if (time == 0)
+            throw new IllegalArgumentException("Time cannot be 0");
+
+        return stakeBalanceRepository.findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address, unit, time)
                 .map(mapper::toStakeBalance);
     }
 
