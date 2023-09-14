@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.core.model.Relay;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;

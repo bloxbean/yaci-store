@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
