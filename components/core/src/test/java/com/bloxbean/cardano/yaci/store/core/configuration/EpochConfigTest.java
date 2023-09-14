@@ -5,11 +5,15 @@ import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.ResourceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class EpochConfigTest {
-    private GenesisConfig genesisConfig = new GenesisConfig(new StoreProperties(), new ObjectMapper());
+    ResourceLoader resourceLoader = new DefaultResourceLoader();
+
+    private GenesisConfig genesisConfig = new GenesisConfig(new StoreProperties(), new ObjectMapper(), resourceLoader);
     private EpochConfig epochConfig = new EpochConfig(genesisConfig);
 
     private final Long mainnetShellyStartSlot = 4492800L;
