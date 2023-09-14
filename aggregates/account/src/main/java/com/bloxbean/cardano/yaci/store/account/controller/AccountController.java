@@ -15,10 +15,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -42,20 +41,53 @@ public class AccountController {
         if (!accountStoreConfiguration.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getAddressBalance(address);
+        return accountBalanceStorage.getAddressBalance(address)
+                .stream()
+                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                .toList();
     }
 
-    @GetMapping("/accounts/{address}/balance")
+    @GetMapping("/accounts/{stakeAddress}/balance")
     @Operation(description = "Get current balance at a stake address")
-    public List<StakeAddressBalance> getStakeAddressBalance(String stakeAddr) {
+    public List<StakeAddressBalance> getStakeAddressBalance(String stakeAddress) {
         if (!accountStoreConfiguration.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getStakeAddressBalance(stakeAddr);
+        return accountBalanceStorage.getStakeAddressBalance(stakeAddress)
+                .stream()
+                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                .toList();
+    }
+
+    @GetMapping("/addresses/{address}/{unit}/balance")
+    @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
+    public AddressBalance getAddressBalanceAtTime(String address, String unit,
+                                                        @RequestParam long timeInSec) {
+        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
+
+        return accountBalanceStorage.getAddressBalanceByTime(address, unit, timeInSec)
+                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
+    }
+
+    @GetMapping("/accounts/{stakeAddress}/{unit}/balance")
+    @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
+    public StakeAddressBalance getStakeAddressBalanceAtTime(String stakeAddress, String unit,
+                                                        @RequestParam long timeInSec) {
+        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
+
+        return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, unit, timeInSec)
+                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
+
     }
 
     @GetMapping("/accounts/{stakeAddress}")
-    @Operation(description = "Obtain information about a specific stake account")
+    @Operation(description = "Obtain information about a specific stake account." +
+            "It calculates the current lovelace balance at the stake address by aggregating all currrent utxos for the stake address" +
+            "and get rewards amount directly from node.")
     public StakeAccountInfo getStakeAccountDetails(@PathVariable @NonNull String stakeAddress) {
         if (!stakeAddress.startsWith(Bech32Prefixes.STAKE_ADDR_PREFIX))
             throw new IllegalArgumentException("Invalid stake address");
@@ -92,7 +124,8 @@ public class AccountController {
     }
 
     @GetMapping("/addresses/{address}/amounts")
-    @Operation(description = "Get amounts at an address. For stake address, only lovelace is returned")
+    @Operation(description = "Get amounts at an address. For stake address, only lovelace is returned." +
+            "It calculates the current balance at the address by aggregating all currrent utxos for the stake address. It may be slow for addresses with too many utxos.")
     public List<Amount> getAddressAmounts(@PathVariable @NonNull String address) {
         List<Amount> amounts = utxoAccountService.getAmountsAtAddress(address);
         if (amounts == null || amounts.size() == 0)

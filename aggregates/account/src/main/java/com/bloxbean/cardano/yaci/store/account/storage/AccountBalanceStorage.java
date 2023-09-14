@@ -20,6 +20,15 @@ public interface AccountBalanceStorage {
     Optional<AddressBalance> getAddressBalance(String address, String unit, long slot);
 
     /**
+     * Get address balance for the given address, unit at the given time in sec
+     * @param address address
+     * @param unit unit
+     * @param time time in seconds
+     * @return AddressBalance
+     */
+    Optional<AddressBalance> getAddressBalanceByTime(String address, String unit, long time);
+
+    /**
      * Get latest address balance for the given address at highest slot
      * @param address address
      * @return List of AddressBalance
@@ -52,12 +61,21 @@ public interface AccountBalanceStorage {
 
     /**
      * Get stake address balance for the given address, unit at the given slot
-     * @param address address
+     * @param address stake address
      * @param unit unit
      * @param slot slot
      * @return StakeAddressBalance
      */
-    Optional<StakeAddressBalance> getAddressStakeBalance(String address, String unit, long slot);
+    Optional<StakeAddressBalance> getStakeAddressBalance(String address, String unit, long slot);
+
+    /**
+     * Get stake address balance for the given address, unit at the given time in sec
+     * @param address stake address
+     * @param unit unit
+     * @param time time in sec
+     * @return StakeAddressBalance
+     */
+    Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, String unit, long time);
 
     /**
      * Get latest stake address balance for the given address at highest slot

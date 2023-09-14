@@ -14,6 +14,7 @@ import java.util.Optional;
 public interface StakeBalanceRepository extends JpaRepository<StakeAddressBalanceEntity, AddressBalanceId> {
 
     Optional<StakeAddressBalanceEntity> findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(String address, String unit, Long slot);
+    Optional<StakeAddressBalanceEntity> findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(String address, String unit, Long blockTime);
 
     @Query("SELECT a FROM StakeAddressBalanceEntity a " +
             "WHERE a.address = :address " +
