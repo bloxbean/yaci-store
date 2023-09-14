@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +16,9 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 @Slf4j
 public class AccountBalanceHistoryCleanupHelper {
-    private static int confirmedSlotCount = 2160 * 20; //TODO: Make it configurable
+    @Value("${store.account.balance-cleanup-slot-count:43200}")
+    private int cleanupSlotCount; //TODO: Make it configurable
+
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountStoreConfiguration accountStoreConfiguration;
 
@@ -27,7 +30,7 @@ public class AccountBalanceHistoryCleanupHelper {
         if (!accountStoreConfiguration.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - confirmedSlotCount;
+        long slot = currentSlot - cleanupSlotCount;
         if(slot < 0)
             return;
 
@@ -46,7 +49,7 @@ public class AccountBalanceHistoryCleanupHelper {
         if (!accountStoreConfiguration.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - confirmedSlotCount;
+        long slot = currentSlot - cleanupSlotCount;
         if(slot < 0)
             return;
 

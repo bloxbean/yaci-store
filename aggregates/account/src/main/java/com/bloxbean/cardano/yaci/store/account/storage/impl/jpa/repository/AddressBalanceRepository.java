@@ -15,6 +15,8 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
 
     Optional<AddressBalanceEntity> findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(String address, String unit, Long slot);
 
+    Optional<AddressBalanceEntity> findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(String address, String unit, Long blockTime);
+
     @Query("SELECT a FROM AddressBalanceEntity a " +
             "WHERE a.address = :address " +
             "AND a.slot = (" +
