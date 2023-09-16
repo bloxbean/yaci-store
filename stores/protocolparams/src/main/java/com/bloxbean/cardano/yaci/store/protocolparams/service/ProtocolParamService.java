@@ -93,7 +93,8 @@ public class ProtocolParamService {
         protocolParams.setRho(protocolParamUpdate.getExpansionRate());
         protocolParams.setTau(protocolParamUpdate.getTreasuryGrowthRate());
         protocolParams.setDecentralisationParam(protocolParamUpdate.getDecentralisationParam()); //Deprecated. Not there
-        protocolParams.setExtraEntropy(protocolParamUpdate.getExtraEntropy());
+        if (protocolParamUpdate.getExtraEntropy() != null)
+            protocolParams.setExtraEntropy(protocolParamUpdate.getExtraEntropy()._2);
         protocolParams.setProtocolMajorVer(protocolParamUpdate.getProtocolMajorVer());
         protocolParams.setProtocolMinorVer(protocolParamUpdate.getProtocolMinorVer());
         protocolParams.setMinUtxo(String.valueOf(protocolParamUpdate.getMinUtxo()));
