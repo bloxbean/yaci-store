@@ -130,7 +130,7 @@ public class GenesisConfig {
 
         if (protocolMagic != storeProperties.getProtocolMagic())
             throw new StoreRuntimeException("Protocol magic mismatch. Expected : " + storeProperties.getProtocolMagic() +
-                    ", found in byron genesis file : " + protocolMagic);
+                    ", found in byron genesis file : " + protocolMagic + ", genesis file : " + byronGenesisFile);
     }
 
     private void parseShelleyGenesisFile(String shelleyGenesisFile) {
@@ -145,7 +145,7 @@ public class GenesisConfig {
         long networkMagic = shelleyGenesis.getNetworkMagic();
         if (networkMagic != storeProperties.getProtocolMagic())
             throw new StoreRuntimeException("Protocol magic mismatch. Expected : " + storeProperties.getProtocolMagic() +
-                    ", found in shelley genesis file : " + networkMagic);
+                    ", found in shelley genesis file : " + networkMagic + ", genesis file : " + shelleyGenesisFile);
     }
 
     public List<GenesisBalance> getGenesisBalances() {
