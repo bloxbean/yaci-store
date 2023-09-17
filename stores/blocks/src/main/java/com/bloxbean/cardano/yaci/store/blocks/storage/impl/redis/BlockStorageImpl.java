@@ -1,17 +1,17 @@
-package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockSummary;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.BlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.BlockEntity;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.model.BlockEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.repository.BlockRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
@@ -21,14 +21,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BlockStorageImpl implements BlockStorage {
 
-    private final BlockRepository blockRepositoryJpa;
-    private final BlockMapper blockDetailsMapperJpa;
-    private final Bloc
+    private final BlockRepository blockRepository;
+    private final BlockMapper blockDetailsMapper;
 
     @Override
     public Optional<Block> findRecentBlock() {
         return blockRepository.findTopByOrderByNumberDesc()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override
@@ -36,13 +35,12 @@ public class BlockStorageImpl implements BlockStorage {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        //TODO -- Fix once the count query is fixed
-        Slice<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
+        Page<BlockEntity> blocksEntityPage = blockRepository.findAll(sortedByBlock);
 //      long total = blocksEntityPage.getTotalElements();
 //      int totalPage = blocksEntityPage.getTotalPages();
 
         List<BlockSummary> blockSummaryList = blocksEntityPage.stream()
-            .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
+            .map(blockDetailsMapper::toBlockSummary)
             .collect(Collectors.toList());
 
         return BlocksPage.builder()
@@ -56,20 +54,20 @@ public class BlockStorageImpl implements BlockStorage {
     public List<Block> findBlocksByEpoch(int epochNumber) {
         return blockRepository.findByEpochNumber(epochNumber)
                 .stream()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity))
+                .map(blockDetailsMapper::toBlock)
                 .collect(Collectors.toList());
     }
 
     @Override
     public Optional<Block> findByBlockHash(String blockHash) {
         return blockRepository.findByHash(blockHash)
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override
     public Optional<Block> findByBlock(long block) {
         return blockRepository.findByNumber(block)
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override

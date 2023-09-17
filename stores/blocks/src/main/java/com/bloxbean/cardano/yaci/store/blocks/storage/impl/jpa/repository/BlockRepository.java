@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
+@Repository(value = "blockRepositoryJpa")
 public interface BlockRepository extends JpaRepository<BlockEntity, String> {
 
     Optional<BlockEntity> findTopByOrderByNumberDesc();

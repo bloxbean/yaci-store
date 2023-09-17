@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -22,8 +23,9 @@ import java.math.BigInteger;
 @Slf4j
 public class BlockProcessor {
 
-    private BlockStorage blockStorage;
+    private final BlockStorage blockStorage;
 
+    @Autowired
     public BlockProcessor(BlockStorage blockStorage) {
         this.blockStorage = blockStorage;
     }

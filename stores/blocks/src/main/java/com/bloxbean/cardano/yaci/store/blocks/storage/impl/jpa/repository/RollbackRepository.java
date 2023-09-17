@@ -4,6 +4,6 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.RollbackEnt
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-@Repository
+@Repository(value = "rollbackRepositoryJpa")
 public interface RollbackRepository extends JpaRepository<RollbackEntity, Long> {
 }

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-@Repository
+@Repository(value = "epochRepositoryJpa")
 public interface EpochRepository extends JpaRepository<EpochEntity, Long> {
 
     Optional<EpochEntity> findTopByOrderByNumberDesc();

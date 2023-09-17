@@ -1,6 +1,7 @@
 dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'org.springframework.boot:spring-boot-starter-jooq'
+    api 'com.redis.om:redis-om-spring:0.8.6'
     api 'org.springframework:spring-context'
     api(libs.yaci) {
         exclude group: "io.netty", module: "netty-all"

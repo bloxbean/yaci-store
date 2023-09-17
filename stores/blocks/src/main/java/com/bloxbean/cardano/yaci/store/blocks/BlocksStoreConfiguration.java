@@ -11,6 +11,10 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.EpochMappe
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.EpochRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.RollbackRepository;
+import com.redis.om.spring.annotations.EnableRedisDocumentRepositories;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -22,34 +26,43 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.blocks",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(prefix = "store.blocks", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
+@EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa"})
+@EnableRedisDocumentRepositories(basePackages = "com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis")
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
 @EnableTransactionManagement
 @EnableScheduling
 public class BlocksStoreConfiguration {
 
-    @Bean
-    @ConditionalOnMissingBean
-    public BlockStorage blockStorage(BlockRepository blockRepository, BlockMapper blockMapper) {
-        return new BlockStorageImpl(blockRepository, blockMapper);
+    private final String springDataRedisHost;
+
+    public BlocksStoreConfiguration(@Value("${spring.data.redis.host}") String springDataRedisHost) {
+        this.springDataRedisHost = springDataRedisHost;
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public EpochStorage epochStorage(EpochRepository epochRepository, EpochMapper epochMapper) {
+    public BlockStorage blockStorage(@Qualifier("blockRepositoryJpa") BlockRepository blockRepository, BlockMapper blockMapper,
+                                     @Qualifier("blockRepositoryRedis") com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.repository.BlockRepository blockRepositoryRedis,
+                                     com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.mapper.BlockMapper blockMapperRedis) {
+        if (StringUtils.isNotEmpty(springDataRedisHost)) {
+            return new BlockStorageImpl(blockRepositoryRedis, blockMapperRedis);
+        } else {
+            return new BlockStorageImpl(blockRepository, blockMapper);
+        }
+
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public EpochStorage epochStorage(@Qualifier("epochRepositoryJpa") EpochRepository epochRepository, EpochMapper epochMapper) {
         return new EpochStorageImpl(epochRepository, epochMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public RollbackStorage rollbackStorage(RollbackRepository rollbackRepository) {
+    public RollbackStorage rollbackStorage(@Qualifier("rollbackRepositoryJpa") RollbackRepository rollbackRepository) {
         return new RollbackStorageImpl(rollbackRepository);
     }
 }

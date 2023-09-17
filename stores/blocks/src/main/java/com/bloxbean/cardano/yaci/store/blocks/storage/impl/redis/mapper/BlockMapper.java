@@ -1,12 +1,13 @@
-package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper;
+package com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.mapper;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockSummary;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model.BlockEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.model.BlockEntity;
 import org.mapstruct.Mapper;
 
-@Mapper(componentModel = "spring", implementationName = "BlockMapperJpa")
+@Mapper(componentModel = "spring", implementationName = "BlockMapperRedis")
 public abstract class BlockMapper {
+
     public abstract Block toBlock(BlockEntity blockEntity);
     public abstract BlockEntity toBlockEntity(Block blockDetails);
 
