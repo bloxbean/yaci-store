@@ -1,4 +1,12 @@
-## Yaci Store - Components
+**Table of content:**
+
+- [Yaci Store - High Level Design](#highlevel-design)
+
+- [Store - Components](#store-design)
+
+
+<a id="highlevel-design"></a>
+## Yaci Store - Design
 
 ![High Level Design](images/component-diagram.png)
 
@@ -40,6 +48,7 @@ An application can also use a custom persistence store by implementing a store's
 
 The "submit" module provides the ability to submit transactions to nodes directly, either through n2c or the submit API.
 
+<a id="store-design"></a>
 ## Stores - Components
 <hr>
 

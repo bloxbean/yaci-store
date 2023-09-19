@@ -1,13 +1,26 @@
+**Table of content:**
+
+- [What's Yaci Store](#whats-yaci-store)
+
+- [Yaci Store Modules](#yaci-store-modules)
+
+- [Yaci Store Spring Boot Starters](#yaci-store-spring-boot-starters)
+
+<a id="what-yaci-store"></a>
 ## What's Yaci Store?
 
-Yaci Store is a modular Java library built for Java developers who are keen on constructing their custom indexer solutions.
+Yaci Store is a modular Java library for Java developers who are keen on constructing their custom indexer solutions.
 Its architecture ensures that every component within Yaci Store is accessible both as a standalone Java library and a 
 corresponding Spring Boot starter.
 
-Developers have the flexibility to select the specific modules that align with their project requirements. 
-Yaci Store also offers an out-of-box application that indexes commonly-used data sets.
+Developers have the flexibility to select the specific modules that align with their project requirements.
 
-## Yaci Store Module Categories
+## Yaci Store application
+
+Yaci Store also offers an out-of-box application that indexes commonly-used data sets using the available modules.
+
+<a id="yaci-store-modules"></a>
+## Yaci Store Modules
 
 The modules in Yaci Store are divided into three main categories:
 
@@ -23,11 +36,11 @@ This allows them to tap into these events and process them accordingly. In addit
 the current point in the database.
 
 Major core modules include:
-    a. core
-    b. common
-    c. events
+1. core
+2. common
+3. events
 
-Specific events emitted by the core modules comprise:
+Events published by core modules:
 
 - BlockEvent 
 - BlockHeaderEvent 
@@ -42,41 +55,38 @@ Specific events emitted by the core modules comprise:
 
 ### 2. Stores
 
-A "store" in Yaci Store is more than just a name – it's a specialized module designed for a specific data type or use case. Each store boasts a set of capabilities:
+A "store" in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:
 
-- Event Listening: Tuned into events broadcasted by the core module.
-- Data Processing: Efficiently processes data.
-- Data Persistence: Saves data to a dedicated persistence store.
+- Event Listening: Listen to events published by the core module.
+- Data Processing: Processes event data.
+- Data Persistence: Saves processed data to a dedicated persistence store.
 - REST Endpoints: Optionally provides REST endpoints for data retrieval.
 
 Available Store Implementations:
 
-- utxo: Focuses on UTXOs, extracting them from transaction data.
-- block: Dedicated to handling and storing block data.
-- transaction: Takes care of transaction data.
-- assets: Manages data related to asset minting and burning.
-- metadata: Retrieves and processes metadata events.
-- script: Deals with the ScriptEvent, overseeing dataum and redeemers.
-- staking: Handles all things staking – from stake address registration to pool registration and more.
-- mir: All about Mir data.
-- Protocol Params: Fetches protocol parameters from nodes via N2c. Stay tuned – there are plans to expand its capabilities to chronicle the history of protocol parameters.
+- **utxo:** Focuses on UTxOs, extracting them from transaction data.
+- **block:** Dedicated to handling and storing block data.
+- **transaction:** Takes care of transaction data.
+- **assets:** Manages data related to asset minting and burning.
+- **metadata:** Retrieves and processes metadata events.
+- **script:** Deals with the ScriptEvent, get dataum and redeemers.
+- **staking:** Handles from stake address registration to pool registration and more.
+- **mir:** All about Mir data.
+- **Protocol Params:** Fetches protocol parameters from nodes via n2c. There are plans to expand its capabilities to store the history of protocol parameters.
 
 Additional Modules:
-- submit: Enables direct transaction submissions to nodes, either through n2c or the submit API.
+- submit: Enables transaction submissions to nodes, either through n2c or the submit API.
 
 Each of the mentioned stores is available as a Spring Boot starter. This means that integrating a specific store into your 
 application is as straightforward as adding its Spring Boot starter as a dependency. 
 
 ### 3. Aggregates
 
-While stores are designed to handle specific data types, aggregates are more comprehensive. They pool data from multiple stores to provide a unified perspective. So a single aggregate 
-can have dependencies on multiple stores.
+Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store.
+Currently, the only available aggregate is "Account", which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.
 
-Available Aggregates:
-    
-- Account: It provides account balance related data.
-
-### 4. Yaci Store Spring Boot Starters
+<a id="spring-boot-starter"></a>
+## Yaci Store Spring Boot Starters
 
 Each module in Yaci Store is available as a Spring Boot starter. This means that integrating a specific module into your 
 application is as straightforward as adding its Spring Boot starter as a dependency. This ensures that developers can 
