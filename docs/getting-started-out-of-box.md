@@ -9,7 +9,7 @@ The Jar files for these applications are available in the release section.
 
 ## Configuration
 
-Download the application.property file from the release section and place it in a folder named "config" in the same directory as the jar file. 
+Download the application.properties file from the release section and place it in a folder named "config" in the same directory as the jar file. 
 The application will automatically pick up the configuration file.
 
 Update configuration file with your own values. Some of the key properties are mentioned below.
@@ -38,16 +38,32 @@ spring.datasource.password=
 
 Configure genesis files location.
 
-```shell
-store.cardano.byron-genesis-file=/Users/john/cardano-node/preprod/files/byron-genesis.json
-store.cardano.shelley-genesis-file=/Users/john/cardano-node/preprod/files/shelley-genesis.json
+```
+store.cardano.byron-genesis-file=/Users/satya/cardano-node/preprod/files/byron-genesis.json
+store.cardano.shelley-genesis-file=/Users/satya/cardano-node/preprod/files/shelley-genesis.json
 ```
 
 ### Optional Configuration
 The followings are optional configuration. You can leave them as-is.
 
-```shell
+#### N2C Configuration
+
+The following properties are required for node-to-client (n2c) communication. This is required for transaction submission,
+fetching protocol parameters etc. If you don't need these functionalities, you can leave them as-is.
+```
 #store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-8.1.2/db/node.socket
-#store.cardano.n2c-host=192.168.0.228
-#store.cardano.n2c-port=31001
+
+# If you are accessing n2c through a relay like "socat", uncomment and edit the following properties.
+#store.cardano.n2c-host=<relay_host>
+#store.cardano.n2c-port=<relay_port>
+```
+
+#### Account aggregation Configuration
+
+Using account module, you can track account balance related data. By default, this module is disabled. If you want to enable it, uncomment the following properties.
+
+```
+store.account.enabled=false
+store.account.balance-aggregation-enabled=true
+store.account.history-cleanup-enabled=false
 ```

@@ -4,7 +4,7 @@
 
 - [Yaci Store Modules](#yaci-store-modules)
 
-- [Yaci Store Spring Boot Starters](#yaci-store-spring-boot-starters)
+- [Yaci Store Spring Boot Starters](#spring-boot-starter)
 
 <a id="what-yaci-store"></a>
 ## What's Yaci Store?
@@ -107,3 +107,4 @@ required to fetch data from the blockchain and publish events.
 - **yaci-store-protocolparams-spring-boot-starter :** This starter includes the protocol params module and related configuration including db migration scripts.
 - **yaci-store-account-spring-boot-starter :** This starter includes the account aggregate and related configuration including db migration scripts.
 - **yaci-store-submit-spring-boot-starter :** This starter includes the submit module and related configuration including db migration scripts. Submit module is used to submit transactions to nodes.
+

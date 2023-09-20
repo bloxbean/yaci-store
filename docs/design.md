@@ -1,8 +1,9 @@
 **Table of content:**
 
 - [Yaci Store - High Level Design](#highlevel-design)
-
 - [Store - Components](#store-design)
+- [Handling Rollbacks](#rollbacks)
+- [Idempotency](#idempotency)
 
 
 <a id="highlevel-design"></a>
@@ -70,3 +71,21 @@ This can be overridden by developers by implementing the storage api in consumin
 **3. Controller:** A controller provides REST endpoints to retrieve store's data. It uses the storage api to retrieve data from the persistent store. 
 Out of the box, Yaci Store provides some common REST endpoints for all stores. But, developers can implement their own REST endpoints.
 
+<a id="rollbacks"></a>
+## Handling Rollbacks
+
+Yaci Store follows a simply strategy to handle rollbacks. As ``store`` modules don't handle any data aggregation, the rollback handling becomes simple.
+Each table in a store maintains a ``slot`` column. When a processor received a ``RollbackEvent`` event, it deletes all the records with a slot greater than
+the rollback slot mentioned in the event. 
+
+But as aggregates handle data aggregation, the rollback handling becomes a bit complex. But with a simple strategy, we can handle rollbacks in aggregates as well.
+**For example,** the ``Account`` module aggregates account balance. But instead of storing the account balance for an address in one record, balance snapshot is stored for a slot.
+As we don't update existing records during aggregation, rollback can be handled by simply deleting all the records with a slot greater than the rollback slot mentioned in the event.
+
+If you are using Yaci Store as a library in your application with your own domain model and tables, you can follow the similar strategy to handle rollbacks.
+
+<a id="idempotency"></a>
+## Idempotency
+
+Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box 
+modules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
