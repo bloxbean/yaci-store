@@ -44,7 +44,7 @@ store.cardano.shelley-genesis-file=/Users/satya/cardano-node/preprod/files/shell
 ```
 
 ### Optional Configuration
-The followings are optional configuration. You can leave them as-is.
+The followings are optional configuration. You can leave them as-is and jump to the next section [Running the application](#running-the-application)
 
 #### N2C Configuration
 
@@ -58,9 +58,10 @@ fetching protocol parameters etc. If you don't need these functionalities, you c
 #store.cardano.n2c-port=<relay_port>
 ```
 
-#### Account aggregation Configuration
+#### Account aggregation Configuration 
 
 Using account module, you can track account balance related data. By default, this module is disabled. If you want to enable it, uncomment the following properties.
+To use this module, you need to configure genesis files.
 The status of this module is "**experimental**".
 
 ```
@@ -98,3 +99,16 @@ store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3
 #store.cardano.sync-stop-slot=76667163
 #store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
 ```
+
+<a id="running-the-application"></a>
+## Running the application
+
+Use the following command to run the application.
+
+```shell
+java -jar yaci-store-all-<version>.jar 
+```
+
+## Swagger UI
+
+By default, swagger UI is available at http://localhost:8080/swagger-ui/index.html
