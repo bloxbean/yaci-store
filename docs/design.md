@@ -1,10 +1,21 @@
-**Table of content:**
+### **Table of content:**
+### 1. [Goals](#goals)
+### 2. [Yaci Store - High Level Design](#highlevel-design)
+### 3. [Store - Components](#store-design)
+### 4. [Handling Rollbacks](#rollbacks)
+### 5. [Idempotency](#idempotency)
 
-- [Yaci Store - High Level Design](#highlevel-design)
-- [Store - Components](#store-design)
-- [Handling Rollbacks](#rollbacks)
-- [Idempotency](#idempotency)
+<a id="goals"></a>
+## Goals
+Some of the high-level goals of Yaci Store are:
 
+- Providing a Java library for creating scoped indexers. 
+- Handling the common logic required for data indexing. 
+- Allowing applications to select the data they wish to index. 
+- Enabling developers to filter data based on various conditions. 
+- Permitting developers to override default behaviors. 
+- Managing rollbacks. 
+- Offering an out-of-the-box application for indexing common data.
 
 <a id="highlevel-design"></a>
 ## Yaci Store - Design
@@ -13,9 +24,9 @@
 
 ### Core
 
-The core module is the backbone of Yaci Store. It is responsible for reading data from the blockchain and broadcasting events.
+The core module is the backbone of Yaci Store. It is responsible for reading data from Cardano blockchain and broadcasting events.
 It also monitors and records the current point in the database.
-Events are published as Spring events, so developers can write their own Spring event listeners to listen these events and process them accordingly.
+Events are published as ``Spring events``, so developers can write their own Spring event listeners to listen these events and process them accordingly.
 
 ### Stores
 
@@ -37,13 +48,14 @@ Each of the above functionalities can be overridden by developers through the us
 
 Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store.
 Currently, the only available aggregate is "Account", which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.
+But status of this module is still **experimental**.
 
 ### Persistence
 
 By default, Yaci Store uses a relational database to store data. The database schema is generated automatically by Flyway.
-Supported databases include: PostgreSQL, MySQL, H2
+Supported databases include: **PostgreSQL**, **MySQL**, **H2**
 
-An application can also use a custom persistence store by implementing a store's Storage api.
+**An application can also use a custom persistence store by implementing a store's Storage api.**
 
 ### Tx Submission
 
@@ -55,7 +67,7 @@ The "submit" module provides the ability to submit transactions to nodes directl
 
 ![Store Design](images/store-design.png)
 
-A store is composed of the following components:
+A **store** is composed of the following components:
 
 **1. Processor:** A processor is responsible for processing data. It listens to events published by the core module and processes the data contained in the event. A processor can also publish derived events.
 For example: ``UtxoProcessor`` in the ``utxo`` store listens to TransactionEvent and processes the UTxOs contained in the transaction. It also publishes ``AddressUtxo`` derived event for each UTxO.

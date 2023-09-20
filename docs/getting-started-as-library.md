@@ -8,6 +8,10 @@ spring framework's dependency injection feature.
 
 In this guide, we will show you how to use Yaci Store as a library in your own application.
 
+**Sample applications:** 
+- Sample [Metadata Indexer](https://github.com/bloxbean/metadata-indexer) project using Yaci Store as a library.
+- A scoped indexer for [Ada Handler](https://github.com/cardano-foundation/adahandle-resolver)
+
 ## Prerequisites
 
 - Java 17
@@ -19,7 +23,7 @@ You can use the [Spring Initializr](https://start.spring.io/) to create a Spring
 
 ## Add Dependencies
 
-Apart from standard spring dependencies, add the following dependency to your `build.gradle` or `pom.xml` file.
+Apart from standard spring boot dependencies, add the following dependency to your `build.gradle` or `pom.xml` file.
 This will add the Yaci Store Core modules to your project as a dependency. Core modules are responsible for fetching data from the blockchain and
 publishing them as events.
 
@@ -58,7 +62,7 @@ For pom.xml
 
 ## Configuration
 
-Add following flyway configuration to your `application.yml` file. 
+Add following flyway configuration to your `application.yml` file. (**Mandatory**)
 
 ```xml
 spring:
@@ -71,7 +75,7 @@ apiPrefix: /api/v1
 
 **Note:** If you are using Yaci Store 0.0.11 or earlier, use `classpath:db/migration/{vendor}` as the location.
 
-You can add your application specific flyway configuration as well. For example, you may want to add another location for your application.
+You can add your application specific flyway configuration as well. **For example,** you may want to add another location for your application.
 Flyway ``location`` property allows you to specify multiple locations. 
 
 ### Yaci Store Configuration (Mandatory)
@@ -117,7 +121,7 @@ store.cardano.shelley-genesis-file=/Users/satya/cardano-node/preprod/files/shell
 #### N2C Configuration
 
 The following properties are required for node-to-client (n2c) communication. This is required for transaction submission,
-fetching protocol parameters etc. If you don't need these functionalities, you can leave them as-is.
+fetching protocol parameters etc. If you don't need these functionalities, you can leave them commented.
 ```
 #store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-8.1.2/db/node.socket
 
@@ -131,22 +135,23 @@ start syncing the blockchain data and publish them as events and process them.
 
 ## Customization - Override default behavior
 
-**Custom Storage**
+### **Custom Storage**
 
 Yaci Store provides a default storage implementation which stores all data in yaci store defined table. 
-But you can override this default implementation and provide your own storage implementation.
+But you can override this default implementation and provide your own storage implementation. Check out sample projects mentioned above for more details.
 
-For example: If you only want to store a specific metadata label, you can extend the default storage implementation and filter out the labels you want to store. 
+**For example:** If you only want to store a specific metadata label, you can extend the default storage implementation and filter out the labels you want to store. 
 
-**Custom Processor**
+### **Custom Processor**
 
-Ideally you don't need to have your own custom processor, but if you want to do some custom processing, you can listen to both core or derive events and do your custom processing. 
+Ideally you don't need to have your own custom processor, but if you want to do some custom processing, you can listen to both core or derived events and do your custom processing. 
 
-**Rollback Handling**
+### **Rollback Handling**
 
 If you are using default storage implementation or a custom storage by extending default storage, Yaci Store will automatically handle rollbacks.
 
 But if you have your own custom processor or different storage implementation using separate database/table, you need to handle rollbacks in your custom processor by listening to RollbackEvent.
+For more details on how to handle rollbacks, check [Rollback Handling](./design.md?#rollbacks) and also make sure all your operations are idempotent.
 
 
-**Note:** Check this [Metadata Indexer](https://github.com/bloxbean/metadata-indexer) project for a sample application using Yaci Store
+

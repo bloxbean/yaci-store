@@ -1,6 +1,6 @@
 ## Use out-of-the-box applications
 
-Yaci Store comes with a set of applications that you can use out-of-the-box. These applications are designed to be used as-is.
+Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is.
 
 - **yaci-store-all:** This application bundles all available modules/stores into a single application. If you want to index all available data, this is the application you want.
 - **yaci-store-utxo-indexer:** This application contains utxo store,  protocolparams store and submit module If you want a utxo indexer with transaction submission capability, this is the application you want.
@@ -61,9 +61,40 @@ fetching protocol parameters etc. If you don't need these functionalities, you c
 #### Account aggregation Configuration
 
 Using account module, you can track account balance related data. By default, this module is disabled. If you want to enable it, uncomment the following properties.
+The status of this module is "**experimental**".
 
 ```
 store.account.enabled=false
 store.account.balance-aggregation-enabled=true
 store.account.history-cleanup-enabled=false
+```
+
+#### Enable / Disable specif store
+
+Even if you are using ``yaci-store-all`` application, you can enable/disable specific stores. **For example**, if you want to disable utxo store, you can do so by setting the following property to false.
+
+```
+store.utxo.enabled=false
+```
+
+This property is available for all stores.
+
+```
+store.<store_name></store_name>.enabled=false
+```
+
+#### Starting from a specific point
+
+By default, sync starts from the genesis block. If you want to start from a specific point, you can do so by setting the following property.
+
+```
+store.cardano.sync-start-slot=2738868
+store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c
+
+# For Byron block as start  point
+#store.cardano.sync-start-byron-block-number=2737340
+
+# For stop point
+#store.cardano.sync-stop-slot=76667163
+#store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
 ```

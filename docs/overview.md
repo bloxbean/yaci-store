@@ -1,10 +1,8 @@
-**Table of content:**
+### **Table of content:**
 
-- [What's Yaci Store](#whats-yaci-store)
-
-- [Yaci Store Modules](#yaci-store-modules)
-
-- [Yaci Store Spring Boot Starters](#spring-boot-starter)
+### 1. [What's Yaci Store](#whats-yaci-store)
+### 2. [Yaci Store Modules](#yaci-store-modules)
+### 3. [Yaci Store Spring Boot Starters](#spring-boot-starter)
 
 <a id="what-yaci-store"></a>
 ## What's Yaci Store?
@@ -30,17 +28,17 @@ The modules in Yaci Store are divided into three main categories:
 
 ### 1. Core Modules
 
-Core modules serve a critical purpose. They read data directly from the blockchain and then broadcast various domain-specific events.
+Core modules serve a critical purpose. They read data directly from Cardano blockchain and then publish various domain-specific events.
 Since these events are essentially Spring events, developers have the freedom to write their own Spring event listeners. 
 This allows them to tap into these events and process them accordingly. In addition to this, the core module monitors and records
 the current point in the database.
 
-Major core modules include:
+**Major core modules include:**
 1. core
 2. common
 3. events
 
-Events published by core modules:
+**Events published by core modules:**
 
 - BlockEvent 
 - BlockHeaderEvent 
@@ -53,37 +51,44 @@ Events published by core modules:
 - CertificateEvent 
 - GenesisBlockEvent
 
+**Derived Events: Events published by stores**
+- AddressUtxoEvent
+- TxAssetEvent
+- TxMetadataEvent
+- DatumEvent
+- TxScriptEvent
+
 ### 2. Stores
 
-A "store" in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:
+A "**store**" in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:
 
 - Event Listening: Listen to events published by the core module.
 - Data Processing: Processes event data.
 - Data Persistence: Saves processed data to a dedicated persistence store.
 - REST Endpoints: Optionally provides REST endpoints for data retrieval.
 
-Available Store Implementations:
+**Available Store Implementations:**
 
 - **utxo:** Focuses on UTxOs, extracting them from transaction data.
 - **block:** Dedicated to handling and storing block data.
 - **transaction:** Takes care of transaction data.
 - **assets:** Manages data related to asset minting and burning.
 - **metadata:** Retrieves and processes metadata events.
-- **script:** Deals with the ScriptEvent, get dataum and redeemers.
+- **script:** Deals with the ScriptEvent, get datums and redeemers.
 - **staking:** Handles from stake address registration to pool registration and more.
 - **mir:** All about Mir data.
-- **Protocol Params:** Fetches protocol parameters from nodes via n2c. There are plans to expand its capabilities to store the history of protocol parameters.
+- **Protocol Params:** Fetches protocol parameters from nodes via n2c. There are plans to expand its capabilities to store the history of protocol parameter updates.
 
-Additional Modules:
+**Additional Modules:**
 - submit: Enables transaction submissions to nodes, either through n2c or the submit API.
 
-Each of the mentioned stores is available as a Spring Boot starter. This means that integrating a specific store into your 
+Each of the mentioned stores is available as a ``Spring Boot starter``. This means that integrating a specific store into your 
 application is as straightforward as adding its Spring Boot starter as a dependency. 
 
 ### 3. Aggregates
 
 Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store.
-Currently, the only available aggregate is "Account", which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.
+Currently, the only available aggregate is "**Account**" (experimental) , which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.
 
 <a id="spring-boot-starter"></a>
 ## Yaci Store Spring Boot Starters
