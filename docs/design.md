@@ -2,7 +2,7 @@
 ### 1. [Goals](#goals)
 ### 2. [Yaci Store - High Level Design](#highlevel-design)
 ### 3. [Store - Components](#store-design)
-### 4. [Handling Rollbacks](#rollbacks)
+### 4. [Handling Rollbacks](#handling-rollbacks)
 ### 5. [Idempotency](#idempotency)
 
 <a id="goals"></a>
@@ -83,7 +83,7 @@ This can be overridden by developers by implementing the storage api in consumin
 **3. Controller:** A controller provides REST endpoints to retrieve store's data. It uses the storage api to retrieve data from the persistent store. 
 Out of the box, Yaci Store provides some common REST endpoints for all stores. But, developers can implement their own REST endpoints.
 
-<a id="rollbacks"></a>
+<a id="handling-rollbacks"></a>
 ## Handling Rollbacks
 
 Yaci Store follows a simply strategy to handle rollbacks. As ``store`` modules don't handle any data aggregation, the rollback handling becomes simple.
