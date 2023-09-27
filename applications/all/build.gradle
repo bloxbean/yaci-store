@@ -13,6 +13,7 @@ dependencies {
     implementation project(':starters:protocolparams-spring-boot-starter')
     implementation project(':starters:staking-spring-boot-starter')
     implementation project(':starters:mir-spring-boot-starter')
+    implementation project(':starters:governance-spring-boot-starter')
     implementation project(':starters:live-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
 
