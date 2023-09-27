@@ -6,14 +6,12 @@ import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
-import com.bloxbean.cardano.yaci.store.script.domain.Script;
-import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
-import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
-import com.bloxbean.cardano.yaci.store.script.domain.TxScriptEvent;
+import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
+import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import lombok.AllArgsConstructor;
@@ -38,6 +36,7 @@ import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutus
 public class ScriptRedeemerDatumProcessor {
     private TxScriptStorage txScriptStorage;
     private ScriptStorage scriptStorage;
+    private DatumStorage datumStorage;
     private RedeemerDatumMatcher redeemerMatcher;
     private TxScriptFinder txScriptFinder;
     private ApplicationEventPublisher publisher;
@@ -97,6 +96,18 @@ public class ScriptRedeemerDatumProcessor {
                             .datumHash(scriptContext.getDatumHash())
                             .build();
                 }).collect(Collectors.toList());
+
+        //Save redeemer data by data hash in Datum storage
+        if (scriptContexts != null && scriptContexts.size() > 0) {
+            List<Datum> redeemerDataList = scriptContexts.stream()
+                    .filter(scriptContext -> !StringUtil.isEmpty(scriptContext.getRedeemerDataHash()))
+                    .map(scriptContext -> new Datum(scriptContext.getRedeemerDataHash(), scriptContext.getRedeemerData(), transaction.getTxHash()))
+                    .toList();
+
+            if (redeemerDataList.size() > 0) {
+                datumStorage.saveAll(redeemerDataList);
+            }
+        }
 
         //Create TxScript entities to save
         List<Script> plutusScripts = scriptsMap.values().stream()
