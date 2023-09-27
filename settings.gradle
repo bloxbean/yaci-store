@@ -46,3 +46,8 @@ include ':starters:submit-spring-boot-starter'
 include ':starters:remote-spring-boot-starter'
 include ':starters:account-spring-boot-starter'
 
+//extensions
+include ':extensions:blocks-redis'
+
+//extension starters
+include ':starters:blocks-redis-spring-boot-starter'

@@ -1,0 +1,23 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation project(':starters:blocks-spring-boot-starter')
+
+    api project(":extensions:blocks-redis")
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Blocks Store Redis Extension Spring Boot Starter'
+                description = 'Yaci Blocks Store Redis Extension Spring Boot Starter'
+            }
+        }
+    }
+}
