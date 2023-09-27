@@ -54,38 +54,45 @@ public class RedeemerDatumMatcher {
                     com.bloxbean.cardano.yaci.core.model.Redeemer orgRedeemer = redeemerTuple.get()._1;
                     com.bloxbean.cardano.client.plutus.spec.Redeemer deRedeemer = redeemerTuple.get()._2;
 
+                    ScriptContext scriptContext;
                     if (deRedeemer.getTag() == RedeemerTag.Spend) {
-                        ScriptContext scriptContext = findSpendScriptFromRedeemer(deRedeemer, inputs, scriptsMap)
+                        scriptContext = findSpendScriptFromRedeemer(deRedeemer, inputs, scriptsMap)
                                 .orElse(new ScriptContext());
                         scriptContext.setRedeemer(orgRedeemer.getCbor()); //set redeemer here to save serialization cost
-                        return scriptContext;
-                    }
-                    if (deRedeemer.getTag() == RedeemerTag.Mint) {
+                    } else if (deRedeemer.getTag() == RedeemerTag.Mint) {
                         if (log.isDebugEnabled())
                             log.debug("Mint tag : " + transaction.getTxHash());
                         //check mint policy
-                        ScriptContext scriptContext = findMintScriptForRedeemer(deRedeemer, distinctPolicies, scriptsMap)
+                        scriptContext = findMintScriptForRedeemer(deRedeemer, distinctPolicies, scriptsMap)
                                 .orElse(new ScriptContext());
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
-                        return scriptContext;
                     } else if (deRedeemer.getTag() == RedeemerTag.Cert) {
                         if (log.isDebugEnabled())
                             log.debug("Redeemer Cert : " + transaction.getTxHash());
-                        ScriptContext scriptContext = findCertScriptForRedeemer(deRedeemer, transaction.getBody().getCertificates(), scriptsMap)
+                        scriptContext = findCertScriptForRedeemer(deRedeemer, transaction.getBody().getCertificates(), scriptsMap)
                                 .orElse(new ScriptContext());
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
-                        return scriptContext;
                     } else if (deRedeemer.getTag() == RedeemerTag.Reward) {
                         if (log.isDebugEnabled())
                             log.info("Redeemer Reward : " + transaction.getTxHash());
-                        ScriptContext scriptContext = findRewardScriptForRedeemer(deRedeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext = findRewardScriptForRedeemer(deRedeemer, transaction, scriptsMap).orElse(new ScriptContext());
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
-                        return scriptContext;
                     } else {
-                        ScriptContext scriptContext = new ScriptContext();
+                        scriptContext = new ScriptContext();
                         scriptContext.setRedeemer(orgRedeemer.getCbor());
-                        return scriptContext;
                     }
+
+                    //Set redeemer data and redeemer data hash
+                    if (deRedeemer.getData() != null) {
+                        String redeemerData = deRedeemer.getData().serializeToHex();
+                        String redeemerDataHash = deRedeemer.getData().getDatumHash();
+
+                        scriptContext.setRedeemerData(redeemerData);
+                        scriptContext.setRedeemerDataHash(redeemerDataHash);
+                    }
+
+                    return scriptContext;
+
                 }).collect(Collectors.toList());
         return scriptContexts;
     }
