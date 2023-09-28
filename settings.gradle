@@ -27,6 +27,7 @@ include 'stores:assets'
 include 'stores:protocolparams'
 include 'stores:staking'
 include 'stores:mir'
+include 'stores:adapot'
 include 'stores:live'
 
 include 'aggregates:account'
@@ -45,4 +46,5 @@ include ':starters:live-spring-boot-starter'
 include ':starters:submit-spring-boot-starter'
 include ':starters:remote-spring-boot-starter'
 include ':starters:account-spring-boot-starter'
+include ':starters:adapot-spring-boot-starter'
 
