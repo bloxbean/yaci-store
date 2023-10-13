@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
@@ -14,7 +15,8 @@ import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
-import lombok.AllArgsConstructor;
+import io.micrometer.core.annotation.Timed;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -31,22 +33,46 @@ import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumH
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutusScriptHash;
 
 @Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 @Slf4j
 public class ScriptRedeemerDatumProcessor {
-    private TxScriptStorage txScriptStorage;
-    private ScriptStorage scriptStorage;
-    private DatumStorage datumStorage;
-    private RedeemerDatumMatcher redeemerMatcher;
-    private TxScriptFinder txScriptFinder;
-    private ApplicationEventPublisher publisher;
+    private final TxScriptStorage txScriptStorage;
+    private final ScriptStorage scriptStorage;
+    private final DatumStorage datumStorage;
+    private final RedeemerDatumMatcher redeemerMatcher;
+    private final TxScriptFinder txScriptFinder;
+    private final ApplicationEventPublisher publisher;
 
+    /**
+     * This method is called when parallel mode is disabled.
+     * @param transactionEvent
+     */
     @EventListener
     @Transactional
     public void handleScriptTransactionEvent(TransactionEvent transactionEvent) {
+        if (transactionEvent.getMetadata().isParallelMode()) //Skip when parallel mode as it will be handled by BlockCacheProcessedEvent
+            return;
+
         for (Transaction transaction : transactionEvent.getTransactions()) {
             handleScriptTransaction(transactionEvent.getMetadata(), transaction);
         }
+    }
+
+    /**
+     * This method is called when parallel mode is enabled.
+     * @param blockCacheProcessedEvent
+     */
+    @EventListener
+    @Transactional
+    @Timed(value = "store.script.batch.process", percentiles = {0.5, 0.95, 0.99}, histogram = true)
+    public void handleScriptTransactionEventForBlockCacheList(BatchBlocksProcessedEvent blockCacheProcessedEvent) {
+        var blockCacheList = blockCacheProcessedEvent.getBlockCaches();
+
+        blockCacheList.stream().parallel().forEach(blockCache -> {
+            for (Transaction transaction : blockCache.getTransactions()) {
+                handleScriptTransaction(blockCache.getEventMetadata(), transaction);
+            }
+        });
     }
 
     /**

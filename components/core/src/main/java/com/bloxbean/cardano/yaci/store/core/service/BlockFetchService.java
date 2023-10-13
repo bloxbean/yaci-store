@@ -14,19 +14,20 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
-import com.bloxbean.cardano.yaci.store.events.internal.BlockCacheProcessedEvent;
-import com.bloxbean.cardano.yaci.store.events.model.internal.BlockCache;
-import com.bloxbean.cardano.yaci.store.events.model.internal.ByronBlockCache;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.events.domain.TxMintBurn;
 import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
+import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
 import io.micrometer.core.annotation.Counted;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,14 +40,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
+import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
 @Component
 @Slf4j
@@ -79,6 +80,9 @@ public class BlockFetchService implements BlockChainDataListener {
     @Value("${store.block.processing.threads:15}")
     private int blockProcessingThreads;
 
+    @Value("${store.event.processing.threads:30}")
+    private int eventProcessingThreads;
+
     @Value("${store.block.parallel-processing-enabled:false}")
     private boolean enableParallelProcessing;
 
@@ -86,10 +90,11 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private AtomicBoolean isError = new AtomicBoolean(false);
 
-    private List<BlockCache> blockCaches = new ArrayList<>();
-    private List<ByronBlockCache> byronBlockCache = new ArrayList<>();
+    private List<BatchBlock> batchBlockList = new ArrayList<>();
+    private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
 
     private ExecutorService executor;
+    private ExecutorService eventExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     @Value("${store.block.processing.batch-size:100}")
     private int BATCH_SIZE;
@@ -97,11 +102,39 @@ public class BlockFetchService implements BlockChainDataListener {
     @Value("${store.block.processing.partition-size:15}")
     private int partitionSize;
 
+    @Value("${store.use-virtual-thread-for-batch-processing:false}")
+    private boolean useVirtualThreadForBatchProcessing = false;
+
+    @Value("${store.use-virtual-thread-for-event-processing:false}")
+    private boolean useVirtualThreadForEventProcessing = false;
+
     private Thread keepAliveThread;
 
     public BlockFetchService(ApplicationEventPublisher applicationEventPublisher, MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
         this.publisher = applicationEventPublisher;
+    }
+
+    @PostConstruct
+    public void init() {
+        if (!enableParallelProcessing)
+            return;
+
+        if (useVirtualThreadForBatchProcessing) {
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+            log.info("Block Batch processing will be done using virtual threads");
+        } else {
+            executor = Executors.newFixedThreadPool(blockProcessingThreads);
+            log.info("Block Batch processing will be done using fixed thread pool of size {}", blockProcessingThreads);
+        }
+
+        if (useVirtualThreadForEventProcessing) {
+            eventExecutor = Executors.newVirtualThreadPerTaskExecutor();
+            log.info("Block Event processing will be done using virtual threads");
+        } else {
+            eventExecutor = Executors.newFixedThreadPool(eventProcessingThreads);
+            log.info("Block Event processing will be done using fixed thread pool of size {}", eventProcessingThreads);
+        }
     }
 
     @Transactional
@@ -112,13 +145,10 @@ public class BlockFetchService implements BlockChainDataListener {
         checkError();
 
         //Check if there is any pending ByronBlocks to be processed
-        if (byronBlockCache.size() > 0) {
+        if (byronBatchBlockList.size() > 0) {
             processByronMainBlocksInParallel();
-            byronBlockCache.clear();
+            byronBatchBlockList.clear();
         }
-
-
-        //TODO  -- Also check sync mode == true and there are still blocks in blockCache list
 
         BlockHeader blockHeader = block.getHeader();
         final long slot = blockHeader.getHeaderBody().getSlot();
@@ -127,17 +157,6 @@ public class BlockFetchService implements BlockChainDataListener {
         final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
         final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
-
-//        if (newEra) { //Byron to shell
-//            //Check if there is any pending ByronBlocks to be processed
-//            if (byronBlockCache.size() > 0) {
-//                processByronMainBlocksInParallel();
-//                byronBlockCache.clear();
-//            }
-//        }
-
-        if (executor == null)
-            this.executor =  Executors.newFixedThreadPool(blockProcessingThreads);
 
         //paralleMode is true when not fully synced and parallel processing is enabled and not the first block of the era
         boolean parallelMode = !syncMode && enableParallelProcessing && !byronToShelleyEraChange;
@@ -160,90 +179,99 @@ public class BlockFetchService implements BlockChainDataListener {
 
         if (!parallelMode) { //For Sync mode, we need to process block by block
             processBlock(block, transactions, blockHeader, eventMetadata);
-            publisher.publishEvent(new CommitEvent(List.of(new BlockCache(eventMetadata, block, transactions))));
+            publisher.publishEvent(new CommitEvent(List.of(new BatchBlock(eventMetadata, block, transactions))));
 
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                     eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
-            return;
+        } else {
+            handleBlockBatchInParallel(era, block, transactions, eventMetadata);
         }
+    }
 
-        blockCaches.add(new BlockCache(eventMetadata, block, transactions));
-        if (blockCaches.size() != BATCH_SIZE)
+    private void handleBlockBatchInParallel(Era era, Block block, List<Transaction> transactions, EventMetadata eventMetadata) {
+        batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
+        if (batchBlockList.size() != BATCH_SIZE)
             return;
 
-        List<List<BlockCache>> partitions = partition(blockCaches, partitionSize);
-
-        List<Future> futures = new ArrayList<>();
-        for (List<BlockCache> partition: partitions) {
-            Runnable runnable = (() -> {
-                for (BlockCache blockCache: partition)
+        List<List<BatchBlock>> partitions = partition(batchBlockList, partitionSize);
+        List<CompletableFuture> futures = new ArrayList<>();
+        for (List<BatchBlock> partition : partitions) {
+            var future = CompletableFuture.supplyAsync(() -> {
+                for (BatchBlock blockCache : partition) {
                     processBlock(blockCache.getBlock(), blockCache.getTransactions(), blockCache.getBlock().getHeader(), blockCache.getEventMetadata());
-            });
+                }
 
-            Future future = executor.submit(runnable);
+                return true;
+            }, executor);
+
             futures.add(future);
         }
 
-        for (var t: futures) {
-            try {
-                t.get();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .join();
 
-        publisher.publishEvent(new BlockCacheProcessedEvent(blockCaches));
-        publisher.publishEvent(new CommitEvent(blockCaches));
+        //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
+        publisher.publishEvent(new BatchBlocksProcessedEvent(batchBlockList));
+        publisher.publishEvent(new CommitEvent(batchBlockList));
 
-//        //Finally Set the cursor
+        //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
 
         log.info("Block No: " + eventMetadata.getBlock() + "  , Era: " + era);
-
-        blockCaches.clear();
+        batchBlockList.clear();
     }
 
     private void processBlock(Block block, List<Transaction> transactions, BlockHeader blockHeader, EventMetadata eventMetadata) {
         try {
-            publisher.publishEvent(eventMetadata.getEra());
-            publisher.publishEvent(new BlockEvent(eventMetadata, block));
-            publisher.publishEvent(new BlockHeaderEvent(eventMetadata, blockHeader));
-            publisher.publishEvent(new TransactionEvent(eventMetadata, transactions));
+            var eraEventCf = publishEventAsync(eventMetadata.getEra());
+            var blockEventCf = publishEventAsync(new BlockEvent(eventMetadata, block));
+            var blockHeaderEventCf = publishEventAsync(new BlockHeaderEvent(eventMetadata, blockHeader));
+            var txnEventCf = publishEventAsync(new TransactionEvent(eventMetadata, transactions));
 
-            //Addtional events
-            //TxScript Event
-            List<TxScripts> txScriptsList = getTxScripts(transactions);
-            publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
+            //Script Event
+            var txScriptEvent = CompletableFuture.supplyAsync(() -> {
+                List<TxScripts> txScriptsList = getTxScripts(transactions);
+                publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
+                return true;
+            }, eventExecutor);
 
             //AuxData event
-            List<TxAuxData> txAuxDataList = transactions.stream()
-                    .filter(transaction -> transaction.getAuxData() != null)
-                    .map(transaction -> TxAuxData.builder()
-                            .txHash(transaction.getTxHash())
-                            .auxData(transaction.getAuxData())
-                            .build()
-                    ).collect(Collectors.toList());
-            publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
+            var txAuxDataEvent = CompletableFuture.supplyAsync(() -> {
+                List<TxAuxData> txAuxDataList = transactions.stream()
+                        .filter(transaction -> transaction.getAuxData() != null)
+                        .map(transaction -> TxAuxData.builder()
+                                .txHash(transaction.getTxHash())
+                                .auxData(transaction.getAuxData())
+                                .build()
+                        ).collect(Collectors.toList());
+                publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
+                return true;
+            }, eventExecutor);
 
             //Certificate event
-            List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
-                    .txHash(transaction.getTxHash())
-                    .certificates(transaction.getBody().getCertificates())
-                    .build()
-            ).collect(Collectors.toList());
-            publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
+            var txCertificateEvent = CompletableFuture.supplyAsync(() -> {
+                List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
+                        .txHash(transaction.getTxHash())
+                        .certificates(transaction.getBody().getCertificates())
+                        .build()
+                ).collect(Collectors.toList());
+                publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
+                return true;
+            }, eventExecutor);
 
             //Mints
-            List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
-                            transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
-                    .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
-                    .collect(Collectors.toList());
-            publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
+            var txMintBurnEvent = CompletableFuture.supplyAsync(() -> {
+                List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
+                                transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
+                        .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
+                        .collect(Collectors.toList());
+                publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
+                return true;
+            }, eventExecutor);
 
-//            //Finally Set the cursor
-//            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-//                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
+                    txCertificateEvent, txMintBurnEvent).join();
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -253,13 +281,20 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
+    private CompletableFuture<Boolean> publishEventAsync(Object event) {
+        return CompletableFuture.supplyAsync(() -> {
+            publisher.publishEvent(event);
+            return true;
+        }, eventExecutor);
+    }
+
     //Replace asset name contains \u0000 -- postgres can't convert this to text. so replace
     private List<Amount> sanitizeAmounts(List<Amount> amounts) {
         if (amounts == null) return Collections.EMPTY_LIST;
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         return amounts.stream().map(amount ->
                 Amount.builder()
-                        .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null)
+                        .unit(amount.getUnit() != null ? amount.getUnit().replace(".", "") : null)
                         .policyId(amount.getPolicyId())
                         .assetName(amount.getAssetName().replace('\u0000', ' '))
                         .quantity(amount.getQuantity())
@@ -313,78 +348,59 @@ public class BlockFetchService implements BlockChainDataListener {
                     .parallelMode(parallelMode)
                     .build();
 
-            if (executor == null)
-                this.executor =  Executors.newFixedThreadPool(blockProcessingThreads);
-
             if (!parallelMode) { //For Sync mode, we need to process block by block
                 ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
-                publisher.publishEvent(byronMainBlockEvent);
 
-                publisher.publishEvent(new CommitEvent<>(List.of(new ByronBlockCache(eventMetadata, byronBlock))));
+                publisher.publishEvent(byronMainBlockEvent);
+                publisher.publishEvent(new CommitEvent<>(List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
                 //Finally Set the cursor
                 cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
                         eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
-                return;
+            } else {
+                byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
+                if (byronBatchBlockList.size() != BATCH_SIZE)
+                    return;
+
+                processByronMainBlocksInParallel();
+
+                log.info("Block No: " + eventMetadata.getBlock() + "  , Era: " + Era.Byron);
             }
-
-            byronBlockCache.add(new ByronBlockCache(eventMetadata, byronBlock));
-            if (byronBlockCache.size() != 100)
-                return;
-
-            processByronMainBlocksInParallel();
-
-            log.info("Processed {} blocks", byronBlockCache.size());
-            log.info("Cursor: {}", eventMetadata.getBlock());
-
-//            ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
-//            publisher.publishEvent(byronMainBlockEvent);
-//
-//            //Finally Set the cursor
-//            cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
-//                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
-
-            byronBlockCache.clear();
 
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
-            byronBlockCache.clear();
+            byronBatchBlockList.clear();
             stopSyncOnError();
             throw new RuntimeException(e);
         }
     }
 
     private void processByronMainBlocksInParallel() {
-        List<List<ByronBlockCache>> partitions = partition(byronBlockCache, 15);
+        List<List<BatchByronBlock>> partitions = partition(byronBatchBlockList, partitionSize);
 
-        List<Future> futures = new ArrayList<>();
-        for (List<ByronBlockCache> partition: partitions) {
-            Runnable runnable = (() -> {
-                for (ByronBlockCache blockCache: partition) {
+        List<CompletableFuture> futures = new ArrayList<>();
+        for (List<BatchByronBlock> partition : partitions) {
+            var future = CompletableFuture.supplyAsync(() -> {
+                for (BatchByronBlock blockCache : partition) {
                     ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(blockCache.getEventMetadata(), blockCache.getBlock());
                     publisher.publishEvent(byronMainBlockEvent);
                 }
+                return true;
             });
-
-            Future future = executor.submit(runnable);
             futures.add(future);
         }
 
-        for (var t: futures) {
-            try {
-                t.get();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        publisher.publishEvent(new CommitEvent(byronBlockCache));
+        publisher.publishEvent(new CommitEvent(byronBatchBlockList));
 
-        ByronBlockCache lastBlockCache = byronBlockCache.getLast();
+        BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         cursorService.setCursor(new Cursor(lastBlockCache.getEventMetadata().getSlot(), lastBlockCache.getEventMetadata().getBlockHash(),
                 lastBlockCache.getEventMetadata().getBlock(), lastBlockCache.getEventMetadata().getPrevBlockHash(), lastBlockCache.getEventMetadata().getEra()));
+
+        byronBatchBlockList.clear();
     }
 
     @Transactional
@@ -516,7 +532,7 @@ public class BlockFetchService implements BlockChainDataListener {
         cursorService.setSyncMode(syncMode);
     }
 
-    public synchronized  void shutdown() {
+    public synchronized void shutdown() {
         blockRangeSync.stop();
     }
 

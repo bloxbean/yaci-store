@@ -24,6 +24,7 @@ public interface UtxoStorage {
     List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys);
     int deleteBySlotGreaterThan(Long slot);
 
-    Optional<AddressUtxo> save(AddressUtxo addressUtxo);
-    Optional<List<AddressUtxo>> saveAll(List<AddressUtxo> addressUtxoList);
+    void saveUnspent(List<AddressUtxo> addressUtxoList);
+
+    void saveSpent(List<AddressUtxo> addressUtxoList);
 }
