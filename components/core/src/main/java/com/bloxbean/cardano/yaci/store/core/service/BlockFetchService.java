@@ -14,13 +14,18 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.events.internal.BlockCacheProcessedEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BlockCache;
+import com.bloxbean.cardano.yaci.store.events.model.internal.ByronBlockCache;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.events.domain.TxMintBurn;
 import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
-import io.micrometer.core.instrument.Counter;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import io.micrometer.core.annotation.Counted;
+import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,13 +35,18 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
+import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
 @Slf4j
@@ -66,29 +76,71 @@ public class BlockFetchService implements BlockChainDataListener {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
+    @Value("${store.block.processing.threads:15}")
+    private int blockProcessingThreads;
+
+    @Value("${store.block.parallel-processing-enabled:false}")
+    private boolean enableParallelProcessing;
+
     private boolean syncMode;
 
     private AtomicBoolean isError = new AtomicBoolean(false);
 
+    private List<BlockCache> blockCaches = new ArrayList<>();
+    private List<ByronBlockCache> byronBlockCache = new ArrayList<>();
+
+    private ExecutorService executor;
+
+    @Value("${store.block.processing.batch-size:100}")
+    private int BATCH_SIZE;
+
+    @Value("${store.block.processing.partition-size:15}")
+    private int partitionSize;
+
+    private Thread keepAliveThread;
 
     public BlockFetchService(ApplicationEventPublisher applicationEventPublisher, MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
-
         this.publisher = applicationEventPublisher;
-        Counter counter = this.meterRegistry.counter("blocks.processed");
     }
 
     @Transactional
+    @Timed(value = "store.block.process", description = "Block processing time")
+    @Counted(value = "store.block.process.count", description = "Block processing count")
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
         checkError();
+
+        //Check if there is any pending ByronBlocks to be processed
+        if (byronBlockCache.size() > 0) {
+            processByronMainBlocksInParallel();
+            byronBlockCache.clear();
+        }
+
+
+        //TODO  -- Also check sync mode == true and there are still blocks in blockCache list
+
         BlockHeader blockHeader = block.getHeader();
         final long slot = blockHeader.getHeaderBody().getSlot();
-        eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
+        boolean byronToShelleyEraChange = eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
         final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
         final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
+
+//        if (newEra) { //Byron to shell
+//            //Check if there is any pending ByronBlocks to be processed
+//            if (byronBlockCache.size() > 0) {
+//                processByronMainBlocksInParallel();
+//                byronBlockCache.clear();
+//            }
+//        }
+
+        if (executor == null)
+            this.executor =  Executors.newFixedThreadPool(blockProcessingThreads);
+
+        //paralleMode is true when not fully synced and parallel processing is enabled and not the first block of the era
+        boolean parallelMode = !syncMode && enableParallelProcessing && !byronToShelleyEraChange;
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .mainnet(storeProperties.isMainnet())
@@ -103,10 +155,58 @@ public class BlockFetchService implements BlockChainDataListener {
                 .epochSlot(epochSlot)
                 .noOfTxs(transactions.size())
                 .syncMode(syncMode)
+                .parallelMode(parallelMode)
                 .build();
 
+        if (!parallelMode) { //For Sync mode, we need to process block by block
+            processBlock(block, transactions, blockHeader, eventMetadata);
+            publisher.publishEvent(new CommitEvent(List.of(new BlockCache(eventMetadata, block, transactions))));
+
+            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
+                    eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            return;
+        }
+
+        blockCaches.add(new BlockCache(eventMetadata, block, transactions));
+        if (blockCaches.size() != BATCH_SIZE)
+            return;
+
+        List<List<BlockCache>> partitions = partition(blockCaches, partitionSize);
+
+        List<Future> futures = new ArrayList<>();
+        for (List<BlockCache> partition: partitions) {
+            Runnable runnable = (() -> {
+                for (BlockCache blockCache: partition)
+                    processBlock(blockCache.getBlock(), blockCache.getTransactions(), blockCache.getBlock().getHeader(), blockCache.getEventMetadata());
+            });
+
+            Future future = executor.submit(runnable);
+            futures.add(future);
+        }
+
+        for (var t: futures) {
+            try {
+                t.get();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        publisher.publishEvent(new BlockCacheProcessedEvent(blockCaches));
+        publisher.publishEvent(new CommitEvent(blockCaches));
+
+//        //Finally Set the cursor
+        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
+                eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+
+        log.info("Block No: " + eventMetadata.getBlock() + "  , Era: " + era);
+
+        blockCaches.clear();
+    }
+
+    private void processBlock(Block block, List<Transaction> transactions, BlockHeader blockHeader, EventMetadata eventMetadata) {
         try {
-            publisher.publishEvent(era);
+            publisher.publishEvent(eventMetadata.getEra());
             publisher.publishEvent(new BlockEvent(eventMetadata, block));
             publisher.publishEvent(new BlockHeaderEvent(eventMetadata, blockHeader));
             publisher.publishEvent(new TransactionEvent(eventMetadata, transactions));
@@ -141,9 +241,9 @@ public class BlockFetchService implements BlockChainDataListener {
                     .collect(Collectors.toList());
             publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
 
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+//            //Finally Set the cursor
+//            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+//                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -195,6 +295,9 @@ public class BlockFetchService implements BlockChainDataListener {
             final String slotLeader = SlotLeaderUtil
                     .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
 
+            //paralleMode is true when not fully synced and parallel processing is enabled
+            boolean parallelMode = !syncMode && enableParallelProcessing;
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
                     .era(Era.Byron)
@@ -207,21 +310,81 @@ public class BlockFetchService implements BlockChainDataListener {
                     .slot(absoluteSlot)
                     .epochSlot(epochSlot)
                     .syncMode(syncMode)
+                    .parallelMode(parallelMode)
                     .build();
 
-            ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
-            publisher.publishEvent(byronMainBlockEvent);
+            if (executor == null)
+                this.executor =  Executors.newFixedThreadPool(blockProcessingThreads);
 
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            if (!parallelMode) { //For Sync mode, we need to process block by block
+                ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
+                publisher.publishEvent(byronMainBlockEvent);
+
+                publisher.publishEvent(new CommitEvent<>(List.of(new ByronBlockCache(eventMetadata, byronBlock))));
+
+                //Finally Set the cursor
+                cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
+                        eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+                return;
+            }
+
+            byronBlockCache.add(new ByronBlockCache(eventMetadata, byronBlock));
+            if (byronBlockCache.size() != 100)
+                return;
+
+            processByronMainBlocksInParallel();
+
+            log.info("Processed {} blocks", byronBlockCache.size());
+            log.info("Cursor: {}", eventMetadata.getBlock());
+
+//            ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
+//            publisher.publishEvent(byronMainBlockEvent);
+//
+//            //Finally Set the cursor
+//            cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
+//                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+
+            byronBlockCache.clear();
+
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
+            byronBlockCache.clear();
             stopSyncOnError();
             throw new RuntimeException(e);
         }
+    }
+
+    private void processByronMainBlocksInParallel() {
+        List<List<ByronBlockCache>> partitions = partition(byronBlockCache, 15);
+
+        List<Future> futures = new ArrayList<>();
+        for (List<ByronBlockCache> partition: partitions) {
+            Runnable runnable = (() -> {
+                for (ByronBlockCache blockCache: partition) {
+                    ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(blockCache.getEventMetadata(), blockCache.getBlock());
+                    publisher.publishEvent(byronMainBlockEvent);
+                }
+            });
+
+            Future future = executor.submit(runnable);
+            futures.add(future);
+        }
+
+        for (var t: futures) {
+            try {
+                t.get();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        publisher.publishEvent(new CommitEvent(byronBlockCache));
+
+        ByronBlockCache lastBlockCache = byronBlockCache.getLast();
+        cursorService.setCursor(new Cursor(lastBlockCache.getEventMetadata().getSlot(), lastBlockCache.getEventMetadata().getBlockHash(),
+                lastBlockCache.getEventMetadata().getBlock(), lastBlockCache.getEventMetadata().getPrevBlockHash(), lastBlockCache.getEventMetadata().getEra()));
     }
 
     @Transactional
@@ -337,13 +500,17 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startFetch(Point from, Point to) {
+        stopKeepAliveThread();
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
         syncMode = false;
         cursorService.setSyncMode(syncMode);
+
+        startKeepAliveThread();
     }
 
     public synchronized void startSync(Point from) {
+        stopKeepAliveThread();
         blockSync.startSync(from, this);
         syncMode = true;
         cursorService.setSyncMode(syncMode);
@@ -366,4 +533,33 @@ public class BlockFetchService implements BlockChainDataListener {
             throw new IllegalStateException("Fetcher has already been stopped due to error.");
     }
 
+    private synchronized void stopKeepAliveThread() {
+        try {
+            if (keepAliveThread != null && keepAliveThread.isAlive())
+                keepAliveThread.interrupt();
+        } catch (Exception e) {
+            log.error("Error stopping keep alive thread", e);
+        }
+    }
+
+    private synchronized void startKeepAliveThread() {
+        stopKeepAliveThread();
+        keepAliveThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(10000);
+                    int randomNo = getRandomNumber(0, 60000);
+                    blockRangeSync.sendKeepAliveMessage(randomNo);
+                } catch (InterruptedException e) {
+                    log.info("Keep alive thread interrupted");
+                    break;
+                }
+            }
+        });
+        keepAliveThread.start();
+    }
+
+    private int getRandomNumber(int min, int max) {
+        return (int) ((Math.random() * (max - min)) + min);
+    }
 }
