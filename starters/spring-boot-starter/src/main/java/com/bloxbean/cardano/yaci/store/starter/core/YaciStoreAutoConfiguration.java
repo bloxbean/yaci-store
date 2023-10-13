@@ -39,6 +39,11 @@ public class YaciStoreAutoConfiguration {
     @Autowired
     YaciStoreProperties properties;
 
+    static {
+        System.setProperty("org.jooq.no-logo", "true");
+        System.setProperty("org.jooq.no-tips", "true");
+    }
+
     //configuration
 
     @Bean
