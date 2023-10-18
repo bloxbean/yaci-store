@@ -20,8 +20,6 @@ import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import io.micrometer.core.annotation.Counted;
-import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,8 +55,6 @@ public class BlockFetchService implements BlockChainDataListener {
     private Thread keepAliveThread;
 
     @Transactional
-    @Timed(value = "store.block.process", description = "Block processing time")
-    @Counted(value = "store.block.process.count", description = "Block processing count")
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
         checkError();
@@ -150,7 +146,6 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
-            //byronBatchBlockList.clear();
             stopSyncOnError();
             throw new RuntimeException(e);
         }
