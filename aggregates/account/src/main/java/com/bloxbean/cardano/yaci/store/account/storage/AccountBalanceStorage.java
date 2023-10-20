@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.storage;
 
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 
 import java.util.List;
 import java.util.Optional;
@@ -107,4 +108,16 @@ public interface AccountBalanceStorage {
      * @return number of records deleted
      */
     int deleteStakeAddressBalanceBySlotGreaterThan(Long slot);
+
+    //Optional -- Required for controller
+
+    /**
+     * Get address balance for the given unit.
+     * @param unit unit (policyId + assetName)
+     * @param page page
+     * @param count count
+     * @param sort sort order.
+     * @return List of AddressBalance
+     */
+    List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort);
 }
