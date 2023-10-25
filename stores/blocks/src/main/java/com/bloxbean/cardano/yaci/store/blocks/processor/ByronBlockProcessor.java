@@ -49,19 +49,19 @@ public class ByronBlockProcessor {
     public void handleByronMainBlockEvent(ByronMainBlockEvent event) {
         ByronMainBlock byronBlock = event.getByronMainBlock();
 
-        long slot = event.getEventMetadata().getSlot();
+        long slot = event.getMetadata().getSlot();
 
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
-                .number(event.getEventMetadata().getBlock())
+                .number(event.getMetadata().getBlock())
                 .hash(byronBlock.getHeader().getBlockHash())
                 .slot(slot)
-                .epochNumber(event.getEventMetadata().getEpochNumber())
-                .epochSlot((int) event.getEventMetadata().getEpochSlot())
+                .epochNumber(event.getMetadata().getEpochNumber())
+                .epochSlot((int) event.getMetadata().getEpochSlot())
                 .totalOutput(BigInteger.ZERO)
                 .prevHash(byronBlock.getHeader().getPrevBlock())
-                .blockTime(event.getEventMetadata().getBlockTime())
-                .slotLeader(event.getEventMetadata().getSlotLeader())
+                .blockTime(event.getMetadata().getBlockTime())
+                .slotLeader(event.getMetadata().getSlotLeader())
                 .build();
 
         //Find total tx output
@@ -85,14 +85,14 @@ public class ByronBlockProcessor {
         ByronEbBlock byronEbBlock = event.getByronEbBlock();
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
-                .number(event.getEventMetadata().getBlock())
+                .number(event.getMetadata().getBlock())
                 .hash(byronEbBlock.getHeader().getBlockHash())
-                .slot(event.getEventMetadata().getSlot())
-                .epochNumber(event.getEventMetadata().getEpochNumber())
-                .epochSlot((int) event.getEventMetadata().getEpochSlot())
+                .slot(event.getMetadata().getSlot())
+                .epochNumber(event.getMetadata().getEpochNumber())
+                .epochSlot((int) event.getMetadata().getEpochSlot())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
-                .blockTime(event.getEventMetadata().getBlockTime())
-                .slotLeader(event.getEventMetadata().getSlotLeader())
+                .blockTime(event.getMetadata().getBlockTime())
+                .slotLeader(event.getMetadata().getSlotLeader())
                 .build();
 
         blockStorage.save(block);

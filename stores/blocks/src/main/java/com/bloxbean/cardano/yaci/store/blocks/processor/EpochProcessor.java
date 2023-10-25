@@ -44,7 +44,7 @@ public class EpochProcessor {
     @Transactional
     @Async
     public void handleByronBlockHeaderEvent(ByronMainBlockEvent byronMainBlockEvent) {
-        aggregateDataDuringEpochChange(byronMainBlockEvent.getEventMetadata());
+        aggregateDataDuringEpochChange(byronMainBlockEvent.getMetadata());
     }
 
     private void aggregateDataDuringEpochChange(EventMetadata eventMetadata) {
