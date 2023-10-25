@@ -28,12 +28,32 @@ public class RemoteEventConsumer {
     }
 
     @Bean
+    public Consumer<String> blockEvent() {
+        return blockEventStr -> {
+            BlockEvent blockEvent = parseJson(blockEventStr, BlockEvent.class);
+            if (log.isDebugEnabled())
+                log.info("Received: " + blockEvent);
+            publisher.publishEvent(blockEvent);
+        };
+    }
+
+    @Bean
     public Consumer<String> blockHeaderEvent() {
         return blockHeaderEventStr -> {
             BlockHeaderEvent blockHeaderEvent = parseJson(blockHeaderEventStr, BlockHeaderEvent.class);
             if (log.isDebugEnabled())
                 log.info("Received: " + blockHeaderEvent);
             publisher.publishEvent(blockHeaderEvent);
+        };
+    }
+
+    @Bean
+    public Consumer<String> byronMainBlockEvent() {
+        return byronMainBlockEventStr -> {
+            ByronMainBlockEvent byronMainBlockEvent = parseJson(byronMainBlockEventStr, ByronMainBlockEvent.class);
+            if (log.isDebugEnabled())
+                log.debug("Received: " + byronMainBlockEvent);
+            publisher.publishEvent(byronMainBlockEvent);
         };
     }
 

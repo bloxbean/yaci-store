@@ -1,8 +1,9 @@
 package com.bloxbean.cardano.yaci.store.remote.publisher;
 
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.remote.RemoteProperties;
 import com.bloxbean.cardano.yaci.store.remote.common.RemoteBindingConstant;
-import com.bloxbean.cardano.yaci.store.remote.common.RemoteConfigProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,17 +12,40 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class RemoteEventPublisher {
     private final StreamBridge streamBridge;
+    private final RemoteProperties remoteProperties;
 
-    public RemoteEventPublisher(StreamBridge streamBridge) {
-        this.streamBridge = streamBridge;
-        log.info("RemoteEventPublisher initialized >>");
+    @PostConstruct
+    public void init() {
+        log.info("<< RemoteEventPublisher initialized >>");
+        log.info("<< Events Enabled For Remote Publish : " + remoteProperties.getPublisherEvents() + " >>");
     }
 
     private void publish(String topic, Object event) {
+        if (remoteProperties.getPublisherEvents() != null
+                && !remoteProperties.getPublisherEvents().contains(topic))
+            return;
+
+        if (log.isDebugEnabled())
+            log.debug("Publishing event to : " + topic);
+
         streamBridge.send(topic + "-out-0", event);
+    }
+
+    @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")
+    public void handleBlockEvent(@NonNull BlockEvent event) {
+        if (log.isDebugEnabled())
+            log.debug("Publishing event to Kafka: "
+                    + event.getBlock().getHeader().getHeaderBody().getBlockNumber());
+
+        EventMetadata eventMetadata = event.getMetadata().toBuilder()
+                .remotePublish(true)
+                .build();
+        BlockEvent remoteEvent = new BlockEvent(eventMetadata, event.getBlock());
+        publish(RemoteBindingConstant.blockEvent, remoteEvent);
     }
 
     @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")
@@ -38,12 +62,25 @@ public class RemoteEventPublisher {
     }
 
     @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")
+    public void handleByronMainBlockEvent(@NonNull ByronMainBlockEvent event) {
+        if (log.isDebugEnabled())
+            log.debug("Publishing event to Kafka: "
+                    + event.getMetadata().getBlock());
+
+        EventMetadata eventMetadata = event.getMetadata().toBuilder()
+                .remotePublish(true)
+                .build();
+        ByronMainBlockEvent remoteEvent = new ByronMainBlockEvent(eventMetadata, event.getByronMainBlock());
+        publish(RemoteBindingConstant.byronMainBlockEvent, remoteEvent);
+    }
+
+    @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")
     public void handleByronEbBlockEvent(@NonNull ByronEbBlockEvent event) {
         if (log.isDebugEnabled())
             log.debug("Publishing event to Kafka: "
-                    + event.getEventMetadata().getBlock());
+                    + event.getMetadata().getBlock());
 
-        EventMetadata eventMetadata = event.getEventMetadata().toBuilder()
+        EventMetadata eventMetadata = event.getMetadata().toBuilder()
                 .remotePublish(true)
                 .build();
         ByronEbBlockEvent remoteEvent = new ByronEbBlockEvent(eventMetadata, event.getByronEbBlock());
