@@ -4,10 +4,12 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.List;
+
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
-public class RemoteStoreProperties {
+public class RemoteStoreAutoConfProperties {
     private Remote remote;
 
     @Getter
@@ -15,6 +17,7 @@ public class RemoteStoreProperties {
     public static final class Remote {
        private boolean publisherEnabled = false;
        private boolean consumerEnabled = false;
+       private List<String> publisherEvents = List.of("blockEvent", "rollbackEvent");
     }
 
 }
