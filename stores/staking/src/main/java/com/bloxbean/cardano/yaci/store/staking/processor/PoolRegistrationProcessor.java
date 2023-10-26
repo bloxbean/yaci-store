@@ -26,7 +26,7 @@ public class PoolRegistrationProcessor {
 
     @EventListener
     @Transactional
-    public void processStakeRegistration(CertificateEvent certificateEvent) {
+    public void processPoolRegistration(CertificateEvent certificateEvent) {
         EventMetadata eventMetadata = certificateEvent.getMetadata();
 
         for (TxCertificates txCertificates: certificateEvent.getTxCertificatesList()) {
