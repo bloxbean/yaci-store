@@ -37,7 +37,7 @@ public class ByronUtxoProcessor {
     @EventListener
     @Transactional
     public void handleByronTransactionEvent(ByronMainBlockEvent event) {
-        EventMetadata metadata = event.getEventMetadata();
+        EventMetadata metadata = event.getMetadata();
         List<ByronTx> byronTxList = event.getByronMainBlock().getBody().getTxPayload()
                 .stream()
                 .map(byronTxPayload -> byronTxPayload.getTransaction())
