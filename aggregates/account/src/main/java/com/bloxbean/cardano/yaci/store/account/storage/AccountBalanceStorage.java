@@ -120,4 +120,10 @@ public interface AccountBalanceStorage {
      * @return List of AddressBalance
      */
     List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort);
+
+    /**
+     * Get the last block for which the balance was calculated
+     * @return
+     */
+    Long getBalanceCalculationBlock();
 }

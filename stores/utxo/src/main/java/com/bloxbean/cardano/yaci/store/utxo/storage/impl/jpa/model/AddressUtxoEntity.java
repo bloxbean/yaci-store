@@ -79,6 +79,15 @@ public class AddressUtxoEntity extends BlockAwareEntity {
     @Column(name = "spent_at_slot")
     private Long spentAtSlot;
 
+    @Column(name = "spent_at_block")
+    private Long spentAtBlock;
+
+    @Column(name = "spent_at_block_hash")
+    private Long spentAtBlockHash;
+
+    @Column(name = "spent_block_time")
+    private Long spentBlockTime;
+
     @Column(name = "spent_epoch")
     private Integer spentEpoch;
 

@@ -10,8 +10,8 @@ import java.util.List;
 
 @Data
 @AllArgsConstructor
-public class BatchBlock {
-    private EventMetadata eventMetadata;
+public class BatchBlock implements BatchEvent {
+    private EventMetadata metadata;
     private Block block;
     private List<Transaction> transactions;
 }

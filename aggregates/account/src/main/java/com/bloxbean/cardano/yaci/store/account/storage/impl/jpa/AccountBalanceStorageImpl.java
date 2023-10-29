@@ -116,4 +116,9 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .map(mapper::toAddressBalance)
                 .toList();
     }
+
+    @Override
+    public Long getBalanceCalculationBlock() {
+        return addressBalanceRepository.findMaxBlock();
+    }
 }

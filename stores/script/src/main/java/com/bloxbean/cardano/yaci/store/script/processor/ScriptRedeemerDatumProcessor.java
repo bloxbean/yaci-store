@@ -15,7 +15,6 @@ import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
-import io.micrometer.core.annotation.Timed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -64,13 +63,12 @@ public class ScriptRedeemerDatumProcessor {
      */
     @EventListener
     @Transactional
-    @Timed(value = "store.script.batch.process", percentiles = {0.5, 0.95, 0.99}, histogram = true)
     public void handleScriptTransactionEventForBlockCacheList(BatchBlocksProcessedEvent blockCacheProcessedEvent) {
         var blockCacheList = blockCacheProcessedEvent.getBlockCaches();
 
         blockCacheList.stream().parallel().forEach(blockCache -> {
             for (Transaction transaction : blockCache.getTransactions()) {
-                handleScriptTransaction(blockCache.getEventMetadata(), transaction);
+                handleScriptTransaction(blockCache.getMetadata(), transaction);
             }
         });
     }

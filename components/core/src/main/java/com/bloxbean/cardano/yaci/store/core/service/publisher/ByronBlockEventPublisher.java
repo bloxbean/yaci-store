@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,18 +42,20 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
     private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
 
+    @Transactional
     @Override
     public void publishBlockEvents(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
         ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
 
         publisher.publishEvent(byronMainBlockEvent);
-        publisher.publishEvent(new CommitEvent<>(List.of(new BatchByronBlock(eventMetadata, byronBlock))));
+        publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                 eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
 
+    @Transactional
     @Override
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
         byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
@@ -62,6 +65,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         processByronMainBlocksInParallel();
     }
 
+    @Transactional
     public void processByronMainBlocksInParallel() {
         if (byronBatchBlockList.size() == 0)
             return;
@@ -72,7 +76,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         for (List<BatchByronBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
                 for (BatchByronBlock blockCache : partition) {
-                    ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(blockCache.getEventMetadata(), blockCache.getBlock());
+                    ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(blockCache.getMetadata(), blockCache.getBlock());
                     publisher.publishEvent(byronMainBlockEvent);
                 }
                 return true;
@@ -82,12 +86,12 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        publisher.publishEvent(new CommitEvent(byronBatchBlockList));
-
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
-        cursorService.setCursor(new Cursor(lastBlockCache.getEventMetadata().getSlot(), lastBlockCache.getEventMetadata().getBlockHash(),
-                lastBlockCache.getEventMetadata().getBlock(), lastBlockCache.getEventMetadata().getPrevBlockHash(),
-                lastBlockCache.getEventMetadata().getEra()));
+        publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
+
+        cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
+                lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),
+                lastBlockCache.getMetadata().getEra()));
 
         byronBatchBlockList.clear();
     }

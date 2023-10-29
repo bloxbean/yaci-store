@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,15 +53,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
 
+    @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
-        //processBlock(eventMetadata, block, transactions);
         processBlockSingleThread(eventMetadata, block, transactions);
-        publisher.publishEvent(new CommitEvent(List.of(new BatchBlock(eventMetadata, block, transactions))));
+        publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
 
+    @Transactional
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         handleBlockBatchInParallel(eventMetadata, block, transactions);
     }
@@ -75,7 +77,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         for (List<BatchBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
                 for (BatchBlock blockCache : partition) {
-                    processBlockInParallel(blockCache.getEventMetadata(), blockCache.getBlock(), blockCache.getTransactions());
+                    processBlockInParallel(blockCache.getMetadata(), blockCache.getBlock(), blockCache.getTransactions());
                 }
 
                 return true;
@@ -88,8 +90,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .join();
 
         //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
-        publisher.publishEvent(new BatchBlocksProcessedEvent(batchBlockList));
-        publisher.publishEvent(new CommitEvent(batchBlockList));
+        publisher.publishEvent(new BatchBlocksProcessedEvent(eventMetadata, batchBlockList));
+        publisher.publishEvent(new CommitEvent(eventMetadata, batchBlockList));
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),

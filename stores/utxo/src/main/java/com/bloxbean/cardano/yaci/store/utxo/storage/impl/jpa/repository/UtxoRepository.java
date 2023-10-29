@@ -4,9 +4,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEn
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.UtxoId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -24,8 +22,25 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
 
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
 
-    List<AddressUtxoEntity> findBySlot(Long slot);
-
     int deleteBySlotGreaterThan(Long slot);
+
+    //Required for account balance aggregation
+    @Query("SELECT distinct ab.blockNumber FROM AddressUtxoEntity  ab where ab.blockNumber >= :block order by ab.blockNumber ASC LIMIT :limit")
+    List<Long> findNextAvailableBlocks(Long block, int limit);
+
+    List<AddressUtxoEntity> findByBlockNumberBetween(Long startBlock, Long endBlock);
+    List<AddressUtxoEntity> findBySpentAtBlockBetween(Long startBlock, Long endBlock);
+
+    //The followings are not used currently
+    @Query("SELECT MIN(ab.blockNumber) FROM AddressUtxoEntity ab WHERE ab.blockNumber > :block")
+    Long findNextAvailableBlock(Long block);
+
+    @Query("SELECT MAX(ab.blockNumber) FROM AddressUtxoEntity ab")
+    Long findMaxBlockNumer();
+
+    List<AddressUtxoEntity> findBySlot(Long slot);
+    List<AddressUtxoEntity> findBySpentAtSlot(Long slot);
+    List<AddressUtxoEntity> findByBlockNumber(Long blockNumber);
+    List<AddressUtxoEntity> findBySpentAtBlock(Long slot);
 }
 

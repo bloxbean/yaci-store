@@ -1,0 +1,14 @@
+plugins {
+    id 'org.springframework.boot' version '3.1.4'
+}
+
+dependencies {
+    implementation project(':starters:utxo-spring-boot-starter')
+    implementation project(':starters:account-spring-boot-starter')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.32'
+    runtimeOnly 'org.postgresql:postgresql:42.5.0'
+}

@@ -54,6 +54,9 @@ public class ByronUtxoProcessor {
                         addressUtxo.setOutputIndex(utxoKey.getOutputIndex());
                         addressUtxo.setSpent(true);
                         addressUtxo.setSpentAtSlot(metadata.getSlot());
+                        addressUtxo.setSpentAtBlock(metadata.getBlock());
+                        addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                        addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                         addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                         addressUtxo.setSpentTxHash(byronTx.getTxHash());
                         return addressUtxo;
@@ -81,8 +84,8 @@ public class ByronUtxoProcessor {
                 txInputOutputList.add(new TxInputOutput(byronTx.getTxHash(), inputAddressUtxos, outputAddressUtxos));
         }
 
-        if (txInputOutputList.size() > 0)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
+     // if (txInputOutputList.size() > 0)
+        publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
     }
 
     private List<Utxo> getUtxosFromByronOutput(ByronTx byronTx) {

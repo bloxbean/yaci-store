@@ -19,6 +19,9 @@ create table address_utxo
     reference_script_hash varchar(255) null,
     spent                 bit          null,
     spent_at_slot         bigint       null,
+    spent_at_block        bigint       null,
+    spent_at_block_hash   varchar(255),
+    spent_block_time      bigint,
     spent_epoch           int          null,
     spent_tx_hash         varchar(255) null,
     is_collateral_return  bit          null,
@@ -51,6 +54,12 @@ CREATE INDEX idx_address_utxo_epoch
 
 CREATE INDEX idx_address_utxo_spent_epoch
     ON address_utxo(spent_epoch);
+
+CREATE INDEX idx_address_utxo_spent_slot
+    ON address_utxo(spent_at_slot);
+
+CREATE INDEX idx_address_utxo_spent_block
+    ON address_utxo(spent_at_block);
 
 drop table if exists invalid_transaction;
 create table invalid_transaction

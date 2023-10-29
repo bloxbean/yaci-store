@@ -7,7 +7,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class BatchByronBlock {
-    private EventMetadata eventMetadata;
+public class BatchByronBlock implements BatchEvent {
+    private EventMetadata metadata;
     private ByronMainBlock block;
 }

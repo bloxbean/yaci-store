@@ -104,8 +104,8 @@ public class UtxoProcessor {
             utxoStorage.saveUnspent(txInputOutputs.stream()
                     .flatMap(txInputOutput -> txInputOutput.getOutputs().stream()).collect(Collectors.toList()));
 
-            if(txInputOutputs.size() > 0)
-                publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
+            //if(txInputOutputs.size() > 0)
+            publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
         } catch (Exception e) {
             log.error("Error saving : " + event.getMetadata(), e);
             log.error("Stopping fetcher");
@@ -126,6 +126,9 @@ public class UtxoProcessor {
                     addressUtxo.setOutputIndex(utxoKey.getOutputIndex());
                     addressUtxo.setSpent(true);
                     addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentAtBlock(metadata.getBlock());
+                    addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                    addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                     addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
@@ -140,10 +143,12 @@ public class UtxoProcessor {
                 .collect(Collectors.toList());
 
         //publish event
-        if (outputAddressUtxos.size() > 0)
+        if (outputAddressUtxos.size() > 0 || inputAddressUtxos.size() > 0)
             return Optional.of(new TxInputOutput(transaction.getTxHash(), inputAddressUtxos, outputAddressUtxos));
-        else
+        else {
+            log.warn("No input or output found for transaction: " + transaction.getTxHash());
             return Optional.empty();
+        }
     }
 
     private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
@@ -176,6 +181,9 @@ public class UtxoProcessor {
                     addressUtxo.setOutputIndex(transactionInput.getIndex());
                     addressUtxo.setSpent(true);
                     addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentAtBlock(metadata.getBlock());
+                    addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                    addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                     addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
@@ -192,8 +200,10 @@ public class UtxoProcessor {
 
         if (collateralOutputUtxo != null)
             return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, List.of(collateralOutputUtxo)));
-        else
+        else {
+            log.warn("No input or output found for invalid transaction: " + transaction.getTxHash());
             return Optional.empty();
+        }
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {

@@ -153,10 +153,8 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     @Override
-    public List<AddressUtxo> findBySlot(Long slot) {
-        return utxoRepository.findBySlot(slot)
-                .stream().map(mapper::toAddressUtxo)
-                .toList();
+    public List<Long> findNextAvailableBlocks(Long block, int limit) {
+        return utxoRepository.findNextAvailableBlocks(block, limit);
     }
 
     @Override
@@ -242,6 +240,20 @@ public class UtxoStorageImpl implements UtxoStorage {
         spentUtxoCache.addAll(addressUtxoList);
     }
 
+    @Override
+    public List<AddressUtxo> findUnspentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
+        return utxoRepository.findByBlockNumberBetween(startBlock, endBlock)
+                .stream().map(entity -> mapper.toAddressUtxo(entity))
+                .toList();
+    }
+
+    @Override
+    public List<AddressUtxo> findSpentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
+        return utxoRepository.findBySpentAtBlockBetween(startBlock, endBlock)
+                .stream().map(entity -> mapper.toAddressUtxo(entity))
+                .toList();
+    }
+
     @EventListener
     @Transactional
     public void handleCommit(CommitEvent event) {
@@ -254,12 +266,18 @@ public class UtxoStorageImpl implements UtxoStorage {
                             .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
                             .set(ADDRESS_UTXO.SPENT, true)
                             .set(ADDRESS_UTXO.SPENT_AT_SLOT, addressUtxo.getSpentAtSlot())
+                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK, addressUtxo.getSpentAtBlock())
+                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK_HASH, addressUtxo.getSpentAtBlockHash())
+                            .set(ADDRESS_UTXO.SPENT_BLOCK_TIME, addressUtxo.getSpentBlockTime())
                             .set(ADDRESS_UTXO.SPENT_EPOCH, addressUtxo.getSpentEpoch())
                             .set(ADDRESS_UTXO.SPENT_TX_HASH, addressUtxo.getSpentTxHash())
                             .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
                             .onDuplicateKeyUpdate()
                             .set(ADDRESS_UTXO.SPENT, true)
                             .set(ADDRESS_UTXO.SPENT_AT_SLOT, addressUtxo.getSpentAtSlot())
+                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK, addressUtxo.getSpentAtBlock())
+                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK_HASH, addressUtxo.getSpentAtBlockHash())
+                            .set(ADDRESS_UTXO.SPENT_BLOCK_TIME, addressUtxo.getSpentBlockTime())
                             .set(ADDRESS_UTXO.SPENT_EPOCH, addressUtxo.getSpentEpoch())
                             .set(ADDRESS_UTXO.SPENT_TX_HASH, addressUtxo.getSpentTxHash())
                             .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
