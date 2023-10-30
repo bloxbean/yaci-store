@@ -38,4 +38,4 @@ drop index idx_stake_addr_balance_policy;
 drop index idx_stake_addr_balance_policy_asset;
 
 -- transaction_witness
-drop index idx_transaction_witness_tx_hash
+drop index idx_transaction_witness_tx_hash;
