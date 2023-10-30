@@ -36,3 +36,6 @@ drop index idx_stake_addr_balance_epoch;
 drop index idx_stake_addr_balance_unit;
 drop index idx_stake_addr_balance_policy;
 drop index idx_stake_addr_balance_policy_asset;
+
+-- transaction_witness
+drop index idx_transaction_witness_tx_hash

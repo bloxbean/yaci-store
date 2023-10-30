@@ -1,9 +1,12 @@
 package com.bloxbean.cardano.yaci.store.transaction;
 
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionWitnessStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.TransactionStorageImpl;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.TransactionWitnessStorageImpl;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.repository.TxnEntityRepository;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.jpa.repository.TxnWitnessRepository;
 import org.jooq.DSLContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -35,5 +38,11 @@ public class TransactionStoreConfiguration {
     @ConditionalOnMissingBean
     public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository, TxnMapper txnMapper) {
         return new TransactionStorageImpl(txnEntityRepository, txnMapper, dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TransactionWitnessStorage transactionWitnessStorage(TxnWitnessRepository txnWitnessRepository, TxnMapper txnMapper) {
+        return new TransactionWitnessStorageImpl(txnWitnessRepository, txnMapper);
     }
 }

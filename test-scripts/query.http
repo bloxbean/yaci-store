@@ -206,3 +206,12 @@ GET http://localhost:8080/api/v1/assets/f2dbd5db5ad0571ea533411e99dc960f582c0deb
 
 ###
 GET http://localhost:8080/api/v1/assets/e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72534b594c4552/addresses?page=0&count=100
+
+### Get Witnesses
+GET http://localhost:8080/api/v1/txs/64bc262000cdcf07927ee3b06a03b65f8fb81ca9c4b15cbbdd6a2689f974e9a3/witnesses
+
+###
+GET http://localhost:8080/api/v1/txs/ee0d811b75e0fbbd5d2bca9542b37225d2c5a58b8f371953d6494ab48ae3b9f0/witnesses
+
+###
+GET http://localhost:8080/api/v1/txs/8179c0867476f1d7a06c6abae22864ac280e2dc7083481f01ffd16382b7e3c59/witnesses

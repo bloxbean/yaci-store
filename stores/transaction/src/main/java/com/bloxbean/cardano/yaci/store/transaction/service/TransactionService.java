@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.transaction.domain.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionWitnessStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ import static java.util.stream.Collectors.groupingBy;
 @RequiredArgsConstructor
 public class TransactionService {
     private final TransactionStorage transactionStorage;
+    private final TransactionWitnessStorage transactionWitnessStorage;
     private final UtxoClient utxoClient;
 
     public Optional<TransactionDetails> getTransaction(String txHash) {
@@ -180,6 +182,10 @@ public class TransactionService {
     public List<TransactionSummary> getTransactionsByBlockHash(String blockHash) {
         List<Txn> txns = transactionStorage.getTransactionsByBlockHash(blockHash);
         return getTransactionSummaries(txns);
+    }
+
+    public List<TxnWitness> getTransactionWitnesses(String txHash) {
+        return transactionWitnessStorage.getTransactionWitnesses(txHash);
     }
 
     private List<TransactionSummary> getTransactionSummaries(List<Txn> txns) {
