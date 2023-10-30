@@ -14,7 +14,7 @@ import static com.bloxbean.cardano.client.address.util.AddressEncoderDecoderUtil
 
 //TODO -- Remove this class once the cardano-client-lib is updated to 0.5.0
 public class AddressUtil {
-    private static final byte RWD_STAKE_KEY_HEDER_TYPE = (byte)0b1110_0000;
+    private static final byte RWD_STAKE_KEY_HEADER_TYPE = (byte)0b1110_0000;
     private static final byte RWD_STAKE_SCRIPT_HEADER_TYPE = (byte)0b1111_0000;
 
     public static Address getRewardAddress(@NonNull StakeCredential stakeCredential, boolean isMainnet) {
@@ -23,7 +23,7 @@ public class AddressUtil {
         switch (stakeCredential.getType()) {
             case ADDR_KEYHASH:
                 return getAddress(null, HexUtil.decodeHexString(stakeCredential.getHash()),
-                        RWD_STAKE_KEY_HEDER_TYPE, network, AddressType.Reward);
+                        RWD_STAKE_KEY_HEADER_TYPE, network, AddressType.Reward);
             case SCRIPTHASH:
                 return getAddress(null, HexUtil.decodeHexString(stakeCredential.getHash()),
                         RWD_STAKE_SCRIPT_HEADER_TYPE, network, AddressType.Reward);
