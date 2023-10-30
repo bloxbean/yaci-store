@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,6 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -46,6 +46,9 @@ public class UtxoProcessorTest {
     @InjectMocks
     private UtxoProcessor utxoProcessor;
 
+    @Mock
+    private MeterRegistry meterRegistry;
+
     @Captor
     ArgumentCaptor<List<AddressUtxo>> argCaptor;
 
@@ -53,7 +56,7 @@ public class UtxoProcessorTest {
     @BeforeEach
     public void setup() {
 //        openMocks(this);
-        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage, publisher);
+        utxoProcessor = new UtxoProcessor(utxoStorage, invalidTransactionStorage, publisher, meterRegistry);
     }
 
     @Test
@@ -72,7 +75,7 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoStorage, times(2)).saveAll(argCaptor.capture());
+        verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
 
         List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
@@ -122,7 +125,7 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoStorage, times(2)).saveAll(argCaptor.capture());
+        verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
 
         List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);

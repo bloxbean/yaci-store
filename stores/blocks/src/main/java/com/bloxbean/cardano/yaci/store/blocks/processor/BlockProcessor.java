@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
+import com.bloxbean.cardano.yaci.core.model.TransactionBody;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
-import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.util.List;
 
 @Component
 @Slf4j
@@ -31,8 +32,8 @@ public class BlockProcessor {
     @EventListener
     @Order(1)
     @Transactional
-    public void handleBlockHeaderEvent(@NonNull BlockHeaderEvent blockHeaderEvent) {
-        BlockHeader blockHeader = blockHeaderEvent.getBlockHeader();
+    public void handleBlockHeaderEvent(@NonNull BlockEvent blockEvent) {
+        BlockHeader blockHeader = blockEvent.getBlock().getHeader();
         long blockNumber = blockHeader.getHeaderBody().getBlockNumber();
         long slot = blockHeader.getHeaderBody().getSlot();
 
@@ -42,10 +43,10 @@ public class BlockProcessor {
                 .slot(slot)
                 .totalOutput(BigInteger.ZERO)
                 .totalFees(BigInteger.ZERO)
-                .epochNumber(blockHeaderEvent.getMetadata().getEpochNumber())
-                .epochSlot((int) blockHeaderEvent.getMetadata().getEpochSlot())
-                .blockTime(blockHeaderEvent.getMetadata().getBlockTime())
-                .era(blockHeaderEvent.getMetadata().getEra().getValue())
+                .epochNumber(blockEvent.getMetadata().getEpochNumber())
+                .epochSlot((int) blockEvent.getMetadata().getEpochSlot())
+                .blockTime(blockEvent.getMetadata().getBlockTime())
+                .era(blockEvent.getMetadata().getEra().getValue())
                 .prevHash(blockHeader.getHeaderBody().getPrevHash())
                 .issuerVkey(blockHeader.getHeaderBody().getIssuerVkey())
                 .vrfVkey(blockHeader.getHeaderBody().getVrfVkey())
@@ -56,8 +57,8 @@ public class BlockProcessor {
                 .blockBodyHash(blockHeader.getHeaderBody().getBlockBodyHash())
                 .protocolVersion(blockHeader.getHeaderBody().getProtocolVersion().get_1()
                         + "." + blockHeader.getHeaderBody().getProtocolVersion().get_2())
-                .noOfTxs(blockHeaderEvent.getMetadata().getNoOfTxs())
-                .slotLeader(blockHeaderEvent.getMetadata().getSlotLeader())
+                .noOfTxs(blockEvent.getMetadata().getNoOfTxs())
+                .slotLeader(blockEvent.getMetadata().getSlotLeader())
                 .build();
 
         if (blockHeader.getHeaderBody().getOperationalCert() != null) {
@@ -67,38 +68,30 @@ public class BlockProcessor {
             block.setOpCertSigma(blockHeader.getHeaderBody().getOperationalCert().getSigma());
         }
 
+        handleTransaction(block, blockEvent.getBlock().getTransactionBodies());
+
         blockStorage.save(block);
     }
 
-    @EventListener
-    @Order(2)
-    @Transactional
-    public void handleTransactionEvent(TransactionEvent transactionEvent) {
-        if (transactionEvent.getTransactions().size() == 0)
+    public void handleTransaction(Block block, List<TransactionBody> transactionBodies) {
+        if (transactionBodies == null || transactionBodies.size() == 0)
             return;
 
-        BigInteger transactionOutputInLovelace = transactionEvent.getTransactions()
-                .parallelStream()
-                .flatMap(transaction -> transaction.getBody().getOutputs().stream())
+        BigInteger transactionOutputInLovelace = transactionBodies
+                .stream()
+                .flatMap(transactionBody -> transactionBody.getOutputs().stream())
                 .flatMap(transactionOutput -> transactionOutput.getAmounts().stream())
                 .filter(amount -> BlockUtil.amountIsInADA(amount))
                 .map(amount -> amount.getQuantity())
                 .reduce((a, b) -> a.add(b)).orElse(BigInteger.ZERO);
 
-        BigInteger totalFees = transactionEvent.getTransactions()
-                .parallelStream()
-                .map(transaction -> transaction.getBody().getFee())
+        BigInteger totalFees = transactionBodies
+                .stream()
+                .map(transactionBody -> transactionBody.getFee())
                 .reduce((a, b) -> a.add(b)).orElse(BigInteger.ZERO);
 
-        blockStorage.findByBlockHash(transactionEvent.getMetadata().getBlockHash())
-                .ifPresentOrElse(block -> {
-                    block.setTotalOutput(transactionOutputInLovelace == null ? BigInteger.ZERO : transactionOutputInLovelace);
-                    block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
-                    blockStorage.save(block);
-                }, () -> {
-                    log.warn(String.format("Block {} is not present and a calculated output will be ignored in aggregation" +
-                            " which will result in incorrect output values in the future.", transactionEvent.getMetadata().getBlock()));
-                });
+        block.setTotalOutput(transactionOutputInLovelace == null ? BigInteger.ZERO : transactionOutputInLovelace);
+        block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
     }
 
     @EventListener

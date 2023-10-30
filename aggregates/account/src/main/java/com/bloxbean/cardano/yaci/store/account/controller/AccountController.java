@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.controller;
 
-import com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration;
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountInfo;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
@@ -33,12 +33,12 @@ public class AccountController {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountService accountService;
     private final UtxoAccountService utxoAccountService;
-    private final AccountStoreConfiguration accountStoreConfiguration;
+    private final AccountStoreProperties accountStoreProperties;
 
     @GetMapping("/addresses/{address}/balance")
     @Operation(description = "Get current balance at an address")
     public List<AddressBalance> getAddressBalance(String address) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
         return accountBalanceStorage.getAddressBalance(address)
@@ -50,7 +50,7 @@ public class AccountController {
     @GetMapping("/accounts/{stakeAddress}/balance")
     @Operation(description = "Get current balance at a stake address")
     public List<StakeAddressBalance> getStakeAddressBalance(String stakeAddress) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
         return accountBalanceStorage.getStakeAddressBalance(stakeAddress)
@@ -63,7 +63,7 @@ public class AccountController {
     @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
     public AddressBalance getAddressBalanceAtTime(String address, String unit,
                                                         @RequestParam long timeInSec) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
         return accountBalanceStorage.getAddressBalanceByTime(address, unit, timeInSec)
@@ -75,7 +75,7 @@ public class AccountController {
     @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
     public StakeAddressBalance getStakeAddressBalanceAtTime(String stakeAddress, String unit,
                                                         @RequestParam long timeInSec) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
         return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, unit, timeInSec)
@@ -93,7 +93,7 @@ public class AccountController {
             throw new IllegalArgumentException("Invalid stake address");
 
         BigInteger lovellaceBalance = BigInteger.ZERO;
-        if (accountStoreConfiguration.isBalanceAggregationEnabled()) {
+        if (accountStoreProperties.isBalanceAggregationEnabled()) {
             List<StakeAddressBalance> stakeAddressBalances = accountBalanceStorage.getStakeAddressBalance(stakeAddress);
             if (stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
                 lovellaceBalance = stakeAddressBalances.stream().filter(addressBalance -> addressBalance.getUnit().equals("lovelace"))

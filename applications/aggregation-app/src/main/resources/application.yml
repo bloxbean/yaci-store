@@ -1,0 +1,12 @@
+spring:
+  banner:
+    location: classpath:/banner.txt
+
+store:
+  account:
+    batch-balance-aggregation-enabled: true
+    batch-balance-aggregation-scheduler-enabled: true
+    balance-aggregation-enabled: false
+    history-cleanup-enabled: false
+
+apiPrefix: /api/v1

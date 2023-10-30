@@ -50,4 +50,13 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     //derived from protocol magic. No need to set
     private boolean mainnet;
+
+    //Executor Configurations
+    private int blockProcessingThreads = 15;
+    private int eventProcessingThreads = 30;
+    private boolean enableParallelProcessing;
+    private int blocksBatchSize=100;
+    private int blocksPartitionSize=15;
+    private boolean useVirtualThreadForBatchProcessing;
+    private boolean useVirtualThreadForEventProcessing;
 }

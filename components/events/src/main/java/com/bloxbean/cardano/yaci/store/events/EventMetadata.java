@@ -21,6 +21,7 @@ public class EventMetadata {
     private long epochSlot;
     private int noOfTxs;
     private boolean syncMode;
+    private boolean parallelMode;
 
     private boolean remotePublish; //Is published by a remote publisher
 }

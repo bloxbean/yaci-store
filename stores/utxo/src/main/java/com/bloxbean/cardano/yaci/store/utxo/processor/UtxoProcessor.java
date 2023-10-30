@@ -18,6 +18,10 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +32,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getPaymentKeyHash;
@@ -44,19 +48,44 @@ public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
     private final InvalidTransactionStorage invalidTransactionStorage;
     private final ApplicationEventPublisher publisher;
+    private final MeterRegistry meterRegistry;
+
+    private Counter counter;
+
+    @PostConstruct
+    public void init() {
+        counter = this.meterRegistry.counter("transactions.processed");
+    }
 
     @EventListener
     @Order(2)
     @Transactional
+    @Timed(value = "store.utxo.process", percentiles = {0.5, 0.95, 0.99}, histogram = true)
     public void handleTransactionEvent(TransactionEvent event) {
         try {
             List<Transaction> transactions = event.getTransactions();
             if (transactions == null)
                 return;
 
-            List<TxInputOutput> txInputOutputs = new ArrayList<>();
-            transactions.stream().forEach(
+//            boolean dependencyFound = false;
+//            Set<String> txHashes = transactions.stream().map(transaction -> transaction.getTxHash())
+//                    .collect(Collectors.toSet());
+//            for (Transaction transaction: transactions) {
+//                for (TransactionInput input: transaction.getBody().getInputs()) {
+//                    if (txHashes.contains(input.getTransactionId())) {
+//                        //This is a self transaction. Ignore
+//                        //log.info("Transaction chaining found >>>>>>>>>>>>>>>>>> input >> " + input.getTransactionId() + ", taget txHash: " + transaction.getTxHash());
+//                        dependencyFound = true;
+//                        break;
+//                    }
+//                }
+//            }
+
+
+            Stream<Transaction> transactionStream = transactions.stream(); //dependencyFound? transactions.stream(): transactions.parallelStream();
+            List<TxInputOutput> txInputOutputs = transactionStream.map(
                     transaction -> {
+                        counter.increment();
                         Optional<TxInputOutput> txInputOutputOptional;
                         if (transaction.isInvalid()) {
                             txInputOutputOptional = handleInvalidTransaction(event.getMetadata(), transaction);
@@ -64,12 +93,19 @@ public class UtxoProcessor {
                             txInputOutputOptional = handleValidTransaction(event.getMetadata(), transaction);
                         }
 
-                        //Add to list if i/o is present
-                        txInputOutputOptional.ifPresent(txInputOutput -> txInputOutputs.add(txInputOutput));
-                    });
+                        return txInputOutputOptional;
+                    }).filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .collect(Collectors.toList());
 
-            if(txInputOutputs.size() > 0)
-                publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
+            utxoStorage.saveSpent(txInputOutputs.stream()
+                    .flatMap(txInputOutput -> txInputOutput.getInputs().stream()).collect(Collectors.toList()));
+
+            utxoStorage.saveUnspent(txInputOutputs.stream()
+                    .flatMap(txInputOutput -> txInputOutput.getOutputs().stream()).collect(Collectors.toList()));
+
+            //if(txInputOutputs.size() > 0)
+            publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
         } catch (Exception e) {
             log.error("Error saving : " + event.getMetadata(), e);
             log.error("Stopping fetcher");
@@ -85,38 +121,34 @@ public class UtxoProcessor {
         List<AddressUtxo> inputAddressUtxos = transaction.getBody().getInputs().stream()
                 .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
                 .map(utxoKey -> {
-                    AddressUtxo addressUtxo = utxoStorage.findById(utxoKey.getTxHash(), utxoKey.getOutputIndex())
-                            .orElse(AddressUtxo.builder()        //If not present, then create a record with pk
-                                    .txHash(utxoKey.getTxHash())
-                                    .outputIndex(utxoKey.getOutputIndex()).build());
+                    AddressUtxo addressUtxo = new AddressUtxo();
+                    addressUtxo.setTxHash(utxoKey.getTxHash());
+                    addressUtxo.setOutputIndex(utxoKey.getOutputIndex());
                     addressUtxo.setSpent(true);
                     addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentAtBlock(metadata.getBlock());
+                    addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                    addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                     addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
                 }).collect(Collectors.toList());
 
+        //Check if utxo is already there, only possible in a multi-instance environment
+        //TODO-1
+        //                    utxoStorage.findById(addressUtxo.getTxHash(), addressUtxo.getOutputIndex())
+        //                            .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
         List<AddressUtxo> outputAddressUtxos = transaction.getUtxos().stream()
                 .map(utxo -> getAddressUtxo(metadata, utxo))
-                .map(addressUtxo -> { //Check if utxo is already there, only possible in a multi-instance environment
-                    utxoStorage.findById(addressUtxo.getTxHash(), addressUtxo.getOutputIndex())
-                            .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
-                    return addressUtxo;
-                })
                 .collect(Collectors.toList());
 
-        if (outputAddressUtxos.size() > 0) //unspent utxos
-            utxoStorage.saveAll(outputAddressUtxos);
-
-        //Update existing utxos as spent
-        if (inputAddressUtxos.size() > 0) //spent utxos
-            utxoStorage.saveAll(inputAddressUtxos);
-
         //publish event
-        if (outputAddressUtxos.size() > 0)
+        if (outputAddressUtxos.size() > 0 || inputAddressUtxos.size() > 0)
             return Optional.of(new TxInputOutput(transaction.getTxHash(), inputAddressUtxos, outputAddressUtxos));
-        else
+        else {
+            log.warn("No input or output found for transaction: " + transaction.getTxHash());
             return Optional.empty();
+        }
     }
 
     private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
@@ -144,15 +176,14 @@ public class UtxoProcessor {
         //collateral inputs will be marked as spent
         List<AddressUtxo> collateralInputUtxos = transaction.getBody().getCollateralInputs().stream()
                 .map(transactionInput -> {
-                    AddressUtxo addressUtxo = utxoStorage.findById(transactionInput.getTransactionId(), transactionInput.getIndex())
-                            .orElse(AddressUtxo.builder()
-                                    .txHash(transactionInput.getTransactionId())
-                                    .outputIndex(transactionInput.getIndex())
-                                    .build()
-                            );
-
+                    AddressUtxo addressUtxo = new AddressUtxo();
+                    addressUtxo.setTxHash(transactionInput.getTransactionId());
+                    addressUtxo.setOutputIndex(transactionInput.getIndex());
                     addressUtxo.setSpent(true);
                     addressUtxo.setSpentAtSlot(metadata.getSlot());
+                    addressUtxo.setSpentAtBlock(metadata.getBlock());
+                    addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                    addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                     addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                     addressUtxo.setSpentTxHash(transaction.getTxHash());
                     return addressUtxo;
@@ -162,21 +193,17 @@ public class UtxoProcessor {
         //Check if collateral utxos are already present. If yes, then update everything except spent field
         //Only possible in multi-instance environment.
         if (collateralOutputUtxo != null) {
-            utxoStorage.findById(collateralOutputUtxo.getTxHash(), collateralOutputUtxo.getOutputIndex())
-                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
+            //TODO --1
+//            utxoStorage.findById(collateralOutputUtxo.getTxHash(), collateralOutputUtxo.getOutputIndex())
+//                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
         }
 
-
-        if (collateralOutputUtxo != null)
-            utxoStorage.save(collateralOutputUtxo);
-        if (collateralInputUtxos != null && collateralInputUtxos.size() > 0)
-            utxoStorage.saveAll(collateralInputUtxos);
-
-        //publish event
         if (collateralOutputUtxo != null)
             return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, List.of(collateralOutputUtxo)));
-        else
+        else {
+            log.warn("No input or output found for invalid transaction: " + transaction.getTxHash());
             return Optional.empty();
+        }
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {

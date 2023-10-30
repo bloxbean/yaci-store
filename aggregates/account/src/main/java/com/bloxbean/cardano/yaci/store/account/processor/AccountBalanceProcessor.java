@@ -4,16 +4,23 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration;
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
+import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AccountConfigEntity;
+import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
+import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 
@@ -37,28 +45,32 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
-    private final AccountStoreConfiguration accountStoreConfiguration;
-
-//    private boolean warmedUp = false;
+    private final AccountStoreProperties accountStoreProperties;
+    private final UtxoClient utxoClient;
+    private final AccountConfigService accountConfigService;
+    private final AccountBalanceBatchProcessingService accountBalanceBatchProcessingService;
 
     @EventListener
     @Transactional
     @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             return; //Balance aggregation is disabled
 
+        if (addressUtxoEvent.getEventMetadata().isParallelMode())
+            return; //Ignore when parallel mode is enabled
+
+        if (accountStoreProperties.isBatchBalanceAggregationEnabled()) {
+            //If true, we can process balance for this block here, otherwise return
+            if (!handlePendingBalanceCalculation(addressUtxoEvent))
+                return;
+        }
+
+        accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, addressUtxoEvent.getEventMetadata().getBlock());
         if (addressUtxoEvent.getTxInputOutputs() == null || addressUtxoEvent.getTxInputOutputs().size() == 0)
             return;
 
         EventMetadata metadata = addressUtxoEvent.getEventMetadata();
-//        if (!warmedUp) {//Probably a restart, so delete all state after this slot no
-//            int noOfDeleted = accountBalanceStorage.deleteAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
-//            log.info("Deleted {} address balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
-//            noOfDeleted = accountBalanceStorage.deleteStakeAddressBalanceBySlotGreaterThan(metadata.getSlot() - 1);
-//            log.info("Deleted {} stake balances after slot {}", noOfDeleted, metadata.getSlot() - 1);
-//            warmedUp = true;
-//        }
 
         CompletableFuture<Void> addressBalancesFuture = CompletableFuture.supplyAsync(() -> handleAddressBalance(addressUtxoEvent))
                 .thenAcceptAsync(addressBalances -> {
@@ -70,7 +82,6 @@ public class AccountBalanceProcessor {
                         accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, metadata.getSlot());
                     }
                 });
-
 
         CompletableFuture<Void> stakeBalancesFuture = CompletableFuture.supplyAsync(() -> handleStakeAddressBalance(addressUtxoEvent))
                 .thenAcceptAsync(stakeBalances -> {
@@ -84,9 +95,62 @@ public class AccountBalanceProcessor {
                 });
 
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(addressBalancesFuture, stakeBalancesFuture);
-
         // Wait for both steps to complete
         combinedFuture.join();
+    }
+
+    @EventListener
+    @Transactional
+    public void handleCommitEvent(CommitEvent commitEvent) {
+        long currentBlock = commitEvent.getMetadata().getBlock();
+        accountConfigService.upateConfig(ConfigIds.LAST_PROCESSED_BLOCK, null, currentBlock);
+    }
+
+    private boolean handlePendingBalanceCalculation(AddressUtxoEvent addressUtxoEvent) {
+        var lastSyncBlockConfig = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
+        var lastBalanceSyncBlock = lastSyncBlockConfig.map(AccountConfigEntity::getBlock).orElse(null);
+
+        if (lastBalanceSyncBlock != null && lastBalanceSyncBlock >= addressUtxoEvent.getEventMetadata().getBlock() - 1) {
+            if (log.isDebugEnabled())
+                log.debug("Balance calculation is already in sync with the block {}.", lastBalanceSyncBlock);
+            return true;
+        }
+
+        var aggrJobConfig = accountConfigService.getConfig(ConfigIds.ACCOUNT_BALANCE_AGGR_JOB_ID);
+        var aggrJobStatus = aggrJobConfig.map(AccountConfigEntity::getStatus).orElse(null);
+
+        if (aggrJobStatus == ConfigStatus.BATCH_AGGR_IN_PROGRESS) {
+            log.info("Aggregation job is in progress.");
+
+            if (lastBalanceSyncBlock == null)
+                return false;
+
+            //Let's check if the main sync process can handle the balance calculation for remaining blocks
+            long blockDiff = addressUtxoEvent.getEventMetadata().getBlock() - lastBalanceSyncBlock;
+            if (lastBalanceSyncBlock != null &&
+                    blockDiff < 2 * accountStoreProperties.getBatchBalanceAggregationSafeBlockDiff()) {
+                accountConfigService
+                        .upateConfig(ConfigIds.ACCOUNT_BALANCE_AGGR_JOB_ID, ConfigStatus.BATCH_AGGR_REQUEST_TO_STOP,
+                                addressUtxoEvent.getEventMetadata().getBlock());
+                log.info("Main sync process is requesting to stop the aggregation job.");
+            }
+            return false;
+        } else if (aggrJobStatus == ConfigStatus.BATCH_AGGR_STOPPED) {
+            log.info("Aggregation job has been stopped. " +
+                    "So let's do remaining balance calculation in main sync.");
+            long currentBlockMinus20 = addressUtxoEvent.getEventMetadata().getBlock() - 10;
+            //As schedule job has probably stopped
+            accountBalanceBatchProcessingService.runBalanceCalculationBatch(currentBlockMinus20, 600);
+            accountBalanceBatchProcessingService.runBalanceCalculationBatch(addressUtxoEvent.getEventMetadata().getBlock() - 1, 1);
+
+            accountConfigService.upateConfig(ConfigIds.ACCOUNT_BALANCE_SYNC_JOB_ID, ConfigStatus.IN_SYNC,
+                    addressUtxoEvent.getEventMetadata().getBlock());
+            return true;
+        } else {
+            log.info("Skipping balance calculation in main sync as aggregation job is not stopped yet.");
+            return false;
+        }
+
     }
 
     private List<AddressBalance> handleAddressBalance(AddressUtxoEvent addressUtxoEvent) {
@@ -96,6 +160,11 @@ public class AccountBalanceProcessor {
             List<AddressUtxo> inputs = txInputOutput.getInputs();
             List<AddressUtxo> outputs = txInputOutput.getOutputs();
 
+            List<UtxoKey> inputUtxoKeys = inputs.stream()
+                    .map(input -> new UtxoKey(input.getTxHash(), input.getOutputIndex()))
+                    .collect(Collectors.toList());
+
+            inputs = utxoClient.getUtxosByIds(inputUtxoKeys);
             //Update inputs
             for (AddressUtxo input : inputs) {
                 if (input.getAmounts() == null) {
@@ -328,7 +397,7 @@ public class AccountBalanceProcessor {
     @EventListener
     @Transactional
     public void handleGenesisBalanceEvent(GenesisBlockEvent genesisBlockEvent) {
-        if (!accountStoreConfiguration.isBalanceAggregationEnabled())
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
             return; //Balance aggregation is disabled
 
         List<GenesisBalance> genesisBalanceList = genesisBlockEvent.getGenesisBalances();
@@ -349,7 +418,7 @@ public class AccountBalanceProcessor {
                         //Not a valid shelley address
                     }
 
-                    AddressBalance addressBalance =  AddressBalance.builder()
+                    AddressBalance addressBalance = AddressBalance.builder()
                             .address(genesisBalance.getAddress())
                             .blockHash(genesisBlockEvent.getBlockHash())
                             .slot(genesisBlockEvent.getSlot())

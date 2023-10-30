@@ -35,6 +35,9 @@ public class AddressUtxo extends BlockAwareDomain {
     private String referenceScriptHash;
     private Boolean spent;
     private Long spentAtSlot;
+    private Long spentAtBlock;
+    private String spentAtBlockHash;
+    private Long spentBlockTime;
     private Integer spentEpoch;
     private String spentTxHash;
     private Boolean isCollateralReturn;

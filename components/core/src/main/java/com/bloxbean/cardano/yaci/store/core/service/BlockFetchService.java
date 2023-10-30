@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
-import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
@@ -14,17 +13,16 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
+import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
-import com.bloxbean.cardano.yaci.store.events.*;
-import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
-import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.events.domain.TxMintBurn;
-import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
-import io.micrometer.core.instrument.Counter;
+import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -34,61 +32,45 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {
     private final ApplicationEventPublisher publisher;
-
-    private MeterRegistry meterRegistry;
-
-    @Autowired
-    private BlockRangeSync blockRangeSync;
-
-    @Autowired
-    private BlockSync blockSync;
-
-    @Autowired
-    private CursorService cursorService;
-
-    @Autowired
-    private EraService eraService;
-
-    @Autowired
-    private StoreProperties storeProperties;
-
-    @Autowired
-    private GenesisConfig genesisConfig;
-
-    @Value("${store.cardano.protocol-magic}")
-    private long protocolMagic;
+    private final MeterRegistry meterRegistry;
+    private final BlockRangeSync blockRangeSync;
+    private final BlockSync blockSync;
+    private final CursorService cursorService;
+    private final EraService eraService;
+    private final StoreProperties storeProperties;
+    private final GenesisConfig genesisConfig;
+    private final ShelleyBlockEventPublisher postShelleyBlockEventPublisher;
+    private final ByronBlockEventPublisher byronBlockEventPublisher;
 
     private boolean syncMode;
-
     private AtomicBoolean isError = new AtomicBoolean(false);
-
-
-    public BlockFetchService(ApplicationEventPublisher applicationEventPublisher, MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-
-        this.publisher = applicationEventPublisher;
-        Counter counter = this.meterRegistry.counter("blocks.processed");
-    }
+    private Thread keepAliveThread;
 
     @Transactional
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
         checkError();
+        byronBlockEventPublisher.processByronMainBlocksInParallel();
+
         BlockHeader blockHeader = block.getHeader();
         final long slot = blockHeader.getHeaderBody().getSlot();
-        eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
+        boolean byronToShelleyEraChange = eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
         final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
         final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
+
+        //paralleMode is true when not fully synced and parallel processing is enabled and not the first block of the era
+        boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing()
+                && !byronToShelleyEraChange;
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .mainnet(storeProperties.isMainnet())
@@ -103,47 +85,15 @@ public class BlockFetchService implements BlockChainDataListener {
                 .epochSlot(epochSlot)
                 .noOfTxs(transactions.size())
                 .syncMode(syncMode)
+                .parallelMode(parallelMode)
                 .build();
 
         try {
-            publisher.publishEvent(era);
-            publisher.publishEvent(new BlockEvent(eventMetadata, block));
-            publisher.publishEvent(new BlockHeaderEvent(eventMetadata, blockHeader));
-            publisher.publishEvent(new TransactionEvent(eventMetadata, transactions));
-
-            //Addtional events
-            //TxScript Event
-            List<TxScripts> txScriptsList = getTxScripts(transactions);
-            publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
-
-            //AuxData event
-            List<TxAuxData> txAuxDataList = transactions.stream()
-                    .filter(transaction -> transaction.getAuxData() != null)
-                    .map(transaction -> TxAuxData.builder()
-                            .txHash(transaction.getTxHash())
-                            .auxData(transaction.getAuxData())
-                            .build()
-                    ).collect(Collectors.toList());
-            publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
-
-            //Certificate event
-            List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
-                    .txHash(transaction.getTxHash())
-                    .certificates(transaction.getBody().getCertificates())
-                    .build()
-            ).collect(Collectors.toList());
-            publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
-
-            //Mints
-            List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
-                            transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
-                    .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
-                    .collect(Collectors.toList());
-            publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
-
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            if (parallelMode) {
+                postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
+            } else {
+                postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+            }
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -151,32 +101,6 @@ public class BlockFetchService implements BlockChainDataListener {
             stopSyncOnError();
             throw new RuntimeException(e);
         }
-    }
-
-    //Replace asset name contains \u0000 -- postgres can't convert this to text. so replace
-    private List<Amount> sanitizeAmounts(List<Amount> amounts) {
-        if (amounts == null) return Collections.EMPTY_LIST;
-        //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
-        return amounts.stream().map(amount ->
-                Amount.builder()
-                        .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null)
-                        .policyId(amount.getPolicyId())
-                        .assetName(amount.getAssetName().replace('\u0000', ' '))
-                        .quantity(amount.getQuantity())
-                        .build()).collect(Collectors.toList());
-    }
-
-    private List<TxScripts> getTxScripts(List<Transaction> transactions) {
-        List<TxScripts> txScriptsList = transactions.stream().map(transaction -> TxScripts.builder()
-                .txHash(transaction.getTxHash())
-                .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
-                .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
-                .nativeScripts(transaction.getWitnesses().getNativeScripts())
-                .datums(transaction.getWitnesses().getDatums())
-                .redeemers(transaction.getWitnesses().getRedeemers())
-                .build()
-        ).collect(Collectors.toList());
-        return txScriptsList;
     }
 
     @Transactional
@@ -195,6 +119,9 @@ public class BlockFetchService implements BlockChainDataListener {
             final String slotLeader = SlotLeaderUtil
                     .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
 
+            //paralleMode is true when not fully synced and parallel processing is enabled
+            boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
+
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
                     .era(Era.Byron)
@@ -207,14 +134,14 @@ public class BlockFetchService implements BlockChainDataListener {
                     .slot(absoluteSlot)
                     .epochSlot(epochSlot)
                     .syncMode(syncMode)
+                    .parallelMode(parallelMode)
                     .build();
 
-            ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
-            publisher.publishEvent(byronMainBlockEvent);
-
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(absoluteSlot, eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            if (parallelMode) {
+                byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
+            } else {
+                byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+            }
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
@@ -337,19 +264,23 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startFetch(Point from, Point to) {
+        stopKeepAliveThread();
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
         syncMode = false;
         cursorService.setSyncMode(syncMode);
+
+        startKeepAliveThread();
     }
 
     public synchronized void startSync(Point from) {
+        stopKeepAliveThread();
         blockSync.startSync(from, this);
         syncMode = true;
         cursorService.setSyncMode(syncMode);
     }
 
-    public synchronized  void shutdown() {
+    public synchronized void shutdown() {
         blockRangeSync.stop();
     }
 
@@ -366,4 +297,33 @@ public class BlockFetchService implements BlockChainDataListener {
             throw new IllegalStateException("Fetcher has already been stopped due to error.");
     }
 
+    private synchronized void stopKeepAliveThread() {
+        try {
+            if (keepAliveThread != null && keepAliveThread.isAlive())
+                keepAliveThread.interrupt();
+        } catch (Exception e) {
+            log.error("Error stopping keep alive thread", e);
+        }
+    }
+
+    private synchronized void startKeepAliveThread() {
+        stopKeepAliveThread();
+        keepAliveThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(10000);
+                    int randomNo = getRandomNumber(0, 60000);
+                    blockRangeSync.sendKeepAliveMessage(randomNo);
+                } catch (InterruptedException e) {
+                    log.info("Keep alive thread interrupted");
+                    break;
+                }
+            }
+        });
+        keepAliveThread.start();
+    }
+
+    private int getRandomNumber(int min, int max) {
+        return (int) ((Math.random() * (max - min)) + min);
+    }
 }
