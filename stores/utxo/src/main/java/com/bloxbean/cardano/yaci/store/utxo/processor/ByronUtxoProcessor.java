@@ -49,12 +49,14 @@ public class ByronUtxoProcessor {
             List<AddressUtxo> inputAddressUtxos = byronTx.getInputs().stream()
                     .map(txIn -> new UtxoKey(txIn.getTxId(), txIn.getIndex()))
                     .map(utxoKey -> {
-                        AddressUtxo addressUtxo = utxoStorage.findById(utxoKey.getTxHash(), utxoKey.getOutputIndex())
-                                .orElse(AddressUtxo.builder()        //If not present, then create a record with pk
-                                        .txHash(utxoKey.getTxHash())
-                                        .outputIndex(utxoKey.getOutputIndex()).build());
+                        AddressUtxo addressUtxo = new AddressUtxo();
+                        addressUtxo.setTxHash(utxoKey.getTxHash());
+                        addressUtxo.setOutputIndex(utxoKey.getOutputIndex());
                         addressUtxo.setSpent(true);
                         addressUtxo.setSpentAtSlot(metadata.getSlot());
+                        addressUtxo.setSpentAtBlock(metadata.getBlock());
+                        addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
+                        addressUtxo.setSpentBlockTime(metadata.getBlockTime());
                         addressUtxo.setSpentEpoch(metadata.getEpochNumber());
                         addressUtxo.setSpentTxHash(byronTx.getTxHash());
                         return addressUtxo;
@@ -71,19 +73,19 @@ public class ByronUtxoProcessor {
                     .collect(Collectors.toList());
 
             if (outputAddressUtxos.size() > 0) //unspent utxos
-                utxoStorage.saveAll(outputAddressUtxos);
+                utxoStorage.saveUnspent(outputAddressUtxos);
 
             //Update existing utxos as spent
             if (inputAddressUtxos.size() > 0) //spent utxos
-                utxoStorage.saveAll(inputAddressUtxos);
+                utxoStorage.saveSpent(inputAddressUtxos);
 
             //publish event
             if (outputAddressUtxos.size() > 0)
                 txInputOutputList.add(new TxInputOutput(byronTx.getTxHash(), inputAddressUtxos, outputAddressUtxos));
         }
 
-        if (txInputOutputList.size() > 0)
-            publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
+     // if (txInputOutputList.size() > 0)
+        publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
     }
 
     private List<Utxo> getUtxosFromByronOutput(ByronTx byronTx) {

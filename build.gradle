@@ -45,8 +45,8 @@ subprojects {
     }
 
     compileJava {
-        sourceCompatibility = '17'
-        targetCompatibility = '17'
+        sourceCompatibility = '21'
+        targetCompatibility = '21'
 
         options.compilerArgs += ["-Aproject=${project.group}/${project.name}", "-parameters"]
     }
@@ -56,20 +56,30 @@ subprojects {
     }
 
     task sourceJar(type: Jar) {
-        classifier "sources"
-        from sourceSets.main.allJava
+        from sourceSets.main.allSource
+        archiveClassifier.set('sources')
     }
 
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier "javadoc"
-        from javadoc.destinationDir
+    task javadocJar(type: Jar) {
+        from javadoc
+        archiveClassifier.set('javadoc')
     }
 
-    artifacts {
-        archives jar
-        archives sourceJar
-        archives javadocJar
-    }
+//    task sourceJar(type: Jar) {
+////        archiveClassifier "sources"
+//        from sourceSets.main.allJava
+//    }
+
+//    task javadocJar(type: Jar, dependsOn: javadoc) {
+////        archiveClassifier "javadoc"
+//        from javadoc.destinationDir
+//    }
+
+//    artifacts {
+//        archives jar
+//        archives sourceJar
+//        archives javadocJar
+//    }
 
     test {
         useJUnitPlatform()

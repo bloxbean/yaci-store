@@ -64,6 +64,6 @@ public class GenesisUtxoProcessor {
             genesisUtxos.add(addressUtxo);
         }
 
-        utxoStorage.saveAll(genesisUtxos);
+        utxoStorage.saveUnspent(genesisUtxos);
     }
 }
