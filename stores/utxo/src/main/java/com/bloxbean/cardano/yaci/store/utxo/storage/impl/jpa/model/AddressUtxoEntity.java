@@ -83,7 +83,7 @@ public class AddressUtxoEntity extends BlockAwareEntity {
     private Long spentAtBlock;
 
     @Column(name = "spent_at_block_hash")
-    private Long spentAtBlockHash;
+    private String spentAtBlockHash;
 
     @Column(name = "spent_block_time")
     private Long spentBlockTime;
