@@ -14,7 +14,7 @@ corresponding Spring Boot starter.
 
 ## How to Run 
 
-**Pre-requisites:** Java 17
+**Pre-requisites:** Java 21
 
 1. Download the latest binary and property file from [release page](https://github.com/bloxbean/yaci-store/releases)
 2. You need to download ``yaci-store-all-<version>.jar`` and ``application.properties`` files
@@ -24,7 +24,7 @@ corresponding Spring Boot starter.
 
 ## Build from source and Run 
 
-**Pre-requisites:** Java 17
+**Pre-requisites:** Java 21
 
 ### Build
 
