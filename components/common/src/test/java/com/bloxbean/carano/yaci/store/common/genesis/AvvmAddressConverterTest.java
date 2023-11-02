@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.core.genesis;
+package com.bloxbean.carano.yaci.store.common.genesis;
 
+import com.bloxbean.cardano.yaci.store.common.genesis.AvvmAddressConverter;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

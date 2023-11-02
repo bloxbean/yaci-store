@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core.genesis;
+package com.bloxbean.cardano.yaci.store.common.genesis;
 
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;

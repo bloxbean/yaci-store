@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.core.genesis;
+package com.bloxbean.carano.yaci.store.common.genesis;
 
+import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

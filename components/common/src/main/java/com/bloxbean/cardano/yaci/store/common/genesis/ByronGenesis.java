@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core.genesis;
+package com.bloxbean.cardano.yaci.store.common.genesis;
 
 import com.bloxbean.cardano.client.crypto.Base58;
 import com.bloxbean.cardano.client.crypto.Blake2bUtil;
@@ -7,13 +7,10 @@ import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Data;
 import lombok.ToString;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -23,7 +20,7 @@ import java.util.Map;
 
 @Data
 @ToString
-public class ByronGenesis {
+public class ByronGenesis extends GenesisFile {
     public static final String ATTR_START_TIME = "startTime";
     public static final String ATTR_BLOCK_VERSION_DATA = "blockVersionData";
     public static final String ATTR_SLOT_DURATION = "slotDuration";
@@ -35,23 +32,23 @@ public class ByronGenesis {
     private static ObjectMapper objectMapper = new ObjectMapper();
 
     private Map<String, BigInteger> avvmDistr;
-    private Map<String, BigInteger> nonAvvmBalances = new HashMap<>();
-    private List<GenesisBalance> avvmGenesisBalances = new ArrayList<>();
-    private List<GenesisBalance> nonAvvmGenesisBalances = new ArrayList<>();
+    private Map<String, BigInteger> nonAvvmBalances;
+    private List<GenesisBalance> avvmGenesisBalances;
+    private List<GenesisBalance> nonAvvmGenesisBalances;
     private long startTime;
     private long byronSlotLength;
     private long protocolMagic;
 
     public ByronGenesis(File byronGenesisFile) {
-        try (FileInputStream fis = new FileInputStream(byronGenesisFile)) {
-            parseByronGenesisFile(fis);
-        } catch (IOException e) {
-            throw new StoreRuntimeException("Byron genesis file not found at path : " + byronGenesisFile);
-        }
+        super(byronGenesisFile);
     }
 
-    public ByronGenesis(InputStream is) {
-        parseByronGenesisFile(is);
+    public ByronGenesis(InputStream in) {
+        super(in);
+    }
+
+    public ByronGenesis(long protocolMagic) {
+        super(protocolMagic);
     }
 
     public long getByronSlotLength() {
@@ -61,23 +58,33 @@ public class ByronGenesis {
             return byronSlotLength / 1000;
     }
 
-    private void parseByronGenesisFile(InputStream is) {
-        ObjectNode byronJsonNode = parseJson(is);
+    protected void readGenesisData(JsonNode byronJsonNode) {
         startTime = byronJsonNode.get(ATTR_START_TIME).asLong();
         byronSlotLength = byronJsonNode.get(ATTR_BLOCK_VERSION_DATA).get(ATTR_SLOT_DURATION).asLong() / 1000; //in second
         protocolMagic = byronJsonNode.get(ATTR_PROTOCOL_CONSTS).get(ATTR_PROTOCOL_MAGIC).asLong();
 
         JsonNode avvmDistrMap = byronJsonNode.get(ATTR_AVVM_DISTR);
         if (avvmDistrMap != null && avvmDistrMap.fields().hasNext()) {
-            avvmDistr = convertAvvmDistribution(avvmDistrMap);
-            avvmGenesisBalances = convertAvvmGenesisBalances(avvmDistr);
+            this.avvmDistr = convertAvvmDistribution(avvmDistrMap);
+            this.avvmGenesisBalances = convertAvvmGenesisBalances(avvmDistr);
+        } else {
+            this.avvmDistr = new HashMap<>();
+            this.avvmGenesisBalances = new ArrayList<>();
         }
 
         JsonNode nonAvvmBalancesMap = byronJsonNode.get(ATTR_NON_AVVM_BALANCES);
         if (nonAvvmBalancesMap != null && nonAvvmBalancesMap.fields().hasNext()) {
-            nonAvvmBalances = convertNonAvvmBalances(nonAvvmBalancesMap);
-            nonAvvmGenesisBalances = convertNonAvvmGenesisBalances(nonAvvmBalances);
+            this.nonAvvmBalances = convertNonAvvmBalances(nonAvvmBalancesMap);
+            this.nonAvvmGenesisBalances = convertNonAvvmGenesisBalances(nonAvvmBalances);
+        } else {
+            this.nonAvvmBalances = new HashMap<>();
+            this.nonAvvmGenesisBalances = new ArrayList<>();
         }
+    }
+
+    @Override
+    protected String getFileName() {
+        return "byron-genesis.json";
     }
 
     private Map<String, BigInteger> convertAvvmDistribution(JsonNode avvmDistrMap) {
@@ -130,16 +137,6 @@ public class ByronGenesis {
         });
 
         return nonAvvmGenesisBalances;
-    }
-
-    private ObjectNode parseJson(InputStream is) {
-        ObjectNode jsonNode;
-        try {
-            jsonNode = (ObjectNode) objectMapper.readTree(is);
-        } catch (IOException e) {
-            throw new StoreRuntimeException("Error parsing byron genesis file", e);
-        }
-        return jsonNode;
     }
 
 }
