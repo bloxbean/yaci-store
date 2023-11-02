@@ -34,6 +34,9 @@ create table epoch_param
     epoch  integer not null,
     params jsonb,
     slot   bigint,
+    block              bigint,
+    block_time         bigint,
+    update_datetime    timestamp,
         primary key ( epoch )
 );
 

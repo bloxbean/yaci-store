@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.core.service.publisher;
 
 import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.Block;
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
@@ -36,10 +35,6 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private final ExecutorService eventExecutor;
     private final StoreProperties storeProperties;
 
-    //Required to publish EpochChangeEvent
-    private Integer previousEpoch;
-    private Era previousEra;
-
     public ShelleyBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                       @Qualifier("blockEventExecutor") ExecutorService eventExecutor,
                                       ApplicationEventPublisher publisher,
@@ -59,9 +54,6 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         processBlockSingleThread(eventMetadata, block, transactions);
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
-        //Publish EpochChangeEvent if epoch change
-        publishEpochChangeEventIfRequired(eventMetadata);
-
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
@@ -74,6 +66,15 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private void handleBlockBatchInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
         if (batchBlockList.size() != storeProperties.getBlocksBatchSize())
+            return;
+
+        processBlocksInParallel();
+
+    }
+
+    @Transactional
+    public void processBlocksInParallel() {
+        if (batchBlockList.size() == 0)
             return;
 
         List<List<BatchBlock>> partitions = partition(batchBlockList, storeProperties.getBlocksPartitionSize());
@@ -93,21 +94,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .join();
 
-        //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
-        publisher.publishEvent(new BatchBlocksProcessedEvent(eventMetadata, batchBlockList));
-        publisher.publishEvent(new CommitEvent(eventMetadata, batchBlockList));
+        BatchBlock lastBatchBlock = batchBlockList.getLast();
 
-        //Loop through all blocks and publish EpochChangeEvent(s) if required
-        for (var batchBlock: batchBlockList) {
-            EventMetadata batchBlockEventMetadata = batchBlock.getMetadata();
-            publishEpochChangeEventIfRequired(batchBlockEventMetadata);
-        }
+        //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
+        publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
 
         //Finally Set the cursor
-        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
-                eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+        cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
+                lastBatchBlock.getMetadata().getPrevBlockHash(), lastBatchBlock.getMetadata().getEra()));
         batchBlockList.clear();
-
     }
 
     private void processBlockInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
@@ -252,20 +248,4 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         return txScriptsList;
     }
 
-    private void publishEpochChangeEventIfRequired(EventMetadata eventMetadata) {
-        if (previousEpoch == null ||  eventMetadata.getEpochNumber() == previousEpoch + 1) {
-            //Time for epoch change
-            EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
-                    .eventMetadata(eventMetadata)
-                    .previousEpoch(previousEpoch)
-                    .epoch(eventMetadata.getEpochNumber())
-                    .previousEra(previousEra)
-                    .era(eventMetadata.getEra())
-                    .build();
-            publisher.publishEvent(epochChangeEvent);
-        }
-
-        previousEpoch = eventMetadata.getEpochNumber();
-        previousEra = eventMetadata.getEra();
-    }
 }

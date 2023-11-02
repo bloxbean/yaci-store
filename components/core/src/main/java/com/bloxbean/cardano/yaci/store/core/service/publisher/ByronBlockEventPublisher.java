@@ -34,10 +34,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
     private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
 
-    //Required to publish EpochChangeEvent
-    private Integer previousEpoch;
-    private Era previousEra;
-
     public ByronBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                     ApplicationEventPublisher publisher,
                                     CursorService cursorService,
@@ -56,9 +52,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         publisher.publishEvent(byronMainBlockEvent);
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
-        //Publish EpochChangeEvent if epoch change
-        publishEpochChangeEventIfRequired(eventMetadata);
-
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                 eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
@@ -71,11 +64,11 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         if (byronBatchBlockList.size() != storeProperties.getBlocksBatchSize())
             return;
 
-        processByronMainBlocksInParallel();
+        processBlocksInParallel();
     }
 
     @Transactional
-    public void processByronMainBlocksInParallel() {
+    public void processBlocksInParallel() {
         if (byronBatchBlockList.size() == 0)
             return;
 
@@ -98,12 +91,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
 
-        //Loop through all blocks and publish EpochChangeEvent(s) if required
-        for (var batchBlock: byronBatchBlockList) {
-            EventMetadata batchBlockEventMetadata = batchBlock.getMetadata();
-            publishEpochChangeEventIfRequired(batchBlockEventMetadata);
-        }
-
         cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
                 lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),
                 lastBlockCache.getMetadata().getEra()));
@@ -111,20 +98,4 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         byronBatchBlockList.clear();
     }
 
-    private void publishEpochChangeEventIfRequired(EventMetadata eventMetadata) {
-        if (previousEpoch == null ||  eventMetadata.getEpochNumber() == previousEpoch + 1) {
-            //Time for epoch change
-            EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
-                    .eventMetadata(eventMetadata)
-                    .previousEpoch(previousEpoch)
-                    .epoch(eventMetadata.getEpochNumber())
-                    .previousEra(previousEra)
-                    .era(eventMetadata.getEra())
-                    .build();
-            publisher.publishEvent(epochChangeEvent);
-        }
-
-        previousEpoch = eventMetadata.getEpochNumber();
-        previousEra = eventMetadata.getEra();
-    }
 }

@@ -84,6 +84,9 @@ public class EpochParamProcessor {
         EpochParam epochParam = EpochParam.builder()
                 .epoch(newEpoch)
                 .params(protocolParams)
+                .slot(epochChangeEvent.getEventMetadata().getSlot())
+                .blockNumber(epochChangeEvent.getEventMetadata().getBlock())
+                .blockTime(epochChangeEvent.getEventMetadata().getBlockTime())
                 .build();
 
         epochParamStorage.save(epochParam);

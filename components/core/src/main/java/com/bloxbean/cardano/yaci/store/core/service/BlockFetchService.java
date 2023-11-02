@@ -51,23 +51,27 @@ public class BlockFetchService implements BlockChainDataListener {
     private AtomicBoolean isError = new AtomicBoolean(false);
     private Thread keepAliveThread;
 
+    //Required to publish EpochChangeEvent
+    private Integer previousEpoch;
+    private Era previousEra;
+
     @Transactional
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
         checkError();
-        byronBlockEventPublisher.processByronMainBlocksInParallel();
+        byronBlockEventPublisher.processBlocksInParallel();
 
-        BlockHeader blockHeader = block.getHeader();
+        final BlockHeader blockHeader = block.getHeader();
         final long slot = blockHeader.getHeaderBody().getSlot();
-        boolean byronToShelleyEraChange = eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
+        final boolean newEra = eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
         final int epochNumber = eraService.getEpochNo(era, slot);
         final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
         final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
+        final boolean newEpoch = detectIfNewEpoch(epochNumber);
 
-        //paralleMode is true when not fully synced and parallel processing is enabled and not the first block of the era
-        boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing()
-                && !byronToShelleyEraChange;
+        //paralleMode is true when not fully synced and parallel processing is enabled
+        boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .mainnet(storeProperties.isMainnet())
@@ -86,12 +90,32 @@ public class BlockFetchService implements BlockChainDataListener {
                 .parallelMode(parallelMode)
                 .build();
 
+
         try {
-            if (parallelMode) {
-                postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
-            } else {
+            if (newEra || newEpoch) { //Also add epoch change
+                log.info("Publish EpochChangeEvent >>>");
+                //Incase of era change. Process all pending blocks and then process era change block first
+                if (parallelMode) {
+                    postShelleyBlockEventPublisher.processBlocksInParallel();
+                }
+
+                //Publish epoch change event first and then process first block of the epoch
+                publishEpochChangeEvent(eventMetadata);
+
+                //Now process first block
+                log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
                 postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+            } else {
+                if (parallelMode) {
+                    postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
+                } else {
+                    postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+                }
             }
+
+            previousEpoch = eventMetadata.getEpochNumber();
+            previousEra = eventMetadata.getEra();
+
         } catch (Exception e) {
             log.error("Error saving : " + eventMetadata, e);
             log.error("Stopping fetcher");
@@ -116,6 +140,7 @@ public class BlockFetchService implements BlockChainDataListener {
             long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
             final String slotLeader = SlotLeaderUtil
                     .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
+            final boolean newEpoch = detectIfNewEpoch((int)epochNumber);
 
             //paralleMode is true when not fully synced and parallel processing is enabled
             boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
@@ -136,11 +161,30 @@ public class BlockFetchService implements BlockChainDataListener {
                     .parallelMode(parallelMode)
                     .build();
 
-            if (parallelMode) {
-                byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
-            } else {
+            if (newEpoch) {
+                if (parallelMode) {
+                    byronBlockEventPublisher.processBlocksInParallel();
+                }
+
+                log.info("Publish EpochChangeEvent >>>");
+                //Publish epoch change event
+                publishEpochChangeEvent(eventMetadata);
+
+                log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
+                //Process single block (First block of epoch)
                 byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+
+            } else {
+                if (parallelMode) {
+                    byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
+                } else {
+                    byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+                }
             }
+
+            previousEpoch = eventMetadata.getEpochNumber();
+            previousEra = eventMetadata.getEra();
+
         } catch (Exception e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
@@ -325,5 +369,23 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private int getRandomNumber(int min, int max) {
         return (int) ((Math.random() * (max - min)) + min);
+    }
+
+    private boolean detectIfNewEpoch(Integer epoch) {
+        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+            return true;
+        } else
+            return false;
+    }
+
+    private void publishEpochChangeEvent(EventMetadata eventMetadata) {
+        EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+                .eventMetadata(eventMetadata)
+                .previousEpoch(previousEpoch)
+                .epoch(eventMetadata.getEpochNumber())
+                .previousEra(previousEra)
+                .era(eventMetadata.getEra())
+                .build();
+        publisher.publishEvent(epochChangeEvent);
     }
 }
