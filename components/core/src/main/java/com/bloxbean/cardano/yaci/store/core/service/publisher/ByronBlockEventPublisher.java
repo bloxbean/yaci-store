@@ -1,11 +1,13 @@
 package com.bloxbean.cardano.yaci.store.core.service.publisher;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
@@ -30,6 +32,12 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     private final ExecutorService blockExecutor;
     private final StoreProperties storeProperties;
 
+    private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
+
+    //Required to publish EpochChangeEvent
+    private Integer previousEpoch;
+    private Era previousEra;
+
     public ByronBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                     ApplicationEventPublisher publisher,
                                     CursorService cursorService,
@@ -40,8 +48,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         this.storeProperties = storeProperties;
     }
 
-    private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
-
     @Transactional
     @Override
     public void publishBlockEvents(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
@@ -49,6 +55,9 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
         publisher.publishEvent(byronMainBlockEvent);
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
+
+        //Publish EpochChangeEvent if epoch change
+        publishEpochChangeEventIfRequired(eventMetadata);
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
@@ -89,10 +98,33 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
 
+        //Loop through all blocks and publish EpochChangeEvent(s) if required
+        for (var batchBlock: byronBatchBlockList) {
+            EventMetadata batchBlockEventMetadata = batchBlock.getMetadata();
+            publishEpochChangeEventIfRequired(batchBlockEventMetadata);
+        }
+
         cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
                 lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),
                 lastBlockCache.getMetadata().getEra()));
 
         byronBatchBlockList.clear();
+    }
+
+    private void publishEpochChangeEventIfRequired(EventMetadata eventMetadata) {
+        if (previousEpoch == null ||  eventMetadata.getEpochNumber() == previousEpoch + 1) {
+            //Time for epoch change
+            EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+                    .eventMetadata(eventMetadata)
+                    .previousEpoch(previousEpoch)
+                    .epoch(eventMetadata.getEpochNumber())
+                    .previousEra(previousEra)
+                    .era(eventMetadata.getEra())
+                    .build();
+            publisher.publishEvent(epochChangeEvent);
+        }
+
+        previousEpoch = eventMetadata.getEpochNumber();
+        previousEra = eventMetadata.getEra();
     }
 }

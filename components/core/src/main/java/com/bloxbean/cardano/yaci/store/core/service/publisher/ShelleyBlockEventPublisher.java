@@ -2,15 +2,13 @@ package com.bloxbean.cardano.yaci.store.core.service.publisher;
 
 import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.Block;
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.*;
-import com.bloxbean.cardano.yaci.store.events.domain.TxAuxData;
-import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.events.domain.TxMintBurn;
-import com.bloxbean.cardano.yaci.store.events.domain.TxScripts;
+import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
@@ -38,6 +36,9 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private final ExecutorService eventExecutor;
     private final StoreProperties storeProperties;
 
+    //Required to publish EpochChangeEvent
+    private Integer previousEpoch;
+    private Era previousEra;
 
     public ShelleyBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                       @Qualifier("blockEventExecutor") ExecutorService eventExecutor,
@@ -57,6 +58,9 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
+
+        //Publish EpochChangeEvent if epoch change
+        publishEpochChangeEventIfRequired(eventMetadata);
 
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
@@ -92,6 +96,12 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(eventMetadata, batchBlockList));
         publisher.publishEvent(new CommitEvent(eventMetadata, batchBlockList));
+
+        //Loop through all blocks and publish EpochChangeEvent(s) if required
+        for (var batchBlock: batchBlockList) {
+            EventMetadata batchBlockEventMetadata = batchBlock.getMetadata();
+            publishEpochChangeEventIfRequired(batchBlockEventMetadata);
+        }
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
@@ -149,8 +159,18 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             return true;
         }, eventExecutor);
 
+        //Updates
+        var txUpdateEvent = CompletableFuture.supplyAsync(() -> {
+            List<TxUpdate> txUpdates = transactions.stream().filter(transaction -> transaction.getBody().getUpdate() != null)
+                    .map(transaction -> new TxUpdate(transaction.getTxHash(), transaction.getBody().getUpdate()))
+                    .toList();
+            if (txUpdates.size() > 0)
+                publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
+            return true;
+        });
+
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
-                txCertificateEvent, txMintBurnEvent).join();
+                txCertificateEvent, txMintBurnEvent, txUpdateEvent).join();
     }
 
     private void processBlockSingleThread(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
@@ -190,6 +210,13 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
                 .collect(Collectors.toList());
         publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
+
+        //Updates
+        List<TxUpdate> txUpdates = transactions.stream().filter(transaction -> transaction.getBody().getUpdate() != null)
+                .map(transaction -> new TxUpdate(transaction.getTxHash(), transaction.getBody().getUpdate()))
+                .toList();
+        if (txUpdates.size() > 0)
+            publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
     }
 
     private CompletableFuture<Boolean> publishEventAsync(Object event) {
@@ -225,4 +252,20 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         return txScriptsList;
     }
 
+    private void publishEpochChangeEventIfRequired(EventMetadata eventMetadata) {
+        if (previousEpoch == null ||  eventMetadata.getEpochNumber() == previousEpoch + 1) {
+            //Time for epoch change
+            EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+                    .eventMetadata(eventMetadata)
+                    .previousEpoch(previousEpoch)
+                    .epoch(eventMetadata.getEpochNumber())
+                    .previousEra(previousEra)
+                    .era(eventMetadata.getEra())
+                    .build();
+            publisher.publishEvent(epochChangeEvent);
+        }
+
+        previousEpoch = eventMetadata.getEpochNumber();
+        previousEra = eventMetadata.getEra();
+    }
 }
