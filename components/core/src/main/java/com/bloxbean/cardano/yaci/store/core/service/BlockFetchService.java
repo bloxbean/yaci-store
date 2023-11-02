@@ -63,7 +63,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
         final BlockHeader blockHeader = block.getHeader();
         final long slot = blockHeader.getHeaderBody().getSlot();
-        final boolean newEra = eraService.checkIfNewEra(era, blockHeader); //Currently it only looks for Byron to Shelley transition
+        final boolean newEra = eraService.checkIfNewEra(era, blockHeader);
         final int epochNumber = eraService.getEpochNo(era, slot);
         final int epochSlot = eraService.getShelleyEpochSlot(slot);
         final long blockTime = eraService.blockTime(era, slot);
