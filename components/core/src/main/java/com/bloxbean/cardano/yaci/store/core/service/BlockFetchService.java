@@ -16,10 +16,7 @@ import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
-import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.*;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,6 +71,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
         EventMetadata eventMetadata = EventMetadata.builder()
                 .mainnet(storeProperties.isMainnet())
+                .protocolMagic(storeProperties.getProtocolMagic())
                 .era(era)
                 .block(blockHeader.getHeaderBody().getBlockNumber())
                 .epochNumber(epochNumber)
@@ -124,6 +122,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
+                    .protocolMagic(storeProperties.getProtocolMagic())
                     .era(Era.Byron)
                     .block(blockNumber)
                     .blockHash(byronBlock.getHeader().getBlockHash())
@@ -165,6 +164,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
+                    .protocolMagic(storeProperties.getProtocolMagic())
                     .era(Era.Byron)
                     .block(blockNumber)
                     .blockHash(byronEbBlock.getHeader().getBlockHash())
