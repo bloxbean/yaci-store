@@ -9,12 +9,10 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
+import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class DomainMapperDecorator implements DomainMapper {
     private final DomainMapper delegate;
@@ -79,5 +77,46 @@ public class DomainMapperDecorator implements DomainMapper {
         }
 
         return resultMap;
+    }
+
+    @Override
+    public com.bloxbean.cardano.client.api.model.ProtocolParams toCCLProtocolParams(ProtocolParams protocolParams) {
+        var cclProtocolPrams = delegate.toCCLProtocolParams(protocolParams);
+
+        //convert CostModel to CCL CostModel
+        var costModelMap = protocolParams.getCostModels();
+        if (costModelMap == null)
+            return cclProtocolPrams;
+
+        if (cclProtocolPrams.getCostModels() == null)
+            cclProtocolPrams.setCostModels(new TreeMap<>());
+
+        for (var key: costModelMap.keySet()) {
+            List<String> ops = switch (key) {
+                case PlutusKeys.PLUTUS_V1 -> PlutusOps.getOperations(1);
+                case PlutusKeys.PLUTUS_V2 -> PlutusOps.getOperations(2);
+                case PlutusKeys.PLUTUS_V3 -> Collections.emptyList(); //TODO
+                default -> Collections.emptyList();
+            };
+
+            Map<String, Long> langCost = new TreeMap<>();
+            var costArr = costModelMap.get(key);
+            if (costArr.length == ops.size()) {
+                int index = 0;
+
+                for (String op: ops) {
+                    langCost.put(op, costArr[index++]);
+                }
+            } else {
+                int index = 0;
+                for (var opCost : costArr) {
+                    langCost.put(String.format("%03d", index++), opCost);
+                }
+            }
+
+            cclProtocolPrams.getCostModels().put(key, langCost);
+        }
+
+        return cclProtocolPrams;
     }
 }

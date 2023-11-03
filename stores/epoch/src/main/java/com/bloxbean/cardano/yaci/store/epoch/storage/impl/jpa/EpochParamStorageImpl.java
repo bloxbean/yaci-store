@@ -51,8 +51,20 @@ public class EpochParamStorageImpl implements EpochParamStorage {
 
     @Override
     public Optional<EpochParam> getProtocolParams(int epoch) {
-        return epochParamRepository.findById(epoch)
+        var epochParamOpt = epochParamRepository.findById(epoch)
                 .map(mapper::toDomain);
+
+        var costs = epochParamOpt
+                .map(epochParam -> epochParam.getParams().getCostModelsHash())
+                .filter(costModelHash -> costModelHash != null)
+                .map(costModelHash -> costModelRepository.findById(costModelHash))
+                .map(costModelEntity -> costModelEntity.get().getCosts())
+                .orElse(null);
+
+        epochParamOpt
+                .ifPresent(epochParam -> epochParam.getParams().setCostModels(costs));
+
+        return epochParamOpt;
     }
 
     @Override

@@ -206,3 +206,12 @@ GET http://localhost:8080/api/v1/assets/f2dbd5db5ad0571ea533411e99dc960f582c0deb
 
 ###
 GET http://localhost:8080/api/v1/assets/e16c2dc8ae937e8d3790c7fd7168d7b994621ba14ca11415f39fed72534b594c4552/addresses?page=0&count=100
+
+### Epoch -- Epoch Param
+GET http://localhost:8080/api/v1/epochs/latest/parameters
+
+###
+GET http://localhost:8080/api/v1/epochs/latest
+
+###
+GET http://localhost:8080/api/v1/epochs/57/parameters
