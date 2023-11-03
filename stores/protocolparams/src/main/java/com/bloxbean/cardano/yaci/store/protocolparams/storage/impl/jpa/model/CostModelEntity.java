@@ -1,0 +1,34 @@
+package com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.model;
+
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Type;
+
+import java.util.Map;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@SuperBuilder
+@Entity
+@Table(name = "cost_model")
+public class CostModelEntity extends BlockAwareEntity {
+    @Id
+    @Column(name = "hash")
+    private String hash;
+
+    @Type(JsonType.class)
+    @Column(name = "costs", columnDefinition = "json")
+    private Map<String, long[]> costs;
+
+    @Column(name = "slot")
+    private Long slot;
+}

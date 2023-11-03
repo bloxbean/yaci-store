@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.common.domain;
 
 import com.bloxbean.cardano.yaci.core.model.DrepVoteThresholds;
 import com.bloxbean.cardano.yaci.core.model.PoolVotingThresholds;
-import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -39,7 +38,7 @@ public class ProtocolParams {
     private BigDecimal expansionRate; //unit interval //10
     private BigDecimal treasuryGrowthRate; //11
     private BigDecimal decentralisationParam; //12
-    private Tuple<Integer, String> extraEntropy; //13
+    private String extraEntropy; //13
     private Integer protocolMajorVer; //14
     private Integer protocolMinorVer; //14
     private BigInteger minUtxo; //TODO //15
@@ -50,6 +49,7 @@ public class ProtocolParams {
 
     //Alonzo changes
     private Map<String, long[]> costModels; //18
+    private String costModelsHash;
 
     //ex_unit_prices
     private BigDecimal priceMem; //19
@@ -150,6 +150,11 @@ public class ProtocolParams {
                 keys.forEach(key -> this.costModels.put(key, other.costModels.get(key)));
             }
         }
+
+        if (other.costModelsHash != null) {
+            this.costModelsHash = other.costModelsHash;
+        }
+
         if (other.priceMem != null) {
             this.priceMem = other.priceMem;
         }

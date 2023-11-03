@@ -31,12 +31,12 @@ import java.util.*;
 @Component
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @Slf4j
-public class ProtocolParamService {
+public class LocalProtocolParamService {
     private final LocalClientProvider localClientProvider;
     private final LocalStateQueryClient localStateQueryClient;
     private ProtocolParamsRepository protocolParamsRepository;
 
-    public ProtocolParamService(LocalClientProvider localClientProvider, ProtocolParamsRepository protocolParamsRepository) {
+    public LocalProtocolParamService(LocalClientProvider localClientProvider, ProtocolParamsRepository protocolParamsRepository) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;

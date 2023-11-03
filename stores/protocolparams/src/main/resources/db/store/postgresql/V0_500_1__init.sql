@@ -27,18 +27,30 @@ create table protocol_params_proposal
 CREATE INDEX idx_protocol_params_proposal_slot
     ON protocol_params_proposal(slot);
 
-
 drop table if exists epoch_param;
 create table epoch_param
 (
     epoch  integer not null,
     params jsonb,
+    cost_model_hash varchar(256) null ,
     slot   bigint,
     block              bigint,
     block_time         bigint,
     update_datetime    timestamp,
-        primary key ( epoch )
+    primary key ( epoch )
 );
 
 CREATE INDEX idx_epoch_param_slot
     ON epoch_param(slot);
+
+drop table if exists cost_model;
+create table cost_model
+(
+    hash  varchar(256) not null,
+    costs jsonb,
+    slot   bigint,
+    block              bigint,
+    block_time         bigint,
+    update_datetime    timestamp,
+    primary key ( hash )
+);

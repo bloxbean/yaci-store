@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.protocolparams.controller;
 
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
-import com.bloxbean.cardano.yaci.store.protocolparams.service.ProtocolParamService;
+import com.bloxbean.cardano.yaci.store.protocolparams.service.LocalProtocolParamService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -16,12 +16,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("${apiPrefix}/epochs")
 @Slf4j
-@ConditionalOnBean(ProtocolParamService.class)
+@ConditionalOnBean(LocalProtocolParamService.class)
 public class EpochController {
 
-    private final ProtocolParamService protocolParamService;
+    private final LocalProtocolParamService protocolParamService;
 
-    public EpochController(ProtocolParamService protocolParamService) {
+    public EpochController(LocalProtocolParamService protocolParamService) {
         this.protocolParamService = protocolParamService;
     }
 

@@ -1,15 +1,7 @@
 package com.bloxbean.cardano.yaci.store.protocolparams.processor;
 
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.DataItem;
-import co.nstant.in.cbor.model.Special;
-import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.Update;
-import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
-import com.bloxbean.cardano.yaci.core.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.UpdateEvent;
@@ -23,15 +15,16 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigInteger;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ProtocolParamsUpdateProcessor {
     private final ProtocolParamsProposalStorage protocolParamsProposalStorage;
-    private final DomainMapper mapper;
+    private final DomainMapper mapper = DomainMapper.INSTANCE;
 
     @EventListener
     @Transactional
@@ -53,7 +46,7 @@ public class ProtocolParamsUpdateProcessor {
                             .map(ppEntry -> ProtocolParamsProposal.builder()
                                     .txHash(txUpdate.getTxHash())
                                     .keyHash(ppEntry.getKey())
-                                    .params(convertYaciProtocolParamUpdateToDomain(ppEntry.getValue()))
+                                    .params(mapper.toProtocolParams(ppEntry.getValue()))
                                     .targetEpoch((int) update.getEpoch())
                                     .epoch(metadata.getEpochNumber())
                                     .slot(metadata.getSlot())
@@ -67,53 +60,6 @@ public class ProtocolParamsUpdateProcessor {
 
         if (!protocolParamsProposals.isEmpty())
             protocolParamsProposalStorage.saveAll(protocolParamsProposals);
-    }
-
-    private ProtocolParams convertYaciProtocolParamUpdateToDomain(ProtocolParamUpdate protocolParamUpdate) {
-        ProtocolParams protocolParams = mapper.toProtocolParams(protocolParamUpdate);
-        var updatedCostModelMap = getCostModels(protocolParamUpdate);
-        if (updatedCostModelMap != null && updatedCostModelMap.size() > 0) {
-            protocolParams.setCostModels(updatedCostModelMap);
-        }
-
-        return protocolParams;
-    }
-
-    private Map<String, long[]> getCostModels(ProtocolParamUpdate protocolParamUpdate) {
-        var costModelmap = protocolParamUpdate.getCostModels();
-        if (costModelmap == null)
-            return null;
-
-        Map<String, long[]> resultMap = new HashMap<>();
-        var languageKeys = costModelmap.keySet();
-        for (var key : languageKeys) {
-            String strKey = null;
-            if (key == 0) {
-                strKey = PlutusKeys.PLUTUS_V1;
-            } else if (key == 1) {
-                strKey = PlutusKeys.PLUTUS_V2;
-            } else if (key == 2) {
-                strKey = PlutusKeys.PLUTUS_V3;
-            }
-
-            var cborCostModelValue = costModelmap.get(key);
-            Array array = (Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(cborCostModelValue));
-            List<Long> costs = new ArrayList<>();
-            for (DataItem di : array.getDataItems()) {
-                if (di == Special.BREAK)
-                    continue;
-                BigInteger val = ((UnsignedInteger) di).getValue();
-                costs.add(val.longValue());
-            }
-
-            long[] costArray = costs.stream()
-                    .mapToLong(Long::longValue)
-                    .toArray();
-
-            resultMap.put(strKey, costArray);
-        }
-
-        return resultMap;
     }
 
     @EventListener

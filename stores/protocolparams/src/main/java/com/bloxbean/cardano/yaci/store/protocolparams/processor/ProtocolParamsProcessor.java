@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.protocolparams.processor;
 
-import com.bloxbean.cardano.yaci.store.protocolparams.service.ProtocolParamService;
+import com.bloxbean.cardano.yaci.store.protocolparams.service.LocalProtocolParamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -9,12 +9,12 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 @Component
-@ConditionalOnBean(ProtocolParamService.class)
+@ConditionalOnBean(LocalProtocolParamService.class)
 @Slf4j
 public class ProtocolParamsProcessor {
-    private ProtocolParamService protocolParamService;
+    private LocalProtocolParamService protocolParamService;
 
-    public ProtocolParamsProcessor(ProtocolParamService protocolParamService) {
+    public ProtocolParamsProcessor(LocalProtocolParamService protocolParamService) {
         this.protocolParamService = protocolParamService;
     }
 

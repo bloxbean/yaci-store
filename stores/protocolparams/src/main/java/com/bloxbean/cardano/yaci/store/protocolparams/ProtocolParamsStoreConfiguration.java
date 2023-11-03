@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.protocolparams.storage.api.ProtocolParams
 import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.EpochParamStorageImpl;
 import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.ProtocolParamsProposalStorageImpl;
 import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.mapper.ProtocolParamsMapper;
+import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.repository.CostModelRepository;
 import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.repository.EpochParamRepository;
 import com.bloxbean.cardano.yaci.store.protocolparams.storage.impl.jpa.repository.ProtocolParamsProposalRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -38,7 +39,8 @@ public class ProtocolParamsStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public EpochParamStorage epochParamStorage(EpochParamRepository epochParamRepository, ProtocolParamsMapper protocolParamsMapper) {
-        return new EpochParamStorageImpl(epochParamRepository, protocolParamsMapper);
+    public EpochParamStorage epochParamStorage(EpochParamRepository epochParamRepository, CostModelRepository costModelRepository,
+                                               ProtocolParamsMapper protocolParamsMapper) {
+        return new EpochParamStorageImpl(epochParamRepository, costModelRepository, protocolParamsMapper);
     }
 }
