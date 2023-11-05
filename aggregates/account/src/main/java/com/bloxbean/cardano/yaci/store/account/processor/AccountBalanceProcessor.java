@@ -147,7 +147,8 @@ public class AccountBalanceProcessor {
                     addressUtxoEvent.getEventMetadata().getBlock());
             return true;
         } else {
-            log.info("Skipping balance calculation in main sync as aggregation job is not stopped yet.");
+            if (log.isDebugEnabled())
+                log.debug("Skipping balance calculation in main sync as aggregation job is not stopped yet.");
             return false;
         }
 
