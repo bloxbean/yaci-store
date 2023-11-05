@@ -1,4 +1,6 @@
 dependencies {
+    implementation project(':components:events')
+
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'org.springframework.boot:spring-boot-starter-jooq'
     api 'org.springframework:spring-context'

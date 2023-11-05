@@ -3,14 +3,12 @@ package com.bloxbean.cardano.yaci.store.core.configuration;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
+import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
-import com.bloxbean.cardano.yaci.store.core.genesis.ByronGenesis;
-import com.bloxbean.cardano.yaci.store.core.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.SneakyThrows;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -31,7 +29,6 @@ public class GenesisConfig {
 
     private final StoreProperties storeProperties;
     private final ObjectMapper objectMapper;
-    private ResourceLoader resourceLoader;
 
     private long startTime;
     private String shelleyStartTime;
@@ -43,10 +40,9 @@ public class GenesisConfig {
     private double activeSlotsCoeff;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
-    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
+    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper) {
         this.storeProperties = storeProperties;
         this.objectMapper = objectMapper;
-        this.resourceLoader = resourceLoader;
 
         parseGenesisFiles();
     }
@@ -110,19 +106,17 @@ public class GenesisConfig {
     }
 
     public void parseGenesisFiles() {
-        if (!StringUtil.isEmpty(storeProperties.getByronGenesisFile())) {
-            //parse byron genesis file
-            parseByronGenesisFile(storeProperties.getByronGenesisFile());
-        }
-
-        if (!StringUtil.isEmpty(storeProperties.getShelleyGenesisFile())) {
-            //parse shelley genesis file
-            parseShelleyGenesisFile(storeProperties.getShelleyGenesisFile());
-        }
+        parseByronGenesisFile(storeProperties.getByronGenesisFile());
+        parseShelleyGenesisFile(storeProperties.getShelleyGenesisFile());
     }
 
     private void parseByronGenesisFile(String byronGenesisFile) {
-        ByronGenesis byronGenesis = getByronGenesis(byronGenesisFile);
+        ByronGenesis byronGenesis;
+        if (!StringUtil.isEmpty(byronGenesisFile))
+            byronGenesis = new ByronGenesis(new File(byronGenesisFile));
+        else {
+            byronGenesis = new ByronGenesis(storeProperties.getProtocolMagic());
+        }
 
         startTime = byronGenesis.getStartTime();
         byronSlotLength = byronGenesis.getByronSlotLength(); //in second
@@ -134,7 +128,12 @@ public class GenesisConfig {
     }
 
     private void parseShelleyGenesisFile(String shelleyGenesisFile) {
-        ShelleyGenesis shelleyGenesis = getShelleyGenesis(shelleyGenesisFile);
+        ShelleyGenesis shelleyGenesis;
+
+        if (!StringUtil.isEmpty(shelleyGenesisFile))
+            shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
+        else
+            shelleyGenesis = new ShelleyGenesis(storeProperties.getProtocolMagic());
 
         shelleyStartTime = shelleyGenesis.getSystemStart();
         shelleySlotLength = shelleyGenesis.getSlotLength();
@@ -151,46 +150,32 @@ public class GenesisConfig {
     public List<GenesisBalance> getGenesisBalances() {
         //Parsing on-demand, as we don't want to keep the balances in memory
         List<GenesisBalance> genesisBalances = new ArrayList<>();
+
+        //Byron
+        ByronGenesis byronGenesis;
         if (!StringUtil.isEmpty(storeProperties.getByronGenesisFile())) {
-            ByronGenesis byronGenesis = getByronGenesis(storeProperties.getByronGenesisFile());
-            if (byronGenesis.getAvvmGenesisBalances() != null && byronGenesis.getAvvmGenesisBalances().size() > 0)
-                genesisBalances.addAll(byronGenesis.getAvvmGenesisBalances());
-            if (byronGenesis.getNonAvvmGenesisBalances() != null && byronGenesis.getNonAvvmBalances().size() > 0)
-                genesisBalances.addAll(byronGenesis.getNonAvvmGenesisBalances());
+            byronGenesis = new ByronGenesis(new File(storeProperties.getByronGenesisFile()));
+        } else {
+            byronGenesis = new ByronGenesis(storeProperties.getProtocolMagic());
         }
+        if (byronGenesis.getAvvmGenesisBalances() != null && byronGenesis.getAvvmGenesisBalances().size() > 0)
+            genesisBalances.addAll(byronGenesis.getAvvmGenesisBalances());
+        if (byronGenesis.getNonAvvmGenesisBalances() != null && byronGenesis.getNonAvvmBalances().size() > 0)
+            genesisBalances.addAll(byronGenesis.getNonAvvmGenesisBalances());
 
+
+        //Shelley
+        ShelleyGenesis shelleyGenesis;
         if (!StringUtil.isEmpty(storeProperties.getShelleyGenesisFile())) {
-          ShelleyGenesis shelleyGenesis = getShelleyGenesis(storeProperties.getShelleyGenesisFile());
-
-          if (shelleyGenesis.getInitialFunds() != null && shelleyGenesis.getInitialFunds().size() > 0)
-              genesisBalances.addAll(shelleyGenesis.getInitialFunds());
+            shelleyGenesis = new ShelleyGenesis(new File(storeProperties.getShelleyGenesisFile()));
+        } else {
+            shelleyGenesis = new ShelleyGenesis(storeProperties.getProtocolMagic());
         }
+
+        if (shelleyGenesis.getInitialFunds() != null && shelleyGenesis.getInitialFunds().size() > 0)
+            genesisBalances.addAll(shelleyGenesis.getInitialFunds());
 
         return genesisBalances;
-    }
-
-    @SneakyThrows
-    private ByronGenesis getByronGenesis(String byronGenesisFile) {
-        ByronGenesis byronGenesis;
-        if (byronGenesisFile.startsWith("classpath:")) {
-            byronGenesis = new ByronGenesis(resourceLoader.getResource(byronGenesisFile).getInputStream());
-        } else {
-            byronGenesis = new ByronGenesis(new File(byronGenesisFile));
-        }
-
-        return byronGenesis;
-    }
-
-    @SneakyThrows
-    private ShelleyGenesis getShelleyGenesis(String shelleyGenesisFile) {
-        ShelleyGenesis shelleyGenesis;
-        if (shelleyGenesisFile.startsWith("classpath:")) {
-            shelleyGenesis = new ShelleyGenesis(resourceLoader.getResource(shelleyGenesisFile).getInputStream());
-        } else {
-            shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
-        }
-
-        return shelleyGenesis;
     }
 
 }

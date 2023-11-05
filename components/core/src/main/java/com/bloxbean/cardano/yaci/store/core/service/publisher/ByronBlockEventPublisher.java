@@ -30,6 +30,8 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     private final ExecutorService blockExecutor;
     private final StoreProperties storeProperties;
 
+    private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
+
     public ByronBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                     ApplicationEventPublisher publisher,
                                     CursorService cursorService,
@@ -39,8 +41,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         this.cursorService = cursorService;
         this.storeProperties = storeProperties;
     }
-
-    private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
 
     @Transactional
     @Override
@@ -55,18 +55,16 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
                 eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
 
-    @Transactional
     @Override
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
         byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
         if (byronBatchBlockList.size() != storeProperties.getBlocksBatchSize())
             return;
 
-        processByronMainBlocksInParallel();
+        processBlocksInParallel();
     }
 
-    @Transactional
-    public void processByronMainBlocksInParallel() {
+    public void processBlocksInParallel() {
         if (byronBatchBlockList.size() == 0)
             return;
 
@@ -95,4 +93,5 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
         byronBatchBlockList.clear();
     }
+
 }
