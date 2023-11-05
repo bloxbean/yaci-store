@@ -215,3 +215,6 @@ GET http://localhost:8080/api/v1/epochs/latest
 
 ###
 GET http://localhost:8080/api/v1/epochs/57/parameters
+
+### Param proposals
+GET http://localhost:8080/api/v1/epoch/param-propsals?page=0&count=2&order=asc
