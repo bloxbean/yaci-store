@@ -58,7 +58,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
 
-    @Transactional
+    //Don't add transactional annotation here
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         handleBlockBatchInParallel(eventMetadata, block, transactions);
     }
@@ -72,7 +72,6 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     }
 
-    @Transactional
     public void processBlocksInParallel() {
         if (batchBlockList.size() == 0)
             return;
@@ -96,7 +95,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         BatchBlock lastBatchBlock = batchBlockList.getLast();
 
-        //Publish BatchProcessedEvent. This may be useful for some schenarios where we need to do some processing before CommitEvent
+        //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
         publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
 

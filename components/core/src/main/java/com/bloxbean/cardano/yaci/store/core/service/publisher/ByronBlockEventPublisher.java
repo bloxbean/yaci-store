@@ -1,13 +1,11 @@
 package com.bloxbean.cardano.yaci.store.core.service.publisher;
 
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
@@ -57,7 +55,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
                 eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
     }
 
-    @Transactional
     @Override
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
         byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
@@ -67,7 +64,6 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         processBlocksInParallel();
     }
 
-    @Transactional
     public void processBlocksInParallel() {
         if (byronBatchBlockList.size() == 0)
             return;
