@@ -1,4 +1,4 @@
-set search_path to mainnet;
+-- set search_path to mainnet;
 
 -- transaction store
 drop index idx_transaction_block;
@@ -39,3 +39,4 @@ drop index idx_stake_addr_balance_policy_asset;
 
 -- transaction_witness
 drop index idx_transaction_witness_tx_hash;
+
