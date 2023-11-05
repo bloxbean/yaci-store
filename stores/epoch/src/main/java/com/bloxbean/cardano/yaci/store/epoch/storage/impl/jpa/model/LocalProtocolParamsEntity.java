@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.epoch.model;
+package com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
@@ -18,8 +18,8 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "protocol_params")
-public class ProtocolParamsEntity extends BaseEntity {
+@Table(name = "local_protocol_params")
+public class LocalProtocolParamsEntity extends BaseEntity {
     @Id
     private Long id;
 

@@ -1,5 +1,5 @@
-drop table if exists protocol_params;
-create table protocol_params
+drop table if exists local_protocol_params;
+create table local_protocol_params
 (
     id   bigint
         primary key,

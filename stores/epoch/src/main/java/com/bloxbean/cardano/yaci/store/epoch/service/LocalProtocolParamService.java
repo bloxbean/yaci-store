@@ -14,8 +14,8 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
-import com.bloxbean.cardano.yaci.store.epoch.repository.ProtocolParamsRepository;
-import com.bloxbean.cardano.yaci.store.epoch.model.ProtocolParamsEntity;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.repository.LocalProtocolParamsRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.model.LocalProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -34,9 +34,9 @@ import java.util.*;
 public class LocalProtocolParamService {
     private final LocalClientProvider localClientProvider;
     private final LocalStateQueryClient localStateQueryClient;
-    private ProtocolParamsRepository protocolParamsRepository;
+    private LocalProtocolParamsRepository protocolParamsRepository;
 
-    public LocalProtocolParamService(LocalClientProvider localClientProvider, ProtocolParamsRepository protocolParamsRepository) {
+    public LocalProtocolParamService(LocalClientProvider localClientProvider, LocalProtocolParamsRepository protocolParamsRepository) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
@@ -46,12 +46,12 @@ public class LocalProtocolParamService {
     @Transactional
     public void fetchAndSetCurrentProtocolParams() {
         getCurrentProtocolParamsFromNode().subscribe(protocolParamUpdate -> {
-            ProtocolParamsEntity entity = new ProtocolParamsEntity();
-            entity.setId(1L);
-            entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
+                    LocalProtocolParamsEntity entity = new LocalProtocolParamsEntity();
+                    entity.setId(1L);
+                    entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
 
-            protocolParamsRepository.save(entity);
-        });
+                    protocolParamsRepository.save(entity);
+                });
     }
 
     public Optional<ProtocolParams> getCurrentProtocolParams() {
