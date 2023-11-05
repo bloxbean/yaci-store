@@ -16,6 +16,7 @@ public interface DomainMapper {
     @Mapping(target = "extraEntropy", ignore = true)
     ProtocolParams toProtocolParams(ProtocolParamUpdate protocolParamUpdate);
 
-    @Mapping(target = "costModels", ignore = true) 
+    @Mapping(target = "costModels", ignore = true)
+    @Mapping(target = "coinsPerUtxoSize", source = "adaPerUtxoByte")
     com.bloxbean.cardano.client.api.model.ProtocolParams toCCLProtocolParams(ProtocolParams protocolParams);
 }
