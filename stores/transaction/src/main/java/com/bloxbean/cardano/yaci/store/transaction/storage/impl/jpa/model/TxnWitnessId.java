@@ -17,6 +17,6 @@ public class TxnWitnessId implements Serializable {
     private String txHash;
 
     @Id
-    @Column(name = "index")
+    @Column(name = "idx")
     private Integer index;
 }
