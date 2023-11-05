@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -20,7 +21,7 @@ public class ScriptStorageImpl implements ScriptStorage {
     private final ScriptRepository scriptRepository;
     private final ScriptMapper scriptMapper;
 
-    private List<Script> scriptCache = new ArrayList<>();
+    private List<Script> scriptCache = Collections.synchronizedList(new ArrayList<>());
 
     @Override
     public List<Script> saveScripts(List<Script> scripts) {
