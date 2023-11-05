@@ -27,3 +27,21 @@ create table transaction
 
 CREATE INDEX idx_transaction_slot
     ON transaction(slot);
+
+
+drop table if exists transaction_witness;
+create table transaction_witness
+(
+    tx_hash varchar(128) not null,
+    index   integer not null,
+    pub_key varchar(128),
+    signature varchar(255),
+    pub_keyhash varchar(128),
+    type varchar(40),
+    additional_data jsonb,
+    slot bigint,
+    primary key (tx_hash, index)
+);
+
+CREATE INDEX idx_transaction_witness_slot
+    ON transaction_witness(slot);
