@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
-    implementation project(':starters:protocolparams-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'

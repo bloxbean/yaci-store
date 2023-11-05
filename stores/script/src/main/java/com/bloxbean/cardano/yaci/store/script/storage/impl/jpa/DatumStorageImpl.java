@@ -16,7 +16,7 @@ import java.util.*;
 @Slf4j
 public class DatumStorageImpl implements DatumStorage {
     private final DatumRepository datumRepository;
-    private Set<Datum> datumCache = new HashSet<>();
+    private Set<Datum> datumCache = Collections.synchronizedSet(new HashSet<>());
 
     @Override
     @Transactional

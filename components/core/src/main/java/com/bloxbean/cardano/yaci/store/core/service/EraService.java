@@ -41,7 +41,7 @@ public class EraService {
             }
         }
 
-        if (prevEra == Era.Byron && era != Era.Byron) { //Save shelley slot info, it could be babbage for local devenet
+        if (prevEra != null && prevEra != era) {
             log.info("Era change detected at block {} from {} to {}", blockHeader.getHeaderBody().getBlockNumber(), prevEra.getValue(), era.getValue());
             saveEra(era, blockHeader.getHeaderBody().getSlot(), blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getBlockNumber());
             prevEra = era;

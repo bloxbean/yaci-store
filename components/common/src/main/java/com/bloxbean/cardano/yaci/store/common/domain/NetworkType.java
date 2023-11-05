@@ -4,7 +4,8 @@ public enum NetworkType {
     MAINNET(764824073),
     LEGACY_TESTNET(1097911063),
     PREPROD(1),
-    PREVIEW(2);
+    PREVIEW(2),
+    SANCHONET(4);
 
     long protocolMagic;
     NetworkType(long protocolMagic) {

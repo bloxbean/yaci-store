@@ -23,6 +23,7 @@ import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,7 +37,7 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
 
-    private List<AddressUtxo> spentUtxoCache = new ArrayList<>();
+    private List<AddressUtxo> spentUtxoCache = Collections.synchronizedList(new ArrayList<>());
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
