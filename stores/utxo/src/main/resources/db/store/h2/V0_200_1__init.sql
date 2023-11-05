@@ -40,10 +40,10 @@ CREATE INDEX idx_address_utxo_owner_addr
 CREATE INDEX idx_address_utxo_owner_stake_addr
     ON address_utxo(owner_stake_addr);
 
-CREATE INDEX idx_address_utxo_owner_pkey_hash
+CREATE INDEX idx_address_utxo_owner_paykey_hash
     ON address_utxo(owner_payment_credential);
 
-CREATE INDEX idx_address_utxo_owner_skey_hash
+CREATE INDEX idx_address_utxo_owner_stakekey_hash
     ON address_utxo(owner_stake_credential);
 
 CREATE INDEX idx_reference_script_hash

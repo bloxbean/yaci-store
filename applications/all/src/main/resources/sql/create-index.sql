@@ -1,4 +1,4 @@
-set search_path  to mainnet;
+-- set search_path  to mainnet;
 
 -- transaction store
 CREATE INDEX if not exists idx_transaction_block
