@@ -86,3 +86,8 @@ CREATE INDEX if not exists idx_stake_addr_balance_policy
 
 CREATE INDEX if not exists idx_stake_addr_balance_policy_asset
     ON stake_address_balance (policy, asset_name);
+
+-- transaction_witness
+
+CREATE INDEX if not exists idx_transaction_witness_tx_hash
+    ON transaction_witness(tx_hash);

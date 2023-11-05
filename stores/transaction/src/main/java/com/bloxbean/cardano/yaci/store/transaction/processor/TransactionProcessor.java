@@ -1,13 +1,23 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
+import com.bloxbean.cardano.client.crypto.KeyGenUtil;
+import com.bloxbean.cardano.yaci.core.model.BootstrapWitness;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
+import com.bloxbean.cardano.yaci.core.model.VkeyWitness;
+import com.bloxbean.cardano.yaci.core.model.Witnesses;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionWitnessStorage;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -24,8 +34,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionProcessor {
+    public static final String CHAINCODE = "chaincode";
+    public static final String ATTRIBUTES = "attributes";
 
     private final TransactionStorage transactionStorage;
+    private final TransactionWitnessStorage transactionWitnessStorage;
+    private final ObjectMapper objectMapper;
 
     @EventListener
     @Order(3)
@@ -89,6 +103,72 @@ public class TransactionProcessor {
         if (txList.size() > 0) {
             transactionStorage.saveAll(txList);
         }
+    }
+
+
+    @EventListener
+    @Transactional
+    public void handleTransactionWitnesses(TransactionEvent event) {
+        List<Transaction> transactions = event.getTransactions();
+        List<TxnWitness> txnWitnesses = new ArrayList<>();
+
+        int index = 0;
+        for(Transaction transaction: transactions) {
+            Witnesses witnesses = transaction.getWitnesses();
+            if (witnesses == null)
+                return;
+
+            var vkeyWitnessList = witnesses.getVkeyWitnesses();
+            var bootstrapWitnessList = witnesses.getBootstrapWitnesses();
+
+            if (vkeyWitnessList != null && vkeyWitnessList.size() > 0) {
+                for (VkeyWitness vkeyWitness: vkeyWitnessList) {
+                    TxnWitness txnWitness = TxnWitness.builder()
+                            .txHash(transaction.getTxHash())
+                            .index(index++)
+                            .pubKey(vkeyWitness.getKey())
+                            .signature(vkeyWitness.getSignature())
+                            .type(TxWitnessType.VKEY_WITNESS)
+                            .slot(event.getMetadata().getSlot())
+                            .build();
+                    txnWitness.setPubKeyhash(getKeyHash(txnWitness.getPubKey()));
+                    txnWitnesses.add(txnWitness);
+                }
+            }
+
+            if (bootstrapWitnessList != null && bootstrapWitnessList.size() > 0) {
+                for (BootstrapWitness bootstrapWitness : bootstrapWitnessList) {
+                    TxnWitness txnWitness = TxnWitness.builder()
+                            .txHash(transaction.getTxHash())
+                            .index(index++)
+                            .pubKey(bootstrapWitness.getPublicKey())
+                            .signature(bootstrapWitness.getSignature())
+                            .type(TxWitnessType.BOOTSTRAP_WITNESS)
+                            .slot(event.getMetadata().getSlot())
+                            .build();
+                    txnWitness.setPubKeyhash(getKeyHash(txnWitness.getPubKey()));
+
+                    ObjectNode objectNode = objectMapper.createObjectNode();
+                    objectNode.put(CHAINCODE, bootstrapWitness.getChainCode());
+                    objectNode.put(ATTRIBUTES, bootstrapWitness.getAttributes());
+                    txnWitness.setAdditionalData(objectNode);
+
+                    txnWitnesses.add(txnWitness);
+                }
+            }
+
+            if (txnWitnesses.size() > 0)
+                transactionWitnessStorage.saveAll(txnWitnesses);
+        }
+    }
+
+    private String getKeyHash(String pubKey) {
+        try {
+            return KeyGenUtil.getKeyHash(HexUtil.decodeHexString(pubKey));
+        } catch (Exception e) {
+            log.error("Error generating keyhash for key : " + pubKey, e);
+        }
+        return null;
     }
 
 
