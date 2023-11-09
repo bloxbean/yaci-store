@@ -314,7 +314,7 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = false;
         cursorService.setSyncMode(syncMode);
 
-        startKeepAliveThread();
+        startKeepAliveThread(syncMode);
     }
 
     public synchronized void startSync(Point from) {
@@ -322,6 +322,7 @@ public class BlockFetchService implements BlockChainDataListener {
         blockSync.startSync(from, this);
         syncMode = true;
         cursorService.setSyncMode(syncMode);
+        startKeepAliveThread(syncMode);
     }
 
     public synchronized void shutdown() {
@@ -350,14 +351,22 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    private synchronized void startKeepAliveThread() {
+    private synchronized void startKeepAliveThread(boolean syncMode) {
         stopKeepAliveThread();
-        keepAliveThread = new Thread(() -> {
+        keepAliveThread = Thread.ofVirtual().unstarted(() -> {
+            int interval = storeProperties.getKeepAliveInterval();
             while (true) {
                 try {
-                    Thread.sleep(10000);
+                    if (log.isDebugEnabled())
+                        log.debug("Sending keep alive");
+
+                    Thread.sleep(interval);
                     int randomNo = getRandomNumber(0, 60000);
-                    blockRangeSync.sendKeepAliveMessage(randomNo);
+                    if (syncMode)
+                        blockSync.sendKeepAliveMessage(randomNo);
+                    else
+                        blockRangeSync.sendKeepAliveMessage(randomNo);
+
                 } catch (InterruptedException e) {
                     log.info("Keep alive thread interrupted");
                     break;
