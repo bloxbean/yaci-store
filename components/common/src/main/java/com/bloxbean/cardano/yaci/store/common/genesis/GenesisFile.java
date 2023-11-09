@@ -16,6 +16,7 @@ import java.io.InputStream;
 
 @Slf4j
 public abstract class GenesisFile {
+    public static final String GENESIS_RESOURCE_FOLDER = "store/networks/";
     protected ProtocolParams protocolParams;
 
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -47,7 +48,7 @@ public abstract class GenesisFile {
 
         log.info("Loading default genesis files for network : {}", networkFolder);
 
-        InputStream is = FileUtil.class.getClassLoader().getResourceAsStream("networks/" + networkFolder + "/" + getFileName());
+        InputStream is = FileUtil.class.getClassLoader().getResourceAsStream(GENESIS_RESOURCE_FOLDER + networkFolder + "/" + getFileName());
         var jsonNode = parseGenesisFile(is);
         readGenesisData(jsonNode);
     }
