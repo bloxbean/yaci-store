@@ -47,7 +47,7 @@ public abstract class GenesisFile {
 
         log.info("Loading default genesis files for network : {}", networkFolder);
 
-        InputStream is = FileUtil.class.getClassLoader().getResourceAsStream("networks/" + networkFolder + "/" + getFileName());
+        InputStream is = FileUtil.class.getClassLoader().getResourceAsStream("store/networks/" + networkFolder + "/" + getFileName());
         var jsonNode = parseGenesisFile(is);
         readGenesisData(jsonNode);
     }

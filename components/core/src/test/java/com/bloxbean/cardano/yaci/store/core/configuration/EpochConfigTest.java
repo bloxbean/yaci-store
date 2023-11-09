@@ -6,11 +6,14 @@ import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.ResourceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class EpochConfigTest {
 
+    private ResourceLoader resourceLoader = new DefaultResourceLoader();
     private GenesisConfig genesisConfig;
     private EpochConfig epochConfig;
 
@@ -20,14 +23,14 @@ class EpochConfigTest {
     void preprodSetup() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setProtocolMagic(NetworkType.PREPROD.getProtocolMagic());
-        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper());
+        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper(), resourceLoader);
         epochConfig = new EpochConfig(genesisConfig);
     }
 
     void mainnetSetup() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setProtocolMagic(NetworkType.MAINNET.getProtocolMagic());
-        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper());
+        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper(), resourceLoader);
         epochConfig = new EpochConfig(genesisConfig);
     }
 
