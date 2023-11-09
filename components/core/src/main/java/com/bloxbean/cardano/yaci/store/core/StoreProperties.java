@@ -45,6 +45,8 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int cursorNoOfBlocksToKeep = 2160;
     private int cursorCleanupInterval = 3600;
 
+    private int keepAliveInterval = 10000;
+
     //Only required if the genesis hash can't be fetched
     private String defaultGenesisHash = "Genesis";
 

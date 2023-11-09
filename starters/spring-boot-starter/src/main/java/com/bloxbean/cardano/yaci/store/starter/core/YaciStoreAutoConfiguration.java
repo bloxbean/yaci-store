@@ -162,6 +162,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
 
+        storeProperties.setKeepAliveInterval(properties.getCardano().getKeepAliveInterval());
+
         storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
 
         //executor properties
