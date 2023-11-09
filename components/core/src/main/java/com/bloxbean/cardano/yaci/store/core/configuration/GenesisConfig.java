@@ -9,6 +9,8 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -29,6 +31,7 @@ public class GenesisConfig {
 
     private final StoreProperties storeProperties;
     private final ObjectMapper objectMapper;
+    private final ResourceLoader resourceLoader;
 
     private long startTime;
     private String shelleyStartTime;
@@ -40,9 +43,10 @@ public class GenesisConfig {
     private double activeSlotsCoeff;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
-    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper) {
+    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
         this.storeProperties = storeProperties;
         this.objectMapper = objectMapper;
+        this.resourceLoader = resourceLoader;
 
         parseGenesisFiles();
     }
@@ -113,7 +117,7 @@ public class GenesisConfig {
     private void parseByronGenesisFile(String byronGenesisFile) {
         ByronGenesis byronGenesis;
         if (!StringUtil.isEmpty(byronGenesisFile))
-            byronGenesis = new ByronGenesis(new File(byronGenesisFile));
+            byronGenesis = getByronGenesis(byronGenesisFile);
         else {
             byronGenesis = new ByronGenesis(storeProperties.getProtocolMagic());
         }
@@ -131,7 +135,7 @@ public class GenesisConfig {
         ShelleyGenesis shelleyGenesis;
 
         if (!StringUtil.isEmpty(shelleyGenesisFile))
-            shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
+            shelleyGenesis = getShelleyGenesis(shelleyGenesisFile);
         else
             shelleyGenesis = new ShelleyGenesis(storeProperties.getProtocolMagic());
 
@@ -154,7 +158,7 @@ public class GenesisConfig {
         //Byron
         ByronGenesis byronGenesis;
         if (!StringUtil.isEmpty(storeProperties.getByronGenesisFile())) {
-            byronGenesis = new ByronGenesis(new File(storeProperties.getByronGenesisFile()));
+            byronGenesis = getByronGenesis(storeProperties.getByronGenesisFile());
         } else {
             byronGenesis = new ByronGenesis(storeProperties.getProtocolMagic());
         }
@@ -167,7 +171,7 @@ public class GenesisConfig {
         //Shelley
         ShelleyGenesis shelleyGenesis;
         if (!StringUtil.isEmpty(storeProperties.getShelleyGenesisFile())) {
-            shelleyGenesis = new ShelleyGenesis(new File(storeProperties.getShelleyGenesisFile()));
+            shelleyGenesis = getShelleyGenesis(storeProperties.getShelleyGenesisFile());
         } else {
             shelleyGenesis = new ShelleyGenesis(storeProperties.getProtocolMagic());
         }
@@ -176,6 +180,30 @@ public class GenesisConfig {
             genesisBalances.addAll(shelleyGenesis.getInitialFunds());
 
         return genesisBalances;
+    }
+
+    @SneakyThrows
+    private ByronGenesis getByronGenesis(String byronGenesisFile) {
+        ByronGenesis byronGenesis;
+        if (byronGenesisFile.startsWith("classpath:")) {
+            byronGenesis = new ByronGenesis(resourceLoader.getResource(byronGenesisFile).getInputStream());
+        } else {
+            byronGenesis = new ByronGenesis(new File(byronGenesisFile));
+        }
+
+        return byronGenesis;
+    }
+
+    @SneakyThrows
+    private ShelleyGenesis getShelleyGenesis(String shelleyGenesisFile) {
+        ShelleyGenesis shelleyGenesis;
+        if (shelleyGenesisFile.startsWith("classpath:")) {
+            shelleyGenesis = new ShelleyGenesis(resourceLoader.getResource(shelleyGenesisFile).getInputStream());
+        } else {
+            shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
+        }
+
+        return shelleyGenesis;
     }
 
 }
