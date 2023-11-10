@@ -1,29 +1,29 @@
 drop table if exists address_utxo;
 create table address_utxo
 (
-    output_index          integer      not null,
-    tx_hash               varchar(255) not null,
+    output_index          smallint      not null,
+    tx_hash               varchar(64) not null,
     slot                  bigint,
-    block_hash            varchar(255),
+    block_hash            varchar(64),
     epoch                 integer,
     lovelace_amount       bigint       null,
     amounts               jsonb,
-    data_hash             varchar(255),
+    data_hash             varchar(64),
     inline_datum          text,
     owner_addr            varchar(500),
     owner_addr_full       text,
     owner_stake_addr      varchar(255),
-    owner_payment_credential varchar(255),
-    owner_stake_credential  varchar(255),
+    owner_payment_credential varchar(56),
+    owner_stake_credential  varchar(56),
     script_ref            text,
-    reference_script_hash varchar(255) null,
+    reference_script_hash varchar(56) null,
     spent                 boolean,
     spent_at_slot         bigint,
     spent_at_block        bigint,
-    spent_at_block_hash   varchar(255),
+    spent_at_block_hash   varchar(64),
     spent_block_time      bigint,
     spent_epoch           integer,
-    spent_tx_hash         varchar(255) null,
+    spent_tx_hash         varchar(64) null,
     is_collateral_return  boolean,
     block                 bigint,
     block_time            bigint,
@@ -64,10 +64,10 @@ CREATE INDEX idx_address_utxo_spent_block
 drop table if exists invalid_transaction;
 create table invalid_transaction
 (
-    tx_hash         varchar(255) not null
+    tx_hash         varchar(64) not null
         primary key,
     slot            bigint not null,
-    block_hash      varchar(255),
+    block_hash      varchar(64),
     transaction     jsonb,
     create_datetime timestamp,
     update_datetime timestamp

@@ -1,15 +1,15 @@
 drop table if exists stake_registration;
 create table stake_registration
 (
-    tx_hash         varchar(255) not null,
+    tx_hash         varchar(64) not null,
     cert_index      int          not null,
-    credential      varchar(255) not null,
+    credential      varchar(56) not null,
     type            varchar(50),
     address         varchar(255), -- bech32 stake address
     epoch           int,
     slot            bigint,
-    block_hash      varchar(255),
-    block            bigint,
+    block_hash      varchar(64),
+    block           bigint,
     block_time      bigint,
     update_datetime timestamp,
     primary key (tx_hash, cert_index)
@@ -33,14 +33,14 @@ CREATE INDEX idx_stake_registration_stake_address
 drop table if exists delegation;
 create table delegation
 (
-    tx_hash         varchar(255) not null,
+    tx_hash         varchar(64) not null,
     cert_index      int          not null,
-    credential      varchar(255) not null,
-    pool_id         varchar(255), -- pool hash
+    credential      varchar(56) not null,
+    pool_id         varchar(56), -- pool hash
     address         varchar(255), -- bech32 stake address
     epoch           int,
     slot            bigint,
-    block_hash      varchar(255),
+    block_hash      varchar(64),
     block            bigint,
     block_time      bigint,
     update_datetime timestamp,
@@ -62,10 +62,10 @@ CREATE INDEX idx_delegation_address
 drop table if exists pool_registration;
 create table pool_registration
 (
-    tx_hash         varchar(255) not null,
+    tx_hash         varchar(64) not null,
     cert_index      int          not null,
-    pool_id         varchar(255), -- pool hash
-    vrf_key         varchar(255),
+    pool_id         varchar(56), -- pool hash
+    vrf_key         varchar(64),
     pledge          numeric(20, 0),
     cost            numeric(20, 0),
     margin          decimal(10, 8),
@@ -73,10 +73,10 @@ create table pool_registration
     pool_owners     json,
     relays          json,
     metadata_url    clob,
-    metadata_hash   varchar(255),
+    metadata_hash   varchar(64),
     epoch           int,
     slot            bigint,
-    block_hash      varchar(255),
+    block_hash      varchar(64),
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
@@ -98,13 +98,13 @@ CREATE INDEX idx_pool_registration_reward_account
 drop table if exists pool_retirement;
 create table pool_retirement
 (
-    tx_hash          varchar(255) not null,
+    tx_hash          varchar(64) not null,
     cert_index       int          not null,
-    pool_id          varchar(255), -- pool hash
+    pool_id          varchar(56), -- pool hash
     retirement_epoch int,
     epoch            int,
     slot             bigint,
-    block_hash      varchar(255),
+    block_hash      varchar(64),
     block            bigint,
     block_time       bigint,
     update_datetime  timestamp,
