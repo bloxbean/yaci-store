@@ -11,13 +11,13 @@ create table local_protocol_params
 drop table if exists protocol_param_proposal;
 create table protocol_params_proposal
 (
-    tx_hash            varchar(255) not null,
-    key_hash           varchar(255) not null,
+    tx_hash            varchar(64) not null,
+    key_hash           varchar(56) not null,
     params             json,
     target_epoch       integer,
     epoch              integer,
     slot               bigint,
-    era                integer,
+    era                smallint,
     block              bigint,
     block_time         bigint,
     update_datetime    timestamp,
@@ -33,7 +33,7 @@ create table epoch_param
 (
     epoch              integer not null,
     params             json,
-    cost_model_hash    varchar(256) null ,
+    cost_model_hash    varchar(64) null ,
     slot   bigint,
     block              bigint,
     block_time         bigint,
@@ -47,7 +47,7 @@ CREATE INDEX idx_epoch_param_slot
 drop table if exists cost_model;
 create table cost_model
 (
-    hash               varchar(256) not null,
+    hash               varchar(64) not null,
     costs              json,
     slot               bigint,
     block              bigint,
