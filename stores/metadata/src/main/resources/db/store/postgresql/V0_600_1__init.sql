@@ -4,7 +4,7 @@ create table transaction_metadata
     id bigint not null
        primary key generated ALWAYS AS IDENTITY,
     slot                  bigint,
-    tx_hash               varchar(255) not null,
+    tx_hash               varchar(64) not null,
     label                 varchar(255),
     body                  text,
     cbor                  text,
