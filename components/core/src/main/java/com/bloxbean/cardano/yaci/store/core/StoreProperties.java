@@ -45,9 +45,20 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int cursorNoOfBlocksToKeep = 2160;
     private int cursorCleanupInterval = 3600;
 
+    private int keepAliveInterval = 10000;
+
     //Only required if the genesis hash can't be fetched
     private String defaultGenesisHash = "Genesis";
 
     //derived from protocol magic. No need to set
     private boolean mainnet;
+
+    //Executor Configurations
+    private int blockProcessingThreads = 15;
+    private int eventProcessingThreads = 30;
+    private boolean enableParallelProcessing;
+    private int blocksBatchSize=100;
+    private int blocksPartitionSize=15;
+    private boolean useVirtualThreadForBatchProcessing;
+    private boolean useVirtualThreadForEventProcessing;
 }

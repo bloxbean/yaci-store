@@ -10,6 +10,7 @@ import lombok.*;
 @ToString
 public class EventMetadata {
     private boolean mainnet;
+    private long protocolMagic;
     private Era era;
     private String slotLeader;
     private int epochNumber;
@@ -21,6 +22,7 @@ public class EventMetadata {
     private long epochSlot;
     private int noOfTxs;
     private boolean syncMode;
+    private boolean parallelMode;
 
     private boolean remotePublish; //Is published by a remote publisher
 }

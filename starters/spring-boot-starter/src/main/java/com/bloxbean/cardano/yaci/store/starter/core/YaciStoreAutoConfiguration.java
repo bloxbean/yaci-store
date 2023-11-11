@@ -39,6 +39,11 @@ public class YaciStoreAutoConfiguration {
     @Autowired
     YaciStoreProperties properties;
 
+    static {
+        System.setProperty("org.jooq.no-logo", "true");
+        System.setProperty("org.jooq.no-tips", "true");
+    }
+
     //configuration
 
     @Bean
@@ -157,7 +162,21 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
 
+        storeProperties.setKeepAliveInterval(properties.getCardano().getKeepAliveInterval());
+
         storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
+
+        //executor properties
+        storeProperties.setEnableParallelProcessing(properties.getExecutor().isEnableParallelProcessing());
+        storeProperties.setBlockProcessingThreads(properties.getExecutor().getBlockProcessingThreads());
+        storeProperties.setEventProcessingThreads(properties.getExecutor().getEventProcessingThreads());
+
+        storeProperties.setBlocksBatchSize(properties.getExecutor().getBlocksBatchSize());
+        storeProperties.setBlocksPartitionSize(properties.getExecutor().getBlocksPartitionSize());
+
+        storeProperties.setUseVirtualThreadForBatchProcessing(properties.getExecutor().isUseVirtualThreadForBatchProcessing());
+        storeProperties.setUseVirtualThreadForEventProcessing(properties.getExecutor().isUseVirtualThreadForEventProcessing());
+
         return storeProperties;
     }
 

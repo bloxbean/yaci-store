@@ -11,6 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class ByronEbBlockEvent {
-    private EventMetadata eventMetadata;
+    private EventMetadata metadata;
     private ByronEbBlock byronEbBlock;
 }

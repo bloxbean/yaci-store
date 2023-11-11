@@ -64,7 +64,7 @@ public class CursorStorageImpl implements CursorStorage {
                 .blockHash(cursorEntity.getBlockHash())
                 .block(cursorEntity.getBlock())
                 .prevBlockHash(cursorEntity.getPrevBlockHash())
-                .era(EraMapper.intToEra(cursorEntity.getEra()))
+                .era(cursorEntity.getEra() != null? EraMapper.intToEra(cursorEntity.getEra()): null)
                 .build();
     }
 }

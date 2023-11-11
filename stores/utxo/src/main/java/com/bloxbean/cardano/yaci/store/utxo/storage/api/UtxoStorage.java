@@ -20,10 +20,15 @@ public interface UtxoStorage {
     Optional<List<AddressUtxo>> findUtxoByStakeAddress(String stakeAddress, int page, int count, Order order);
     Optional<List<AddressUtxo>> findUtxoByStakeAddressAndAsset(String stakeAddress, String unit, int page, int count, Order order);
 
-    List<AddressUtxo> findBySlot(Long slot);
+    List<Long> findNextAvailableBlocks(Long block, int limit);
+
     List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys);
     int deleteBySlotGreaterThan(Long slot);
 
-    Optional<AddressUtxo> save(AddressUtxo addressUtxo);
-    Optional<List<AddressUtxo>> saveAll(List<AddressUtxo> addressUtxoList);
+    void saveUnspent(List<AddressUtxo> addressUtxoList);
+
+    void saveSpent(List<AddressUtxo> addressUtxoList);
+
+    List<AddressUtxo> findUnspentUtxosBetweenBlocks(Long startBlock, Long endBlock);
+    List<AddressUtxo> findSpentUtxosBetweenBlocks(Long startBlock, Long endBlock);
 }

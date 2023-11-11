@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository;
 
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AddressBalanceEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AddressBalanceId;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -26,6 +28,12 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
             ")")
     List<AddressBalanceEntity> findLatestAddressBalanceByAddress(String address);
 
+    @Query("SELECT ab " +
+            "FROM AddressBalanceEntity ab " +
+            "WHERE ab.unit = :unit and ab.quantity > 0" +
+            "GROUP BY ab.address, ab.unit, ab.slot " +
+            "HAVING ab.slot = (SELECT MAX(ab2.slot) FROM AddressBalanceEntity ab2 WHERE ab2.address = ab.address AND ab2.unit = ab.unit)")
+    Slice<AddressBalanceEntity> findLatestAddressBalanceByUnit(String unit, Pageable pageable);
 
     @Modifying
     @Query("DELETE FROM AddressBalanceEntity ab " +
@@ -35,4 +43,7 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
     int deleteAllBeforeSlot(String address, String unit, Long slot);
 
     int deleteBySlotGreaterThan(Long slot);
+
+    @Query("select MAX (ab.blockNumber) from AddressBalanceEntity ab")
+    Long findMaxBlock();
 }

@@ -19,14 +19,13 @@ public class CursorService {
     private final StoreProperties storeProperties;
     private final BlockFinder blockFinder;
 
-    private AtomicLong count;
+    private AtomicLong lastBlock = new AtomicLong(0);
     private boolean syncMode;
 
     public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
         this.cursorStorage = cursorStorage;
         this.storeProperties = storeProperties;
         this.blockFinder = blockFinder;
-        this.count = new AtomicLong(0);
     }
 
     public void setCursor(Cursor cursor) {
@@ -103,18 +102,27 @@ public class CursorService {
     }
 
     private void printLog(long block, Era era) {
-        count.incrementAndGet();
-        double val = count.get() % 100;
+        if (lastBlock.get() == 0) {
+            lastBlock.set(block);
+            return;
+        }
+
+        var diff = block - lastBlock.get();
+        if (diff < 0) {
+            return;
+        }
 
         if (!syncMode) {
-            if (val == 0) {
-                log.info("# of blocks written: " + count.get());
+            if (diff >= 100) {
+                log.info("# of blocks written: " + diff);
                 log.info("Block No: " + block + "  , Era: " + era);
+                lastBlock.set(block);
             }
 
         } else {
-            log.info("# of blocks written: " + count.get());
+            log.info("# of blocks written: " + diff);
             log.info("Block No: " + block);
+            lastBlock.set(block);
         }
     }
 }

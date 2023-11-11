@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class YaciStoreProperties {
     private Core core = new Core();
     private Cardano cardano = new Cardano();
+    private Executor executor = new Executor();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
     private String utxoClientUrl;
@@ -46,6 +47,7 @@ public class YaciStoreProperties {
 
         private int cursorNoOfBlocksToKeep = 2160;
         private int cursorCleanupInterval = 3600;
+        private int keepAliveInterval = 10000;
 
         //This is only required when the genesis hash can't be fetched from the network.
         // In that case, the default genesis hash will be used
@@ -56,5 +58,17 @@ public class YaciStoreProperties {
     @Setter
     public static final class Core {
         private boolean enabled = true;
+    }
+
+    @Getter
+    @Setter
+    public static final class Executor {
+        private boolean enableParallelProcessing;
+        private int blockProcessingThreads = 15;
+        private int eventProcessingThreads = 30;
+        private int blocksBatchSize=100;
+        private int blocksPartitionSize=10;
+        private boolean useVirtualThreadForBatchProcessing;
+        private boolean useVirtualThreadForEventProcessing;
     }
 }

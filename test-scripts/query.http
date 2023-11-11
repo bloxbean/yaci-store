@@ -200,3 +200,31 @@ GET http://localhost:8080/api/v1/scripts/datum/ee4a6a499024cae6b4d632c07fcad84df
 
 ### Get datum by hash
 GET http://localhost:8080/api/v1/scripts/datum/ee4a6a499024cae6b4d632c07fcad84dfdf0243381cd57fd8a15e6a42158a39f/cbor
+
+### Addresses by Asset
+GET http://localhost:8080/api/v1/assets/f2dbd5db5ad0571ea533411e99dc960f582c0debbb731d746079f6a006b5e33ad456a338e7513cce2b112f33ae70024c0d3b77fabd006dac99cde45d/addresses?page=0&count=100&sort=desc
+
+###
+GET http://localhost:8080/api/v1/assets/627c22b8a13e0f7dad08ea3cc25ac6f254822acf9ded1b52b8578b41/addresses?page=0&count=100
+
+### Epoch -- Epoch Param
+GET http://localhost:8080/api/v1/epochs/latest/parameters
+
+###
+GET http://localhost:8080/api/v1/epochs/latest
+
+###
+GET http://localhost:8080/api/v1/epochs/2/parameters
+
+### Param proposals
+GET http://localhost:8080/api/v1/epoch/param-propsals?page=0&count=2&order=asc
+
+### Get Witnesses
+GET http://localhost:8080/api/v1/txs/64bc262000cdcf07927ee3b06a03b65f8fb81ca9c4b15cbbdd6a2689f974e9a3/witnesses
+
+###
+GET http://localhost:8080/api/v1/txs/ee0d811b75e0fbbd5d2bca9542b37225d2c5a58b8f371953d6494ab48ae3b9f0/witnesses
+
+###
+GET http://localhost:8080/api/v1/txs/8179c0867476f1d7a06c6abae22864ac280e2dc7083481f01ffd16382b7e3c59/witnesses
+

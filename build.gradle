@@ -3,10 +3,10 @@ plugins {
     id 'signing'
     id 'org.flywaydb.flyway' version '9.7.0'
     id 'nu.studer.jooq' version '8.2'
+    id 'io.spring.dependency-management' version '1.1.3'
 
-    id 'io.spring.dependency-management' version '1.1.0'
+    id 'org.ajoberstar.grgit' version '5.2.0'
 }
-
 
 subprojects {
     apply plugin: 'java'
@@ -23,10 +23,15 @@ subprojects {
 
     archivesBaseName = 'yaci-store-' + project.name
 
+    def commit_id=getCheckedOutGitCommitHash()
+    if (project.version.endsWith("-SNAPSHOT")) {
+        version = "${project.version}".replace("-SNAPSHOT", "-${commit_id}-SNAPSHOT")
+    }
+
     dependencyManagement {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:3.0.5")
-            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2022.0.2"
+            mavenBom("org.springframework.boot:spring-boot-dependencies:3.1.4")
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2022.0.4"
         }
     }
 
@@ -40,8 +45,8 @@ subprojects {
     }
 
     compileJava {
-        sourceCompatibility = '17'
-        targetCompatibility = '17'
+        sourceCompatibility = '21'
+        targetCompatibility = '21'
 
         options.compilerArgs += ["-Aproject=${project.group}/${project.name}", "-parameters"]
     }
@@ -51,22 +56,36 @@ subprojects {
     }
 
     task sourceJar(type: Jar) {
-        classifier "sources"
-        from sourceSets.main.allJava
+        from sourceSets.main.allSource
+        archiveClassifier.set('sources')
     }
 
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier "javadoc"
-        from javadoc.destinationDir
+    task javadocJar(type: Jar) {
+        from javadoc
+        archiveClassifier.set('javadoc')
     }
 
-    artifacts {
-        archives jar
-        archives sourceJar
-        archives javadocJar
-    }
+//    task sourceJar(type: Jar) {
+////        archiveClassifier "sources"
+//        from sourceSets.main.allJava
+//    }
+
+//    task javadocJar(type: Jar, dependsOn: javadoc) {
+////        archiveClassifier "javadoc"
+//        from javadoc.destinationDir
+//    }
+
+//    artifacts {
+//        archives jar
+//        archives sourceJar
+//        archives javadocJar
+//    }
 
     test {
         useJUnitPlatform()
     }
+}
+
+def getCheckedOutGitCommitHash() {
+    grgit.head().abbreviatedId
 }

@@ -1,17 +1,16 @@
 drop table if exists mir;
 create table mir
 (
-    id              bigint  not null auto_increment
-        primary key,
-    tx_hash         varchar(255) not null,
+    id              uuid not null primary key,
+    tx_hash         varchar(64) not null,
     cert_index      int          not null,
-    pot             varchar(50),
-    credential      varchar(255),
+    pot             varchar(30),
+    credential      varchar(56),
     address         varchar(255), -- bech32 stake address
     amount          numeric(38),
     epoch           int,
     slot            bigint,
-    block_hash      varchar(255),
+    block_hash      varchar(64),
     block           bigint,
     block_time      bigint,
     update_datetime timestamp

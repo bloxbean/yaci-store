@@ -2,11 +2,11 @@ drop table if exists cursor_;
 create table cursor_
 (
     id          int not null,
-    block_hash  varchar(255),
+    block_hash  varchar(64),
     slot        bigint,
     block_number bigint,
     era         int,
-    prev_block_hash varchar(255),
+    prev_block_hash varchar(64),
     create_datetime  timestamp,
     update_datetime  timestamp,
     primary key (id, block_hash)
@@ -26,5 +26,5 @@ create table era
     era        int not null primary key,
     start_slot bigint not null,
     block     bigint not null,
-    block_hash varchar(255) not null
+    block_hash varchar(64) not null
 );

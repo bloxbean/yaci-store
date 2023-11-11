@@ -1,10 +1,9 @@
 drop table if exists transaction_metadata;
 create table transaction_metadata
 (
-    id bigint not null auto_increment
-       primary key,
+    id                    uuid not null primary key,
     slot                  bigint,
-    tx_hash               varchar(255) not null,
+    tx_hash               varchar(64) not null,
     label                 varchar(255),
     body                  clob,
     cbor                  clob,

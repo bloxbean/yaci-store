@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '3.0.5'
+    id 'org.springframework.boot' version '3.1.4'
 }
 
 dependencies {
@@ -10,7 +10,7 @@ dependencies {
     implementation project(':starters:metadata-spring-boot-starter')
     implementation project(':starters:assets-spring-boot-starter')
     implementation project(':starters:blocks-spring-boot-starter')
-    implementation project(':starters:protocolparams-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
     implementation project(':starters:staking-spring-boot-starter')
     implementation project(':starters:mir-spring-boot-starter')
     implementation project(':starters:live-spring-boot-starter')
@@ -22,6 +22,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     runtimeOnly 'mysql:mysql-connector-java:8.0.32'
-    runtimeOnly 'org.postgresql:postgresql:42.5.0'
+    runtimeOnly 'org.postgresql:postgresql:42.6.0'
 }
 

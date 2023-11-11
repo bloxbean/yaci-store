@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,9 @@ public class UtxoRollbackProcessorIT {
     @Autowired
     private UtxoRepository utxoRepository;
 
+    @Autowired
+    private InvalidTransactionRepository invalidTransactionRepository;
+
     @Test
     @SqlGroup({
             @Sql(value = "classpath:scripts/address_utxo_data.sql", executionPhase = BEFORE_TEST_METHOD)
@@ -37,5 +41,20 @@ public class UtxoRollbackProcessorIT {
         assertThat(count).isEqualTo(13);
     }
 
-    //TODO -- Add tests for invalid transaction rollback
+    @Test
+    @SqlGroup({
+            @Sql(value = "classpath:scripts/invalid_transaction_data.sql", executionPhase = BEFORE_TEST_METHOD)
+    })
+    void givenRollbackEvent_shouldDeleteInvalidTransactions() throws Exception {
+        RollbackEvent rollbackEvent = RollbackEvent.builder()
+                .rollbackTo(new Point(13133973, "96bb7918a219dbe0cb01d3962b78a883931da27b5a4987af7c1bd964d7ffc6ff"))
+                .currentPoint(new Point(13518703, "5470beb0a38e7793db667269e55ed74b339d35db57e640d8f82de831ee348ba0"))
+                .build();
+
+        utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
+
+        int count = invalidTransactionRepository.findAll().size();
+        assertThat(count).isEqualTo(12);
+    }
+
 }

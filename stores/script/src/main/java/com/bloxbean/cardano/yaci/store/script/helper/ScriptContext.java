@@ -14,6 +14,8 @@ public class ScriptContext {
     private String redeemer;
     private String datum;
     private String datumHash;
+    private String redeemerData;
+    private String redeemerDataHash;
 
     public String getScriptHash() {
         if (plutusScript == null)

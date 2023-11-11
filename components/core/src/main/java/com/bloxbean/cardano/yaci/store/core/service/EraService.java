@@ -29,7 +29,7 @@ public class EraService {
     private long _firstShelleySlot;
     private long _shelleyStartTime;
 
-    public void checkIfNewEra(Era era, BlockHeader blockHeader) {
+    public boolean checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
             long blockNumber = blockHeader.getHeaderBody().getBlockNumber();
             String prevBlockHash = blockHeader.getHeaderBody().getPrevHash();
@@ -41,11 +41,13 @@ public class EraService {
             }
         }
 
-        if (prevEra == Era.Byron && era != Era.Byron) { //Save shelley slot info, it could be babbage for local devenet
+        if (prevEra != null && prevEra != era) {
             log.info("Era change detected at block {} from {} to {}", blockHeader.getHeaderBody().getBlockNumber(), prevEra.getValue(), era.getValue());
             saveEra(era, blockHeader.getHeaderBody().getSlot(), blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getBlockNumber());
             prevEra = era;
-        }
+            return true;
+        } else
+            return false;
     }
 
     public void saveEra(Era era, long slot, String blockHash, long blockNumber) {
