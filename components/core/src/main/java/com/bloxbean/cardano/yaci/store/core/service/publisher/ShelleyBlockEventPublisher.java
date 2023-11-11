@@ -230,6 +230,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                         .unit(amount.getUnit() != null ? amount.getUnit().replace(".", "") : null)
                         .policyId(amount.getPolicyId())
                         .assetName(amount.getAssetName().replace('\u0000', ' '))
+                        .assetNameBytes(amount.getAssetNameBytes())
                         .quantity(amount.getQuantity())
                         .build()).collect(Collectors.toList());
     }
