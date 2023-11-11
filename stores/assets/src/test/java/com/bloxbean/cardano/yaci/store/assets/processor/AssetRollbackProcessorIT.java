@@ -27,13 +27,13 @@ class AssetRollbackProcessorIT {
     })
     void givenRollbackEvent_shouldDeleteAssets() throws Exception {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
-                .rollbackTo(new Point(10725319, "5068285d5eccc63bbfe0caa446fde9c28d77e45b6f34d37c29bbae8d47c30b9b"))
-                .currentPoint(new Point(10725426, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
+                .rollbackTo(new Point(10702061, "5068285d5eccc63bbfe0caa446fde9c28d77e45b6f34d37c29bbae8d47c30b9b"))
+                .currentPoint(new Point(10707861, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
                 .build();
 
         assetRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
         int count = txAssetRepository.findAll().size();
-        assertThat(count).isEqualTo(14);
+        assertThat(count).isEqualTo(4);
     }
 }

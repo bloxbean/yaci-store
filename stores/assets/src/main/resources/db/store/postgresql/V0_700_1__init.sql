@@ -1,8 +1,7 @@
 drop table if exists assets;
 create table assets
 (
-    id bigint not null
-       primary key generated ALWAYS AS IDENTITY,
+    id                    uuid not null primary key,
     slot                  bigint,
     tx_hash               varchar(64) not null,
     policy                varchar(56),

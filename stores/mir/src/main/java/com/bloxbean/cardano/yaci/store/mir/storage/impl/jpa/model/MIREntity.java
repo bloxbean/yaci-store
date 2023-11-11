@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigInteger;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,10 +18,10 @@ import java.math.BigInteger;
 @Entity
 @Table(name = "mir")
 public class MIREntity extends BlockAwareEntity {
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
-    @Column(name = "id")
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id", updatable = false, nullable = false)
+    private UUID id;
 
     @Column(name = "tx_hash")
     private String txHash;

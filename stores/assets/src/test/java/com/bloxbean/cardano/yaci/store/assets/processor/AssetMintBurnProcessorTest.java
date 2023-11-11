@@ -139,6 +139,7 @@ class AssetMintBurnProcessorTest {
                                 .unit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e")
                                 .policyId("34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518")
                                 .assetName("ATADAcoin")
+                                .assetNameBytes("ATADAcoin".getBytes())
                                 .quantity(BigInteger.valueOf(1))
                                 .build()))
                 .build();
@@ -150,6 +151,7 @@ class AssetMintBurnProcessorTest {
                                 .unit("3bc07438218b280dc651d825bd0e3276fc01e9faf73f0bda13c083276474734e4654")
                                 .policyId("3bc07438218b280dc651d825bd0e3276fc01e9faf73f0bda13c08327")
                                 .assetName("dtsNFT")
+                                .assetNameBytes("dtsNFT".getBytes())
                                 .quantity(BigInteger.valueOf(0))
                                 .build()))
                 .build();

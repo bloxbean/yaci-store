@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.assets.processor;
 
 import com.bloxbean.cardano.client.api.util.AssetUtil;
-import com.bloxbean.cardano.client.transaction.spec.Asset;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAssetEvent;
@@ -41,7 +41,7 @@ public class AssetMintBurnProcessor {
                                     .policy(amount.getPolicyId())
                                     .assetName(amount.getAssetName())
                                     .unit(amount.getUnit())
-                                    .fingerprint(getFingerprint(amount.getPolicyId(), amount.getAssetName()))
+                                    .fingerprint(getFingerprint(amount.getPolicyId(), amount.getAssetNameBytes()))
                                     .quantity(amount.getQuantity())
                                     .mintType(amount.getQuantity().compareTo(BigInteger.ZERO) == 1? MintType.MINT : MintType.BURN)
                                     .blockNumber(eventMetadata.getBlock())
@@ -59,11 +59,11 @@ public class AssetMintBurnProcessor {
         }
     }
 
-    private String getFingerprint(String policyId, String assetName) {
+    private String getFingerprint(String policyId, byte[] assetNameBytes) {
         try {
-            return AssetUtil.calculateFingerPrint(policyId, new Asset(assetName, BigInteger.ZERO).getNameAsHex());
+            return AssetUtil.calculateFingerPrint(policyId, HexUtil.encodeHexString(assetNameBytes));
         } catch (Exception e) {
-            log.error("Error calculating fingerprint for policy: " + policyId + ", asset: " + assetName, e);
+            log.error("Error calculating fingerprint for policy: " + policyId + ", asset (hex): " + HexUtil.encodeHexString(assetNameBytes), e);
             return null;
         }
     }
