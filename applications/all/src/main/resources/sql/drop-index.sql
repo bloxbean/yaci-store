@@ -40,3 +40,9 @@ drop index idx_stake_addr_balance_policy_asset;
 -- transaction_witness
 drop index idx_transaction_witness_tx_hash;
 
+-- metadata
+drop index idx_txn_metadata_tx_hash;
+drop index idx_txn_metadata_label;
+
+-- scripts
+drop index idx_txn_scripts_tx_hash;
