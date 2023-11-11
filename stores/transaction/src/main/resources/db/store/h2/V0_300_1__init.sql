@@ -34,7 +34,7 @@ create table transaction_witness
 (
     tx_hash varchar(64) not null,
     idx   integer not null,
-    pub_key varchar(64),
+    pub_key varchar(128),
     signature varchar(128),
     pub_keyhash varchar(56),
     type varchar(40),
