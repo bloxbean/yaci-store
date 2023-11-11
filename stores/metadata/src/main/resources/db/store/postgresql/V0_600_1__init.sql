@@ -1,8 +1,7 @@
 drop table if exists transaction_metadata;
 create table transaction_metadata
 (
-    id bigint not null
-       primary key generated ALWAYS AS IDENTITY,
+    id                    uuid not null primary key,
     slot                  bigint,
     tx_hash               varchar(64) not null,
     label                 varchar(255),

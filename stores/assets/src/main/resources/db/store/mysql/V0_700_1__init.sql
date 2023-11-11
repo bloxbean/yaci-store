@@ -1,8 +1,7 @@
 drop table if exists assets;
 create table assets
 (
-    id bigint not null auto_increment
-       primary key,
+    id                    binary(16) not null primary key,
     slot                  bigint,
     tx_hash               varchar(64) not null,
     policy                varchar(56),

@@ -12,8 +12,7 @@ create table script
 drop table if exists transaction_scripts;
 create table transaction_scripts
 (
-    id              bigint       not null
-        primary key generated ALWAYS AS IDENTITY,
+    id              uuid not null primary key,
     slot            bigint,
     block_hash      varchar(64),
     tx_hash         varchar(64) not null,

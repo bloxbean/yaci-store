@@ -1,8 +1,7 @@
 drop table if exists mir;
 create table mir
 (
-    id              bigint  not null auto_increment
-        primary key,
+    id              uuid not null primary key,
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
     pot             varchar(30),
