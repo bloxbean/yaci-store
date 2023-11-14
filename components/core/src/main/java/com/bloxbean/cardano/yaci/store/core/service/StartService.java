@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -124,6 +125,9 @@ public class StartService {
             log.info("Publishing rollback event to clean data after restart >>> " + rollbackEvent);
             publisher.publishEvent(rollbackEvent);
         }
+
+        if (blockNumber != null && blockNumber > 0L)
+            publisher.publishEvent(new PreSyncEvent(blockNumber));
 
         log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
         long diff = tip.getPoint().getSlot() - from.getSlot();
