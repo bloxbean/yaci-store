@@ -48,7 +48,13 @@ public class DBIndexService {
     @Transactional
     public void handleFirstBlockEventToCreateIndex(BlockHeaderEvent blockHeaderEvent) {
         if (blockHeaderEvent.getMetadata().isSyncMode() && !indexApplied.get()) {
-           reApplyIndexes();
+            if (blockHeaderEvent.getMetadata().getBlock() < 50000) {
+                 reApplyIndexes();
+            } else {
+                log.info("<< I can't manage the creation of automatic indexes because the number of actual blocks in database exceeds the # of blocks threshold for automatic index application >>");
+                log.info("Please manually reapply the required indexes if not done yet. For more details, refer to the 'create-index.sql' file !!!");
+                indexApplied.set(true);
+            }
         }
     }
 

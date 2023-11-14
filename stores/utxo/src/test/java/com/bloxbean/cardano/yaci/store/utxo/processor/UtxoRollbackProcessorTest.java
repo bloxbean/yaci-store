@@ -38,7 +38,7 @@ class UtxoRollbackProcessorTest {
 
         utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
-        Mockito.verify(utxoStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verify(utxoStorage, Mockito.times(1)).deleteUnspentBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         Mockito.verify(invalidTransactionStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
     }
 }

@@ -73,27 +73,6 @@ public class AddressUtxoEntity extends BlockAwareEntity {
     @Column(name = "reference_script_hash")
     private String referenceScriptHash;
 
-    @Column(name = "spent")
-    private Boolean spent;
-
-    @Column(name = "spent_at_slot")
-    private Long spentAtSlot;
-
-    @Column(name = "spent_at_block")
-    private Long spentAtBlock;
-
-    @Column(name = "spent_at_block_hash")
-    private String spentAtBlockHash;
-
-    @Column(name = "spent_block_time")
-    private Long spentBlockTime;
-
-    @Column(name = "spent_epoch")
-    private Integer spentEpoch;
-
-    @Column(name = "spent_tx_hash")
-    private String spentTxHash;
-
     @Column(name = "is_collateral_return")
     private Boolean isCollateralReturn;
 }

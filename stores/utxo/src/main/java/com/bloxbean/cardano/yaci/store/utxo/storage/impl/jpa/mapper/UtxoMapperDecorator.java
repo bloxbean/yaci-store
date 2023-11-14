@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.mapper;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.model.TxInputEntity;
 
 public class UtxoMapperDecorator implements UtxoMapper {
     public static final int MAX_ADDR_SIZE = 500;
@@ -33,6 +35,11 @@ public class UtxoMapperDecorator implements UtxoMapper {
             addressUtxo.setOwnerAddr(entity.getOwnerAddrFull());
 
         return addressUtxo;
+    }
+
+    @Override
+    public TxInput toTxInput(TxInputEntity txInputEntity) {
+        return delegate.toTxInput(txInputEntity);
     }
 
     @Override

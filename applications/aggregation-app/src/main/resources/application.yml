@@ -4,6 +4,7 @@ spring:
 
 store:
   account:
+    enabled: true
     batch-balance-aggregation-enabled: true
     batch-balance-aggregation-scheduler-enabled: true
     balance-aggregation-enabled: false

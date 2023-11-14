@@ -24,9 +24,6 @@ CREATE INDEX if not exists idx_address_utxo_owner_stakekey_hash
 CREATE INDEX if not exists idx_address_utxo_epoch
     ON address_utxo(epoch);
 
-CREATE INDEX if not exists idx_address_utxo_spent_epoch
-    ON address_utxo(spent_epoch);
-
 -- asset store
 
 CREATE INDEX if not exists idx_assets_tx_hash
