@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,14 +26,12 @@ public class AddressService {
 
     public List<Utxo> getUtxoByAddress(@NonNull String address, int page, int count, Order order) {
         return utxoStorage.findUtxoByAddress(address, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByAddressAndAsset(@NonNull String address, String asset, int page, int count, Order order) {
         return utxoStorage.findUtxoByAddressAndAsset(address, asset, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }
@@ -43,7 +40,6 @@ public class AddressService {
         String paymentCred = getPaymentCredential(addrOrPaymentCredOrVkh);
 
         return utxoStorage.findUtxoByPaymentCredential(paymentCred, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }
@@ -52,21 +48,18 @@ public class AddressService {
         String paymentCred = getPaymentCredential(addrOrPaymentCredOrVkh);
 
         return utxoStorage.findUtxoByPaymentCredentialAndAsset(paymentCred, asset, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByStakeAddress(@NonNull String stakeAddress, int page, int count, Order order) {
         return utxoStorage.findUtxoByStakeAddress(stakeAddress, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByStakeAddressAndAsset(@NonNull String stakeAddress, String asset, int page, int count, Order order) {
         return utxoStorage.findUtxoByStakeAddressAndAsset(stakeAddress, asset, page, count, order)
-                .orElse(Collections.emptyList())
                 .stream()
                 .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
     }

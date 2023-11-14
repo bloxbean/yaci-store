@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
+import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
@@ -7,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
 import jakarta.annotation.PostConstruct;
@@ -75,7 +77,7 @@ public class AccountBalanceBatchProcessingService {
 
                 log.info("Total blocks to process {}", blocks.size());
 
-                List<AddressUtxo> inputs = utxoStorage.findSpentUtxosBetweenBlocks(startBlock, endBlock);
+                List<Tuple<AddressUtxo, TxInput>> inputs = utxoStorage.findSpentUtxosBetweenBlocks(startBlock, endBlock);
                 List<AddressUtxo> outputs = utxoStorage.findUnspentUtxosBetweenBlocks(startBlock, endBlock);
 
                 log.info("Total inputs {} and outputs {} found for block {} to {}", inputs.size(), outputs.size(), startBlock, endBlock);
@@ -128,11 +130,14 @@ public class AccountBalanceBatchProcessingService {
         }
     }
 
-    private List<AddressBalance> handleAddressBalance(List<AddressUtxo> inputs, List<AddressUtxo> outputs) {
+    private List<AddressBalance> handleAddressBalance(List<Tuple<AddressUtxo, TxInput>> inputTuples, List<AddressUtxo> outputs) {
         Map<String, AddressBalance> addressBalanceMap = new HashMap<>();
 
         //Update inputs
-        for (AddressUtxo input : inputs) {
+        for (Tuple<AddressUtxo, TxInput> inputTuple : inputTuples) {
+            var input = inputTuple._1;
+            var spentInfo = inputTuple._2;
+
             if (input.getAmounts() == null) {
                 log.error("Input amounts are null for tx: " + input.getTxHash());
                 log.error("Input: " + input);
@@ -144,16 +149,16 @@ public class AccountBalanceBatchProcessingService {
                     AddressBalance addressBalance = addressBalanceMap.get(key);
                     addressBalance.setQuantity(addressBalance.getQuantity().subtract(amount.getQuantity()));
                 } else {
-                    accountBalanceStorage.getAddressBalance(input.getOwnerAddr(), amount.getUnit(), input.getSpentAtSlot() - 1)
+                    accountBalanceStorage.getAddressBalance(input.getOwnerAddr(), amount.getUnit(), spentInfo.getSpentAtSlot() - 1)
                             .ifPresentOrElse(addressBalance -> {
                                 BigInteger newBalance = addressBalance.getQuantity().subtract(amount.getQuantity());
                                 AddressBalance newAddressBalance = AddressBalance.builder()
                                         .address(input.getOwnerAddr())
-                                        .blockHash(input.getSpentAtBlockHash())
-                                        .slot(input.getSpentAtSlot())
-                                        .blockNumber(input.getSpentAtBlock())
-                                        .blockTime(input.getSpentBlockTime())
-                                        .epoch(input.getSpentEpoch())
+                                        .blockHash(spentInfo.getSpentAtBlockHash())
+                                        .slot(spentInfo.getSpentAtSlot())
+                                        .blockNumber(spentInfo.getSpentAtBlock())
+                                        .blockTime(spentInfo.getSpentBlockTime())
+                                        .epoch(spentInfo.getSpentEpoch())
                                         .paymentCredential(input.getOwnerPaymentCredential())
                                         .stakeAddress(input.getOwnerStakeAddr())
                                         .unit(amount.getUnit())
@@ -166,11 +171,11 @@ public class AccountBalanceBatchProcessingService {
                             }, () -> {
                                 AddressBalance newAddressBalance = AddressBalance.builder()
                                         .address(input.getOwnerAddr())
-                                        .blockHash(input.getSpentAtBlockHash())
-                                        .slot(input.getSpentAtSlot())
-                                        .blockNumber(input.getSpentAtBlock())
-                                        .blockTime(input.getSpentBlockTime())
-                                        .epoch(input.getSpentEpoch())
+                                        .blockHash(spentInfo.getSpentAtBlockHash())
+                                        .slot(spentInfo.getSpentAtSlot())
+                                        .blockNumber(spentInfo.getSpentAtBlock())
+                                        .blockTime(spentInfo.getSpentBlockTime())
+                                        .epoch(spentInfo.getSpentEpoch())
                                         .paymentCredential(input.getOwnerPaymentCredential())
                                         .stakeAddress(input.getOwnerStakeAddr())
                                         .unit(amount.getUnit())
@@ -235,11 +240,14 @@ public class AccountBalanceBatchProcessingService {
         return addressBalanceMap.values().stream().toList();
     }
 
-    private List<StakeAddressBalance> handleStakeAddressBalance(List<AddressUtxo> inputs, List<AddressUtxo> outputs) {
+    private List<StakeAddressBalance> handleStakeAddressBalance(List<Tuple<AddressUtxo, TxInput>> inputTuples, List<AddressUtxo> outputs) {
         Map<String, StakeAddressBalance> stakeBalanceMap = new HashMap<>();
 
         //Update inputs
-        for (AddressUtxo input : inputs) {
+        for (var inputTuple : inputTuples) {
+            var input = inputTuple._1;
+            var spentInfo = inputTuple._2;
+
             if (StringUtil.isEmpty(input.getOwnerStakeAddr())) //Don't process if stake address is empty
                 continue;
 
@@ -249,16 +257,16 @@ public class AccountBalanceBatchProcessingService {
                     StakeAddressBalance addressBalance = stakeBalanceMap.get(key);
                     addressBalance.setQuantity(addressBalance.getQuantity().subtract(amount.getQuantity()));
                 } else {
-                    accountBalanceStorage.getStakeAddressBalance(input.getOwnerStakeAddr(), amount.getUnit(), input.getSpentAtSlot() - 1)
+                    accountBalanceStorage.getStakeAddressBalance(input.getOwnerStakeAddr(), amount.getUnit(), spentInfo.getSpentAtSlot() - 1)
                             .ifPresentOrElse(stakeAddrBalance -> {
                                 BigInteger newBalance = stakeAddrBalance.getQuantity().subtract(amount.getQuantity());
                                 StakeAddressBalance newStakeAddrBalance = StakeAddressBalance.builder()
                                         .address(input.getOwnerStakeAddr())
-                                        .blockHash(input.getSpentAtBlockHash())
-                                        .slot(input.getSpentAtSlot())
-                                        .blockNumber(input.getSpentAtBlock())
-                                        .blockTime(input.getSpentBlockTime())
-                                        .epoch(input.getSpentEpoch())
+                                        .blockHash(spentInfo.getSpentAtBlockHash())
+                                        .slot(spentInfo.getSpentAtSlot())
+                                        .blockNumber(spentInfo.getSpentAtBlock())
+                                        .blockTime(spentInfo.getSpentBlockTime())
+                                        .epoch(spentInfo.getSpentEpoch())
                                         .stakeCredential(input.getOwnerStakeCredential())
                                         .unit(amount.getUnit())
                                         .policy(amount.getPolicyId())
@@ -270,11 +278,11 @@ public class AccountBalanceBatchProcessingService {
                             }, () -> {
                                 StakeAddressBalance newStakeAddrBalance = StakeAddressBalance.builder()
                                         .address(input.getOwnerStakeAddr())
-                                        .blockHash(input.getSpentAtBlockHash())
-                                        .slot(input.getSpentAtSlot())
-                                        .blockNumber(input.getSpentAtBlock())
-                                        .blockTime(input.getSpentBlockTime())
-                                        .epoch(input.getSpentEpoch())
+                                        .blockHash(spentInfo.getSpentAtBlockHash())
+                                        .slot(spentInfo.getSpentAtSlot())
+                                        .blockNumber(spentInfo.getSpentAtBlock())
+                                        .blockTime(spentInfo.getSpentBlockTime())
+                                        .epoch(spentInfo.getSpentEpoch())
                                         .stakeCredential(input.getOwnerStakeCredential())
                                         .unit(amount.getUnit())
                                         .policy(amount.getPolicyId())

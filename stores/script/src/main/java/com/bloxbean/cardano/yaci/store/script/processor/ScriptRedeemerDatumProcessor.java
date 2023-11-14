@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
@@ -15,19 +16,22 @@ import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumHash;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutusScriptHash;
 
@@ -41,6 +45,16 @@ public class ScriptRedeemerDatumProcessor {
     private final RedeemerDatumMatcher redeemerMatcher;
     private final TxScriptFinder txScriptFinder;
     private final ApplicationEventPublisher publisher;
+
+    @Value("${store.executor.blocks-partition-size:10}")
+    private int blockBatchPartitionSize;
+
+    private Executor executor;
+
+    @PostConstruct
+    public void init() {
+        executor = Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     /**
      * This method is called when parallel mode is disabled.
@@ -65,7 +79,21 @@ public class ScriptRedeemerDatumProcessor {
     @Transactional
     public void handleScriptTransactionEventForBlockCacheList(BatchBlocksProcessedEvent blockCacheProcessedEvent) {
         var blockCacheList = blockCacheProcessedEvent.getBlockCaches();
+        List<List<BatchBlock>> partitions = partition(blockCacheList, blockBatchPartitionSize);
+        List<CompletableFuture> futures = new ArrayList<>();
+        for (List<BatchBlock> partition : partitions) {
+            var future = CompletableFuture.supplyAsync(() -> {
+                processBlockPartition(partition);
+                return true;
+            }, executor);
+            futures.add(future);
+        }
 
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .join();
+    }
+
+    private void processBlockPartition(List<BatchBlock> blockCacheList) {
         blockCacheList.stream().parallel().forEach(blockCache -> {
             for (Transaction transaction : blockCache.getTransactions()) {
                 handleScriptTransaction(blockCache.getMetadata(), transaction);

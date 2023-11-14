@@ -15,14 +15,17 @@ import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
@@ -50,6 +55,13 @@ public class AccountBalanceProcessor {
     private final AccountConfigService accountConfigService;
     private final AccountBalanceBatchProcessingService accountBalanceBatchProcessingService;
 
+    private Executor executor;
+
+    @PostConstruct
+    void init() {
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
+    }
+
     @EventListener
     @Transactional
     @SneakyThrows
@@ -62,7 +74,7 @@ public class AccountBalanceProcessor {
 
         if (accountStoreProperties.isBatchBalanceAggregationEnabled()) {
             //If true, we can process balance for this block here, otherwise return
-            if (!handlePendingBalanceCalculation(addressUtxoEvent))
+            if (!handlePendingBalanceCalculation(new PreSyncEvent(addressUtxoEvent.getEventMetadata().getBlock())))
                 return;
         }
 
@@ -81,7 +93,7 @@ public class AccountBalanceProcessor {
                                 addressBalances.stream().map(addressBalance -> new Tuple<>(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
                         accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, metadata.getSlot());
                     }
-                });
+                }, executor);
 
         CompletableFuture<Void> stakeBalancesFuture = CompletableFuture.supplyAsync(() -> handleStakeAddressBalance(addressUtxoEvent))
                 .thenAcceptAsync(stakeBalances -> {
@@ -92,7 +104,7 @@ public class AccountBalanceProcessor {
                                 stakeBalances.stream().map(stakeAddrBalance -> new Tuple<>(stakeAddrBalance.getAddress(), stakeAddrBalance.getUnit())).distinct().toList();
                         accountBalanceCleanupHelper.deleteStakeBalanceBeforeConfirmedSlot(stakeAddrUnitList, metadata.getSlot());
                     }
-                });
+                }, executor);
 
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(addressBalancesFuture, stakeBalancesFuture);
         // Wait for both steps to complete
@@ -106,11 +118,12 @@ public class AccountBalanceProcessor {
         accountConfigService.upateConfig(ConfigIds.LAST_PROCESSED_BLOCK, null, currentBlock);
     }
 
-    private boolean handlePendingBalanceCalculation(AddressUtxoEvent addressUtxoEvent) {
+    @EventListener
+    public boolean handlePendingBalanceCalculation(PreSyncEvent preSyncEvent) {
         var lastSyncBlockConfig = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
         var lastBalanceSyncBlock = lastSyncBlockConfig.map(AccountConfigEntity::getBlock).orElse(null);
 
-        if (lastBalanceSyncBlock != null && lastBalanceSyncBlock >= addressUtxoEvent.getEventMetadata().getBlock() - 1) {
+        if (lastBalanceSyncBlock != null && lastBalanceSyncBlock >= preSyncEvent.getStartBlock() - 1) {
             if (log.isDebugEnabled())
                 log.debug("Balance calculation is already in sync with the block {}.", lastBalanceSyncBlock);
             return true;
@@ -126,25 +139,25 @@ public class AccountBalanceProcessor {
                 return false;
 
             //Let's check if the main sync process can handle the balance calculation for remaining blocks
-            long blockDiff = addressUtxoEvent.getEventMetadata().getBlock() - lastBalanceSyncBlock;
+            long blockDiff = preSyncEvent.getStartBlock() - lastBalanceSyncBlock;
             if (lastBalanceSyncBlock != null &&
                     blockDiff < 2 * accountStoreProperties.getBatchBalanceAggregationSafeBlockDiff()) {
                 accountConfigService
                         .upateConfig(ConfigIds.ACCOUNT_BALANCE_AGGR_JOB_ID, ConfigStatus.BATCH_AGGR_REQUEST_TO_STOP,
-                                addressUtxoEvent.getEventMetadata().getBlock());
+                                preSyncEvent.getStartBlock());
                 log.info("Main sync process is requesting to stop the aggregation job.");
             }
             return false;
         } else if (aggrJobStatus == ConfigStatus.BATCH_AGGR_STOPPED) {
             log.info("Aggregation job has been stopped. " +
                     "So let's do remaining balance calculation in main sync.");
-            long currentBlockMinus20 = addressUtxoEvent.getEventMetadata().getBlock() - 10;
+            long currentBlockMinus20 = preSyncEvent.getStartBlock() - 10;
             //As schedule job has probably stopped
             accountBalanceBatchProcessingService.runBalanceCalculationBatch(currentBlockMinus20, 600);
-            accountBalanceBatchProcessingService.runBalanceCalculationBatch(addressUtxoEvent.getEventMetadata().getBlock() - 1, 1);
+            accountBalanceBatchProcessingService.runBalanceCalculationBatch(preSyncEvent.getStartBlock() - 1, 1);
 
             accountConfigService.upateConfig(ConfigIds.ACCOUNT_BALANCE_SYNC_JOB_ID, ConfigStatus.IN_SYNC,
-                    addressUtxoEvent.getEventMetadata().getBlock());
+                    preSyncEvent.getStartBlock());
             return true;
         } else {
             if (log.isDebugEnabled())
@@ -158,16 +171,16 @@ public class AccountBalanceProcessor {
         EventMetadata metadata = addressUtxoEvent.getEventMetadata();
         Map<String, AddressBalance> addressBalanceMap = new HashMap<>();
         for (TxInputOutput txInputOutput : addressUtxoEvent.getTxInputOutputs()) {
-            List<AddressUtxo> inputs = txInputOutput.getInputs();
+            List<TxInput> inputs = txInputOutput.getInputs();
             List<AddressUtxo> outputs = txInputOutput.getOutputs();
 
             List<UtxoKey> inputUtxoKeys = inputs.stream()
                     .map(input -> new UtxoKey(input.getTxHash(), input.getOutputIndex()))
                     .collect(Collectors.toList());
 
-            inputs = utxoClient.getUtxosByIds(inputUtxoKeys);
+            var resolveInputs = utxoClient.getUtxosByIds(inputUtxoKeys);
             //Update inputs
-            for (AddressUtxo input : inputs) {
+            for (AddressUtxo input : resolveInputs) {
                 if (input.getAmounts() == null) {
                     log.error("Input amounts are null for tx: " + txInputOutput.getTxHash());
                     log.error("Input: " + input);
@@ -283,11 +296,17 @@ public class AccountBalanceProcessor {
         EventMetadata metadata = addressUtxoEvent.getEventMetadata();
         Map<String, StakeAddressBalance> stakeBalanceMap = new HashMap<>();
         for (TxInputOutput txInputOutput : addressUtxoEvent.getTxInputOutputs()) {
-            List<AddressUtxo> inputs = txInputOutput.getInputs();
+            List<TxInput> inputs = txInputOutput.getInputs();
             List<AddressUtxo> outputs = txInputOutput.getOutputs();
 
+            List<UtxoKey> inputUtxoKeys = inputs.stream()
+                    .map(input -> new UtxoKey(input.getTxHash(), input.getOutputIndex()))
+                    .collect(Collectors.toList());
+
+            var resolveInputs = utxoClient.getUtxosByIds(inputUtxoKeys);
+
             //Update inputs
-            for (AddressUtxo input : inputs) {
+            for (AddressUtxo input : resolveInputs) {
                 if (StringUtil.isEmpty(input.getOwnerStakeAddr())) //Don't process if stake address is empty
                     continue;
 
