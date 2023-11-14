@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.utxo.domain;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -17,6 +18,6 @@ import java.util.List;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TxInputOutput {
     private String txHash;
-    private List<AddressUtxo> inputs;
+    private List<TxInput> inputs;
     private List<AddressUtxo> outputs;
 }

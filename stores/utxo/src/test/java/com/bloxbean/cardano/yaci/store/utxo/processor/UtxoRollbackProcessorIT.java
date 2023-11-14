@@ -31,14 +31,14 @@ public class UtxoRollbackProcessorIT {
     })
     void givenRollbackEvent_shouldDeleteAddressUtxos() throws Exception {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
-                .rollbackTo(new Point(14486302, "5068285d5eccc63bbfe0caa446fde9c28d77e45b6f34d37c29bbae8d47c30b9b"))
-                .currentPoint(new Point(14487479, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
+                .rollbackTo(new Point(44185446, "925347abf637eb2d436349b78589bb257e396c0a4cc133236b76e56ffebc57bb"))
+                .currentPoint(new Point(44185802, "64069e4f2351d25a572189c0df03f2c9e0a1200b9fe897cc5fb74106ed6ed6ad"))
                 .build();
 
         utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
         int count = utxoRepository.findAll().size();
-        assertThat(count).isEqualTo(13);
+        assertThat(count).isEqualTo(14);
     }
 
     @Test

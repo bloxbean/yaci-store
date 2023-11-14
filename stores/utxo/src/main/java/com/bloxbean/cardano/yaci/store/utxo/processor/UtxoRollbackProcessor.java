@@ -21,10 +21,13 @@ public class UtxoRollbackProcessor {
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
 
-        int deleted = utxoStorage.deleteBySlotGreaterThan(rollBackToSlot);
+        int deletedUnspent = utxoStorage.deleteUnspentBySlotGreaterThan(rollBackToSlot);
+        int deletedSpent = utxoStorage.deleteSpentBySlotGreaterThan(rollBackToSlot);
         int invalidTxnDeleted = invalidTransactionStorage.deleteBySlotGreaterThan(rollBackToSlot);
 
-        log.info("Rollback -- {} address_utxos records", deleted);
+
+        log.info("Rollback -- {} address_utxos records", deletedUnspent);
+        log.info("Rollback -- {} spent output records", deletedSpent);
         log.info("Rollback -- {} invalid_transactions records", invalidTxnDeleted);
     }
 }

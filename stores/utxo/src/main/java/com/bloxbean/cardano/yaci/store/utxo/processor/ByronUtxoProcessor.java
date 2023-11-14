@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.core.model.byron.ByronTxOut;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -46,45 +47,38 @@ public class ByronUtxoProcessor {
         List<TxInputOutput> txInputOutputList = new ArrayList<>();
         for (ByronTx byronTx : byronTxList) {
             //set spent for input
-            List<AddressUtxo> inputAddressUtxos = byronTx.getInputs().stream()
+            List<TxInput> spentOutputs = byronTx.getInputs().stream()
                     .map(txIn -> new UtxoKey(txIn.getTxId(), txIn.getIndex()))
                     .map(utxoKey -> {
-                        AddressUtxo addressUtxo = new AddressUtxo();
-                        addressUtxo.setTxHash(utxoKey.getTxHash());
-                        addressUtxo.setOutputIndex(utxoKey.getOutputIndex());
-                        addressUtxo.setSpent(true);
-                        addressUtxo.setSpentAtSlot(metadata.getSlot());
-                        addressUtxo.setSpentAtBlock(metadata.getBlock());
-                        addressUtxo.setSpentAtBlockHash(metadata.getBlockHash());
-                        addressUtxo.setSpentBlockTime(metadata.getBlockTime());
-                        addressUtxo.setSpentEpoch(metadata.getEpochNumber());
-                        addressUtxo.setSpentTxHash(byronTx.getTxHash());
-                        return addressUtxo;
+                        TxInput txInput = new TxInput();
+                        txInput.setTxHash(utxoKey.getTxHash());
+                        txInput.setOutputIndex(utxoKey.getOutputIndex());
+                        txInput.setSpentAtSlot(metadata.getSlot());
+                        txInput.setSpentAtBlock(metadata.getBlock());
+                        txInput.setSpentAtBlockHash(metadata.getBlockHash());
+                        txInput.setSpentBlockTime(metadata.getBlockTime());
+                        txInput.setSpentEpoch(metadata.getEpochNumber());
+                        txInput.setSpentTxHash(byronTx.getTxHash());
+                        return txInput;
                     }).collect(Collectors.toList());
 
             List<Utxo> utxos = getUtxosFromByronOutput(byronTx);
             List<AddressUtxo> outputAddressUtxos = utxos.stream()
                     .map(utxo -> getAddressUtxo(metadata, utxo))
-                    .map(addressUtxo -> { //Check if utxo is already there, only possible in a multi-instance environment
-                        utxoStorage.findById(addressUtxo.getTxHash(), addressUtxo.getOutputIndex())
-                                .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
-                        return addressUtxo;
-                    })
                     .collect(Collectors.toList());
 
             if (outputAddressUtxos.size() > 0) //unspent utxos
                 utxoStorage.saveUnspent(outputAddressUtxos);
 
             //Update existing utxos as spent
-            if (inputAddressUtxos.size() > 0) //spent utxos
-                utxoStorage.saveSpent(inputAddressUtxos);
+            if (spentOutputs.size() > 0) //spent utxos
+                utxoStorage.saveSpent(spentOutputs);
 
             //publish event
             if (outputAddressUtxos.size() > 0)
-                txInputOutputList.add(new TxInputOutput(byronTx.getTxHash(), inputAddressUtxos, outputAddressUtxos));
+                txInputOutputList.add(new TxInputOutput(byronTx.getTxHash(), spentOutputs, outputAddressUtxos));
         }
 
-     // if (txInputOutputList.size() > 0)
         publisher.publishEvent(new AddressUtxoEvent(metadata, txInputOutputList));
     }
 

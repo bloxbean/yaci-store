@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
@@ -50,7 +51,7 @@ public class UtxoProcessorTest {
     private MeterRegistry meterRegistry;
 
     @Captor
-    ArgumentCaptor<List<AddressUtxo>> argCaptor;
+    ArgumentCaptor<List> argCaptor;
 
 
     @BeforeEach
@@ -77,7 +78,7 @@ public class UtxoProcessorTest {
         utxoProcessor.handleTransactionEvent(transactionEvent);
         verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
 
-        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
+        List<TxInput> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(3);
@@ -90,19 +91,12 @@ public class UtxoProcessorTest {
 
         assertThat(spentUtxos.stream().map(addressUtxo -> addressUtxo.getOutputIndex()))
                 .contains(1, 2, 0);
-        assertThat(spentUtxos.stream().map(addressUtxo -> addressUtxo.getSpent()))
-                .contains(true, true, true);
         assertThat(spentUtxos.get(0).getSpentTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(1).getSpentTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(2).getSpentTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
-        assertThat(spentUtxos.stream().filter(addressUtxo -> addressUtxo.getAmounts() != null).collect(Collectors.toList())).hasSize(0);
 
         assertThat(unspentUtxos.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(unspentUtxos.get(1).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
-        assertThat(unspentUtxos.get(0).getSpentTxHash()).isNull();
-        assertThat(unspentUtxos.get(1).getSpentTxHash()).isNull();
-        assertThat(unspentUtxos.get(0).getSpent()).isFalse();
-        assertThat(unspentUtxos.get(1).getSpent()).isFalse();
         assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getBody().getOutputs().get(0).getAmounts().get(0).getQuantity());
     }
 
@@ -127,20 +121,16 @@ public class UtxoProcessorTest {
         utxoProcessor.handleTransactionEvent(transactionEvent);
         verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
 
-        List<AddressUtxo> spentUtxos = argCaptor.getAllValues().get(0);
+        List<TxInput> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
 
         assertThat(spentUtxos).hasSize(2);
         assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(0).getOutputIndex()).isEqualTo(4);
-        assertThat(spentUtxos.get(0).getSpent()).isTrue();
         assertThat(spentUtxos.get(1).getTxHash()).isEqualTo("eeee529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(spentUtxos.get(1).getOutputIndex()).isEqualTo(0);
-        assertThat(spentUtxos.get(1).getSpent()).isTrue();
 
         assertThat(unspentUtxos.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
-        assertThat(unspentUtxos.get(0).getSpentTxHash()).isNull();
-        assertThat(unspentUtxos.get(0).getSpent()).isFalse();
         assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getCollateralReturnUtxo().getAmounts().get(0).getQuantity());
     }
 

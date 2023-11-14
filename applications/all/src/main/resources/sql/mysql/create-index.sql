@@ -24,9 +24,6 @@ CREATE INDEX idx_address_utxo_owner_stakekey_hash
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
 
-CREATE INDEX idx_address_utxo_spent_epoch
-    ON address_utxo(spent_epoch);
-
 -- asset store
 
 CREATE INDEX idx_assets_tx_hash
@@ -91,3 +88,16 @@ CREATE INDEX idx_stake_addr_balance_policy_asset
 
 CREATE INDEX idx_transaction_witness_tx_hash
     ON transaction_witness(tx_hash);
+
+-- metadata
+
+CREATE INDEX idx_txn_metadata_tx_hash
+    ON transaction_metadata(tx_hash);
+
+CREATE INDEX idx_txn_metadata_label
+    ON transaction_metadata(label);
+
+-- scripts
+
+CREATE INDEX idx_txn_scripts_tx_hash
+    ON transaction_scripts (tx_hash);
