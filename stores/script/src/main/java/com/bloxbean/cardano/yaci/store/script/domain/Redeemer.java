@@ -10,8 +10,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigInteger;
-
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
@@ -20,7 +18,7 @@ import java.math.BigInteger;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Redeemer {
     private RedeemerTag tag;
-    private BigInteger index;
+    private Integer index;
     private String data;
     private ExUnits exUnits;
 }

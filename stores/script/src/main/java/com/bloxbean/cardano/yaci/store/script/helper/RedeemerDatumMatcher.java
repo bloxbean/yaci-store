@@ -1,23 +1,24 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.client.address.Address;
-import com.bloxbean.cardano.client.plutus.spec.Redeemer;
 import com.bloxbean.cardano.client.plutus.spec.RedeemerTag;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.store.common.util.Util;
-import com.bloxbean.cardano.client.util.Tuple;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.core.model.TransactionInput;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -47,48 +48,33 @@ public class RedeemerDatumMatcher {
         List<TransactionInput> inputs = new ArrayList<>(transaction.getBody().getInputs());
         List<com.bloxbean.cardano.yaci.core.model.Redeemer> redeemers = transaction.getWitnesses().getRedeemers();
         List<ScriptContext> scriptContexts = redeemers.stream()
-                .map(redeemer -> Util.deserialize(redeemer.getCbor())
-                        .map(deRedeemer -> new Tuple<>(redeemer, deRedeemer)))
-                .filter(Optional::isPresent)
-                .map(redeemerTuple -> {
-                    com.bloxbean.cardano.yaci.core.model.Redeemer orgRedeemer = redeemerTuple.get()._1;
-                    com.bloxbean.cardano.client.plutus.spec.Redeemer deRedeemer = redeemerTuple.get()._2;
-
+                .map(redeemer -> {
                     ScriptContext scriptContext;
-                    if (deRedeemer.getTag() == RedeemerTag.Spend) {
-                        scriptContext = findSpendScriptFromRedeemer(deRedeemer, inputs, scriptsMap)
+                    if (redeemer.getTag() == RedeemerTag.Spend) {
+                        scriptContext = findSpendScriptFromRedeemer(redeemer, inputs, scriptsMap)
                                 .orElse(new ScriptContext());
-                        scriptContext.setRedeemer(orgRedeemer.getCbor()); //set redeemer here to save serialization cost
-                    } else if (deRedeemer.getTag() == RedeemerTag.Mint) {
+                        scriptContext.setRedeemer(redeemer); //set redeemer here to save serialization cost
+                    } else if (redeemer.getTag() == RedeemerTag.Mint) {
                         if (log.isDebugEnabled())
                             log.debug("Mint tag : " + transaction.getTxHash());
                         //check mint policy
-                        scriptContext = findMintScriptForRedeemer(deRedeemer, distinctPolicies, scriptsMap)
+                        scriptContext = findMintScriptForRedeemer(redeemer, distinctPolicies, scriptsMap)
                                 .orElse(new ScriptContext());
-                        scriptContext.setRedeemer(orgRedeemer.getCbor());
-                    } else if (deRedeemer.getTag() == RedeemerTag.Cert) {
+                        scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Cert) {
                         if (log.isDebugEnabled())
                             log.debug("Redeemer Cert : " + transaction.getTxHash());
-                        scriptContext = findCertScriptForRedeemer(deRedeemer, transaction.getBody().getCertificates(), scriptsMap)
+                        scriptContext = findCertScriptForRedeemer(redeemer, transaction.getBody().getCertificates(), scriptsMap)
                                 .orElse(new ScriptContext());
-                        scriptContext.setRedeemer(orgRedeemer.getCbor());
-                    } else if (deRedeemer.getTag() == RedeemerTag.Reward) {
+                        scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Reward) {
                         if (log.isDebugEnabled())
                             log.info("Redeemer Reward : " + transaction.getTxHash());
-                        scriptContext = findRewardScriptForRedeemer(deRedeemer, transaction, scriptsMap).orElse(new ScriptContext());
-                        scriptContext.setRedeemer(orgRedeemer.getCbor());
+                        scriptContext = findRewardScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext.setRedeemer(redeemer);
                     } else {
                         scriptContext = new ScriptContext();
-                        scriptContext.setRedeemer(orgRedeemer.getCbor());
-                    }
-
-                    //Set redeemer data and redeemer data hash
-                    if (deRedeemer.getData() != null) {
-                        String redeemerData = deRedeemer.getData().serializeToHex();
-                        String redeemerDataHash = deRedeemer.getData().getDatumHash();
-
-                        scriptContext.setRedeemerData(redeemerData);
-                        scriptContext.setRedeemerDataHash(redeemerDataHash);
+                        scriptContext.setRedeemer(redeemer);
                     }
 
                     return scriptContext;
@@ -98,7 +84,7 @@ public class RedeemerDatumMatcher {
     }
 
     public Optional<ScriptContext> findSpendScriptFromRedeemer(Redeemer redeemer,
-                                                              List<TransactionInput> inputs, Map<String, PlutusScript> scriptsMap) {
+                                                               List<TransactionInput> inputs, Map<String, PlutusScript> scriptsMap) {
         //Sort inputs and find the right input for redeemer
         TransactionInput input = getScriptInputFromRedeemer(redeemer, inputs);
 
@@ -136,7 +122,7 @@ public class RedeemerDatumMatcher {
                 .map(entry -> entry.getKey())
                 .collect(Collectors.toList());
 
-        int index = redeemer.getIndex().intValue();
+        int index = redeemer.getIndex();
         String rewardAddress = rewardAddresses.get(index);
 
         Address address = new Address(HexUtil.decodeHexString(rewardAddress));
@@ -156,7 +142,7 @@ public class RedeemerDatumMatcher {
         if (certificates == null ||certificates.size() == 0)
             return Optional.empty();
 
-        int index = redeemer.getIndex().intValue();
+        int index = redeemer.getIndex();
 
         if (index >= certificates.size())
             return Optional.empty();
@@ -187,7 +173,7 @@ public class RedeemerDatumMatcher {
         if (policies == null)
             return Optional.empty();
 
-        int index = redeemer.getIndex().intValue();
+        int index = redeemer.getIndex();
         if (index >= policies.size()) {
             return Optional.empty();
         }
@@ -209,7 +195,7 @@ public class RedeemerDatumMatcher {
                 .collect(Collectors.toList());
         copyInputs.sort((o1, o2) -> (o1.getTransactionId() + "#" + o1.getIndex()).compareTo(o2.getTransactionId() + "#" + o2.getIndex()));
 
-        int index = redeemer.getIndex().intValue();
+        int index = redeemer.getIndex();
         return copyInputs.get(index);
     }
 }

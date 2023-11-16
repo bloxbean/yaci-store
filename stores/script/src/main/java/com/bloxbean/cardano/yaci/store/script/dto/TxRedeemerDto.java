@@ -18,6 +18,7 @@ public class TxRedeemerDto {
     private Integer txIndex;
     private String purpose;
     private String scriptHash;
+    private String datumHash;
     private String redeemerDataHash;
     private String unitMem;
     private String unitSteps;
