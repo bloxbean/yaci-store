@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
+import com.bloxbean.cardano.client.plutus.spec.RedeemerTag;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.persistence.*;
@@ -8,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
 import java.util.UUID;
 
 @Data
@@ -37,13 +39,26 @@ public class TxScriptEntity extends BlockAwareEntity {
     @Column(name = "script_type")
     private ScriptType type;
 
-    @Column(name = "redeemer")
-    private String redeemer;
-
-    @Column(name = "datum")
-    private String datum;
+    @Column(name = "redeemer_cbor")
+    private String redeemerCbor;
 
     @Column(name = "datum_hash")
     private String datumHash;
+
+    @Column(name = "unit_mem")
+    private BigInteger unitMem;
+
+    @Column(name = "unit_steps")
+    private BigInteger unitSteps;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose")
+    private RedeemerTag purpose;
+
+    @Column(name = "redeemer_index")
+    private Integer redeemerIndex;
+
+    @Column(name = "redeemer_datahash")
+    private String redeemerDatahash;
 
 }

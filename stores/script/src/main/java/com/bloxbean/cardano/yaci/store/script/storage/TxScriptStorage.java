@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import java.util.List;
 
 public interface TxScriptStorage {
-    List<TxScript> saveAll(List<TxScript> txScripts);
+    void saveAll(List<TxScript> txScripts);
 
     int deleteBySlotGreaterThan(long slot);
 

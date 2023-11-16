@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
@@ -135,6 +136,12 @@ public class ScriptRedeemerDatumProcessor {
                     if (StringUtil.isEmpty(scriptContext.getDatumHash()) && !StringUtil.isEmpty(scriptContext.getDatum()))
                         scriptContext.setDatumHash(ScriptUtil.getDatumHash(scriptContext.getDatum()));
 
+                    Redeemer redeemer;
+                    if (scriptContext.getRedeemer() != null)
+                        redeemer = scriptContext.getRedeemer();
+                    else
+                        redeemer = new Redeemer();
+
                     return TxScript.builder()
                             .txHash(transaction.getTxHash())
                             .slot(metadata.getSlot())
@@ -143,17 +150,24 @@ public class ScriptRedeemerDatumProcessor {
                             .blockTime(metadata.getBlockTime())
                             .scriptHash(scriptContext.getScriptHash())
                             .type(scriptContext.getPlutusScriptType())
-                            .redeemer(scriptContext.getRedeemer())
                             .datum(scriptContext.getDatum())
                             .datumHash(scriptContext.getDatumHash())
+                            .redeemerCbor(redeemer.getCbor())
+                            .unitMem(redeemer.getExUnits() != null? redeemer.getExUnits().getMem(): null)
+                            .unitSteps(redeemer.getExUnits() != null? redeemer.getExUnits().getSteps(): null)
+                            .purpose(redeemer.getTag())
+                            .redeemerIndex(redeemer.getIndex())
+                            .redeemerData(redeemer.getData() != null? redeemer.getData().getCbor(): null)
+                            .redeemerDatahash(redeemer.getData() != null? redeemer.getData().getHash(): null)
                             .build();
                 }).collect(Collectors.toList());
 
         //Save redeemer data by data hash in Datum storage
         if (scriptContexts != null && scriptContexts.size() > 0) {
             List<Datum> redeemerDataList = scriptContexts.stream()
-                    .filter(scriptContext -> !StringUtil.isEmpty(scriptContext.getRedeemerDataHash()))
-                    .map(scriptContext -> new Datum(scriptContext.getRedeemerDataHash(), scriptContext.getRedeemerData(), transaction.getTxHash()))
+                    .map(scriptContext -> scriptContext.getRedeemer())
+                    .filter(redeemer -> redeemer != null)
+                    .map(redeemer -> new Datum(redeemer.getData().getHash(), redeemer.getData().getCbor(), transaction.getTxHash()))
                     .toList();
 
             if (redeemerDataList.size() > 0) {
