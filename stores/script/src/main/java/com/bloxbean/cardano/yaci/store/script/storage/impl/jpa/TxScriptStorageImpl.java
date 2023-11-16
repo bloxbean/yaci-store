@@ -16,11 +16,9 @@ public class TxScriptStorageImpl implements TxScriptStorage {
     private final ScriptMapper scriptMapper;
 
     @Override
-    public List<TxScript> saveAll(List<TxScript> txScripts) {
+    public void saveAll(List<TxScript> txScripts) {
         List<TxScriptEntity> txScriptEntities = txScripts.stream().map(scriptMapper::toTxScriptEntity).collect(Collectors.toList());
-        List<TxScriptEntity> savedEntities = txScriptRepository.saveAll(txScriptEntities);
-
-        return savedEntities.stream().map(scriptMapper::toTxScript).collect(Collectors.toList());
+        txScriptRepository.saveAll(txScriptEntities);
     }
 
     @Override
@@ -30,7 +28,25 @@ public class TxScriptStorageImpl implements TxScriptStorage {
 
     @Override
     public List<TxScript> findByTxHash(String txHash) {
-        return txScriptRepository.findByTxHash(txHash)
-                .stream().map(scriptMapper::toTxScript).collect(Collectors.toList());
+        List<Object[]> results = txScriptRepository.findByTxHash(txHash);
+        return results.stream()
+                .map(result -> {
+                    TxScriptEntity txScriptEntity = (TxScriptEntity) result[0];
+                    var datum = (String)result[1];
+                    var redeemerData = (String)result[2];
+
+                    var txScript = scriptMapper.toTxScript(txScriptEntity);
+
+                    if (datum != null) {
+                        txScript.setDatum(datum);
+                    }
+
+                    if (redeemerData != null) {
+                        txScript.setRedeemerData(redeemerData);
+                    }
+
+                    return txScript;
+                }).toList();
     }
+
 }

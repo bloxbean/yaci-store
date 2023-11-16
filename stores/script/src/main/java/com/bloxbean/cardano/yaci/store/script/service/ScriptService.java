@@ -1,11 +1,11 @@
 package com.bloxbean.cardano.yaci.store.script.service;
 
+import com.bloxbean.cardano.client.plutus.spec.ExUnits;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.plutus.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.dto.TxRedeemerDto;
-import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
@@ -46,14 +46,12 @@ public class ScriptService {
                         .orElse(null);
             }
 
-            Redeemer redeemerDto = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
-                    .map(redeemer -> Redeemer.builder()
-                            .tag(redeemer.getTag())
-                            .index(redeemer.getIndex())
-                            .exUnits(redeemer.getExUnits())
-                            .data(redeemer.getData() != null ? redeemer.getData().serializeToHex() : null)
-                            .build())
-                    .orElse(null);
+            Redeemer redeemerDto =  Redeemer.builder()
+                            .tag(txScript.getPurpose())
+                            .index(txScript.getRedeemerIndex())
+                            .exUnits(new ExUnits(txScript.getUnitMem(), txScript.getUnitSteps()))
+                            .data(txScript.getRedeemerData())
+                            .build();
 
             return TxContractDetails.builder()
                     .txHash(txHash)
@@ -91,21 +89,15 @@ public class ScriptService {
             return Collections.EMPTY_LIST;
 
         return txScripts.stream()
-                .filter(txScript -> txScript.getRedeemer() != null && !txScript.getRedeemer().isEmpty())
-                .map(txScript -> {
-            com.bloxbean.cardano.client.plutus.spec.Redeemer redeemer = ScriptUtil.deserializeRedeemer(txScript.getRedeemer())
-                    .orElseThrow(() -> new IllegalStateException("Unable to deserialize redeemer : " + txScript.getRedeemer()));
-            String dataHash = redeemer.getData().getDatumHash();
-
-            return TxRedeemerDto.builder()
-                    .txIndex(redeemer.getIndex().intValue())
-                    .purpose(redeemer.getTag().toString().toLowerCase())
-                    .scriptHash(txScript.getScriptHash())
-                    .redeemerDataHash(dataHash)
-                    .unitMem(String.valueOf(redeemer.getExUnits().getMem()))
-                    .unitSteps(String.valueOf(redeemer.getExUnits().getSteps()))
-                    //.fee(String.valueOf()) //TODO -- calcuate script cost from mem and steps
-                    .build();
-        }).collect(Collectors.toList());
+                .map(txScript -> TxRedeemerDto.builder()
+                        .txIndex(txScript.getRedeemerIndex())
+                        .purpose(txScript.getPurpose().toString().toLowerCase())
+                        .scriptHash(txScript.getScriptHash())
+                        .datumHash(txScript.getDatumHash())
+                        .redeemerDataHash(txScript.getRedeemerDatahash())
+                        .unitMem(String.valueOf(txScript.getUnitMem()))
+                        .unitSteps(String.valueOf(txScript.getUnitSteps()))
+                        //.fee(String.valueOf()) //TODO -- calcuate script cost from mem and steps
+                        .build()).collect(Collectors.toList());
     }
 }
