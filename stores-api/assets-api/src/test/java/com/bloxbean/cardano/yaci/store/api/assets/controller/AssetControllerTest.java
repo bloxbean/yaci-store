@@ -1,8 +1,8 @@
-package com.bloxbean.cardano.yaci.store.assets.controller;
+package com.bloxbean.cardano.yaci.store.api.assets.controller;
 
+import com.bloxbean.cardano.yaci.store.api.assets.service.AssetService;
 import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
-import com.bloxbean.cardano.yaci.store.assets.service.AssetService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

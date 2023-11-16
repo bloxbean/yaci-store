@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:assets")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Assets API'
+                description = 'Yaci Store Assets API Module'
+            }
+        }
+    }
+}

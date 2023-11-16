@@ -16,4 +16,10 @@ public class AssetsStoreProperties {
        private boolean enabled = true;
     }
 
+    @Getter
+    @Setter
+    public static final class AssetsApi {
+        private boolean enabled = true;
+    }
+
 }

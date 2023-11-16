@@ -1,9 +1,9 @@
-package com.bloxbean.cardano.yaci.store.assets;
+package com.bloxbean.cardano.yaci.store.api.assets;
 
+import com.bloxbean.cardano.yaci.store.api.assets.storage.AssetReader;
+import com.bloxbean.cardano.yaci.store.api.assets.storage.AssetReaderImpl;
+import com.bloxbean.cardano.yaci.store.api.assets.storage.repository.TxAssetReadRepository;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetMapper;
-import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
-import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorageImpl;
-import com.bloxbean.cardano.yaci.store.assets.storage.repository.TxAssetRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -15,20 +15,20 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
 @ConditionalOnProperty(
-        prefix = "store.assets",
+        prefix = "store.assets.api",
         name = "enabled",
         havingValue = "true",
         matchIfMissing = true
 )
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.assets"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.assets.storage"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.assets.storage"})
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.api.assets"})
+@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.api.assets.storage"})
+@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.api.assets.storage"})
 @EnableTransactionManagement
-public class AssetsStoreConfiguration {
+public class AssetsApiConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AssetStorage assetStorage(TxAssetRepository txAssetRepository, AssetMapper assetMapper) {
-        return new AssetStorageImpl(txAssetRepository, assetMapper);
+    public AssetReader assetReader(TxAssetReadRepository txAssetReadRepository, AssetMapper assetMapper) {
+        return new AssetReaderImpl(txAssetReadRepository, assetMapper);
     }
 }

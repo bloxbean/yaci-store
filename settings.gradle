@@ -30,6 +30,8 @@ include 'stores:staking'
 include 'stores:mir'
 include 'stores:live'
 
+include 'stores-api:assets-api'
+
 include 'aggregates:account'
 
 include ':starters:spring-boot-starter'

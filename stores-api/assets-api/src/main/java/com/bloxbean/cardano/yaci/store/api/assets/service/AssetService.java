@@ -1,8 +1,7 @@
-package com.bloxbean.cardano.yaci.store.assets.service;
+package com.bloxbean.cardano.yaci.store.api.assets.service;
 
+import com.bloxbean.cardano.yaci.store.api.assets.storage.AssetReader;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
-import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
-import io.micrometer.observation.ObservationFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,33 +13,33 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class AssetService {
-    private final AssetStorage assetStorage;
+    private final AssetReader assetReader;
 
     public List<TxAsset> getAssetsByTx(String txHash) {
-        return assetStorage.findByTxHash(txHash);
+        return assetReader.findByTxHash(txHash);
     }
 
     public List<TxAsset> getAssetTxsByFingerprint(String fingerprint, int page, int count) {
-        return assetStorage.findByFingerprint(fingerprint, page, count);
+        return assetReader.findByFingerprint(fingerprint, page, count);
     }
 
     public List<TxAsset> getAssetTxsByPolicyId(String policyId, int page, int count) {
-        return assetStorage.findByPolicy(policyId, page, count);
+        return assetReader.findByPolicy(policyId, page, count);
     }
 
     public List<TxAsset> getAssetTxsByUnit(String unit, int page, int count) {
-        return assetStorage.findByUnit(unit, page, count);
+        return assetReader.findByUnit(unit, page, count);
     }
 
     public Optional<Integer> getSupplyByFingerprint(String fingerprint) {
-        return assetStorage.getSupplyByFingerprint(fingerprint);
+        return assetReader.getSupplyByFingerprint(fingerprint);
     }
 
     public Optional<Integer> getSupplyByUnit(String unit) {
-        return assetStorage.getSupplyByUnit(unit);
+        return assetReader.getSupplyByUnit(unit);
     }
 
     public Optional<Integer> getSupplyByPolicy(String policyId) {
-        return assetStorage.getSupplyByPolicy(policyId);
+        return assetReader.getSupplyByPolicy(policyId);
     }
 }

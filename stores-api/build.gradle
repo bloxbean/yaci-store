@@ -1,0 +1,7 @@
+subprojects {
+    apply from : "../../publish-common.gradle"
+
+    dependencies {
+
+    }
+}
