@@ -1,8 +1,8 @@
-package com.bloxbean.cardano.yaci.store.epoch.controller;
+package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
-import com.bloxbean.cardano.yaci.store.epoch.service.EpochParamService;
+import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

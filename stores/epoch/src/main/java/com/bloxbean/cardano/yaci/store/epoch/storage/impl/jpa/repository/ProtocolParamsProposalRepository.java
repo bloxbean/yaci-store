@@ -12,7 +12,5 @@ public interface ProtocolParamsProposalRepository extends JpaRepository<Protocol
 
     List<ProtocolParamsProposalEntity> findByTargetEpoch(int targetEpoch);
 
-    List<ProtocolParamsProposalEntity> findByEpoch(int epoch);
-
     int deleteBySlotGreaterThan(Long slot);
 }

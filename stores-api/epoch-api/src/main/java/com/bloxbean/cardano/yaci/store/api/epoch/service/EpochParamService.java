@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.epoch.service;
+package com.bloxbean.cardano.yaci.store.api.epoch.service;
 
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;

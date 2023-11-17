@@ -32,6 +32,7 @@ include 'stores:live'
 
 include 'stores-api:assets-api'
 include 'stores-api:blocks-api'
+include 'stores-api:epoch-api'
 
 include 'aggregates:account'
 
