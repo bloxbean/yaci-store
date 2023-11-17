@@ -1,10 +1,10 @@
-package com.bloxbean.cardano.yaci.store.blocks.controller;
+package com.bloxbean.cardano.yaci.store.api.blocks.controller;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
-import com.bloxbean.cardano.yaci.store.blocks.dto.BlockDto;
-import com.bloxbean.cardano.yaci.store.blocks.dto.BlockDtoMapper;
-import com.bloxbean.cardano.yaci.store.blocks.service.BlockService;
+import com.bloxbean.cardano.yaci.store.api.blocks.dto.BlockDto;
+import com.bloxbean.cardano.yaci.store.api.blocks.dto.BlockDtoMapper;
+import com.bloxbean.cardano.yaci.store.api.blocks.service.BlockService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

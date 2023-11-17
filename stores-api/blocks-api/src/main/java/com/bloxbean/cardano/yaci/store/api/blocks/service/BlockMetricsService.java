@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.blocks.service;
+package com.bloxbean.cardano.yaci.store.api.blocks.service;
 
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
+import com.bloxbean.cardano.yaci.store.api.blocks.storage.BlockReader;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -11,15 +11,15 @@ import java.util.function.Supplier;
 @Component
 @Slf4j
 public class BlockMetricsService {
-    private final BlockStorage blockStorage;
+    private final BlockReader blockReader;
 
-    public BlockMetricsService(BlockStorage blockStorage, MeterRegistry meterRegistry) {
-        this.blockStorage = blockStorage;
+    public BlockMetricsService(BlockReader blockReader, MeterRegistry meterRegistry) {
+        this.blockReader = blockReader;
         Gauge.builder("yaci.store.block.recent", getLastBlock()).register(meterRegistry);
     }
 
     private Supplier<Number> getLastBlock() {
-        return () -> blockStorage.findRecentBlock()
+        return () -> blockReader.findRecentBlock()
                 .map(block -> block.getNumber())
                 .orElse(0L);
     }

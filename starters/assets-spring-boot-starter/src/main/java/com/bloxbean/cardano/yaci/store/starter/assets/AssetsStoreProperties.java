@@ -14,12 +14,7 @@ public class AssetsStoreProperties {
     @Setter
     public static final class Assets  {
        private boolean enabled = true;
-    }
-
-    @Getter
-    @Setter
-    public static final class AssetsApi {
-        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

@@ -3,6 +3,7 @@ dependencies {
     api project(":components:core")
     api project(":components:events")
     api project(":stores:blocks")
+    api project(":stores-api:blocks-api")
     api project(":stores:transaction")
 
     implementation(libs.guava)

@@ -15,8 +15,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
 @ConditionalOnProperty(
-        prefix = "store.assets.api",
-        name = "enabled",
+        prefix = "store.assets",
+        name = "api-enabled",
         havingValue = "true",
         matchIfMissing = true
 )

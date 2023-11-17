@@ -1,7 +1,8 @@
-package com.bloxbean.cardano.yaci.store.blocks.controller;
+package com.bloxbean.cardano.yaci.store.api.blocks.controller;
+
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.blocks.domain.EpochsPage;
-import com.bloxbean.cardano.yaci.store.blocks.service.EpochService;
+import com.bloxbean.cardano.yaci.store.api.blocks.service.EpochReadService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -13,9 +14,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 public class EpochController {
 
-    private EpochService epochService;
+    private EpochReadService epochService;
 
-    public EpochController(EpochService epochService) {
+    public EpochController(EpochReadService epochService) {
         this.epochService = epochService;
     }
 

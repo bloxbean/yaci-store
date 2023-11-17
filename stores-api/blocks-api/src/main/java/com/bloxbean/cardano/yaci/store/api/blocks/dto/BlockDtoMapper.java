@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blocks.dto;
+package com.bloxbean.cardano.yaci.store.api.blocks.dto;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
