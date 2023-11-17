@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.metadata.service;
+package com.bloxbean.cardano.yaci.store.api.metadata.service;
 
+import com.bloxbean.cardano.yaci.store.api.metadata.storage.TxMetadataReader;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
-import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,13 +12,13 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class MetadataService {
-    private final TxMetadataStorage metadataStorage;
+    private final TxMetadataReader metadataReader;
 
     public List<TxMetadataLabel> getMetadataForTx(String txHash) {
-        return metadataStorage.findByTxHash(txHash);
+        return metadataReader.findByTxHash(txHash);
     }
 
     public List<TxMetadataLabel> getMetadataByLabel(String label, int page, int count) {
-        return metadataStorage.findByLabel(label, page, count);
+        return metadataReader.findByLabel(label, page, count);
     }
 }

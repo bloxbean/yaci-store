@@ -6,9 +6,6 @@ import com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.model.TxMetadat
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.jpa.repository.TxMetadataLabelRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import java.util.List;
 
@@ -25,25 +22,6 @@ public class TxMetadataStorageImpl implements TxMetadataStorage {
 
         List<TxMetadataLabelEntity> savedEntities = metadataLabelRepository.saveAll(txMetadataLabelEntities);
         return savedEntities.stream()
-                .map(metadataMapper::toTxMetadataLabel)
-                .toList();
-    }
-
-    @Override
-    public List<TxMetadataLabel> findByTxHash(String txHash) {
-        return metadataLabelRepository.findByTxHash(txHash)
-                .stream()
-                .map(metadataMapper::toTxMetadataLabel)
-                .toList();
-    }
-
-    @Override
-    public List<TxMetadataLabel> findByLabel(String label, int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
-
-        return metadataLabelRepository.findByLabel(label, sortedBySlot)
-                .stream()
                 .map(metadataMapper::toTxMetadataLabel)
                 .toList();
     }

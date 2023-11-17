@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.metadata.dto;
+package com.bloxbean.cardano.yaci.store.api.metadata.dto;
 
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

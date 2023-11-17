@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.metadata.dto;
+package com.bloxbean.cardano.yaci.store.api.metadata.dto;
 
 import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;

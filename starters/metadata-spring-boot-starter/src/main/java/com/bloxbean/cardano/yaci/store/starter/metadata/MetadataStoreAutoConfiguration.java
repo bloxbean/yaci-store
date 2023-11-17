@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.metadata;
 
+import com.bloxbean.cardano.yaci.store.api.metadata.MetadataApiConfiguration;
 import com.bloxbean.cardano.yaci.store.metadata.MetadataStoreConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +10,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(MetadataStoreProperties.class)
-@Import(MetadataStoreConfiguration.class)
+@Import({MetadataStoreConfiguration.class, MetadataApiConfiguration.class})
 @Slf4j
 public class MetadataStoreAutoConfiguration {
 
