@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.mir.storage.impl.jpa.projection;
+package com.bloxbean.cardano.yaci.store.api.mir.projection;
 
 import java.math.BigInteger;
 

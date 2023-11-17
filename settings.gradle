@@ -34,6 +34,7 @@ include 'stores-api:assets-api'
 include 'stores-api:blocks-api'
 include 'stores-api:epoch-api'
 include 'stores-api:metadata-api'
+include 'stores-api:mir-api'
 
 include 'aggregates:account'
 
