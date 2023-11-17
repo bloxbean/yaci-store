@@ -67,6 +67,11 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
+    public int deleteAddressBalanceByBlockGreaterThan(Long block) {
+        return addressBalanceRepository.deleteByBlockNumberGreaterThan(block);
+    }
+
+    @Override
     public Optional<StakeAddressBalance> getStakeAddressBalance(String address, String unit, long slot) {
         return stakeBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
                 .map(mapper::toStakeBalance);
@@ -105,6 +110,11 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Override
     public int deleteStakeAddressBalanceBySlotGreaterThan(Long slot) {
         return stakeBalanceRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    @Override
+    public int deleteStakeBalanceByBlockGreaterThan(Long block) {
+        return stakeBalanceRepository.deleteByBlockNumberGreaterThan(block);
     }
 
     @Override

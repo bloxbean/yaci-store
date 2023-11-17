@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AccountConfigEntity;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
@@ -17,12 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
@@ -41,6 +44,21 @@ public class AccountBalanceBatchProcessingService {
     public void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    @Transactional
+    public void cleanupBeforeStart() {
+        Optional<AccountConfigEntity> accountConfig = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
+        if (!accountConfig.isPresent())
+            return;
+
+        Long lastAccountBalanceProcessedBlock = accountConfig.get().getBlock();
+        if (lastAccountBalanceProcessedBlock != null && lastAccountBalanceProcessedBlock != 0) {
+            int addrBalDeleted = accountBalanceStorage.deleteAddressBalanceByBlockGreaterThan(lastAccountBalanceProcessedBlock);
+            int stakeBalDeleted = accountBalanceStorage.deleteStakeBalanceByBlockGreaterThan(lastAccountBalanceProcessedBlock);
+            log.info("# of deleted address_balance records {} after block {}", addrBalDeleted, lastAccountBalanceProcessedBlock);
+            log.info("# of deleted stake_address_balance records {} after block {}", stakeBalDeleted, lastAccountBalanceProcessedBlock);
+        }
     }
 
     public void runBalanceCalculationBatch(Long maxBlockNumber, int blockBatchSize) {

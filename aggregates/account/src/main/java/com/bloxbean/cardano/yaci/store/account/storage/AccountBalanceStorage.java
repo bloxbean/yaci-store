@@ -61,6 +61,13 @@ public interface AccountBalanceStorage {
     int deleteAddressBalanceBySlotGreaterThan(Long slot);
 
     /**
+     * Delete all address balances after the block
+     * @param block - block
+     * @return number of records deleted
+     */
+    int deleteAddressBalanceByBlockGreaterThan(Long block);
+
+    /**
      * Get stake address balance for the given address, unit at the given slot
      * @param address stake address
      * @param unit unit
@@ -108,6 +115,13 @@ public interface AccountBalanceStorage {
      * @return number of records deleted
      */
     int deleteStakeAddressBalanceBySlotGreaterThan(Long slot);
+
+    /**
+     * Delete all stake address balances after the block
+     * @param block
+     * @return number of records deleted
+     */
+    int deleteStakeBalanceByBlockGreaterThan(Long block);
 
     //Optional -- Required for controller
 

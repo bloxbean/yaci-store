@@ -33,4 +33,5 @@ public interface StakeBalanceRepository extends JpaRepository<StakeAddressBalanc
     int deleteAllBeforeSlot(String address, String unit, Long slot);
 
     int deleteBySlotGreaterThan(Long slot);
+    int deleteByBlockNumberGreaterThan(Long block);
 }

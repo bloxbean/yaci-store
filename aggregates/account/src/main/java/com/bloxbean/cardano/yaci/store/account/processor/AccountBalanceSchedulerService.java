@@ -63,6 +63,7 @@ public class AccountBalanceSchedulerService {
         maxBlockNumber = maxBlockNumber - accountStoreProperties.getBatchBalanceAggregationSafeBlockDiff();
         if (maxBlockNumber < 0) return;
 
+        accountBalanceBatchProcessingService.cleanupBeforeStart();
         accountBalanceBatchProcessingService.runBalanceCalculationBatch(maxBlockNumber, accountStoreProperties.getBatchBalanceAggregationBatchSize());
     }
 

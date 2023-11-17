@@ -43,6 +43,7 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
     int deleteAllBeforeSlot(String address, String unit, Long slot);
 
     int deleteBySlotGreaterThan(Long slot);
+    int deleteByBlockNumberGreaterThan(Long block);
 
     @Query("select MAX (ab.blockNumber) from AddressBalanceEntity ab")
     Long findMaxBlock();
