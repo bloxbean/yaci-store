@@ -48,7 +48,11 @@ public class LocalProtocolParamService {
 
     @Transactional
     public void fetchAndSetCurrentProtocolParams() {
-        getCurrentProtocolParamsFromNode().subscribe(protocolParamUpdate -> {
+        getCurrentProtocolParamsFromNode()
+                .doOnError(throwable -> {
+                    log.error("Local protocol param sync error {}", throwable.getMessage());
+                })
+                .subscribe(protocolParamUpdate -> {
                     LocalProtocolParamsEntity entity = new LocalProtocolParamsEntity();
                     entity.setId(1L);
                     entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
