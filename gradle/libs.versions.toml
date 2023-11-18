@@ -1,5 +1,5 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.3.0-beta7"
+yaci = "com.bloxbean.cardano:yaci:0.3.0-beta8"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.5.0"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.5.0"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.5.0"
@@ -12,3 +12,6 @@ mapstruct="org.mapstruct:mapstruct:1.5.3.Final"
 mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.3.Final"
 
 assertj-core="org.assertj:assertj-core:3.24.2"
+
+spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.1.8"
+spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.1.8"
