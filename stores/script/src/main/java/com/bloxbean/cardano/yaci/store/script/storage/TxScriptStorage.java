@@ -9,5 +9,4 @@ public interface TxScriptStorage {
 
     int deleteBySlotGreaterThan(long slot);
 
-    List<TxScript> findByTxHash(String txHash);
 }

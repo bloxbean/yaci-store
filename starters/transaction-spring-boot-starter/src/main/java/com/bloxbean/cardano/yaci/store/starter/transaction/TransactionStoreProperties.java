@@ -14,6 +14,7 @@ public class TransactionStoreProperties {
     @Setter
     public static final class Transaction {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

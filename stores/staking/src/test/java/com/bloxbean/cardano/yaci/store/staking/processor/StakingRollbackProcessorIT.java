@@ -2,10 +2,10 @@ package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.DelegationRepository;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.PoolRegistrationRepository;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.PoolRetirementRepository;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.jpa.repository.StakeRegistrationRepository;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.DelegationRepository;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRegistrationRepository;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRetirementRepository;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.StakeRegistrationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

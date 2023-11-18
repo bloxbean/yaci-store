@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:metadata")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Metadata API'
+                description = 'Yaci Store Metadata API Module'
+            }
+        }
+    }
+}

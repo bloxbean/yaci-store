@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:epoch")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Epoch API'
+                description = 'Yaci Store Epoch API Module'
+            }
+        }
+    }
+}

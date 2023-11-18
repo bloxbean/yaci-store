@@ -1,10 +1,10 @@
 package com.bloxbean.cardano.yaci.store.account;
 
-import com.bloxbean.cardano.yaci.store.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.AccountBalanceStorageImpl;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository.AddressBalanceRepository;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.repository.StakeBalanceRepository;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.AccountBalanceStorageImpl;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
+import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;

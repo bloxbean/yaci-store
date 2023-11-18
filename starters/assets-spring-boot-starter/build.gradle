@@ -1,6 +1,7 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":stores:assets")
+    api project(":stores-api:assets-api")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }

@@ -14,6 +14,7 @@ public class MIRStoreProperties {
     @Setter
     public static final class MIR  {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

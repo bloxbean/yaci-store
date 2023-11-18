@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.mir;
 
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorage;
-import com.bloxbean.cardano.yaci.store.mir.storage.impl.jpa.MIRRepository;
-import com.bloxbean.cardano.yaci.store.mir.storage.impl.jpa.MIRStorageImpl;
-import com.bloxbean.cardano.yaci.store.mir.storage.impl.jpa.mapper.MIRMapper;
+import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorageReader;
+import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRRepository;
+import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRStorageImpl;
+import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.mir.storage.impl.mapper.MIRMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -33,6 +35,13 @@ public class MIRStoreConfiguration {
     public MIRStorage mirStorage(MIRRepository mirRepository,
                                      MIRMapper mapper) {
         return new MIRStorageImpl(mirRepository, mapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MIRStorageReader mirStorageReader(MIRRepository mirRepository,
+                                       MIRMapper mapper) {
+        return new MIRStorageReaderImpl(mirRepository, mapper);
     }
 
 }

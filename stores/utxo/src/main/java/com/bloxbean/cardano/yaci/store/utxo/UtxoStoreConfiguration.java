@@ -1,12 +1,14 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.InvalidTransactionStorageImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.UtxoStorageImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.TxInputRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.InvalidTransactionStorageImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,5 +42,11 @@ public class UtxoStoreConfiguration {
     @ConditionalOnMissingBean
     public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository) {
         return new InvalidTransactionStorageImpl(invalidTransactionRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
+        return new UtxoStorageReaderImpl(utxoRepository, spentOutputRepository, dslContext);
     }
 }
