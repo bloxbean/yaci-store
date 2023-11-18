@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
-import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

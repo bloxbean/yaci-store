@@ -14,6 +14,7 @@ public class EpochStoreProperties {
     @Setter
     public static final class ProtocolParams {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

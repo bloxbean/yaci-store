@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.Update;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.ProtocolParamsProposalStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.UpdateEvent;

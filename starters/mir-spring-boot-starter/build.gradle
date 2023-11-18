@@ -1,6 +1,7 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":stores:mir")
+    api project(":stores-api:mir-api")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }

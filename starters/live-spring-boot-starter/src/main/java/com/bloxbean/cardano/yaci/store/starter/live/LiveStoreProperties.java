@@ -14,6 +14,7 @@ public class LiveStoreProperties {
     @Setter
     public static final class Live  {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

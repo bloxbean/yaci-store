@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.assets;
 
+import com.bloxbean.cardano.yaci.store.api.assets.AssetsApiConfiguration;
 import com.bloxbean.cardano.yaci.store.assets.AssetsStoreConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +10,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AssetsStoreProperties.class)
-@Import(AssetsStoreConfiguration.class)
+@Import({AssetsStoreConfiguration.class, AssetsApiConfiguration.class})
 @Slf4j
 public class AssetsStoreAutoConfiguration {
 

@@ -12,7 +12,7 @@ import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

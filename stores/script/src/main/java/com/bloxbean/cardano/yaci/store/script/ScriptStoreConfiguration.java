@@ -1,15 +1,11 @@
 package com.bloxbean.cardano.yaci.store.script;
 
-import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
-import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
-import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.DatumStorageImpl;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.ScriptStorageImpl;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.TxScriptStorageImpl;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.DatumRepository;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.ScriptRepository;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.TxScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.*;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.*;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.ScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -48,5 +44,23 @@ public class ScriptStoreConfiguration {
     @ConditionalOnMissingBean
     public ScriptStorage scriptStorage(ScriptRepository scriptRepository, ScriptMapper scriptMapper) {
         return new ScriptStorageImpl(scriptRepository, scriptMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TxScriptStorageReader txScriptStorageReader(TxScriptRepository txScriptRepository, ScriptMapper scriptMapper) {
+        return new TxScriptStorageReaderImpl(txScriptRepository, scriptMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DatumStorageReader datumStorageReader(DatumRepository datumRepository) {
+        return new DatumStorageReaderImpl(datumRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ScriptStorageReader scriptStorageReader(ScriptRepository scriptRepository, ScriptMapper scriptMapper) {
+        return new ScriptStorageReaderImpl(scriptRepository, scriptMapper);
     }
 }

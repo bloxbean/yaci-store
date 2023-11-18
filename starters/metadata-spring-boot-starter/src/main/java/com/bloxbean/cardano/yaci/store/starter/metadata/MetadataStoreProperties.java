@@ -14,6 +14,7 @@ public class MetadataStoreProperties {
     @Setter
     public static final class Metadata  {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

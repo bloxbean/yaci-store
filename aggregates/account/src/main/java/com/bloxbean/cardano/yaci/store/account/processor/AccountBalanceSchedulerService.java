@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AccountConfigEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AccountConfigEntity;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
 import jakarta.annotation.PostConstruct;
@@ -63,6 +63,7 @@ public class AccountBalanceSchedulerService {
         maxBlockNumber = maxBlockNumber - accountStoreProperties.getBatchBalanceAggregationSafeBlockDiff();
         if (maxBlockNumber < 0) return;
 
+        accountBalanceBatchProcessingService.cleanupBeforeStart();
         accountBalanceBatchProcessingService.runBalanceCalculationBatch(maxBlockNumber, accountStoreProperties.getBatchBalanceAggregationBatchSize());
     }
 

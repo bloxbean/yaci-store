@@ -1,0 +1,14 @@
+dependencies {
+    api project(":stores:staking")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Staking API'
+                description = 'Yaci Store Staking API Module'
+            }
+        }
+    }
+}

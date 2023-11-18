@@ -1,16 +1,12 @@
 package com.bloxbean.cardano.yaci.store.blocks;
 
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.EpochStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.RollbackStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.BlockStorageImpl;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.EpochStorageImpl;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.RollbackStorageImpl;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.BlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.EpochMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.EpochRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.RollbackRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.*;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.*;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.EpochMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.EpochRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.RollbackRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -45,6 +41,18 @@ public class BlocksStoreConfiguration {
     @ConditionalOnMissingBean
     public EpochStorage epochStorage(EpochRepository epochRepository, EpochMapper epochMapper) {
         return new EpochStorageImpl(epochRepository, epochMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BlockStorageReader blockStorageReader(BlockRepository blockReadRepository, BlockMapper blockMapper) {
+        return new BlockStorageReaderImpl(blockReadRepository, blockMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public EpochStorageReader epochStorageReader(EpochRepository epochReadRepository, EpochMapper epochMapper) {
+        return new EpochStorageReaderImpl(epochReadRepository, epochMapper);
     }
 
     @Bean
