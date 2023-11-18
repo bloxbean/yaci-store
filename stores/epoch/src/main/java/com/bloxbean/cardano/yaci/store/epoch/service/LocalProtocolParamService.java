@@ -70,6 +70,13 @@ public class LocalProtocolParamService {
         } catch (Exception e) {
             //Ignore the error
         }
+
+        try {
+            localStateQueryClient.acquire().block(Duration.ofSeconds(5));
+        } catch (Exception e) {
+            //Ignore the error
+        }
+
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
