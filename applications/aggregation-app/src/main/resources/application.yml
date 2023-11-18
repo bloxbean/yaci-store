@@ -1,6 +1,15 @@
+server:
+  port: 8081
+
 spring:
   banner:
     location: classpath:/banner.txt
+  application:
+    name: Yaci Store Aggregator App
+  boot:
+    admin:
+      client:
+        enabled: false
 
 store:
   account:
@@ -11,3 +20,4 @@ store:
     history-cleanup-enabled: false
 
 apiPrefix: /api/v1
+

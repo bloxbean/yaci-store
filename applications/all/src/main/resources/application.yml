@@ -1,6 +1,14 @@
 spring:
   banner:
     location: classpath:/banner.txt
+  application:
+    name: Yaci Store App
+
+  boot:
+    admin:
+      client:
+        enabled: false
+
 #  jpa:
 #    hibernate:
 #      ddl-auto: none
@@ -11,6 +19,7 @@ spring:
 #        jdbc:
 #          batch_size: 30
 #          order_inserts: true
+
   flyway:
     locations: classpath:db/store/{vendor}
     out-of-order: true
