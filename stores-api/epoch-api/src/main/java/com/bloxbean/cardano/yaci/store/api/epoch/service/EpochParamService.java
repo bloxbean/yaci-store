@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.api.epoch.service;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

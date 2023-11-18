@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:script")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Script API'
+                description = 'Yaci Stroe Script API Module'
+            }
+        }
+    }
+}

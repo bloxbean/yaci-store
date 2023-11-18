@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.assets.service;
 
-import com.bloxbean.cardano.yaci.store.api.assets.storage.AssetReader;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
+import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,7 +13,7 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class AssetService {
-    private final AssetReader assetReader;
+    private final AssetStorageReader assetReader;
 
     public List<TxAsset> getAssetsByTx(String txHash) {
         return assetReader.findByTxHash(txHash);

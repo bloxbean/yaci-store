@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.api.blocks.service;
 
-import com.bloxbean.cardano.yaci.store.api.blocks.storage.BlockReader;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +13,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class BlockService {
-    private final BlockReader blockReader;
+    private final BlockStorageReader blockReader;
 
     public Optional<Block> getBlockByNumber(long blockNumber) {
         return blockReader.findByBlock(blockNumber);

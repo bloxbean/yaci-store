@@ -14,6 +14,7 @@ public class StakingStoreProperties {
     @Setter
     public static final class Staking  {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

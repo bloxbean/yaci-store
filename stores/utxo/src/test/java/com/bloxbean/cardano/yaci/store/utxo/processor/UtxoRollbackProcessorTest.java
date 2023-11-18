@@ -2,8 +2,8 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionStorage;
-import com.bloxbean.cardano.yaci.store.transaction.storage.api.TransactionWitnessStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

@@ -14,6 +14,7 @@ public class ScriptStoreProperties {
     @Setter
     public static final class Script  {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }

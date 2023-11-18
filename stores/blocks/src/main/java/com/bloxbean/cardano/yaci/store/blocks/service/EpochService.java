@@ -2,8 +2,8 @@ package com.bloxbean.cardano.yaci.store.blocks.service;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Epoch;
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.EpochStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.EpochStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -5,13 +5,13 @@ import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.jpa.model.AccountConfigEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AccountConfigEntity;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class AccountBalanceBatchProcessingService {
     private final AccountBalanceStorage accountBalanceStorage;
-    private final UtxoStorage utxoStorage;
+    private final UtxoStorageReader utxoStorageReader;
     private final AccountConfigService accountConfigService;
 
     private AtomicLong latestProcessedBlock = new AtomicLong(0L);
@@ -81,7 +81,7 @@ public class AccountBalanceBatchProcessingService {
                     break;
                 }
 
-                List<Long> blocks = utxoStorage.findNextAvailableBlocks(startBlock, blockBatchSize);
+                List<Long> blocks = utxoStorageReader.findNextAvailableBlocks(startBlock, blockBatchSize);
                 if (blocks == null || blocks.size() == 0) {
                     log.info("No blocks found for balance calculation");
                     break;
@@ -95,8 +95,8 @@ public class AccountBalanceBatchProcessingService {
 
                 log.info("Total blocks to process {}", blocks.size());
 
-                List<Tuple<AddressUtxo, TxInput>> inputs = utxoStorage.findSpentUtxosBetweenBlocks(startBlock, endBlock);
-                List<AddressUtxo> outputs = utxoStorage.findUnspentUtxosBetweenBlocks(startBlock, endBlock);
+                List<Tuple<AddressUtxo, TxInput>> inputs = utxoStorageReader.findSpentUtxosBetweenBlocks(startBlock, endBlock);
+                List<AddressUtxo> outputs = utxoStorageReader.findUnspentUtxosBetweenBlocks(startBlock, endBlock);
 
                 log.info("Total inputs {} and outputs {} found for block {} to {}", inputs.size(), outputs.size(), startBlock, endBlock);
 

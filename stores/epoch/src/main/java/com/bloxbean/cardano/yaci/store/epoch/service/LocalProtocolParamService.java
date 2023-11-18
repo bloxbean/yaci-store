@@ -14,8 +14,8 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.repository.LocalProtocolParamsRepository;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.model.LocalProtocolParamsEntity;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.LocalProtocolParamsEntity;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalProtocolParamsRepository;
 import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -26,7 +26,10 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Component
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
