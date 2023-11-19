@@ -21,5 +21,6 @@ import java.util.List;
  */
 public class DatumEvent {
     private EventMetadata eventMetadata;
-    private List<Datum> datumList;
+    private List<OutputDatumContext>  outputDatums;
+    private List<WitnessDatumContext> witnessDatums;
 }
