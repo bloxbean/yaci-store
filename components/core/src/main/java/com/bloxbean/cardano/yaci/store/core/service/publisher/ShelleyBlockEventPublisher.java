@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.core.service.publisher;
 import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.*;
