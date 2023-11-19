@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
