@@ -1,26 +1,51 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.model.ScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.ScriptRepository;
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jooq.DSLContext;
+import org.jooq.JSON;
 import org.springframework.context.event.EventListener;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+
+import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
+import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.SCRIPT;
 
 @RequiredArgsConstructor
+@Slf4j
 public class ScriptStorageImpl implements ScriptStorage {
     private final ScriptRepository scriptRepository;
     private final ScriptMapper scriptMapper;
+    private final DSLContext dsl;
+    private final ParallelExecutor executorHelper;
+    private final StoreProperties storeProperties;
 
-    private List<Script> scriptCache = Collections.synchronizedList(new ArrayList<>());
+    private final PlatformTransactionManager transactionManager;
+
+    private TransactionTemplate transactionTemplate;
+
+    private Set<Script> scriptCache = Collections.synchronizedSet(new HashSet<>());
+
+    @PostConstruct
+    public void init() {
+        transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     @Override
     public List<Script> saveScripts(List<Script> scripts) {
@@ -34,14 +59,52 @@ public class ScriptStorageImpl implements ScriptStorage {
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
         try {
-            List<ScriptEntity> scriptEntities = scriptCache.stream()
-                    .filter(script -> !scriptRepository.existsById(script.getScriptHash()))
-                    .map(scriptMapper::toScriptEntity)
-                    .collect(Collectors.toList());
+            if (scriptCache.size() == 0)
+                return;
 
-            scriptRepository.saveAll(scriptEntities);
+            LocalDateTime localDateTime = LocalDateTime.now();
+
+            if (scriptCache.size() <= storeProperties.getDbBatchSize() || !storeProperties.isDbParallelInsert()) {
+                saveScriptsInPartition(scriptCache.stream().toList(), localDateTime);
+            } else {
+                List<List<Script>> partitions = partition(scriptCache.stream().toList(), storeProperties.getDbBatchSize());
+                List<Future> futures = new ArrayList<>();
+                for (var partition : partitions) {
+                    var future = CompletableFuture.supplyAsync(() -> {
+                        saveScriptsInPartition(partition, localDateTime);
+                        return true;
+                    }, executorHelper.getVirtualThreadExecutor());
+
+                    futures.add(future);
+                }
+
+                var allCf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+                allCf.join();
+            }
+
+            if (scriptCache.size() > 1000)
+                log.info("Script Size: " + scriptCache.size());
         } finally {
             scriptCache.clear();
         }
+    }
+
+    private void saveScriptsInPartition(List<Script> partition, LocalDateTime localDateTime) {
+        transactionTemplate.execute(status -> {
+            dsl.batched(c -> {
+                for (var script : partition) {
+                    c.dsl().insertInto(SCRIPT)
+                            .set(SCRIPT.SCRIPT_HASH, script.getScriptHash())
+                            .set(SCRIPT.SCRIPT_TYPE, script.getScriptType().toString())
+                            .set(SCRIPT.CONTENT, JSON.valueOf(script.getContent()))
+                            .set(SCRIPT.CREATE_DATETIME, localDateTime)
+                            .set(SCRIPT.UPDATE_DATETIME, localDateTime)
+                            .onDuplicateKeyIgnore()
+                            .execute();
+                }
+            });
+
+            return null;
+        });
     }
 }
