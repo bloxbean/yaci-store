@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
 import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -13,28 +14,31 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestController
-@RequestMapping("${apiPrefix}/epochs")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequiredArgsConstructor
+@Tag(name = "Epoch Service")
+@RequestMapping("${apiPrefix}/epochs")
 public class EpochController {
+
     private final EpochParamService epochParamService;
 
     @GetMapping("latest/parameters")
-    public ProtocolParams getProtocolParams() {
+    @Operation(summary = "Latest Epoch's Protocol Parameters", description = "Get the protocol parameters of the latest epoch.")
+    public ProtocolParams getLatestProtocolParams() {
         return epochParamService.getLatestProtocolParams()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 
-    @Operation(summary = "Get protocol parameters. The {number} path variable is ignored. So any value can be passed. It always returns current protocol parameters")
     @GetMapping("{number}/parameters")
-    public ProtocolParams getProtocolParams(@PathVariable Integer number) {
+    @Operation(summary = "Specific Epoch's Protocol Parameters", description = "Get the protocol parameters of a specific epoch.")
+    public ProtocolParams getProtocolParamsByEpochNo(@PathVariable Integer number) {
         return epochParamService.getProtocolParams(number)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found for epoch: " + number));
     }
 
-    @Operation(summary = "Get latest epoch")
     @GetMapping("latest")
+    @Operation(summary = "Latest Epoch Information", description = "Get the information of the latest epoch.")
     public EpochContent getLatestEpoch() {
         return epochParamService.getLatestEpoch();
     }

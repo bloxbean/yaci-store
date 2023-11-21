@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorageReader;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,14 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@RestController
-@RequestMapping("${apiPrefix}/epoch/param-propsals")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequiredArgsConstructor
+@Tag(name = "Network Service")
+@RequestMapping("${apiPrefix}/network")
 public class ParamProposalController {
+
     private final ProtocolParamsProposalStorageReader protocolParamsProposalReader;
 
-    @GetMapping
+    @GetMapping("/param-proposals")
+    @Operation(summary = "Param Update Proposals", description = "Get all parameter update proposals submitted to the chain starting Shelley era.")
     public List<ProtocolParamsProposal> getProtocolParamProposals(@RequestParam(name = "page", defaultValue = "0") int page,
                                                         @RequestParam(name = "count", defaultValue = "10") int count) {
         //TODO -- Fix pagination index
