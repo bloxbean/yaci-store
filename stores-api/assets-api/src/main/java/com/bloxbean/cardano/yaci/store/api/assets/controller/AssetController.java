@@ -30,7 +30,7 @@ public class AssetController {
     @Tag(name = "Asset Service")
     @GetMapping("/txs/{txHash}")
     @Operation(summary = "Assets Information by Tx Hash", description = "Returns the information for all assets included in a transaction.")
-    public List<TxAsset> getAssetTxsByTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]$") String txHash) {
+    public List<TxAsset> getAssetTxsByTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return assetService.getAssetsByTx(txHash);
     }
 
@@ -39,11 +39,6 @@ public class AssetController {
     @Operation(summary = "Asset Information by Fingerprint", description = "Returns asset information by fingerprint.")
     public List<TxAsset> getAssetTxsByFingerprint(@PathVariable String fingerprint, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                                 @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
-
         return assetService.getAssetTxsByFingerprint(fingerprint, page, count);
     }
 
@@ -52,11 +47,6 @@ public class AssetController {
     @Operation(summary = "Asset Information by Unit", description = "Returns asset information by unit.")
     public List<TxAsset> getAssetTxsByUnit(@PathVariable String unit, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
-
         return assetService.getAssetTxsByUnit(unit, page, count);
     }
 
@@ -65,11 +55,6 @@ public class AssetController {
     @Operation(summary = "Policy Assets", description = "Returns the information for all assets under the same policy.")
     public List<TxAsset> getAssetTxsByPolicyId(@PathVariable String policyId, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                              @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
-
         return assetService.getAssetTxsByPolicyId(policyId, page, count);
     }
 

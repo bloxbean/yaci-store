@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.api.account.service.AddressAssetService;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +24,8 @@ public class AddressAssetController {
     @GetMapping("/assets/{unit}/addresses")
     @Operation(description = "Get addresses by asset")
     public List<AddressAssetBalanceDto> getAddressesByAsset(@PathVariable String unit,
-                                                            @RequestParam(name = "page", defaultValue = "0") int page,
-                                                            @RequestParam(name = "count", defaultValue = "10") int count,
+                                                            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
                                                             @RequestParam(name = "sort", defaultValue = "asc") String sort) {
         //TODO -- Fix pagination index
         int p = page;

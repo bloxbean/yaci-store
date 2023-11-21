@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +30,7 @@ public class MetadataController {
 
     @GetMapping("/txs/{txHash}/metadata")
     @Operation(summary = "Transaction Metadata Labels", description = "Get a list of metadata labels included in a specific transaction.")
-    public List<TxMetadataLabelDto> getMetadataByTxHash(@PathVariable String txHash) {
+    public List<TxMetadataLabelDto> getMetadataByTxHash(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         List<TxMetadataLabel> txMetadataLabels = metadataService.getMetadataForTx(txHash);
         if (txMetadataLabels == null || txMetadataLabels.isEmpty())
             return Collections.emptyList();
@@ -42,7 +43,7 @@ public class MetadataController {
 
     @GetMapping("/txs/{txHash}/metadata/cbor")
     @Operation(summary = "Transaction Metadata CBOR", description = "Get a list of metadata CBOR included in a specific transaction.")
-    public List<TxMetadataLabelCBORDto> getMetadataCborByTxHash(@PathVariable String txHash) {
+    public List<TxMetadataLabelCBORDto> getMetadataCborByTxHash(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         List<TxMetadataLabel> txMetadataLabels = metadataService.getMetadataForTx(txHash);
         if (txMetadataLabels == null || txMetadataLabels.isEmpty())
             return Collections.emptyList();

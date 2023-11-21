@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -62,13 +63,13 @@ public class ScriptController {
 
     @Tag(name = "Transaction Service")
     @GetMapping("/txs/{txHash}/scripts")
-    public List<TxContractDetails> getTxContractDetails(@PathVariable String txHash) {
+    public List<TxContractDetails> getTxContractDetails(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return scriptService.getTransactionScripts(txHash);
     }
 
     @Tag(name = "Transaction Service")
     @GetMapping("/txs/{txHash}/redeemers")
-    public List<TxRedeemerDto> getTxRedeemers(@PathVariable String txHash) {
+    public List<TxRedeemerDto> getTxRedeemers(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return scriptService.getTransactionRedeemers(txHash);
     }
 
