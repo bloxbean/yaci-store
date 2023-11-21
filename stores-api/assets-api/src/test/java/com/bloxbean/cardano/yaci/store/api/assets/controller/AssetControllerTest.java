@@ -52,7 +52,7 @@ class AssetControllerTest {
         when(assetService.getAssetsByTx("fd960815810b788da1f1d8719e3fdb47c5e4a82b9527f9c337a49512d255d545"))
                 .thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/txs/{txHash}/assets", "fd960815810b788da1f1d8719e3fdb47c5e4a82b9527f9c337a49512d255d545"))
+        mockMvc.perform(get(apiPrefix + "/assets/txs/{txHash}", "fd960815810b788da1f1d8719e3fdb47c5e4a82b9527f9c337a49512d255d545"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
                 .andExpect(content().json(objectMapper.writeValueAsString(List.of(txAsset()))));
@@ -63,7 +63,7 @@ class AssetControllerTest {
         when(assetService.getAssetTxsByFingerprint("asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs", 0, 10))
                 .thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/txs/fingerprint/{fingerprint}",
+        mockMvc.perform(get(apiPrefix + "/assets/fingerprint/{fingerprint}",
                         "asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs")
                         .param("page", "0")
                         .param("count", "10"))
@@ -77,7 +77,7 @@ class AssetControllerTest {
         when(assetService.getAssetTxsByPolicyId("34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518", 0, 10))
                 .thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/txs/policy/{policyId}",
+        mockMvc.perform(get(apiPrefix + "/assets/policy/{policyId}",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518")
                         .param("page", "0")
                         .param("count", "10"))
@@ -90,7 +90,7 @@ class AssetControllerTest {
     void testGetAssetTxsByUnit_shouldReturn200() throws Exception {
         when(assetService.getAssetTxsByUnit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e", 0, 10)).thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/txs/unit/{unit}",
+        mockMvc.perform(get(apiPrefix + "/assets/unit/{unit}",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e")
                         .param("page", "0")
                         .param("count", "10"))

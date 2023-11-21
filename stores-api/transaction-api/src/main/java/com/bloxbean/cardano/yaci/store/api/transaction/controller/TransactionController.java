@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -29,14 +30,14 @@ public class TransactionController {
 
     @GetMapping("{txHash}")
     @Operation(summary = "Transaction Information", description = "Get detailed information about a specific transaction.")
-    public TransactionDetails getTransaction(@PathVariable String txHash) {
+    public TransactionDetails getTransaction(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return transactionService.getTransaction(txHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
     }
 
     @GetMapping("{txHash}/utxos")
     @Operation(summary = "Transaction UTxOs", description = "Return the UTxOs of a specific transaction.")
-    public TxInputsOutputs getTransactionInputsOutputs(@PathVariable String txHash) {
+    public TxInputsOutputs getTransactionInputsOutputs(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return transactionService.getTransaction(txHash)
                 .map(transactionDetails -> {
                     TxInputsOutputs txInputsOutputs = new TxInputsOutputs();
@@ -60,7 +61,7 @@ public class TransactionController {
 
     @GetMapping("{txHash}/witnesses")
     @Operation(summary = "Transaction Witnesses", description = "Return list of witnesses of a specific transaction.")
-    public List<TxnWitness> getTransactionWitnesses(@PathVariable String txHash) {
+    public List<TxnWitness> getTransactionWitnesses(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return transactionService.getTransactionWitnesses(txHash);
     }
 }

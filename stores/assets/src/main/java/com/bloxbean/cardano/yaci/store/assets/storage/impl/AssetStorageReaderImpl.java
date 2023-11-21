@@ -16,6 +16,7 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 public class AssetStorageReaderImpl implements AssetStorageReader {
+
     private final TxAssetRepository txAssetRepository;
     private final AssetMapper assetMapper;
 
