@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,17 +50,17 @@ public class AssetStorageReaderImpl implements AssetStorageReader {
     }
 
     @Override
-    public Optional<Integer> getSupplyByFingerprint(String fingerprint) {
+    public Optional<BigInteger> getSupplyByFingerprint(String fingerprint) {
         return txAssetRepository.getSupplyByFingerprint(fingerprint);
     }
 
     @Override
-    public Optional<Integer> getSupplyByUnit(String unit) {
+    public Optional<BigInteger> getSupplyByUnit(String unit) {
         return txAssetRepository.getSupplyByUnit(unit);
     }
 
     @Override
-    public Optional<Integer> getSupplyByPolicy(String policyId) {
+    public Optional<BigInteger> getSupplyByPolicy(String policyId) {
         return txAssetRepository.getSupplyByPolicy(policyId);
     }
 }

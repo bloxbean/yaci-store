@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,7 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class AssetService {
+
     private final AssetStorageReader assetReader;
 
     public List<TxAsset> getAssetsByTx(String txHash) {
@@ -31,15 +33,15 @@ public class AssetService {
         return assetReader.findByUnit(unit, page, count);
     }
 
-    public Optional<Integer> getSupplyByFingerprint(String fingerprint) {
+    public Optional<BigInteger> getSupplyByFingerprint(String fingerprint) {
         return assetReader.getSupplyByFingerprint(fingerprint);
     }
 
-    public Optional<Integer> getSupplyByUnit(String unit) {
+    public Optional<BigInteger> getSupplyByUnit(String unit) {
         return assetReader.getSupplyByUnit(unit);
     }
 
-    public Optional<Integer> getSupplyByPolicy(String policyId) {
+    public Optional<BigInteger> getSupplyByPolicy(String policyId) {
         return assetReader.getSupplyByPolicy(policyId);
     }
 }
