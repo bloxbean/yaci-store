@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
+@ConfigurationProperties(prefix = "store")
 public class AssetsStoreProperties {
     private Assets assets;
 

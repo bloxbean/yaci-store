@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.assets.storage;
 
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,7 +15,7 @@ public interface AssetStorageReader {
 
     List<TxAsset> findByUnit(String unit, int page, int count);
 
-    Optional<Integer> getSupplyByFingerprint(String fingerprint);
-    Optional<Integer> getSupplyByUnit(String unit);
-    Optional<Integer> getSupplyByPolicy(String policyId);
+    Optional<BigInteger> getSupplyByFingerprint(String fingerprint);
+    Optional<BigInteger> getSupplyByUnit(String unit);
+    Optional<BigInteger> getSupplyByPolicy(String policyId);
 }

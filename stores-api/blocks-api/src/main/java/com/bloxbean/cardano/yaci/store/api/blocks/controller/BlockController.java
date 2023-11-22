@@ -6,60 +6,64 @@ import com.bloxbean.cardano.yaci.store.api.blocks.service.BlockService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
-@RestController("BlockController")
-@RequestMapping("${apiPrefix}/blocks")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequiredArgsConstructor
+@Tag(name = "Block Service")
+@RequestMapping("${apiPrefix}/blocks")
 public class BlockController {
+
     private final BlockService blockService;
     private final BlockDtoMapper dtoMapper;
 
     @GetMapping("{numberOrHash}")
-    @Operation(description = "Get block by number or hash")
-    public BlockDto getBlockByNumber(@PathVariable String numberOrHash) {
+    @Operation(summary = "Block Information by Number or Hash", description = "Get block information by number or hash.")
+    public ResponseEntity<BlockDto> getBlockByNumber(@PathVariable String numberOrHash) {
         if (NumberUtils.isParsable(numberOrHash)) {
             return blockService.getBlockByNumber(Long.parseLong(numberOrHash))
-                    .map(block -> dtoMapper.toBlockDto(block))
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+                    .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
+                    .orElse(ResponseEntity.notFound().build());
         } else {
             return blockService.getBlockByHash(numberOrHash)
-                    .map(block -> dtoMapper.toBlockDto(block))
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+                    .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
+                    .orElse(ResponseEntity.notFound().build());
         }
     }
 
     @GetMapping
-    @Operation(description = "Get blocks by page number and count")
-    public BlocksPage getBlocks(@RequestParam(name = "page", defaultValue = "0") int page,
-                                @RequestParam(name = "count", defaultValue = "10") int count) {
+    @Operation(summary = "Block List", description = "Get blocks by page number and count.")
+    public ResponseEntity<BlocksPage> getBlocks(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
-        return blockService.getBlocks(p, count);
+        return ResponseEntity.ok(blockService.getBlocks(p, count));
     }
 
     @GetMapping("pool/{poolId}")
-    @Operation(description = "Get block by slot leader and epoch")
-    public List<PoolBlock> getBlocksBySlotLeaderEpoch(@PathVariable String poolId, @RequestParam int epoch) {
-        return blockService.getBlocksBySlotLeaderEpoch(poolId, epoch);
+    @Operation(summary = "Slot Leader Block List", description = "Get blocks of slot leader in a specific epoch.")
+    public ResponseEntity<List<PoolBlock>> getBlocksBySlotLeaderEpoch(@PathVariable String poolId, @RequestParam int epoch) {
+        return ResponseEntity.ok(blockService.getBlocksBySlotLeaderEpoch(poolId, epoch));
     }
 
     @GetMapping("latest")
-    @Operation(description = "Get latest block")
-    public BlockDto getLatestBlock() {
+    @Operation(summary = "Latest Block", description = "Get the Latest Block Information.")
+    public ResponseEntity<BlockDto> getLatestBlock() {
         return blockService.getLatestBlock()
-                .map(block -> dtoMapper.toBlockDto(block))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Block not found"));
+                .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
 }
