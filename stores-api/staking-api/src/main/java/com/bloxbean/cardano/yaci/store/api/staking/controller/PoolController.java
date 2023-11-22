@@ -4,6 +4,9 @@ import com.bloxbean.cardano.yaci.store.api.staking.service.PoolService;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,17 +16,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@RestController
-@RequestMapping("${apiPrefix}/pools")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequiredArgsConstructor
+@Tag(name = "Pool Service")
+@RequestMapping("${apiPrefix}/pools")
 public class PoolController {
     private final PoolService poolService;
 
     @GetMapping("/registrations")
-    @Operation(description = "Get pool registerations by page number and count")
-    public List<PoolRegistration> getPoolRegistrations(@RequestParam(name = "page", defaultValue = "0") int page,
-                                            @RequestParam(name = "count", defaultValue = "10") int count) {
+    @Operation(description = "Get pool registrations by page number and count")
+    public List<PoolRegistration> getPoolRegistrations(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
@@ -33,8 +37,8 @@ public class PoolController {
 
     @GetMapping("/retirements")
     @Operation(description = "Get pool retirements by page number and count")
-    public List<PoolRetirement> getRetirements(@RequestParam(name = "page", defaultValue = "0") int page,
-                                               @RequestParam(name = "count", defaultValue = "10") int count) {
+    public List<PoolRetirement> getRetirements(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                               @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)

@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.store.script.domain.TxContractDetails;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -17,53 +19,61 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
-@RestController
-@RequestMapping("${apiPrefix}")
-@RequiredArgsConstructor
 @Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("${apiPrefix}")
 public class ScriptController {
+
     private final ScriptService scriptService;
     private final ScriptDtoMapper scriptDtoMapper;
     private final ObjectMapper objectMapper;
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/{scriptHash}/details")
     public ScriptDetailDto getScriptDetailsByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
-                .map(script -> scriptDtoMapper.toScriptDetailDto(script))
+                .map(scriptDtoMapper::toScriptDetailDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/{scriptHash}")
     public ScriptDto getScriptByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
-                .map(script -> scriptDtoMapper.toScriptDto(script))
+                .map(scriptDtoMapper::toScriptDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/{scriptHash}/cbor")
     public ScriptCborDto getScriptCborByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
-                .map(script -> scriptDtoMapper.toScriptCbor(script))
+                .map(scriptDtoMapper::toScriptCbor)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/{scriptHash}/json")
     public ScriptJsonDto getScriptJsonByHash(@PathVariable String scriptHash) {
         return scriptService.getScriptByHash(scriptHash)
-                .map(script -> scriptDtoMapper.toScriptJson(script))
+                .map(scriptDtoMapper::toScriptJson)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Script not found"));
     }
 
+    @Tag(name = "Transaction Service")
     @GetMapping("/txs/{txHash}/scripts")
-    public List<TxContractDetails> getTxContractDetails(@PathVariable String txHash) {
+    public List<TxContractDetails> getTxContractDetails(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return scriptService.getTransactionScripts(txHash);
     }
 
+    @Tag(name = "Transaction Service")
     @GetMapping("/txs/{txHash}/redeemers")
-    public List<TxRedeemerDto> getTxRedeemers(@PathVariable String txHash) {
+    public List<TxRedeemerDto> getTxRedeemers(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return scriptService.getTransactionRedeemers(txHash);
     }
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/datum/{datumHash}")
     public JsonNode getDatumJsonByHash(@PathVariable String datumHash) {
         return scriptService.getDatumAsJson(datumHash)
@@ -74,6 +84,7 @@ public class ScriptController {
                 }).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Datum not found"));
     }
 
+    @Tag(name = "Script Service")
     @GetMapping("/scripts/datum/{datumHash}/cbor")
     public JsonNode getDatumCborByHash(@PathVariable String datumHash) {
         return scriptService.getDatum(datumHash)

@@ -6,9 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
 public class StoreProperties { //TODO - replace this with YaciStoreProperties from starter
     private Long eventPublisherId;
     private boolean syncAutoStart;
@@ -39,10 +39,14 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String byronGenesisFile;
     private String shelleyGenesisFile;
 
+    @Builder.Default
     private int blockDiffToStartSyncProtocol = 2000;
 
     //Cursor table cleanup properties
+    @Builder.Default
     private int cursorNoOfBlocksToKeep = 2160;
+    
+    @Builder.Default
     private int cursorCleanupInterval = 3600;
 
     private int keepAliveInterval = 10000;
@@ -54,10 +58,18 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private boolean mainnet;
 
     //Executor Configurations
+    @Builder.Default
     private int blockProcessingThreads = 15;
+
+    @Builder.Default
     private int eventProcessingThreads = 30;
+    
     private boolean enableParallelProcessing;
+
+    @Builder.Default
     private int blocksBatchSize=100;
+
+    @Builder.Default
     private int blocksPartitionSize=15;
     private boolean useVirtualThreadForBatchProcessing;
     private boolean useVirtualThreadForEventProcessing;

@@ -75,14 +75,12 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
     public List<PoolBlock> findBlocksBySlotLeaderAndEpoch(String slotLeader, int epoch) {
         return blockRepository.getBlockEntitiesBySlotLeaderAndEpochNumber(slotLeader, epoch)
                 .stream()
-                .map(blockEntity -> {
-                    return PoolBlock.builder()
-                            .hash(blockEntity.getHash())
-                            .number(blockEntity.getNumber())
-                            .epoch(blockEntity.getEpochNumber())
-                            .poolId(blockEntity.getSlotLeader())
-                            .build();
-                }).collect(Collectors.toList());
+                .map(blockEntity -> PoolBlock.builder()
+                        .hash(blockEntity.getHash())
+                        .number(blockEntity.getNumber())
+                        .epoch(blockEntity.getEpochNumber())
+                        .poolId(blockEntity.getSlotLeader())
+                        .build()).collect(Collectors.toList());
     }
 
 }
