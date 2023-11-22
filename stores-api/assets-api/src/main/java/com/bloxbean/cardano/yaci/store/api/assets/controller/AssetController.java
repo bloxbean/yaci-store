@@ -29,33 +29,45 @@ public class AssetController {
 
     @Tag(name = "Asset Service")
     @GetMapping("/txs/{txHash}")
-    @Operation(summary = "Assets Information by Tx Hash", description = "Returns the information for all assets included in a transaction.")
+    @Operation(summary = "Assets History by Tx Hash", description = "Returns the Mint / Burn History for all assets included in a transaction.")
     public List<TxAsset> getAssetTxsByTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return assetService.getAssetsByTx(txHash);
     }
 
     @Tag(name = "Asset Service")
     @GetMapping("/fingerprint/{fingerprint}")
-    @Operation(summary = "Asset Information by Fingerprint", description = "Returns asset information by fingerprint.")
+    @Operation(summary = "Asset History by Fingerprint", description = "Returns the Mint / Burn History of an asset by fingerprint.")
     public List<TxAsset> getAssetTxsByFingerprint(@PathVariable String fingerprint, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                                 @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        return assetService.getAssetTxsByFingerprint(fingerprint, page, count);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return assetService.getAssetTxsByFingerprint(fingerprint, p, count);
     }
 
     @Tag(name = "Asset Service")
     @GetMapping("/unit/{unit}")
-    @Operation(summary = "Asset Information by Unit", description = "Returns asset information by unit.")
+    @Operation(summary = "Asset History by Unit", description = "Returns the Mint / Burn History of an asset by unit.")
     public List<TxAsset> getAssetTxsByUnit(@PathVariable String unit, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        return assetService.getAssetTxsByUnit(unit, page, count);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return assetService.getAssetTxsByUnit(unit, p, count);
     }
 
     @Tag(name = "Asset Service")
     @GetMapping("/policy/{policyId}")
-    @Operation(summary = "Policy Assets", description = "Returns the information for all assets under the same policy.")
+    @Operation(summary = "Asset History by Policy", description = "Returns the Mint / Burn History for all assets included in a policy.")
     public List<TxAsset> getAssetTxsByPolicyId(@PathVariable String policyId, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                              @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        return assetService.getAssetTxsByPolicyId(policyId, page, count);
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return assetService.getAssetTxsByPolicyId(policyId, p, count);
     }
 
     @Tag(name = "Asset Service")
