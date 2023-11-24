@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -52,6 +53,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
+        publisher.publishEvent(new ReadyForBalanceAggregationEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
@@ -97,7 +99,17 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
-        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+
+        var postProcessingFuture = CompletableFuture.supplyAsync(() -> {
+            publisher.publishEvent(new ReadyForBalanceAggregationEvent(lastBatchBlock.getMetadata()));
+            return true;
+        }, eventExecutor);
+
+        var commitFuture = CompletableFuture.supplyAsync(() -> {
+            publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+            return true;
+        }, eventExecutor);
+        CompletableFuture.allOf(postProcessingFuture, commitFuture).join();
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),

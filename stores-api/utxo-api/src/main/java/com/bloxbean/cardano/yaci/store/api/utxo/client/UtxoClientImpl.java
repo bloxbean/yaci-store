@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,23 +26,23 @@ import static com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes.STAKE_A
         matchIfMissing = true)
 @Slf4j
 public class UtxoClientImpl implements UtxoClient {
-    private UtxoStorageReader utxoStorageReader;
+    private UtxoStorage utxoStorage;
     private AddressService addressService;
 
-    public UtxoClientImpl(UtxoStorageReader utxoStorageReader, AddressService addressService) {
-        this.utxoStorageReader = utxoStorageReader;
+    public UtxoClientImpl(UtxoStorage utxoStorage, AddressService addressService) {
+        this.utxoStorage = utxoStorage;
         this.addressService = addressService;
         log.info("Enabled Local UtxoClient >>>");
     }
 
     @Override
     public List<AddressUtxo> getUtxosByIds(List<UtxoKey> utxoIds) {
-        return utxoStorageReader.findAllByIds(utxoIds);
+        return utxoStorage.findAllByIds(utxoIds);
     }
 
     @Override
-    public Optional<AddressUtxo> getUtxoById(@NotNull UtxoKey utxoId) {
-        return utxoStorageReader.findById(utxoId.getTxHash(), utxoId.getOutputIndex());
+    public Optional<AddressUtxo>  getUtxoById(@NotNull UtxoKey utxoId) {
+        return utxoStorage.findById(utxoId.getTxHash(), utxoId.getOutputIndex());
     }
 
     @Override

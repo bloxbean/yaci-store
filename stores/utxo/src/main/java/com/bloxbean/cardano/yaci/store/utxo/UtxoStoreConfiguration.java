@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.InvalidTransactionStorageImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.InvalidTransactionRepository;
@@ -34,8 +35,8 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
-        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext);
+    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext, UtxoCache utxoCache) {
+        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache);
     }
 
     @Bean
