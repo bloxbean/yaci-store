@@ -5,9 +5,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.utxo",
-        name = "api-enabled",
+@ConditionalOnProperty(name = {"store.utxo.enabled", "store.utxo.api-enabled"},
         havingValue = "true",
         matchIfMissing = true
 )
