@@ -22,19 +22,18 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
+@Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
 public class AssetController {
 
     private final AssetService assetService;
 
-    @Tag(name = "Asset Service")
     @GetMapping("/txs/{txHash}")
     @Operation(summary = "Assets History by Tx Hash", description = "Returns the Mint / Burn History for all assets included in a transaction.")
     public List<TxAsset> getAssetTxsByTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash) {
         return assetService.getAssetsByTx(txHash);
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/fingerprint/{fingerprint}")
     @Operation(summary = "Asset History by Fingerprint", description = "Returns the Mint / Burn History of an asset by fingerprint.")
     public List<TxAsset> getAssetTxsByFingerprint(@PathVariable String fingerprint, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
@@ -46,7 +45,6 @@ public class AssetController {
         return assetService.getAssetTxsByFingerprint(fingerprint, p, count);
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/unit/{unit}")
     @Operation(summary = "Asset History by Unit", description = "Returns the Mint / Burn History of an asset by unit.")
     public List<TxAsset> getAssetTxsByUnit(@PathVariable String unit, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
@@ -58,7 +56,6 @@ public class AssetController {
         return assetService.getAssetTxsByUnit(unit, p, count);
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/policy/{policyId}")
     @Operation(summary = "Asset History by Policy", description = "Returns the Mint / Burn History for all assets included in a policy.")
     public List<TxAsset> getAssetTxsByPolicyId(@PathVariable String policyId, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
@@ -70,7 +67,6 @@ public class AssetController {
         return assetService.getAssetTxsByPolicyId(policyId, p, count);
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/supply/fingerprint/{fingerprint}")
     @Operation(summary = "Assets Supply by Fingerprint", description = "Returns the entire supply of a specific asset by fingerprint.")
     public FingerprintSupply getSupplyByFingerprint(@PathVariable String fingerprint) {
@@ -79,7 +75,6 @@ public class AssetController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/supply/unit/{unit}")
     @Operation(summary = "Assets Supply by Unit", description = "Returns the entire supply of a specific asset by unit.")
     public UnitSupply getSupplyByUnit(@PathVariable String unit) {
@@ -88,7 +83,6 @@ public class AssetController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
     }
 
-    @Tag(name = "Asset Service")
     @GetMapping("/supply/policy/{policy}")
     @Operation(summary = "Assets Supply by Policy", description = "Returns the entire assets supply of a specific policy.")
     public PolicySupply getSupplyByPolicy(@PathVariable String policy) {
@@ -96,7 +90,6 @@ public class AssetController {
                 .map(supply -> new PolicySupply(policy, supply))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
     }
-
 
     @Data
     @NoArgsConstructor
