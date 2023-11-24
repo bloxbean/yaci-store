@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +25,11 @@ public interface TxAssetRepository extends JpaRepository<TxAssetEntity, Long> {
     Slice<TxAssetEntity> findByUnit(String unit, Pageable page);
 
     @Query("select sum(ta.quantity) from TxAssetEntity ta where ta.fingerprint = ?1")
-    Optional<Integer> getSupplyByFingerprint(String fingerprint);
+    Optional<BigInteger> getSupplyByFingerprint(String fingerprint);
 
     @Query("select sum(ta.quantity) from TxAssetEntity ta where ta.unit = ?1")
-    Optional<Integer> getSupplyByUnit(String unit);
+    Optional<BigInteger> getSupplyByUnit(String unit);
 
     @Query("select sum(ta.quantity) from TxAssetEntity ta where ta.policy = ?1")
-    Optional<Integer> getSupplyByPolicy(String policy);
+    Optional<BigInteger> getSupplyByPolicy(String policy);
 }
