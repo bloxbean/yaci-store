@@ -19,11 +19,8 @@ import java.math.BigInteger;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class StakeAddressBalance extends BlockAwareDomain {
     private String address;
-    private String unit;
     private Long slot;
     private BigInteger quantity;
-    private String policy;
-    private String assetName;
     private String stakeCredential;
     private String blockHash;
     private Integer epoch;

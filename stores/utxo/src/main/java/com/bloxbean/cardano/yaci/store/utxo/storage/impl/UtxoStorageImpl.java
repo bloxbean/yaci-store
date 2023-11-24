@@ -2,19 +2,25 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.springframework.context.event.EventListener;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
@@ -26,7 +32,50 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final TxInputRepository spentOutputRepository;
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
+    private final UtxoCache utxoCache;
 
+    @Override
+    public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
+        var cacheUtxo = utxoCache.get(txHash, outputIndex);
+        if (cacheUtxo.isPresent())
+            return cacheUtxo;
+        else {
+            var savedUtxo = utxoRepository.findById(new UtxoId(txHash, outputIndex))
+                    .map(entity -> mapper.toAddressUtxo(entity));
+            if (savedUtxo.isPresent())
+                utxoCache.add(savedUtxo.get());
+
+            return savedUtxo;
+        }
+    }
+
+    @Override
+    public List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys) {
+
+        var cacheResult = utxoCache.get(utxoKeys);
+        if (cacheResult._2 == null)
+            return cacheResult._1;
+
+        List<UtxoKey> notFoundKeys = cacheResult._2;
+
+        List<UtxoId> utxoIds = notFoundKeys.stream()
+                .map(utxoKey -> new UtxoId(utxoKey.getTxHash(), utxoKey.getOutputIndex()))
+                .toList();
+
+        var savedUtxos = utxoRepository.findAllById(utxoIds)
+                .stream().map(mapper::toAddressUtxo)
+                .toList();
+
+        //Add remaining utxos to cache
+        if (savedUtxos != null)
+            savedUtxos.stream().forEach(utxo -> utxoCache.add(utxo));
+
+        List<AddressUtxo> finalUtxos = new ArrayList<>();
+        finalUtxos.addAll(cacheResult._1);
+        finalUtxos.addAll(savedUtxos);
+
+        return finalUtxos;
+    }
 
     @Override
     public int deleteUnspentBySlotGreaterThan(Long slot) {
@@ -90,6 +139,9 @@ public class UtxoStorageImpl implements UtxoStorage {
                         .execute();
             }
         });
+
+        addressUtxoList.stream()
+                .forEach(addressUtxo -> utxoCache.add(addressUtxo));
     }
 
     @Override
@@ -112,6 +164,11 @@ public class UtxoStorageImpl implements UtxoStorage {
                         .execute();
             }
         });
+    }
+
+    @EventListener
+    public void handleCommit(CommitEvent commitEvent) {
+        utxoCache.clear();
     }
 
 /**   Remove this method after testing

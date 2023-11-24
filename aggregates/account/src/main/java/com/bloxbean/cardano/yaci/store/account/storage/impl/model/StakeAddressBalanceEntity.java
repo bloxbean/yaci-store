@@ -16,7 +16,7 @@ import java.math.BigInteger;
 @SuperBuilder
 @Entity
 @Table(name = "stake_address_balance")
-@IdClass(AddressBalanceId.class)
+@IdClass(StakeAddressBalanceId.class)
 @DynamicUpdate
 public class StakeAddressBalanceEntity extends BlockAwareEntity {
     @Id
@@ -24,21 +24,11 @@ public class StakeAddressBalanceEntity extends BlockAwareEntity {
     private String address;
 
     @Id
-    @Column(name = "unit")
-    private String unit;
-
-    @Id
     @Column(name = "slot")
     private Long slot;
 
     @Column(name = "quantity")
     private BigInteger quantity;
-
-    @Column(name = "policy")
-    private String policy;
-
-    @Column(name = "asset_name")
-    private String assetName;
 
     @Column(name = "stake_credential")
     private String stakeCredential;

@@ -25,11 +25,8 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setHistoryCleanupEnabled(properties.getAccount().isHistoryCleanupEnabled());
         accountStoreProperties.setBalanceAggregationEnabled(properties.getAccount().isBalanceAggregationEnabled());
 
-        accountStoreProperties.setBatchBalanceAggregationEnabled(properties.getAccount().isBatchBalanceAggregationEnabled());
-        accountStoreProperties.setBatchBalanceAggregationSchedulerEnabled(properties.getAccount().isBatchBalanceAggregationSchedulerEnabled());
-        accountStoreProperties.setBatchBalanceAggregationScheduleDelay(properties.getAccount().getBatchBalanceAggregationScheduleDelay());
-        accountStoreProperties.setBatchBalanceAggregationBatchSize(properties.getAccount().getBatchBalanceAggregationBatchSize());
-        accountStoreProperties.setBatchBalanceAggregationSafeBlockDiff(properties.getAccount().getBatchBalanceAggregationSafeBlockDiff());
+        accountStoreProperties.setMaxBalanceRecordsPerAddressPerBatch(properties.getAccount().getMaxBalanceRecordsPerAddressPerBatch());
+        accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
 
         return accountStoreProperties;
     }

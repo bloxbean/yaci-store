@@ -18,11 +18,9 @@ public class AccountStoreAutoConfigProperties {
 
         private boolean balanceAggregationEnabled = false;
         private boolean historyCleanupEnabled = false;
-        private boolean batchBalanceAggregationEnabled = false;
-        private boolean batchBalanceAggregationSchedulerEnabled=false;
-        private int batchBalanceAggregationScheduleDelay = 5; //5 sec
-        private int batchBalanceAggregationBatchSize = 4320; //~ 1 day (4320 blocks)
-        private int batchBalanceAggregationSafeBlockDiff = 500;
+
+        private int maxBalanceRecordsPerAddressPerBatch = 3;
+        private boolean stakeAddressBalanceEnabled = true;
     }
 
 }
