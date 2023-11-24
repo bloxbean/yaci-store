@@ -51,7 +51,6 @@ public class UtxoCache { //TODO -- auto expiry
     }
 
     public void clear() {
-        log.info("Total utxos: " + utxoCache.size());
         utxoCache.clear();
     }
 
