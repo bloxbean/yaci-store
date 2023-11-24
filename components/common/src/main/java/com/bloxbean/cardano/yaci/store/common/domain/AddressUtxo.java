@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.List;
 
@@ -17,7 +18,7 @@ import java.util.List;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AddressUtxo extends BlockAwareDomain {
+public class AddressUtxo extends BlockAwareDomain implements Serializable {
     private String txHash;
     private Integer outputIndex;
     private Long slot;

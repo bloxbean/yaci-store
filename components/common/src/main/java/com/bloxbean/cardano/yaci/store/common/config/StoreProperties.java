@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core;
+package com.bloxbean.cardano.yaci.store.common.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -73,4 +73,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int blocksPartitionSize=15;
     private boolean useVirtualThreadForBatchProcessing;
     private boolean useVirtualThreadForEventProcessing;
+
+    private int dbBatchSize = 200;
+    private boolean dbParallelInsert = true;
 }

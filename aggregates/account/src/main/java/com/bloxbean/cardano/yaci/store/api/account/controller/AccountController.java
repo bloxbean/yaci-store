@@ -49,14 +49,12 @@ public class AccountController {
 
     @GetMapping("/accounts/{stakeAddress}/balance")
     @Operation(description = "Get current balance at a stake address")
-    public List<StakeAddressBalance> getStakeAddressBalance(String stakeAddress) {
+    public Optional<StakeAddressBalance> getStakeAddressBalance(String stakeAddress) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
         return accountBalanceStorage.getStakeAddressBalance(stakeAddress)
-                .stream()
-                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
-                .toList();
+                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0);
     }
 
     @GetMapping("/addresses/{address}/{unit}/balance")
@@ -78,7 +76,7 @@ public class AccountController {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, unit, timeInSec)
+        return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, timeInSec)
                 .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
 
@@ -94,13 +92,10 @@ public class AccountController {
 
         BigInteger lovellaceBalance = BigInteger.ZERO;
         if (accountStoreProperties.isBalanceAggregationEnabled()) {
-            List<StakeAddressBalance> stakeAddressBalances = accountBalanceStorage.getStakeAddressBalance(stakeAddress);
-            if (stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
-                lovellaceBalance = stakeAddressBalances.stream().filter(addressBalance -> addressBalance.getUnit().equals("lovelace"))
-                        .findFirst()
-                        .map(addressBalance -> addressBalance.getQuantity())
-                        .orElse(BigInteger.ZERO);
-            }
+            Optional<StakeAddressBalance> stakeAddressBalances = accountBalanceStorage.getStakeAddressBalance(stakeAddress);
+            lovellaceBalance = stakeAddressBalances
+                    .map(addressBalance -> addressBalance.getQuantity())
+                    .orElse(BigInteger.ZERO);
         } else { //Do run time aggregation
             List<Amount> amounts = utxoAccountService.getAmountsAtAddress(stakeAddress);
             if (amounts != null && amounts.size() > 0) {
