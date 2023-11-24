@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.mir;
+package com.bloxbean.cardano.yaci.store.starter.mir;
 
 import lombok.Getter;
 import lombok.Setter;
