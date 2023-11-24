@@ -12,6 +12,7 @@ public class YaciStoreProperties {
     private Core core = new Core();
     private Cardano cardano = new Cardano();
     private Executor executor = new Executor();
+    private Db db = new Db();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
     private String utxoClientUrl;
@@ -70,5 +71,12 @@ public class YaciStoreProperties {
         private int blocksPartitionSize=10;
         private boolean useVirtualThreadForBatchProcessing;
         private boolean useVirtualThreadForEventProcessing;
+    }
+
+    @Getter
+    @Setter
+    public static final class Db {
+        private int batchSize = 200;
+        private boolean parallelInsert = true;
     }
 }

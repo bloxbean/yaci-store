@@ -72,25 +72,24 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public Optional<StakeAddressBalance> getStakeAddressBalance(String address, String unit, long slot) {
-        return stakeBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
+    public Optional<StakeAddressBalance> getStakeAddressBalance(String address, long slot) {
+        return stakeBalanceRepository.findTopByAddressAndSlotIsLessThanEqualOrderBySlotDesc(address, slot)
                 .map(mapper::toStakeBalance);
     }
 
     @Override
-    public Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, String unit, long time) {
+    public Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, long time) {
         if (time == 0)
             throw new IllegalArgumentException("Time cannot be 0");
 
-        return stakeBalanceRepository.findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address, unit, time)
+        return stakeBalanceRepository.findTopByAddressAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address,time)
                 .map(mapper::toStakeBalance);
     }
 
     @Override
-    public List<StakeAddressBalance> getStakeAddressBalance(String address) {
-        return stakeBalanceRepository.findLatestAddressBalanceByAddress(address).stream()
-                .map(mapper::toStakeBalance)
-                .toList();
+    public Optional<StakeAddressBalance> getStakeAddressBalance(String address) {
+        return stakeBalanceRepository.findLatestAddressBalanceByAddress(address)
+                .map(mapper::toStakeBalance);
     }
 
     @Override
@@ -101,10 +100,10 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public int deleteStakeBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
+    public int deleteStakeBalanceBeforeSlotExceptTop(String address, long slot) {
         //Find the latest stake address balance before the slot and delete all address balances before that
-        return stakeBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
-                .map(addressBalanceEntity -> stakeBalanceRepository.deleteAllBeforeSlot(address, unit, addressBalanceEntity.getSlot() - 1)).orElse(0);
+        return stakeBalanceRepository.findTopByAddressAndSlotIsLessThanEqualOrderBySlotDesc(address, slot)
+                .map(addressBalanceEntity -> stakeBalanceRepository.deleteAllBeforeSlot(address, addressBalanceEntity.getSlot() - 1)).orElse(0);
     }
 
     @Override

@@ -24,4 +24,10 @@ public class AccountConfigEntity {
 
     @Column(name = "block")
     private Long block;
+
+    @Column(name = "block_hash")
+    private String blockHash;
+
+    @Column(name = "slot")
+    private Long slot;
 }

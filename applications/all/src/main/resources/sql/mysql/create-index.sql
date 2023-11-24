@@ -75,15 +75,6 @@ CREATE INDEX idx_stake_addr_balance_block_time
 CREATE INDEX idx_stake_addr_balance_epoch
     ON stake_address_balance (epoch);
 
-CREATE INDEX idx_stake_addr_balance_unit
-    ON stake_address_balance (unit);
-
-CREATE INDEX idx_stake_addr_balance_policy
-    ON stake_address_balance (policy);
-
-CREATE INDEX idx_stake_addr_balance_policy_asset
-    ON stake_address_balance (policy, asset_name);
-
 -- transaction_witness
 
 CREATE INDEX idx_transaction_witness_tx_hash
