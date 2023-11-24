@@ -5,9 +5,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.epoch",
-        name = "api-enabled",
+@ConditionalOnProperty(name = {"store.epoch.enabled", "store.epoch.api-enabled"},
         havingValue = "true",
         matchIfMissing = true
 )

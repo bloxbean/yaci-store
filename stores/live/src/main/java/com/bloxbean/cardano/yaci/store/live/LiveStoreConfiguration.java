@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         prefix = "store.live",
         name = "enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.live"})
 @EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.live"})
