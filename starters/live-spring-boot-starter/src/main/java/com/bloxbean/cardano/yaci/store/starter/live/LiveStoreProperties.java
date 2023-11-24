@@ -13,7 +13,7 @@ public class LiveStoreProperties {
     @Getter
     @Setter
     public static final class Live  {
-       private boolean enabled = true;
+       private boolean enabled = false;
        private boolean apiEnabled = true;
     }
 

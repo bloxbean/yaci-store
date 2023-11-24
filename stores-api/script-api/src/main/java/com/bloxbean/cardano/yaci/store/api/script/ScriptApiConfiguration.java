@@ -6,9 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.script",
-        name = "api-enabled",
+@ConditionalOnProperty(name = {"store.script.enabled", "store.script.api-enabled"},
         havingValue = "true",
         matchIfMissing = true
 )
