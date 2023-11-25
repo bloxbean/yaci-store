@@ -50,7 +50,7 @@ public class AccountBalanceProcessor {
 
     private int nAddrBalanceRecordToKeep = 3;
 
-    private List<AddressUtxoEvent> addressUtxoEvents = Collections.synchronizedList(new ArrayList<>());
+    private Map<Long, AddressUtxoEvent> addressUtxoEventsMap = Collections.synchronizedMap(new HashMap<>());
 
     private final PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
@@ -66,7 +66,7 @@ public class AccountBalanceProcessor {
     @Transactional
     @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
-        addressUtxoEvents.add(addressUtxoEvent);
+        addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
     }
 
     @EventListener
@@ -74,9 +74,29 @@ public class AccountBalanceProcessor {
     public void handlePostProcessingEvent(ReadyForBalanceAggregationEvent event) {
 
         try {
+            Collection<AddressUtxoEvent> addressUtxoEvents = addressUtxoEventsMap.values();
+
+            var accountConfigOpt = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
+            Long lastProcessedBlock = accountConfigOpt.map(accountConfigEntity -> accountConfigEntity.getBlock())
+                    .orElse(null);
+
             List<AddressUtxoEvent> sortedAddressEventUtxo = addressUtxoEvents.stream()
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
                     .collect(Collectors.toList());
+
+            //Create final address balance records for saving
+            //Required to get balance before the slot mention in the metadata
+            EventMetadata firstBlockInBatchMetadata = sortedAddressEventUtxo.get(0).getEventMetadata();
+
+            if (lastProcessedBlock != null
+                    && !((firstBlockInBatchMetadata.getBlock() - lastProcessedBlock) <= 1)) { // 1 block diff or same block
+                log.warn("Account balance calculation will be ignored. " +
+                        "Please run the aggregation app to calculate the account balance for pending blocks.");
+                log.warn("The last processed block for account balance calculation is not the same as the expected last block.");
+                log.warn("Last processed block for account balance: {}", lastProcessedBlock);
+                log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
+                return;
+            }
 
             //Go through each block and return Address --> SlotAmount map for each block and add to List
             long t0 = System.currentTimeMillis();
@@ -113,9 +133,6 @@ public class AccountBalanceProcessor {
                 log.debug("Total time to first process : " + (System.currentTimeMillis() - t0));
             }
 
-            //Create final address balance records for saving
-            //Required to get balance before the slot mention in the metadata
-            EventMetadata firstBlockInBatchMetadata = sortedAddressEventUtxo.get(0).getEventMetadata();
 
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
@@ -154,12 +171,12 @@ public class AccountBalanceProcessor {
                 addressBalFuture.join();
             }
 
-            log.info("Total Address/Stake Addr balance processing and saving time {}", (System.currentTimeMillis() - t1));
+            log.info("Total balance processing and saving time {}", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
 
         } finally {
-            addressUtxoEvents.clear();
+            addressUtxoEventsMap.clear();
         }
     }
 
@@ -334,6 +351,7 @@ public class AccountBalanceProcessor {
                             log.error("[Inputs] Negative balance for address: " + key.getAddress() + " : " + newAddressBalance.getQuantity());
                             if (savedAddressBalance.isPresent()) {
                                 log.info("Previous amount : " + savedAddressBalance.get().getQuantity());
+                                log.info("SlotAmounts >> " + slotAmounts);
                                 //log.info("Amount to add / deduct : " + totalQuantity);
                                 log.info("Unit: " + savedAddressBalance.get().getUnit());
                             }
@@ -384,6 +402,7 @@ public class AccountBalanceProcessor {
 
                         if (newStakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) < 0) {
                             log.error("[Inputs] Negative balance for stakeAddress: " + stakeAddrInfoKey.getAddress() + " : " + newStakeAddrBalance.getQuantity());
+                            log.info("SlotAmounts >> " + slotAmounts);
                             log.error("Existing StakeAddressBalance >> " + savedStakeAddressBalance);
                             throw new IllegalStateException("Error in stake address balance calculation");
                         }
