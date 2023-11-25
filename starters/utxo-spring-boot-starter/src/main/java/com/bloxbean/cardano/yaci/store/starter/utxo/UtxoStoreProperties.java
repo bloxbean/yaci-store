@@ -14,6 +14,7 @@ public class UtxoStoreProperties {
     @Setter
     public static final class Utxo {
        private boolean enabled = true;
+       private boolean apiEnabled = true;
     }
 
 }
