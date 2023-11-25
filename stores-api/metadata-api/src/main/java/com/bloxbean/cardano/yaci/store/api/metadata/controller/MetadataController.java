@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
@@ -23,6 +24,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @RequestMapping("${apiPrefix}")
 @Tag(name = "Transaction Service")
+@ConditionalOnExpression("${store.transaction.api-enabled:true} && ${store.metadata.enabled:true}")
 public class MetadataController {
 
     private final MetadataService metadataService;

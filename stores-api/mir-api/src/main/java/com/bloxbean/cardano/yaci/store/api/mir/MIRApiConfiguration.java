@@ -5,10 +5,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(name = {"store.mir.enabled", "store.mir.api-enabled"},
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(name = {"store.mir.enabled"}, havingValue = "true", matchIfMissing = true)
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.api.mir"})
 public class MIRApiConfiguration {
 

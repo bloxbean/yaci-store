@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
+@ConditionalOnExpression("${store.asset.api-enabled:true} && ${store.utxo.enabled:true}")
 public class AssetController {
 
     private final AssetService assetService;

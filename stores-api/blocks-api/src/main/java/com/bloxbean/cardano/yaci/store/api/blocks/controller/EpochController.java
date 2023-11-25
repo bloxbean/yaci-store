@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Epoch Service")
 @RestController("EpochController")
 @RequestMapping("${apiPrefix}/epochs")
+@ConditionalOnExpression("${store.epoch.api-enabled:true} && ${store.blocks.enabled:true}")
 public class EpochController {
 
     private final EpochReadService epochService;

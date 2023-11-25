@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Block Service")
 @RequestMapping("${apiPrefix}/blocks")
+@ConditionalOnExpression("${store.blocks.api-enabled:true} && ${store.blocks.enabled:true}")
 public class BlockController {
 
     private final BlockService blockService;

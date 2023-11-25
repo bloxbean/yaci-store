@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +22,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Transaction Service")
 @RequestMapping("${apiPrefix}/txs")
+@ConditionalOnExpression("${store.transaction.api-enabled:true} && ${store.transaction.enabled:true}")
 public class TransactionController {
     private final TransactionService transactionService;
 
