@@ -12,6 +12,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -24,6 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
+@ConditionalOnExpression("${store.assets.api-enabled:true} && ${store.assets.enabled:true}")
 public class AssetController {
 
     private final AssetService assetService;

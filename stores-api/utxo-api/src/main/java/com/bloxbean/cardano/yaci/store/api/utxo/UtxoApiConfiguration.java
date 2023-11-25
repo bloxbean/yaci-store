@@ -5,10 +5,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(name = {"store.utxo.enabled", "store.utxo.api-enabled"},
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(name = {"store.utxo.enabled"}, havingValue = "true", matchIfMissing = true)
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.api.utxo"})
 public class UtxoApiConfiguration {
 

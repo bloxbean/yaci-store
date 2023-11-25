@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "MIR Service")
 @RequestMapping("${apiPrefix}/mir")
+@ConditionalOnExpression("${store.mir.api-enabled:true} && ${store.mir.enabled:true}")
 public class MIRController {
 
     private final MIRService mirService;
