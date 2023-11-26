@@ -12,12 +12,18 @@ spring:
         enabled: false
 
 store:
+  event-publisher-id: 2
   account:
     enabled: true
-    batch-balance-aggregation-enabled: true
-    batch-balance-aggregation-scheduler-enabled: true
-    balance-aggregation-enabled: false
+    balance-aggregation-enabled: true
     history-cleanup-enabled: false
+  aggr:
+    embedded-utxo-store-enabled: true
+  rocksdb:
+    column-families: utxos,spent-utxos
 
 apiPrefix: /api/v1
 
+logging:
+  file:
+    name: ./logs/yaci-store-aggr.log
