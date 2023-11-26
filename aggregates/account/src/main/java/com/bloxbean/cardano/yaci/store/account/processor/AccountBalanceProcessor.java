@@ -111,6 +111,9 @@ public class AccountBalanceProcessor {
                                         .toList();
 
                                 List<AddressUtxo> inputAddressUtxos = utxoClient.getUtxosByIds(inputKeys);
+                                if (inputAddressUtxos.size() != inputKeys.size())
+                                    throw new IllegalStateException("Unable to get inputs for all input keys for account balance calculation : " + inputKeys);
+
                                 List<AddressUtxo> outputAddressUtxos = addressUtxoEvent.getTxInputOutputs()
                                         .stream()
                                         .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
