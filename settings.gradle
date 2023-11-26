@@ -19,6 +19,7 @@ include 'components:common'
 include 'components:client'
 include 'components:submit'
 include 'components:remote'
+include 'components:rocksdb'
 
 include 'stores:blocks'
 include 'stores:utxo'
