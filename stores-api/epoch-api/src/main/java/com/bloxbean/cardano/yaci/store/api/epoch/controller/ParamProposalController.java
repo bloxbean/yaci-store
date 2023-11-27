@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Network Service")
 @RequestMapping("${apiPrefix}/network")
-@ConditionalOnExpression("${store.network.api-enabled:true} && ${store.epoch.enabled:true}")
+@ConditionalOnExpression("${store.epoch.endpoints.network.enabled:true}")
 public class ParamProposalController {
 
     private final ProtocolParamsProposalStorageReader protocolParamsProposalReader;

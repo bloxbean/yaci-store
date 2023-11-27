@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
-@ConditionalOnExpression("${store.asset.api-enabled:true} && ${store.utxo.enabled:true}")
+@ConditionalOnExpression("${store.utxo.endpoints.asset.enabled:true}")
 public class AssetController {
 
     private final AssetService assetService;

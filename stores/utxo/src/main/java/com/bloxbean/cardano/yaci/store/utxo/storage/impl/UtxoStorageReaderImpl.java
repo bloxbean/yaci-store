@@ -65,7 +65,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .from(ADDRESS_UTXO)
                 .leftJoin(TX_INPUT)
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).equalIgnoreCase(unit))
                 .and(TX_INPUT.TX_HASH.isNull())
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
                 .offset(pageable.getOffset())

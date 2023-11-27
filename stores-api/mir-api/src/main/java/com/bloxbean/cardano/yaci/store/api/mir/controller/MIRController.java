@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "MIR Service")
 @RequestMapping("${apiPrefix}/mir")
-@ConditionalOnExpression("${store.mir.api-enabled:true} && ${store.mir.enabled:true}")
+@ConditionalOnExpression("${store.mir.endpoints.mir.enabled:true}")
 public class MIRController {
 
     private final MIRService mirService;

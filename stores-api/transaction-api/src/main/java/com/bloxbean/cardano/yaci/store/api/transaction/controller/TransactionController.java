@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Transaction Service")
 @RequestMapping("${apiPrefix}/txs")
-@ConditionalOnExpression("${store.transaction.api-enabled:true} && ${store.transaction.enabled:true}")
+@ConditionalOnExpression("${store.transaction.endpoints.transaction.enabled:true}")
 public class TransactionController {
     private final TransactionService transactionService;
 

@@ -19,7 +19,7 @@ import java.util.Optional;
 @Tag(name = "Transaction Service")
 @RequestMapping("${apiPrefix}/utxos")
 @RequiredArgsConstructor
-@ConditionalOnExpression("${store.transaction.api-enabled:true} && ${store.utxo.enabled:true}")
+@ConditionalOnExpression("${store.utxo.endpoints.transaction.enabled:true}")
 public class UtxoController {
 
     private final UtxoService utxoService;

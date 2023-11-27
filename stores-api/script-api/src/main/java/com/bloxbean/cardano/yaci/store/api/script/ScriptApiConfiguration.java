@@ -6,7 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(name = {"store.script.enabled"}, havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = {"store.script.enabled", "store.script.api-enabled"},
+        havingValue = "true",
+        matchIfMissing = true
+)
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.api.script"})
 @EnableTransactionManagement
 public class ScriptApiConfiguration {

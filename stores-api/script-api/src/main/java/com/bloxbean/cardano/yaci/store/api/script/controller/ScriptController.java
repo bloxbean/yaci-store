@@ -24,7 +24,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("${apiPrefix}")
-@ConditionalOnExpression("${store.script.api-enabled:true} && ${store.script.enabled:true}")
+@ConditionalOnExpression("${store.script.endpoints.script.enabled:true}")
 public class ScriptController {
 
     private final ScriptService scriptService;

@@ -24,7 +24,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @RequestMapping("${apiPrefix}")
 @Tag(name = "Transaction Service")
-@ConditionalOnExpression("${store.transaction.api-enabled:true} && ${store.metadata.enabled:true}")
+@ConditionalOnExpression("${store.metadata.endpoints.transaction.enabled:true}")
 public class MetadataController {
 
     private final MetadataService metadataService;

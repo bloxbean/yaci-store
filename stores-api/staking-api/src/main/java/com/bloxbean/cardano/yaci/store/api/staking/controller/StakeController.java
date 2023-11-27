@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Account Service")
 @RequestMapping("${apiPrefix}/stake")
-@ConditionalOnExpression("${store.account.api-enabled:true} && ${store.staking.enabled:true}")
+@ConditionalOnExpression("${store.staking.endpoints.account.enabled:true}")
 public class StakeController {
 
     private final StakeService stakeService;
