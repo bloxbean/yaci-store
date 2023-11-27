@@ -18,7 +18,7 @@ import static com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes.STAKE_A
 @RestController
 @Tag(name = "Address Service")
 @RequestMapping("${apiPrefix}/addresses")
-@ConditionalOnExpression("${store.address.api-enabled:true} && ${store.utxo.enabled:true}")
+@ConditionalOnExpression("${store.utxo.endpoints.address.enabled:true}")
 public class AddressController {
 
     private final AddressService addressService;

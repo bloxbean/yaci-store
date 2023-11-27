@@ -25,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
-@ConditionalOnExpression("${store.assets.api-enabled:true} && ${store.assets.enabled:true}")
+@ConditionalOnExpression("${store.assets.endpoints.assets.enabled:true}")
 public class AssetController {
 
     private final AssetService assetService;

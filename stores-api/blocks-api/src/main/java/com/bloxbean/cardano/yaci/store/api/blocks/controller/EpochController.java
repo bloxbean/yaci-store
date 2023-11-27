@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Epoch Service")
 @RestController("EpochController")
 @RequestMapping("${apiPrefix}/epochs")
-@ConditionalOnExpression("${store.epoch.api-enabled:true} && ${store.blocks.enabled:true}")
+@ConditionalOnExpression("${store.blocks.endpoints.epoch.enabled:true}")
 public class EpochController {
 
     private final EpochReadService epochService;

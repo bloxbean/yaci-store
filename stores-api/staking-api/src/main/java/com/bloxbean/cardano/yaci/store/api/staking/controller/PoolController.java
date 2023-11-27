@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Pool Service")
 @RequestMapping("${apiPrefix}/pools")
-@ConditionalOnExpression("${store.pool.api-enabled:true} && ${store.staking.enabled:true}")
+@ConditionalOnExpression("${store.staking.endpoints.pool.enabled:true}")
 public class PoolController {
     private final PoolService poolService;
 

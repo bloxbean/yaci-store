@@ -20,7 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(name = "Epoch Service")
 @RequestMapping("${apiPrefix}/epochs")
-@ConditionalOnExpression("${store.epoch.api-enabled:true} && ${store.epoch.enabled:true}")
+@ConditionalOnExpression("${store.epoch.endpoints.epoch.enabled:true}")
 public class EpochController {
 
     private final EpochParamService epochParamService;
