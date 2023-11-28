@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Block Service")
 @RequestMapping("${apiPrefix}/blocks")
+@ConditionalOnExpression("${store.transaction.endpoints.block.enabled:true}")
 public class BlockTransactionController {
 
     private final TransactionService transactionService;
