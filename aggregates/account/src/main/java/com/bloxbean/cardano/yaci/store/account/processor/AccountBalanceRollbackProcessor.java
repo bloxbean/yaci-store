@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
-import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +22,6 @@ public class AccountBalanceRollbackProcessor {
         //Check rollbackTo slot
         int addressBalanceDeleted = accountBalanceStorage.deleteAddressBalanceBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         int stakeBalanceDeleted = accountBalanceStorage.deleteStakeAddressBalanceBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-
-        //Updated last processed block for account balance
-        accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, null,
-                rollbackEvent.getRollbackTo().getHash(), rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} address_balance records", addressBalanceDeleted);
         log.info("Rollback -- {} stake_balance records", stakeBalanceDeleted);
