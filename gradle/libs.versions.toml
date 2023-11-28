@@ -15,3 +15,6 @@ assertj-core="org.assertj:assertj-core:3.24.2"
 
 spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.1.8"
 spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.1.8"
+
+rocksdb="org.rocksdb:rocksdbjni:8.8.1"
+messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
