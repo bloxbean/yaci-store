@@ -70,6 +70,11 @@ public class EmbeddedUtxoStorage implements UtxoStorage {
         return 0; //TODO
     }
 
+    @Override
+    public int deleteBySpentAndBlockLessThan(Long block) {
+        return 0; // TODO
+    }
+
     private String getKey(String txHash, int outputIndex) {
         return txHash + "#" + outputIndex;
     }
