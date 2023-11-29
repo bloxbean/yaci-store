@@ -3,8 +3,10 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import jakarta.persistence.QueryHint;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
@@ -50,5 +52,10 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
             @QueryHint(name = "org.hibernate.readOnly", value = "true") })
     List<Object[]> findBySpentAtBlockBetween(Long startBlock, Long endBlock);
 
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM AddressUtxoEntity a WHERE a IN (SELECT au FROM AddressUtxoEntity au JOIN TxInputEntity s ON " +
+            "au.txHash = s.txHash AND au.outputIndex = s.outputIndex AND s.spentAtBlock < :block)")
+    int deleteBySpentAndBlockLessThan(Long block);
 }
 
