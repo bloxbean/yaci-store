@@ -28,6 +28,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
+
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
     private final DSLContext dsl;
@@ -41,9 +42,8 @@ public class UtxoStorageImpl implements UtxoStorage {
             return cacheUtxo;
         else {
             var savedUtxo = utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                    .map(entity -> mapper.toAddressUtxo(entity));
-            if (savedUtxo.isPresent())
-                utxoCache.add(savedUtxo.get());
+                    .map(mapper::toAddressUtxo);
+            savedUtxo.ifPresent(utxoCache::add);
 
             return savedUtxo;
         }
@@ -68,7 +68,7 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         //Add remaining utxos to cache
         if (savedUtxos != null)
-            savedUtxos.stream().forEach(utxo -> utxoCache.add(utxo));
+            savedUtxos.forEach(utxoCache::add);
 
         List<AddressUtxo> finalUtxos = new ArrayList<>();
         finalUtxos.addAll(cacheResult._1);
@@ -88,9 +88,14 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     @Override
+    public int deleteBySpentAndBlockLessThan(Long block) {
+        return utxoRepository.deleteBySpentAndBlockLessThan(block);
+    }
+
+    @Override
     public void saveUnspent(List<AddressUtxo> addressUtxoList) {
         List<AddressUtxoEntity> addressUtxoEntities = addressUtxoList.stream()
-                .map(addressUtxo -> mapper.toAddressUtxoEntity(addressUtxo))
+                .map(mapper::toAddressUtxoEntity)
                 .toList();
 
         LocalDateTime localDateTime = LocalDateTime.now();
@@ -140,13 +145,12 @@ public class UtxoStorageImpl implements UtxoStorage {
             }
         });
 
-        addressUtxoList.stream()
-                .forEach(addressUtxo -> utxoCache.add(addressUtxo));
+        addressUtxoList.forEach(utxoCache::add);
     }
 
     @Override
     public void saveSpent(List<TxInput> txInputs) {
-        if (txInputs == null || txInputs.size() == 0)
+        if (txInputs == null || txInputs.isEmpty())
             return;
 
         dsl.batched(c -> {
