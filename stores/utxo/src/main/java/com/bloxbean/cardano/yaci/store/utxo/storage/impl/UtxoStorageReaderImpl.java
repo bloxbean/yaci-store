@@ -14,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepos
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +30,6 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static org.jooq.impl.DSL.field;
 
 @RequiredArgsConstructor
-@Slf4j
 public class UtxoStorageReaderImpl implements UtxoStorageReader {
 
     private final UtxoRepository utxoRepository;
@@ -71,8 +69,6 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
-        log.info(query.getSQL());
-
         return query.fetch().into(AddressUtxo.class);
     }
 
@@ -92,8 +88,6 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
-
-        log.info(query.getSQL());
 
         return query.fetch().into(AddressUtxo.class);
     }
@@ -121,7 +115,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc()) //TODO ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
@@ -154,7 +148,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
                 // .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
