@@ -110,7 +110,11 @@ public class AccountBalanceProcessor {
                                         .map(txInput -> new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex()))
                                         .toList();
 
-                                List<AddressUtxo> inputAddressUtxos = utxoClient.getUtxosByIds(inputKeys);
+                                List<AddressUtxo> inputAddressUtxos = utxoClient.getUtxosByIds(inputKeys)
+                                        .stream()
+                                        .filter(Objects::nonNull)
+                                        .toList();
+
                                 if (inputAddressUtxos.size() != inputKeys.size())
                                     throw new IllegalStateException("Unable to get inputs for all input keys for account balance calculation : " + inputKeys);
 
