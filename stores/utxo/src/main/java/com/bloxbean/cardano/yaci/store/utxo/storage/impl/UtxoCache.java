@@ -50,7 +50,17 @@ public class UtxoCache { //TODO -- auto expiry
         return new Tuple<>(foundList, notFoundList);
     }
 
+    public List<AddressUtxo> getAll() {
+        return new ArrayList<>(utxoCache.values());
+    }
+
+    public int size() {
+        return utxoCache.size();
+    }
+
     public void clear() {
+        if (log.isDebugEnabled())
+            log.debug("Clearing UTXO cache : " + utxoCache.size());
         utxoCache.clear();
     }
 
