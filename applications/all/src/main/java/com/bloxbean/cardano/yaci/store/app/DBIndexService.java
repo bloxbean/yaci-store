@@ -10,8 +10,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
@@ -34,8 +34,7 @@ public class DBIndexService {
     }
 
     @EventListener
-    @Async
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleFirstBlockEvent(BlockHeaderEvent blockHeaderEvent) {
         if (indexRemoved.get() || blockHeaderEvent.getMetadata().getBlock() > 1
                 || blockHeaderEvent.getMetadata().isSyncMode())
@@ -45,7 +44,7 @@ public class DBIndexService {
     }
 
     @EventListener
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleFirstBlockEventToCreateIndex(BlockHeaderEvent blockHeaderEvent) {
         if (blockHeaderEvent.getMetadata().isSyncMode() && !indexApplied.get()) {
             if (blockHeaderEvent.getMetadata().getBlock() < 50000) {
@@ -59,8 +58,7 @@ public class DBIndexService {
     }
 
     @EventListener
-    @Transactional
-    @Async
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @SneakyThrows
     public void handleFirstBlockEvent(ByronMainBlockEvent byronMainBlockEvent) {
         if (indexRemoved.get() || byronMainBlockEvent.getMetadata().getBlock() > 1
