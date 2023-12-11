@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.common.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class ListUtil {
     public static  <T> List<List<T>> partition(List<T> list, int size) {
@@ -20,5 +21,19 @@ public class ListUtil {
             partitions.add(list.subList(from, to));
         }
         return partitions;
+    }
+
+    public static <T> void partitionAndApply(List<T> list, int batchSize, Consumer<List<T>> applyFunc) {
+        if (list == null || list.size() == 0)
+            return;
+
+        if (list.size() <= batchSize) {
+            applyFunc.accept(list);
+        } else {
+            List<List<T>> partitions = partition(new ArrayList<>(list), batchSize);
+            for (var partition: partitions) {
+                applyFunc.accept(partition);
+            }
+        }
     }
 }
