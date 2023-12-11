@@ -14,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepos
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,8 +30,8 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static org.jooq.impl.DSL.field;
 
 @RequiredArgsConstructor
-@Slf4j
 public class UtxoStorageReaderImpl implements UtxoStorageReader {
+
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
     private final DSLContext dsl;
@@ -41,7 +40,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
         return utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                .map(entity -> mapper.toAddressUtxo(entity));
+                .map(mapper::toAddressUtxo);
     }
 
     @Override
@@ -52,6 +51,25 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .stream()
                 .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
                 .toList();
+    }
+
+    @Override
+    public List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order) {
+        Pageable pageable = PageRequest.of(page, count)
+                .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
+
+        var query = dsl
+                .select(ADDRESS_UTXO.fields())
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
+                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
+                .and(TX_INPUT.TX_HASH.isNull())
+                //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize());
+
+        return query.fetch().into(AddressUtxo.class);
     }
 
     @Override
@@ -66,15 +84,12 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_ADDR.eq(address))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
-        log.info(query.getSQL());
-
-        List<AddressUtxo> addressUtxoList = query.fetch().into(AddressUtxo.class);
-        return addressUtxoList;
+        return query.fetch().into(AddressUtxo.class);
     }
 
     @Override
@@ -82,12 +97,10 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
 
-        List<AddressUtxo> addressUtxoList = utxoRepository.findUnspentByOwnerPaymentCredential(paymentCredential, pageable)
+        return utxoRepository.findUnspentByOwnerPaymentCredential(paymentCredential, pageable)
                 .stream()
                 .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
                 .toList();
-
-        return addressUtxoList;
     }
 
     @Override
@@ -102,13 +115,12 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc()) //TODO ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
-        List<AddressUtxo> addressUtxoList = query.fetch().into(AddressUtxo.class);
-        return addressUtxoList;
+        return query.fetch().into(AddressUtxo.class);
     }
 
     @Override
@@ -116,12 +128,10 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
 
-        List<AddressUtxo> addressUtxoList = utxoRepository.findUnspentByOwnerStakeAddr(stakeAddress, pageable)
+        return utxoRepository.findUnspentByOwnerStakeAddr(stakeAddress, pageable)
                 .stream()
                 .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
                 .toList();
-
-        return addressUtxoList;
     }
 
     @Override
@@ -138,13 +148,12 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains(unit))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
                 // .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
-        List<AddressUtxo> addressUtxoList = query.fetch().into(AddressUtxo.class);
-        return addressUtxoList;
+        return query.fetch().into(AddressUtxo.class);
     }
 
     @Override
@@ -166,7 +175,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     @Override
     public List<AddressUtxo> findUnspentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
         return utxoRepository.findByBlockNumberBetween(startBlock, endBlock)
-                .stream().map(entity -> mapper.toAddressUtxo(entity))
+                .stream().map(mapper::toAddressUtxo)
                 .toList();
     }
 

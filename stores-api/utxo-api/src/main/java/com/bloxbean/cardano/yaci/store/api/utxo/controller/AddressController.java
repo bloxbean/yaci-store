@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import static com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes.STAKE_A
 @RestController
 @Tag(name = "Address Service")
 @RequestMapping("${apiPrefix}/addresses")
+@ConditionalOnExpression("${store.utxo.endpoints.address.enabled:true}")
 public class AddressController {
 
     private final AddressService addressService;
