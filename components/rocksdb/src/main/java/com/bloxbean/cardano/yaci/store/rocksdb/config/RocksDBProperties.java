@@ -1,11 +1,13 @@
-package com.bloxbean.cardano.yaci.store.rocksdb;
+package com.bloxbean.cardano.yaci.store.rocksdb.config;
 
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
 
+@Data
 @Component
 public class RocksDBProperties {
 
