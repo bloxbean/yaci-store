@@ -1,5 +1,7 @@
-package com.bloxbean.cardano.yaci.store.rocksdb;
+package com.bloxbean.cardano.yaci.store.rocksdb.config;
 
+import com.bloxbean.cardano.yaci.store.rocksdb.serializer.MessagePackSerializer;
+import com.bloxbean.cardano.yaci.store.rocksdb.serializer.Serializer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +31,9 @@ public class RocksDBConfig {
 
     private File baseDir;
 
+    private Serializer keySerializer;
+    private Serializer valueSerializer;
+
     @PostConstruct
     public void initDB() {
         try {
@@ -39,19 +45,30 @@ public class RocksDBConfig {
             // Default column family
             cfDescriptors.add(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY));
 
+            BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            tableConfig.setFilterPolicy(new BloomFilter(10, false));
+
             // Dynamic column families
             for (String cfName : rocksDBProperties.getColumnFamilyNames()) {
-                cfDescriptors.add(new ColumnFamilyDescriptor(cfName.getBytes()));
+                var cfDescriptor = new ColumnFamilyDescriptor(cfName.getBytes(StandardCharsets.UTF_8));
+                cfDescriptor.getOptions().useCappedPrefixExtractor(56);
+                cfDescriptors.add(cfDescriptor);
+                cfDescriptor.getOptions().setTableFormatConfig(tableConfig);
             }
 
             baseDir = new File(rocksDBProperties.getRocksDBBaseDir(), FILE_NAME);
             Files.createDirectories(baseDir.getParentFile().toPath());
             Files.createDirectories(baseDir.getAbsoluteFile().toPath());
 
-            try (final DBOptions options = new DBOptions().setCreateIfMissing(true).setCreateMissingColumnFamilies(true)) {
+            try (final var options = new DBOptions().setCreateIfMissing(true).setCreateMissingColumnFamilies(true)) {
+
+               // db = RocksDB.open(options, baseDir.getAbsolutePath());
                 db = RocksDB.open(options, baseDir.getAbsolutePath(), cfDescriptors, cfHandles);
 
                 for (int i = 0; i < cfHandles.size(); i++) {
+                    if (log.isDebugEnabled())
+                        log.debug("Column family name: '{}'", new String(cfDescriptors.get(i).getName()));
+
                     columnFamilyHandles.put(new String(cfDescriptors.get(i).getName()), cfHandles.get(i));
                 }
             }
@@ -79,5 +96,31 @@ public class RocksDBConfig {
 
     public ColumnFamilyHandle getColumnFamilyHandle(String name) {
         return columnFamilyHandles.get(name);
+    }
+
+    public void setKeySerializer(Serializer serializer) {
+        if (keySerializer != null)
+            throw new IllegalStateException("Key serializer is already set");
+
+        this.keySerializer = serializer;
+    }
+
+    public void setValueSerializer(Serializer serializer) {
+        if (valueSerializer != null)
+            throw new IllegalStateException("Value serializer is already set");
+
+        this.valueSerializer = serializer;
+    }
+
+    public Serializer getKeySerializer() {
+        if (keySerializer == null)
+            return new MessagePackSerializer();
+        return keySerializer;
+    }
+
+    public Serializer getValueSerializer() {
+        if (valueSerializer == null)
+            return new MessagePackSerializer();
+        return valueSerializer;
     }
 }
