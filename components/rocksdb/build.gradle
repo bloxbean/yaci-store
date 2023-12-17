@@ -1,7 +1,7 @@
 dependencies {
     api project(":components:common")
 
-    implementation libs.rocksdb
+    api libs.rocks.types
     implementation libs.messagepack.jackson
 }
 
