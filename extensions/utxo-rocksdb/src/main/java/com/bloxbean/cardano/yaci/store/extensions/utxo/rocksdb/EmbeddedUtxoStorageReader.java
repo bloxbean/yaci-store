@@ -8,9 +8,9 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.rocksdb.RocksDBRepository;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.KeyValue;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBConfig;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
+import com.bloxbean.rocks.types.common.KeyValue;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -58,6 +58,11 @@ public class EmbeddedUtxoStorageReader implements UtxoStorageReader {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid address"));
 
         return findUtxoByPaymentCredential(paymentCred, page, count, order);
+    }
+
+    @Override
+    public List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
