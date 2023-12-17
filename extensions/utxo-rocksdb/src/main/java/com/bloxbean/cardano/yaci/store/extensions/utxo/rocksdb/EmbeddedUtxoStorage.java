@@ -6,16 +6,17 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.rocksdb.*;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.IndexRecord;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.KeyValue;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBConfig;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
+import com.bloxbean.rocks.types.common.IndexRecord;
+import com.bloxbean.rocks.types.common.KeyValue;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -86,6 +87,9 @@ public class EmbeddedUtxoStorage implements UtxoStorage {
 
     @Override
     public List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys) {
+        if (utxoKeys.size() == 0)
+            return Collections.emptyList();
+
         var keys = utxoKeys.stream()
                 .map(utxoKey -> getKey(utxoKey.getTxHash(), utxoKey.getOutputIndex()))
                 .toList();
@@ -137,6 +141,11 @@ public class EmbeddedUtxoStorage implements UtxoStorage {
         } else {
             return 0;
         }
+    }
+
+    @Override
+    public int deleteBySpentAndBlockLessThan(Long block) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     @EventListener
