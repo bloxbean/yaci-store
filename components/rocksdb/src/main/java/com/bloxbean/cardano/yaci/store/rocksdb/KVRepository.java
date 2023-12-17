@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.rocksdb;
 
-import com.bloxbean.cardano.yaci.store.rocksdb.common.KeyValue;
+import com.bloxbean.rocks.types.common.KeyValue;
 
 import java.util.List;
 import java.util.Optional;

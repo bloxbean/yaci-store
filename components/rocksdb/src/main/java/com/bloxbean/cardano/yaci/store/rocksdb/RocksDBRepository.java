@@ -1,11 +1,11 @@
 package com.bloxbean.cardano.yaci.store.rocksdb;
 
-import com.bloxbean.cardano.yaci.store.rocksdb.common.IndexDef;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.IndexRecord;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.KeyValue;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBConfig;
-import com.bloxbean.cardano.yaci.store.rocksdb.serializer.Serializer;
-import com.bloxbean.cardano.yaci.store.rocksdb.types.RocksDBMultiSet;
+import com.bloxbean.rocks.types.collection.RocksMultiSet;
+import com.bloxbean.rocks.types.common.IndexDef;
+import com.bloxbean.rocks.types.common.IndexRecord;
+import com.bloxbean.rocks.types.common.KeyValue;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
+import com.bloxbean.rocks.types.serializer.Serializer;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
@@ -28,7 +28,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
     private static Map<String, ColumnFamilyHandle> indexColumnFamilyHandles = new ConcurrentHashMap<>();
 
-    private Map<String, RocksDBMultiSet> indexMap = new ConcurrentHashMap<>();
+    private Map<String, RocksMultiSet> indexMap = new ConcurrentHashMap<>();
 
     public RocksDBRepository(RocksDBConfig dbConfig, String columnFamily) {
         this(dbConfig, columnFamily, false);
@@ -71,7 +71,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
             indexColumnFamilyHandles.put(indexColumnFamily, indexColumnFamilyHandle);
         }
 
-        RocksDBMultiSet rocksDBMultiSet = new RocksDBMultiSet(dbConfig, indexDef.getIndexName());
+        RocksMultiSet rocksDBMultiSet = new RocksMultiSet(dbConfig, indexDef.getIndexName(), String.class);
         indexMap.put(indexDef.getIndexName(), rocksDBMultiSet);
 
         return this;
@@ -301,7 +301,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
         try (var writeBatch = new WriteBatch()) {
             for (var indexRecord : indexRecords) {
-                indexSet.remove(writeBatch, indexRecord.getPartKey(), indexRecord.getSecondaryKey());
+                indexSet.removeBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
                 //writeBatch.delete(columnHandler, keySerializer.serialize(indexKey));
             }
 
@@ -324,7 +324,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
             try {
                 for (var indexRecord: indexRecords) {
-                    indexSet.add(writeBatch, indexRecord.getPartKey(), indexRecord.getSecondaryKey());
+                    indexSet.addBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
                 }
             } catch (Exception e) {
                 log.error("Error creating index : {}", indexRecords);
@@ -345,7 +345,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
                 try {
                     for (var indexRecord: indexRecords) {
-                        indexSet.add(writeBatch, indexRecord.getPartKey(), indexRecord.getSecondaryKey());
+                        indexSet.addBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
                     }
 
                 } catch (Exception e) {

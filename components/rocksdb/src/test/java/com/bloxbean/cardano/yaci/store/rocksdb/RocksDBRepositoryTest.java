@@ -4,9 +4,9 @@ import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.KeyValue;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBConfig;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBProperties;
+import com.bloxbean.rocks.types.common.KeyValue;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
+import com.bloxbean.rocks.types.config.RocksDBProperties;
 import org.junit.jupiter.api.*;
 
 import java.io.File;
@@ -25,25 +25,24 @@ class RocksDBRepositoryTest {
     private static RocksDBConfig rocksDBConfig;
     private static RocksDBProperties rocksDBProperties;
 
-    @BeforeAll
-    static void setup() {
+    @BeforeEach
+    void setup() {
+        File rocksDBFolder = new File(tmpdir + File.separator + "rocks-test");
+        deleteDirectory(rocksDBFolder);
+
         rocksDBProperties = new RocksDBProperties();
         rocksDBProperties.setRocksDBBaseDir(tmpdir + File.separator + "rocksdb-test");
         rocksDBProperties.setColumnFamilies("test1,test2");
 
         rocksDBConfig = new RocksDBConfig(rocksDBProperties);
-        rocksDBConfig.initDB();
 
         rocksDBRepository = new RocksDBRepository(rocksDBConfig, "test1");
     }
 
-    @AfterAll
-    static void tearDown() {
+    @AfterEach
+    void tearDown() {
         if (rocksDBConfig != null)
             rocksDBConfig.closeDB();
-
-        File rocksDBFolder = new File(tmpdir + File.separator + "rocks-test");
-        deleteDirectory(rocksDBFolder);
     }
 
     static boolean deleteDirectory(File directoryToBeDeleted) {
