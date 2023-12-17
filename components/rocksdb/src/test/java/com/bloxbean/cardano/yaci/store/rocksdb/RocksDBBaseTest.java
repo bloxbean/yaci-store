@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.rocksdb;
 
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBConfig;
-import com.bloxbean.cardano.yaci.store.rocksdb.config.RocksDBProperties;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
+import com.bloxbean.rocks.types.config.RocksDBProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 

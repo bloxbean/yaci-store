@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.store.rocksdb.common.IndexRecord;
+import com.bloxbean.rocks.types.common.IndexRecord;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
