@@ -15,10 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -46,12 +43,13 @@ public class RedeemerDatumMatcher {
                 .collect(Collectors.toList()) : null;
 
         List<TransactionInput> inputs = new ArrayList<>(transaction.getBody().getInputs());
+        List<TransactionInput> sortedInputs = getSortedInputs(inputs);
         List<com.bloxbean.cardano.yaci.core.model.Redeemer> redeemers = transaction.getWitnesses().getRedeemers();
         List<ScriptContext> scriptContexts = redeemers.stream()
                 .map(redeemer -> {
                     ScriptContext scriptContext;
                     if (redeemer.getTag() == RedeemerTag.Spend) {
-                        scriptContext = findSpendScriptFromRedeemer(redeemer, inputs, scriptsMap)
+                        scriptContext = findSpendScriptFromRedeemer(redeemer, sortedInputs, scriptsMap)
                                 .orElse(new ScriptContext());
                         scriptContext.setRedeemer(redeemer); //set redeemer here to save serialization cost
                     } else if (redeemer.getTag() == RedeemerTag.Mint) {
@@ -83,10 +81,9 @@ public class RedeemerDatumMatcher {
         return scriptContexts;
     }
 
-    public Optional<ScriptContext> findSpendScriptFromRedeemer(Redeemer redeemer,
-                                                               List<TransactionInput> inputs, Map<String, PlutusScript> scriptsMap) {
-        //Sort inputs and find the right input for redeemer
-        TransactionInput input = getScriptInputFromRedeemer(redeemer, inputs);
+    public Optional<ScriptContext> findSpendScriptFromRedeemer(Redeemer redeemer, List<TransactionInput> sortedInputs, Map<String, PlutusScript> scriptsMap) {
+        int index = redeemer.getIndex();
+        TransactionInput input = sortedInputs.get(index);
 
         //Find out if any script addressed inputs
         Optional<ScriptContext> scriptContext = utxoClient.getUtxoById(new UtxoKey(input.getTransactionId(), input.getIndex()))
@@ -187,15 +184,14 @@ public class RedeemerDatumMatcher {
         return Optional.of(scriptContext);
     }
 
-    //Sort inputs and then find the right input for the redeemer's index field
-    public static TransactionInput getScriptInputFromRedeemer(Redeemer redeemer, List<TransactionInput> inputs) {
-        //Sorting required to find the correct input. This is the current behavior in the node.
+    private static List<TransactionInput> getSortedInputs(List<TransactionInput> inputs) {
         List<TransactionInput> copyInputs = inputs
                 .stream()
                 .collect(Collectors.toList());
-        copyInputs.sort((o1, o2) -> (o1.getTransactionId() + "#" + o1.getIndex()).compareTo(o2.getTransactionId() + "#" + o2.getIndex()));
-
-        int index = redeemer.getIndex();
-        return copyInputs.get(index);
+        copyInputs.sort(
+                Comparator.comparing(TransactionInput::getTransactionId)
+                        .thenComparing(TransactionInput::getIndex)
+        );
+        return copyInputs;
     }
 }
