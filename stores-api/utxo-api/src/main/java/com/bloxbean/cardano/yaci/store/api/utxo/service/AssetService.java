@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Slf4j
-@Component
+@Component("utxoAssetService")
 @RequiredArgsConstructor
 public class AssetService {
 
