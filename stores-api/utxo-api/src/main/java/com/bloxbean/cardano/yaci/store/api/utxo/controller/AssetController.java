@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController
+@RestController("utxoAssetController")
 @Tag(name = "Asset Service")
 @RequestMapping("${apiPrefix}/assets")
 @ConditionalOnExpression("${store.utxo.endpoints.asset.enabled:true}")
