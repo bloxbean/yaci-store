@@ -15,6 +15,18 @@ public class MetadataStoreProperties {
     public static final class Metadata  {
        private boolean enabled = true;
        private boolean apiEnabled = true;
+       private Endpoints endpoints = new Endpoints();
     }
 
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint transaction = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
+    }
 }

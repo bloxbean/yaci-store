@@ -18,6 +18,20 @@ public class BlocksStoreProperties {
        private boolean epochCalculationEnabled;
 
        private boolean apiEnabled = true;
+
+       private Endpoints endpoints = new Endpoints();
     }
 
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint block = new Endpoint();
+        private Endpoint epoch = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
+    }
 }

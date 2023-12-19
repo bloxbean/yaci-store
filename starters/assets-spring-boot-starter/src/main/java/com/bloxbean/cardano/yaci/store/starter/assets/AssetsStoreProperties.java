@@ -15,6 +15,19 @@ public class AssetsStoreProperties {
     public static final class Assets  {
        private boolean enabled = true;
        private boolean apiEnabled = true;
+       private Endpoints endpoints = new Endpoints();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint asset = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
     }
 
 }
