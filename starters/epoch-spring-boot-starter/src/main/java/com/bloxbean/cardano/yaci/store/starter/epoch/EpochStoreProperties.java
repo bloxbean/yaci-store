@@ -8,13 +8,26 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class EpochStoreProperties {
-    private ProtocolParams protocolParams;
+    private Epoch epoch;
 
     @Getter
     @Setter
-    public static final class ProtocolParams {
+    public static final class Epoch {
        private boolean enabled = true;
        private boolean apiEnabled = true;
+       private Endpoints endpoints = new Endpoints();
     }
 
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint epoch = new Endpoint();
+        private Endpoint network = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
+    }
 }
