@@ -15,6 +15,18 @@ public class ScriptStoreProperties {
     public static final class Script  {
        private boolean enabled = true;
        private boolean apiEnabled = true;
+       private Endpoints endpoints = new Endpoints();
     }
 
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint script = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
+    }
 }
