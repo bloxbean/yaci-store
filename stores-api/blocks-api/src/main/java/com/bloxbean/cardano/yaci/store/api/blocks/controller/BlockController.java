@@ -23,7 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Block Service")
 @RequestMapping("${apiPrefix}/blocks")
-@ConditionalOnExpression("${store.blocks.endpoints.blocks.enabled:true}")
+@ConditionalOnExpression("${store.blocks.endpoints.block.enabled:true}")
 public class BlockController {
 
     private final BlockService blockService;

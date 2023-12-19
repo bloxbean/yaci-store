@@ -15,6 +15,18 @@ public class MIRStoreProperties {
     public static final class MIR  {
        private boolean enabled = true;
        private boolean apiEnabled = true;
+       private Endpoints endpoints = new Endpoints();
     }
 
+    @Getter
+    @Setter
+    public static final class Endpoints {
+        private Endpoint mir = new Endpoint();
+    }
+
+    @Getter
+    @Setter
+    public static final class Endpoint {
+        private boolean enabled = true;
+    }
 }
