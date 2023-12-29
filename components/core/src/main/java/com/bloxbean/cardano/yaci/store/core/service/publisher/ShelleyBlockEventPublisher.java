@@ -176,8 +176,21 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             return true;
         });
 
+        //Governance
+        var governanceEvent = CompletableFuture.supplyAsync(() -> {
+            List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
+                            transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
+                    .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
+                            transaction.getBody().getProposalProcedures()))
+                    .collect(Collectors.toList());
+
+            if (txGovernanceList.size() > 0)
+                publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
+            return true;
+        });
+
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
-                txCertificateEvent, txMintBurnEvent, txUpdateEvent).join();
+                txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent).join();
     }
 
     private void processBlockSingleThread(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
@@ -224,6 +237,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .toList();
         if (txUpdates.size() > 0)
             publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
+
+        //Governance
+        List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
+                        transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
+                .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
+                        transaction.getBody().getProposalProcedures()))
+                .collect(Collectors.toList());
+
+        if (txGovernanceList.size() > 0)
+            publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
     }
 
     private CompletableFuture<Boolean> publishEventAsync(Object event) {
