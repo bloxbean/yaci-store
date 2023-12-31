@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb;
 
+import com.bloxbean.cardano.client.address.util.AddressUtil;
 import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
@@ -93,5 +94,20 @@ public class UtxoStoreKeyUtils {
             throw new IllegalArgumentException("Invalid key");
 
         return new UtxoKey(parts[0], Integer.parseInt(parts[1]));
+    }
+
+    public static byte[] getAddressBytes(String address) {
+        try {
+            return AddressUtil.addressToBytes(address);
+        } catch (Exception e) {
+            return address.getBytes(StandardCharsets.UTF_8);
+        }
+    }
+
+    public static byte[] getPaymentCredential(String paymentCredential) {
+        if (paymentCredential == null)
+            return null;
+
+        return HexUtil.decodeHexString(paymentCredential);
     }
 }

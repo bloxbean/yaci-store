@@ -1,12 +1,15 @@
 package com.bloxbean.cardano.yaci.store.aggregation.config;
 
-import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.EmbeddedUtxoStorage;
-import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.EmbeddedUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.aggregation.storage.RocksDBAccountBalanceStorageImpl;
+import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorage;
+import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.rocks.types.config.RocksDBConfig;
 import com.bloxbean.rocks.types.config.RocksDBProperties;
+import com.bloxbean.rocks.types.serializer.JacksonSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,17 +37,26 @@ public class EmbeddedDBConfig {
         var rocksDBProperties = new RocksDBProperties();
         rocksDBProperties.setRocksDBBaseDir(rocksDBBaseDir);
         rocksDBProperties.setColumnFamilies(columnFamilies);
-        return new RocksDBConfig(rocksDBProperties);
+        var rocksDBConfig = new RocksDBConfig(rocksDBProperties);
+        rocksDBConfig.setKeySerializer(new JacksonSerializer());
+        rocksDBConfig.setValueSerializer(new JacksonSerializer());
+
+        return rocksDBConfig;
     }
 
     @Bean
     public UtxoStorage utxoStorage(RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
-        return new EmbeddedUtxoStorage(rocksDBConfig, utxoCache);
+        return new RocksDBUtxoStorage(rocksDBConfig, utxoCache);
     }
 
     @Bean
     public UtxoStorageReader utxoStorageReader(RocksDBConfig rocksDBConfig) {
-        return new EmbeddedUtxoStorageReader(rocksDBConfig);
+        return new RocksDBUtxoStorageReader(rocksDBConfig);
+    }
+
+    @Bean
+    public AccountBalanceStorage accountBalanceStorage(RocksDBConfig rocksDBConfig) {
+        return new RocksDBAccountBalanceStorageImpl(rocksDBConfig);
     }
 
 }
