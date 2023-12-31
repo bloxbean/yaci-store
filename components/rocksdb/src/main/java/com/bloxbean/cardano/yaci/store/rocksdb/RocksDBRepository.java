@@ -269,7 +269,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
         if (indexMultiSet == null)
             throw new IllegalStateException("Index not found for name: " + indexName);
 
-        Set<String> secondaryKeys = indexMultiSet.members(indexKeyPrefix);
+        Set<String> secondaryKeys = indexMultiSet.members(strToBytes(indexKeyPrefix));
         if (secondaryKeys == null || secondaryKeys.size() == 0)
             return Collections.emptyList();
 
@@ -301,7 +301,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
         try (var writeBatch = new WriteBatch()) {
             for (var indexRecord : indexRecords) {
-                indexSet.removeBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
+                indexSet.removeBatch(strToBytes(indexRecord.getPartKey()), writeBatch, indexRecord.getSecondaryKey());
                 //writeBatch.delete(columnHandler, keySerializer.serialize(indexKey));
             }
 
@@ -324,7 +324,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
             try {
                 for (var indexRecord: indexRecords) {
-                    indexSet.addBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
+                    indexSet.addBatch(strToBytes(indexRecord.getPartKey()), writeBatch, indexRecord.getSecondaryKey());
                 }
             } catch (Exception e) {
                 log.error("Error creating index : {}", indexRecords);
@@ -345,7 +345,7 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
 
                 try {
                     for (var indexRecord: indexRecords) {
-                        indexSet.addBatch(indexRecord.getPartKey(), writeBatch, indexRecord.getSecondaryKey());
+                        indexSet.addBatch(strToBytes(indexRecord.getPartKey()), writeBatch, indexRecord.getSecondaryKey());
                     }
 
                 } catch (Exception e) {
@@ -367,5 +367,9 @@ public class RocksDBRepository<V> implements KVRepository<String, V> {
                 writeBatch.delete(indexColFamilyHandle, keySerializer.serialize(key));
             }
         }
+    }
+
+    private byte[] strToBytes(String str) {
+        return str.getBytes(StandardCharsets.UTF_8);
     }
 }
