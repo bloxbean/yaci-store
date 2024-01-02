@@ -33,8 +33,8 @@ public class VotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "voter_hash")
     private String voterHash;
 
-    @Column(name = "transaction_id", length = 64)
-    private String transactionId;
+    @Column(name = "gov_action_tx_hash")
+    private String govActionTxHash;
 
     @Column(name = "gov_action_index")
     private Integer govActionIndex;
