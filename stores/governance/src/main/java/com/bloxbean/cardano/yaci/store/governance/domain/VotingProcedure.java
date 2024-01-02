@@ -27,7 +27,7 @@ public class VotingProcedure extends BlockAwareDomain {
 
     private String voterHash;
 
-    private String transactionId;
+    private String govActionTxHash;
 
     private Integer govActionIndex;
 

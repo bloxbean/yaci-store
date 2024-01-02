@@ -55,7 +55,7 @@ public class VotingProcedureProcessor {
                     votingProcedure.setIndex(index++);
                     votingProcedure.setVote(votingInfo.getVote());
                     votingProcedure.setTxHash(txGovernance.getTxHash());
-                    votingProcedure.setTransactionId(govActionId.getTransactionId());
+                    votingProcedure.setGovActionTxHash(govActionId.getTransactionId());
                     votingProcedure.setGovActionIndex(govActionId.getGov_action_index());
 
                     if (votingInfo.getAnchor() != null) {
