@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorag
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
-import com.bloxbean.rocks.types.config.RocksDBConfig;
 import com.bloxbean.rocks.types.config.RocksDBProperties;
 import com.bloxbean.rocks.types.serializer.JacksonSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,26 +17,26 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(name = "store.aggr.embedded-utxo-store-enabled",
-        havingValue = "true",
+@ConditionalOnProperty(name = "store.aggr.utxo-storage-type",
+        havingValue = "rocksdb",
         matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.rocksdb"})
-public class EmbeddedDBConfig {
+public class RocksDBConfig {
 
     @Value("${store.aggr.rocksdb.base-dir:./_rocksdb}")
     private String rocksDBBaseDir;
 
-    @Value("${store.rocksdb.column-families:}")
+    @Value("${store.rocksdb.column-families:utxos,spent-utxos,account_balances,stake_account_balances}")
     private String columnFamilies;
 
     @Bean
     @ConditionalOnMissingBean
-    public RocksDBConfig rocksDBConfig() {
+    public com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig() {
         var rocksDBProperties = new RocksDBProperties();
         rocksDBProperties.setRocksDBBaseDir(rocksDBBaseDir);
         rocksDBProperties.setColumnFamilies(columnFamilies);
-        var rocksDBConfig = new RocksDBConfig(rocksDBProperties);
+        var rocksDBConfig = new com.bloxbean.rocks.types.config.RocksDBConfig(rocksDBProperties);
         rocksDBConfig.setKeySerializer(new JacksonSerializer());
         rocksDBConfig.setValueSerializer(new JacksonSerializer());
 
@@ -45,17 +44,21 @@ public class EmbeddedDBConfig {
     }
 
     @Bean
-    public UtxoStorage utxoStorage(RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
+    public UtxoStorage utxoStorage(com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
         return new RocksDBUtxoStorage(rocksDBConfig, utxoCache);
     }
 
     @Bean
-    public UtxoStorageReader utxoStorageReader(RocksDBConfig rocksDBConfig) {
+    public UtxoStorageReader utxoStorageReader(com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig) {
         return new RocksDBUtxoStorageReader(rocksDBConfig);
     }
 
     @Bean
-    public AccountBalanceStorage accountBalanceStorage(RocksDBConfig rocksDBConfig) {
+    @ConditionalOnProperty(name = "store.aggr.rocksdb-account-balance-store-enabled",
+            havingValue = "true",
+            matchIfMissing = false
+    )
+    public AccountBalanceStorage accountBalanceStorage(com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig) {
         return new RocksDBAccountBalanceStorageImpl(rocksDBConfig);
     }
 

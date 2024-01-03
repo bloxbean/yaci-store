@@ -17,7 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class EmbeddedNoFinderUtxoStorageTest extends RocksDBBaseTest {
+class RocksDBUtxoStorageTest extends RocksDBBaseTest {
     String address1 = "addr_test1xrk9x99ey79w25d3eyqd7zy0qmecl3h4ngqvy5w2yp06nxyhzcvnyv2r9xr86rm4f7dragz4ckudkrs06nylfrwllzcs63c0dy";
     String address2 = "addr_test1wr64gtafm8rpkndue4ck2nx95u4flhwf643l2qmg9emjajg2ww0nj";
     String paymentCred1 = HexUtil.encodeHexString(new Address(address1).getPaymentCredential().get().getBytes());
