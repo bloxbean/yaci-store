@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorag
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
+import com.bloxbean.rocks.types.config.RocksDBConfig;
 import com.bloxbean.rocks.types.config.RocksDBProperties;
 import com.bloxbean.rocks.types.serializer.JacksonSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
         matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.rocksdb"})
-public class RocksDBConfig {
+public class EmbeddedRocksDBConfiguration {
 
     @Value("${store.aggr.rocksdb.base-dir:./_rocksdb}")
     private String rocksDBBaseDir;
@@ -32,7 +33,7 @@ public class RocksDBConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig() {
+    public RocksDBConfig rocksDBConfig() {
         var rocksDBProperties = new RocksDBProperties();
         rocksDBProperties.setRocksDBBaseDir(rocksDBBaseDir);
         rocksDBProperties.setColumnFamilies(columnFamilies);
