@@ -17,10 +17,9 @@ store:
     enabled: true
     balance-aggregation-enabled: true
     history-cleanup-enabled: false
+    api-enabled: true
   aggr:
-    embedded-utxo-store-enabled: true
-  rocksdb:
-    column-families: utxos,spent-utxos
+    utxo-storage-type: dummydb
 
 apiPrefix: /api/v1
 
