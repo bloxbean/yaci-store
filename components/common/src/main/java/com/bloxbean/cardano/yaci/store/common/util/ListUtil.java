@@ -2,9 +2,11 @@ package com.bloxbean.cardano.yaci.store.common.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class ListUtil {
+
     public static  <T> List<List<T>> partition(List<T> list, int size) {
 
         List<List<T>> partitions = new ArrayList<>();
@@ -34,6 +36,27 @@ public class ListUtil {
             for (var partition: partitions) {
                 applyFunc.accept(partition);
             }
+        }
+    }
+
+    public static <T> void partitionAndApplyInParallel(List<T> list, int batchSize, Consumer<List<T>> applyFunc) {
+        if (list == null || list.size() == 0)
+            return;
+
+        if (list.size() <= batchSize) {
+            applyFunc.accept(list);
+        } else {
+            List<List<T>> partitions = partition(new ArrayList<>(list), batchSize);
+            List<CompletableFuture> futures = new ArrayList<>();
+            for (var partition: partitions) {
+                var completableFuture = CompletableFuture.supplyAsync(() -> {
+                    applyFunc.accept(partition);
+                    return true;
+                });
+                futures.add(completableFuture);
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
     }
 }

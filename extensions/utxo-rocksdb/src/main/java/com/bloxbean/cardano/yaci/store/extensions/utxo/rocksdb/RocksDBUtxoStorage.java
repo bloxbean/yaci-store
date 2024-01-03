@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
@@ -14,9 +15,9 @@ import com.bloxbean.rocks.types.common.Tuple;
 import com.bloxbean.rocks.types.config.RocksDBConfig;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 
 import java.util.*;
@@ -41,6 +42,12 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     private final UtxoCache utxoCache;
     private final List<TxInput> spentUtxoCache = Collections.synchronizedList(new ArrayList<>());
 
+    @Value("${store.extensions.rocksdb-utxo-storage.write-batch-size:1000}")
+    private int batchSize = 1000;
+
+    @Value("${store.extensions.rocksdb-utxo-storage.parallel-writes:false}")
+    private boolean parallelWrites = false;
+
     public RocksDBUtxoStorage(RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
         this.rocksDBConfig = rocksDBConfig;
         this.utxoCache = utxoCache;
@@ -52,7 +59,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
         this.addressUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "address_utxos", String.class);
         this.paymentCredUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "payment_cred_utxos", String.class);
 
-        log.info("<< Embedded utxo storage enabled >>");
+        log.info("<< RocksDB utxo storage enabled >>");
     }
 
     @Override
@@ -108,8 +115,9 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     @Override
     public int deleteUnspentBySlotGreaterThan(Long slot) {
         Long slotToDel = slot + 1;
-        try (ValueIterator<Tuple<String, Long>> iterator = utxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE)) {
-            WriteBatch writeBatch = new WriteBatch();
+        try (ValueIterator<Tuple<String, Long>> iterator = utxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
+             var writeBatch = new WriteBatch();
+             var writeOptions = new WriteOptions()) {
             int counter = 0;
             while (iterator.hasNext()) {
                 Tuple<String, Long> utxoIdWithSlot = iterator.next();
@@ -128,7 +136,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
                 counter++;
             }
 
-            rocksDBConfig.getRocksDB().write(new WriteOptions(), writeBatch);
+            rocksDBConfig.getRocksDB().write(writeOptions, writeBatch);
             return counter;
         }
     }
@@ -137,8 +145,9 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     @Override
     public int deleteSpentBySlotGreaterThan(Long slot) {
         Long slotToDel = slot + 1;
-        try (ValueIterator<Tuple<String, Long>> iterator = spentUtxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE)) {
-            WriteBatch writeBatch = new WriteBatch();
+        try (ValueIterator<Tuple<String, Long>> iterator = spentUtxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
+             var writeBatch = new WriteBatch();
+             var writeOptions = new WriteOptions()) {
             int counter = 0;
             while (iterator.hasNext()) {
                 Tuple<String, Long> utxoIdWithSlot = iterator.next();
@@ -158,7 +167,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
                 counter++;
             }
 
-            rocksDBConfig.getRocksDB().write(new WriteOptions(), writeBatch);
+            rocksDBConfig.getRocksDB().write(writeOptions, writeBatch);
             return counter;
         }
 
@@ -177,11 +186,46 @@ public class RocksDBUtxoStorage implements UtxoStorage {
 
             var utxoList = addressUtxoList.stream().map(addressUtxo -> new Tuple<>(getKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()), addressUtxo)).toList();
 
+            if (utxoList.size() > 1000) log.info("Saving {} utxos ", utxoList.size() + " - Batch size: " + batchSize + " - Parallel writes: " + parallelWrites);
 
-            WriteBatch writeBatch = new WriteBatch();
-            if (utxoList.size() > 1000) log.info("Saving {} utxos ", utxoList.size());
+            if (parallelWrites) {
+                ListUtil.partitionAndApplyInParallel(utxoList, batchSize, tuples -> {
+                    saveUnspentUtxosToDB(tuples);
+                });
+            } else {
+                ListUtil.partitionAndApply(utxoList, batchSize, tuples -> {
+                    saveUnspentUtxosToDB(tuples);
+                });
+            }
 
-            utxoList.stream().forEach(tuple -> {
+            handleCommitForSpentUtxos();
+        } finally {
+            utxoCache.clear();
+            spentUtxoCache.clear();
+        }
+    }
+
+    private void handleCommitForSpentUtxos() {
+        if (spentUtxoCache.size() == 0)
+            return;
+
+        if (spentUtxoCache.size() > 1000) log.info("Saving {} spent utxos ", spentUtxoCache.size());
+
+        if (parallelWrites) {
+            ListUtil.partitionAndApplyInParallel(spentUtxoCache, batchSize, txInputs -> {
+                saveSpentUtxosToDB(txInputs);
+            });
+        } else {
+            ListUtil.partitionAndApply(spentUtxoCache, batchSize, txInputs -> {
+                saveSpentUtxosToDB(txInputs);
+            });
+        }
+    }
+
+    private void saveUnspentUtxosToDB(List<Tuple<String, AddressUtxo>> tuples) {
+        try (var writeBatch = new WriteBatch();
+             var writeOptions = new WriteOptions()) {
+            tuples.stream().forEach(tuple -> {
                 utxoMap.putBatch(writeBatch, tuple);
                 utxoSlotZSet.addBatch(writeBatch, new Tuple<>(tuple._1, tuple._2.getSlot()));
 
@@ -193,46 +237,40 @@ public class RocksDBUtxoStorage implements UtxoStorage {
                     paymentCredUtxoZSet.addBatch(paymentCredNS, writeBatch, new Tuple<>(tuple._1, tuple._2.getSlot()));
             });
 
-            rocksDBConfig.getRocksDB().write(new WriteOptions(), writeBatch);
-
-            handleCommitForSpentUtxos();
-        } finally {
-            utxoCache.clear();
-            spentUtxoCache.clear();
+            rocksDBConfig.getRocksDB().write(writeOptions, writeBatch);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
-    private void handleCommitForSpentUtxos() throws RocksDBException {
-        if (spentUtxoCache.size() == 0)
-            return;
+    private void saveSpentUtxosToDB(List<TxInput> txInputs) {
+        try (var writeBatch = new WriteBatch();
+             var writeOptions = new WriteOptions()) {
+            txInputs.stream().forEach(txInput -> {
+                spentUtxoMap.putBatch(writeBatch, new Tuple<>(getKey(txInput.getTxHash(), txInput.getOutputIndex()), txInput));
+                spentUtxoSlotZSet.addBatch(writeBatch, new Tuple<>(getKey(txInput.getTxHash(), txInput.getOutputIndex()), txInput.getSpentAtSlot()));
 
-        var utxoList = spentUtxoCache.stream().map(txInput -> new Tuple<>(getKey(txInput.getTxHash(), txInput.getOutputIndex()), txInput)).toList();
+                //Update address utxo zset & payment cred utxo zset
+                var addressUtxo = findById(txInput.getTxHash(), txInput.getOutputIndex());
 
-        var spentUtxoToSlotList = spentUtxoCache.stream().map(txInput -> new Tuple<>(getKey(txInput.getTxHash(), txInput.getOutputIndex()), txInput.getSpentAtSlot())).toList();
+                if (addressUtxo.isPresent()) {
+                    byte[] addressNS = getAddressBytes(addressUtxo.get().getOwnerAddr());
+                    addressUtxoZSet.removeBatch(addressNS, writeBatch, getKey(txInput.getTxHash(), txInput.getOutputIndex()));
 
-        WriteBatch writeBatch = new WriteBatch();
-        spentUtxoMap.putBatch(writeBatch, utxoList.toArray(new Tuple[0]));
-        spentUtxoSlotZSet.addBatch(writeBatch, spentUtxoToSlotList.toArray(new Tuple[0]));
+                    byte[] paymentCredNS = getPaymentCredential(addressUtxo.get().getOwnerPaymentCredential());
+                    if (paymentCredNS != null)
+                        paymentCredUtxoZSet.removeBatch(paymentCredNS, writeBatch, getKey(txInput.getTxHash(), txInput.getOutputIndex()));
 
-        //Update address utxo zset & payment cred utxo zset
-        spentUtxoCache.stream().forEach(txInput -> {
-            var addressUtxo = findById(txInput.getTxHash(), txInput.getOutputIndex());
+                } else {
+                    throw new RuntimeException("AddressUtxo not found for spent utxo: " + txInput.getTxHash() + ":" + txInput.getOutputIndex());
+                }
+            });
 
-            if (addressUtxo.isPresent()) {
-                byte[] addressNS = getAddressBytes(addressUtxo.get().getOwnerAddr());
-                addressUtxoZSet.removeBatch(addressNS, writeBatch, getKey(txInput.getTxHash(), txInput.getOutputIndex()));
+            rocksDBConfig.getRocksDB().write(writeOptions, writeBatch);
 
-                byte[] paymentCredNS = getPaymentCredential(addressUtxo.get().getOwnerPaymentCredential());
-                if (paymentCredNS != null)
-                    paymentCredUtxoZSet.removeBatch(paymentCredNS, writeBatch, getKey(txInput.getTxHash(), txInput.getOutputIndex()));
-
-            } else {
-                throw new RuntimeException("AddressUtxo not found for spent utxo: " + txInput.getTxHash() + ":" + txInput.getOutputIndex());
-            }
-        });
-
-        rocksDBConfig.getRocksDB().write(new WriteOptions(), writeBatch);
-
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

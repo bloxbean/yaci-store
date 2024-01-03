@@ -17,6 +17,7 @@ import com.bloxbean.rocks.types.config.RocksDBConfig;
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteOptions;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.nio.charset.StandardCharsets;
@@ -92,25 +93,27 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         if (addressBalances.size() == 0)
             return;
 
-        WriteBatch writeBatch = new WriteBatch();
-        addressBalances
-                .forEach(ab -> {
-                    byte[] ns = getAddressAssetKey(ab.getAddress(), ab.getUnit());
-                    long slot = ab.getSlot();
-                    if (slot == -1)
-                        slot = 0;
+        try (var writeBatch = new WriteBatch();
+             var writeOption = new WriteOptions()) {
+            addressBalances
+                    .forEach(ab -> {
+                        byte[] ns = getAddressAssetKey(ab.getAddress(), ab.getUnit());
+                        long slot = ab.getSlot();
+                        if (slot == -1)
+                            slot = 0;
 
-                    byte[] hash = getAddressBalanceHash(ab);
-                    accountBalanceZSet.addBatch(ns, writeBatch, new Tuple<>(hash, slot));
-                    accountBalanceMap.putBatch(ns, writeBatch, new Tuple<>(hash, ab));
-                    byte[] addressNS = getAddressBytes(ab.getAddress());
-                    accountAssetsSet.addBatch(addressNS, writeBatch, ab.getUnit());
+                        byte[] hash = getAddressBalanceHash(ab);
+                        accountBalanceZSet.addBatch(ns, writeBatch, new Tuple<>(hash, slot));
+                        accountBalanceMap.putBatch(ns, writeBatch, new Tuple<>(hash, ab));
+                        byte[] addressNS = getAddressBytes(ab.getAddress());
+                        accountAssetsSet.addBatch(addressNS, writeBatch, ab.getUnit());
 
-                    //For slot index
-                    slotAccountAssetSet.addBatch(writeBatch, new Tuple<>(serializeAccountAssetKeyForSlotSet(ab.getAddress(), ab.getUnit(), hash), slot));
-                });
+                        //For slot index
+                        slotAccountAssetSet.addBatch(writeBatch, new Tuple<>(serializeAccountAssetKeyForSlotSet(ab.getAddress(), ab.getUnit(), hash), slot));
+                    });
 
-        rocksDBConfig.getRocksDB().write(new org.rocksdb.WriteOptions(), writeBatch);
+            rocksDBConfig.getRocksDB().write(writeOption, writeBatch);
+        }
     }
 
     @Override
@@ -121,23 +124,25 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     @SneakyThrows
     @Override
     public int deleteAddressBalanceBySlotGreaterThan(Long slot) {
-        WriteBatch writeBatch = new WriteBatch();
         int count = 0;
-        try (var iterator = slotAccountAssetSet.membersInRangeIterable(slot + 1, Long.MAX_VALUE)) {
-            while (iterator.hasNext()) {
-                var tuple = iterator.next();
-                KeyReference keyRef = deserializeAccountAssetKeyForSlot(tuple._1);
-                if (keyRef != null) {
-                    byte[] addressAssetNS = keyRef.getNs();
-                    byte[] hash = keyRef.getKey();
+        try (var writeBatch = new WriteBatch();
+             var writeOption = new WriteOptions()) {
+            try (var iterator = slotAccountAssetSet.membersInRangeIterable(slot + 1, Long.MAX_VALUE)) {
+                while (iterator.hasNext()) {
+                    var tuple = iterator.next();
+                    KeyReference keyRef = deserializeAccountAssetKeyForSlot(tuple._1);
+                    if (keyRef != null) {
+                        byte[] addressAssetNS = keyRef.getNs();
+                        byte[] hash = keyRef.getKey();
 
-                    accountBalanceZSet.removeBatch(addressAssetNS, writeBatch, hash);
-                    accountBalanceMap.removeBatch(addressAssetNS, writeBatch, hash);
-                    count++;
+                        accountBalanceZSet.removeBatch(addressAssetNS, writeBatch, hash);
+                        accountBalanceMap.removeBatch(addressAssetNS, writeBatch, hash);
+                        count++;
+                    }
                 }
             }
+            rocksDBConfig.getRocksDB().write(writeOption, writeBatch);
         }
-        rocksDBConfig.getRocksDB().write(new org.rocksdb.WriteOptions(), writeBatch);
         return count;
     }
 
@@ -174,25 +179,27 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         if (stakeBalances.size() == 0)
             return;
 
-        WriteBatch writeBatch = new WriteBatch();
-        stakeBalances
-                .forEach(stakeBalance -> {
-                    byte[] ns = new Address(stakeBalance.getAddress()).getBytes();
+        try (var writeBatch = new WriteBatch();
+             var writeOption = new WriteOptions()) {
+            stakeBalances
+                    .forEach(stakeBalance -> {
+                        byte[] ns = new Address(stakeBalance.getAddress()).getBytes();
 
-                    long slot = stakeBalance.getSlot();
-                    if (slot == -1)
-                        slot = 0;
+                        long slot = stakeBalance.getSlot();
+                        if (slot == -1)
+                            slot = 0;
 
-                    byte[] hash = getStakeAddressBalanceHash(stakeBalance);
-                    stakeBalanceZSet.addBatch(ns, writeBatch, new Tuple<>(hash, slot));
-                    stakeBalanceMap.putBatch(ns, writeBatch, new Tuple<>(hash, stakeBalance));
+                        byte[] hash = getStakeAddressBalanceHash(stakeBalance);
+                        stakeBalanceZSet.addBatch(ns, writeBatch, new Tuple<>(hash, slot));
+                        stakeBalanceMap.putBatch(ns, writeBatch, new Tuple<>(hash, stakeBalance));
 
-                    //For slot index
-                    slotStakeAccountSet.addBatch(writeBatch,
-                            new Tuple<>(serailizeStakeAccountKeyForSlot(stakeBalance.getAddress(), hash), slot));
-                });
+                        //For slot index
+                        slotStakeAccountSet.addBatch(writeBatch,
+                                new Tuple<>(serailizeStakeAccountKeyForSlot(stakeBalance.getAddress(), hash), slot));
+                    });
 
-        rocksDBConfig.getRocksDB().write(new org.rocksdb.WriteOptions(), writeBatch);
+            rocksDBConfig.getRocksDB().write(writeOption, writeBatch);
+        }
     }
 
     @Override
@@ -203,23 +210,27 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     @SneakyThrows
     @Override
     public int deleteStakeAddressBalanceBySlotGreaterThan(Long slot) {
-        WriteBatch writeBatch = new WriteBatch();
         int count = 0;
-        try (var iterator = slotStakeAccountSet.membersInRangeIterable(slot + 1, Long.MAX_VALUE)) {
-            while (iterator.hasNext()) {
-                var tuple = iterator.next();
-                KeyReference keyRef = deserializeStakeAccountKeyForSlot(tuple._1);
-                if (keyRef != null) {
-                    byte[] stakeAddressNS = keyRef.getNs();
-                    byte[] hash = keyRef.getKey();
 
-                    stakeBalanceZSet.removeBatch(stakeAddressNS, writeBatch, hash);
-                    stakeBalanceMap.removeBatch(stakeAddressNS, writeBatch, hash);
-                    count++;
+        try (var writeBatch = new WriteBatch();
+             var writeOption = new WriteOptions()) {
+            try (var iterator = slotStakeAccountSet.membersInRangeIterable(slot + 1, Long.MAX_VALUE)) {
+                while (iterator.hasNext()) {
+                    var tuple = iterator.next();
+                    KeyReference keyRef = deserializeStakeAccountKeyForSlot(tuple._1);
+                    if (keyRef != null) {
+                        byte[] stakeAddressNS = keyRef.getNs();
+                        byte[] hash = keyRef.getKey();
+
+                        stakeBalanceZSet.removeBatch(stakeAddressNS, writeBatch, hash);
+                        stakeBalanceMap.removeBatch(stakeAddressNS, writeBatch, hash);
+                        count++;
+                    }
                 }
             }
+            rocksDBConfig.getRocksDB().write(writeOption, writeBatch);
         }
-        rocksDBConfig.getRocksDB().write(new org.rocksdb.WriteOptions(), writeBatch);
+
         return count;
     }
 
