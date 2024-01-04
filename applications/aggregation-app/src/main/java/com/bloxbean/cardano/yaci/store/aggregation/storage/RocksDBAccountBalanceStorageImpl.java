@@ -6,8 +6,9 @@ import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
-import com.bloxbean.cardano.yaci.store.rocksdb.KeyReference;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
+import com.bloxbean.cardano.yaci.store.rocksdb.KeyReference;
 import com.bloxbean.rocks.types.collection.RocksMultiMap;
 import com.bloxbean.rocks.types.collection.RocksMultiSet;
 import com.bloxbean.rocks.types.collection.RocksMultiZSet;
@@ -16,6 +17,7 @@ import com.bloxbean.rocks.types.common.Tuple;
 import com.bloxbean.rocks.types.config.RocksDBConfig;
 import lombok.NonNull;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
+@Slf4j
 public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     private static final String ACCOUNT_BAL_COL_FAMILY = "account_balances";
     private static final String STAKE_BAL_COL_FAMILy = "stake_account_balances";
@@ -42,8 +45,11 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     private RocksZSet<byte[]> slotAccountAssetSet;
     private RocksZSet<byte[]> slotStakeAccountSet;
 
-    @Value("${store.aggr.embedded-utxo-storage.write-batch-size:1000}")
-    private int batchSize;
+    @Value("${store.extensions.account-balance-storage.write-batch-size:1000}")
+    private int batchSize = 1000;
+
+    @Value("${store.extensions.account-balance-storage.parallel-writes:false}")
+    private boolean parallelWrite = false;
 
     public RocksDBAccountBalanceStorageImpl(RocksDBConfig rocksDBConfig) {
         this.rocksDBConfig = rocksDBConfig;
@@ -93,6 +99,16 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         if (addressBalances.size() == 0)
             return;
 
+        log.info("Saving {} address balances to DB with batchSize {}. Parallel Writes {} ", addressBalances.size(), batchSize, parallelWrite);
+        if (parallelWrite) {
+            ListUtil.partitionAndApplyInParallel(addressBalances, batchSize, this::saveAddressBalancesToDB);
+        } else {
+            ListUtil.partitionAndApply(addressBalances, batchSize, this::saveAddressBalancesToDB);
+        }
+    }
+
+    @SneakyThrows
+    private void saveAddressBalancesToDB(List<AddressBalance> addressBalances) {
         try (var writeBatch = new WriteBatch();
              var writeOption = new WriteOptions()) {
             addressBalances
@@ -179,6 +195,16 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         if (stakeBalances.size() == 0)
             return;
 
+        log.info("Saving {} stake address balances to DB with batchSize {}. Parallel Writes {} ", stakeBalances.size(), batchSize, parallelWrite);
+        if (parallelWrite) {
+            ListUtil.partitionAndApplyInParallel(stakeBalances, batchSize, this::saveStakeAddressBalancesToDB);
+        } else {
+            ListUtil.partitionAndApply(stakeBalances, batchSize, this::saveStakeAddressBalancesToDB);
+        }
+    }
+
+    @SneakyThrows
+    private void saveStakeAddressBalancesToDB(List<StakeAddressBalance> stakeBalances) {
         try (var writeBatch = new WriteBatch();
              var writeOption = new WriteOptions()) {
             stakeBalances
