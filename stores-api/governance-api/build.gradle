@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:governance")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Governance API'
+                description = 'Yaci Store Governance API Module'
+            }
+        }
+    }
+}
