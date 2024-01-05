@@ -20,4 +20,9 @@ public class VotingProcedureStorageImpl implements VotingProcedureStorage {
         votingProcedureRepository.saveAll(votingProcedures.stream()
                 .map(votingProcedureMapper::toVotingProcedureEntity).collect(Collectors.toList()));
     }
+
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return votingProcedureRepository.deleteBySlotGreaterThan(slot);
+    }
 }

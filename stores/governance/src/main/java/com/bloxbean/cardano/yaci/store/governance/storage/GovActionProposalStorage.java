@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface GovActionProposalStorage {
     void saveAll(List<GovActionProposal> govActionProposals);
+    int deleteBySlotGreaterThan(long slot);
 }

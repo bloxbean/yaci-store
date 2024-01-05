@@ -26,6 +26,9 @@ public class VotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "index")
     private long index;
 
+    @Column(name = "slot")
+    private Long slot;
+
     @Column(name = "voter_type")
     @Enumerated(EnumType.STRING)
     private VoterType voterType;

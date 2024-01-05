@@ -2,11 +2,14 @@ package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Type;
 
 import java.math.BigInteger;
 
@@ -26,6 +29,9 @@ public class GovActionProposalEntity extends BlockAwareEntity {
     @Column(name = "index")
     private long index;
 
+    @Column(name = "slot")
+    private Long slot;
+
     @Column(name = "deposit")
     private BigInteger deposit;
 
@@ -36,8 +42,9 @@ public class GovActionProposalEntity extends BlockAwareEntity {
     @Enumerated(EnumType.STRING)
     private GovActionType type;
 
-    @Column(name = "description")
-    private String description;
+    @Type(JsonType.class)
+    @Column(columnDefinition = "json", name = "details")
+    private JsonNode details;
 
     @Column(name = "anchor_url")
     private String anchorUrl;

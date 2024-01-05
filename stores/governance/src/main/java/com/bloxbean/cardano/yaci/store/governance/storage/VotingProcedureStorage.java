@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface VotingProcedureStorage {
     void saveAll(List<VotingProcedure> votingProcedures);
+    int deleteBySlotGreaterThan(long slot);
 }

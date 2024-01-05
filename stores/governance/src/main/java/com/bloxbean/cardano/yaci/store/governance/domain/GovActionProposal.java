@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.governance.domain;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -24,13 +25,15 @@ public class GovActionProposal extends BlockAwareDomain {
 
     private long index;
 
+    private Long slot;
+
     private BigInteger deposit;
 
     private String returnAddress;
 
     private GovActionType type;
 
-    private String description;
+    private JsonNode details;
 
     private String anchorUrl;
 
