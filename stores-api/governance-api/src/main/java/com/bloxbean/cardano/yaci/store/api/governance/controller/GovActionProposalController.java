@@ -41,22 +41,16 @@ public class GovActionProposalController {
     @Operation(description = "Get governance action proposal list by governance action type")
     public ResponseEntity<List<GovActionProposal>> getGovActionProposalByGovActionType(
             @Parameter(description = "Governance action type", required = true, example = "PARAMETER_CHANGE_ACTION")
-            @PathVariable String govActionType,
+            @PathVariable GovActionType govActionType,
             @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
             @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
-        GovActionType type;
-        try {
-            type = GovActionType.valueOf(govActionType.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Governance action type is not valid");
-        }
 
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
 
-        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByGovActionType(type, p, count));
+        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByGovActionType(govActionType, p, count));
     }
 
     @GetMapping("/return-address/{address}")
