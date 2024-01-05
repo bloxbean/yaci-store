@@ -1,9 +1,13 @@
 package com.bloxbean.cardano.yaci.store.governance;
 
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.GovActionProposalStorageImpl;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.GovActionProposalStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.VotingProcedureStorageImpl;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.VotingProcedureStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.VotingProcedureMapper;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
@@ -39,8 +43,22 @@ public class GovernanceStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public GovActionProposalStorageReader govActionProposalStorageReader(GovActionProposalRepository govActionProposalRepository,
+                                                                         GovActionProposalMapper govActionProposalMapper) {
+        return new GovActionProposalStorageReaderImpl(govActionProposalRepository, govActionProposalMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public VotingProcedureStorage votingProposalStorage(VotingProcedureRepository votingProcedureRepository,
                                                         VotingProcedureMapper votingProcedureMapper) {
         return new VotingProcedureStorageImpl(votingProcedureRepository, votingProcedureMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public VotingProcedureStorageReader votingProcedureStorageReader(VotingProcedureRepository votingProcedureRepository,
+                                                                     VotingProcedureMapper votingProcedureMapper) {
+        return new VotingProcedureStorageReaderImpl(votingProcedureRepository, votingProcedureMapper);
     }
 }

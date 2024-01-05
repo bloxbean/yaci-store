@@ -63,6 +63,7 @@ public class VotingProcedureProcessor {
                         votingProcedure.setAnchorHash(votingInfo.getAnchor().getAnchor_data_hash());
                     }
 
+                    votingProcedure.setSlot(eventMetadata.getSlot());
                     votingProcedure.setBlockNumber(eventMetadata.getBlock());
                     votingProcedure.setBlockTime(eventMetadata.getBlockTime());
 

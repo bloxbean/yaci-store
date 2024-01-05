@@ -21,4 +21,9 @@ public class GovActionProposalStorageImpl implements GovActionProposalStorage {
                 .map(govActionProposalMapper::toGovActionProposalEntity)
                 .collect(Collectors.toList()));
     }
+
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return govActionProposalRepository.deleteBySlotGreaterThan(slot);
+    }
 }

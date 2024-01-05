@@ -8,7 +8,9 @@ import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -23,9 +25,11 @@ import java.util.List;
 public class GovActionProposalProcessor {
 
     private final GovActionProposalStorage govActionProposalStorage;
+    private final ObjectMapper objectMapper;
 
     @EventListener
     @Transactional
+    @SneakyThrows
     public void handleGovernanceAction(GovernanceEvent governanceEvent) {
         EventMetadata eventMetadata = governanceEvent.getMetadata();
 
@@ -46,7 +50,8 @@ public class GovActionProposalProcessor {
                 govActionProposal.setTxHash(txHash);
                 govActionProposal.setIndex(index++);
                 govActionProposal.setType(proposalProcedure.getGovAction().getType());
-                govActionProposal.setDescription(proposalProcedure.getGovAction().toString());
+                govActionProposal.setDetails(objectMapper.valueToTree(proposalProcedure.getGovAction()));
+
                 govActionProposal.setDeposit(proposalProcedure.getDeposit());
 
                 Address address = new Address(HexUtil.decodeHexString(proposalProcedure.getRewardAccount()));
@@ -59,6 +64,7 @@ public class GovActionProposalProcessor {
 
                 govActionProposal.setBlockNumber(eventMetadata.getBlock());
                 govActionProposal.setBlockTime(eventMetadata.getBlockTime());
+                govActionProposal.setSlot(eventMetadata.getSlot());
 
                 govActionProposals.add(govActionProposal);
             }
