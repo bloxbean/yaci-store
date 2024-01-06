@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import lombok.SneakyThrows;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -39,6 +41,7 @@ public class ListUtil {
         }
     }
 
+    @SneakyThrows
     public static <T> void partitionAndApplyInParallel(List<T> list, int batchSize, Consumer<List<T>> applyFunc) {
         if (list == null || list.size() == 0)
             return;
@@ -57,6 +60,9 @@ public class ListUtil {
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            for (var future: futures) {
+                future.get();
+            }
         }
     }
 }
