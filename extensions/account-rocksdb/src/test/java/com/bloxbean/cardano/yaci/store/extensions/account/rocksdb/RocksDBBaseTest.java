@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation;
+package com.bloxbean.cardano.yaci.store.extensions.account.rocksdb;
 
 import com.bloxbean.rocks.types.config.RocksDBConfig;
 import com.bloxbean.rocks.types.config.RocksDBProperties;

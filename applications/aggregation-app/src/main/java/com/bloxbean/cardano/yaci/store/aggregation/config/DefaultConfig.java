@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(name = "store.aggr.utxo-storage-type",
+@ConditionalOnProperty(name = "store.extensions.utxo-storage-type",
         havingValue = "dummydb",
         matchIfMissing = true
 )
