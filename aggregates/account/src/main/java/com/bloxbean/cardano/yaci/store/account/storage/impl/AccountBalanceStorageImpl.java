@@ -9,11 +9,13 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBa
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -32,6 +34,12 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     private final StakeBalanceRepository stakeBalanceRepository;
     private final AccountMapper mapper = AccountMapper.INSTANCE;
     private final DSLContext dsl;
+
+    @Value("${store.account.write-batch-size:1000}")
+    private int batchSize = 1000;
+
+    @Value("${store.account.parallel-write:false}")
+    private boolean parallelWrite = false;
 
     @Override
     public Optional<AddressBalance> getAddressBalance(String address, long slot) {
@@ -60,7 +68,13 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     public void saveAddressBalances(@NonNull List<AddressBalance> addressBalances) {
         List<AddressBalanceEntity> entities = addressBalances.stream().map(mapper::toAddressBalanceEntity)
                 .toList();
-        addressBalanceRepository.saveAll(entities);
+
+        if (parallelWrite) {
+            log.info("Writing address balances in parallel : Batch size : {}", batchSize);
+            ListUtil.partitionAndApplyInParallel(entities, batchSize, addressBalanceRepository::saveAll);
+        } else {
+            addressBalanceRepository.saveAll(entities);
+        }
     }
 
     @Override
@@ -106,7 +120,12 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     public void saveStakeAddressBalances(List<StakeAddressBalance> stakeBalances) {
         List<StakeAddressBalanceEntity> entities = stakeBalances.stream().map(mapper::toStakeBalanceEntity)
                 .toList();
-        stakeBalanceRepository.saveAll(entities);
+
+        if (parallelWrite) {
+            ListUtil.partitionAndApplyInParallel(entities, batchSize, stakeBalanceRepository::saveAll);
+        } else {
+            stakeBalanceRepository.saveAll(entities);
+        }
     }
 
     @Override
