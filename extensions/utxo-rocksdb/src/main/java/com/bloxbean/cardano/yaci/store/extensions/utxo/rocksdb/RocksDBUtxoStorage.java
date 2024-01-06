@@ -45,7 +45,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     @Value("${store.extensions.rocksdb-utxo-storage.write-batch-size:1000}")
     private int batchSize = 1000;
 
-    @Value("${store.extensions.rocksdb-utxo-storage.parallel-writes:false}")
+    @Value("${store.extensions.rocksdb-utxo-storage.parallel-write:false}")
     private boolean parallelWrites = false;
 
     public RocksDBUtxoStorage(RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
