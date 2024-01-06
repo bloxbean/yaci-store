@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @Service
@@ -18,7 +19,12 @@ public class AddressAssetService {
     public List<AddressAssetBalanceDto> getAddressesByAsset(String unit, int page, int count, Order sort) {
 
         return accountBalanceStorage.getAddressesByAsset(unit, page, count, sort)
-                .stream().map(addressAssetBalance -> new AddressAssetBalanceDto(addressAssetBalance.getAddress(),
-                        String.valueOf(addressAssetBalance.getQuantity()))).toList();
+                .stream()
+                .map(addressBalance -> {
+                    var amount = addressBalance.getAmounts().stream().filter(amount1 -> amount1.getUnit().equals(unit)).findFirst().orElse(null);
+                    var quantity = amount != null ? amount.getQuantity() : BigInteger.ZERO;
+                    return new AddressAssetBalanceDto(addressBalance.getAddress(), String.valueOf(quantity));
+                })
+                .toList();
     }
 }

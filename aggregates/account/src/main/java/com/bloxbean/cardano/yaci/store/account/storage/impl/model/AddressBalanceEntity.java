@@ -1,14 +1,17 @@
 package com.bloxbean.cardano.yaci.store.account.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Type;
 
-import java.math.BigInteger;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -24,25 +27,16 @@ public class AddressBalanceEntity extends BlockAwareEntity {
     private String address;
 
     @Id
-    @Column(name = "unit")
-    private String unit;
-
-    @Id
     @Column(name = "slot")
     private Long slot;
-
-    @Column(name = "quantity")
-    private BigInteger quantity;
 
     //Only set if address doesn't fit in ownerAddr field. Required for few Byron Era addr
     @Column(name = "addr_full")
     private String addrFull;
 
-    @Column(name = "policy")
-    private String policy;
-
-    @Column(name = "asset_name")
-    private String assetName;
+    @Type(JsonType.class)
+    @Column(name = "amounts")
+    private List<Amt> amounts;
 
     @Column(name = "payment_credential")
     private String paymentCredential;
