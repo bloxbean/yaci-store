@@ -5,8 +5,8 @@ import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,7 +24,8 @@ public class AccountBalanceHistoryCleanupHelper {
     private final AtomicLong deleteCountAddrBal = new AtomicLong(0);
     private final AtomicLong deleteCountStakeBal = new AtomicLong(0);
 
-    public void deleteAddressBalanceBeforeConfirmedSlot(List<Pair<String, String>> addressUnits, long currentSlot) {
+    @Transactional
+    public void deleteAddressBalanceBeforeConfirmedSlot(List<String> addressList, long currentSlot) {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
 
@@ -32,8 +33,8 @@ public class AccountBalanceHistoryCleanupHelper {
         if(slot < 0)
             return;
 
-        addressUnits.forEach(addressUnit -> {
-            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
+        addressList.forEach(address -> {
+            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(address, slot);
             deleteCountAddrBal.addAndGet(delCount);
         });
 
@@ -42,6 +43,7 @@ public class AccountBalanceHistoryCleanupHelper {
             log.info("Total address balances deleted: " + count);
     }
 
+    @Transactional
     public void deleteStakeBalanceBeforeConfirmedSlot(List<String> addresses, long currentSlot) {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
