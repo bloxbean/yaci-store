@@ -1,0 +1,18 @@
+dependencies {
+    api project(":components:common")
+
+    api project(":stores:utxo")
+    api project(':components:rocksdb')
+    implementation libs.rocksdb
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Utxo RocksDB Storage'
+                description = 'Yaci Store Utxo - RocksDB Storage Extension'
+            }
+        }
+    }
+}

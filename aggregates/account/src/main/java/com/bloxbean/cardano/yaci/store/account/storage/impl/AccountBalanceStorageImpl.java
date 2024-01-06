@@ -49,10 +49,10 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public List<AddressBalance> getAddressBalance(String address) {
+    public Optional<AddressBalance> getAddressBalance(String address) {
         return addressBalanceRepository.findLatestAddressBalanceByAddress(address).stream()
                 .map(mapper::toAddressBalance)
-                .toList();
+                .findFirst();
     }
 
     @Transactional
@@ -119,11 +119,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Override
     public int deleteStakeAddressBalanceBySlotGreaterThan(Long slot) {
         return stakeBalanceRepository.deleteBySlotGreaterThan(slot);
-    }
-
-    @Override
-    public int deleteStakeBalanceByBlockGreaterThan(Long block) {
-        return stakeBalanceRepository.deleteByBlockNumberGreaterThan(block);
     }
 
     //TODO -- This query is very slow. Need to optimize
