@@ -10,20 +10,20 @@ spring:
     admin:
       client:
         enabled: false
-
 store:
-  event-publisher-id: 2
+  event-publisher-id: 1000
   account:
     enabled: true
     balance-aggregation-enabled: true
     history-cleanup-enabled: false
-  aggr:
-    embedded-utxo-store-enabled: true
-  rocksdb:
-    column-families: utxos,spent-utxos
+    api-enabled: true
+  extensions:
+    utxo-storage-type: dummydb
 
 apiPrefix: /api/v1
 
 logging:
   file:
     name: ./logs/yaci-store-aggr.log
+
+
