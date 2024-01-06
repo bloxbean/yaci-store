@@ -13,8 +13,6 @@ import java.io.Serializable;
 public class AddressBalanceId implements Serializable {
     @Column(name = "address")
     private String address;
-    @Column(name = "unit")
-    private String unit;
     @Column(name = "slot")
     private Long slot;
 }
