@@ -60,3 +60,4 @@ include ':starters:remote-spring-boot-starter'
 include ':starters:account-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
+include ':extensions:account-rocksdb'

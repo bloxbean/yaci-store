@@ -1,7 +1,7 @@
 dependencies {
     api project(":components:common")
 
-    api project(":stores:utxo")
+    api project(":aggregates:account")
     api project(':components:rocksdb')
     implementation libs.rocksdb
 }
@@ -10,8 +10,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             pom {
-                name = 'Yaci Store Utxo RocksDB Storage'
-                description = 'Yaci Store Utxo - RocksDB Storage Extension'
+                name = 'Yaci Store Account Balance RocksDB Storage'
+                description = 'Yaci Store Account - RocksDB Storage Extension'
             }
         }
     }
