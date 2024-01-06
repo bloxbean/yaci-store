@@ -19,11 +19,11 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.google.common.collect.ArrayListMultimap;
 import jakarta.annotation.PostConstruct;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -33,6 +33,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
@@ -122,40 +123,31 @@ public class AccountBalanceProcessor {
                                 return getAddressAmountMapForBlock(addressUtxoEvent.getEventMetadata(), inputAddressUtxos, outputAddressUtxos);
                             })
                             .filter(Objects::nonNull)
+                            .sorted(Comparator.comparingLong(blockAddressAmount -> blockAddressAmount.getEventMetadata().getBlock()))
                             .toList();
-
-            //Merge all address amounts in the block
-            var batchAddressAmts = mergeAddressAmountsForAllBlocks(blocksBalanceList);
-
-            var addressAmtMap = batchAddressAmts.getFirst();
-            var stakeAddrAmtMap = batchAddressAmts.getSecond();
-
-            if (log.isDebugEnabled()) {
-                log.debug("Total no of addresses : " + addressAmtMap.size());
-                log.debug("Total no of stakeAddresses : " + stakeAddrAmtMap.size());
-                log.debug("Total time to first process : " + (System.currentTimeMillis() - t0));
-            }
-
 
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
-            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
+            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, blocksBalanceList))
                     .thenAcceptAsync(addressBalances -> {
-                        long t2 = System.currentTimeMillis();
-                        accountBalanceStorage.saveAddressBalances(addressBalances);
-                        long t3 = System.currentTimeMillis();
-                        log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
+                        if (addressBalances != null && addressBalances.size() > 0) {
+                            long t2 = System.currentTimeMillis();
+                            accountBalanceStorage.saveAddressBalances(addressBalances);
+                            long t3 = System.currentTimeMillis();
+                            log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
+                        }
 
                         if (addressBalances != null && addressBalances.size() > 0) {
-                            List<Pair<String, String>> addresseUnitList =
-                                    addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
-                            accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
+                            List<String> addressList =
+                                    addressBalances.stream().map(addressBalance -> addressBalance.getAddress()).distinct().toList();
+                            accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addressList, firstBlockInBatchMetadata.getSlot());
                         }
                     }, parallelExecutor.getVirtualThreadExecutor());
 
 
+            CompletableFuture<Void> stakeAddrBalFuture = null;
             if (accountStoreProperties.isStakeAddressBalanceEnabled()) {
-                CompletableFuture<Void> stakeAddrBalFuture = CompletableFuture.supplyAsync(() -> getStakeAddressBalances(firstBlockInBatchMetadata, stakeAddrAmtMap))
+                stakeAddrBalFuture = CompletableFuture.supplyAsync(() -> getStakeAddressBalances(firstBlockInBatchMetadata, blocksBalanceList))
                         .thenAcceptAsync(stakeAddressBalances -> {
                             long t2 = System.currentTimeMillis();
                             accountBalanceStorage.saveStakeAddressBalances(stakeAddressBalances);
@@ -174,6 +166,16 @@ public class AccountBalanceProcessor {
                 addressBalFuture.join();
             }
 
+            try {
+                addressBalFuture.get();
+                if (stakeAddrBalFuture != null)
+                    stakeAddrBalFuture.get();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+
             log.info("Total balance processing and saving time {}", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
@@ -184,7 +186,7 @@ public class AccountBalanceProcessor {
     }
 
     public BlockAddressAmount getAddressAmountMapForBlock(EventMetadata metadata, List<AddressUtxo> inputs, List<AddressUtxo> outputs) {
-        Map<AddressUnitInfo, SlotAmount> addressBalanceMap = new HashMap<>();
+        Map<AddressInfo, Map<UnitInfo, SlotAmount>> addressBalanceMap = new HashMap<>();
         Map<StakeAddressInfo, SlotAmount> stakeAddrBalanceMap = new HashMap<>();
         //Update inputs
         for (AddressUtxo input : inputs) {
@@ -195,16 +197,28 @@ public class AccountBalanceProcessor {
 
             for (Amt amount : input.getAmounts()) {
                 //Addr
-                var addrBalKey = getAddrBalKey(input, amount);
-                if (addressBalanceMap.get(addrBalKey) != null) {
-                    SlotAmount slotAmount = addressBalanceMap.get(addrBalKey);
-                    slotAmount.setQuantity(slotAmount.getQuantity().subtract(amount.getQuantity()));
+                var addressInfoKey = getAddressInfoKey(input);
+                var unitInfoKey = getUnitInfoKey(amount);
+                if (addressBalanceMap.get(addressInfoKey) != null) {
+                    var slotAmountsMap = addressBalanceMap.get(addressInfoKey);
+                    var unitSlotAmount = slotAmountsMap.get(unitInfoKey);
+                    if (unitSlotAmount != null) {
+                        unitSlotAmount.setQuantity(unitSlotAmount.getQuantity().subtract(amount.getQuantity()));
+                    } else {
+                        var slotAmount = SlotAmount.builder()
+                                .quantity(BigInteger.ZERO.subtract(amount.getQuantity()))
+                                .eventMetadata(metadata)
+                                .build();
+                        slotAmountsMap.put(unitInfoKey, slotAmount);
+                    }
                 } else {
                     var slotAmount = SlotAmount.builder()
                             .quantity(BigInteger.ZERO.subtract(amount.getQuantity()))
                             .eventMetadata(metadata)
                             .build();
-                    addressBalanceMap.put(addrBalKey, slotAmount);
+                    var slotAmountsMap = new HashMap<UnitInfo, SlotAmount>();
+                    slotAmountsMap.put(unitInfoKey, slotAmount);
+                    addressBalanceMap.put(addressInfoKey, slotAmountsMap);
                 }
 
                 //Stake Addr
@@ -229,16 +243,29 @@ public class AccountBalanceProcessor {
         for (AddressUtxo output : outputs) {
             for (Amt amount : output.getAmounts()) {
                 //address
-                var addrBalKey = getAddrBalKey(output, amount);
-                if (addressBalanceMap.get(addrBalKey) != null) {
-                    SlotAmount slotAmount = addressBalanceMap.get(addrBalKey);
-                    slotAmount.setQuantity(slotAmount.getQuantity().add(amount.getQuantity()));
+                var addressInfoKey = getAddressInfoKey(output);
+                var unitInfoKey = getUnitInfoKey(amount);
+                if (addressBalanceMap.get(addressInfoKey) != null) {
+                    var slotAmountsMap = addressBalanceMap.get(addressInfoKey);
+                    var unitSlotAmount = slotAmountsMap.get(unitInfoKey);
+
+                    if (unitSlotAmount != null) {
+                        unitSlotAmount.setQuantity(unitSlotAmount.getQuantity().add(amount.getQuantity()));
+                    } else {
+                        var slotAmount = SlotAmount.builder()
+                                .quantity(amount.getQuantity())
+                                .eventMetadata(metadata)
+                                .build();
+                        slotAmountsMap.put(unitInfoKey, slotAmount);
+                    }
                 } else {
                     var amt = SlotAmount.builder()
                             .quantity(amount.getQuantity())
                             .eventMetadata(metadata)
                             .build();
-                    addressBalanceMap.put(addrBalKey, amt);
+                    var slotAmountsMap = new HashMap<UnitInfo, SlotAmount>();
+                    slotAmountsMap.put(unitInfoKey, amt);
+                    addressBalanceMap.put(addressInfoKey, slotAmountsMap);
                 }
 
                 //stakeAddress
@@ -258,169 +285,169 @@ public class AccountBalanceProcessor {
             }
         }
 
-        return new BlockAddressAmount(addressBalanceMap, stakeAddrBalanceMap);
+        return new BlockAddressAmount(metadata, addressBalanceMap, stakeAddrBalanceMap);
     }
 
-    public Pair<Map<AddressUnitInfo, List<SlotAmount>>, Map<StakeAddressInfo, List<SlotAmount>>> mergeAddressAmountsForAllBlocks(List<BlockAddressAmount> blockAddressAmountList) {
-        Map<AddressUnitInfo, List<SlotAmount>> addressAmtMap = Collections.synchronizedMap(new HashMap<>());
-        Map<StakeAddressInfo, List<SlotAmount>> stakeAddrAmtMap = Collections.synchronizedMap(new HashMap<>());
-        //Create Address Amount Map / Stake Addr Amount Map with all amounts (for all blocks in the batch)
-        for (var blockAddressAmount : blockAddressAmountList) {
-            var blockAddressBalanceMap = blockAddressAmount.getAddressAmountMap();
-            var blockStakeAddrBalanceMap = blockAddressAmount.getStakeAddressAmountMap();
-
-            //For address Balance
-            blockAddressBalanceMap.entrySet()
-                    .stream()
-                    .forEach(entry -> {
-                        var amtList = addressAmtMap.get(entry.getKey());
-                        if (amtList == null) {
-                            synchronized (this) {
-                                if (addressAmtMap.get(entry.getKey()) == null) {
-                                    addressAmtMap.put(entry.getKey(), Collections.synchronizedList(new LinkedList<>()));
-                                }
-                            }
-                            amtList = addressAmtMap.get(entry.getKey());
-                        }
-
-                        amtList.add(entry.getValue());
-                    });
-
-            //For Stake address Balance
-            blockStakeAddrBalanceMap.entrySet()
-                    .stream()
-                    .forEach(entry -> {
-                        var amtList = stakeAddrAmtMap.get(entry.getKey());
-                        if (amtList == null) {
-                            synchronized (this) {
-                                if (stakeAddrAmtMap.get(entry.getKey()) == null) {
-                                    stakeAddrAmtMap.put(entry.getKey(), Collections.synchronizedList(new LinkedList<>()));
-                                }
-                            }
-                            amtList = stakeAddrAmtMap.get(entry.getKey());
-                        }
-
-                        amtList.add(entry.getValue());
-                    });
+    public List<AddressBalance> getAddressBalances(EventMetadata firstBlockMetadata, List<BlockAddressAmount> blockAddressAmounts) {
+        ArrayListMultimap<String, AddressBalance> addressBalanceMap = ArrayListMultimap.create();
+        for (var blockAddressAmount : blockAddressAmounts) {
+            var blockAddressAmountMap = blockAddressAmount.getAddressAmountMap();
+            calculateAddressBalancesForBlock(firstBlockMetadata, addressBalanceMap, blockAddressAmountMap);
         }
 
-        return Pair.of(addressAmtMap, stakeAddrAmtMap);
-
+        return addressBalanceMap.values().stream().toList();
     }
 
-    public List<AddressBalance> getAddressBalances(EventMetadata firstBlockMetadata, Map<AddressUnitInfo, List<SlotAmount>> addressAmtMap) {
-        var addressBalances = addressAmtMap.entrySet()
-                .parallelStream()
-                .map(entry -> {
-                    var key = entry.getKey();
+    private void calculateAddressBalancesForBlock(EventMetadata firstBlockMetadata, ArrayListMultimap<String, AddressBalance> addressBalanceMap,
+                                                  Map<AddressInfo, Map<UnitInfo, SlotAmount>> addressAmtMap) {
+        addressAmtMap.entrySet()
+                .forEach(entry -> {
+                    var addressInfo = entry.getKey();
+                    var unitSlotAmtsMap = entry.getValue();
 
-                    List<SlotAmount> slotAmountValues = entry.getValue();
+                    var addressBalancesPerBlock = addressBalanceMap.get(addressInfo.getAddress());
 
-                    //Sort slot values from low to high
-                    List<SlotAmount> slotAmounts = null;
-                    if (slotAmountValues.size() > 1)
-                        slotAmounts = slotAmountValues.stream().sorted(Comparator.comparingLong(value -> value.getEventMetadata().getBlock())).toList();
-                    else
-                        slotAmounts = slotAmountValues;
-
-                    var savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1);
-                    List<AddressBalance> addressSlotBalances = new ArrayList<>();
-
-                    BigInteger quantity = savedAddressBalance.map(addressBalance -> addressBalance.getQuantity())
-                            .orElse(BigInteger.ZERO);
-
-                    for (SlotAmount slotAmount : slotAmounts) {
-                        AddressBalance newAddressBalance = null;
-                        quantity = quantity.add(slotAmount.getQuantity());
-
-                        newAddressBalance = AddressBalance.builder()
-                                .address(key.getAddress())
-                                .slot(slotAmount.getEventMetadata().getSlot())
-                                .blockNumber(slotAmount.getEventMetadata().getBlock())
-                                .blockHash(slotAmount.getEventMetadata().getBlockHash())
-                                .blockTime(slotAmount.getEventMetadata().getBlockTime())
-                                .epoch(slotAmount.getEventMetadata().getEpochNumber())
-                                .paymentCredential(key.getPaymentCredential())
-                                .stakeAddress(key.getStakeAddress())
-                                .unit(key.getUnit())
-                                .policy(key.getPolicyId())
-                                .assetName(key.getAssetName())
-                                .quantity(quantity)
-                                .build();
-
-                        addressSlotBalances.add(newAddressBalance);
-
-                        if (newAddressBalance.getQuantity().compareTo(BigInteger.ZERO) < 0) {
-                            log.error("[Inputs] Negative balance for address: " + key.getAddress() + " : " + newAddressBalance.getQuantity());
-                            if (savedAddressBalance.isPresent()) {
-                                log.info("Previous amount : " + savedAddressBalance.get().getQuantity());
-                                log.info("SlotAmounts >> " + slotAmounts);
-                                //log.info("Amount to add / deduct : " + totalQuantity);
-                                log.info("Unit: " + savedAddressBalance.get().getUnit());
+                    AddressBalance lastAddressBalance = null;
+                    if (addressBalancesPerBlock == null || addressBalancesPerBlock.size() == 0) {
+                        lastAddressBalance = accountBalanceStorage.getAddressBalance(addressInfo.getAddress(), firstBlockMetadata.getSlot() - 1)
+                                .orElse(null);
+                    } else {
+                        if (nAddrBalanceRecordToKeep > 0 && addressBalancesPerBlock.size() >= nAddrBalanceRecordToKeep) {
+                            for (int i = 0; i < addressBalancesPerBlock.size() - nAddrBalanceRecordToKeep; i++) {
+                                addressBalancesPerBlock.remove(i);
                             }
-                            log.error("Existing AddressBalance >> " + savedAddressBalance);
+                        }
+
+                        lastAddressBalance = addressBalancesPerBlock.get(addressBalancesPerBlock.size() - 1);
+                    }
+
+                    //Create unit --> balance
+                    Map<String, Amt> lastUnitQtyMap = new HashMap<>();
+                    if (lastAddressBalance != null) {
+                        lastAddressBalance.getAmounts()
+                                .stream()
+                                .map(amt -> {
+                                    var amtCopy = Amt.builder()
+                                            .unit(amt.getUnit())
+                                            .policyId(amt.getPolicyId())
+                                            .assetName(amt.getAssetName())
+                                            .quantity(amt.getQuantity())
+                                            .build();
+                                    lastUnitQtyMap.put(amt.getUnit(), amtCopy);
+                                    return amt;
+                                }).collect(Collectors.toList());
+                    }
+
+
+                    //Iterate through each unit and calculate the balance
+                    for (var unitAmtEntry : unitSlotAmtsMap.entrySet()) {
+                        var newUnitAmt = unitAmtEntry.getValue();
+                        var lastUnitAmt = lastUnitQtyMap.get(unitAmtEntry.getKey().getUnit());
+
+                        if (lastUnitAmt == null) {
+                            lastUnitAmt = Amt.builder()
+                                    .unit(unitAmtEntry.getKey().getUnit())
+                                    .quantity(BigInteger.ZERO)
+                                    .policyId(unitAmtEntry.getKey().getPolicyId())
+                                    .assetName(unitAmtEntry.getKey().getAssetName())
+                                    .build();
+                            lastUnitQtyMap.put(unitAmtEntry.getKey().getUnit(), lastUnitAmt);
+                        }
+
+                        //Update amt
+                        lastUnitAmt.setQuantity(lastUnitAmt.getQuantity().add(newUnitAmt.getQuantity()));
+
+                        if (lastUnitAmt.getQuantity().compareTo(BigInteger.ZERO) < 0) {
+                            log.error("[Inputs] Negative balance for address: " + addressInfo.getAddress() + " : " + lastUnitAmt.getQuantity());
+                            log.error("Unit: " + lastUnitAmt.getUnit());
+                            log.error("Existing AddressBalance >> " + lastAddressBalance);
                             throw new IllegalStateException("Error in address balance calculation");
                         }
                     }
 
-                    if (nAddrBalanceRecordToKeep > 0 && addressSlotBalances.size() >= nAddrBalanceRecordToKeep) {
-                        return addressSlotBalances.subList(addressSlotBalances.size() - nAddrBalanceRecordToKeep, addressSlotBalances.size());
-                    } else {
-                        return addressSlotBalances;
-                    }
-                }).flatMap(addressBalances1 -> addressBalances1.stream())
-                .toList();
-        return addressBalances;
+                    EventMetadata blockEventMetadata = unitSlotAmtsMap.entrySet().iterator().next().getValue().getEventMetadata();
+                    var finalAmtList = lastUnitQtyMap.entrySet()
+                            .stream().map(unitAmtEntry -> unitAmtEntry.getValue())
+                            .filter(amt -> amt.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                            .toList();
+
+                    //Create AddressBalance
+                    var newAddressBalance = AddressBalance.builder()
+                            .address(addressInfo.getAddress())
+                            .slot(blockEventMetadata.getSlot())
+                            .blockNumber(blockEventMetadata.getBlock())
+                            .blockHash(blockEventMetadata.getBlockHash())
+                            .blockTime(blockEventMetadata.getBlockTime())
+                            .epoch(blockEventMetadata.getEpochNumber())
+                            .paymentCredential(addressInfo.getPaymentCredential())
+                            .stakeAddress(addressInfo.getStakeAddress())
+                            .amounts(finalAmtList)
+                            .build();
+
+                    addressBalanceMap.put(addressInfo.getAddress(), newAddressBalance);
+
+                });
     }
 
-    public List<StakeAddressBalance> getStakeAddressBalances(EventMetadata firstBlockMetadata, Map<StakeAddressInfo, List<SlotAmount>> stakeAddrAmtMap) {
-        var stakeAddrBalances = stakeAddrAmtMap.entrySet()
-                .parallelStream()
-                .map(entry -> {
+    public List<StakeAddressBalance> getStakeAddressBalances(EventMetadata firstBlockMetadata, List<BlockAddressAmount> blockAddressAmounts) {
+        ArrayListMultimap<String, StakeAddressBalance> stakeAddressBalanceMap = ArrayListMultimap.create();
+        for (var blockAddressAmount : blockAddressAmounts) {
+            var blockStakeAddressAmountMap = blockAddressAmount.getStakeAddressAmountMap();
+            calculateStakeAddressBalancesForBlock(firstBlockMetadata, stakeAddressBalanceMap, blockStakeAddressAmountMap);
+        }
+
+        return stakeAddressBalanceMap.values().stream().toList();
+    }
+
+    private void calculateStakeAddressBalancesForBlock(EventMetadata firstBlockMetadata, ArrayListMultimap<String, StakeAddressBalance> stakeAddressBalanceMap,
+                                                       Map<StakeAddressInfo, SlotAmount> stakeAddrAmtMap) {
+        stakeAddrAmtMap.entrySet()
+//                .parallelStream()
+                .forEach(entry -> {
                     var stakeAddrInfoKey = entry.getKey();
-                    var slotAmounts = entry.getValue();
+                    var slotAmount = entry.getValue();
 
-                    var savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
-                    List<StakeAddressBalance> stakeAddressBalances = new ArrayList<>();
+                    var stakeAddressBalancePerBlocks = stakeAddressBalanceMap.get(stakeAddrInfoKey.getAddress());
 
-                    BigInteger quantity = savedStakeAddressBalance.map(stakeAddrBalance -> stakeAddrBalance.getQuantity())
-                            .orElse(BigInteger.ZERO);
-
-                    for (SlotAmount slotAmount : slotAmounts) {
-                        StakeAddressBalance newStakeAddrBalance = null;
-                        quantity = quantity.add(slotAmount.getQuantity());
-
-                        newStakeAddrBalance = StakeAddressBalance.builder()
-                                .address(stakeAddrInfoKey.getAddress())
-                                .stakeCredential(stakeAddrInfoKey.getStakeCredential())
-                                .slot(slotAmount.getEventMetadata().getSlot())
-                                .blockNumber(slotAmount.getEventMetadata().getBlock())
-                                .blockHash(slotAmount.getEventMetadata().getBlockHash())
-                                .blockTime(slotAmount.getEventMetadata().getBlockTime())
-                                .epoch(slotAmount.getEventMetadata().getEpochNumber())
-                                .quantity(quantity)
-                                .build();
-
-                        stakeAddressBalances.add(newStakeAddrBalance);
-
-                        if (newStakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) < 0) {
-                            log.error("[Inputs] Negative balance for stakeAddress: " + stakeAddrInfoKey.getAddress() + " : " + newStakeAddrBalance.getQuantity());
-                            log.info("SlotAmounts >> " + slotAmounts);
-                            log.error("Existing StakeAddressBalance >> " + savedStakeAddressBalance);
-                            throw new IllegalStateException("Error in stake address balance calculation");
-                        }
-                    }
-
-                    if (nAddrBalanceRecordToKeep > 0 && stakeAddressBalances.size() >= nAddrBalanceRecordToKeep) {
-                        return stakeAddressBalances.subList(stakeAddressBalances.size() - nAddrBalanceRecordToKeep, stakeAddressBalances.size());
+                    StakeAddressBalance lastStakeAddressBalance = null;
+                    if (stakeAddressBalancePerBlocks == null || stakeAddressBalancePerBlocks.size() == 0) {
+                        lastStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1)
+                                .orElse(null);
                     } else {
-                        return stakeAddressBalances;
+                        if (nAddrBalanceRecordToKeep > 0 && stakeAddressBalancePerBlocks.size() >= nAddrBalanceRecordToKeep) {
+                            for (int i = 0; i < stakeAddressBalancePerBlocks.size() - nAddrBalanceRecordToKeep; i++) {
+                                stakeAddressBalancePerBlocks.remove(i);
+                            }
+                        }
+
+                        lastStakeAddressBalance = stakeAddressBalancePerBlocks.get(stakeAddressBalancePerBlocks.size() - 1);
                     }
 
-                }).flatMap(stakeAddrBalance -> stakeAddrBalance.stream())
-                .toList();
+                    BigInteger quantity = lastStakeAddressBalance != null ? lastStakeAddressBalance.getQuantity() : BigInteger.ZERO;
 
-        return stakeAddrBalances;
+                    quantity = quantity.add(slotAmount.getQuantity());
+
+                    StakeAddressBalance newStakeAddrBalance = StakeAddressBalance.builder()
+                            .address(stakeAddrInfoKey.getAddress())
+                            .stakeCredential(stakeAddrInfoKey.getStakeCredential())
+                            .slot(slotAmount.getEventMetadata().getSlot())
+                            .blockNumber(slotAmount.getEventMetadata().getBlock())
+                            .blockHash(slotAmount.getEventMetadata().getBlockHash())
+                            .blockTime(slotAmount.getEventMetadata().getBlockTime())
+                            .epoch(slotAmount.getEventMetadata().getEpochNumber())
+                            .quantity(quantity)
+                            .build();
+
+                    stakeAddressBalanceMap.put(stakeAddrInfoKey.getAddress(), newStakeAddrBalance);
+
+                    if (newStakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) < 0) {
+                        log.error("[Inputs] Negative balance for stakeAddress: " + stakeAddrInfoKey.getAddress() + " : " + newStakeAddrBalance.getQuantity());
+                        log.info("SlotAmount >> " + slotAmount);
+                        log.error("Existing StakeAddressBalance >> " + lastStakeAddressBalance);
+                        throw new IllegalStateException("Error in stake address balance calculation");
+                    }
+
+                });
     }
 
     @EventListener
@@ -453,9 +480,11 @@ public class AccountBalanceProcessor {
                             .slot(genesisBlockEvent.getSlot())
                             .blockNumber(genesisBlockEvent.getBlock())
                             .blockTime(genesisBlockEvent.getBlockTime())
-                            .unit(LOVELACE)
-                            .assetName(LOVELACE)
-                            .quantity(genesisBalance.getBalance())
+                            .amounts(List.of(Amt.builder()
+                                    .unit(LOVELACE)
+                                    .assetName(LOVELACE)
+                                    .quantity(genesisBalance.getBalance())
+                                    .build()))
                             .paymentCredential(paymentCredential)
                             .stakeAddress(stakeAddress)
                             .build();
@@ -489,14 +518,19 @@ public class AccountBalanceProcessor {
         accountBalanceStorage.saveStakeAddressBalances(stakeAddrBalances);
     }
 
-    private AddressUnitInfo getAddrBalKey(AddressUtxo input, Amt amount) {
-        return AddressUnitInfo.builder()
+    private AddressInfo getAddressInfoKey(AddressUtxo input) {
+        return AddressInfo.builder()
                 .address(input.getOwnerAddr())
                 .paymentCredential(input.getOwnerPaymentCredential())
+                .stakeAddress(input.getOwnerStakeAddr())
+                .build();
+    }
+
+    private UnitInfo getUnitInfoKey(Amt amount) {
+        return UnitInfo.builder()
                 .unit(amount.getUnit())
                 .policyId(amount.getPolicyId())
                 .assetName(amount.getAssetName())
-                .stakeAddress(input.getOwnerStakeAddr())
                 .build();
     }
 
@@ -512,10 +546,30 @@ public class AccountBalanceProcessor {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    static class AddressUnitInfo {
+    static class AddressInfo {
         private String address;
         private String stakeAddress;
         private String paymentCredential;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AddressInfo that = (AddressInfo) o;
+            return Objects.equals(address, that.address);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(address);
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    static class UnitInfo {
         private String unit;
         private String policyId;
         private String assetName;
@@ -524,13 +578,13 @@ public class AccountBalanceProcessor {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            AddressUnitInfo that = (AddressUnitInfo) o;
-            return Objects.equals(address, that.address) && Objects.equals(unit, that.unit);
+            UnitInfo unitInfo = (UnitInfo) o;
+            return Objects.equals(unit, unitInfo.unit);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(address, unit);
+            return Objects.hash(unit);
         }
     }
 
@@ -570,7 +624,8 @@ public class AccountBalanceProcessor {
     @AllArgsConstructor
     @Builder
     static class BlockAddressAmount {
-        private Map<AddressUnitInfo, SlotAmount> addressAmountMap;
+        private EventMetadata eventMetadata;
+        private Map<AddressInfo, Map<UnitInfo, SlotAmount>> addressAmountMap;
         private Map<StakeAddressInfo, SlotAmount> stakeAddressAmountMap;
     }
 
