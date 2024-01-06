@@ -28,7 +28,7 @@ import java.util.Optional;
 @RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "(Experimental) Account API", description = "APIs for account related operations. This is an experimental module. Some apis may not be stable.")
+@Tag(name = "Account API", description = "APIs for account related operations. This is an experimental module. Some apis may not be stable.")
 public class AccountController {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountService accountService;
@@ -43,7 +43,6 @@ public class AccountController {
 
         return accountBalanceStorage.getAddressBalance(address)
                 .stream()
-                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
                 .toList();
     }
 
@@ -57,34 +56,21 @@ public class AccountController {
                 .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0);
     }
 
-    @GetMapping("/addresses/{address}/{unit}/balance")
+    @GetMapping("/addresses/{address}/{timeInSec}/balance")
     @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
-    public AddressBalance getAddressBalanceAtTime(String address, String unit,
-                                                        @RequestParam long timeInSec) {
+    public AddressBalance getAddressBalanceAtTime(String address,
+                                                        long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getAddressBalanceByTime(address, unit, timeInSec)
-                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+        return accountBalanceStorage.getAddressBalanceByTime(address,  timeInSec)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
-    }
-
-    @GetMapping("/accounts/{stakeAddress}/{unit}/balance")
-    @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
-    public StakeAddressBalance getStakeAddressBalanceAtTime(String stakeAddress, String unit,
-                                                        @RequestParam long timeInSec) {
-        if (!accountStoreProperties.isBalanceAggregationEnabled())
-            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
-
-        return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, timeInSec)
-                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
-
     }
 
     @GetMapping("/accounts/{stakeAddress}")
     @Operation(description = "Obtain information about a specific stake account." +
-            "It calculates the current lovelace balance at the stake address by aggregating all currrent utxos for the stake address" +
+            "It gets stake account balance from aggregated stake account balance if aggregation is enabled, " +
+            "otherwise it calculates the current lovelace balance by aggregating all current utxos for the stake address" +
             "and get rewards amount directly from node.")
     public StakeAccountInfo getStakeAccountDetails(@PathVariable @NonNull String stakeAddress) {
         if (!stakeAddress.startsWith(Bech32Prefixes.STAKE_ADDR_PREFIX))

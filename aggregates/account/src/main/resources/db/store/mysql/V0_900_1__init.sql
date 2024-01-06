@@ -2,12 +2,9 @@ drop table if exists address_balance;
 create table address_balance
 (
     address            varchar(500),
-    unit               varchar(255),
     slot               bigint,
-    quantity           numeric(38)  null,
     addr_full          longtext null,
-    policy             varchar(56),
-    asset_name         varchar(255),
+    amounts            json,
     payment_credential varchar(56),
     stake_address      varchar(255),
     block_hash         varchar(64),
@@ -15,7 +12,7 @@ create table address_balance
     block_time         bigint,
     epoch              integer,
     update_datetime    timestamp,
-    primary key (address, unit, slot)
+    primary key (address, slot)
 );
 
 CREATE INDEX idx_address_balance_address
@@ -33,17 +30,8 @@ CREATE INDEX idx_address_balance_block_time
 CREATE INDEX idx_address_balance_epoch
     ON address_balance (epoch);
 
-CREATE INDEX idx_address_balance_unit
-    ON address_balance (unit);
-
-CREATE INDEX idx_address_balance_policy
-    ON address_balance (policy);
-
 CREATE INDEX idx_address_stake_address
     ON address_balance (stake_address);
-
-CREATE INDEX idx_address_balance_policy_asset
-    ON address_balance (policy, asset_name);
 
 -- stake_balance
 drop table if exists stake_address_balance;
