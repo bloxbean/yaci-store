@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.aggregation.config;
 
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
-import com.bloxbean.cardano.yaci.store.aggregation.storage.RocksDBAccountBalanceStorageImpl;
+import com.bloxbean.cardano.yaci.store.extensions.account.rocksdb.RocksDBAccountBalanceStorageImpl;
 import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorage;
 import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -18,14 +18,14 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(name = "store.aggr.utxo-storage-type",
+@ConditionalOnProperty(name = "store.extensions.utxo-storage-type",
         havingValue = "rocksdb",
         matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.rocksdb"})
 public class EmbeddedRocksDBConfiguration {
 
-    @Value("${store.aggr.rocksdb.base-dir:./_rocksdb}")
+    @Value("${store.rocksdb.base-dir:./_rocksdb}")
     private String rocksDBBaseDir;
 
     @Value("${store.rocksdb.column-families:utxos,spent-utxos,account_balances,stake_account_balances}")
@@ -55,8 +55,8 @@ public class EmbeddedRocksDBConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "store.aggr.rocksdb-account-balance-store-enabled",
-            havingValue = "true",
+    @ConditionalOnProperty(name = "store.extensions.account-storage-type",
+            havingValue = "rocksdb",
             matchIfMissing = false
     )
     public AccountBalanceStorage accountBalanceStorage(com.bloxbean.rocks.types.config.RocksDBConfig rocksDBConfig) {

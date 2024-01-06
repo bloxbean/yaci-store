@@ -33,7 +33,7 @@ public interface AccountBalanceStorage {
      * @param address address
      * @return List of AddressBalance
      */
-    List<AddressBalance> getAddressBalance(String address);
+    Optional<AddressBalance> getAddressBalance(String address);
 
     /**
      * Save address balances
@@ -110,13 +110,6 @@ public interface AccountBalanceStorage {
      * @return number of records deleted
      */
     int deleteStakeAddressBalanceBySlotGreaterThan(Long slot);
-
-    /**
-     * Delete all stake address balances after the block
-     * @param block
-     * @return number of records deleted
-     */
-    int deleteStakeBalanceByBlockGreaterThan(Long block);
 
     //Optional -- Required for controller
 

@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class AccountStoreAutoConfigProperties {
-    private Account account;
+    private Account account = new Account();
 
     @Getter
     @Setter
