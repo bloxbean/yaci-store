@@ -1,6 +1,5 @@
 dependencies {
     api project(":stores:utxo")
-    implementation libs.guava
 }
 
 publishing {

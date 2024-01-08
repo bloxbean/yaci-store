@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.account.domain;
+package com.bloxbean.cardano.yaci.store.api.account.dto;
 
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -9,7 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-import java.math.BigInteger;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -17,15 +18,13 @@ import java.math.BigInteger;
 @SuperBuilder(toBuilder = true)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AddressBalance extends BlockAwareDomain {
+public class AddressBalanceDto extends BlockAwareDomain {
     private String address;
-    private String unit;
-    private Long slot;
-    private BigInteger quantity;
-    private String policy;
-    private String assetName;
+    private List<Amt> amounts;
     private String paymentCredential;
     private String stakeAddress;
     private String blockHash;
-    private Integer epoch;
+    private Long slot;
+
+    private Long lastBalanceCalculationBlock;
 }

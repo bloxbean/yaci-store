@@ -11,29 +11,30 @@ import java.util.Optional;
  * Storage for address balance and stake address balance
  */
 public interface AccountBalanceStorage {
-
     /**
-     * Get address balance for the given address at the given slot
-     * @param address
-     * @param slot
-     * @return
-     */
-    Optional<AddressBalance> getAddressBalance(String address, long slot);
-
-    /**
-     * Get address balance for the given address at the given time in sec
+     * Get address balance for the given address, unit at the given slot
      * @param address address
+     * @param unit unit
+     * @param slot slot
+     * @return AddressBalance
+     */
+    Optional<AddressBalance> getAddressBalance(String address, String unit, long slot);
+
+    /**
+     * Get address balance for the given address, unit at the given time in sec
+     * @param address address
+     * @param unit unit
      * @param time time in seconds
      * @return AddressBalance
      */
-    Optional<AddressBalance> getAddressBalanceByTime(String address, long time);
+    Optional<AddressBalance> getAddressBalanceByTime(String address, String unit, long time);
 
     /**
      * Get latest address balance for the given address at highest slot
      * @param address address
      * @return List of AddressBalance
      */
-    Optional<AddressBalance> getAddressBalance(String address);
+    List<AddressBalance> getAddressBalance(String address);
 
     /**
      * Save address balances
@@ -45,10 +46,11 @@ public interface AccountBalanceStorage {
      * Delete all address balances before the slot except the top one
      * This is called to clean history data
      * @param address address
+     * @param unit unit
      * @param slot slot
      * @return number of records deleted
      */
-    int deleteAddressBalanceBeforeSlotExceptTop(String address, long slot);
+    int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot);
 
     /**
      * Delete all address balances after the slot

@@ -22,7 +22,10 @@ drop index idx_assets_fingerprint;
 drop index idx_address_balance_address;
 drop index idx_address_balance_block_time;
 drop index idx_address_balance_epoch;
+drop index idx_address_balance_unit;
+drop index idx_address_balance_policy;
 drop index idx_address_stake_address;
+drop index idx_address_balance_policy_asset;
 
 -- stake address balance
 

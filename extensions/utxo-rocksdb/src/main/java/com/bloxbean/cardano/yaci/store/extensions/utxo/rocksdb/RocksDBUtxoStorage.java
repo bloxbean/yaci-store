@@ -31,13 +31,13 @@ public class RocksDBUtxoStorage implements UtxoStorage {
 
     private RocksDBConfig rocksDBConfig;
 
-    private RocksMap<String, AddressUtxo> utxoMap;
-    private RocksMap<String, TxInput> spentUtxoMap;
-    private RocksZSet<String> utxoSlotZSet;
-    private RocksZSet<String> spentUtxoSlotZSet;
+    private RocksMap<byte[], AddressUtxo> utxoMap;
+    private RocksMap<byte[], TxInput> spentUtxoMap;
+    private RocksZSet<byte[]> utxoSlotZSet;
+    private RocksZSet<byte[]> spentUtxoSlotZSet;
 
-    private RocksMultiZSet<String> addressUtxoZSet;
-    private RocksMultiZSet<String> paymentCredUtxoZSet;
+    private RocksMultiZSet<byte[]> addressUtxoZSet;
+    private RocksMultiZSet<byte[]> paymentCredUtxoZSet;
 
     private final UtxoCache utxoCache;
     private final List<TxInput> spentUtxoCache = Collections.synchronizedList(new ArrayList<>());
@@ -51,13 +51,13 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     public RocksDBUtxoStorage(RocksDBConfig rocksDBConfig, UtxoCache utxoCache) {
         this.rocksDBConfig = rocksDBConfig;
         this.utxoCache = utxoCache;
-        this.utxoMap = new RocksMap<>(rocksDBConfig, UTXOS_COL_FAMILY, String.class, AddressUtxo.class);
-        this.spentUtxoMap = new RocksMap<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, String.class, TxInput.class);
-        this.utxoSlotZSet = new RocksZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "slot_utxos", String.class);
-        this.spentUtxoSlotZSet = new RocksZSet<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, "spent_slot_utxos", String.class);
+        this.utxoMap = new RocksMap<>(rocksDBConfig, UTXOS_COL_FAMILY, byte[].class, AddressUtxo.class);
+        this.spentUtxoMap = new RocksMap<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, byte[].class, TxInput.class);
+        this.utxoSlotZSet = new RocksZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "slot_utxos", byte[].class);
+        this.spentUtxoSlotZSet = new RocksZSet<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, "spent_slot_utxos", byte[].class);
 
-        this.addressUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "address_utxos", String.class);
-        this.paymentCredUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "payment_cred_utxos", String.class);
+        this.addressUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "address_utxos", byte[].class);
+        this.paymentCredUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "payment_cred_utxos", byte[].class);
 
         log.info("<< RocksDB utxo storage enabled >>");
     }
@@ -115,12 +115,12 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     @Override
     public int deleteUnspentBySlotGreaterThan(Long slot) {
         Long slotToDel = slot + 1;
-        try (ValueIterator<Tuple<String, Long>> iterator = utxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
+        try (ValueIterator<Tuple<byte[], Long>> iterator = utxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
              var writeBatch = new WriteBatch();
              var writeOptions = new WriteOptions()) {
             int counter = 0;
             while (iterator.hasNext()) {
-                Tuple<String, Long> utxoIdWithSlot = iterator.next();
+                Tuple<byte[], Long> utxoIdWithSlot = iterator.next();
 
                 var addressUtxo = utxoMap.get(utxoIdWithSlot._1);
 
@@ -145,12 +145,12 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     @Override
     public int deleteSpentBySlotGreaterThan(Long slot) {
         Long slotToDel = slot + 1;
-        try (ValueIterator<Tuple<String, Long>> iterator = spentUtxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
+        try (ValueIterator<Tuple<byte[], Long>> iterator = spentUtxoSlotZSet.membersInRangeIterable(slotToDel, Long.MAX_VALUE);
              var writeBatch = new WriteBatch();
              var writeOptions = new WriteOptions()) {
             int counter = 0;
             while (iterator.hasNext()) {
-                Tuple<String, Long> utxoIdWithSlot = iterator.next();
+                Tuple<byte[], Long> utxoIdWithSlot = iterator.next();
                 spentUtxoMap.removeBatch(writeBatch, utxoIdWithSlot._1);
                 spentUtxoSlotZSet.removeBatch(writeBatch, utxoIdWithSlot._1);
 
@@ -222,7 +222,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
         }
     }
 
-    private void saveUnspentUtxosToDB(List<Tuple<String, AddressUtxo>> tuples) {
+    private void saveUnspentUtxosToDB(List<Tuple<byte[], AddressUtxo>> tuples) {
         try (var writeBatch = new WriteBatch();
              var writeOptions = new WriteOptions()) {
             tuples.stream().forEach(tuple -> {
