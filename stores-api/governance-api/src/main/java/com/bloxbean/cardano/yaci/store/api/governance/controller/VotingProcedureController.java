@@ -20,7 +20,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "VotingProcedure Service")
-@RequestMapping("${apiPrefix}/voting-procedure")
+@RequestMapping("${apiPrefix}/voting-procedures")
 @ConditionalOnExpression("${store.governance.endpoints.votingProcedure.enabled:true}")
 public class VotingProcedureController {
     private final VotingProcedureService votingProcedureService;

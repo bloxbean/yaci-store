@@ -26,7 +26,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "GovActionProposal Service")
-@RequestMapping("${apiPrefix}/gov-action-proposal")
+@RequestMapping("${apiPrefix}/gov-action-proposals")
 @ConditionalOnExpression("${store.governance.endpoints.govActionProposal.enabled:true}")
 public class GovActionProposalController {
     private final GovActionProposalService govActionProposalService;
