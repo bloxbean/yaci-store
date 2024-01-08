@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.api.governance.controller;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.api.governance.service.GovActionProposalService;
 import com.bloxbean.cardano.yaci.store.api.governance.service.VotingProcedureService;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,11 +26,24 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "GovActionProposal Service")
-@RequestMapping("${apiPrefix}/gov-action-proposal")
+@RequestMapping("${apiPrefix}/gov-action-proposals")
 @ConditionalOnExpression("${store.governance.endpoints.govActionProposal.enabled:true}")
 public class GovActionProposalController {
     private final GovActionProposalService govActionProposalService;
     private final VotingProcedureService votingProcedureService;
+
+    @GetMapping
+    @Operation(description = "Get governance action proposal list")
+    public ResponseEntity<List<GovActionProposal>> getGovActionProposalList(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+                                                                            @RequestParam(name = "order", defaultValue = "desc") Order order) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return ResponseEntity.ok(govActionProposalService.getGovActionProposalList(p, count, order));
+    }
 
     @GetMapping("/{txHash}")
     @Operation(description = "Get governance action proposal list by transaction hash")
