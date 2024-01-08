@@ -27,23 +27,23 @@ public class RocksDBUtxoStorageReader implements UtxoStorageReader {
 
     private RocksDBConfig rocksDBConfig;
 
-    private RocksMap<String, AddressUtxo> utxoMap;
-    private RocksMap<String, TxInput> spentUtxoMap;
-    private RocksZSet<String> utxoSlotZSet;
-    private RocksZSet<String> spentUtxoSlotZSet;
+    private RocksMap<byte[], AddressUtxo> utxoMap;
+    private RocksMap<byte[], TxInput> spentUtxoMap;
+    private RocksZSet<byte[]> utxoSlotZSet;
+    private RocksZSet<byte[]> spentUtxoSlotZSet;
 
-    private RocksMultiZSet<String> addressUtxoZSet;
-    private RocksMultiZSet<String> paymentCredUtxoZSet;
+    private RocksMultiZSet<byte[]> addressUtxoZSet;
+    private RocksMultiZSet<byte[]> paymentCredUtxoZSet;
 
     public RocksDBUtxoStorageReader(RocksDBConfig rocksDBConfig) {
         this.rocksDBConfig = rocksDBConfig;
-        this.utxoMap = new RocksMap<>(rocksDBConfig, UTXOS_COL_FAMILY, String.class, AddressUtxo.class);
-        this.spentUtxoMap = new RocksMap<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, String.class, TxInput.class);
-        this.utxoSlotZSet = new RocksZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "slot_utxos", String.class);
-        this.spentUtxoSlotZSet = new RocksZSet<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, "spent_slot_utxos", String.class);
+        this.utxoMap = new RocksMap<>(rocksDBConfig, UTXOS_COL_FAMILY, byte[].class, AddressUtxo.class);
+        this.spentUtxoMap = new RocksMap<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, byte[].class, TxInput.class);
+        this.utxoSlotZSet = new RocksZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "slot_utxos", byte[].class);
+        this.spentUtxoSlotZSet = new RocksZSet<>(rocksDBConfig, SPENT_UTXOS_COL_FAMILY, "spent_slot_utxos", byte[].class);
 
-        this.addressUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "address_utxos", String.class);
-        this.paymentCredUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "payment_cred_utxos", String.class);
+        this.addressUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "address_utxos", byte[].class);
+        this.paymentCredUtxoZSet = new RocksMultiZSet<>(rocksDBConfig, UTXOS_COL_FAMILY, "payment_cred_utxos", byte[].class);
 
         log.info("<< Embedded utxo storage enabled >>");
     }
