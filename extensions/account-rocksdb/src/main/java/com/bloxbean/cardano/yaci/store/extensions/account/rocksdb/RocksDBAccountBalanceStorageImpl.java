@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.rocksdb.KeyReference;
 import com.bloxbean.rocks.types.collection.RocksMultiMap;
+import com.bloxbean.rocks.types.collection.RocksMultiSet;
 import com.bloxbean.rocks.types.collection.RocksMultiZSet;
 import com.bloxbean.rocks.types.collection.RocksZSet;
 import com.bloxbean.rocks.types.common.Tuple;
@@ -39,13 +40,15 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     private RocksMultiZSet<byte[]> accountBalanceZSet;
     private RocksMultiZSet<byte[]> stakeBalanceZSet;
 
+    private RocksMultiSet<String> accountAssetsSet;
+
     private RocksZSet<byte[]> slotAccountAssetSet;
     private RocksZSet<byte[]> slotStakeAccountSet;
 
-    @Value("${store.extensions.rocksdb-account-balance-storage.write-batch-size:1000}")
+    @Value("${store.extensions.account-balance-storage.write-batch-size:1000}")
     private int batchSize = 1000;
 
-    @Value("${store.extensions.rocksdb-account-balance-storage.parallel-write:false}")
+    @Value("${store.extensions.account-balance-storage.parallel-write:false}")
     private boolean parallelWrite = false;
 
     public RocksDBAccountBalanceStorageImpl(RocksDBConfig rocksDBConfig) {
@@ -57,14 +60,16 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         this.stakeBalanceMap = new RocksMultiMap<>(rocksDBConfig, STAKE_BAL_COL_FAMILy, "stake_bal_map", byte[].class, StakeAddressBalance.class);
         this.stakeBalanceZSet = new RocksMultiZSet<>(rocksDBConfig, STAKE_BAL_COL_FAMILy, "stake_bal", byte[].class);
 
+        this.accountAssetsSet = new RocksMultiSet<>(rocksDBConfig, ACCOUNT_BAL_COL_FAMILY, "account_assets", String.class);
+
         this.slotAccountAssetSet = new RocksZSet<>(rocksDBConfig, ACCOUNT_BAL_COL_FAMILY, "slot_account_asset", byte[].class);
         this.slotStakeAccountSet = new RocksZSet<>(rocksDBConfig, STAKE_BAL_COL_FAMILy, "slot_stake_account", byte[].class);
     }
 
     @SneakyThrows
     @Override
-    public Optional<AddressBalance> getAddressBalance(String address, long slot) {
-        byte[] ns = getAddressBytes(address);
+    public Optional<AddressBalance> getAddressBalance(String address, String unit, long slot) {
+        byte[] ns = getAddressAssetKey(address, unit);
         try (var iterator = accountBalanceZSet.membersInRangeReverseIterator(ns, slot, 0)) {
             var tuple = iterator.prev();
             return accountBalanceMap.get(ns, tuple._1);
@@ -74,14 +79,18 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public Optional<AddressBalance> getAddressBalanceByTime(String address, long time) {
+    public Optional<AddressBalance> getAddressBalanceByTime(String address, String unit, long time) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public Optional<AddressBalance> getAddressBalance(@NonNull String address) {
+    public List<AddressBalance> getAddressBalance(@NonNull String address) {
         byte[] addressNS = getAddressBytes(address);
-        return getAddressBalance(address, Long.MAX_VALUE);
+        return accountAssetsSet.members(addressNS)
+                .stream()
+                .map(asset -> getAddressBalance(address, asset, Long.MAX_VALUE))
+                .map(Optional::get)
+                .toList();
     }
 
     @SneakyThrows
@@ -104,7 +113,7 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
              var writeOption = new WriteOptions()) {
             addressBalances
                     .forEach(ab -> {
-                        byte[] ns = getAddressBytes(ab.getAddress());
+                        byte[] ns = getAddressAssetKey(ab.getAddress(), ab.getUnit());
                         long slot = ab.getSlot();
                         if (slot == -1)
                             slot = 0;
@@ -112,9 +121,11 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
                         byte[] hash = getAddressBalanceHash(ab);
                         accountBalanceZSet.addBatch(ns, writeBatch, new Tuple<>(hash, slot));
                         accountBalanceMap.putBatch(ns, writeBatch, new Tuple<>(hash, ab));
+                        byte[] addressNS = getAddressBytes(ab.getAddress());
+                        accountAssetsSet.addBatch(addressNS, writeBatch, ab.getUnit());
 
                         //For slot index
-                        slotAccountAssetSet.addBatch(writeBatch, new Tuple<>(serializeAccountAssetKeyForSlotSet(ab.getAddress(), hash), slot));
+                        slotAccountAssetSet.addBatch(writeBatch, new Tuple<>(serializeAccountAssetKeyForSlotSet(ab.getAddress(), ab.getUnit(), hash), slot));
                     });
 
             rocksDBConfig.getRocksDB().write(writeOption, writeBatch);
@@ -122,7 +133,7 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
-    public int deleteAddressBalanceBeforeSlotExceptTop(String address, long slot) {
+    public int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -254,8 +265,12 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    private byte[] getAddressAssetKey(String address, String unit) {
+        return (address + "_" + unit).getBytes(StandardCharsets.UTF_8);
+    }
+
     private byte[] getAddressBalanceHash(AddressBalance addressBalance) {
-        return Blake2bUtil.blake2bHash224((addressBalance.getAddress() + "_" + addressBalance.getSlot()).getBytes());
+        return Blake2bUtil.blake2bHash224((addressBalance.getAddress() + "_" + addressBalance.getUnit() + "_" + addressBalance.getSlot()).getBytes());
     }
 
     private byte[] getStakeAddressBalanceHash(StakeAddressBalance addressBalance) {
@@ -271,8 +286,8 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     //For slot index
-    private byte[] serializeAccountAssetKeyForSlotSet(String address, byte[] hash) {
-        var keyRef = new KeyReference(getAddressBytes(address), hash);
+    private byte[] serializeAccountAssetKeyForSlotSet(String address, String unit, byte[] hash) {
+        var keyRef = new KeyReference(getAddressAssetKey(address, unit), hash);
         return keyRef.serialize();
     }
 

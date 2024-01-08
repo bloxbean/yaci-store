@@ -8,6 +8,8 @@ dependencies {
     implementation project(':starters:epoch-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
 
+    implementation project(':extensions:utxo-rocksdb')
+
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 

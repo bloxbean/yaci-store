@@ -5,9 +5,13 @@ import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountInfo;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
+import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
+import com.bloxbean.cardano.yaci.store.api.account.dto.AddressBalanceDto;
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.api.account.service.UtxoAccountService;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes;
 import com.bloxbean.cardano.yaci.store.utxo.domain.Amount;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,16 +38,25 @@ public class AccountController {
     private final AccountService accountService;
     private final UtxoAccountService utxoAccountService;
     private final AccountStoreProperties accountStoreProperties;
+    private final AccountConfigService accountConfigService;
 
     @GetMapping("/addresses/{address}/balance")
     @Operation(description = "Get current balance at an address")
-    public List<AddressBalance> getAddressBalance(String address) {
+    public Optional<AddressBalanceDto> getAddressBalance(String address) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getAddressBalance(address)
+        var addresssBalances = accountBalanceStorage.getAddressBalance(address)
                 .stream()
+                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
                 .toList();
+
+        if (addresssBalances.size() == 0)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found");
+
+        var addressBalanceDto = toAddressDto(addresssBalances);
+
+        return addressBalanceDto;
     }
 
     @GetMapping("/accounts/{stakeAddress}/balance")
@@ -56,15 +69,30 @@ public class AccountController {
                 .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0);
     }
 
-    @GetMapping("/addresses/{address}/{timeInSec}/balance")
+    @GetMapping("/addresses/{address}/{unit}/{timeInSec}/balance")
     @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
-    public AddressBalance getAddressBalanceAtTime(String address,
-                                                        long timeInSec) {
+    public Optional<AddressBalanceDto> getAddressBalanceAtTime(String address, String unit, long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
-        return accountBalanceStorage.getAddressBalanceByTime(address,  timeInSec)
+        var addressBalances = accountBalanceStorage.getAddressBalanceByTime(address, unit, timeInSec)
+                .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
+
+        return toAddressDto(addressBalances);
+    }
+
+    @GetMapping("/accounts/{stakeAddress}/{timeInSec}/balance")
+    @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
+    public StakeAddressBalance getStakeAddressBalanceAtTime(String stakeAddress,
+                                                            long timeInSec) {
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
+            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
+
+        return accountBalanceStorage.getStakeAddressBalanceByTime(stakeAddress, timeInSec)
+                .filter(stakeAddrBalance -> stakeAddrBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Balance not found for the time"));
+
     }
 
     @GetMapping("/accounts/{stakeAddress}")
@@ -119,4 +147,77 @@ public class AccountController {
             return amounts;
         }
     }
+
+    private Optional<AddressBalanceDto> toAddressDto(List<AddressBalance> addresssBalances) {
+        if (addresssBalances == null || addresssBalances.size() == 0)
+            return Optional.empty();
+
+        var amts = addresssBalances.stream()
+                .map(addressBalance -> Amt.builder()
+                        .unit(addressBalance.getUnit())
+                        .assetName(addressBalance.getAssetName())
+                        .policyId(addressBalance.getPolicy())
+                        .quantity(addressBalance.getQuantity())
+                        .build()).toList();
+
+        Long lastTxBlock = 0L;
+        String lastTxBlockHash = null;
+        Long lastTxSlot = 0L;
+        Long lastTxBlockTime = 0L;
+        for (AddressBalance addressBalance: addresssBalances) {
+            if (addressBalance.getBlockNumber() > lastTxBlock) {
+                lastTxBlock = addressBalance.getBlockNumber();
+                lastTxBlockHash = addressBalance.getBlockHash();
+                lastTxSlot = addressBalance.getSlot();
+                lastTxBlockTime = addressBalance.getBlockTime();
+            }
+        }
+
+        var addressBalanceDto = new AddressBalanceDto();
+        addressBalanceDto.setAddress(addresssBalances.get(0).getAddress());
+        addressBalanceDto.setPaymentCredential(addresssBalances.get(0).getPaymentCredential());
+        addressBalanceDto.setStakeAddress(addresssBalances.get(0).getStakeAddress());
+        addressBalanceDto.setAmounts(amts);
+        addressBalanceDto.setBlockNumber(lastTxBlock);
+        addressBalanceDto.setBlockHash(lastTxBlockHash);
+        addressBalanceDto.setSlot(lastTxSlot);
+        addressBalanceDto.setBlockTime(lastTxBlockTime);
+
+        accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK)
+                .ifPresent(accountConfigEntity -> {
+                    addressBalanceDto.setLastBalanceCalculationBlock(accountConfigEntity.getBlock());
+                });
+
+        return Optional.of(addressBalanceDto);
+    }
+
+    private Optional<AddressBalanceDto> toAddressDto(AddressBalance addressBalance) {
+        if (addressBalance == null)
+            return Optional.empty();
+
+        var amts =  Amt.builder()
+                        .unit(addressBalance.getUnit())
+                        .assetName(addressBalance.getAssetName())
+                        .policyId(addressBalance.getPolicy())
+                        .quantity(addressBalance.getQuantity())
+                        .build();
+
+        AddressBalanceDto addressBalanceDto = new AddressBalanceDto();
+        addressBalanceDto.setAddress(addressBalance.getAddress());
+        addressBalanceDto.setPaymentCredential(addressBalance.getPaymentCredential());
+        addressBalanceDto.setStakeAddress(addressBalance.getStakeAddress());
+        addressBalanceDto.setAmounts(List.of(amts));
+        addressBalanceDto.setBlockNumber(addressBalance.getBlockNumber());
+        addressBalanceDto.setBlockHash(addressBalance.getBlockHash());
+        addressBalanceDto.setSlot(addressBalance.getSlot());
+        addressBalanceDto.setBlockTime(addressBalance.getBlockTime());
+
+        accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK)
+                .ifPresent(accountConfigEntity -> {
+                    addressBalanceDto.setLastBalanceCalculationBlock(accountConfigEntity.getBlock());
+                });
+
+        return Optional.of(addressBalanceDto);
+    }
+
 }

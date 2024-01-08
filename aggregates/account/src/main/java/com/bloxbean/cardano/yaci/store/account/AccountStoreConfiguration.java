@@ -5,7 +5,6 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.AccountBalanceStorag
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
-import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -32,8 +31,8 @@ public class AccountStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
-                                                       StakeBalanceRepository stakeBalanceRepository, DSLContext dslContext) {
-        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository, dslContext);
+                                                       StakeBalanceRepository stakeBalanceRepository) {
+        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository);
     }
 
     @Bean
