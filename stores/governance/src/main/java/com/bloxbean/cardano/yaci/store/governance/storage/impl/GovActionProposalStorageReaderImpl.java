@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
@@ -20,6 +21,15 @@ import java.util.List;
 public class GovActionProposalStorageReaderImpl implements GovActionProposalStorageReader {
     private final GovActionProposalRepository govActionProposalRepository;
     private final GovActionProposalMapper govActionProposalMapper;
+
+    @Override
+    public List<GovActionProposal> findAll(int page, int count, Order order) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
+
+        Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findAll(sortedBySlot);
+        return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
+    }
 
     @Override
     public List<GovActionProposal> findByTxHash(String txHash) {

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.VotingProcedureMapper;
@@ -19,6 +20,15 @@ import java.util.List;
 public class VotingProcedureStorageReaderImpl implements VotingProcedureStorageReader {
     private final VotingProcedureRepository votingProcedureRepository;
     private final VotingProcedureMapper votingProcedureMapper;
+
+    @Override
+    public List<VotingProcedure> findAll(int page, int count, Order order) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
+
+        Slice<VotingProcedureEntity> votingProcedureEntities = votingProcedureRepository.findAll(sortedBySlot);
+        return votingProcedureEntities.stream().map(votingProcedureMapper::toVotingProcedure).toList();
+    }
 
     @Override
     public List<VotingProcedure> findByTxHash(String txHash) {
