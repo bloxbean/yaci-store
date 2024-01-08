@@ -1,11 +1,15 @@
 package com.bloxbean.cardano.yaci.store.governance.storage;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 
 import java.util.List;
 
 public interface GovActionProposalStorageReader {
+
+    List<GovActionProposal> findAll(int page, int count, Order order);
+
     List<GovActionProposal> findByTxHash(String txHash);
 
     List<GovActionProposal> findByGovActionType(GovActionType govActionType, int page, int count);
