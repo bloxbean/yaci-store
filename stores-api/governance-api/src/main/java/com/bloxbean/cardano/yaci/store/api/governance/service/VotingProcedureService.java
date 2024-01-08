@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governance.service;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -22,5 +23,9 @@ public class VotingProcedureService {
 
     public List<VotingProcedure> getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(String txHash, int index) {
         return votingProcedureStorageReader.findByGovActionTxHashAndGovActionIndex(txHash, index);
+    }
+
+    public List<VotingProcedure> getVotingProcedureList(int page, int count, Order order) {
+        return votingProcedureStorageReader.findAll(page, count, order);
     }
 }
