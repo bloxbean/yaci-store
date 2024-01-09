@@ -6,17 +6,17 @@ cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogm
 rocks-types="com.bloxbean:rocks-types:0.0.1-preview6"
 
 cbor = "co.nstant.in:cbor:0.9"
-hibernate-types = "io.hypersistence:hypersistence-utils-hibernate-60:3.5.2"
+hibernate-types = "io.hypersistence:hypersistence-utils-hibernate-63:3.7.0"
 codehaus-janino = "org.codehaus.janino:janino:3.1.8"
-guava = "com.google.guava:guava:32.1.2-jre"
-springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.0"
-mapstruct="org.mapstruct:mapstruct:1.5.3.Final"
-mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.3.Final"
+guava = "com.google.guava:guava:33.0.0-jre"
+springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0"
+mapstruct="org.mapstruct:mapstruct:1.5.5.Final"
+mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.5.Final"
 
-assertj-core="org.assertj:assertj-core:3.24.2"
+assertj-core="org.assertj:assertj-core:3.25.1"
 
-spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.1.8"
-spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.1.8"
+spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.2.1"
+spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
 
-rocksdb="org.rocksdb:rocksdbjni:8.8.1"
+rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
