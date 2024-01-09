@@ -8,12 +8,12 @@ if (!name.equalsIgnoreCase("stores") && !name.equalsIgnoreCase("components")) {
         publications {
             mavenJava(MavenPublication) {
                 from components.java
-//                artifact(sourceJar) {
-//                    classifier = 'sources'
-//                }
-//                artifact(javadocJar) {
-//                    classifier = 'javadoc'
-//                }
+                artifact(sourceJar) {
+                    classifier = 'sources'
+                }
+                artifact(javadocJar) {
+                    classifier = 'javadoc'
+                }
 
                 artifactId 'yaci-store-' + project.name
 
