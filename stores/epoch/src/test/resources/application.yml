@@ -1,27 +1,8 @@
 spring:
-#  spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_indexer
-#  spring.datasource.username=user
-#  spring.datasource.password=
-#  datasource:
-#    driver-class-name: org.h2.Driver
-#    url: jdbc:postgresql://localhost:5432/yaci_indexer
-#    username: user
-#    password:
   datasource:
-#    url: jdbc:h2:mem:demo;DB_CLOSE_ON_EXIT=FALSE
     url: jdbc:h2:mem:mydb
     username: sa
     password: password
-#  jpa:
-#    hibernate:
-#      ddl-auto: create-drop
-#    defer-datasource-initialization: true
-#    show-sql: true
-#    properties:
-#      hibernate:
-#        dialect: H2Dialect
-#        format_sql: true
-
 
   flyway:
     locations: classpath:db/store/{vendor}
