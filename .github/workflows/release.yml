@@ -37,6 +37,10 @@ jobs:
           files: |
             applications/all/build/libs/yaci-store-all-*.jar
             applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-*.jar
+            applications/aggregation-app/build/libs/yaci-store-aggregation-app-*.jar
+            applications/admin/build/libs/yaci-store-admin-*.jar
+            config/application.properties
+            config/application-aggr.properties
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,3 +49,61 @@ jobs:
 #        env:
 #          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
 #          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push yaci-store-all docker image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./Dockerfile
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          target: yaci-store-all
+          build-args: |
+            TARGET=yaci-store-all
+            APP_VERSION=${{env.VERSION}}
+          tags: bloxbean/yaci-store-all:${{ env.VERSION }}
+
+      - name: Build and push yaci-store-aggregation-app docker image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./Dockerfile
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          target: yaci-store-aggregation-app
+          build-args: |
+            TARGET=yaci-store-aggregation-app
+            APP_VERSION=${{env.VERSION}}
+          tags: bloxbean/yaci-store-aggregation-app:${{ env.VERSION }}
+
+      - name: Build and push yaci-store-utxo-indexer docker image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./Dockerfile
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          target: yaci-store-utxo-indexer
+          build-args: |
+            TARGET=yaci-store-utxo-indexer
+            APP_VERSION=${{env.VERSION}}
+          tags: bloxbean/yaci-store-utxo-indexer:${{ env.VERSION }}
+
+      - name: Build and push yaci-store-admin docker image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./Dockerfile
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          target: yaci-store-admin
+          build-args: |
+            TARGET=yaci-store-admin
+            APP_VERSION=${{env.VERSION}}
+          tags: bloxbean/yaci-store-admin:${{ env.VERSION }}
