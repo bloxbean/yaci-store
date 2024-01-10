@@ -34,20 +34,20 @@ jobs:
         run: |
           ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
           echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
-#      - name: Release
-#        uses: softprops/action-gh-release@v1
-#        if: startsWith(github.ref, 'refs/tags/')
-#        with:
-#          files: |
-#            applications/all/build/libs/yaci-store-all-${{env.VERSION}}.jar
-#            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar
-#            applications/aggregation-app/build/libs/yaci-store-aggregation-app-${{env.VERSION}}.jar
-#            applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
-#            config/application.properties
-#            config/application-aggr.properties
-#          prerelease: true
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            applications/all/build/libs/yaci-store-all-${{env.VERSION}}.jar
+            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar
+            applications/aggregation-app/build/libs/yaci-store-aggregation-app-${{env.VERSION}}.jar
+            applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
+            config/application.properties
+            config/application-aggr.properties
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #      - name: Close And Release Repository
 #        run: ./gradlew closeAndReleaseRepository
 #        env:
