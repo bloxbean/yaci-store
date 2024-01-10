@@ -30,15 +30,19 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+      - name: 'Get Version Number'
+        run: |
+          ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
+          echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            applications/all/build/libs/yaci-store-all-*.jar
-            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-*.jar
-            applications/aggregation-app/build/libs/yaci-store-aggregation-app-*.jar
-            applications/admin/build/libs/yaci-store-admin-*.jar
+            applications/all/build/libs/yaci-store-all-${{env.VERSION}}.jar
+            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar
+            applications/aggregation-app/build/libs/yaci-store-aggregation-app-${{env.VERSION}}.jar
+            applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
             config/application.properties
             config/application-aggr.properties
           prerelease: true
