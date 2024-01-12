@@ -94,7 +94,7 @@ fetching protocol parameters etc. If you don't need these functionalities, you c
 #store.cardano.n2c-port=<relay_port>
 ```
 
-#### Enable / Disable specif store
+#### Enable / Disable specific store
 
 Even if you are using ``yaci-store-all`` application, you can enable/disable specific stores. **For example**, if you want to disable utxo store, you can do so by setting the following property to false.
 
