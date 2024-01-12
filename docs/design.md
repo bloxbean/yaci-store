@@ -101,3 +101,12 @@ If you are using Yaci Store as a library in your application with your own domai
 
 Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box 
 modules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
+
+
+## Yaci Store - Sequential Block Processing
+
+![Sequential Processing](images/store-sequential-diagram.png)
+
+## Yaci Store - Parallel Block Processing
+
+![Parallel Processing](images/store-parallel-diagram.png)
