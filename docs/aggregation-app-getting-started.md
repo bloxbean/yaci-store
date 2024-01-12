@@ -8,9 +8,14 @@ in the same directory as the jar file. The application will automatically pick u
 
 Swagger UI is available at http://localhost:8081/swagger-ui.html
 
+1. [Mode 1 - Companion Mode](#mode1)
+2. [Mode 2 - Standalone Mode](#mode2)
+3. [Mode 3 - Standalone Mode with RocksDB Utxo Storage](#mode3)
+4. [How to run as Docker Container](#docker)
+
 This application can be run in three modes.
 
-## Mode 1 - Companion Mode
+## Mode 1 - Companion Mode <a id="mode1"></a>
 
 **Read UTxOs from the main database and write account balance to same database.**
 
@@ -32,7 +37,7 @@ java -jar yaci-store-aggregation-app-<version>.jar
 java -Dstore.aggr.clean-db-before-start=true -jar yaci-store-aggregation-app-<version>.jar
 ```
 
-## Mode 2 - Standalone Mode
+## Mode 2 - Standalone Mode <a id="mode2"></a>
 
 **Write UTxOs and account balance related data to a separate database.**
 
@@ -72,7 +77,7 @@ java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 ```
 
-## Mode 3 - Standalone Mode with RocksDB Utxo Storage
+## Mode 3 - Standalone Mode with RocksDB Utxo Storage <a id="mode3"></a>
 
 **Write UTxOs to embedded RocksDB storage and account balance related data to a separate database.**
 
@@ -114,4 +119,14 @@ java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 
 ```
 java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
+```
+
+## How to run as Docker Container <a id="docker"></a>
+
+To run the application as docker container, create an env file named "**env**" and set the required environment variables.
+
+Please set the correct version in the docker command.
+
+```
+docker run --env-file env -p 8081:8081 bloxbean/yaci-store-aggregation-app:0.1.0-rc1
 ```
