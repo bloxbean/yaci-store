@@ -4,6 +4,8 @@ Yaci Store comes with few applications that you can use out-of-the-box. These ap
 
 - **yaci-store-all:** This application bundles all available modules/stores into a single application. If you want to index all available data, this is the application you want.
 - **yaci-store-utxo-indexer:** This application contains utxo store,  protocolparams store and submit module If you want a utxo indexer with transaction submission capability, this is the application you want.
+- **yaci-store-aggregation-app:** This application handles aggregation tasks like account balance calculation. This can be run as a separate application to calculate address balances.
+For steps to run this application, please refer to [Aggregation App Getting Started](aggregation-app-getting-started.md) section.
 
 The Jar files for these applications are available in the release section.
 
@@ -56,18 +58,6 @@ fetching protocol parameters etc. If you don't need these functionalities, you c
 # If you are accessing n2c through a relay like "socat", uncomment and edit the following properties.
 #store.cardano.n2c-host=<relay_host>
 #store.cardano.n2c-port=<relay_port>
-```
-
-#### Account aggregation Configuration 
-
-Using account module, you can track account balance related data. By default, this module is disabled. If you want to enable it, uncomment the following properties.
-To use this module, you need to configure genesis files.
-The status of this module is "**experimental**".
-
-```
-store.account.enabled=false
-store.account.balance-aggregation-enabled=true
-store.account.history-cleanup-enabled=false
 ```
 
 #### Enable / Disable specif store
