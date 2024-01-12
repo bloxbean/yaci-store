@@ -42,6 +42,9 @@ $> edit config/application.properties //datasource, network details
 $> java -jar applications/all/build/libs/yaci-store-all-<version>.jar
 ```
 
+## Run Release Build (Jar or Docker)
+To run a release build, follow the instructions in [Getting Started - Out of Box Application](./docs/getting-started-out-of-box.md)
+
 ## Documents
 
 ### 1. [Overview](./docs/overview.md)
@@ -49,16 +52,6 @@ $> java -jar applications/all/build/libs/yaci-store-all-<version>.jar
 ### 3. [Getting Started - Out of Box Application](./docs/getting-started-out-of-box.md)
 ### 4. [Getting Started - Custom Application](./docs/getting-started-as-library.md)
 
-## Known Limitations:
-
-1. Currently, epoch aggregation metrics such as total transactions and total fees in an epoch are calculated at specific intervals.
-This process takes some time on the **mainnet** due to the current implementation. Since this process is executed synchronously within the main flow, 
-you may experience some lag in the sync process during aggregation. However, once the aggregation is completed, the sync process should quickly catch up with the latest data.
-
-The current implementation of epoch aggregation will be replaced by a more efficient approach in a future release. 
-Nonetheless, you have control over the epoch aggregation interval by adjusting the following flag in application.properties, which is currently set to 14400 (4 hours):
-
-``` store.blocks.epoch-calculation-interval=14400 ```
 
 # Any questions, ideas or issues?
 
