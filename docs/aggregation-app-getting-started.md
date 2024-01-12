@@ -52,6 +52,7 @@ Make sure the **only** following properties are uncommented in ``application-agg
 
 ```
 store.account.enabled=true
+store.extensions.utxo-storage-type=default
 
 spring.flyway.locations=classpath:db/store/{vendor}
 spring.flyway.out-of-order=true
@@ -71,7 +72,7 @@ java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 ```
 
-## Mode 3 - Standalone Mode with RocksDB
+## Mode 3 - Standalone Mode with RocksDB Utxo Storage
 
 **Write UTxOs to embedded RocksDB storage and account balance related data to a separate database.**
 
