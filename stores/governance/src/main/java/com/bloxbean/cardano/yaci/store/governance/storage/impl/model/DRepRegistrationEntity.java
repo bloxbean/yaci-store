@@ -16,8 +16,8 @@ import java.math.BigInteger;
 @SuperBuilder
 @Entity
 @Table(name = "drep_registration")
-@IdClass(DrepRegistrationId.class)
-public class DrepRegistrationEntity extends BlockAwareEntity {
+@IdClass(DRepRegistrationId.class)
+public class DRepRegistrationEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

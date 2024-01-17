@@ -6,7 +6,7 @@ import lombok.EqualsAndHashCode;
 import java.io.Serializable;
 
 @EqualsAndHashCode
-public class DrepRegistrationId implements Serializable {
+public class DRepRegistrationId implements Serializable {
     @Column(name = "tx_hash")
     private String txHash;
 

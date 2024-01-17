@@ -18,7 +18,7 @@ import java.math.BigInteger;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class DrepRegistration extends BlockAwareDomain {
+public class DRepRegistration extends BlockAwareDomain {
 
     private String txHash;
 

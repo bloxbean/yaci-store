@@ -9,8 +9,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.governance.domain.DrepRegistration;
-import com.bloxbean.cardano.yaci.store.governance.storage.DrepRegistrationStorage;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
+import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -24,55 +24,55 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class DrepRegistrationProcessor {
-    private final DrepRegistrationStorage drepRegistrationStorage;
+public class DRepRegistrationProcessor {
+    private final DRepRegistrationStorage drepRegistrationStorage;
 
     @Transactional
     @EventListener
-    public void handleDrepRegistration(CertificateEvent certificateEvent) {
+    public void handleDRepRegistration(CertificateEvent certificateEvent) {
         EventMetadata eventMetadata = certificateEvent.getMetadata();
 
-        List<DrepRegistration> drepRegistrations = new ArrayList<>();
+        List<DRepRegistration> dRepRegistrations = new ArrayList<>();
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
             int index = 0;
 
             for (var certificate : txCertificates.getCertificates()) {
-                DrepRegistration drepRegistration = switch (certificate.getType()) {
+                DRepRegistration drepRegistration = switch (certificate.getType()) {
                     case REG_DREP_CERT -> {
                         RegDrepCert regDrepCert = (RegDrepCert) certificate;
-                        yield buildDrepRegistration(regDrepCert.getDrepCredential(), regDrepCert.getAnchor(),
+                        yield buildDRepRegistration(regDrepCert.getDrepCredential(), regDrepCert.getAnchor(),
                                 regDrepCert.getCoin(), certificate.getType(),
                                 txHash, index, eventMetadata);
                     }
                     case UNREG_DREP_CERT -> {
                         UnregDrepCert unregDrepCert = (UnregDrepCert) certificate;
-                        yield buildDrepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
+                        yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
                                 certificate.getType(), txHash, index, eventMetadata);
                     }
                     case UPDATE_DREP_CERT -> {
                         UpdateDrepCert updateDrepCert = (UpdateDrepCert) certificate;
-                        yield buildDrepRegistration(updateDrepCert.getDrepCredential(), updateDrepCert.getAnchor(), null,
+                        yield buildDRepRegistration(updateDrepCert.getDrepCredential(), updateDrepCert.getAnchor(), null,
                                 certificate.getType(), txHash, index, eventMetadata);
                     }
                     default -> null;
                 };
 
                 if (drepRegistration != null) {
-                    drepRegistrations.add(drepRegistration);
+                    dRepRegistrations.add(drepRegistration);
                 }
                 index++;
             }
         }
-        if (!drepRegistrations.isEmpty()) {
-            drepRegistrationStorage.saveAll(drepRegistrations);
+        if (!dRepRegistrations.isEmpty()) {
+            drepRegistrationStorage.saveAll(dRepRegistrations);
         }
     }
 
-    private DrepRegistration buildDrepRegistration(Credential drepCredential, Anchor anchor, BigInteger deposit,
+    private DRepRegistration buildDRepRegistration(Credential drepCredential, Anchor anchor, BigInteger deposit,
                                                    CertificateType certificateType, String txHash,
                                                    int certIndex, EventMetadata eventMetadata) {
-        DrepRegistration drepRegistration = DrepRegistration.builder()
+        DRepRegistration drepRegistration = DRepRegistration.builder()
                 .txHash(txHash)
                 .certIndex(certIndex)
                 .type(certificateType)
