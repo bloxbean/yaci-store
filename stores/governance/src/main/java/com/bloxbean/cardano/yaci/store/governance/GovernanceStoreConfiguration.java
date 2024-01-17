@@ -77,9 +77,9 @@ public class GovernanceStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DrepRegistrationStorage drepRegistrationStorage(DrepRegistrationRepository drepRegistrationRepository,
-                                                           DrepRegistrationMapper drepRegistrationMapper) {
-        return new DrepRegistrationStorageImpl(drepRegistrationRepository, drepRegistrationMapper);
+    public DRepRegistrationStorage drepRegistrationStorage(DRepRegistrationRepository drepRegistrationRepository,
+                                                           DRepRegistrationMapper drepRegistrationMapper) {
+        return new DRepRegistrationStorageImpl(drepRegistrationRepository, drepRegistrationMapper);
     }
 
 }
