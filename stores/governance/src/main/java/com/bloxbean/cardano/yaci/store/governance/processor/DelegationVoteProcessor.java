@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DelegationVote;
 import com.bloxbean.cardano.yaci.store.governance.storage.DelegationVoteStorage;
 import com.bloxbean.cardano.yaci.store.governance.util.AddressUtil;
+import com.bloxbean.cardano.yaci.store.governance.util.DRepId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -68,7 +69,6 @@ public class DelegationVoteProcessor {
 
     private DelegationVote buildDelegationVote(Drep drep, StakeCredential stakeCredential, String txHash,
                                                int certIndex, EventMetadata eventMetadata) {
-        // todo: calculate drep view
         DelegationVote delegationVote = DelegationVote.builder()
                 .drepHash(drep.getHash())
                 .txHash(txHash)
@@ -76,6 +76,7 @@ public class DelegationVoteProcessor {
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
+                .drepView(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null)
                 .build();
 
         Address address = AddressUtil.getRewardAddress(stakeCredential, eventMetadata.isMainnet());

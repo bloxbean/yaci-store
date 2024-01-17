@@ -12,7 +12,7 @@ import lombok.NonNull;
 
 import static com.bloxbean.cardano.client.address.util.AddressEncoderDecoderUtil.*;
 
-//TODO -- Remove this class once the cardano-client-lib is updated to 0.5.0
+//TODO -- Remove this class once the cardano-client-lib is updated
 public class AddressUtil {
     private static final byte RWD_STAKE_KEY_HEADER_TYPE = (byte)0b1110_0000;
     private static final byte RWD_STAKE_SCRIPT_HEADER_TYPE = (byte)0b1111_0000;

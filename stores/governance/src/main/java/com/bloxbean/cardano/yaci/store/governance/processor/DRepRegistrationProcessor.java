@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorage;
+import com.bloxbean.cardano.yaci.store.governance.util.DRepId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -47,7 +48,7 @@ public class DRepRegistrationProcessor {
                     }
                     case UNREG_DREP_CERT -> {
                         UnregDrepCert unregDrepCert = (UnregDrepCert) certificate;
-                        yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
+                        yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin().negate(),
                                 certificate.getType(), txHash, index, eventMetadata);
                     }
                     case UPDATE_DREP_CERT -> {
@@ -80,9 +81,10 @@ public class DRepRegistrationProcessor {
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
                 .drepHash(drepCredential.getHash())
+                .drepView(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()): null)
                 .deposit(deposit)
                 .build();
-        // todo : drep view
+
         if (anchor != null) {
             drepRegistration.setAnchorHash(anchor.getAnchor_data_hash());
             drepRegistration.setAnchorUrl(anchor.getAnchor_url());
