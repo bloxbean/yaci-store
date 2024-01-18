@@ -27,5 +27,5 @@ public class DelegationVote extends BlockAwareDomain {
 
     private String drepHash;
 
-    private String drepView;
+    private String drepId;
 }
