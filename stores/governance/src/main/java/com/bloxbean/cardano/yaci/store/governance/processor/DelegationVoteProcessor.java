@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DelegationVote;
 import com.bloxbean.cardano.yaci.store.governance.storage.DelegationVoteStorage;
@@ -83,5 +84,13 @@ public class DelegationVoteProcessor {
         delegationVote.setAddress(address.toBech32());
 
         return delegationVote;
+    }
+
+    @EventListener
+    @Transactional
+    //TODO -- tests
+    public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        int count = delegationVoteStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} delegation_vote records", count);
     }
 }
