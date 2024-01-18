@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.certs.ResignCommitteeColdCert;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeDeRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeRegistration;
@@ -83,5 +84,16 @@ public class CommitteeRegistrationProcessor {
         if (!committeeDeRegistrations.isEmpty()) {
             committeeDeRegistrationStorage.saveAll(committeeDeRegistrations);
         }
+    }
+
+    @EventListener
+    @Transactional
+    //TODO -- tests
+    public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        int count = committeeDeRegistrationStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} committee_de_registrations records", count);
+
+        count = committeeRegistrationStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} committee_registrations records", count);
     }
 }

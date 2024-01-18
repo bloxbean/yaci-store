@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.UpdateDrepCert;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorage;
@@ -81,7 +82,7 @@ public class DRepRegistrationProcessor {
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
                 .drepHash(drepCredential.getHash())
-                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()): null)
+                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()) : null)
                 .deposit(deposit)
                 .build();
 
@@ -91,5 +92,13 @@ public class DRepRegistrationProcessor {
         }
 
         return drepRegistration;
+    }
+
+    @EventListener
+    @Transactional
+    //TODO -- tests
+    public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        int count = drepRegistrationStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} drep_registration records", count);
     }
 }
