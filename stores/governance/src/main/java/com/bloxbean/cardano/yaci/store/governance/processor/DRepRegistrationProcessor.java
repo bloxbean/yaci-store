@@ -81,7 +81,7 @@ public class DRepRegistrationProcessor {
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
                 .drepHash(drepCredential.getHash())
-                .drepView(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()): null)
+                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()): null)
                 .deposit(deposit)
                 .build();
 

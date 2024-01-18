@@ -39,8 +39,8 @@ public class DRepRegistrationEntity extends BlockAwareEntity {
     @Column(name = "drep_hash")
     private String drepHash;
 
-    @Column(name = "drep_view")
-    private String drepView;
+    @Column(name = "drep_id")
+    private String drepId;
 
     @Column(name = "anchor_url")
     private String anchorUrl;

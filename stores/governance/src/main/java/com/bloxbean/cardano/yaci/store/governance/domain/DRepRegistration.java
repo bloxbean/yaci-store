@@ -32,7 +32,7 @@ public class DRepRegistration extends BlockAwareDomain {
 
     private String drepHash;
 
-    private String drepView;
+    private String drepId;
 
     private String anchorUrl;
 
