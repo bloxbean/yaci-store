@@ -32,6 +32,6 @@ public class DelegationVoteEntity extends BlockAwareEntity {
     @Column(name = "drep_hash")
     private String drepHash;
 
-    @Column(name = "drep_view")
-    private String drepView;
+    @Column(name = "drep_id")
+    private String drepId;
 }

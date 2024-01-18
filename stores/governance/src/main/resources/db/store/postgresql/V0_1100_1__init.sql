@@ -74,7 +74,7 @@ CREATE TABLE delegation_vote
     cert_index      int         NOT NULL,
     address         varchar(255), -- bech32 stake address
     drep_hash       varchar(56),
-    drep_view       varchar(255),
+    drep_id         varchar(255),
     slot            bigint,
     block           bigint,
     block_time      bigint,
@@ -89,7 +89,7 @@ CREATE TABLE drep_registration
     type            varchar(50),
     deposit         bigint NULL,
     drep_hash       varchar(56),
-    drep_view       varchar(255),
+    drep_id         varchar(255),
     anchor_url      varchar,
     anchor_hash     varchar(64),
     slot            bigint,
