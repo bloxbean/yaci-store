@@ -77,7 +77,7 @@ public class DelegationVoteProcessor {
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
-                .drepView(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null)
+                .drepId(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null)
                 .build();
 
         Address address = AddressUtil.getRewardAddress(stakeCredential, eventMetadata.isMainnet());
