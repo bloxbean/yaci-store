@@ -45,10 +45,21 @@ spring.datasource.username=user
 spring.datasource.password=
 ```
 
+Additional configurations for database connection pool and batch insert.
+
+```shell
+spring.datasource.hikari.maximum-pool-size=30
+spring.datasource.hikari.minimum-idle=5
+spring.jpa.properties.hibernate.jdbc.batch_size=100
+spring.jpa.properties.hibernate.order_inserts=true
+```
+
 #### Parallel Processing Configuration
 
 The following properties are used to configure parallel processing. You can leave them as-is or change them based on
 your machine configuration.
+
+**Note:** If you are using parallel processing, you also need to configure the database connection pool size accordingly.
 
 ```
 store.executor.enable-parallel-processing=true
@@ -169,6 +180,11 @@ SPRING_DATASOURCE_URL=jdbc:postgresql://<db-host>:5432/yacistore?currentSchema=p
 SPRING_DATASOURCE_USERNAME=user
 SPRING_DATASOURCE_PASSWORD=
 
+SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE=30
+SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE=5
+SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE=100
+SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS=true
+
 STORE_EXECUTOR_ENABLE-PARALLEL-PROCESSING=true
 STORE_EXECUTOR_BLOCK-PROCESSING-THREADS=15
 STORE_EXECUTOR_EVENT-PROCESSING-THREADS=30
@@ -182,6 +198,8 @@ STORE_EXECUTOR_USE-VIRTUAL-THREAD-FOR-EVENT-PROCESSING=true
 
 **Note:** To configure other optional properties, please refer to ``application.properties`` file or properties in the previous section.
 You need to configure the properties in the env file in the correct format.
+
+**Note:** If you are using parallel processing, you also need to configure no of threads and the database connection pool size accordingly.
 
 ### Yaci Store All docker image
 
