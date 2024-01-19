@@ -63,9 +63,23 @@ public class GovernanceStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public CommitteeDeRegistrationStorageReader committeeDeRegistrationStorageReader(CommitteeDeRegistrationRepository committeeDeRegistrationRepository,
+                                                                                     CommitteeDeRegistrationMapper committeeDeRegistrationMapper) {
+        return new CommitteeDeRegistrationStorageReaderImpl(committeeDeRegistrationRepository, committeeDeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public CommitteeRegistrationStorage committeeRegistrationStorage(CommitteeRegistrationRepository committeeRegistrationRepository,
                                                                      CommitteeRegistrationMapper committeeRegistrationMapper) {
         return new CommitteeRegistrationStorageImpl(committeeRegistrationRepository, committeeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeRegistrationStorageReader committeeRegistrationStorageReader(CommitteeRegistrationRepository committeeRegistrationRepository,
+                                                                                 CommitteeRegistrationMapper committeeRegistrationMapper) {
+        return new CommitteeRegistrationStorageReaderImpl(committeeRegistrationRepository, committeeRegistrationMapper);
     }
 
     @Bean
@@ -77,9 +91,22 @@ public class GovernanceStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public DelegationVoteStorageReader delegationVoteStorageReader(DelegationVoteRepository delegationVoteRepository,
+                                                                   DelegationVoteMapper delegationVoteMapper) {
+        return new DelegationVoteStorageReaderImpl(delegationVoteRepository, delegationVoteMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public DRepRegistrationStorage drepRegistrationStorage(DRepRegistrationRepository drepRegistrationRepository,
                                                            DRepRegistrationMapper drepRegistrationMapper) {
         return new DRepRegistrationStorageImpl(drepRegistrationRepository, drepRegistrationMapper);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepRegistrationStorageReader dRepRegistrationStorageReader(DRepRegistrationRepository drepRegistrationRepository,
+                                                                       DRepRegistrationMapper drepRegistrationMapper) {
+        return new DRepRegistrationStorageReaderImpl(drepRegistrationRepository, drepRegistrationMapper);
+    }
 }
