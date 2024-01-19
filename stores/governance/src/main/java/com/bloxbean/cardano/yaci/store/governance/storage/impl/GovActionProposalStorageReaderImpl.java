@@ -15,6 +15,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -53,5 +54,10 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
 
         Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByReturnAddress(address, sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
+    }
+
+    @Override
+    public Optional<GovActionProposal> findMostRecentGovActionByType(GovActionType govActionType) {
+        return govActionProposalRepository.findMostRecentGovActionByType(govActionType).map(govActionProposalMapper::toGovActionProposal);
     }
 }

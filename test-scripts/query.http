@@ -240,6 +240,9 @@ GET http://localhost:8080/api/v1/gov-action-proposals/{tx_hash}
 ### Get GovActionProposal list by governance action type
 GET http://localhost:8080/api/v1/gov-action-proposals/gov-action-type/{gov_action_type}?page=0&count=10
 
+### Get most recent governance action for a specific type
+GET http://localhost:8080/api/v1/gov-action-proposals/latest/gov-action-type/{gov_action_type}
+
 ### Get GovActionProposal list by return address
 GET http://localhost:8080/api/v1/gov-action-proposals/return-address/{address}?page=0&count=10
 
