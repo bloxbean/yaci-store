@@ -99,4 +99,13 @@ public class GovActionProposalController {
                                                                                          @PathVariable @Min(0) int indexInTx) {
         return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx));
     }
+
+    @GetMapping("/latest/gov-action-type/{govActionType}")
+    @Operation(description = "Get most recent governance action proposal for a specific type")
+    public ResponseEntity<GovActionProposal> getMostRecentGovActionProposalByGovActionType(@Parameter(description = "Governance action type", required = true, example = "PARAMETER_CHANGE_ACTION")
+                                                                                           @PathVariable GovActionType govActionType) {
+        var govAction = govActionProposalService.getMostRecentGovActionProposalByGovActionType(govActionType);
+        return govAction.map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Governance Action not found"));
+    }
 }

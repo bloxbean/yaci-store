@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -28,5 +29,9 @@ public class GovActionProposalService {
 
     public List<GovActionProposal> getGovActionProposalList(int page, int count, Order order) {
         return govActionProposalStorageReader.findAll(page, count, order);
+    }
+
+    public Optional<GovActionProposal> getMostRecentGovActionProposalByGovActionType(GovActionType type) {
+        return govActionProposalStorageReader.findMostRecentGovActionByType(type);
     }
 }
