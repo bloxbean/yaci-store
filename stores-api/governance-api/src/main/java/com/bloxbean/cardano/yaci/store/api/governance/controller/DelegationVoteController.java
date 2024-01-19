@@ -10,10 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -39,7 +36,7 @@ public class DelegationVoteController {
 
     @GetMapping("/{dRepId}")
     @Operation(description = "Get delegations by DRep ID")
-    public ResponseEntity<List<DelegationVote>> getDelegationsOfDRep(String dRepId) {
+    public ResponseEntity<List<DelegationVote>> getDelegationsOfDRep(@PathVariable String dRepId) {
         return ResponseEntity.ok(delegationVoteService.getDelegationsByDRepId(dRepId));
     }
 }
