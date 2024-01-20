@@ -1,16 +1,11 @@
 package com.bloxbean.cardano.yaci.store.common.domain;
 
-import com.bloxbean.cardano.yaci.core.model.DrepVoteThresholds;
-import com.bloxbean.cardano.yaci.core.model.PoolVotingThresholds;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -76,13 +71,13 @@ public class ProtocolParams {
 
     //Conway era fields
     private PoolVotingThresholds poolVotingThresholds; //25
-    private DrepVoteThresholds dRepVoteThresholds; //26
-    private Integer minCommitteeSize; //27
-    private Integer committeeTermLimit; //28
-    private Integer governanceActionValidityPeriod; //29
-    private BigInteger governanceActionDeposit; //30
+    private DrepVoteThresholds drepVotingThresholds; //26
+    private Integer committeeMinSize; //27
+    private Integer committeeMaxTermLength; //28
+    private Integer govActionLifetime; //29
+    private BigInteger govActionDeposit; //30
     private BigInteger drepDeposit; //31
-    private Integer drepInactivityPeriod; //32
+    private Integer drepActivity; //32
 
     public void merge(ProtocolParams other) {
         if (other.minFeeA != null) {
@@ -185,26 +180,26 @@ public class ProtocolParams {
         if (other.poolVotingThresholds != null) {
             this.poolVotingThresholds = other.poolVotingThresholds;
         }
-        if (other.dRepVoteThresholds != null) {
-            this.dRepVoteThresholds = other.dRepVoteThresholds;
+        if (other.drepVotingThresholds != null) {
+            this.drepVotingThresholds = other.drepVotingThresholds;
         }
-        if (other.minCommitteeSize != null) {
-            this.minCommitteeSize = other.minCommitteeSize;
+        if (other.committeeMinSize != null) {
+            this.committeeMinSize = other.committeeMinSize;
         }
-        if (other.committeeTermLimit != null) {
-            this.committeeTermLimit = other.committeeTermLimit;
+        if (other.committeeMaxTermLength != null) {
+            this.committeeMaxTermLength = other.committeeMaxTermLength;
         }
-        if (other.governanceActionValidityPeriod != null) {
-            this.governanceActionValidityPeriod = other.governanceActionValidityPeriod;
+        if (other.govActionLifetime != null) {
+            this.govActionLifetime = other.govActionLifetime;
         }
-        if (other.governanceActionDeposit != null) {
-            this.governanceActionDeposit = other.governanceActionDeposit;
+        if (other.govActionDeposit != null) {
+            this.govActionDeposit = other.govActionDeposit;
         }
         if (other.drepDeposit != null) {
             this.drepDeposit = other.drepDeposit;
         }
-        if (other.drepInactivityPeriod != null) {
-            this.drepInactivityPeriod = other.drepInactivityPeriod;
+        if (other.drepActivity != null) {
+            this.drepActivity = other.drepActivity;
         }
     }
 }

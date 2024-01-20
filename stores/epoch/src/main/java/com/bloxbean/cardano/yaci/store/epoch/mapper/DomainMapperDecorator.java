@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
+import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 
 import java.math.BigInteger;
@@ -80,16 +81,15 @@ public class DomainMapperDecorator implements DomainMapper {
     }
 
     @Override
-    public com.bloxbean.cardano.client.api.model.ProtocolParams toCCLProtocolParams(ProtocolParams protocolParams) {
-        var cclProtocolPrams = delegate.toCCLProtocolParams(protocolParams);
+    public ProtocolParamsDto toProtocolParamsDto(ProtocolParams protocolParams) {
+        var protocolParamsDto = delegate.toProtocolParamsDto(protocolParams);
 
-        //convert CostModel to CCL CostModel
         var costModelMap = protocolParams.getCostModels();
         if (costModelMap == null)
-            return cclProtocolPrams;
+            return protocolParamsDto;
 
-        if (cclProtocolPrams.getCostModels() == null)
-            cclProtocolPrams.setCostModels(new TreeMap<>());
+        if (protocolParamsDto.getCostModels() == null)
+            protocolParamsDto.setCostModels(new TreeMap<>());
 
         for (var key: costModelMap.keySet()) {
             List<String> ops = switch (key) {
@@ -114,9 +114,9 @@ public class DomainMapperDecorator implements DomainMapper {
                 }
             }
 
-            cclProtocolPrams.getCostModels().put(key, langCost);
+            protocolParamsDto.getCostModels().put(key, langCost);
         }
 
-        return cclProtocolPrams;
+        return protocolParamsDto;
     }
 }

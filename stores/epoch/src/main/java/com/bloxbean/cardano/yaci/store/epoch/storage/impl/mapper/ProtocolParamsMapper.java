@@ -14,6 +14,7 @@ public abstract class ProtocolParamsMapper {
 
     @Mapping(target = "costModelHash", source = "epochParam.params.costModelsHash")
     @Mapping(target = "params.costModels", ignore = true) //set as null
+    @Mapping(target = "params.nOpt", source = "params.NOpt")
     public abstract EpochParamEntity toEntity(EpochParam epochParam);
     public abstract EpochParam toDomain(EpochParamEntity entity);
 }
