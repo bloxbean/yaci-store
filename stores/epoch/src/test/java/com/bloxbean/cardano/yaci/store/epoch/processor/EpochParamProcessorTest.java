@@ -22,11 +22,17 @@ class EpochParamProcessorTest {
     @Mock
     private ProtocolParamsProposalStorage protocolParamsProposalStorage;
 
+    @Mock
+    private EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+
     @InjectMocks
     private EpochParamProcessor epochParamProcessor;
 
     @Captor
     private ArgumentCaptor<EpochParam> argCaptor;
+
+    EpochParamProcessorTest() {
+    }
 
     @Test
     void givenEpochChangeEvent_whenPreviousEpochIsNullAndEpochEqualsMaxEpoch_shouldReturn() {
