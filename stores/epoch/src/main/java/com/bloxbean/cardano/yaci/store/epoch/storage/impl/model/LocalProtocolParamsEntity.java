@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.storage.impl.model;
 
-import com.bloxbean.cardano.client.api.model.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;

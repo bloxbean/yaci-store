@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.submit.controller;
 import com.bloxbean.cardano.client.api.model.Result;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.submit.service.OgmiosService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
@@ -21,6 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class OgmiosTxSubmissionController {
     private final OgmiosService ogmiosService;
+
+    @PostConstruct
+    public void postConstruct() {
+        log.info("Ogmios Tx Submission Controller initialized");
+    }
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody byte[] txBytes) {
