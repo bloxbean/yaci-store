@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.SortedMap;
 
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V1;
+import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V2;
 
 @Data
 public class AlonzoGenesis extends GenesisFile {
@@ -93,23 +94,15 @@ public class AlonzoGenesis extends GenesisFile {
 
         var costModelNode = genesisJson.get(COST_MODELS);
         var plutusV1CostModelNode = costModelNode.get(PLUTUS_V1);
+        var plutusV2CostModelNode = costModelNode.get(PLUTUS_V2);
 
-        long[] plutusV1Costs;
-        if (plutusV1CostModelNode.isObject()) { //op -> cost
-            Map<String, Long> plutusV1CostModelMap = objectMapper.convertValue(plutusV1CostModelNode, new TypeReference<SortedMap<String, Long>>() {
-            });
-            plutusV1Costs = plutusV1CostModelMap.values().stream().mapToLong(Long::longValue).toArray();
-        } else if (plutusV1CostModelNode.isArray()) { //long[] costmodel
-            var arrNode = ((ArrayNode)plutusV1CostModelNode);
-            plutusV1Costs = new long[arrNode.size()];
-            for (int i=0; i<arrNode.size(); i++) {
-                plutusV1Costs[i] = arrNode.get(i).asLong();
-            }
-        } else
-            throw new IllegalStateException("CostModel format in alonzo-genesis file isn not supported");
+        long[] plutusV1Costs = getCostsInLong(plutusV1CostModelNode);
+        long[] plutusV2Costs = plutusV2CostModelNode != null? getCostsInLong(plutusV2CostModelNode) : null;
 
         Map<String, long[]> costModelMap = new HashMap<>();
         costModelMap.put(PLUTUS_V1, plutusV1Costs);
+        if (plutusV2Costs != null)
+            costModelMap.put(PLUTUS_V2, plutusV2Costs);
 
         protocolParams = ProtocolParams.builder()
                 .adaPerUtxoByte(lovelacePerUTxOWord)
@@ -123,7 +116,25 @@ public class AlonzoGenesis extends GenesisFile {
                 .collateralPercent(collateralPercentage)
                 .maxCollateralInputs(maxCollateralInputs)
                 .costModels(costModelMap)
+                .costModelsHash("alonzo.genesis")
                 .build();
+    }
+
+    private long[] getCostsInLong(JsonNode plutusCostModelNode) {
+        long[] plutusV1Costs;
+        if (plutusCostModelNode.isObject()) { //op -> cost
+            Map<String, Long> plutusV1CostModelMap = objectMapper.convertValue(plutusCostModelNode, new TypeReference<SortedMap<String, Long>>() {
+            });
+            plutusV1Costs = plutusV1CostModelMap.values().stream().mapToLong(Long::longValue).toArray();
+        } else if (plutusCostModelNode.isArray()) { //long[] costmodel
+            var arrNode = ((ArrayNode) plutusCostModelNode);
+            plutusV1Costs = new long[arrNode.size()];
+            for (int i=0; i<arrNode.size(); i++) {
+                plutusV1Costs[i] = arrNode.get(i).asLong();
+            }
+        } else
+            throw new IllegalStateException("CostModel format in alonzo-genesis file isn not supported");
+        return plutusV1Costs;
     }
 
     @Override
