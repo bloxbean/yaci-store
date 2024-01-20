@@ -43,6 +43,8 @@ public class YaciStoreProperties {
 
         private String byronGenesisFile;
         private String shelleyGenesisFile;
+        private String alonzoGenesisFile;
+        private String conwayGenesisFile;
 
         private int blockDiffToStartSyncProtocol = 2000;
 
