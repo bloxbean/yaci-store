@@ -18,7 +18,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Delegation Vote Service")
-@RequestMapping("${apiPrefix}/delegation-votes")
+@RequestMapping("${apiPrefix}/governance/delegation-votes")
 @ConditionalOnExpression("${store.governance.endpoints.delegationVote.enabled:true}")
 public class DelegationVoteController {
     private final DelegationVoteService delegationVoteService;

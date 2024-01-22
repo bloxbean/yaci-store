@@ -23,7 +23,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Committee Service")
-@RequestMapping("${apiPrefix}/committees")
+@RequestMapping("${apiPrefix}/governance/committees")
 @ConditionalOnExpression("${store.governance.endpoints.committee.enabled:true}")
 public class CommitteeController {
     private final CommitteeRegistrationService committeeRegistrationService;
