@@ -20,7 +20,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "DRep Service")
-@RequestMapping("${apiPrefix}/dreps")
+@RequestMapping("${apiPrefix}/governance/dreps")
 @ConditionalOnExpression("${store.governance.endpoints.drep.enabled:true}")
 public class DRepController {
     private final DRepRegistrationService dRepRegistrationService;
