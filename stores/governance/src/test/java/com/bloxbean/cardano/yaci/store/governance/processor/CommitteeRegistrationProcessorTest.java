@@ -74,6 +74,8 @@ class CommitteeRegistrationProcessorTest {
         assertThat(savedCommitteeDeRegistration.getAnchorHash()).isEqualTo("cd4ca39b59b7c1133635fb97668bde1f28934af4dfd524fdeacda0d47ffb8bf2");
         assertThat(savedCommitteeDeRegistration.getAnchorUrl()).isEqualTo("http://bit.ly/3QFMhii?index=0");
         assertThat(savedCommitteeDeRegistration.getColdKey()).isEqualTo("50b0f0893285e237641df982bf8cbd277a5788bd81e1014eb9e8e207");
+        assertThat(savedCommitteeDeRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
+        assertThat(savedCommitteeDeRegistration.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedCommitteeDeRegistration.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedCommitteeDeRegistration.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
         assertThat(savedCommitteeDeRegistration.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
@@ -110,6 +112,8 @@ class CommitteeRegistrationProcessorTest {
         assertThat(savedCommitteeRegistration.getTxHash()).isEqualTo(txHash);
         assertThat(savedCommitteeRegistration.getColdKey()).isEqualTo("50b0f0893285e237641df982bf8cbd277a5788bd81e1014eb9e8e207");
         assertThat(savedCommitteeRegistration.getHotKey()).isEqualTo("212f86a07149f5d19e1f841d065f9e76c6b4a76db727ae7afc2cb2e4");
+        assertThat(savedCommitteeRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
+        assertThat(savedCommitteeRegistration.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedCommitteeRegistration.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedCommitteeRegistration.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
         assertThat(savedCommitteeRegistration.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
@@ -130,6 +134,7 @@ class CommitteeRegistrationProcessorTest {
 
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
+                .epochNumber(50)
                 .block(100L)
                 .blockTime(99999L)
                 .slot(10000L)

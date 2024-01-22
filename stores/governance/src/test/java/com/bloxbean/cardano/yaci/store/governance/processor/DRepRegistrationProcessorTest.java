@@ -74,6 +74,7 @@ class DRepRegistrationProcessorTest {
         assertThat(savedDRepRegistration.getAnchorUrl()).isEqualTo("https://bit.ly/3zCH2HL");
         assertThat(savedDRepRegistration.getAnchorHash()).isEqualTo("1111111111111111111111111111111111111111111111111111111111111111");
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);
+        assertThat(savedDRepRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
         assertThat(savedDRepRegistration.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedDRepRegistration.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
         assertThat(savedDRepRegistration.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
@@ -105,13 +106,15 @@ class DRepRegistrationProcessorTest {
         DRepRegistration savedDRepRegistration = dRepRegistrationsCaptor.getValue().get(0);
 
         assertThat(savedDRepRegistration.getTxHash()).isEqualTo(txHash);
-        assertThat(savedDRepRegistration.getDeposit()).isEqualTo(-2000000);
+        assertThat(savedDRepRegistration.getDeposit()).isEqualTo(2000000);
         assertThat(savedDRepRegistration.getDrepHash()).isEqualTo("adae9fa43726611f1c2c29f798f223316a084a3f54f8c3bf4fb8d410");
         assertThat(savedDRepRegistration.getDrepId()).isEqualTo("drep14khflfphyes378pv98me3u3rx94qsj3l2nuv8060hr2pqq74y8t");
         assertThat(savedDRepRegistration.getAnchorUrl()).isNull();
         assertThat(savedDRepRegistration.getAnchorHash()).isNull();
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);
+        assertThat(savedDRepRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
         assertThat(savedDRepRegistration.getSlot()).isEqualTo(eventMetadata().getSlot());
+        assertThat(savedDRepRegistration.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDRepRegistration.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
         assertThat(savedDRepRegistration.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
     }
@@ -151,7 +154,9 @@ class DRepRegistrationProcessorTest {
         assertThat(savedDRepRegistration.getAnchorUrl()).isEqualTo("https://bit.ly/3zCH2HL");
         assertThat(savedDRepRegistration.getAnchorHash()).isEqualTo("1111111111111111111111111111111111111111111111111111111111111111");
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);
+        assertThat(savedDRepRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
         assertThat(savedDRepRegistration.getSlot()).isEqualTo(eventMetadata().getSlot());
+        assertThat(savedDRepRegistration.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDRepRegistration.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
         assertThat(savedDRepRegistration.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
     }
@@ -169,6 +174,7 @@ class DRepRegistrationProcessorTest {
 
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
+                .epochNumber(50)
                 .block(100L)
                 .blockTime(99999L)
                 .slot(10000L)
