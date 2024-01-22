@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.domain;
 
+import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -27,4 +28,8 @@ public class CommitteeDeRegistration extends BlockAwareDomain {
     private String anchorHash;
 
     private String coldKey;
+
+    private StakeCredType credType;
+
+    private Integer epoch;
 }

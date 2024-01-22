@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.domain;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -37,4 +38,8 @@ public class DRepRegistration extends BlockAwareDomain {
     private String anchorUrl;
 
     private String anchorHash;
+
+    private StakeCredType credType;
+
+    private Integer epoch;
 }

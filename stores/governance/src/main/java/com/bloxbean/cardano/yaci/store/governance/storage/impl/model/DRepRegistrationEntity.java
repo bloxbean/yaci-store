@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -47,4 +48,11 @@ public class DRepRegistrationEntity extends BlockAwareEntity {
 
     @Column(name = "anchor_hash")
     private String anchorHash;
+
+    @Column(name = "cred_type")
+    @Enumerated(EnumType.STRING)
+    private StakeCredType credType;
+
+    @Column(name = "epoch")
+    private Integer epoch;
 }
