@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
@@ -9,7 +12,6 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DelegationVote;
 import com.bloxbean.cardano.yaci.store.governance.storage.DelegationVoteStorage;
-import com.bloxbean.cardano.yaci.store.governance.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.governance.util.DRepId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,13 +79,27 @@ public class DelegationVoteProcessor {
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
-                .drepId(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null)
+                .epoch(eventMetadata.getEpochNumber())
+                .credType(stakeCredential.getType())
+                .drepId(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null) // TODO: check if the DRepId is different for script hash
                 .build();
 
-        Address address = AddressUtil.getRewardAddress(stakeCredential, eventMetadata.isMainnet());
+        Address address = AddressProvider.getRewardAddress(toCCLCredential(stakeCredential),
+                eventMetadata.isMainnet() ? Networks.mainnet() : Networks.testnet());
+
         delegationVote.setAddress(address.toBech32());
 
         return delegationVote;
+    }
+
+    private Credential toCCLCredential(StakeCredential credential) {
+        if (credential.getType() == StakeCredType.ADDR_KEYHASH) {
+            return Credential.fromKey(credential.getHash());
+        } else if (credential.getType() == StakeCredType.SCRIPTHASH) {
+            return Credential.fromScript(credential.getHash());
+        } else {
+            throw new IllegalArgumentException("Invalid credential type");
+        }
     }
 
     @EventListener
