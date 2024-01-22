@@ -5,7 +5,10 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 public class GenesisFileUtil {
 
     public static String getGenesisfileDefaultFolder(long protocolMagic) {
-        var networkFolder = switch (NetworkType.fromProtocolMagic(protocolMagic)) {
+        NetworkType networkType = NetworkType.fromProtocolMagic(protocolMagic);
+        if (networkType == null)
+            return null;
+        var networkFolder = switch (networkType) {
             case MAINNET -> "mainnet";
             case PREPROD -> "preprod";
             case PREVIEW -> "preview";

@@ -1,34 +1,27 @@
 package com.bloxbean.cardano.yaci.store.epoch.service;
 
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.DataItem;
-import co.nstant.in.cbor.model.Special;
-import co.nstant.in.cbor.model.UnsignedInteger;
-import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
-import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
-import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
-import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.LocalProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalProtocolParamsRepository;
-import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
+import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -39,11 +32,43 @@ public class LocalProtocolParamService {
     private final LocalStateQueryClient localStateQueryClient;
     private LocalProtocolParamsRepository protocolParamsRepository;
 
+    private DomainMapper domainMapper = DomainMapper.INSTANCE;
+
+    @Value("${store.cardano.n2c-era:Babbage}")
+    private String eraStr;
+
+    private Era era;
+
     public LocalProtocolParamService(LocalClientProvider localClientProvider, LocalProtocolParamsRepository protocolParamsRepository) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
         log.info("ProtocolParamService initialized >>>");
+    }
+
+    @PostConstruct
+    public void postConstruct() {
+        if (StringUtil.isEmpty(eraStr))
+            eraStr = "Babbage";
+
+        era = Era.valueOf(eraStr);
+        log.info("N2C Era set to {}", era.name());
+    }
+
+    /**
+     * Listen to block event to set the correct era
+     * @param blockHeaderEvent
+     */
+    @EventListener
+    public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
+        if (!blockHeaderEvent.getMetadata().isSyncMode())
+            return;
+
+        if (blockHeaderEvent.getMetadata().getEra() != null
+                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+            era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
+            log.info("Era changed to {}", era.name());
+        }
     }
 
     @Transactional
@@ -82,84 +107,12 @@ public class LocalProtocolParamService {
         }
 
         Mono<CurrentProtocolParamQueryResult> mono =
-                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
-        return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
-    }
-
-    public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNodeAt(Point point) {
-        Mono<CurrentProtocolParamQueryResult> mono =
-                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(Era.Babbage));
+                localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(era));
         return mono.map(currentProtocolParamQueryResult -> currentProtocolParamQueryResult.getProtocolParams());
     }
 
     private ProtocolParams convertProtoParams(ProtocolParamUpdate protocolParamUpdate) {
-        ProtocolParams protocolParams = new ProtocolParams();
-        protocolParams.setMinFeeA(protocolParamUpdate.getMinFeeA());
-        protocolParams.setMinFeeB(protocolParamUpdate.getMinFeeB());
-        protocolParams.setMaxBlockSize(protocolParamUpdate.getMaxBlockSize());
-        protocolParams.setMaxTxSize(protocolParamUpdate.getMaxTxSize());
-        protocolParams.setMaxBlockHeaderSize(protocolParamUpdate.getMaxBlockHeaderSize());
-        protocolParams.setKeyDeposit(String.valueOf(protocolParamUpdate.getKeyDeposit()));
-        protocolParams.setPoolDeposit(String.valueOf(protocolParamUpdate.getPoolDeposit()));
-        protocolParams.setEMax(protocolParamUpdate.getMaxEpoch());
-        protocolParams.setNOpt(protocolParamUpdate.getNOpt());
-        protocolParams.setA0(protocolParamUpdate.getPoolPledgeInfluence());
-        protocolParams.setRho(protocolParamUpdate.getExpansionRate());
-        protocolParams.setTau(protocolParamUpdate.getTreasuryGrowthRate());
-        protocolParams.setDecentralisationParam(protocolParamUpdate.getDecentralisationParam()); //Deprecated. Not there
-        if (protocolParamUpdate.getExtraEntropy() != null)
-            protocolParams.setExtraEntropy(protocolParamUpdate.getExtraEntropy()._2);
-        protocolParams.setProtocolMajorVer(protocolParamUpdate.getProtocolMajorVer());
-        protocolParams.setProtocolMinorVer(protocolParamUpdate.getProtocolMinorVer());
-        protocolParams.setMinUtxo(String.valueOf(protocolParamUpdate.getMinUtxo()));
-        protocolParams.setMinPoolCost(String.valueOf(protocolParamUpdate.getMinPoolCost()));
-//        protocolParams.setNonce(currentProtocolParameters.getProtocolParameters().getNonce()); //TODO
-
-        Map<String, Long> plutusV1CostModel
-                = cborToCostModel(protocolParamUpdate.getCostModels().get(0), PlutusOps.getOperations(1));
-        Map<String, Long> plutusV2CostModel
-                = cborToCostModel(protocolParamUpdate.getCostModels().get(1), PlutusOps.getOperations(2));
-
-        LinkedHashMap<String, Map<String, Long>> costModels = new LinkedHashMap<>();
-        costModels.put("PlutusV1", plutusV1CostModel);
-        costModels.put("PlutusV2", plutusV2CostModel);
-        protocolParams.setCostModels(costModels);
-
-        protocolParams.setPriceMem(protocolParamUpdate.getPriceMem());
-        protocolParams.setPriceStep(protocolParamUpdate.getPriceStep());
-        protocolParams.setMaxTxExMem(String.valueOf(protocolParamUpdate.getMaxTxExMem()));
-        protocolParams.setMaxTxExSteps(String.valueOf(protocolParamUpdate.getMaxTxExSteps()));
-        protocolParams.setMaxBlockExMem(String.valueOf(protocolParamUpdate.getMaxBlockExMem()));
-        protocolParams.setMaxBlockExSteps(String.valueOf(protocolParamUpdate.getMaxBlockExSteps()));
-        protocolParams.setMaxValSize(String.valueOf(protocolParamUpdate.getMaxValSize()));
-        protocolParams.setCollateralPercent(BigDecimal.valueOf(protocolParamUpdate.getCollateralPercent()));
-        protocolParams.setMaxCollateralInputs(protocolParamUpdate.getMaxCollateralInputs());
-        protocolParams.setCoinsPerUtxoSize(String.valueOf(protocolParamUpdate.getAdaPerUtxoByte()));
-        return protocolParams;
+        return domainMapper.toProtocolParams(protocolParamUpdate);
     }
 
-    private Map<String, Long> cborToCostModel(String costModelCbor, List<String> ops) {
-        Array array = (Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(costModelCbor));
-        Map<String, Long> costModel = new LinkedHashMap<>();
-
-        if (ops.size() == array.getDataItems().size()) {
-            int index = 0;
-            for (DataItem di : array.getDataItems()) {
-                if (di == Special.BREAK)
-                    continue;
-                BigInteger val = ((UnsignedInteger) di).getValue();
-                costModel.put(ops.get(index++), val.longValue());
-            }
-        } else {
-            int index = 0;
-            for (DataItem di : array.getDataItems()) {
-                if (di == Special.BREAK)
-                    continue;
-                BigInteger val = ((UnsignedInteger) di).getValue();
-                costModel.put(String.format("%03d", index++), val.longValue());
-            }
-        }
-
-        return costModel;
-    }
 }

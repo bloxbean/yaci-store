@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.api.epoch.service;
 
-import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.client.backend.model.EpochContent;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import lombok.RequiredArgsConstructor;
@@ -17,17 +17,17 @@ public class EpochParamService {
     private final EpochParamStorage epochParamStorage;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
 
-    public Optional<ProtocolParams> getLatestProtocolParams() {
+    public Optional<ProtocolParamsDto> getLatestProtocolParams() {
         int epoch = epochParamStorage.getMaxEpoch();
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toCCLProtocolParams);
+                .map(mapper::toProtocolParamsDto);
     }
 
-    public Optional<ProtocolParams> getProtocolParams(int epoch) {
+    public Optional<ProtocolParamsDto> getProtocolParams(int epoch) {
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toCCLProtocolParams);
+                .map(mapper::toProtocolParamsDto);
     }
 
     public EpochContent getLatestEpoch() {
