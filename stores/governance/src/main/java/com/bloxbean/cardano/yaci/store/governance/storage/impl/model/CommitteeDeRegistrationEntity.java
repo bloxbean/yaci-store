@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -12,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@Table(name = "committee_de_registration")
+@Table(name = "committee_deregistration")
 @IdClass(CommitteeDeRegistrationId.class)
 public class CommitteeDeRegistrationEntity extends BlockAwareEntity {
     @Id
@@ -34,4 +35,11 @@ public class CommitteeDeRegistrationEntity extends BlockAwareEntity {
 
     @Column(name = "cold_key")
     private String coldKey;
+
+    @Column(name = "cred_type")
+    @Enumerated(EnumType.STRING)
+    private StakeCredType credType;
+
+    @Column(name = "epoch")
+    private Integer epoch;
 }
