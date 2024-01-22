@@ -49,7 +49,7 @@ public class DRepRegistrationProcessor {
                     }
                     case UNREG_DREP_CERT -> {
                         UnregDrepCert unregDrepCert = (UnregDrepCert) certificate;
-                        yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin().negate(),
+                        yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
                                 certificate.getType(), txHash, index, eventMetadata);
                     }
                     case UPDATE_DREP_CERT -> {
@@ -81,8 +81,10 @@ public class DRepRegistrationProcessor {
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
+                .epoch(eventMetadata.getEpochNumber())
                 .drepHash(drepCredential.getHash())
-                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()) : null)
+                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()) : null) // TODO: check if the DRepId is different for script hash
+                .credType(drepCredential.getType())
                 .deposit(deposit)
                 .build();
 

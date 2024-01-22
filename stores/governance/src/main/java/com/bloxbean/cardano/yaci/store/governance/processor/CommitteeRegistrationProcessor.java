@@ -49,6 +49,8 @@ public class CommitteeRegistrationProcessor {
                             .blockNumber(eventMetadata.getBlock())
                             .blockTime(eventMetadata.getBlockTime())
                             .coldKey(resignCommitteeColdCert.getCommitteeColdCredential().getHash())
+                            .credType(resignCommitteeColdCert.getCommitteeColdCredential().getType())
+                            .epoch(eventMetadata.getEpochNumber())
                             .certIndex(index)
                             .build();
 
@@ -69,6 +71,8 @@ public class CommitteeRegistrationProcessor {
                             .certIndex(index)
                             .coldKey(authCommitteeHotCert.getCommitteeColdCredential().getHash())
                             .hotKey(authCommitteeHotCert.getCommitteeHotCredential().getHash())
+                            .credType(authCommitteeHotCert.getCommitteeColdCredential().getType())
+                            .epoch(eventMetadata.getEpochNumber())
                             .build();
 
                     committeeRegistrations.add(committeeRegistration);
