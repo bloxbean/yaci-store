@@ -64,7 +64,7 @@ class BlockProcessorTest {
     private BlockEvent blockEvent() {
         return BlockEvent.builder()
                 .metadata(EventMetadata.builder()
-                        .era(Era.CONWAY)
+                        .era(Era.Conway)
                         .epochNumber(200)
                         .epochSlot(205347)
                         .blockTime(1654041600)

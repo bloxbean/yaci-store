@@ -3,15 +3,13 @@ package com.bloxbean.cardano.yaci.store.epoch.util;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedMap;
+import java.util.*;
 
 public class PlutusOps {
     private static ObjectMapper objectMapper = new ObjectMapper();
     private static List<String> V1_OPS;
     private static List<String> V2_OPS;
+    private static List<String> V3_OPS; //TODO
 
     private static String PLUTUS_V1_COSTS = """
             {
@@ -372,6 +370,8 @@ public class PlutusOps {
             return V1_OPS;
         else if (version == 2)
             return V2_OPS;
+        else if (version == 3)
+            return V3_OPS;
         else
             throw new IllegalArgumentException("Invalid version: " + version);
     }
@@ -388,6 +388,9 @@ public class PlutusOps {
             });
             keys = map2.keySet();
             V2_OPS = keys.stream().sorted().toList();
+
+            //TODO
+            V3_OPS = Collections.emptyList();
 
         } catch (Exception e) {
             throw new RuntimeException(e);

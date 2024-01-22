@@ -38,6 +38,8 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private String byronGenesisFile;
     private String shelleyGenesisFile;
+    private String alonzoGenesisFile;
+    private String conwayGenesisFile;
 
     @Builder.Default
     private int blockDiffToStartSyncProtocol = 2000;
@@ -45,7 +47,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     //Cursor table cleanup properties
     @Builder.Default
     private int cursorNoOfBlocksToKeep = 2160;
-    
+
     @Builder.Default
     private int cursorCleanupInterval = 3600;
 
@@ -63,7 +65,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     @Builder.Default
     private int eventProcessingThreads = 30;
-    
+
     private boolean enableParallelProcessing;
 
     @Builder.Default
