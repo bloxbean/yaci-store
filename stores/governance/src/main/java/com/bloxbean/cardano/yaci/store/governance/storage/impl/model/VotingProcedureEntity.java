@@ -9,20 +9,23 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
 @Entity
 @Table(name = "voting_procedure")
-@IdClass(VotingProcedureId.class)
 public class VotingProcedureEntity extends BlockAwareEntity {
-
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id", updatable = false, nullable = false)
+    private UUID id;
+
     @Column(name = "tx_hash")
     private String txHash;
 
-    @Id
     @Column(name = "index")
     private long index;
 
@@ -51,5 +54,8 @@ public class VotingProcedureEntity extends BlockAwareEntity {
 
     @Column(name = "anchor_hash")
     private String anchorHash;
+
+    @Column(name = "epoch")
+    private Integer epoch;
 }
 

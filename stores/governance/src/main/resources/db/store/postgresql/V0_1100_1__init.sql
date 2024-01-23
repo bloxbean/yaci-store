@@ -9,6 +9,7 @@ create table gov_action_proposal
     anchor_hash     varchar(64),
     type            varchar(50),
     details         jsonb,
+    epoch           int,
     slot            bigint,
     block           bigint,
     block_time      bigint,
@@ -25,6 +26,7 @@ CREATE INDEX idx_gov_action_proposal_return_address
 drop table if exists voting_procedure;
 create table voting_procedure
 (
+    id                 uuid        not null primary key,
     tx_hash            varchar(64) not null,
     index              int         not null,
     voter_type         varchar(50),
@@ -34,11 +36,11 @@ create table voting_procedure
     vote               varchar(10),
     anchor_url         varchar,
     anchor_hash        varchar(64),
+    epoch              int,
     slot               bigint,
     block              bigint,
     block_time         bigint,
-    update_datetime    timestamp,
-    primary key (tx_hash, index)
+    update_datetime    timestamp
 );
 
 CREATE TABLE committee_registration
