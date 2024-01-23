@@ -1,17 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance;
 
-import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
-import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.GovActionProposalStorageImpl;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.GovActionProposalStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.VotingProcedureStorageImpl;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.VotingProcedureStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.VotingProcedureMapper;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.VotingProcedureRepository;
+import com.bloxbean.cardano.yaci.store.governance.storage.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -60,5 +52,61 @@ public class GovernanceStoreConfiguration {
     public VotingProcedureStorageReader votingProcedureStorageReader(VotingProcedureRepository votingProcedureRepository,
                                                                      VotingProcedureMapper votingProcedureMapper) {
         return new VotingProcedureStorageReaderImpl(votingProcedureRepository, votingProcedureMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeDeRegistrationStorage committeeDeRegistrationStorage(CommitteeDeRegistrationRepository committeeDeRegistrationRepository,
+                                                                         CommitteeDeRegistrationMapper committeeDeRegistrationMapper) {
+        return new CommitteeDeRegistrationStorageImpl(committeeDeRegistrationRepository, committeeDeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeDeRegistrationStorageReader committeeDeRegistrationStorageReader(CommitteeDeRegistrationRepository committeeDeRegistrationRepository,
+                                                                                     CommitteeDeRegistrationMapper committeeDeRegistrationMapper) {
+        return new CommitteeDeRegistrationStorageReaderImpl(committeeDeRegistrationRepository, committeeDeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeRegistrationStorage committeeRegistrationStorage(CommitteeRegistrationRepository committeeRegistrationRepository,
+                                                                     CommitteeRegistrationMapper committeeRegistrationMapper) {
+        return new CommitteeRegistrationStorageImpl(committeeRegistrationRepository, committeeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeRegistrationStorageReader committeeRegistrationStorageReader(CommitteeRegistrationRepository committeeRegistrationRepository,
+                                                                                 CommitteeRegistrationMapper committeeRegistrationMapper) {
+        return new CommitteeRegistrationStorageReaderImpl(committeeRegistrationRepository, committeeRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DelegationVoteStorage delegationVoteStorage(DelegationVoteRepository delegationVoteRepository,
+                                                       DelegationVoteMapper delegationVoteMapper) {
+        return new DelegationVoteStorageImpl(delegationVoteRepository, delegationVoteMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DelegationVoteStorageReader delegationVoteStorageReader(DelegationVoteRepository delegationVoteRepository,
+                                                                   DelegationVoteMapper delegationVoteMapper) {
+        return new DelegationVoteStorageReaderImpl(delegationVoteRepository, delegationVoteMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepRegistrationStorage drepRegistrationStorage(DRepRegistrationRepository drepRegistrationRepository,
+                                                           DRepRegistrationMapper drepRegistrationMapper) {
+        return new DRepRegistrationStorageImpl(drepRegistrationRepository, drepRegistrationMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepRegistrationStorageReader dRepRegistrationStorageReader(DRepRegistrationRepository drepRegistrationRepository,
+                                                                       DRepRegistrationMapper drepRegistrationMapper) {
+        return new DRepRegistrationStorageReaderImpl(drepRegistrationRepository, drepRegistrationMapper);
     }
 }
