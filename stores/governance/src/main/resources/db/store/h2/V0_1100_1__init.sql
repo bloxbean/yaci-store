@@ -17,11 +17,17 @@ create table gov_action_proposal
     primary key (tx_hash, index)
 );
 
+CREATE INDEX idx_gov_action_proposal_slot
+    ON gov_action_proposal (slot);
+
 CREATE INDEX idx_gov_action_proposal_txhash
     ON gov_action_proposal (tx_hash);
 
 CREATE INDEX idx_gov_action_proposal_return_address
     ON gov_action_proposal (return_address);
+
+CREATE INDEX idx_gov_action_proposal_type
+    ON gov_action_proposal (type);
 
 drop table if exists voting_procedure;
 create table voting_procedure
@@ -40,8 +46,11 @@ create table voting_procedure
     slot               bigint,
     block              bigint,
     block_time         bigint,
-    update_datetime    timestamp,
+    update_datetime    timestamp
 );
+
+CREATE INDEX idx_voting_procedure_slot
+    ON voting_procedure (slot);
 
 CREATE INDEX idx_voting_procedure_txhash
     ON voting_procedure (tx_hash);
@@ -49,6 +58,8 @@ CREATE INDEX idx_voting_procedure_txhash
 CREATE INDEX idx_voting_procedure_gov_action_tx_hash
     ON voting_procedure (gov_action_tx_hash);
 
+CREATE INDEX idx_voting_procedure_gov_action_tx_hash_gov_action_index
+    ON voting_procedure (gov_action_tx_hash, gov_action_index);
 
 CREATE TABLE committee_registration
 (
@@ -64,6 +75,9 @@ CREATE TABLE committee_registration
     update_datetime timestamp,
     PRIMARY KEY (tx_hash, cert_index)
 );
+
+CREATE INDEX idx_committee_registration_slot
+    ON committee_registration (slot);
 
 CREATE TABLE committee_deregistration
 (
@@ -81,6 +95,9 @@ CREATE TABLE committee_deregistration
     PRIMARY KEY (tx_hash, cert_index)
 );
 
+CREATE INDEX idx_committee_deregistration_slot
+    ON committee_deregistration (slot);
+
 CREATE TABLE delegation_vote
 (
     tx_hash         varchar(64) not null,
@@ -96,6 +113,15 @@ CREATE TABLE delegation_vote
     update_datetime timestamp,
     PRIMARY KEY (tx_hash, cert_index)
 );
+
+CREATE INDEX idx_delegation_vote_slot
+    ON delegation_vote (slot);
+
+CREATE INDEX idx_delegation_vote_address
+    ON delegation_vote (address);
+
+CREATE INDEX idx_delegation_vote_drep_id
+    ON delegation_vote (drep_id);
 
 CREATE TABLE drep_registration
 (
@@ -116,4 +142,8 @@ CREATE TABLE drep_registration
     PRIMARY KEY (tx_hash, cert_index)
 );
 
---Todo: add more necessary indexes
+CREATE INDEX idx_drep_registration_slot
+    ON drep_registration (slot);
+
+CREATE INDEX idx_drep_registration_type
+    ON drep_registration (type);
