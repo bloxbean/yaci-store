@@ -15,10 +15,8 @@ import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -26,8 +24,8 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "GovActionProposal Service")
-@RequestMapping("${apiPrefix}/gov-action-proposals")
-@ConditionalOnExpression("${store.governance.endpoints.govActionProposal.enabled:true}")
+@RequestMapping("${apiPrefix}/governance/proposals")
+@ConditionalOnExpression("${store.governance.endpoints.proposal.enabled:true}")
 public class GovActionProposalController {
     private final GovActionProposalService govActionProposalService;
     private final VotingProcedureService votingProcedureService;
@@ -80,7 +78,7 @@ public class GovActionProposalController {
         return ResponseEntity.ok(govActionProposalService.getGovActionProposalByReturnAddress(address, p, count));
     }
 
-    @GetMapping("/{txHash}/voting-procedures")
+    @GetMapping("/{txHash}/votes")
     @Operation(description = "Get voting procedure list by transaction hash of governance action proposal")
     public ResponseEntity<List<VotingProcedure>> getVotingProceduresByGovActionProposalTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash,
                                                                                           @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
@@ -90,22 +88,13 @@ public class GovActionProposalController {
         if (p > 0)
             p = p - 1;
 
-        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTx(txHash, page, count));
+        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTx(txHash, p, count));
     }
 
-    @GetMapping("/{txHash}/{indexInTx}/voting-procedures")
+    @GetMapping("/{txHash}/{indexInTx}/votes")
     @Operation(description = "Get voting procedure list for a governance action proposal")
     public ResponseEntity<List<VotingProcedure>> getVotingProceduresForGovActionProposal(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash,
                                                                                          @PathVariable @Min(0) int indexInTx) {
         return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx));
-    }
-
-    @GetMapping("/latest/gov-action-type/{govActionType}")
-    @Operation(description = "Get most recent governance action proposal for a specific type")
-    public ResponseEntity<GovActionProposal> getMostRecentGovActionProposalByGovActionType(@Parameter(description = "Governance action type", required = true, example = "PARAMETER_CHANGE_ACTION")
-                                                                                           @PathVariable GovActionType govActionType) {
-        var govAction = govActionProposalService.getMostRecentGovActionProposalByGovActionType(govActionType);
-        return govAction.map(ResponseEntity::ok)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Governance Action not found"));
     }
 }
