@@ -31,14 +31,14 @@ class GovernanceRollbackProcessorIT {
     })
     void givenRollbackEvent_shouldDeleteVotingProcedures() throws Exception {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
-                .rollbackTo(new Point(14559346, "dffd1848e8ef26aadb1d4d05612825596ab697b27d2ea422fec077dd0de93254"))
+                .rollbackTo(new Point(14468394, "dffd1848e8ef26aadb1d4d05612825596ab697b27d2ea422fec077dd0de93254"))
                 .currentPoint(new Point(15000000, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
                 .build();
 
         governanceRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
         int count = votingProcedureRepository.findAll().size();
-        assertThat(count).isEqualTo(7);
+        assertThat(count).isEqualTo(3);
     }
 
     @Test
@@ -47,13 +47,13 @@ class GovernanceRollbackProcessorIT {
     })
     void givenRollbackEvent_shouldDeleteGovActionProposals() throws Exception {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
-                .rollbackTo(new Point(14458412, "dffd1848e8ef26aadb1d4d05612825596ab697b27d2ea422fec077dd0de93254"))
-                .currentPoint(new Point(15000000, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
+                .rollbackTo(new Point(18961390, "dffd1848e8ef26aadb1d4d05612825596ab697b27d2ea422fec077dd0de93254"))
+                .currentPoint(new Point(20000000, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
                 .build();
 
         governanceRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
         int count = govActionProposalRepository.findAll().size();
-        assertThat(count).isEqualTo(8);
+        assertThat(count).isEqualTo(2);
     }
 }
