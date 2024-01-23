@@ -15,8 +15,10 @@ import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -96,5 +98,14 @@ public class GovActionProposalController {
     public ResponseEntity<List<VotingProcedure>> getVotingProceduresForGovActionProposal(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash,
                                                                                          @PathVariable @Min(0) int indexInTx) {
         return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx));
+    }
+
+    @GetMapping("/latest/gov-action-type/{govActionType}")
+    @Operation(description = "Get most recent governance action proposal for a specific type")
+    public ResponseEntity<GovActionProposal> getMostRecentGovActionProposalByGovActionType(@Parameter(description = "Governance action type", required = true, example = "PARAMETER_CHANGE_ACTION")
+                                                                                           @PathVariable GovActionType govActionType) {
+        var govAction = govActionProposalService.getMostRecentGovActionProposalByGovActionType(govActionType);
+        return govAction.map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Governance Action not found"));
     }
 }
