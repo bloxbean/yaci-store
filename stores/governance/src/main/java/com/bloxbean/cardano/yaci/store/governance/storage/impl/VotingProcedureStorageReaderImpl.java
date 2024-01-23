@@ -14,6 +14,8 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -28,6 +30,11 @@ public class VotingProcedureStorageReaderImpl implements VotingProcedureStorageR
 
         Slice<VotingProcedureEntity> votingProcedureEntities = votingProcedureRepository.findAll(sortedBySlot);
         return votingProcedureEntities.stream().map(votingProcedureMapper::toVotingProcedure).toList();
+    }
+
+    @Override
+    public Optional<VotingProcedure> findById(UUID id) {
+        return votingProcedureRepository.findById(id).map(votingProcedureMapper::toVotingProcedure);
     }
 
     @Override
