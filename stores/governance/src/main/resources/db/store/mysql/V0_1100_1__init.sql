@@ -46,3 +46,72 @@ CREATE INDEX idx_voting_procedure_txhash
 
 CREATE INDEX idx_voting_procedure_gov_action_tx_hash
     ON voting_procedure (gov_action_tx_hash);
+
+
+CREATE TABLE committee_registration
+(
+    tx_hash         varchar(64) not null,
+    cert_index      int         NOT NULL,
+    cold_key        varchar,
+    hot_key         varchar,
+    cred_type       varchar(40),
+    epoch           int,
+    slot            bigint,
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (tx_hash, cert_index)
+);
+
+CREATE TABLE committee_deregistration
+(
+    tx_hash         varchar(64) not null,
+    cert_index      int         NOT NULL,
+    anchor_url      varchar(256),
+    anchor_hash     varchar(64),
+    cold_key        varchar     NOT NULL,
+    cred_type       varchar(40),
+    epoch           int,
+    slot            bigint,
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (tx_hash, cert_index)
+);
+
+CREATE TABLE delegation_vote
+(
+    tx_hash         varchar(64) not null,
+    cert_index      int         NOT NULL,
+    address         varchar(255), -- bech32 stake address
+    drep_hash       varchar(56),
+    drep_id         varchar(255),
+    epoch           int,
+    cred_type       varchar(40),
+    slot            bigint,
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (tx_hash, cert_index)
+);
+
+CREATE TABLE drep_registration
+(
+    tx_hash         varchar(64) NOT NULL,
+    cert_index      int         NOT NULL,
+    type            varchar(50),
+    deposit         bigint NULL,
+    drep_hash       varchar(56),
+    drep_id         varchar(255),
+    anchor_url      varchar,
+    anchor_hash     varchar(64),
+    cred_type       varchar(40),
+    epoch           int,
+    slot            bigint,
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (tx_hash, cert_index)
+);
+
+--Todo: add more necessary indexes

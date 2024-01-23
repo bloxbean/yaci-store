@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface GovActionProposalStorageReader {
 
@@ -15,4 +16,6 @@ public interface GovActionProposalStorageReader {
     List<GovActionProposal> findByGovActionType(GovActionType govActionType, int page, int count);
 
     List<GovActionProposal> findByReturnAddress(String address, int page, int count);
+
+    Optional<GovActionProposal> findMostRecentGovActionByType(GovActionType govActionType);
 }
