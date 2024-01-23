@@ -65,6 +65,7 @@ public class GovActionProposalProcessor {
                 govActionProposal.setBlockNumber(eventMetadata.getBlock());
                 govActionProposal.setBlockTime(eventMetadata.getBlockTime());
                 govActionProposal.setSlot(eventMetadata.getSlot());
+                govActionProposal.setEpoch(eventMetadata.getEpochNumber());
 
                 govActionProposals.add(govActionProposal);
             }
