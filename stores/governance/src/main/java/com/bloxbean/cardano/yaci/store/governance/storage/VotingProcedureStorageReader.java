@@ -15,7 +15,7 @@ public interface VotingProcedureStorageReader {
 
     List<VotingProcedure> findByTxHash(String txHash);
 
-    List<VotingProcedure> findByGovActionTxHash(String govActionTxHash, int page, int count);
+    List<VotingProcedure> findByGovActionTxHash(String govActionTxHash, int page, int count, Order order);
 
-    List<VotingProcedure> findByGovActionTxHashAndGovActionIndex(String govActionTxHash, int index);
+    List<VotingProcedure> findByGovActionTxHashAndGovActionIndex(String govActionTxHash, int index, int page, int count, Order order);
 }

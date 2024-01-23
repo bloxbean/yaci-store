@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governance.service;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeRegistrationStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +13,7 @@ import java.util.List;
 public class CommitteeRegistrationService {
     private final CommitteeRegistrationStorageReader committeeRegistrationStorageReader;
 
-    public List<CommitteeRegistration> getCommitteeRegistrations(int page, int count) {
-        return committeeRegistrationStorageReader.findAll(page, count);
+    public List<CommitteeRegistration> getCommitteeRegistrations(int page, int count, Order order) {
+        return committeeRegistrationStorageReader.findAll(page, count, order);
     }
 }

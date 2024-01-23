@@ -249,17 +249,17 @@ GET http://localhost:8080/api/v1/governance/proposals/return-address/{address}?p
 ### Get Voting Procedures list
 GET http://localhost:8080/api/v1/governance/votes?page=0&count=10
 
-### Get Voting Procedures by GovActionProposal transaction hash
-GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/voting-procedures?page=0&count=10
-
-### Get Voting Procedures by GovActionProposal transaction hash and index in this transaction
-GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/{index_in_transaction}/voting-procedures
-
 ### Get Voting Procedures by transaction hash
 GET http://localhost:8080/api/v1/governance/votes/txs/{tx_hash}
 
 ### Get Voting Procedures by id
 GET http://localhost:8080/api/v1/governance/votes/id/{id}
+
+### Get Voting Procedures by GovActionProposal transaction hash
+GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/voting-procedures?page=0&count=10
+
+### Get Voting Procedures by GovActionProposal transaction hash and index in this transaction
+GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/{index_in_transaction}/voting-procedures?page=0&count=10
 
 ### Get committee registrations
 GET http://localhost:8080/api/v1/governance/committees/registrations?page=0&count=10
@@ -271,7 +271,10 @@ GET http://localhost:8080/api/v1/governance/committees/deregistrations?page=0&co
 GET http://localhost:8080/api/v1/governance/delegation-votes?page=0&count=10
 
 ### Get delegations by DRep ID
-GET http://localhost:8080/api/v1/governance/delegation-votes/{dRepId}
+GET http://localhost:8080/api/v1/governance/delegation-votes/drep/{dRepId}?page=0&count=10
+
+### Get delegations by address
+GET http://localhost:8080/api/v1/governance/delegation-votes/address/{address}?page=0&count=10
 
 ### Get dRep registrations
 GET http://localhost:8080/api/v1/governance/dreps/registrations?page=0&count=10
