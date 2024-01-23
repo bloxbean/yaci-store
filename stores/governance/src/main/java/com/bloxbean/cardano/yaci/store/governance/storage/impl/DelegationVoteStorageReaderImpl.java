@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DelegationVote;
 import com.bloxbean.cardano.yaci.store.governance.storage.DelegationVoteStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DelegationVoteMapper;
@@ -18,9 +19,9 @@ public class DelegationVoteStorageReaderImpl implements DelegationVoteStorageRea
     private final DelegationVoteMapper delegationVoteMapper;
 
     @Override
-    public List<DelegationVote> findAll(int page, int count) {
+    public List<DelegationVote> findAll(int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         return delegationVoteRepository.findAll(sortedBySlot)
                 .stream()
@@ -29,8 +30,20 @@ public class DelegationVoteStorageReaderImpl implements DelegationVoteStorageRea
     }
 
     @Override
-    public List<DelegationVote> findByDRepId(String dRepId) {
-        return delegationVoteRepository.findByDrepId(dRepId).stream().map(delegationVoteMapper::toDelegationVote)
+    public List<DelegationVote> findByDRepId(String dRepId, int page, int count, Order order) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
+
+        return delegationVoteRepository.findByDrepId(dRepId, sortedBySlot).stream().map(delegationVoteMapper::toDelegationVote)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DelegationVote> findByAddress(String address, int page, int count, Order order) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
+
+        return delegationVoteRepository.findByAddress(address, sortedBySlot).stream().map(delegationVoteMapper::toDelegationVote)
                 .collect(Collectors.toList());
     }
 }

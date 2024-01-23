@@ -39,18 +39,18 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
     }
 
     @Override
-    public List<GovActionProposal> findByGovActionType(GovActionType govActionType, int page, int count) {
+    public List<GovActionProposal> findByGovActionType(GovActionType govActionType, int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByType(govActionType, sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 
     @Override
-    public List<GovActionProposal> findByReturnAddress(String address, int page, int count) {
+    public List<GovActionProposal> findByReturnAddress(String address, int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByReturnAddress(address, sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
