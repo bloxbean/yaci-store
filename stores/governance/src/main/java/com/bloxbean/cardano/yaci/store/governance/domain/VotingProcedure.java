@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,6 +20,7 @@ import lombok.experimental.SuperBuilder;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class VotingProcedure extends BlockAwareDomain {
+    private UUID id;
 
     private String txHash;
 
@@ -38,4 +41,6 @@ public class VotingProcedure extends BlockAwareDomain {
     private String anchorUrl;
 
     private String anchorHash;
+
+    private Integer epoch;
 }

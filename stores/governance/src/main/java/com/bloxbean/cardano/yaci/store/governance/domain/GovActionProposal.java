@@ -38,4 +38,6 @@ public class GovActionProposal extends BlockAwareDomain {
     private String anchorUrl;
 
     private String anchorHash;
+
+    private Integer epoch;
 }
