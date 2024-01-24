@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DRepRegistrationMapper;
@@ -18,9 +19,9 @@ public class DRepRegistrationStorageReaderImpl implements DRepRegistrationStorag
     private final DRepRegistrationMapper drepRegistrationMapper;
 
     @Override
-    public List<DRepRegistration> findRegistrations(int page, int count) {
+    public List<DRepRegistration> findRegistrations(int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         return drepRegistrationRepository.findRegistrations(sortedBySlot)
                 .stream()
@@ -29,9 +30,9 @@ public class DRepRegistrationStorageReaderImpl implements DRepRegistrationStorag
     }
 
     @Override
-    public List<DRepRegistration> findDeRegistrations(int page, int count) {
+    public List<DRepRegistration> findDeRegistrations(int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         return drepRegistrationRepository.findDeRegistrations(sortedBySlot)
                 .stream()
@@ -40,9 +41,9 @@ public class DRepRegistrationStorageReaderImpl implements DRepRegistrationStorag
     }
 
     @Override
-    public List<DRepRegistration> findUpdates(int page, int count) {
+    public List<DRepRegistration> findUpdates(int page, int count, Order order) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         return drepRegistrationRepository.findUpdates(sortedBySlot)
                 .stream()

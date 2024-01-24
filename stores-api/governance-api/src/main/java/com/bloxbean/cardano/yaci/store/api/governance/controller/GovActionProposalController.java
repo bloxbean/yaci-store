@@ -26,8 +26,8 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "GovActionProposal Service")
-@RequestMapping("${apiPrefix}/gov-action-proposals")
-@ConditionalOnExpression("${store.governance.endpoints.govActionProposal.enabled:true}")
+@RequestMapping("${apiPrefix}/governance/proposals")
+@ConditionalOnExpression("${store.governance.endpoints.proposal.enabled:true}")
 public class GovActionProposalController {
     private final GovActionProposalService govActionProposalService;
     private final VotingProcedureService votingProcedureService;
@@ -57,47 +57,58 @@ public class GovActionProposalController {
             @Parameter(description = "Governance action type", required = true, example = "PARAMETER_CHANGE_ACTION")
             @PathVariable GovActionType govActionType,
             @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
-            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
+            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+            @RequestParam(name = "order", defaultValue = "desc") Order order) {
 
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
 
-        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByGovActionType(govActionType, p, count));
+        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByGovActionType(govActionType, p, count, order));
     }
 
     @GetMapping("/return-address/{address}")
     @Operation(description = "Get governance action proposal list by return address")
     public ResponseEntity<List<GovActionProposal>> getGovActionProposalByReturnAddress(@PathVariable String address,
                                                                                        @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
-                                                                                       @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
+                                                                                       @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+                                                                                       @RequestParam(name = "order", defaultValue = "desc") Order order) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
 
-        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByReturnAddress(address, p, count));
+        return ResponseEntity.ok(govActionProposalService.getGovActionProposalByReturnAddress(address, p, count, order));
     }
 
-    @GetMapping("/{txHash}/voting-procedures")
+    @GetMapping("/{txHash}/votes")
     @Operation(description = "Get voting procedure list by transaction hash of governance action proposal")
     public ResponseEntity<List<VotingProcedure>> getVotingProceduresByGovActionProposalTx(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash,
                                                                                           @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
-                                                                                          @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
+                                                                                          @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+                                                                                          @RequestParam(name = "order", defaultValue = "desc") Order order) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
 
-        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTx(txHash, page, count));
+        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTx(txHash, p, count, order));
     }
 
-    @GetMapping("/{txHash}/{indexInTx}/voting-procedures")
+    @GetMapping("/{txHash}/{indexInTx}/votes")
     @Operation(description = "Get voting procedure list for a governance action proposal")
     public ResponseEntity<List<VotingProcedure>> getVotingProceduresForGovActionProposal(@PathVariable @Pattern(regexp = "^[0-9a-fA-F]{64}$") String txHash,
-                                                                                         @PathVariable @Min(0) int indexInTx) {
-        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx));
+                                                                                         @PathVariable @Min(0) int indexInTx,
+                                                                                         @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                                                                         @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+                                                                                         @RequestParam(name = "order", defaultValue = "desc") Order order) {
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return ResponseEntity.ok(votingProcedureService
+                .getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx, p, count, order));
     }
 
     @GetMapping("/latest/gov-action-type/{govActionType}")

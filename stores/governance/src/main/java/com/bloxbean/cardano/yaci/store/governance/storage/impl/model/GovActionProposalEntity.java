@@ -52,4 +52,6 @@ public class GovActionProposalEntity extends BlockAwareEntity {
     @Column(name = "anchor_hash")
     private String anchorHash;
 
+    @Column(name = "epoch")
+    private Integer epoch;
 }
