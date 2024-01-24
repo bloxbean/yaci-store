@@ -66,6 +66,7 @@ public class VotingProcedureProcessor {
                     votingProcedure.setSlot(eventMetadata.getSlot());
                     votingProcedure.setBlockNumber(eventMetadata.getBlock());
                     votingProcedure.setBlockTime(eventMetadata.getBlockTime());
+                    votingProcedure.setEpoch(eventMetadata.getEpochNumber());
 
                     votingProcedures.add(votingProcedure);
                 }

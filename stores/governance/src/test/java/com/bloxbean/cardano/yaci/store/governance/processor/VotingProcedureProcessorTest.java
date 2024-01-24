@@ -79,6 +79,7 @@ class VotingProcedureProcessorTest {
         assertThat(votingProceduresSaved.get(0).getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(votingProceduresSaved.get(0).getBlockNumber()).isEqualTo(eventMetadata().getBlock());
         assertThat(votingProceduresSaved.get(0).getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
+        assertThat(votingProceduresSaved.get(0).getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
 
         assertThat(votingProceduresSaved.get(0).getTxHash()).isEqualTo("498e6ee7063e94c6f459257a89cbd0bc953c5409e6b24460900cc997ba9d1f2f");
         assertThat(votingProceduresSaved.get(0).getVote()).isEqualTo(Vote.NO);

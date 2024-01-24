@@ -19,12 +19,12 @@ public class GovActionProposalService {
         return govActionProposalStorageReader.findByTxHash(txHash);
     }
 
-    public List<GovActionProposal> getGovActionProposalByGovActionType(GovActionType type, int page, int count) {
-        return govActionProposalStorageReader.findByGovActionType(type, page, count);
+    public List<GovActionProposal> getGovActionProposalByGovActionType(GovActionType type, int page, int count, Order order) {
+        return govActionProposalStorageReader.findByGovActionType(type, page, count, order);
     }
 
-    public List<GovActionProposal> getGovActionProposalByReturnAddress(String address, int page, int count) {
-        return govActionProposalStorageReader.findByReturnAddress(address, page, count);
+    public List<GovActionProposal> getGovActionProposalByReturnAddress(String address, int page, int count, Order order) {
+        return govActionProposalStorageReader.findByReturnAddress(address, page, count, order);
     }
 
     public List<GovActionProposal> getGovActionProposalList(int page, int count, Order order) {

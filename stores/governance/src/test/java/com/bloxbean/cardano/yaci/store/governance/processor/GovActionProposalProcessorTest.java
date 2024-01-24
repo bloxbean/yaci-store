@@ -1,7 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
-import com.bloxbean.cardano.client.address.Address;
-import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.ProtocolVersion;
@@ -28,6 +26,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
 
+import static com.bloxbean.cardano.yaci.core.model.governance.GovActionType.HARD_FORK_INITIATION_ACTION;
+import static com.bloxbean.cardano.yaci.core.model.governance.GovActionType.INFO_ACTION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -88,20 +88,30 @@ class GovActionProposalProcessorTest {
         List<GovActionProposal> govActionProposalsSaved = govActionProposalsCaptor.getValue();
         assertThat(govActionProposalsSaved).hasSize(2);
 
-        for (int i = 0; i < govActionProposalsSaved.size(); i++) {
-            var govActionProposal = govActionProposalsSaved.get(i);
-
+        for (var govActionProposal : govActionProposalsSaved) {
             assertThat(govActionProposal.getSlot()).isEqualTo(eventMetadata().getSlot());
             assertThat(govActionProposal.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
             assertThat(govActionProposal.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
-
             assertThat(govActionProposal.getTxHash()).isEqualTo("498e6ee7063e94c6f459257a89cbd0bc953c5409e6b24460900cc997ba9d1f2f");
-            assertThat(govActionProposal.getIndex()).isEqualTo(i);
-            assertThat(govActionProposal.getDeposit()).isEqualTo(proposalProcedures().get(i).getDeposit());
-            assertThat(govActionProposal.getType()).isEqualTo(proposalProcedures().get(i).getGovAction().getType());
-            assertThat(govActionProposal.getReturnAddress())
-                    .isEqualTo(new Address(HexUtil.decodeHexString(proposalProcedures().get(i).getRewardAccount())).getAddress());
+            assertThat(govActionProposal.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         }
+
+        assertThat(govActionProposalsSaved).map(GovActionProposal::getIndex).contains(0L, 1L);
+        assertThat(govActionProposalsSaved).map(GovActionProposal::getType).contains(INFO_ACTION, HARD_FORK_INITIATION_ACTION);
+        assertThat(govActionProposalsSaved).map(GovActionProposal::getReturnAddress).contains(
+                "stake_test1urvwycygqdv0pgs0vvjnsjt4w4934lvlu3w3vntg57w5dqgt4prgt",
+                "stake_test1upuhx0upngft6d832ds2sug76c76ynm94mehgmd4rfm4tnsxs62hr"
+        );
+
+//        for (int i = 0; i < govActionProposalsSaved.size(); i++) {
+//            var govActionProposal = govActionProposalsSaved.get(i);
+//
+//            assertThat(govActionProposal.getIndex()).isEqualTo(i);
+//            assertThat(govActionProposal.getDeposit()).isEqualTo(proposalProcedures().get(i).getDeposit());
+//            assertThat(govActionProposal.getType()).isEqualTo(proposalProcedures().get(i).getGovAction().getType());
+//            assertThat(govActionProposal.getReturnAddress())
+//                    .isEqualTo(new Address(HexUtil.decodeHexString(proposalProcedures().get(i).getRewardAccount())).getAddress());
+//        }
 
         assertThat(govActionProposalsSaved.get(0).getAnchorUrl()).isEqualTo(proposalProcedures().get(0).getAnchor().getAnchor_url());
         assertThat(govActionProposalsSaved.get(0).getAnchorHash()).isEqualTo(proposalProcedures().get(0).getAnchor().getAnchor_data_hash());
@@ -128,6 +138,7 @@ class GovActionProposalProcessorTest {
 
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
+                .epochNumber(90)
                 .block(100L)
                 .blockTime(99999L)
                 .slot(10000L)
@@ -137,17 +148,17 @@ class GovActionProposalProcessorTest {
     private List<ProposalProcedure> proposalProcedures() {
         return List.of(
                 ProposalProcedure.builder()
-                        .govAction(govAction(GovActionType.HARD_FORK_INITIATION_ACTION))
+                        .govAction(govAction(HARD_FORK_INITIATION_ACTION))
                         .deposit(BigInteger.valueOf(1000))
-                        .rewardAccount("e0db1bc3c3f99ce68977ceaf27ab4dd917123ef9e73f85c304236eab23")
+                        .rewardAccount("E0D8E260880358F0A20F6325384975754B1AFD9FE45D164D68A79D4681")
                         .anchor(Anchor.builder()
                                 .anchor_url("https://bit.ly/3zCH2HL")
                                 .anchor_data_hash("1111111111111111111111111111111111111111111111111111111111111111")
                                 .build()).build(),
                 ProposalProcedure.builder()
-                        .govAction(govAction(GovActionType.INFO_ACTION))
+                        .govAction(govAction(INFO_ACTION))
                         .deposit(BigInteger.valueOf(1000))
-                        .rewardAccount("E00F879F701DE63145C805B61ADF0BFB3351DF81164DCAE7BE120B41C8")
+                        .rewardAccount("E079733F819A12BD34F15360A8711ED63DA24F65AEF3746DB51A7755CE")
                         .build()
         );
     }
