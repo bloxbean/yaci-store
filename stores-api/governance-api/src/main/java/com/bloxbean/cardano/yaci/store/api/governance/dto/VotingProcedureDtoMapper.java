@@ -16,8 +16,10 @@ public class VotingProcedureDtoMapper {
                 .epoch(votingProcedure.getEpoch())
                 .slot(votingProcedure.getSlot())
                 .vote(votingProcedure.getVote())
+                .voterType(votingProcedure.getVoterType())
+                .voterHash(votingProcedure.getVoterHash())
+                .anchorUrl(votingProcedure.getAnchorUrl())
                 .anchorHash(votingProcedure.getAnchorHash())
-                .anchorHash(votingProcedure.getAnchorUrl())
                 .govActionTxHash(votingProcedure.getGovActionTxHash())
                 .govActionIndex(votingProcedure.getGovActionIndex())
                 .index(votingProcedure.getIndex())
@@ -31,7 +33,8 @@ public class VotingProcedureDtoMapper {
             dRepId = Bech32.encode(HexUtil.decodeHexString(votingProcedure.getVoterHash()), "drep");
             votingProcedureDto.setDRepId(dRepId);
         } else if (votingProcedure.getVoterType() == VoterType.DREP_SCRIPT_HASH) {
-            //Todo: check this case
+            dRepId = Bech32.encode(HexUtil.decodeHexString(votingProcedure.getVoterHash()), "drep_script");
+            votingProcedureDto.setDRepId(dRepId);
         }
 
         return votingProcedureDto;
