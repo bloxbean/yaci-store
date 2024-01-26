@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -50,6 +51,7 @@ public class VotingProcedureProcessor {
                     var govActionId = votingInfoEntry.getKey();
                     var votingInfo = votingInfoEntry.getValue();
 
+                    votingProcedure.setId(UUID.randomUUID());
                     votingProcedure.setVoterType(voter.getType());
                     votingProcedure.setVoterHash(voter.getHash());
                     votingProcedure.setIndex(index++);
@@ -67,7 +69,6 @@ public class VotingProcedureProcessor {
                     votingProcedure.setBlockNumber(eventMetadata.getBlock());
                     votingProcedure.setBlockTime(eventMetadata.getBlockTime());
                     votingProcedure.setEpoch(eventMetadata.getEpochNumber());
-
                     votingProcedures.add(votingProcedure);
                 }
             }
