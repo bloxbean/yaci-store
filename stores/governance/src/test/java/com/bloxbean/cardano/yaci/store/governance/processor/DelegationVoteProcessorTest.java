@@ -205,7 +205,4 @@ class DelegationVoteProcessorTest {
                 .build();
     }
 
-    public static void main(String[] args) {
-        System.out.println("fa197cecfa58002403eb7530632c6bcbb9cfd82b8a6ab4209504b622".length());
-    }
 }
