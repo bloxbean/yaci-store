@@ -1,10 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Credential;
-import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
-import com.bloxbean.cardano.yaci.core.model.certs.RegDrepCert;
-import com.bloxbean.cardano.yaci.core.model.certs.UnregDrepCert;
-import com.bloxbean.cardano.yaci.core.model.certs.UpdateDrepCert;
+import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -83,10 +80,17 @@ public class DRepRegistrationProcessor {
                 .blockTime(eventMetadata.getBlockTime())
                 .epoch(eventMetadata.getEpochNumber())
                 .drepHash(drepCredential.getHash())
-                .drepId(drepCredential.getHash() != null ? DRepId.fromKeyHash(drepCredential.getHash()) : null) // TODO: check if the DRepId is different for script hash
                 .credType(drepCredential.getType())
                 .deposit(deposit)
                 .build();
+
+        if (drepCredential.getHash() != null) {
+            if (drepCredential.getType() == StakeCredType.ADDR_KEYHASH) {
+                drepRegistration.setDrepId(DRepId.fromKeyHash(drepCredential.getHash()));
+            } else if (drepCredential.getType() == StakeCredType.SCRIPTHASH) {
+                drepRegistration.setDrepId(DRepId.fromScriptHash(drepCredential.getHash()));
+            }
+        }
 
         if (anchor != null) {
             drepRegistration.setAnchorHash(anchor.getAnchor_data_hash());

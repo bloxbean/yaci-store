@@ -102,6 +102,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
+        assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
         assertThat(savedDelegationVote.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedDelegationVote.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
         assertThat(savedDelegationVote.getBlockTime()).isEqualTo(eventMetadata().getBlockTime());
@@ -138,6 +139,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
         assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
+        assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDelegationVote.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedDelegationVote.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
@@ -175,6 +177,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
         assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
+        assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDelegationVote.getSlot()).isEqualTo(eventMetadata().getSlot());
         assertThat(savedDelegationVote.getBlockNumber()).isEqualTo(eventMetadata().getBlock());
@@ -201,4 +204,5 @@ class DelegationVoteProcessorTest {
                 .mainnet(false)
                 .build();
     }
+
 }

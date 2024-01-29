@@ -30,6 +30,8 @@ public class DelegationVote extends BlockAwareDomain {
 
     private String drepId;
 
+    private String credential;
+
     private StakeCredType credType;
 
     private Integer epoch;

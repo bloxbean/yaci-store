@@ -36,6 +36,9 @@ public class DelegationVoteEntity extends BlockAwareEntity {
     @Column(name = "drep_id")
     private String drepId;
 
+    @Column(name = "credential")
+    private String credential;
+
     @Column(name = "cred_type")
     @Enumerated(EnumType.STRING)
     private StakeCredType credType;
