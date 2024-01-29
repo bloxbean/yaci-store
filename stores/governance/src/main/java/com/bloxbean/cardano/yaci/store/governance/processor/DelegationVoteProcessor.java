@@ -6,6 +6,7 @@ import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -81,8 +82,16 @@ public class DelegationVoteProcessor {
                 .blockTime(eventMetadata.getBlockTime())
                 .epoch(eventMetadata.getEpochNumber())
                 .credType(stakeCredential.getType())
-                .drepId(drep.getHash() != null ? DRepId.fromKeyHash(drep.getHash()) : null) // TODO: check if the DRepId is different for script hash
+                .credential(stakeCredential.getHash())
                 .build();
+
+        if (drep.getHash() != null) {
+            if (drep.getType() == DrepType.ADDR_KEYHASH) {
+                delegationVote.setDrepId(DRepId.fromKeyHash(drep.getHash()));
+            } else if (drep.getType() == DrepType.SCRIPTHASH) {
+                delegationVote.setDrepId(DRepId.fromScriptHash(drep.getHash()));
+            }
+        }
 
         Address address = AddressProvider.getRewardAddress(toCCLCredential(stakeCredential),
                 eventMetadata.isMainnet() ? Networks.mainnet() : Networks.testnet());

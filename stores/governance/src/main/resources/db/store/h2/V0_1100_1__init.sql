@@ -32,7 +32,7 @@ CREATE INDEX idx_gov_action_proposal_type
 drop table if exists voting_procedure;
 create table voting_procedure
 (
-    id                 uuid        not null primary key,
+    id                 uuid        not null,
     tx_hash            varchar(64) not null,
     index              int         not null,
     voter_type         varchar(50),
@@ -46,7 +46,8 @@ create table voting_procedure
     slot               bigint,
     block              bigint,
     block_time         bigint,
-    update_datetime    timestamp
+    update_datetime    timestamp,
+    primary key (tx_hash, voter_hash, gov_action_tx_hash, gov_action_index)
 );
 
 CREATE INDEX idx_voting_procedure_slot
@@ -106,6 +107,7 @@ CREATE TABLE delegation_vote
     drep_hash       varchar(56),
     drep_id         varchar(255),
     epoch           int,
+    credential      varchar(56),
     cred_type       varchar(40),
     slot            bigint,
     block           bigint,
