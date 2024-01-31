@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.submit.service;
 import com.bloxbean.cardano.client.api.exception.ApiException;
 import com.bloxbean.cardano.client.api.model.EvaluationResult;
 import com.bloxbean.cardano.client.api.model.Result;
-import com.bloxbean.cardano.client.backend.ogmios.OgmiosBackendService;
+import com.bloxbean.cardano.client.backend.ogmios.http.OgmiosBackendService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
