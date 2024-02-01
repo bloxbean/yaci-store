@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governance.dto;
 
-import com.bloxbean.cardano.client.crypto.Bech32;
-import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.client.governance.DRepId;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import org.springframework.stereotype.Component;
@@ -29,11 +28,10 @@ public class VotingProcedureDtoMapper {
 
         String dRepId;
         if (votingProcedure.getVoterType() == VoterType.DREP_KEY_HASH) {
-            //Todo: use ccl instead when new version of ccl is released
-            dRepId = Bech32.encode(HexUtil.decodeHexString(votingProcedure.getVoterHash()), "drep");
+            dRepId = DRepId.fromKeyHash(votingProcedure.getVoterHash());
             votingProcedureDto.setDRepId(dRepId);
         } else if (votingProcedure.getVoterType() == VoterType.DREP_SCRIPT_HASH) {
-            dRepId = Bech32.encode(HexUtil.decodeHexString(votingProcedure.getVoterHash()), "drep_script");
+            dRepId = DRepId.fromScriptHash(votingProcedure.getVoterHash());
             votingProcedureDto.setDRepId(dRepId);
         }
 
