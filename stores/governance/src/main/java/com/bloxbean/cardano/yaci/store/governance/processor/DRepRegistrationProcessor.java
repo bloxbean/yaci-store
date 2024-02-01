@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.client.governance.DRepId;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
@@ -9,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorage;
-import com.bloxbean.cardano.yaci.store.governance.util.DRepId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
