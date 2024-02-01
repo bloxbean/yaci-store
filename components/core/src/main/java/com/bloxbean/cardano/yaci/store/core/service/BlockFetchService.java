@@ -357,11 +357,12 @@ public class BlockFetchService implements BlockChainDataListener {
             int interval = storeProperties.getKeepAliveInterval();
             while (true) {
                 try {
-                    if (log.isDebugEnabled())
-                        log.debug("Sending keep alive");
-
                     Thread.sleep(interval);
                     int randomNo = getRandomNumber(0, 60000);
+
+                    if (log.isDebugEnabled())
+                        log.debug("Sending keep alive : " + randomNo);
+
                     if (syncMode)
                         blockSync.sendKeepAliveMessage(randomNo);
                     else
