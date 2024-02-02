@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.epoch.service;
 
-import com.bloxbean.cardano.client.backend.model.EpochContent;
+import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochNo;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
@@ -30,10 +30,8 @@ public class EpochParamService {
                 .map(mapper::toProtocolParamsDto);
     }
 
-    public EpochContent getLatestEpoch() {
+    public EpochNo getLatestEpoch() {
         var latestEpoch = epochParamStorage.getMaxEpoch();
-        return EpochContent.builder()
-                .epoch(latestEpoch)
-                .build();
+        return new EpochNo(latestEpoch);
     }
 }

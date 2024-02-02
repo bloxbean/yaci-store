@@ -1,0 +1,14 @@
+dependencies {
+    api project(":stores:blocks")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Epoch Aggregator Module'
+                description = 'Yaci Store Epoch Aggregator Module'
+            }
+        }
+    }
+}

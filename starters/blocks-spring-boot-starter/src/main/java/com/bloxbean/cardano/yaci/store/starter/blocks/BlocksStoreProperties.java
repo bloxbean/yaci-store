@@ -14,8 +14,6 @@ public class BlocksStoreProperties {
     @Setter
     public static final class Blocks  {
        private boolean enabled = true;
-       private int epochCalculationInterval = 120; //in seconds
-       private boolean epochCalculationEnabled;
 
        private boolean apiEnabled = true;
 
@@ -26,7 +24,6 @@ public class BlocksStoreProperties {
     @Setter
     public static final class Endpoints {
         private Endpoint block = new Endpoint();
-        private Endpoint epoch = new Endpoint();
     }
 
     @Getter
