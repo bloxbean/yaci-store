@@ -1,9 +1,8 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.processor;
 
 import com.bloxbean.cardano.yaci.store.epochaggr.service.EpochService;
-import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
-import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,7 +28,7 @@ class EpochProcessorTest {
     @Test
     void givenBlockHeaderEvent_whenCurrentEpochIsPreEpoch_shouldReturn() {
         ReflectionTestUtils.setField(epochProcessor, "prevEpoch", 100);
-        epochProcessor.handleBlockHeaderEvent(BlockHeaderEvent.builder()
+        epochProcessor.handleCommitEvent(CommitEvent.builder()
                 .metadata(EventMetadata.builder()
                         .epochNumber(100)
                         .build())
@@ -40,30 +39,7 @@ class EpochProcessorTest {
 
     @Test
     void givenBlockHeaderEvent_ShouldAggregateEpochData() {
-        epochProcessor.handleBlockHeaderEvent(BlockHeaderEvent.builder()
-                .metadata(EventMetadata.builder()
-                        .epochNumber(100)
-                        .build())
-                .build());
-
-        Mockito.verify(epochService).aggregateData();
-    }
-
-    @Test
-    void givenByronMainBlockEvent_whenCurrentEpochIsPreEpoch_shouldReturn() {
-        ReflectionTestUtils.setField(epochProcessor, "prevEpoch", 100);
-        epochProcessor.handleByronBlockHeaderEvent(ByronMainBlockEvent.builder()
-                .metadata(EventMetadata.builder()
-                        .epochNumber(100)
-                        .build())
-                .build());
-
-        Mockito.verify(epochService, Mockito.never()).aggregateData();
-    }
-
-    @Test
-    void givenByronMainBlockEvent_ShouldAggregateEpochData() {
-        epochProcessor.handleByronBlockHeaderEvent(ByronMainBlockEvent.builder()
+        epochProcessor.handleCommitEvent(CommitEvent.builder()
                 .metadata(EventMetadata.builder()
                         .epochNumber(100)
                         .build())

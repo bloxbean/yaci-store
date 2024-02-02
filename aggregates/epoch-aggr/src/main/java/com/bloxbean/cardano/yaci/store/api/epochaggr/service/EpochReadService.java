@@ -21,4 +21,8 @@ public class EpochReadService {
         return epochReader.findEpochs(page, count);
     }
 
+    public Optional<Epoch> getLatestEpoch() {
+        return epochReader.findRecentEpoch();
+    }
+
 }

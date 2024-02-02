@@ -1,12 +1,10 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.processor;
 
 import com.bloxbean.cardano.yaci.store.epochaggr.service.EpochService;
-import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
-import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import jakarta.validation.constraints.NotNull;
-import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,7 +25,7 @@ public class EpochProcessor {
     private final EpochService epochService;
     private int prevEpoch = -1;
 
-    @Scheduled(fixedRateString = "${store.epoch-aggr.epoch-calculation-interval:120}", timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedRateString = "${store.epoch-aggr.epoch-calculation-interval:900}", timeUnit = TimeUnit.SECONDS)
     public void scheduleEpochDataAggregation() {
         log.info("Start epoch data aggregation ....");
         epochService.aggregateData();
@@ -36,15 +34,8 @@ public class EpochProcessor {
     @EventListener
     @Transactional
     @Async
-    public void handleBlockHeaderEvent(@NonNull BlockHeaderEvent blockHeaderEvent) {
-        aggregateDataDuringEpochChange(blockHeaderEvent.getMetadata());
-    }
-
-    @EventListener
-    @Transactional
-    @Async
-    public void handleByronBlockHeaderEvent(ByronMainBlockEvent byronMainBlockEvent) {
-        aggregateDataDuringEpochChange(byronMainBlockEvent.getMetadata());
+    public void handleCommitEvent(CommitEvent commitEvent) {
+        aggregateDataDuringEpochChange(commitEvent.getMetadata());
     }
 
     private void aggregateDataDuringEpochChange(EventMetadata eventMetadata) {

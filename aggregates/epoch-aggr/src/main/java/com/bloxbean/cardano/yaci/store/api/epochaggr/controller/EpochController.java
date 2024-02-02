@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.epochaggr.controller;
 
+import com.bloxbean.cardano.yaci.store.api.epochaggr.dto.EpochContent;
 import com.bloxbean.cardano.yaci.store.api.epochaggr.service.EpochReadService;
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.EpochsPage;
@@ -43,5 +44,25 @@ public class EpochController {
             p = p - 1;
 
         return epochService.getEpochs(p, count);
+    }
+
+    @GetMapping("latest/details")
+    @Operation(summary = "Latest Epoch Information", description = "Get the information of the current epoch.")
+    public EpochContent getLatestEpoch() {
+        return epochService.getLatestEpoch()
+                .map(epoch -> {
+                    EpochContent epochContent = EpochContent.builder()
+                            .epoch((int)epoch.getNumber())
+                            .blockCount(epoch.getBlockCount())
+                            .fees(String.valueOf(epoch.getTotalFees()))
+                            .firstBlockTime(epoch.getStartTime())
+                            .lastBlockTime(epoch.getEndTime())
+                            .output(String.valueOf(epoch.getTotalOutput()))
+                            .txCount(epoch.getTransactionCount()).build();
+
+                    return epochContent;
+
+                })
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Epoch not found"));
     }
 }
