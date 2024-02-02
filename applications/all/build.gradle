@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '3.2.1'
+    id 'org.springframework.boot' version '3.2.2'
 }
 
 dependencies {
@@ -23,7 +23,8 @@ dependencies {
 
     implementation libs.spring.boot.admin.client
 
-    runtimeOnly 'mysql:mysql-connector-java:8.0.32'
-    runtimeOnly 'org.postgresql:postgresql:42.6.0'
+    runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
+
 }
 

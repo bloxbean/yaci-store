@@ -83,6 +83,7 @@ if (jooq_modules.contains(name)) {
     }
 
     jooq {
+        version = '3.18.9'
         configurations {
             main {
                 generationTool {
