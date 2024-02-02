@@ -2,10 +2,10 @@ drop table if exists gov_action_proposal;
 create table gov_action_proposal
 (
     tx_hash         varchar(64) not null,
-    index           int         not null,
+    idx             int         not null,
     deposit         bigint,
     return_address  varchar(255),
-    anchor_url      varchar(256),
+    anchor_url      longtext,
     anchor_hash     varchar(64),
     type            varchar(50),
     details         json,
@@ -14,7 +14,7 @@ create table gov_action_proposal
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
-    primary key (tx_hash, index)
+    primary key (tx_hash, idx)
 );
 
 CREATE INDEX idx_gov_action_proposal_slot
@@ -32,15 +32,15 @@ CREATE INDEX idx_gov_action_proposal_type
 drop table if exists voting_procedure;
 create table voting_procedure
 (
-    id                 uuid        not null,
+    id                 binary(16)  not null,
     tx_hash            varchar(64) not null,
-    index              int         not null,
+    idx                int         not null,
     voter_type         varchar(50),
     voter_hash         varchar(56),
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
     vote               varchar(10),
-    anchor_url         varchar,
+    anchor_url         longtext,
     anchor_hash        varchar(64),
     epoch              int,
     slot               bigint,
@@ -66,8 +66,8 @@ CREATE TABLE committee_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         NOT NULL,
-    cold_key        varchar,
-    hot_key         varchar,
+    cold_key        varchar(56),
+    hot_key         varchar(56),
     cred_type       varchar(40),
     epoch           int,
     slot            bigint,
@@ -84,9 +84,9 @@ CREATE TABLE committee_deregistration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         NOT NULL,
-    anchor_url      varchar(256),
+    anchor_url      longtext,
     anchor_hash     varchar(64),
-    cold_key        varchar     NOT NULL,
+    cold_key        varchar(56)     NOT NULL,
     cred_type       varchar(40),
     epoch           int,
     slot            bigint,
@@ -133,7 +133,7 @@ CREATE TABLE drep_registration
     deposit         bigint NULL,
     drep_hash       varchar(56),
     drep_id         varchar(255),
-    anchor_url      varchar,
+    anchor_url      longtext,
     anchor_hash     varchar(64),
     cred_type       varchar(40),
     epoch           int,

@@ -10,6 +10,6 @@ public class GovActionProposalId implements Serializable {
     @Column(name = "tx_hash")
     private String txHash;
 
-    @Column(name = "index")
+    @Column(name = "idx")
     private long index;
 }

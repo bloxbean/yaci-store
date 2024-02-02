@@ -15,7 +15,7 @@ In this guide, we will show you how to use Yaci Store as a library in your own a
 ## Prerequisites
 
 - Java 21
-- Spring Boot 3.2.x (Tested with Spring Boot 3.2.0, 3.2.1)
+- Spring Boot 3.2.x (Tested with Spring Boot 3.2.0, 3.2.1, 3.2.2)
 
 ## Create a Spring Boot application
 
