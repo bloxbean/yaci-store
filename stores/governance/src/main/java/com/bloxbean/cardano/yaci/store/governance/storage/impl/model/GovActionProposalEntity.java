@@ -26,7 +26,7 @@ public class GovActionProposalEntity extends BlockAwareEntity {
     private String txHash;
 
     @Id
-    @Column(name = "index")
+    @Column(name = "idx")
     private long index;
 
     @Column(name = "slot")

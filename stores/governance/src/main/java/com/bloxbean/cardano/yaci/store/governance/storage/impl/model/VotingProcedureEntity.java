@@ -27,7 +27,7 @@ public class VotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "tx_hash")
     private String txHash;
 
-    @Column(name = "index")
+    @Column(name = "idx")
     private long index;
 
     @Column(name = "slot")
