@@ -1,0 +1,17 @@
+dependencies {
+    api project(":stores:blocks")
+    api project(":stores:transaction")
+    api project(":stores:utxo")
+    api project(":stores:epoch")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Ada Pot Module'
+                description = 'Yaci Store Ada Pot Module'
+            }
+        }
+    }
+}
