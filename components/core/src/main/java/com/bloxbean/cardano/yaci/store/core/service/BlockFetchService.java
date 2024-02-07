@@ -333,6 +333,30 @@ public class BlockFetchService implements BlockChainDataListener {
         blockSync.stop();
     }
 
+    public boolean isRunning() {
+        if (syncMode) {
+            return blockSync.isRunning();
+        }
+
+        return blockRangeSync.isRunning();
+    }
+
+    public int getLastKeepAliveResponseCookie() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseCookie();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseCookie();
+    }
+
+    public long getLastKeepAliveResponseTime() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseTime();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseTime();
+    }
+
     private void setError() {
         isError.set(true);
     }
@@ -382,7 +406,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     private boolean detectIfNewEpoch(Integer epoch) {
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        if (previousEpoch == null || epoch == previousEpoch + 1) {
             return true;
         } else
             return false;
