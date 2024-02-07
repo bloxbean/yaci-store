@@ -8,17 +8,18 @@ import lombok.*;
 import java.math.BigInteger;
 import java.util.List;
 
-@Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@ToString
-@JsonIgnoreProperties(ignoreUnknown = true)
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 /**
  * This class is used to represent UTXO for controller API
  */
+@Getter
+@Builder
+@ToString
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Utxo {
+
     private String txHash;
     private int outputIndex;
     private String address;
@@ -26,12 +27,15 @@ public class Utxo {
     private String dataHash;
     private String inlineDatum;
     private String referenceScriptHash;
+    private Integer epochNo;
+    private Long blockHeight;
+    private Long blockTime;
 
     @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Builder
     @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public static class Amount {
