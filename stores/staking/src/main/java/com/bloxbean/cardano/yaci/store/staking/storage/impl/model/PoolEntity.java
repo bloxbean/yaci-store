@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.adapot.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.staking.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.adapot.domain.DepositType;
+import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -15,9 +15,13 @@ import java.math.BigInteger;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@Table(name = "deposit")
-@IdClass(DepositId.class)
-public class DepositEntity extends BlockAwareEntity {
+@Table(name = "pool")
+@IdClass(PoolId.class)
+public class PoolEntity extends BlockAwareEntity {
+    @Id
+    @Column(name = "pool_id")
+    private String poolId;
+
     @Id
     @Column(name = "tx_hash")
     private String txHash;
@@ -26,15 +30,13 @@ public class DepositEntity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private Integer certIndex;
 
-    @Column(name = "credential")
-    private String credential;
+    @Id
+    @Column(name = "slot")
+    private Long slot;
 
-    @Column(name = "cred_type")
-    private String credType;
-
-    @Column(name = "deposit_type")
+    @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private DepositType depositType;
+    private PoolStatusType status;
 
     @Column(name = "amount")
     private BigInteger amount;
@@ -42,8 +44,8 @@ public class DepositEntity extends BlockAwareEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
-    @Column(name = "slot")
-    private Long slot;
+    @Column(name = "retire_epoch")
+    private Integer retireEpoch;
 
     @Column(name = "block_hash")
     private String blockHash;

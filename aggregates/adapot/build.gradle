@@ -1,8 +1,6 @@
 dependencies {
-    api project(":stores:blocks")
-    api project(":stores:transaction")
-    api project(":stores:utxo")
     api project(":stores:epoch")
+    api project(":stores:staking")
 }
 
 publishing {

@@ -7,5 +7,7 @@ import java.util.Optional;
 public interface AdaPotStorage {
     void save(AdaPot adaPot);
 
-    Optional<AdaPot> findByEpoch(int epoch);
+    Optional<AdaPot> findByEpoch(long epoch);
+
+    int deleteBySlotGreaterThan(long slot);
 }

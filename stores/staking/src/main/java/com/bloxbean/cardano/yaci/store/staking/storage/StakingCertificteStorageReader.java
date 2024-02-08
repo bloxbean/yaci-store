@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 
 import java.util.List;
 
-public interface StakingStorageReader {
+public interface StakingCertificteStorageReader {
     List<StakeRegistrationDetail> findRegistrations(int page, int count);
     List<StakeRegistrationDetail> findDeregistrations(int page, int count);
 

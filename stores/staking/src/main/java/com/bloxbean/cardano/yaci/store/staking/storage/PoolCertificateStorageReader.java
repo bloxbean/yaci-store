@@ -5,7 +5,10 @@ import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 
 import java.util.List;
 
-public interface PoolStorageReader {
+public interface PoolCertificateStorageReader {
     List<PoolRegistration> findPoolRegistrations(int page, int count);
     List<PoolRetirement> findPoolRetirements(int page, int count);
+
+    List<PoolRetirement> getRetiringPools(int epoch);
+
 }

@@ -4,6 +4,7 @@ create table stake_registration
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
     credential      varchar(56) not null,
+    cred_type       varchar(50),
     type            varchar(50),
     address         varchar(255), -- bech32 stake address
     epoch           int,
@@ -36,6 +37,7 @@ create table delegation
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
     credential      varchar(56) not null,
+    cred_type       varchar(50),
     pool_id         varchar(56), -- pool hash
     address         varchar(255), -- bech32 stake address
     epoch           int,
@@ -122,3 +124,33 @@ CREATE INDEX idx_pool_retirement_pool_id
 
 CREATE INDEX idx_pool_retirement_retirement_epoch
     ON pool_retirement (retirement_epoch);
+
+drop table if exists pool;
+create table pool
+(
+    pool_id         varchar(56),
+    tx_hash         varchar(64) not null,
+    cert_index      int         not null,
+    status          varchar(50),
+    amount          numeric(38),
+    epoch           int,
+    retire_epoch    int,
+    slot            bigint,
+    block_hash      varchar(64),
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    primary key (pool_id, tx_hash, cert_index, slot)
+);
+
+CREATE INDEX idx_pool_slot
+    ON pool (slot);
+
+CREATE INDEX idx_pool_pool_id
+    ON pool (pool_id);
+
+CREATE INDEX idx_pool_epoch
+    ON pool (epoch);
+
+CREATE INDEX idx_pool_retire_epoch
+    ON pool (retire_epoch);

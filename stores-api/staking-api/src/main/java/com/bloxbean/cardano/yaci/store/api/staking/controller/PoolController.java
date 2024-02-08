@@ -47,4 +47,10 @@ public class PoolController {
             p = p - 1;
         return poolService.getPoolRetirements(p, count);
     }
+
+    @GetMapping("/retiring/{epoch}")
+    @Operation(description = "Get retiring pool ids for the given epoch")
+    public List<PoolRetirement> getRetiringPoolIds(int epoch) {
+        return poolService.getRetiringPoolIds(epoch);
+    }
 }

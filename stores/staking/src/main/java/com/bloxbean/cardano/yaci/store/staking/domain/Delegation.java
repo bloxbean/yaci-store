@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.domain;
 
+import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -17,6 +18,7 @@ import lombok.experimental.SuperBuilder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Delegation extends BlockAwareDomain {
     private String credential;
+    private CredentialType credentialType;
     private String address;
     private String poolId;
     private String txHash;

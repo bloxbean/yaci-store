@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
-import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
+import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRegistrationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRetirementRepository;
@@ -11,11 +11,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public class PoolStorageReaderImpl implements PoolStorageReader {
+public class PoolCertificateStorageReaderImpl implements PoolCertificateStorageReader {
     private final PoolRegistrationRepository poolRegistrationRepository;
     private final PoolRetirementRepository poolRetirementRepository;
     private final PoolMapper mapper;
@@ -41,4 +41,28 @@ public class PoolStorageReaderImpl implements PoolStorageReader {
                 .map(mapper::toPoolRetirement)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<PoolRetirement> getRetiringPools(int epoch) {
+        //Get all pool ids with retirement epoch == epoch
+        var poolsWithRetirementEpoch = poolRetirementRepository.findByRetirementEpoch(epoch);
+        if (poolsWithRetirementEpoch == null || poolsWithRetirementEpoch.isEmpty())
+            return Collections.emptyList();
+
+        Set<PoolRetirement> retiringPoolIds = new HashSet<>();
+        //Check if there is any other retirement certificate with retirement epoch > epoch
+        for (var poolRetirement : poolsWithRetirementEpoch) {
+            var poolId = poolRetirement.getPoolId();
+
+            //Verify if this is the recent retirement certificate for the pool
+            //Find recent retirement certificate for the pool which is submitted before this epoch
+            var retirementCertificate = poolRetirementRepository.findRecentPoolRetirementByEpoch(poolId, epoch - 1);
+            if (retirementCertificate.isPresent() && retirementCertificate.get().getRetirementEpoch() == epoch) {
+                retiringPoolIds.add(mapper.toPoolRetirement(retirementCertificate.get()));
+            }
+        }
+
+        return new ArrayList<>(retiringPoolIds);
+    }
+
 }

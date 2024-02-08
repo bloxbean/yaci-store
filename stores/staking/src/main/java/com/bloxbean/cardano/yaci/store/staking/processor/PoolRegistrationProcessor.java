@@ -8,9 +8,12 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
-import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
+import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRegistrationEvent;
+import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRetirementEvent;
+import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +25,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class PoolRegistrationProcessor {
-    private final PoolStorage poolStorage;
+    private final PoolCertificateStorage poolStorage;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -87,6 +91,13 @@ public class PoolRegistrationProcessor {
                 poolStorage.savePoolRegistrations(poolRegistrations);
             if (poolRetirements.size() > 0)
                 poolStorage.savePoolRetirements(poolRetirements);
+
+            //publish events
+            if (poolRegistrations.size() > 0)
+                publisher.publishEvent(new PoolRegistrationEvent(eventMetadata, poolRegistrations));
+
+            if (poolRetirements.size() > 0)
+                publisher.publishEvent(new PoolRetirementEvent(eventMetadata, poolRetirements));
         }
     }
 

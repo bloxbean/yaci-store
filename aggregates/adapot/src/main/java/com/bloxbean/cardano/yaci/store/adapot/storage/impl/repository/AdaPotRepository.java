@@ -12,7 +12,7 @@ import java.util.Optional;
 public interface AdaPotRepository extends JpaRepository<AdaPotEntity, AdaPotId> {
 
     @Query("SELECT a FROM AdaPotEntity a WHERE a.epoch = :epoch " +
-            "AND a.slot = (SELECT MAX(a.slot) FROM AdaPotEntity a WHERE a.epoch = :epoch)")
+            "AND a.slot = (SELECT MAX(a.slot) FROM AdaPotEntity a WHERE a.epoch = :epoch) ORDER BY a.epochBoundary asc limit 1")
     Optional<AdaPotEntity> findByEpoch(Long epoch);
 
     int deleteBySlotGreaterThan(Long slot);

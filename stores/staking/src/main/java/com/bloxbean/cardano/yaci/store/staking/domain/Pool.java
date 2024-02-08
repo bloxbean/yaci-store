@@ -1,6 +1,5 @@
-package com.bloxbean.cardano.yaci.store.adapot.domain;
+package com.bloxbean.cardano.yaci.store.staking.domain;
 
-import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -18,15 +17,14 @@ import java.math.BigInteger;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Deposit extends BlockAwareDomain {
+public class Pool extends BlockAwareDomain {
+    private String poolId;
     private String txHash;
     private Integer certIndex;
-    private String credential;
-    private CredentialType credType;
-    private String poolId;
-    private DepositType depositType;
+    private PoolStatusType status;
     private BigInteger amount;
     private Integer epoch;
+    private Integer retireEpoch;
     private Long slot;
     private String blockHash;
 }

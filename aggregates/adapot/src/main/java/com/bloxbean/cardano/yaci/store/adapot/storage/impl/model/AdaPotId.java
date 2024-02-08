@@ -12,4 +12,7 @@ public class AdaPotId implements Serializable {
 
     @Column(name = "slot")
     private Long slot;
+
+    @Column(name = "epoch_boundary")
+    private Boolean epochBoundary;
 }

@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.ProtocolPar
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.epoch"})
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.epoch"})
 @EnableTransactionManagement
+@EnableCaching
 public class EpochStoreConfiguration {
 
     @Bean
