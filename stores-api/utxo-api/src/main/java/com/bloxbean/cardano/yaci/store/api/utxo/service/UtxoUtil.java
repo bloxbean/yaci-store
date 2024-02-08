@@ -39,8 +39,8 @@ class UtxoUtil {
                 .dataHash(dataHash)
                 .inlineDatum(addressUtxo.getInlineDatum())
                 .referenceScriptHash(addressUtxo.getReferenceScriptHash())
-                .epochNo(addressUtxo.getEpoch())
-                .blockHeight(addressUtxo.getBlockNumber())
+                .epoch(addressUtxo.getEpoch())
+                .blockNumber(addressUtxo.getBlockNumber())
                 .blockTime(addressUtxo.getBlockTime())
                 .build();
     }

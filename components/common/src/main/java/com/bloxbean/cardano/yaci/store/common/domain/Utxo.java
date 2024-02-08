@@ -27,8 +27,8 @@ public class Utxo {
     private String dataHash;
     private String inlineDatum;
     private String referenceScriptHash;
-    private Integer epochNo;
-    private Long blockHeight;
+    private Integer epoch;
+    private Long blockNumber;
     private Long blockTime;
 
     @Getter
