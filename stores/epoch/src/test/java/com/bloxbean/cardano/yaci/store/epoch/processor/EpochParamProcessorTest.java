@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -36,12 +37,12 @@ class EpochParamProcessorTest {
 
     @Test
     void givenEpochChangeEvent_whenPreviousEpochIsNullAndEpochEqualsMaxEpoch_shouldReturn() {
-        EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+        PreEpochTransitionEvent epochChangeEvent = PreEpochTransitionEvent.builder()
                 .epoch(28)
                 .previousEpoch(null)
                 .era(Era.Byron)
                 .previousEra(Era.Byron)
-                .eventMetadata(EventMetadata.builder()
+                .metadata(EventMetadata.builder()
                         .slot(12961)
                         .block(177070)
                         .blockTime(1666342887)
@@ -57,12 +58,12 @@ class EpochParamProcessorTest {
 
     @Test
     void givenEpochChangeEvent_whenMaxEpochIsNotNullAndMaxEpochPlusOneIsNotEqualToEpoch_shouldReturn() {
-        EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+        PreEpochTransitionEvent epochChangeEvent = PreEpochTransitionEvent.builder()
                 .epoch(28)
                 .previousEpoch(28)
                 .era(Era.Shelley)
                 .previousEra(Era.Byron)
-                .eventMetadata(EventMetadata.builder()
+                .metadata(EventMetadata.builder()
                         .slot(12961)
                         .block(177070)
                         .blockTime(1666342887)
@@ -78,12 +79,12 @@ class EpochParamProcessorTest {
 
     @Test
     void givenEpochChangeEvent_shouldSaveEpochParam() {
-        EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
+        PreEpochTransitionEvent epochChangeEvent = PreEpochTransitionEvent.builder()
                 .epoch(28)
                 .previousEpoch(27)
                 .era(Era.Alonzo)
                 .previousEra(Era.Byron)
-                .eventMetadata(EventMetadata.builder()
+                .metadata(EventMetadata.builder()
                         .slot(12961)
                         .block(177070)
                         .blockTime(1666342887)

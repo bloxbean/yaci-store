@@ -6,26 +6,32 @@ import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.core.model.VkeyWitness;
 import com.bloxbean.cardano.yaci.core.model.Witnesses;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
+import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -38,8 +44,14 @@ public class TransactionProcessor {
     public static final String ATTRIBUTES = "attributes";
 
     private final TransactionStorage transactionStorage;
+
     private final TransactionWitnessStorage transactionWitnessStorage;
     private final ObjectMapper objectMapper;
+    private final FeeResolver feeResolver;
+    private final ApplicationEventPublisher publisher;
+
+    //To keep invalid transactions in a batch if any to resolve fee
+    private List<Tuple<Txn, Transaction>> invalidUnresolvedFeeTxns = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
     @Order(3)
@@ -75,6 +87,8 @@ public class TransactionProcessor {
                         .collect(Collectors.toList());
             }
 
+            BigInteger fee = feeResolver.resolveFee(transaction);
+
             Txn txn = Txn.builder()
                     .txHash(transaction.getTxHash())
                     .blockHash(event.getMetadata().getBlockHash())
@@ -83,7 +97,7 @@ public class TransactionProcessor {
                     .slot(transaction.getSlot())
                     .inputs(inputs)
                     .outputs(outputs)
-                    .fee(transaction.getBody().getFee())
+                    .fee(fee)
                     .ttl(transaction.getBody().getTtl())
                     .auxiliaryDataHash(transaction.getBody().getAuxiliaryDataHash())
                     .validityIntervalStart(transaction.getBody().getValidityIntervalStart())
@@ -97,11 +111,49 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            txList.add(txn);
+            if (fee == null && transaction.isInvalid()) { //will be resolved in pre-commit event as it can't be resolved now due to parallel processing.
+                invalidUnresolvedFeeTxns.add(new Tuple<>(txn, transaction));
+            } else {
+                txList.add(txn);
+            }
+
         });
 
         if (txList.size() > 0) {
             transactionStorage.saveAll(txList);
+
+            //Publish txn event for valid transactions
+            publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
+        }
+
+    }
+
+    //Resolve collateral fee for invalid transactions -- Required during parallel processing
+    @EventListener
+    @Transactional
+    public void handleCollateralFee(PreCommitEvent preCommitEvent) {
+        if (invalidUnresolvedFeeTxns.isEmpty())
+            return;
+
+        try {
+            //Handle collateral fee
+            for (var invalidTx : invalidUnresolvedFeeTxns) {
+                var fee = feeResolver.resolveFee(invalidTx._2);
+                if (fee == null) {
+                    log.error("Fee not found for transaction. Something is wrong : {}", invalidTx._2.getBody().getTxHash());
+                }
+
+                invalidTx._1.setFee(fee);
+                transactionStorage.saveAll(List.of(invalidTx._1));
+            }
+
+            if (invalidUnresolvedFeeTxns.size() > 0) {
+                //Publish txn event for invalid transactions
+                publisher.publishEvent(new TxnEvent(preCommitEvent.getMetadata(),
+                        invalidUnresolvedFeeTxns.stream().map(t -> t._1).toList()));
+            }
+        } finally {
+            invalidUnresolvedFeeTxns.clear();
         }
     }
 

@@ -1,5 +1,6 @@
 dependencies {
     api project(":stores:epoch")
+    api project(":stores:transaction")
     api project(":stores:staking")
 }
 

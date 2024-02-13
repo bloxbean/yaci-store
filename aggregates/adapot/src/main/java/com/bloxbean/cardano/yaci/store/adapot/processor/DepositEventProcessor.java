@@ -20,6 +20,10 @@ public class DepositEventProcessor {
     private final AdaPotService adaPotService;
     private final DepositParamService depositParamService;
 
+    private BigInteger batchDepositAmount = BigInteger.ZERO;
+    private BigInteger batchRefundAmount = BigInteger.ZERO;
+    private BigInteger poolRefundAmount = BigInteger.ZERO;
+
     @EventListener
     @Transactional
     public void handleStakingDepositEvent(StakingDepositEvent stakingDepositEvent) {
@@ -49,7 +53,7 @@ public class DepositEventProcessor {
         if (log.isDebugEnabled())
             log.debug("Total deposit amount : {}", totalDepositAmount);
 
-        adaPotService.updateAdaPotDeposit(metadata, prevAdaPot, totalDepositAmount, false);
+        batchDepositAmount = totalDepositAmount;
     }
 
     //Handles pool deposit refund for retire pool durin epoch change
@@ -68,9 +72,26 @@ public class DepositEventProcessor {
         var metadata = poolRetiredEvent.getMetadata();
         var adaPot = adaPotService.getAdaPot(metadata.getEpochNumber());
 
-        adaPotService.updateAdaPotDeposit(metadata, adaPot, refundAmt, true);
+        poolRefundAmount = refundAmt;
     }
 
+    public BigInteger getBatchDepositAmount() {
+        return batchDepositAmount;
+    }
+
+    public BigInteger getBatchRefundAmount() {
+        return batchRefundAmount;
+    }
+
+    public BigInteger getPoolRefundAmount() {
+        return poolRefundAmount;
+    }
+
+    public void reset() {
+        batchDepositAmount = BigInteger.ZERO;
+        batchRefundAmount = BigInteger.ZERO;
+        poolRefundAmount = BigInteger.ZERO;
+    }
 
     @EventListener
     @Transactional

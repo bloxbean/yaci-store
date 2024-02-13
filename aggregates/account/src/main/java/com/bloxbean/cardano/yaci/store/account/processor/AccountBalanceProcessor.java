@@ -17,7 +17,7 @@ import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.*;
@@ -72,7 +72,7 @@ public class AccountBalanceProcessor {
 
     @EventListener
     @Transactional
-    public void handlePostProcessingEvent(ReadyForBalanceAggregationEvent event) {
+    public void handlePostProcessingEvent(PreCommitEvent event) {
 
         try {
             Collection<AddressUtxoEvent> addressUtxoEvents = addressUtxoEventsMap.values();

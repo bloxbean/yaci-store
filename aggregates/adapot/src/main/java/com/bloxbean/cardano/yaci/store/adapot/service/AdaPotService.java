@@ -19,9 +19,10 @@ import java.util.Optional;
 public class AdaPotService {
     private final AdaPotStorage adaPotStorage;
 
-    public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, boolean isEpochBoundary) {
+    public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, BigInteger totalFee, boolean isEpochBoundary) {
         var adaPot = AdaPot.builder()
                 .deposit(prevAdaPot.getDeposit().add(totalDeposit))
+                .fees(totalFee)
                 .epoch(metadata.getEpochNumber())
                 .epochBoundary(isEpochBoundary)
                 .slot(metadata.getSlot())
@@ -42,6 +43,7 @@ public class AdaPotService {
         var prevAdaPot = prevAdaPotOptional.orElse(
                 AdaPot.builder()
                         .deposit(BigInteger.ZERO)
+                        .fees(BigInteger.ZERO)
                         .epoch(epoch)
                         .build());
         return prevAdaPot;

@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
@@ -65,7 +65,7 @@ public class PoolStatusProcessor {
 
     @EventListener
     @Transactional
-    public void handleCommitEventToProcessPoolStatus(CommitEvent commitEvent) {
+    public void handleCommitEventToProcessPoolStatus(PreCommitEvent preCommitEvent) {
         //sort based on slot event.getMetadata().getSlot()
         poolRegistrationsCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
         poolRetirementsCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
@@ -82,7 +82,7 @@ public class PoolStatusProcessor {
             handlePoolRetirement(poolRetirementEvent);
         }
 
-        var stakingDepositEvent = new StakingDepositEvent(commitEvent.getMetadata(), stakeKeyRegCache.size(),
+        var stakingDepositEvent = new StakingDepositEvent(preCommitEvent.getMetadata(), stakeKeyRegCache.size(),
                 stakeKeyDeRegCache.size(), poolRegistrations.size());
 
         //Publish StakingDepositEvent to trigger adapot deposit calculation
@@ -174,8 +174,8 @@ public class PoolStatusProcessor {
 
     @EventListener
     @Transactional
-    public void handlePoolRetirementsDuringEpochChange(EpochChangeEvent epochChangeEvent) {
-        var metadata = epochChangeEvent.getEventMetadata();
+    public void handlePoolRetirementsDuringEpochChange(PreEpochTransitionEvent epochChangeEvent) {
+        var metadata = epochChangeEvent.getMetadata();
 
         log.info("Processing pool retirement for epoch: " + epochChangeEvent.getEpoch());
 

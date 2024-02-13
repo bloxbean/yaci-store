@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,7 +49,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
 
         publisher.publishEvent(byronMainBlockEvent);
-        publisher.publishEvent(new ReadyForBalanceAggregationEvent(eventMetadata));
+        publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
         //Finally Set the cursor
@@ -87,7 +87,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
-        publisher.publishEvent(new ReadyForBalanceAggregationEvent(lastBlockCache.getMetadata()));
+        publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));
         publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
 
         cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
