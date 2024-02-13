@@ -13,9 +13,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class UtxoAccountService {
     private final UtxoClient utxoClient;
 
@@ -25,14 +25,14 @@ public class UtxoAccountService {
         Map<String, Amount> amountMap = new HashMap<>();
         while (true) {
             List<Utxo> utxos = utxoClient.getUtxoByAddress(address, page, 100);
-            if (utxos == null || utxos.size() == 0)
+            if (utxos == null || utxos.isEmpty())
                 break;
 
             utxos.stream()
                     .flatMap(utxo -> utxo.getAmount().stream())
                     .forEach(utxoAmt -> {
                         Amount existingAmount = amountMap.get(utxoAmt.getUnit());
-                        if(existingAmount == null) {
+                        if (existingAmount == null) {
                             Amount newAmount = new Amount(utxoAmt.getUnit(), utxoAmt.getQuantity());
                             amountMap.put(utxoAmt.getUnit(), newAmount);
                         } else {
@@ -40,7 +40,6 @@ public class UtxoAccountService {
                             existingAmount.setQuantity(newQty);
                         }
                     });
-
             page++;
         }
 

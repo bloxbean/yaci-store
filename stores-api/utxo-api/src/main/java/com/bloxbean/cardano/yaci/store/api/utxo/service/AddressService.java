@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.api.utxo.service.UtxoUtil.addressUtxoToUtxo;
 import static com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes.ADDR_PREFIX;
 import static com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes.ADDR_VKEY_HASH_PREFIX;
 
@@ -27,13 +26,13 @@ public class AddressService {
     public List<Utxo> getUtxoByAddress(@NonNull String address, int page, int count, Order order) {
         return utxoStorage.findUtxoByAddress(address, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByAddressAndAsset(@NonNull String address, String asset, int page, int count, Order order) {
         return utxoStorage.findUtxoByAddressAndAsset(address, asset, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByPaymentCredential(@NonNull String addrOrPaymentCredOrVkh, int page, int count, Order order) {
@@ -41,7 +40,7 @@ public class AddressService {
 
         return utxoStorage.findUtxoByPaymentCredential(paymentCred, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByPaymentCredentialAndAsset(@NonNull String addrOrPaymentCredOrVkh, String asset, int page, int count, Order order) {
@@ -49,23 +48,23 @@ public class AddressService {
 
         return utxoStorage.findUtxoByPaymentCredentialAndAsset(paymentCred, asset, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByStakeAddress(@NonNull String stakeAddress, int page, int count, Order order) {
         return utxoStorage.findUtxoByStakeAddress(stakeAddress, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     public List<Utxo> getUtxoByStakeAddressAndAsset(@NonNull String stakeAddress, String asset, int page, int count, Order order) {
         return utxoStorage.findUtxoByStakeAddressAndAsset(stakeAddress, asset, page, count, order)
                 .stream()
-                .map(addressUtxo -> addressUtxoToUtxo(addressUtxo)).collect(Collectors.toList());
+                .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
     }
 
     private static String getPaymentCredential(String address) {
-        String paymentCredential = null;
+        String paymentCredential;
         if (address.startsWith(ADDR_VKEY_HASH_PREFIX)) {
             paymentCredential = HexUtil.encodeHexString(Bech32.decode(address).data);
 
