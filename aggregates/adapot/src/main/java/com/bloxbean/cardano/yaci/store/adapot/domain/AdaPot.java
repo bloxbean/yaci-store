@@ -21,6 +21,10 @@ public class AdaPot extends BlockAwareDomain {
     private Integer epoch;
     private Long slot;
     private Boolean epochBoundary;
-    private BigInteger deposit;
+    private BigInteger deposits;
     private BigInteger fees;
+    private BigInteger utxo;
+    private BigInteger treasury;
+    private BigInteger reserves;
+    private BigInteger rewards;
 }

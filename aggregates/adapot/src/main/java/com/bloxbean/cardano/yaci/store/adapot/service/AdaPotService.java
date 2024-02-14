@@ -21,7 +21,7 @@ public class AdaPotService {
 
     public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, BigInteger totalFee, boolean isEpochBoundary) {
         var adaPot = AdaPot.builder()
-                .deposit(prevAdaPot.getDeposit().add(totalDeposit))
+                .deposits(prevAdaPot.getDeposits().add(totalDeposit))
                 .fees(totalFee)
                 .epoch(metadata.getEpochNumber())
                 .epochBoundary(isEpochBoundary)
@@ -42,7 +42,7 @@ public class AdaPotService {
 
         var prevAdaPot = prevAdaPotOptional.orElse(
                 AdaPot.builder()
-                        .deposit(BigInteger.ZERO)
+                        .deposits(BigInteger.ZERO)
                         .fees(BigInteger.ZERO)
                         .epoch(epoch)
                         .build());

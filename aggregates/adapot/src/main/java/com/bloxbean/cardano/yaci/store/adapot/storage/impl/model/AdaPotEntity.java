@@ -29,10 +29,22 @@ public class AdaPotEntity extends BlockAwareEntity {
     @Column(name = "epoch_boundary")
     private Boolean epochBoundary;
 
-    @Column(name = "deposit")
-    private BigInteger deposit;
+    @Column(name = "deposits")
+    private BigInteger deposits;
 
     @Column(name = "fees")
     private BigInteger fees;
+
+    @Column(name = "utxo")
+    private BigInteger utxo;
+
+    @Column(name = "treasury")
+    private BigInteger treasury;
+
+    @Column(name = "reserves")
+    private BigInteger reserves;
+
+    @Column(name = "rewards")
+    private BigInteger rewards;
 
 }
