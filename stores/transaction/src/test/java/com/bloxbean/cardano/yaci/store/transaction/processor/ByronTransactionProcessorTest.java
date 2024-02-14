@@ -2,7 +2,9 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.core.model.byron.*;
 import com.bloxbean.cardano.yaci.core.model.byron.payload.ByronTxPayload;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
@@ -14,12 +16,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.BDDMockito.given;
+import static reactor.core.publisher.Mono.when;
 
 @ExtendWith(MockitoExtension.class)
 class ByronTransactionProcessorTest {
@@ -28,6 +35,12 @@ class ByronTransactionProcessorTest {
 
     @Mock
     private TransactionWitnessStorage transactionWitnessStorage;
+
+    @Mock
+    private UtxoClient utxoClient;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
 
     @InjectMocks
     private ByronTransactionProcessor byronTransactionProcessor;
@@ -56,6 +69,19 @@ class ByronTransactionProcessorTest {
 
     @Test
     void givenByronMainBlockEvent_shouldSaveTxnList() {
+        given(utxoClient.getUtxosByIds(any())).willReturn(List.of(AddressUtxo.builder()
+                .blockHash("4497b33b10fa2619c6efbd9f874ecd1c91badb10bf70850732aab45b90524d9e")
+                .txHash("a12a839c25a01fa5d118167db5acdbd9e38172ae8f00e5ac0a4997ef792a2007")
+                .outputIndex(0)
+                .lovelaceAmount(BigInteger.valueOf(1000000))
+                .amounts(List.of(Amt.builder()
+                        .unit(LOVELACE)
+                        .assetName(LOVELACE)
+                        .quantity(BigInteger.valueOf(1000000))
+                        .build()
+                )).build()
+        ));
+
         List<ByronTxIn> inputs = byronTxInputs();
 
         List<ByronTxOut> outputs
