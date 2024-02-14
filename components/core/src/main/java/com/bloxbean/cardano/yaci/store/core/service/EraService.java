@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -93,6 +95,17 @@ public class EraService {
 
     public long slotsPerEpoch(Era era) {
         return genesisConfig.slotsPerEpoch(era);
+    }
+
+    public long getFirstNonByronSlot() {
+        return firstShelleySlot();
+    }
+
+    public Optional<Integer> getFirstNonByronEpoch() {
+        var nonByronEra = eraStorage.findFirstNonByronEra();
+        var epoch = nonByronEra.map(cardanoEra -> getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot()));
+
+        return epoch;
     }
 
     private long firstShelleySlot() {
