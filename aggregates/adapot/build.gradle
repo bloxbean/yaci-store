@@ -1,7 +1,9 @@
 dependencies {
+    api project(":components:core")
     api project(":stores:epoch")
     api project(":stores:transaction")
     api project(":stores:staking")
+    api project(":stores:utxo")
 }
 
 publishing {

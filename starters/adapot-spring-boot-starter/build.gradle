@@ -2,6 +2,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":aggregates:adapot")
 
+    implementation project(':starters:transaction-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
+    implementation project(':starters:staking-spring-boot-starter')
+    implementation project(':starters:utxo-spring-boot-starter')
+
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
 
