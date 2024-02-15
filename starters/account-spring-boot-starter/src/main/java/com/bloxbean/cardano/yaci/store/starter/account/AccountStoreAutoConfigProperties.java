@@ -21,6 +21,7 @@ public class AccountStoreAutoConfigProperties {
 
         private int maxBalanceRecordsPerAddressPerBatch = 3;
         private boolean stakeAddressBalanceEnabled = true;
+        private boolean addressBalanceEnabled = true;
     }
 
 }

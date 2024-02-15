@@ -141,22 +141,26 @@ public class AccountBalanceProcessor {
                 log.debug("Total time to first process : " + (System.currentTimeMillis() - t0));
             }
 
-
+            List<CompletableFuture> futures = new ArrayList<>();
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
-            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
-                    .thenAcceptAsync(addressBalances -> {
-                        long t2 = System.currentTimeMillis();
-                        accountBalanceStorage.saveAddressBalances(addressBalances);
-                        long t3 = System.currentTimeMillis();
-                        log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
+            if (accountStoreProperties.isAddressBalanceEnabled()) {
+                CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
+                        .thenAcceptAsync(addressBalances -> {
+                            long t2 = System.currentTimeMillis();
+                            accountBalanceStorage.saveAddressBalances(addressBalances);
+                            long t3 = System.currentTimeMillis();
+                            log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
 
-                        if (addressBalances != null && addressBalances.size() > 0) {
-                            List<Pair<String, String>> addresseUnitList =
-                                    addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
-                            accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
-                        }
-                    }, parallelExecutor.getVirtualThreadExecutor());
+                            if (addressBalances != null && addressBalances.size() > 0) {
+                                List<Pair<String, String>> addresseUnitList =
+                                        addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
+                                accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
+                            }
+                        }, parallelExecutor.getVirtualThreadExecutor());
+
+                futures.add(addressBalFuture);
+            }
 
 
             CompletableFuture<Void> stakeAddrBalFuture = null;
@@ -175,15 +179,16 @@ public class AccountBalanceProcessor {
                             }
                         }, parallelExecutor.getVirtualThreadExecutor());
 
-                CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
-            } else {
-                addressBalFuture.join();
+                futures.add(stakeAddrBalFuture);
             }
 
+            if (futures.size() > 0)
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
             try {
-                addressBalFuture.get();
-                if (stakeAddrBalFuture != null)
-                    stakeAddrBalFuture.get();
+                for (CompletableFuture future : futures) {
+                    future.get();
+                }
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {

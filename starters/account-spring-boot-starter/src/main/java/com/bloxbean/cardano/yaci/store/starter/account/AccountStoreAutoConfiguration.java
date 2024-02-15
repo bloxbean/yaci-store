@@ -27,6 +27,7 @@ public class AccountStoreAutoConfiguration {
 
         accountStoreProperties.setMaxBalanceRecordsPerAddressPerBatch(properties.getAccount().getMaxBalanceRecordsPerAddressPerBatch());
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
+        accountStoreProperties.setAddressBalanceEnabled(properties.getAccount().isAddressBalanceEnabled());
 
         return accountStoreProperties;
     }
