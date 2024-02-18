@@ -60,6 +60,7 @@ public class TransactionProcessor {
         List<Transaction> transactions = event.getTransactions();
         List<Txn> txList = new ArrayList<>();
 
+        var blockIndex = new AtomicInteger(0);
         transactions.forEach(transaction -> {
             List<UtxoKey> inputs = transaction.getBody().getInputs().stream()
                     .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
@@ -95,6 +96,8 @@ public class TransactionProcessor {
                     .blockNumber(transaction.getBlockNumber())
                     .blockTime(event.getMetadata().getBlockTime())
                     .slot(transaction.getSlot())
+                    .blockIndex(blockIndex.getAndIncrement())
+                    .epoch(event.getMetadata().getEpochNumber())
                     .inputs(inputs)
                     .outputs(outputs)
                     .fee(fee)

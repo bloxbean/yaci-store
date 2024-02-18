@@ -53,4 +53,14 @@ public class StakeCertificateStorageReaderImpl implements StakingCertificteStora
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public List<String> getRegisteredStakeAddresses(Integer epoch, int page, int count) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count);
+
+        return registrationRepository.findRegisteredStakeAddresses(epoch, sortedBySlot)
+                .stream()
+                .collect(Collectors.toList());
+    }
+
 }

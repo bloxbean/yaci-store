@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
@@ -104,16 +105,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
 
         /**
-        var postProcessingFuture = CompletableFuture.supplyAsync(() -> {
-            publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
-            return true;
-        }, eventExecutor);
+         var postProcessingFuture = CompletableFuture.supplyAsync(() -> {
+         publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
+         return true;
+         }, eventExecutor);
 
-        var commitFuture = CompletableFuture.supplyAsync(() -> {
-            publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
-            return true;
-        }, eventExecutor);
-        CompletableFuture.allOf(postProcessingFuture, commitFuture).join();
+         var commitFuture = CompletableFuture.supplyAsync(() -> {
+         publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+         return true;
+         }, eventExecutor);
+         CompletableFuture.allOf(postProcessingFuture, commitFuture).join();
          **/
 
         //Finally Set the cursor
@@ -152,11 +153,17 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Certificate event
         var txCertificateEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
-                    .txHash(transaction.getTxHash())
-                    .certificates(transaction.getBody().getCertificates())
-                    .build()
-            ).collect(Collectors.toList());
+            List<TxCertificates> txCertificatesList =
+                    IntStream.range(0, transactions.size())
+                            .mapToObj(i -> {
+                                        var transaction = transactions.get(i);
+                                        return TxCertificates.builder()
+                                                .txHash(transaction.getTxHash())
+                                                .blockIndex(i)
+                                                .certificates(transaction.getBody().getCertificates())
+                                                .build();
+                                    }
+                            ).collect(Collectors.toList());
             publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
             return true;
         }, eventExecutor);
@@ -222,11 +229,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
 
         //Certificate event
-        List<TxCertificates> txCertificatesList = transactions.stream().map(transaction -> TxCertificates.builder()
-                .txHash(transaction.getTxHash())
-                .certificates(transaction.getBody().getCertificates())
-                .build()
-        ).collect(Collectors.toList());
+        List<TxCertificates> txCertificatesList = IntStream.range(0, transactions.size())
+                .mapToObj(i -> {
+                            var transaction = transactions.get(i);
+                            return TxCertificates.builder()
+                                    .txHash(transaction.getTxHash())
+                                    .blockIndex(i)
+                                    .certificates(transaction.getBody().getCertificates())
+                                    .build();
+                        }
+                ).collect(Collectors.toList());
         publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
 
         //Mints

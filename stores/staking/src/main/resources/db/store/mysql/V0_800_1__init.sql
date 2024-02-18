@@ -3,6 +3,7 @@ create table stake_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
+    block_index     int,
     credential      varchar(56) not null,
     cred_type       varchar(50),
     type            varchar(50),

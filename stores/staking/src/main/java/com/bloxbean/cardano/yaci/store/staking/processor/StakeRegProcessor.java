@@ -38,6 +38,7 @@ public class StakeRegProcessor {
 
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
+            int blockIndex = txCertificates.getBlockIndex();
             List<Certificate> certificates = txCertificates.getCertificates();
 
             int index = 0;
@@ -62,7 +63,7 @@ public class StakeRegProcessor {
                                     .build();
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeRegistration, txHash, index, eventMetadata);
+                                stakeRegistration, txHash, index, blockIndex, eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         break;
@@ -76,7 +77,7 @@ public class StakeRegProcessor {
                                     .build();
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeDeregistration, txHash, index, eventMetadata);
+                                stakeDeregistration, txHash, index, blockIndex, eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         break;
@@ -109,7 +110,7 @@ public class StakeRegProcessor {
 
                         delegation = buildDelegation(stakeDelegation, txHash, index, eventMetadata);
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeRegistration, txHash, index, eventMetadata);
+                                stakeRegistration, txHash, index, blockIndex, eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         delegations.add(delegation);
@@ -138,6 +139,7 @@ public class StakeRegProcessor {
     private StakeRegistrationDetail buildStakeRegistrationDetail(StakeRegistration stakeRegistration,
                                                                  String txHash,
                                                                  int certIndex,
+                                                                 int blockIndex,
                                                                  EventMetadata eventMetadata) {
         Address address =
                 AddressUtil.getRewardAddress(stakeRegistration.getStakeCredential(), eventMetadata.isMainnet());
@@ -149,6 +151,7 @@ public class StakeRegProcessor {
                 .slot(eventMetadata.getSlot())
                 .txHash(txHash)
                 .certIndex(certIndex)
+                .blockIndex(blockIndex)
                 .type(CertificateType.STAKE_REGISTRATION)
                 .epoch(eventMetadata.getEpochNumber())
                 .slot(eventMetadata.getSlot())
@@ -161,6 +164,7 @@ public class StakeRegProcessor {
     private StakeRegistrationDetail buildStakeRegistrationDetail(StakeDeregistration stakeDeregistration,
                                                                  String txHash,
                                                                  int certIndex,
+                                                                 int blockIndex,
                                                                  EventMetadata eventMetadata) {
         Address address =
                 AddressUtil.getRewardAddress(stakeDeregistration.getStakeCredential(), eventMetadata.isMainnet());
@@ -172,6 +176,7 @@ public class StakeRegProcessor {
                 .slot(eventMetadata.getSlot())
                 .txHash(txHash)
                 .certIndex(certIndex)
+                .blockIndex(blockIndex)
                 .type(CertificateType.STAKE_DEREGISTRATION)
                 .epoch(eventMetadata.getEpochNumber())
                 .slot(eventMetadata.getSlot())

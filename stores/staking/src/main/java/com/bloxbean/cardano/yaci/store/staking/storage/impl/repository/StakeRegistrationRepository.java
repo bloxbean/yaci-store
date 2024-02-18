@@ -18,5 +18,10 @@ public interface StakeRegistrationRepository
     @Query("select r from StakeRegistrationEntity r where r.type = 'STAKE_DEREGISTRATION'")
     Slice<StakeRegistrationEntity> findDeregestrations(Pageable pageable);
 
+    @Query("select sr.address FROM StakeRegistrationEntity sr WHERE sr.type = 'STAKE_REGISTRATION' " +
+            "AND sr.epoch <= :epoch AND NOT EXISTS (SELECT 1 FROM StakeRegistrationEntity sd " +
+            "WHERE sd.address = sr.address AND sd.type = 'STAKE_DEREGISTRATION' AND sd.epoch <= sr.epoch AND sd.slot > sr.slot)")
+    Slice<String> findRegisteredStakeAddresses(Integer epoch, Pageable pageable);
+
     int deleteBySlotGreaterThan(Long slot);
 }

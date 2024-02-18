@@ -26,4 +26,8 @@ public class StakeService {
     public List<Delegation> getStakeDelegations(int p, int count) {
         return stakingStorageReader.findDelegations(p, count);
     }
+
+    public List<String> getRegisteredStakeAddresses(int epoch, int p, int count) {
+        return stakingStorageReader.getRegisteredStakeAddresses(epoch, p, count);
+    }
 }

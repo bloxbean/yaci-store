@@ -25,6 +25,8 @@ public class Txn extends BlockAwareDomain {
     private String txHash;
     private String blockHash;
     private Long slot;
+    private Integer blockIndex;
+    private Integer epoch;
     private List<UtxoKey> inputs;
     private List<UtxoKey> outputs;
     private BigInteger fee;
