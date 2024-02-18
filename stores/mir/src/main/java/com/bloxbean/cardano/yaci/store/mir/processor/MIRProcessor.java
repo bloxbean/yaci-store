@@ -8,24 +8,31 @@ import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class MIRProcessor {
     private final MIRStorage mirStorage;
+
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -53,6 +60,45 @@ public class MIRProcessor {
 
         if (!moveInstataneousRewards.isEmpty())
             mirStorage.save(moveInstataneousRewards);
+
+        //Publish reward event
+        getRewardEvent(certificateEvent, moveInstataneousRewards)
+                .ifPresent(publisher::publishEvent);
+
+    }
+
+    private Optional<RewardEvent> getRewardEvent(CertificateEvent certificateEvent, List<MoveInstataneousReward> moveInstataneousRewards) {
+        var rewardAmts = moveInstataneousRewards.stream()
+                .map(moveInstataneousReward -> {
+                    RewardType rewardType;
+                    switch (moveInstataneousReward.getPot()) {
+                        case TREASURY:
+                            rewardType = RewardType.treasury;
+                            break;
+                        case RESERVES:
+                            rewardType = RewardType.reserves;
+                            break;
+                        default:
+                            rewardType = null;
+                    }
+
+                    return RewardAmt.builder()
+                            .rewardType(rewardType)
+                            .txHash(moveInstataneousReward.getTxHash())
+                            .amount(moveInstataneousReward.getAmount())
+                            .address(moveInstataneousReward.getAddress())
+                            .build();
+                }).toList();
+
+        if (rewardAmts.isEmpty())
+            return Optional.empty();
+        else {
+            var rewardEvent = RewardEvent.builder()
+                    .metadata(certificateEvent.getMetadata())
+                    .rewards(rewardAmts)
+                    .build();
+            return Optional.of(rewardEvent);
+        }
     }
 
     private List<MoveInstataneousReward> handleTxMIRCertificate(EventMetadata eventMetadata, String txHash, MoveInstataneous mirCert, int certIndex) {

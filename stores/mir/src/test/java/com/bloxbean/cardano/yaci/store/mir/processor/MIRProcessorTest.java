@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -29,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MIRProcessorTest {
     @Mock
     private MIRStorage mirStorage;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
 
     @InjectMocks
     private MIRProcessor mirProcessor;
