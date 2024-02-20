@@ -2,9 +2,10 @@ package com.bloxbean.cardano.yaci.store.mir.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
-import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
-import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.certs.MoveInstataneous;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -25,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import static com.bloxbean.cardano.yaci.store.common.util.CCLUtil.toCCLCredential;
 
 @Component
 @RequiredArgsConstructor
@@ -144,16 +147,6 @@ public class MIRProcessor {
         moveInstataneousReward.setBlockTime(eventMetadata.getBlockTime());
 
         return moveInstataneousReward;
-    }
-
-    private Credential toCCLCredential(StakeCredential credential) {
-        if (credential.getType() == StakeCredType.ADDR_KEYHASH) {
-            return Credential.fromKey(credential.getHash());
-        } else if (credential.getType() == StakeCredType.SCRIPTHASH) {
-            return Credential.fromScript(credential.getHash());
-        } else {
-            throw new IllegalArgumentException("Invalid credential type");
-        }
     }
 
     @EventListener
