@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificteStorageReader;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.StakingMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.DelegationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.StakeRegistrationRepository;
@@ -12,10 +12,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public class StakeCertificateStorageReaderImpl implements StakingCertificteStorageReader {
+public class StakeCertificateStorageReaderImpl implements StakingCertificateStorageReader {
     private final StakeRegistrationRepository registrationRepository;
     private final DelegationRepository delegationRepository;
     private final StakingMapper mapper;
@@ -61,6 +62,12 @@ public class StakeCertificateStorageReaderImpl implements StakingCertificteStora
         return registrationRepository.findRegisteredStakeAddresses(epoch, sortedBySlot)
                 .stream()
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot) {
+        return registrationRepository.findRegistrationsByStakeAddress(stakeAddress, slot)
+                .map(stakeRegistrationEntity -> mapper.toStakeRegistrationDetail(stakeRegistrationEntity));
     }
 
 }

@@ -20,10 +20,19 @@ public class AdaPotService {
     private final AdaPotStorage adaPotStorage;
 
     public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, BigInteger totalFee, BigInteger netUtxo, boolean isEpochBoundary) {
+        updateAdaPotDeposit(metadata, prevAdaPot, totalDeposit, totalFee, netUtxo, BigInteger.ZERO, isEpochBoundary);
+    }
+
+    public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, BigInteger totalFee, BigInteger netUtxo, BigInteger netTreasuryAmt, boolean isEpochBoundary) {
+        var updatedDeposit = prevAdaPot.getDeposits() != null? prevAdaPot.getDeposits().add(totalDeposit) : BigInteger.ZERO.add(totalDeposit);
+        var updatedUtxo = prevAdaPot.getUtxo() != null? prevAdaPot.getUtxo().add(netUtxo) : BigInteger.ZERO.add(netUtxo);
+        var updatedTreasury = prevAdaPot.getTreasury() != null? prevAdaPot.getTreasury().add(netTreasuryAmt) : BigInteger.ZERO.add(netTreasuryAmt);
+
         var adaPot = AdaPot.builder()
-                .deposits(prevAdaPot.getDeposits().add(totalDeposit))
+                .deposits(updatedDeposit)
                 .fees(totalFee)
-                .utxo(prevAdaPot.getUtxo().add(netUtxo))
+                .utxo(updatedUtxo)
+                .treasury(updatedTreasury)
                 .epoch(metadata.getEpochNumber())
                 .epochBoundary(isEpochBoundary)
                 .slot(metadata.getSlot())

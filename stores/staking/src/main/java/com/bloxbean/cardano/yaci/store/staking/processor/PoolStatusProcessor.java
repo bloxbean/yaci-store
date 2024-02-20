@@ -198,7 +198,7 @@ public class PoolStatusProcessor {
                     .txHash(retirement.getTxHash())
                     .certIndex(retirement.getCertIndex())
                     .status(PoolStatusType.RETIRED)
-                    .amount(poolDeposit.negate())
+                    .amount(poolDeposit)
                     .epoch(newEpoch)
                     .retireEpoch(newEpoch)
                     .slot(metadata.getSlot())
@@ -208,8 +208,9 @@ public class PoolStatusProcessor {
                     .build();
 
             retiredPools.add(retiredPool);
-            poolStorage.save(List.of(retiredPool));
         }
+
+        poolStorage.save(retiredPools);
 
         //Publish PoolRetiredEvent to trigger adapot refund calculation
         publisher.publishEvent(new PoolRetiredEvent(metadata, retiredPools));

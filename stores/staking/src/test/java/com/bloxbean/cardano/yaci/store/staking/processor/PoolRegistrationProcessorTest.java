@@ -95,7 +95,7 @@ class PoolRegistrationProcessorTest {
         assertThat(poolRegistrationSaved.getPledge()).isEqualTo(poolRegistrationCert.getPoolParams().getPledge());
         assertThat(poolRegistrationSaved.getCost()).isEqualTo(poolRegistrationCert.getPoolParams().getCost());
         assertThat(poolRegistrationSaved.getMargin()).isEqualTo(0.075);
-        assertThat(poolRegistrationSaved.getRewardAccount()).isEqualTo(poolRegistrationCert.getPoolParams().getRewardAccount());
+        assertThat(poolRegistrationSaved.getRewardAccount()).isEqualTo("stake_test1uq5teukd4ta7wdf2fuyuhjxpyaa8y373jd2hwtklfwyu4es7clcde");
         assertThat(poolRegistrationSaved.getPoolOwners()).isEqualTo(poolRegistrationCert.getPoolParams().getPoolOwners());
         assertThat(poolRegistrationSaved.getRelays()).isEqualTo(poolRegistrationCert.getPoolParams().getRelays());
         assertThat(poolRegistrationSaved.getMetadataUrl()).isEqualTo(poolRegistrationCert.getPoolParams().getPoolMetadataUrl());

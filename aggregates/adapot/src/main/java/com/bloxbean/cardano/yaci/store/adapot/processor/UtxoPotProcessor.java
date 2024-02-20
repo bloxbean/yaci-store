@@ -46,7 +46,7 @@ public class UtxoPotProcessor {
         log.info("Total Genesis balance : {}", totalGenesisBalance);
     }
 
-    @EventListener
+   @EventListener
     public void calculateNetUtxoAmtInBatach(PreCommitEvent preCommitEvent) {
 
         Collections.sort(addressUtxoEvents, Comparator.comparingLong(addressUtxoEvent -> addressUtxoEvent.getEventMetadata().getSlot()));

@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
+import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -46,6 +48,8 @@ public class PoolRegistrationProcessor {
                     com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration poolRegistrationCert
                             = (com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration) certificate;
 
+                    Address rewardAddress = new Address(HexUtil.decodeHexString(poolRegistrationCert.getPoolParams().getRewardAccount()));
+
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
                             .certIndex(index)
@@ -54,7 +58,7 @@ public class PoolRegistrationProcessor {
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
                             .margin(poolMarginToDouble(poolRegistrationCert.getPoolParams().getMargin()))
-                            .rewardAccount(poolRegistrationCert.getPoolParams().getRewardAccount())
+                            .rewardAccount(rewardAddress.toBech32())
                             .poolOwners(poolRegistrationCert.getPoolParams().getPoolOwners())
                             .relays(poolRegistrationCert.getPoolParams().getRelays())
                             .metadataUrl(poolRegistrationCert.getPoolParams().getPoolMetadataUrl())

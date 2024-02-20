@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRegistrationId;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRegistrationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRetirementRepository;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,12 @@ public class PoolCertificateStorageReaderImpl implements PoolCertificateStorageR
         }
 
         return new ArrayList<>(retiringPoolIds);
+    }
+
+    @Override
+    public Optional<PoolRegistration> findPoolRegistration(String txHash, Integer certIndex) {
+        return poolRegistrationRepository.findById(new PoolRegistrationId(txHash, certIndex))
+                .map(mapper::toPoolRegistration);
     }
 
 }

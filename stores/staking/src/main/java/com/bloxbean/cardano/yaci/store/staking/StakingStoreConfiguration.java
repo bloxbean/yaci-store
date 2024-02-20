@@ -44,9 +44,9 @@ public class StakingStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public StakingCertificteStorageReader stakingStorageReader(StakeRegistrationRepository registrationRepository,
-                                                               DelegationRepository delegationRepository,
-                                                               StakingMapper stakingMapper) {
+    public StakingCertificateStorageReader stakingStorageReader(StakeRegistrationRepository registrationRepository,
+                                                                DelegationRepository delegationRepository,
+                                                                StakingMapper stakingMapper) {
         return new StakeCertificateStorageReaderImpl(registrationRepository, delegationRepository, stakingMapper);
     }
 

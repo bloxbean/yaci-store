@@ -62,11 +62,12 @@ public class AdaPotProcessor {
 
         //Update retired pool refunds
         BigInteger poolRefundAmount = depositEventProcessor.getPoolRefundAmount();
+        BigInteger refundToTreasury = depositEventProcessor.getRefundToTreasury();
 
         var existingAdaPot = adaPotService.getAdaPot(epochTransitionCommitEvent.getMetadata().getEpochNumber());
 
         //Total fee in the epoch
-        adaPotService.updateAdaPotDeposit(epochTransitionCommitEvent.getMetadata(), existingAdaPot, poolRefundAmount, existingAdaPot.getFees(), BigInteger.ZERO, true);
+        adaPotService.updateAdaPotDeposit(epochTransitionCommitEvent.getMetadata(), existingAdaPot, poolRefundAmount, existingAdaPot.getFees(), BigInteger.ZERO, refundToTreasury, true);
 
         log.info("AdaPot updated for epoch transition : {}", epochTransitionCommitEvent.getMetadata().getEpochNumber());
     }

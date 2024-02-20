@@ -22,7 +22,7 @@ public interface PoolRegistrationRepository
     @Query("select distinct p.poolId from PoolRegistrationEnity p where p.epoch <= ?1")
     List<String> findAllRegisteredPool(Integer epoch);
 
-    @Query("select p from PoolRegistrationEnity p where p.poolId = ?1 and p.epoch <= ?2 order by p.slot desc, p.certIndex desc limit 1")
+    @Query("select p from PoolRegistrationEnity p where p.poolId = ?1 and p.epoch <= ?2 order by p.slot desc,  p.certIndex desc limit 1")
     Optional<PoolRegistrationEnity> findRecentPoolRegistrationByEpoch(String poolId, Integer epoch);
 
     List<PoolRegistrationEnity> findByPoolIdAndEpochLessThanEqual(String poolId, Integer epoch);

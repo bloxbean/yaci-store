@@ -4,12 +4,15 @@ import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 
 import java.util.List;
+import java.util.Optional;
 
-public interface StakingCertificteStorageReader {
+public interface StakingCertificateStorageReader {
     List<StakeRegistrationDetail> findRegistrations(int page, int count);
     List<StakeRegistrationDetail> findDeregistrations(int page, int count);
 
     List<Delegation> findDelegations(int page, int count);
 
     List<String> getRegisteredStakeAddresses(Integer epoch, int page, int count);
+
+    Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot);
 }
