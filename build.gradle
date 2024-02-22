@@ -4,6 +4,7 @@ plugins {
     id 'org.flywaydb.flyway' version '9.22.3'
     id 'nu.studer.jooq' version '8.2.3'
     id 'io.spring.dependency-management' version '1.1.4'
+    id 'org.graalvm.buildtools.native' version '0.9.28'
 
     id 'org.ajoberstar.grgit' version '5.2.0'
 }
@@ -12,6 +13,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'java-library'
+    apply plugin: 'org.graalvm.buildtools.native'
 
     repositories {
         mavenLocal()
@@ -84,6 +86,7 @@ subprojects {
     test {
         useJUnitPlatform()
     }
+
 }
 
 def getCheckedOutGitCommitHash() {
