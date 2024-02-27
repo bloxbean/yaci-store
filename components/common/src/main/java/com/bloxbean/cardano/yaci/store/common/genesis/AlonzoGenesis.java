@@ -15,8 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedMap;
 
-import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V1;
-import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V2;
+import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.*;
 
 @Data
 public class AlonzoGenesis extends GenesisFile {
@@ -95,14 +94,19 @@ public class AlonzoGenesis extends GenesisFile {
         var costModelNode = genesisJson.get(COST_MODELS);
         var plutusV1CostModelNode = costModelNode.get(PLUTUS_V1);
         var plutusV2CostModelNode = costModelNode.get(PLUTUS_V2);
+        var plutusV3CostModelNode = costModelNode.get(PLUTUS_V3); //For test env.
 
         long[] plutusV1Costs = getCostsInLong(plutusV1CostModelNode);
         long[] plutusV2Costs = plutusV2CostModelNode != null? getCostsInLong(plutusV2CostModelNode) : null;
+        long[] plutusV3Costs = plutusV3CostModelNode != null? getCostsInLong(plutusV3CostModelNode) : null;
 
         Map<String, long[]> costModelMap = new HashMap<>();
         costModelMap.put(PLUTUS_V1, plutusV1Costs);
         if (plutusV2Costs != null)
             costModelMap.put(PLUTUS_V2, plutusV2Costs);
+
+        if (plutusV3Costs != null)
+            costModelMap.put(PLUTUS_V3, plutusV3Costs);
 
         protocolParams = ProtocolParams.builder()
                 .adaPerUtxoByte(lovelacePerUTxOWord)
