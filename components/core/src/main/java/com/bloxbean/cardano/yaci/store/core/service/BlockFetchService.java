@@ -307,6 +307,13 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
+    @Override
+    public void onParsingError(Exception e) {
+        log.error("Block parsing error", e);
+        stopSyncOnError();
+        throw new RuntimeException(e);
+    }
+
     public synchronized void startFetch(Point from, Point to) {
         stopKeepAliveThread();
         blockRangeSync.restart(this);
