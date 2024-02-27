@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.model;
 
-import com.bloxbean.cardano.client.plutus.spec.RedeemerTag;
+import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.persistence.*;

@@ -25,7 +25,7 @@ public class ScriptReferenceUtil {
      * not successful.
      * The serializedPlutusScript parameter contains both type and script body.
      * @param serializedScriptRef
-     * @return PlutusV1Script or PlutusV2Script
+     * @return PlutusV1Script or PlutusV2Script or PlutusV3Script
      */
     private static Script deserializeScriptRef(byte[] serializedScriptRef) {
         Array scriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedScriptRef);
@@ -39,13 +39,15 @@ public class ScriptReferenceUtil {
             if (type == 0) { //Native script
                 Array scriptBytes = ((Array) dataItemList.get(1));
                 return NativeScript.deserialize(scriptBytes);
-            } else
-                if (type == 1) {
+            } else if (type == 1) {
                 ByteString scriptBytes = ((ByteString) dataItemList.get(1));
                 return PlutusV1Script.deserialize(scriptBytes);
             } else if (type == 2) {
                 ByteString scriptBytes = ((ByteString) dataItemList.get(1));
                 return PlutusV2Script.deserialize(scriptBytes);
+            } else if (type == 3) {
+                ByteString scriptBytes = ((ByteString) dataItemList.get(1));
+                return PlutusV3Script.deserialize(scriptBytes);
             } else {
                 throw new CborRuntimeException("Invalid type : " + type);
             }

@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.domain;
 
-import com.bloxbean.cardano.client.plutus.spec.RedeemerTag;
+import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import lombok.AllArgsConstructor;
 import lombok.Data;
