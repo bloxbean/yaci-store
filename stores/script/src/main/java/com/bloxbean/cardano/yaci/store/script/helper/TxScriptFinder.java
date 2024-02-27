@@ -46,6 +46,13 @@ public class TxScriptFinder {
                     .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
         }
 
+        //PlutusV3 scripts
+        if (transaction.getWitnesses().getPlutusV3Scripts() != null
+                && transaction.getWitnesses().getPlutusV3Scripts().size() > 0) {
+            transaction.getWitnesses().getPlutusV3Scripts()
+                    .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
+        }
+
         //Check if reference input is there, then resolve it if script_ref found for the input
         if (transaction.getBody().getReferenceInputs() != null
                 && transaction.getBody().getReferenceInputs().size() > 0) {

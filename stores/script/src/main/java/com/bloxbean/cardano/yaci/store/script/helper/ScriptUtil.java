@@ -15,9 +15,11 @@ import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.core.model.Datum;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.util.PlutusV3Script;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -46,27 +48,34 @@ public class ScriptUtil {
         byte[] content = HexUtil.decodeHexString(plutusScript.getContent());
 
         try {
-            if ("1".equals(plutusScript.getType())) {
+            if (PlutusScriptType.PlutusScriptV1 == plutusScript.getType()) {
                 PlutusV1Script plutusV1Script =
                         PlutusV1Script.deserialize((ByteString) CborSerializationUtil.deserializeOne(content));
                 return HexUtil.encodeHexString(plutusV1Script.getScriptHash());
-            } else if ("2".equals(plutusScript.getType())) {
+            } else if (PlutusScriptType.PlutusScriptV2 == plutusScript.getType()) {
                 PlutusV2Script plutusV2Script =
                         PlutusV2Script.deserialize((ByteString) CborSerializationUtil.deserializeOne(content));
                 return HexUtil.encodeHexString(plutusV2Script.getScriptHash());
+            } else if (PlutusScriptType.PlutusScriptV3 == plutusScript.getType()) {
+                PlutusV3Script plutusV3Script =
+                        PlutusV3Script.deserialize((ByteString) CborSerializationUtil.deserializeOne(content));
+                return HexUtil.encodeHexString(plutusV3Script.getScriptHash());
             } else {
-                throw new IllegalArgumentException("Invalid plutus script type : " + plutusScript);
+                throw new IllegalArgumentException("Invalid plutus script type : " + plutusScript.getType());
             }
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static ScriptType toPlutusScriptType(@NotNull String strType) {
-        if ("1".equals(strType))
+    public static ScriptType toPlutusScriptType(@NotNull PlutusScriptType strType) {
+        if (PlutusScriptType.PlutusScriptV1 == strType)
             return ScriptType.PLUTUS_V1;
-        else if ("2".equals(strType))
+        else if (PlutusScriptType.PlutusScriptV2 == strType)
             return ScriptType.PLUTUS_V2;
+        else if (PlutusScriptType.PlutusScriptV3 == strType)
+            return ScriptType.PLUTUS_V3;
         else
             throw new IllegalArgumentException("Invalid plutus script type : " + strType);
     }
@@ -93,6 +102,8 @@ public class ScriptUtil {
                 return PlutusV1Script.deserialize(scriptBytes);
             } else if (type == 2) {
                 return PlutusV2Script.deserialize(scriptBytes);
+            } else if (type == 3) {
+                return PlutusV3Script.deserialize(scriptBytes);
             } else {
                 throw new CborRuntimeException("Invalid type : " + type);
             }
@@ -105,7 +116,15 @@ public class ScriptUtil {
         try {
             com.bloxbean.cardano.client.plutus.spec.PlutusScript cclPlutusScript
                     = ScriptUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
-            PlutusScript plutusScript = new PlutusScript(String.valueOf(cclPlutusScript.getScriptType()), cclPlutusScript.getCborHex());
+
+            var plutusScriptType = switch (cclPlutusScript.getScriptType()) {
+                case 1 -> PlutusScriptType.PlutusScriptV1;
+                case 2 -> PlutusScriptType.PlutusScriptV2;
+                case 3 -> PlutusScriptType.PlutusScriptV3;
+                default -> throw new IllegalArgumentException("Invalid plutus script type : " + cclPlutusScript.getScriptType());
+            };
+
+            PlutusScript plutusScript = new PlutusScript(plutusScriptType, cclPlutusScript.getCborHex());
             return plutusScript;
         } catch (Exception e) {
             log.error("Error deserializing plutus script in scriptRef : TxHash: " + addressUtxo.getTxHash()
