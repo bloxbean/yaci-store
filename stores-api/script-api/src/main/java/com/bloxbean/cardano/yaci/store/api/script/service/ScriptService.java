@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.api.script.service;
 
-import com.bloxbean.cardano.client.plutus.spec.ExUnits;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.plutus.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.ExUnits;
 import com.bloxbean.cardano.yaci.store.api.script.dto.TxRedeemerDto;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorageReader;

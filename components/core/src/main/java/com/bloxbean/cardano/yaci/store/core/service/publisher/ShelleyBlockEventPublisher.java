@@ -275,6 +275,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .txHash(transaction.getTxHash())
                 .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
                 .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
+                .plutusV3Scripts(transaction.getWitnesses().getPlutusV3Scripts())
                 .nativeScripts(transaction.getWitnesses().getNativeScripts())
                 .datums(transaction.getWitnesses().getDatums())
                 .redeemers(transaction.getWitnesses().getRedeemers())
