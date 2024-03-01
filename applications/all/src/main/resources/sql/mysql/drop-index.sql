@@ -4,6 +4,9 @@
 drop index idx_transaction_block on transaction;
 drop index idx_transaction_block_hash on transaction;
 
+drop index idx_withdrawal_address on withdrawal;
+drop index idx_withdrawal_tx_hash on withdrawal;
+
 -- utxo store
 drop index idx_address_utxo_owner_addr on address_utxo;
 drop index idx_address_utxo_owner_stake_addr on address_utxo;
