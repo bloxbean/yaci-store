@@ -100,6 +100,9 @@ public class EraService {
         if (_firstShelleySlot == 0) {
             _firstShelleySlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot())
                     .orElse(0L);
+
+            if (_firstShelleySlot == -1) //Genesis block is already in shelley/post shelley era
+                _firstShelleySlot = 0;
         }
 
         return _firstShelleySlot;
