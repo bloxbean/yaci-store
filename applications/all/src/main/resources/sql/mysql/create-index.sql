@@ -7,6 +7,12 @@ CREATE INDEX idx_transaction_block
 CREATE INDEX idx_transaction_block_hash
     ON transaction(block_hash);
 
+CREATE INDEX idx_withdrawal_address
+    ON withdrawal(address);
+
+CREATE INDEX idx_withdrawal_tx_hash
+    ON withdrawal(tx_hash);
+
 -- utxo store
 
 CREATE INDEX idx_address_utxo_owner_addr

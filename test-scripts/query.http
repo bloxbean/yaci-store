@@ -284,3 +284,12 @@ GET http://localhost:8080/api/v1/governance/dreps/deregistrations?page=0&count=1
 
 ### Get dRep updates
 GET http://localhost:8080/api/v1/governance/dreps/updates?page=0&count=10
+
+### Get withdrawals
+GET http://localhost:8080/api/v1/txs/withdrawals?page=0&count=10
+
+### Get withdrawals by tx hash
+GET http://localhost:8080/api/v1/txs/2c949bed7703080773954ad7f752e75bbb4bc7109aec68a9c84a5f1a9af17348/withdrawals
+
+### Get withdrawals by address
+GET http://localhost:8080/api/v1/accounts/stake1uywjy7h05jmhx9y3wzy94td6xz4txynuccgam0zfn800v8qq33z29/withdrawals?page=1&count=10

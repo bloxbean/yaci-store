@@ -1,16 +1,11 @@
 package com.bloxbean.cardano.yaci.store.transaction;
 
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorageReader;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.TransactionStorageImpl;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.TransactionStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.TransactionWitnessStorageImpl;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.TransactionWitnessStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.transaction.storage.*;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.WithdrawalRepository;
 import org.jooq.DSLContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -60,5 +55,17 @@ public class TransactionStoreConfiguration {
     @ConditionalOnMissingBean
     public TransactionWitnessStorageReader transactionWitnessStorageReader(TxnWitnessRepository txnWitnessRepository, TxnMapper txnMapper) {
         return new TransactionWitnessStorageReaderImpl(txnWitnessRepository, txnMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public WithdrawalStorage withdrawalStorage(WithdrawalRepository withdrawalRepository, TxnMapper mapper) {
+        return new WithdrawalStorageImpl(withdrawalRepository, mapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public WithdrawalStorageReader withdrawalStorageReader(WithdrawalRepository withdrawalRepository, TxnMapper mapper) {
+        return new WithdrawalStorageReaderImpl(withdrawalRepository, mapper);
     }
 }
