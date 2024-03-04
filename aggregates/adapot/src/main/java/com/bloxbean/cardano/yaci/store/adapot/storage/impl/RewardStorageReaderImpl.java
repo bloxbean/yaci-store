@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 public class RewardStorageReaderImpl implements RewardStorageReader {
@@ -31,5 +32,10 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
         return rewardActivityRepository.findByEarnedEpochAndType(epoch, rewardType, sortedBySlot).stream().map(mapper::toReward).toList();
+    }
+
+    @Override
+    public Optional<Integer> getLastRewardCalculationEpoch(RewardType rewardType) {
+        return rewardActivityRepository.getLastRewardCalculationEpoch(rewardType);
     }
 }
