@@ -6,6 +6,11 @@ dependencies {
     api project(":stores:utxo")
     api project(":stores:blocks")
     api project(":aggregates:account")
+
+    api(libs.cf.rewards) {
+        exclude group: "org.projectlombok", module: "lombok"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
 }
 
 publishing {
