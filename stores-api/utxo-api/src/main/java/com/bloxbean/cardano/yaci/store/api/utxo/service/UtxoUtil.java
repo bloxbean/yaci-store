@@ -24,7 +24,7 @@ class UtxoUtil {
             log.error("Invalid inline datum found in utxo tx : {}, index: {}, inline_datum: {}", addressUtxo.getTxHash(), addressUtxo.getOutputIndex(), addressUtxo.getInlineDatum());
         }
 
-        Utxo utxo = Utxo.builder()
+        return Utxo.builder()
                 .txHash(addressUtxo.getTxHash())
                 .outputIndex(addressUtxo.getOutputIndex())
                 .address(addressUtxo.getOwnerAddr())
@@ -39,7 +39,9 @@ class UtxoUtil {
                 .dataHash(dataHash)
                 .inlineDatum(addressUtxo.getInlineDatum())
                 .referenceScriptHash(addressUtxo.getReferenceScriptHash())
+                .epoch(addressUtxo.getEpoch())
+                .blockNumber(addressUtxo.getBlockNumber())
+                .blockTime(addressUtxo.getBlockTime())
                 .build();
-        return utxo;
     }
 }

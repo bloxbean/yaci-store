@@ -21,6 +21,7 @@ public class TxScripts {
     private List<Datum> datums;
     private List<Redeemer> redeemers;
     private List<PlutusScript> plutusV2Scripts;
+    private List<PlutusScript> plutusV3Scripts;
     private List<NativeScript> nativeScripts;
     //private List<PlutusScript> scriptRef;
 }

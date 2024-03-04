@@ -102,6 +102,8 @@ public class ScriptDtoMapper {
             type = ScriptDtoType.plutusV1;
         else if (script.getScriptType() == ScriptType.PLUTUS_V2)
             type = ScriptDtoType.plutusV2;
+        else if (script.getScriptType() == ScriptType.PLUTUS_V3)
+            type = ScriptDtoType.plutusV3;
 
         return type;
     }

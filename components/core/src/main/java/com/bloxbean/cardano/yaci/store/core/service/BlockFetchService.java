@@ -307,6 +307,13 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
+    @Override
+    public void onParsingError(Exception e) {
+        log.error("Block parsing error", e);
+        stopSyncOnError();
+        throw new RuntimeException(e);
+    }
+
     public synchronized void startFetch(Point from, Point to) {
         stopKeepAliveThread();
         blockRangeSync.restart(this);
@@ -331,6 +338,30 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public synchronized void shutdownSync() {
         blockSync.stop();
+    }
+
+    public boolean isRunning() {
+        if (syncMode) {
+            return blockSync.isRunning();
+        }
+
+        return blockRangeSync.isRunning();
+    }
+
+    public int getLastKeepAliveResponseCookie() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseCookie();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseCookie();
+    }
+
+    public long getLastKeepAliveResponseTime() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseTime();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseTime();
     }
 
     private void setError() {
