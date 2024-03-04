@@ -60,20 +60,6 @@ create table reward_account
     primary key (address, slot)
 );
 
-drop table if exists withdrawal;
-create table withdrawal
-(
-    tx_hash         varchar(64),
-    address         varchar(255),
-    amount          numeric(38),
-    epoch           integer,
-    slot            bigint,
-    block           bigint,
-    block_time      bigint,
-    update_datetime timestamp,
-    primary key (address, tx_hash)
-);
-
 drop view if exists reward_account_view;
 CREATE VIEW reward_account_view AS
 SELECT ra.*
