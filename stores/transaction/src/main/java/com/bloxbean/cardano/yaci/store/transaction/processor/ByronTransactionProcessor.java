@@ -6,21 +6,29 @@ import com.bloxbean.cardano.yaci.core.model.VkeyWitness;
 import com.bloxbean.cardano.yaci.core.model.byron.*;
 import com.bloxbean.cardano.yaci.core.model.byron.payload.ByronTxPayload;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Tuple;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
+import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -32,6 +40,11 @@ public class ByronTransactionProcessor {
 
     private final TransactionStorage transactionStorage;
     private final TransactionWitnessStorage transactionWitnessStorage;
+    private final UtxoClient utxoClient;
+    private final ApplicationEventPublisher publisher;
+
+    //To keep invalid transactions in a batch if any to resolve fee
+    private List<Tuple<Txn, ByronTx>> unresolvedFeeTxns = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
     @Transactional
@@ -42,12 +55,16 @@ public class ByronTransactionProcessor {
                 .collect(Collectors.toList());
 
         List<Txn> txList = new ArrayList<>();
+        int blockIndex = 0;
         for (ByronTx byronTx : byronTxList) {
 
             //find inputs
             List<UtxoKey> inputs = byronTx.getInputs().stream()
                     .map(txIn -> new UtxoKey(txIn.getTxId(), txIn.getIndex()))
                     .collect(Collectors.toList());
+
+            //Calculate fee
+            BigInteger fee = calculateFee(byronTx);
 
             //find outputs
             AtomicInteger index = new AtomicInteger(0);
@@ -63,18 +80,85 @@ public class ByronTransactionProcessor {
                     .blockNumber(event.getMetadata().getBlock())
                     .blockTime(event.getMetadata().getBlockTime())
                     .slot(event.getMetadata().getSlot())
+                    .blockIndex(blockIndex++)
+                    .epoch(event.getMetadata().getEpochNumber())
                     .inputs(inputs)
                     .outputs(outputs)
-//TODO                    .fee()
+                    .fee(fee)
                     .build();
 
-            txList.add(txn);
+            if (fee == null) { //fee is unresolved due to parallel processing. Add to unresolved list
+                unresolvedFeeTxns.add(new Tuple<>(txn, byronTx));
+            } else {
+                txList.add(txn);
+            }
         }
 
         if (txList.size() > 0) {
             transactionStorage.saveAll(txList);
+
+            //Publish txn event for valid transactions
+            publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
     }
+
+    private BigInteger calculateFee(ByronTx byronTx) {
+        BigInteger fee = null;
+
+        List<UtxoKey> inputs = byronTx.getInputs().stream()
+                .map(txIn -> new UtxoKey(txIn.getTxId(), txIn.getIndex()))
+                .collect(Collectors.toList());
+
+        List<AddressUtxo> inputUtxos = utxoClient.getUtxosByIds(inputs);
+        if(inputUtxos.size() != inputs.size()) {
+            if (log.isDebugEnabled())
+                log.debug("Input utxos not found for transaction : " + byronTx.getTxHash());
+        } else {
+            var totalInputs = inputUtxos.stream()
+                    .map(AddressUtxo::getLovelaceAmount)
+                    .reduce(BigInteger::add).orElse(BigInteger.ZERO);
+
+            var totalOutputs = byronTx.getOutputs().stream()
+                    .map(ByronTxOut::getAmount)
+                    .reduce(BigInteger::add).orElse(BigInteger.ZERO);
+            fee = totalInputs.subtract(totalOutputs);
+        }
+
+        return fee;
+    }
+
+    //Resolve fee for unresolved fee transactions
+    @EventListener
+    @Transactional
+    public void handleUnresolvedFee(PreCommitEvent preCommitEvent) {
+        if (unresolvedFeeTxns.isEmpty())
+            return;
+
+        List<Txn> txnList = new ArrayList<>();
+        try {
+            //Handle collateral fee
+            for (var unresolvedTxs : unresolvedFeeTxns) {
+                var fee = calculateFee(unresolvedTxs._2);
+
+                if (fee != null) {
+                    unresolvedTxs._1.setFee(fee);
+                } else {
+                    unresolvedTxs._1.setFee(BigInteger.ZERO);
+                    log.warn("Fee not resolved for transaction : " + unresolvedTxs._1.getTxHash());
+                }
+
+                txnList.add(unresolvedTxs._1);
+            }
+
+            if (txnList.size() > 0) {
+                publisher.publishEvent(new TxnEvent(preCommitEvent.getMetadata(),
+                        txnList));
+            }
+        } finally {
+            unresolvedFeeTxns.clear();
+        }
+    }
+
 
     @EventListener
     @Transactional

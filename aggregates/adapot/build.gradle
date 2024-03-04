@@ -1,0 +1,25 @@
+dependencies {
+    api project(":components:core")
+    api project(":stores:epoch")
+    api project(":stores:transaction")
+    api project(":stores:staking")
+    api project(":stores:utxo")
+    api project(":stores:blocks")
+    api project(":aggregates:account")
+
+    api(libs.cf.rewards) {
+        exclude group: "org.projectlombok", module: "lombok"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Ada Pot Module'
+                description = 'Yaci Store Ada Pot Module'
+            }
+        }
+    }
+}

@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -20,6 +21,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -37,6 +39,12 @@ class TransactionProcessorTest {
     private TransactionStorage transactionStorage;
     @Mock
     private TransactionWitnessStorage transactionWitnessStorage;
+
+    private FeeResolver feeResolver;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
+
     private TransactionProcessor transactionProcessor;
     @Captor
     private ArgumentCaptor<List<Txn>> txnListCaptor;
@@ -45,7 +53,8 @@ class TransactionProcessorTest {
 
     @BeforeEach
     public void setup() {
-        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, new ObjectMapper());
+        feeResolver = new FeeResolver(new DummyUtxoClient());
+        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, new ObjectMapper(), feeResolver, publisher);
     }
 
     @Test
@@ -215,7 +224,7 @@ class TransactionProcessorTest {
                         .build()
                 )
                 .utxos(utxos(txHash, transactionOutputs()))
-                .invalid(true)
+                .invalid(false)
                 .build();
 
         return List.of(transaction);

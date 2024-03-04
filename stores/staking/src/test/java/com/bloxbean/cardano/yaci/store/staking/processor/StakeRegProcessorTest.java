@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -16,6 +16,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 
@@ -26,7 +27,10 @@ import static org.mockito.Mockito.*;
 class StakeRegProcessorTest {
 
     @Mock
-    private StakingStorage stakingStorage;
+    private StakingCertificateStorage stakingStorage;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
 
     @InjectMocks
     private StakeRegProcessor stakeRegProcessor;

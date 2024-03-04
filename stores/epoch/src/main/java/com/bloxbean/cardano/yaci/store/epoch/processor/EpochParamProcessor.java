@@ -7,8 +7,8 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -30,7 +30,7 @@ public class EpochParamProcessor {
 
     @EventListener
     @Transactional
-    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
+    public void handleEpochChangeEvent(PreEpochTransitionEvent epochChangeEvent) {
         Integer dbEpoch = epochParamStorage.getMaxEpoch();
         if (epochChangeEvent.getPreviousEpoch() == null && dbEpoch == epochChangeEvent.getEpoch()) {
             log.info("EpochParam info is already there. Let's ignore it.");
@@ -50,7 +50,7 @@ public class EpochParamProcessor {
 
         //Get genesis protocol params
         Optional<ProtocolParams> genesisProtocolParams = eraGenesisProtocolParamsUtil
-                .getGenesisProtocolParameters(newEra, prevEra, epochChangeEvent.getEventMetadata().getProtocolMagic());
+                .getGenesisProtocolParameters(newEra, prevEra, epochChangeEvent.getMetadata().getProtocolMagic());
 
         ProtocolParams protocolParams = new ProtocolParams();
 
@@ -83,9 +83,9 @@ public class EpochParamProcessor {
         EpochParam epochParam = EpochParam.builder()
                 .epoch(newEpoch)
                 .params(protocolParams)
-                .slot(epochChangeEvent.getEventMetadata().getSlot())
-                .blockNumber(epochChangeEvent.getEventMetadata().getBlock())
-                .blockTime(epochChangeEvent.getEventMetadata().getBlockTime())
+                .slot(epochChangeEvent.getMetadata().getSlot())
+                .blockNumber(epochChangeEvent.getMetadata().getBlock())
+                .blockTime(epochChangeEvent.getMetadata().getBlockTime())
                 .build();
 
         epochParamStorage.save(epochParam);
