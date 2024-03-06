@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,9 @@ class TransactionRollbackProcessorTest {
     @Mock
     private TransactionWitnessStorage transactionWitnessStorage;
 
+    @Mock
+    private InvalidTransactionStorage invalidTransactionStorage;
+
     @InjectMocks
     private TransactionRollbackProcessor transactionRollbackProcessor;
 
@@ -34,5 +38,6 @@ class TransactionRollbackProcessorTest {
 
         Mockito.verify(transactionStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         Mockito.verify(transactionWitnessStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verify(invalidTransactionStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
     }
 }

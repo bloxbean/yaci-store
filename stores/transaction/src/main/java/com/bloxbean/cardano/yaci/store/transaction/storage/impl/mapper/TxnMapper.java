@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper;
 
+import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.InvalidTransactionEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnWitnessEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalEntity;
@@ -18,4 +20,7 @@ public abstract class TxnMapper {
 
     public abstract Withdrawal toWithdrawal(WithdrawalEntity withdrawalEntity);
     public abstract WithdrawalEntity toWithdrawalEntity(Withdrawal withdrawal);
+
+    public abstract InvalidTransactionEntity toInvalidTransactionEntity(InvalidTransaction invalidTransaction);
+    public abstract InvalidTransaction toInvalidTransaction(InvalidTransactionEntity invalidTransactionEntity);
 }

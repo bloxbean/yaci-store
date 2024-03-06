@@ -1,10 +1,10 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
+package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.InvalidTransactionEntity;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
+import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class InvalidTransactionStorageImpl implements InvalidTransactionStorage {
     private final InvalidTransactionRepository repository;
-    private final UtxoMapper mapper = UtxoMapper.INSTANCE;
+    private final TxnMapper mapper;
 
     @Override
     public InvalidTransaction save(InvalidTransaction invalidTransaction) {

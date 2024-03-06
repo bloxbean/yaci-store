@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.utxo.domain;
+package com.bloxbean.cardano.yaci.store.transaction.domain;
 
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
