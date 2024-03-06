@@ -5,6 +5,7 @@ import lombok.SneakyThrows;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 public class ListUtil {
@@ -56,6 +57,31 @@ public class ListUtil {
                     applyFunc.accept(partition);
                     return true;
                 });
+                futures.add(completableFuture);
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            for (var future: futures) {
+                future.get();
+            }
+        }
+    }
+
+    @SneakyThrows
+    public static <T> void partitionAndApplyInParallel(List<T> list, int batchSize, Consumer<List<T>> applyFunc, Executor executor) {
+        if (list == null || list.size() == 0)
+            return;
+
+        if (list.size() <= batchSize) {
+            applyFunc.accept(list);
+        } else {
+            List<List<T>> partitions = partition(new ArrayList<>(list), batchSize);
+            List<CompletableFuture> futures = new ArrayList<>();
+            for (var partition: partitions) {
+                var completableFuture = CompletableFuture.supplyAsync(() -> {
+                    applyFunc.accept(partition);
+                    return true;
+                }, executor);
                 futures.add(completableFuture);
             }
 

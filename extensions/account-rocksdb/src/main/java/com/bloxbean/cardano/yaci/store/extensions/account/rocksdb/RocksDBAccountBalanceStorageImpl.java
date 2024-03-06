@@ -45,10 +45,10 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     private RocksZSet<byte[]> slotAccountAssetSet;
     private RocksZSet<byte[]> slotStakeAccountSet;
 
-    @Value("${store.extensions.account-balance-storage.write-batch-size:1000}")
+    @Value("${store.extensions.rocksdb-account-balance-storage.write-batch-size:1000}")
     private int batchSize = 1000;
 
-    @Value("${store.extensions.account-balance-storage.parallel-write:false}")
+    @Value("${store.extensions.rocksdb-account-balance-storage.parallel-write:false}")
     private boolean parallelWrite = false;
 
     public RocksDBAccountBalanceStorageImpl(RocksDBConfig rocksDBConfig) {
