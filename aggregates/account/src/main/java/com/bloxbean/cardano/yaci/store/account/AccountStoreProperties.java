@@ -17,4 +17,11 @@ public class AccountStoreProperties {
     private int maxBalanceRecordsPerAddressPerBatch = 3;
     @Builder.Default
     private boolean stakeAddressBalanceEnabled = true;
+
+    @Builder.Default
+    private boolean parallelWrite = false;
+    @Builder.Default
+    private int perThreadBatchSize = 6000;
+    @Builder.Default
+    private int jooqWriteBatchSize = 3000;
 }
