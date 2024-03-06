@@ -28,6 +28,10 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setMaxBalanceRecordsPerAddressPerBatch(properties.getAccount().getMaxBalanceRecordsPerAddressPerBatch());
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
 
+        accountStoreProperties.setParallelWrite(properties.getAccount().isParallelWrite());
+        accountStoreProperties.setPerThreadBatchSize(properties.getAccount().getPerThreadBatchSize());
+        accountStoreProperties.setJooqWriteBatchSize(properties.getAccount().getJooqWriteBatchSize());
+
         return accountStoreProperties;
     }
 }
