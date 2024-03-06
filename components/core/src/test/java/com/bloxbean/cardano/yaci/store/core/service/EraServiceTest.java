@@ -74,4 +74,40 @@ class EraServiceTest {
         long blockTime = eraService.blockTime(Era.Byron, 23761);
         assertEquals(1654516820, blockTime);
     }
+
+    @Test
+    void blockTime_preview_alonzo_blk_21() {
+        when(genesisConfig.slotDuration(Era.Shelley)).thenReturn(1.0);
+        when(genesisConfig.slotDuration(Era.Byron)).thenReturn(20.0);
+        when(genesisConfig.getStartTime(any(Long.class))).thenReturn(1666656000L);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Alonzo).startSlot(0L).build()));
+
+        long blockTime = eraService.blockTime(Era.Alonzo, 420);
+        assertEquals(1666656420, blockTime);
+    }
+
+    @Test
+    void blockTime_preview_alonzo_blk_13011() {
+        when(genesisConfig.slotDuration(Era.Shelley)).thenReturn(1.0);
+        when(genesisConfig.slotDuration(Era.Byron)).thenReturn(20.0);
+        when(genesisConfig.getStartTime(any(Long.class))).thenReturn(1666656000L);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Alonzo).startSlot(0L).build()));
+
+        long blockTime = eraService.blockTime(Era.Alonzo, 259180);
+        assertEquals(1666915180, blockTime);
+    }
+
+    @Test
+    void blockTime_preview_babbage_blk_13011() {
+        when(genesisConfig.slotDuration(Era.Shelley)).thenReturn(1.0);
+        when(genesisConfig.slotDuration(Era.Byron)).thenReturn(20.0);
+        when(genesisConfig.getStartTime(any(Long.class))).thenReturn(1666656000L);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Alonzo).startSlot(0L).build()));
+
+        long blockTime = eraService.blockTime(Era.Babbage, 264811);
+        assertEquals(1666920811, blockTime);
+    }
 }
