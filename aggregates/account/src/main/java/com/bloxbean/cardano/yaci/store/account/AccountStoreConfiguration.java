@@ -14,6 +14,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
@@ -32,8 +33,9 @@ public class AccountStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
-                                                       StakeBalanceRepository stakeBalanceRepository, DSLContext dslContext) {
-        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository, dslContext);
+                                                       StakeBalanceRepository stakeBalanceRepository, DSLContext dslContext,
+                                                       AccountStoreProperties accountStoreProperties, PlatformTransactionManager transactionManager) {
+        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository, dslContext, accountStoreProperties, transactionManager);
     }
 
     @Bean

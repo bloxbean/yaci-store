@@ -21,6 +21,11 @@ public class AccountStoreAutoConfigProperties {
 
         private int maxBalanceRecordsPerAddressPerBatch = 3;
         private boolean stakeAddressBalanceEnabled = true;
+
+        //parallel write & batch size settings
+        private boolean parallelWrite = false;
+        private int perThreadBatchSize = 10000;
+        private int jooqWriteBatchSize = 5000;
     }
 
 }
