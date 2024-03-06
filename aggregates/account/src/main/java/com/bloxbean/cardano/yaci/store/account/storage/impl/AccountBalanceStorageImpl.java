@@ -84,8 +84,10 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .toList();
 
         if (accountStoreProperties.isParallelWrite()) {
-            log.info("Writing address balances in parallel : Per Thread Batch size : {}, JOOQ Insert Batch Size {}",
-                    accountStoreProperties.getPerThreadBatchSize(), accountStoreProperties.getJooqWriteBatchSize());
+            log.info("Writing address balances in parallel. Using {}, Per Thread Batch size : {} ", enableJPAInsert ? "JPA" : "JOOQ", accountStoreProperties.getPerThreadBatchSize());
+            if (!enableJPAInsert)
+                log.info("JOOQ Insert Batch Size {}", accountStoreProperties.getJooqWriteBatchSize());
+
             ListUtil.partitionAndApplyInParallel(entities, accountStoreProperties.getPerThreadBatchSize(), this::saveAddrBalanceBatch);
         } else {
             saveAddrBalanceBatch(entities);
@@ -96,51 +98,56 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         if (enableJPAInsert) {
             if (log.isTraceEnabled())
                 log.trace("Inserting address balances using JPA batch");
-            addressBalanceRepository.saveAll(addressBalanceEntities);
+
+            transactionTemplate.execute(status -> {
+                addressBalanceRepository.saveAll(addressBalanceEntities);
+                return null;
+            });
         } else {
             if (log.isTraceEnabled())
                 log.trace("Inserting address balances using JOOQ batch");
-            saveAddrBalanceBatchJOOQ(addressBalanceEntities);
+
+            transactionTemplate.execute(status -> {
+                saveAddrBalanceBatchJOOQ(addressBalanceEntities);
+                return null;
+            });
         }
     }
 
     private void saveAddrBalanceBatchJOOQ(List<AddressBalanceEntity> addressBalanceEntities) {
         LocalDateTime localDateTime = LocalDateTime.now();
-        transactionTemplate.execute(status -> {
-            dsl.batched(c -> {
-                for (var addressBalance : addressBalanceEntities) {
-                    c.dsl().insertInto(ADDRESS_BALANCE)
-                            .set(ADDRESS_BALANCE.ADDRESS, addressBalance.getAddress())
-                            .set(ADDRESS_BALANCE.UNIT, addressBalance.getUnit())
-                            .set(ADDRESS_BALANCE.SLOT, addressBalance.getSlot())
-                            .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
-                            .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
-                            .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
-                            .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
-                            .set(ADDRESS_BALANCE.PAYMENT_CREDENTIAL, addressBalance.getPaymentCredential())
-                            .set(ADDRESS_BALANCE.STAKE_ADDRESS, addressBalance.getStakeAddress())
-                            .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
-                            .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
-                            .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
-                            .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
-                            .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                            .onDuplicateKeyUpdate()
-                            .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
-                            .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
-                            .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
-                            .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
-                            .set(ADDRESS_BALANCE.PAYMENT_CREDENTIAL, addressBalance.getPaymentCredential())
-                            .set(ADDRESS_BALANCE.STAKE_ADDRESS, addressBalance.getStakeAddress())
-                            .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
-                            .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
-                            .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
-                            .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
-                            .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                            .execute();
-                }
-            });
 
-            return null;
+        dsl.batched(c -> {
+            for (var addressBalance : addressBalanceEntities) {
+                c.dsl().insertInto(ADDRESS_BALANCE)
+                        .set(ADDRESS_BALANCE.ADDRESS, addressBalance.getAddress())
+                        .set(ADDRESS_BALANCE.UNIT, addressBalance.getUnit())
+                        .set(ADDRESS_BALANCE.SLOT, addressBalance.getSlot())
+                        .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
+                        .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
+                        .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
+                        .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
+                        .set(ADDRESS_BALANCE.PAYMENT_CREDENTIAL, addressBalance.getPaymentCredential())
+                        .set(ADDRESS_BALANCE.STAKE_ADDRESS, addressBalance.getStakeAddress())
+                        .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
+                        .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
+                        .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
+                        .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
+                        .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
+                        .onDuplicateKeyUpdate()
+                        .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
+                        .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
+                        .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
+                        .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
+                        .set(ADDRESS_BALANCE.PAYMENT_CREDENTIAL, addressBalance.getPaymentCredential())
+                        .set(ADDRESS_BALANCE.STAKE_ADDRESS, addressBalance.getStakeAddress())
+                        .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
+                        .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
+                        .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
+                        .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
+                        .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
+                        .execute();
+            }
         });
 
     }
@@ -176,7 +183,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         if (time == 0)
             throw new IllegalArgumentException("Time cannot be 0");
 
-        return stakeBalanceRepository.findTopByAddressAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address,time)
+        return stakeBalanceRepository.findTopByAddressAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(address, time)
                 .map(mapper::toStakeBalance);
     }
 
@@ -203,43 +210,47 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         if (enableJPAInsert) {
             if (log.isTraceEnabled())
                 log.trace("Inserting stake address balances using JPA batch");
-            stakeBalanceRepository.saveAll(stakeAddressBalances);
+
+            transactionTemplate.execute(status -> {
+                stakeBalanceRepository.saveAll(stakeAddressBalances);
+                return null;
+            });
         } else {
             if (log.isTraceEnabled())
                 log.trace("Inserting stake address balances using JOOQ batch");
-            saveStakeBalanceBatchJOOQ(stakeAddressBalances);
+
+            transactionTemplate.execute(status -> {
+                saveStakeBalanceBatchJOOQ(stakeAddressBalances);
+                return null;
+            });
         }
     }
 
     private void saveStakeBalanceBatchJOOQ(List<StakeAddressBalanceEntity> stakeAddressBalances) {
         LocalDateTime localDateTime = LocalDateTime.now();
-        transactionTemplate.execute(status -> {
-            dsl.batched(c -> {
-                for (var stakeAddrBalance : stakeAddressBalances) {
-                    c.dsl().insertInto(STAKE_ADDRESS_BALANCE)
-                            .set(STAKE_ADDRESS_BALANCE.ADDRESS, stakeAddrBalance.getAddress())
-                            .set(STAKE_ADDRESS_BALANCE.SLOT, stakeAddrBalance.getSlot())
-                            .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
-                            .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH , stakeAddrBalance.getBlockHash())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
-                            .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
-                            .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                            .onDuplicateKeyUpdate()
-                            .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
-                            .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH , stakeAddrBalance.getBlockHash())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
-                            .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
-                            .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
-                            .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                            .execute();
-                }
-            });
-            return null;
+        dsl.batched(c -> {
+            for (var stakeAddrBalance : stakeAddressBalances) {
+                c.dsl().insertInto(STAKE_ADDRESS_BALANCE)
+                        .set(STAKE_ADDRESS_BALANCE.ADDRESS, stakeAddrBalance.getAddress())
+                        .set(STAKE_ADDRESS_BALANCE.SLOT, stakeAddrBalance.getSlot())
+                        .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
+                        .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH, stakeAddrBalance.getBlockHash())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
+                        .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
+                        .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
+                        .onDuplicateKeyUpdate()
+                        .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
+                        .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH, stakeAddrBalance.getBlockHash())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
+                        .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
+                        .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
+                        .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
+                        .execute();
+            }
         });
-
     }
 
     @Transactional
@@ -259,7 +270,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Override
     public List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort) {
         Pageable sortedBySlot =
-                PageRequest.of(page, count, sort == Order.asc? Sort.by("slot").ascending() : Sort.by("slot").descending());
+                PageRequest.of(page, count, sort == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
         return addressBalanceRepository.findLatestAddressBalanceByUnit(unit, sortedBySlot).stream()
                 .map(mapper::toAddressBalance)
