@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,9 @@ class TransactionRollbackProcessorIT {
     private TxnWitnessRepository txnWitnessRepository;
 
     @Autowired
+    private InvalidTransactionRepository invalidTransactionRepository;
+
+    @Autowired
     private TransactionRollbackProcessor transactionRollbackProcessor;
 
     @Test
@@ -42,5 +46,21 @@ class TransactionRollbackProcessorIT {
         int countWitness = txnWitnessRepository.findAll().size();
         assertThat(countEntity).isEqualTo(3);
         assertThat(countWitness).isEqualTo(9);
+    }
+
+    @Test
+    @SqlGroup({
+            @Sql(value = "classpath:scripts/invalid_transaction_data.sql", executionPhase = BEFORE_TEST_METHOD)
+    })
+    void givenRollbackEvent_shouldDeleteInvalidTransactions() throws Exception {
+        RollbackEvent rollbackEvent = RollbackEvent.builder()
+                .rollbackTo(new Point(13133973, "96bb7918a219dbe0cb01d3962b78a883931da27b5a4987af7c1bd964d7ffc6ff"))
+                .currentPoint(new Point(13518703, "5470beb0a38e7793db667269e55ed74b339d35db57e640d8f82de831ee348ba0"))
+                .build();
+
+        transactionRollbackProcessor.handleRollbackEvent(rollbackEvent);
+
+        int count = invalidTransactionRepository.findAll().size();
+        assertThat(count).isEqualTo(12);
     }
 }

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.transaction.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;

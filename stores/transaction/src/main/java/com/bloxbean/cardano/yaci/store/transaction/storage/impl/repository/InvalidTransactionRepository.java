@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository;
+package com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.InvalidTransactionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

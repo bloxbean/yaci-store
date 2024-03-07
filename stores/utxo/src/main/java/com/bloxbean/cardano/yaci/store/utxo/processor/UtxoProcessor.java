@@ -15,9 +15,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
-import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
-import com.bloxbean.cardano.yaci.store.utxo.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.NonNull;
@@ -44,7 +42,6 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 @Slf4j
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
-    private final InvalidTransactionStorage invalidTransactionStorage;
     private final ApplicationEventPublisher publisher;
     private final MeterRegistry meterRegistry;
 
@@ -126,15 +123,6 @@ public class UtxoProcessor {
     private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
         if (!transaction.isInvalid())
             return Optional.empty();
-
-        //insert invalid transactions and collateral return utxo if any
-        InvalidTransaction invalidTransaction = InvalidTransaction.builder()
-                .txHash(transaction.getTxHash())
-                .slot(metadata.getSlot())
-                .blockHash(metadata.getBlockHash())
-                .transaction(transaction)
-                .build();
-        invalidTransactionStorage.save(invalidTransaction);
 
         //collateral output
         AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
