@@ -61,3 +61,19 @@ create table withdrawal
 
 CREATE INDEX idx_withdrawal_slot
     ON withdrawal(slot);
+
+-- invalid_transaction
+drop table if exists invalid_transaction;
+create table invalid_transaction
+(
+    tx_hash     varchar(64) not null
+        primary key,
+    slot            bigint not null,
+    block_hash      varchar(64),
+    transaction      json         null,
+    create_datetime  timestamp,
+    update_datetime  timestamp
+);
+
+CREATE INDEX idx_invalid_transaction_slot
+    ON invalid_transaction(slot);

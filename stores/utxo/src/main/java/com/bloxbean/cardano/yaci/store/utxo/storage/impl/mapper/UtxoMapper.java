@@ -2,9 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
-import com.bloxbean.cardano.yaci.store.utxo.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.InvalidTransactionEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.TxInputEntity;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
@@ -19,7 +17,4 @@ public interface  UtxoMapper {
     AddressUtxo toAddressUtxo(AddressUtxoEntity entity);
 
     TxInput toTxInput(TxInputEntity txInputEntity);
-
-    InvalidTransactionEntity toInvalidTransactionEntity(InvalidTransaction invalidTransaction);
-    InvalidTransaction toInvalidTransaction(InvalidTransactionEntity invalidTransactionEntity);
 }
