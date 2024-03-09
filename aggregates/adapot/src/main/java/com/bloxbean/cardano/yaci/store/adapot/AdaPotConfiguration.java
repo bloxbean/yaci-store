@@ -4,7 +4,10 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.*;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.AdaPotMapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
-import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.*;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.AdaPotRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.EpochStakeRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardAccountRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -51,12 +54,6 @@ public class AdaPotConfiguration {
     @ConditionalOnMissingBean
     public RewardAccountStorage rewardAccountStorage(RewardAccountRepository rewardAccountRepository, Mapper rewardMapper) {
         return new RewardAccountStorageImpl(rewardAccountRepository, rewardMapper);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public WithdrawalStorage withdrawalStorage(WithdrawalRepository withdrawalRepository, Mapper rewardMapper) {
-        return new WithdrawalStorageImpl(withdrawalRepository, rewardMapper);
     }
 
     @Bean

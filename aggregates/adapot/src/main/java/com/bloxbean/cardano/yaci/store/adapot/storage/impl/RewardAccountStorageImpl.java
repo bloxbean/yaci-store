@@ -1,11 +1,11 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.Withdrawal;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardAccountStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.model.RewardAccountEntity;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardAccountRepository;
+import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
 import lombok.RequiredArgsConstructor;
 
 import java.math.BigInteger;

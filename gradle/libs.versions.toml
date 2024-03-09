@@ -21,4 +21,4 @@ spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
 rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 
-cf-rewards="org.cardanofoundation:cf-rewards-calculation:0.6.2-SNAPSHOT"
+cf-rewards="org.cardanofoundation:cf-rewards-calculation:0.8.0"

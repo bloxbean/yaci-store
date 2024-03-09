@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
+import com.bloxbean.cardano.yaci.store.transaction.domain.WithdrawalEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -53,6 +54,16 @@ public class RewardProcessor {
 
         //Update reward account balance
         rewardAccountStorage.addReward(rewards);
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRewardWithdrawalEvent(WithdrawalEvent withdrawalEvent) {
+        var withdrawals = withdrawalEvent.getWithdrawals();
+        if (withdrawals == null || withdrawals.isEmpty())
+            return;
+
+        rewardAccountStorage.withdrawReward(withdrawals);
     }
 
     @EventListener

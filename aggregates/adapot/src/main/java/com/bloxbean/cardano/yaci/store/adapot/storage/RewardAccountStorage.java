@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.Withdrawal;
+import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
 
 import java.util.List;
 
