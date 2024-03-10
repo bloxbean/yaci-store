@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -20,6 +22,7 @@ public class CursorService {
     private final BlockFinder blockFinder;
 
     private AtomicLong lastBlock = new AtomicLong(0);
+    private Instant lastProcessedTime = Instant.now();
     private boolean syncMode;
 
     public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
@@ -114,9 +117,11 @@ public class CursorService {
 
         if (!syncMode) {
             if (diff >= 100) {
-                log.info("# of blocks written: " + diff);
+                Instant now = Instant.now();
+                log.info("# of blocks written: {}, Time taken: {} ms", diff, Duration.between(lastProcessedTime, now).toMillis());
                 log.info("Block No: " + block + "  , Era: " + era);
                 lastBlock.set(block);
+                lastProcessedTime = now;
             }
 
         } else {
