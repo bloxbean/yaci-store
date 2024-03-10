@@ -74,6 +74,7 @@ public class AccountBalanceProcessor {
     @Transactional
     public void handlePostProcessingEvent(ReadyForBalanceAggregationEvent event) {
 
+        log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
         try {
             Collection<AddressUtxoEvent> addressUtxoEvents = addressUtxoEventsMap.values();
 
@@ -149,13 +150,7 @@ public class AccountBalanceProcessor {
                         long t2 = System.currentTimeMillis();
                         accountBalanceStorage.saveAddressBalances(addressBalances);
                         long t3 = System.currentTimeMillis();
-                        log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
-
-                        if (addressBalances != null && addressBalances.size() > 0) {
-                            List<Pair<String, String>> addresseUnitList =
-                                    addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
-                            accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
-                        }
+                        log.info("\tTotal Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
                     }, parallelExecutor.getVirtualThreadExecutor());
 
 
@@ -166,13 +161,7 @@ public class AccountBalanceProcessor {
                             long t2 = System.currentTimeMillis();
                             accountBalanceStorage.saveStakeAddressBalances(stakeAddressBalances);
                             long t3 = System.currentTimeMillis();
-                            log.info("Total Stake Address Balance records {}, Time taken to save: {}", stakeAddressBalances.size(), (t3 - t2));
-
-                            if (stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
-                                List<String> stakeAddresses =
-                                        stakeAddressBalances.stream().map(stakeAddrBalance -> stakeAddrBalance.getAddress()).distinct().toList();
-                                accountBalanceCleanupHelper.deleteStakeBalanceBeforeConfirmedSlot(stakeAddresses, firstBlockInBatchMetadata.getSlot());
-                            }
+                            log.info("\tTotal Stake Address Balance records {}, Time taken to save: {}", stakeAddressBalances.size(), (t3 - t2));
                         }, parallelExecutor.getVirtualThreadExecutor());
 
                 CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
@@ -190,7 +179,7 @@ public class AccountBalanceProcessor {
                 throw new RuntimeException(e);
             }
 
-            log.info("Total balance processing and saving time {}", (System.currentTimeMillis() - t1));
+            log.info("### Total balance processing and saving time {} ###\n", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
 

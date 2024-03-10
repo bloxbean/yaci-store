@@ -29,8 +29,11 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
 
         accountStoreProperties.setParallelWrite(properties.getAccount().isParallelWrite());
-        accountStoreProperties.setPerThreadBatchSize(properties.getAccount().getPerThreadBatchSize());
+        accountStoreProperties.setWriteThreadDefaultBatchSize(properties.getAccount().getWriteThreadDefaultBatchSize());
         accountStoreProperties.setJooqWriteBatchSize(properties.getAccount().getJooqWriteBatchSize());
+        accountStoreProperties.setWriteThreadCount(properties.getAccount().getWriteThreadCount());
+
+        accountStoreProperties.setBalanceHistoryCleanupInterval(properties.getAccount().getBalanceHistoryCleanupInterval());
 
         return accountStoreProperties;
     }

@@ -28,9 +28,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -84,14 +84,18 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .toList();
 
         if (accountStoreProperties.isParallelWrite()) {
-            log.info("Writing address balances in parallel. Using {}, Per Thread Batch size : {} ", enableJPAInsert ? "JPA" : "JOOQ", accountStoreProperties.getPerThreadBatchSize());
+            log.info("\tWriting address balances in parallel. Using {}, Per Thread Batch size : {} ", enableJPAInsert ? "JPA" : "JOOQ", accountStoreProperties.getWriteThreadDefaultBatchSize());
             if (!enableJPAInsert)
-                log.info("JOOQ Insert Batch Size {}", accountStoreProperties.getJooqWriteBatchSize());
+                log.info("\tInsert Batch Size -- {}", accountStoreProperties.getJooqWriteBatchSize());
 
-            ListUtil.partitionAndApplyInParallel(entities, accountStoreProperties.getPerThreadBatchSize(), this::saveAddrBalanceBatch);
+            int partitionSize = getPartitionSize(entities.size());
+            ListUtil.partitionAndApplyInParallel(entities, partitionSize, this::saveAddrBalanceBatch);
         } else {
             saveAddrBalanceBatch(entities);
         }
+
+        //update addressed in balance change tracker
+        saveAddressBalanceChangeTracker(addressBalances);
     }
 
     private void saveAddrBalanceBatch(List<AddressBalanceEntity> addressBalanceEntities) {
@@ -152,6 +156,21 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     }
 
+    private void saveAddressBalanceChangeTracker(List<AddressBalance> addressBalances) {
+        var addresses = addressBalances.stream()
+                .map(addressBalance -> addressBalance.getAddress())
+                .collect(Collectors.toSet());
+
+        dsl.batched(c -> {
+            for (var address : addresses) {
+                c.dsl().insertInto(ADDRESS_BALANCE_CHANGE_TRACKER)
+                        .set(ADDRESS_BALANCE_CHANGE_TRACKER.ADDRESS, address)
+                        .onDuplicateKeyIgnore()
+                        .execute();
+            }
+        });
+    }
+
     @Transactional
     @Override
     public int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
@@ -200,16 +219,20 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .toList();
 
         if (accountStoreProperties.isParallelWrite()) {
-            ListUtil.partitionAndApplyInParallel(entities, accountStoreProperties.getPerThreadBatchSize(), this::saveStakeBalanceBatch);
+            int partitionSize = getPartitionSize(entities.size());
+            ListUtil.partitionAndApplyInParallel(entities, partitionSize, this::saveStakeBalanceBatch);
         } else {
             saveStakeBalanceBatch(entities);
         }
+
+        //update addressed in balance change tracker
+        saveStakeAddressBalanceChangeTracker(stakeBalances);
     }
 
     private void saveStakeBalanceBatch(List<StakeAddressBalanceEntity> stakeAddressBalances) {
         if (enableJPAInsert) {
             if (log.isTraceEnabled())
-                log.trace("Inserting stake address balances using JPA batch");
+                log.trace("\tInserting stake address balances using JPA batch");
 
             transactionTemplate.execute(status -> {
                 stakeBalanceRepository.saveAll(stakeAddressBalances);
@@ -217,7 +240,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
             });
         } else {
             if (log.isTraceEnabled())
-                log.trace("Inserting stake address balances using JOOQ batch");
+                log.trace("\tInserting stake address balances using JOOQ batch");
 
             transactionTemplate.execute(status -> {
                 saveStakeBalanceBatchJOOQ(stakeAddressBalances);
@@ -253,6 +276,21 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         });
     }
 
+    private void saveStakeAddressBalanceChangeTracker(List<StakeAddressBalance> stakeAddressBalances) {
+        var stakeAddresses = stakeAddressBalances.stream()
+                .map(stakeAddressBalance -> stakeAddressBalance.getAddress())
+                .collect(Collectors.toSet());
+
+        dsl.batched(c -> {
+            for (var address : stakeAddresses) {
+                c.dsl().insertInto(STAKE_ADDRESS_BALANCE_CHANGE_TRACKER)
+                        .set(STAKE_ADDRESS_BALANCE_CHANGE_TRACKER.ADDRESS, address)
+                        .onDuplicateKeyIgnore()
+                        .execute();
+            }
+        });
+    }
+
     @Transactional
     @Override
     public int deleteStakeBalanceBeforeSlotExceptTop(String address, long slot) {
@@ -277,4 +315,14 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .toList();
     }
 
+    private int getPartitionSize(int totalSize) {
+        int partitionSize = totalSize;
+        if (totalSize > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
+            partitionSize = totalSize / accountStoreProperties.getWriteThreadCount();
+            log.info("\tPartition size : {}", partitionSize);
+        } else {
+            log.info("\tPartition size : {}", partitionSize);
+        }
+        return partitionSize;
+    }
 }

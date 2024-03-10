@@ -24,8 +24,12 @@ public class AccountStoreAutoConfigProperties {
 
         //parallel write & batch size settings
         private boolean parallelWrite = false;
-        private int perThreadBatchSize = 6000;
+        private int writeThreadDefaultBatchSize = 6000;
         private int jooqWriteBatchSize = 3000;
+        private int writeThreadCount = 5;
+
+        private int balanceHistoryCleanupInterval = 300;
+        private long balanceCleanupSlotCount = 43200; //2160 blocks
     }
 
 }
