@@ -71,8 +71,8 @@ public class AccountBalanceHistoryCleanupHelper {
                       
                 """, slot);
 
-        log.info(query.getSQL());
-        log.info(query.getParams().toString());
+        if (log.isDebugEnabled())
+            log.debug(query.getSQL());
 
         var count = query.execute();
 
@@ -109,8 +109,8 @@ public class AccountBalanceHistoryCleanupHelper {
                       
                 """, slot);
 
-        log.info(query.getSQL());
-        log.info(query.getParams().toString());
+        if (log.isDebugEnabled())
+            log.debug(query.getSQL());
 
         var count = query.execute();
 
