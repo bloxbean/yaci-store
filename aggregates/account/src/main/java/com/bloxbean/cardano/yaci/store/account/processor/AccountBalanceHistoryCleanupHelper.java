@@ -41,8 +41,8 @@ public class AccountBalanceHistoryCleanupHelper {
         if (slot < 0)
             return;
 
-        log.info("Deleting balance history data before slot: "
-                + accountStoreProperties.getBalanceHistoryCleanupInterval() / 86400 + " days");
+        log.info("Deleting balance history data before : "
+                + (accountStoreProperties.getBalanceCleanupSlotCount() / 86400.0) + " days");
 
         deleteAddressBalanceHistory(slot);
         deleteStakeAddressBalanceHistory(slot);
