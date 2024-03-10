@@ -24,7 +24,7 @@ public class AccountBalanceHistoryCleanupHelper {
     private final AccountConfigService accountConfigService;
 
     //TODO -- Tests
-    @Scheduled(fixedRateString = "#{accountStoreProperties.balanceHistoryCleanupInterval * 1000}", initialDelay = 30000)
+    @Scheduled(fixedRateString = "#{accountStoreProperties.balanceHistoryCleanupInterval * 1000}", initialDelay = 600000)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteHistoryDataBeforeSlot() {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
