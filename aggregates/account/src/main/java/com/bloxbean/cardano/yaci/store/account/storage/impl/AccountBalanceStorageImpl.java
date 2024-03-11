@@ -28,9 +28,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -93,9 +93,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         } else {
             saveAddrBalanceBatch(entities);
         }
-
-        //update addressed in balance change tracker
-        saveAddressBalanceChangeTracker(addressBalances);
     }
 
     private void saveAddrBalanceBatch(List<AddressBalanceEntity> addressBalanceEntities) {
@@ -156,21 +153,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     }
 
-    private void saveAddressBalanceChangeTracker(List<AddressBalance> addressBalances) {
-        var addresses = addressBalances.stream()
-                .map(addressBalance -> addressBalance.getAddress())
-                .collect(Collectors.toSet());
-
-        dsl.batched(c -> {
-            for (var address : addresses) {
-                c.dsl().insertInto(ADDRESS_BALANCE_CHANGE_TRACKER)
-                        .set(ADDRESS_BALANCE_CHANGE_TRACKER.ADDRESS, address)
-                        .onDuplicateKeyIgnore()
-                        .execute();
-            }
-        });
-    }
-
     @Transactional
     @Override
     public int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
@@ -224,9 +206,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         } else {
             saveStakeBalanceBatch(entities);
         }
-
-        //update addressed in balance change tracker
-        saveStakeAddressBalanceChangeTracker(stakeBalances);
     }
 
     private void saveStakeBalanceBatch(List<StakeAddressBalanceEntity> stakeAddressBalances) {
@@ -271,21 +250,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
                         .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
                         .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                        .execute();
-            }
-        });
-    }
-
-    private void saveStakeAddressBalanceChangeTracker(List<StakeAddressBalance> stakeAddressBalances) {
-        var stakeAddresses = stakeAddressBalances.stream()
-                .map(stakeAddressBalance -> stakeAddressBalance.getAddress())
-                .collect(Collectors.toSet());
-
-        dsl.batched(c -> {
-            for (var address : stakeAddresses) {
-                c.dsl().insertInto(STAKE_ADDRESS_BALANCE_CHANGE_TRACKER)
-                        .set(STAKE_ADDRESS_BALANCE_CHANGE_TRACKER.ADDRESS, address)
-                        .onDuplicateKeyIgnore()
                         .execute();
             }
         });

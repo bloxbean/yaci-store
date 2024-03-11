@@ -151,6 +151,16 @@ public class AccountBalanceProcessor {
                         accountBalanceStorage.saveAddressBalances(addressBalances);
                         long t3 = System.currentTimeMillis();
                         log.info("\tTotal Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
+
+                        //Cleanup history data
+                        long t4 = System.currentTimeMillis();
+                        if (addressBalances != null && addressBalances.size() > 0) {
+                            List<Pair<String, String>> addresseUnitList =
+                                    addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
+                            accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
+                        }
+                        long t5 = System.currentTimeMillis();
+                        log.info("\tTime taken to delete address balance history: {}", (t5 - t4));
                     }, parallelExecutor.getVirtualThreadExecutor());
 
 
@@ -162,6 +172,16 @@ public class AccountBalanceProcessor {
                             accountBalanceStorage.saveStakeAddressBalances(stakeAddressBalances);
                             long t3 = System.currentTimeMillis();
                             log.info("\tTotal Stake Address Balance records {}, Time taken to save: {}", stakeAddressBalances.size(), (t3 - t2));
+
+                            //Cleanup history data
+                            long t4 = System.currentTimeMillis();
+                            if (stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
+                                List<String> stakeAddresses =
+                                        stakeAddressBalances.stream().map(stakeAddrBalance -> stakeAddrBalance.getAddress()).distinct().toList();
+                                accountBalanceCleanupHelper.deleteStakeBalanceBeforeConfirmedSlot(stakeAddresses, firstBlockInBatchMetadata.getSlot());
+                            }
+                            long t5 = System.currentTimeMillis();
+                            log.info("\tTime taken to delete stake address balance history: {}", (t5 - t4));
                         }, parallelExecutor.getVirtualThreadExecutor());
 
                 CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
