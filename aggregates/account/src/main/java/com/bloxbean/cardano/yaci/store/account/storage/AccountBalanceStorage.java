@@ -20,6 +20,9 @@ public interface AccountBalanceStorage {
      */
     Optional<AddressBalance> getAddressBalance(String address, String unit, long slot);
 
+    //only used during full syc
+    List<AddressBalance> getAllAddressBalances(String address, String unit, long slot);
+
     /**
      * Get address balance for the given address, unit at the given time in sec
      * @param address address
@@ -75,6 +78,8 @@ public interface AccountBalanceStorage {
      */
     Optional<StakeAddressBalance> getStakeAddressBalance(String address, long slot);
 
+    List<StakeAddressBalance> getAllStakeAddressBalances(String address, long slot);
+
     /**
      * Get stake address balance for the given address, at the given time in sec
      * @param address stake address
@@ -112,6 +117,10 @@ public interface AccountBalanceStorage {
      * @return number of records deleted
      */
     int deleteStakeAddressBalanceBySlotGreaterThan(Long slot);
+
+    default void deleteAddressBalance(List<AddressBalance> addressBalances) {}
+
+    default void deleteStakeAddressBalance(List<StakeAddressBalance> stakeAddressBalances) {}
 
     //Optional -- Required for controller
 

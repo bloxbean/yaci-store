@@ -79,6 +79,13 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
+    public List<AddressBalance> getAllAddressBalances(String address, String unit, long slot) {
+        return getAddressBalance(address, unit, slot)
+                .map(addressBalance -> List.of(addressBalance))
+                .orElse(List.of());
+    }
+
+    @Override
     public Optional<AddressBalance> getAddressBalanceByTime(String address, String unit, long time) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -177,6 +184,13 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         } catch (NoSuchElementException ex) {
             return Optional.empty();
         }
+    }
+
+    @Override
+    public List<StakeAddressBalance> getAllStakeAddressBalances(String address, long slot) {
+        return getStakeAddressBalance(address, slot)
+                .map(stakeAddressBalance -> List.of(stakeAddressBalance))
+                .orElse(List.of());
     }
 
     @Override

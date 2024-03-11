@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
+import com.bloxbean.cardano.yaci.store.account.service.InitialSyncHistoryCleanupService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
@@ -44,14 +45,18 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
+    private final InitialSyncHistoryCleanupService initialSyncHistoryCleanupService;
     private final AccountStoreProperties accountStoreProperties;
     private final UtxoClient utxoClient;
     private final AccountConfigService accountConfigService;
     private final ParallelExecutor parallelExecutor;
 
-    private int nAddrBalanceRecordToKeep = 3;
+    private int nAddrBalanceRecordToKeep = 2;
 
     private Map<Long, AddressUtxoEvent> addressUtxoEventsMap = Collections.synchronizedMap(new HashMap<>());
+
+    private List<AddressBalance> addressBalancesToDelete = Collections.synchronizedList(new ArrayList<>());
+    private List<StakeAddressBalance> stakeAddressBalancesToDelete = Collections.synchronizedList(new ArrayList<>());
 
     private final PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
@@ -151,7 +156,9 @@ public class AccountBalanceProcessor {
                         long t3 = System.currentTimeMillis();
                         log.info("Total Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
 
-                        if (addressBalances != null && addressBalances.size() > 0) {
+                        //Only use this when in sync mode = reached tip or near tip
+                        if (event.getMetadata().isSyncMode() && addressBalances != null && addressBalances.size() > 0) {
+                            log.info("Deleting old address balance records using history cleanup service");
                             List<Pair<String, String>> addresseUnitList =
                                     addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
                             accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
@@ -168,7 +175,8 @@ public class AccountBalanceProcessor {
                             long t3 = System.currentTimeMillis();
                             log.info("Total Stake Address Balance records {}, Time taken to save: {}", stakeAddressBalances.size(), (t3 - t2));
 
-                            if (stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
+                            if (event.getMetadata().isSyncMode() && stakeAddressBalances != null && stakeAddressBalances.size() > 0) {
+                                log.info("Deleting old stake address balance records using history cleanup service");
                                 List<String> stakeAddresses =
                                         stakeAddressBalances.stream().map(stakeAddrBalance -> stakeAddrBalance.getAddress()).distinct().toList();
                                 accountBalanceCleanupHelper.deleteStakeBalanceBeforeConfirmedSlot(stakeAddresses, firstBlockInBatchMetadata.getSlot());
@@ -190,12 +198,19 @@ public class AccountBalanceProcessor {
                 throw new RuntimeException(e);
             }
 
+            //delete old records
+            if (accountStoreProperties.isHistoryCleanupEnabled() && !event.getMetadata().isSyncMode()) {
+                initialSyncHistoryCleanupService.deletePreviousBalances(addressBalancesToDelete, stakeAddressBalancesToDelete);
+            }
+
             log.info("Total balance processing and saving time {}", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
 
         } finally {
             addressUtxoEventsMap.clear();
+            addressBalancesToDelete.clear();
+            stakeAddressBalancesToDelete.clear();
         }
     }
 
@@ -339,7 +354,27 @@ public class AccountBalanceProcessor {
                     else
                         slotAmounts = slotAmountValues;
 
-                    var savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1);
+                    Optional<AddressBalance> savedAddressBalance = Optional.empty();
+                    if (firstBlockMetadata.isSyncMode()) {
+                        savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1)
+                                .or(() -> accountBalanceStorage.getAddressBalanceByTime(key.getAddress(), key.getUnit(), firstBlockMetadata.getBlockTime()));
+
+                        if (savedAddressBalance.isPresent())
+                            addressBalancesToDelete.add(savedAddressBalance.get()); //Add to delete list. Useful for cleanup during full sync scenario as no rollback event is received
+                    } else {
+                        //Get all previous balances //TODO -- what if too many history records
+                        List<AddressBalance> previousAddressBalances = accountBalanceStorage.getAllAddressBalances(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1);
+
+
+                        if (previousAddressBalances != null && previousAddressBalances.size() > 0) {
+                            savedAddressBalance = Optional.of(previousAddressBalances.get(0));
+
+                            //Delete everything except the last balance record, to handle restarts
+                            if (previousAddressBalances.size() > 1)
+                                addressBalancesToDelete.addAll(previousAddressBalances.subList(1, previousAddressBalances.size()));
+                        }
+                    }
+
                     List<AddressBalance> addressSlotBalances = new ArrayList<>();
 
                     BigInteger quantity = savedAddressBalance.map(addressBalance -> addressBalance.getQuantity())
@@ -396,7 +431,27 @@ public class AccountBalanceProcessor {
                     var stakeAddrInfoKey = entry.getKey();
                     var slotAmounts = entry.getValue();
 
-                    var savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
+                    Optional<StakeAddressBalance> savedStakeAddressBalance = Optional.empty();
+
+                    if (firstBlockMetadata.isSyncMode()) {
+                        savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
+
+                        if (savedStakeAddressBalance.isPresent())
+                            stakeAddressBalancesToDelete.add(savedStakeAddressBalance.get()); //Add to delete list. Useful for cleanup during full sync scenario as no rollback event is received
+                    } else {
+                        //Get all previous balances
+                        List<StakeAddressBalance> previousStakeAddressBalances = accountBalanceStorage.getAllStakeAddressBalances(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
+
+                        if (previousStakeAddressBalances != null && previousStakeAddressBalances.size() > 0) {
+                            savedStakeAddressBalance = Optional.of(previousStakeAddressBalances.get(0));
+//                            stakeAddressBalancesToDelete.addAll(previousStakeAddressBalances);
+
+                            //Delete everything except the last balance record, to handle restarts
+                            if (previousStakeAddressBalances.size() > 1)
+                                stakeAddressBalancesToDelete.addAll(previousStakeAddressBalances.subList(1, previousStakeAddressBalances.size()));
+                        }
+                    }
+
                     List<StakeAddressBalance> stakeAddressBalances = new ArrayList<>();
 
                     BigInteger quantity = savedStakeAddressBalance.map(stakeAddrBalance -> stakeAddrBalance.getQuantity())

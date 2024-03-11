@@ -16,6 +16,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.UpdatableRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,7 @@ import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
+import static org.jooq.impl.DSL.deleteFrom;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -60,6 +62,13 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     public Optional<AddressBalance> getAddressBalance(String address, String unit, long slot) {
         return addressBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
                 .map(mapper::toAddressBalance);
+    }
+
+    @Override
+    public List<AddressBalance> getAllAddressBalances(String address, String unit, long slot) {
+        return addressBalanceRepository.findByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot).stream()
+                .map(mapper::toAddressBalance)
+                .toList();
     }
 
     @Override
@@ -179,6 +188,13 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     @Override
+    public List<StakeAddressBalance> getAllStakeAddressBalances(String address, long slot) {
+        return stakeBalanceRepository.findByAddressAndSlotIsLessThanEqualOrderBySlotDesc(address, slot).stream()
+                .map(mapper::toStakeBalance)
+                .toList();
+    }
+
+    @Override
     public Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, long time) {
         if (time == 0)
             throw new IllegalArgumentException("Time cannot be 0");
@@ -275,6 +291,35 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         return addressBalanceRepository.findLatestAddressBalanceByUnit(unit, sortedBySlot).stream()
                 .map(mapper::toAddressBalance)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteAddressBalance(List<AddressBalance> addressBalances) {
+        var recordsToDelete = addressBalances.stream()
+                        .map(addressBalance ->  {
+                           var updatableRecord = dsl.newRecord(ADDRESS_BALANCE);
+                           updatableRecord.set(ADDRESS_BALANCE.ADDRESS, addressBalance.getAddress());
+                           updatableRecord.set(ADDRESS_BALANCE.UNIT, addressBalance.getUnit());
+                            updatableRecord.set(ADDRESS_BALANCE.SLOT, addressBalance.getSlot());
+                           return updatableRecord;
+                        }).toList();
+        // Execute batch delete
+        dsl.batchDelete(recordsToDelete).execute();
+    }
+
+    @Override
+    @Transactional
+    public void deleteStakeAddressBalance(List<StakeAddressBalance> stakeAddressBalances) {
+        var recordsToDelete = stakeAddressBalances.stream()
+                .map(stakeAddressBalance ->  {
+                    var updatableRecord = dsl.newRecord(STAKE_ADDRESS_BALANCE);
+                    updatableRecord.set(ADDRESS_BALANCE.ADDRESS, stakeAddressBalance.getAddress());
+                    updatableRecord.set(ADDRESS_BALANCE.SLOT, stakeAddressBalance.getSlot());
+                    return updatableRecord;
+                }).toList();
+        // Execute batch delete
+        dsl.batchDelete(recordsToDelete).execute();
     }
 
 }

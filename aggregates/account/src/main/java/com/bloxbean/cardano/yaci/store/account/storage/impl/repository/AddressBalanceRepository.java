@@ -16,6 +16,7 @@ import java.util.Optional;
 public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEntity, AddressBalanceId> {
 
     Optional<AddressBalanceEntity> findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(String address, String unit, Long slot);
+    List<AddressBalanceEntity> findByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(String address, String unit, Long slot);
 
     Optional<AddressBalanceEntity> findTopByAddressAndUnitAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(String address, String unit, Long blockTime);
 
@@ -44,5 +45,4 @@ public interface AddressBalanceRepository extends JpaRepository<AddressBalanceEn
 
     int deleteBySlotGreaterThan(Long slot);
     int deleteByBlockNumberGreaterThan(Long block);
-
 }

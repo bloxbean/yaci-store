@@ -7,12 +7,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface StakeBalanceRepository extends JpaRepository<StakeAddressBalanceEntity, StakeAddressBalanceId> {
 
     Optional<StakeAddressBalanceEntity> findTopByAddressAndSlotIsLessThanEqualOrderBySlotDesc(String address, Long slot);
+    List<StakeAddressBalanceEntity> findByAddressAndSlotIsLessThanEqualOrderBySlotDesc(String address, Long slot);
     Optional<StakeAddressBalanceEntity> findTopByAddressAndBlockTimeIsLessThanEqualOrderByBlockTimeDesc(String address, Long blockTime);
 
     @Query("SELECT a FROM StakeAddressBalanceEntity a " +

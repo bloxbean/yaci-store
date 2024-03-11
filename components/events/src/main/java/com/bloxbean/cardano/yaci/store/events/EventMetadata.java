@@ -21,7 +21,7 @@ public class EventMetadata {
     private long slot;
     private long epochSlot;
     private int noOfTxs;
-    private boolean syncMode;
+    private boolean syncMode; //If fully synced / Chain sync protocol in progress
     private boolean parallelMode;
 
     private boolean remotePublish; //Is published by a remote publisher
