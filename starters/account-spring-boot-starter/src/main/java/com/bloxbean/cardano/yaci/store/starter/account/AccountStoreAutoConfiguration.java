@@ -33,7 +33,7 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setJooqWriteBatchSize(properties.getAccount().getJooqWriteBatchSize());
         accountStoreProperties.setWriteThreadCount(properties.getAccount().getWriteThreadCount());
 
-        accountStoreProperties.setBalanceHistoryCleanupInterval(properties.getAccount().getBalanceHistoryCleanupInterval());
+        accountStoreProperties.setBalanceCleanupSlotCount(properties.getAccount().getBalanceCleanupSlotCount());
 
         return accountStoreProperties;
     }
