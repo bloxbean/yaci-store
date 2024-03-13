@@ -8,12 +8,12 @@ if (!name.equalsIgnoreCase("stores") && !name.equalsIgnoreCase("components")) {
         publications {
             mavenJava(MavenPublication) {
                 from components.java
-//                artifact(sourceJar) {
-//                    classifier = 'sources'
-//                }
-//                artifact(javadocJar) {
-//                    classifier = 'javadoc'
-//                }
+                artifact(sourceJar) {
+                    classifier = 'sources'
+                }
+                artifact(javadocJar) {
+                    classifier = 'javadoc'
+                }
 
                 artifactId 'yaci-store-' + project.name
 
@@ -59,7 +59,7 @@ if (!name.equalsIgnoreCase("stores") && !name.equalsIgnoreCase("components")) {
 
 //JOOQ generator
 //Add store modules to this array
-def jooq_modules = ['utxo', 'transaction']
+def jooq_modules = ['utxo', 'transaction', 'script', 'account']
 if (jooq_modules.contains(name)) {
     configurations {
         flywayMigration
@@ -83,6 +83,7 @@ if (jooq_modules.contains(name)) {
     }
 
     jooq {
+        version = '3.18.9'
         configurations {
             main {
                 generationTool {

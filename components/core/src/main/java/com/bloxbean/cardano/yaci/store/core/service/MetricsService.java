@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

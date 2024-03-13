@@ -5,8 +5,9 @@ import com.bloxbean.cardano.yaci.helper.*;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
+import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
 import lombok.extern.slf4j.Slf4j;
@@ -129,6 +130,11 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
+    public ParallelExecutor executorHelper() {
+        return new ParallelExecutor();
+    }
+
+    @Bean
     public StoreProperties storeProperties() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setEventPublisherId(properties.getEventPublisherId());
@@ -157,6 +163,8 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setByronGenesisFile(properties.getCardano().getByronGenesisFile());
         storeProperties.setShelleyGenesisFile(properties.getCardano().getShelleyGenesisFile());
+        storeProperties.setAlonzoGenesisFile(properties.getCardano().getAlonzoGenesisFile());
+        storeProperties.setConwayGenesisFile(properties.getCardano().getConwayGenesisFile());
 
         storeProperties.setBlockDiffToStartSyncProtocol(properties.getCardano().getBlockDiffToStartSyncProtocol());
         storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
@@ -176,6 +184,9 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setUseVirtualThreadForBatchProcessing(properties.getExecutor().isUseVirtualThreadForBatchProcessing());
         storeProperties.setUseVirtualThreadForEventProcessing(properties.getExecutor().isUseVirtualThreadForEventProcessing());
+
+        storeProperties.setDbBatchSize(properties.getDb().getBatchSize());
+        storeProperties.setDbParallelInsert(properties.getDb().isParallelInsert());
 
         return storeProperties;
     }

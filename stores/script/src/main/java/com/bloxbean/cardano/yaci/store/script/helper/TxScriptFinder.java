@@ -1,10 +1,10 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
-import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -43,6 +43,13 @@ public class TxScriptFinder {
         if (transaction.getWitnesses().getPlutusV2Scripts() != null
                 && transaction.getWitnesses().getPlutusV2Scripts().size() > 0) {
             transaction.getWitnesses().getPlutusV2Scripts()
+                    .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
+        }
+
+        //PlutusV3 scripts
+        if (transaction.getWitnesses().getPlutusV3Scripts() != null
+                && transaction.getWitnesses().getPlutusV3Scripts().size() > 0) {
+            transaction.getWitnesses().getPlutusV3Scripts()
                     .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
         }
 

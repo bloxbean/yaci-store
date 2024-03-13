@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;

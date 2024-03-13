@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import lombok.RequiredArgsConstructor;

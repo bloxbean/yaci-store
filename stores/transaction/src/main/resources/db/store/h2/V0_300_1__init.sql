@@ -45,3 +45,37 @@ create table transaction_witness
 
 CREATE INDEX idx_transaction_witness_slot
     ON transaction_witness(slot);
+
+
+drop table if exists withdrawal;
+create table withdrawal
+(
+    tx_hash         varchar(64),
+    address         varchar(255),
+    amount          numeric(38),
+    epoch           integer,
+    slot            bigint,
+    block           bigint,
+    block_time      bigint,
+    update_datetime timestamp,
+    primary key (address, tx_hash)
+);
+
+CREATE INDEX idx_withdrawal_slot
+    ON withdrawal(slot);
+
+-- invalid_transaction
+drop table if exists invalid_transaction;
+create table invalid_transaction
+(
+    tx_hash     varchar(64) not null
+        primary key,
+    slot            bigint not null,
+    block_hash      varchar(64),
+    transaction     json         null,
+    create_datetime timestamp,
+    update_datetime timestamp
+);
+
+CREATE INDEX idx_invalid_transaction_slot
+    ON invalid_transaction(slot);

@@ -10,7 +10,7 @@ import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
@@ -307,6 +307,13 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
+    @Override
+    public void onParsingError(Exception e) {
+        log.error("Block parsing error", e);
+        stopSyncOnError();
+        throw new RuntimeException(e);
+    }
+
     public synchronized void startFetch(Point from, Point to) {
         stopKeepAliveThread();
         blockRangeSync.restart(this);
@@ -333,6 +340,30 @@ public class BlockFetchService implements BlockChainDataListener {
         blockSync.stop();
     }
 
+    public boolean isRunning() {
+        if (syncMode) {
+            return blockSync.isRunning();
+        }
+
+        return blockRangeSync.isRunning();
+    }
+
+    public int getLastKeepAliveResponseCookie() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseCookie();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseCookie();
+    }
+
+    public long getLastKeepAliveResponseTime() {
+        if (syncMode) {
+            return blockSync.getLastKeepAliveResponseTime();
+        }
+
+        return blockRangeSync.getLastKeepAliveResponseTime();
+    }
+
     private void setError() {
         isError.set(true);
     }
@@ -357,11 +388,12 @@ public class BlockFetchService implements BlockChainDataListener {
             int interval = storeProperties.getKeepAliveInterval();
             while (true) {
                 try {
-                    if (log.isDebugEnabled())
-                        log.debug("Sending keep alive");
-
                     Thread.sleep(interval);
                     int randomNo = getRandomNumber(0, 60000);
+
+                    if (log.isDebugEnabled())
+                        log.debug("Sending keep alive : " + randomNo);
+
                     if (syncMode)
                         blockSync.sendKeepAliveMessage(randomNo);
                     else
@@ -381,7 +413,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     private boolean detectIfNewEpoch(Integer epoch) {
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        if (previousEpoch == null || epoch == previousEpoch + 1) {
             return true;
         } else
             return false;

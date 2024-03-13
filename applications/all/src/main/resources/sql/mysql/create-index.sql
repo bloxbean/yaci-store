@@ -7,6 +7,12 @@ CREATE INDEX idx_transaction_block
 CREATE INDEX idx_transaction_block_hash
     ON transaction(block_hash);
 
+CREATE INDEX idx_withdrawal_address
+    ON withdrawal(address);
+
+CREATE INDEX idx_withdrawal_tx_hash
+    ON withdrawal(tx_hash);
+
 -- utxo store
 
 CREATE INDEX idx_address_utxo_owner_addr
@@ -23,9 +29,6 @@ CREATE INDEX idx_address_utxo_owner_stakekey_hash
 
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
-
-CREATE INDEX idx_address_utxo_spent_epoch
-    ON address_utxo(spent_epoch);
 
 -- asset store
 
@@ -78,16 +81,20 @@ CREATE INDEX idx_stake_addr_balance_block_time
 CREATE INDEX idx_stake_addr_balance_epoch
     ON stake_address_balance (epoch);
 
-CREATE INDEX idx_stake_addr_balance_unit
-    ON stake_address_balance (unit);
-
-CREATE INDEX idx_stake_addr_balance_policy
-    ON stake_address_balance (policy);
-
-CREATE INDEX idx_stake_addr_balance_policy_asset
-    ON stake_address_balance (policy, asset_name);
-
 -- transaction_witness
 
 CREATE INDEX idx_transaction_witness_tx_hash
     ON transaction_witness(tx_hash);
+
+-- metadata
+
+CREATE INDEX idx_txn_metadata_tx_hash
+    ON transaction_metadata(tx_hash);
+
+CREATE INDEX idx_txn_metadata_label
+    ON transaction_metadata(label);
+
+-- scripts
+
+CREATE INDEX idx_txn_scripts_tx_hash
+    ON transaction_scripts (tx_hash);

@@ -1,0 +1,17 @@
+dependencies {
+    api project(":components:common")
+
+    api libs.rocks.types
+    implementation libs.messagepack.jackson
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - RocksDB Adapter'
+                description = 'Yaci Store - RocksDB Adapter'
+            }
+        }
+    }
+}

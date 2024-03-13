@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.RollbackStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.RollbackStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

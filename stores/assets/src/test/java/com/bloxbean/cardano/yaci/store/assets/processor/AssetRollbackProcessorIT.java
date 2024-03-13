@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.assets.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
-import com.bloxbean.cardano.yaci.store.assets.storage.repository.TxAssetRepository;
+import com.bloxbean.cardano.yaci.store.assets.storage.impl.repository.TxAssetRepository;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

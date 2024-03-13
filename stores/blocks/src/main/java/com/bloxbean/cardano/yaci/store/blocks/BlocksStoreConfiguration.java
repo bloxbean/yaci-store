@@ -11,10 +11,6 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.EpochMappe
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.EpochRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.RollbackRepository;
-import com.redis.om.spring.annotations.EnableRedisDocumentRepositories;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -51,13 +47,12 @@ public class BlocksStoreConfiguration {
         } else {
             return new BlockStorageImpl(blockRepository, blockMapper);
         }
-
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public EpochStorage epochStorage(@Qualifier("epochRepositoryJpa") EpochRepository epochRepository, EpochMapper epochMapper) {
-        return new EpochStorageImpl(epochRepository, epochMapper);
+    public BlockStorageReader blockStorageReader(BlockRepository blockReadRepository, BlockMapper blockMapper) {
+        return new BlockStorageReaderImpl(blockReadRepository, blockMapper);
     }
 
     @Bean

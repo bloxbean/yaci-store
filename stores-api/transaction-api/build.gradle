@@ -1,0 +1,16 @@
+dependencies {
+    api project(":stores:transaction")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Transaction API'
+                description = 'Yaci Store Transaction API Module'
+            }
+        }
+    }
+}

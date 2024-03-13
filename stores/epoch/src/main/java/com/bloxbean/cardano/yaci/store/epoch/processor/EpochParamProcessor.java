@@ -2,15 +2,13 @@ package com.bloxbean.cardano.yaci.store.epoch.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.genesis.AlonzoGenesis;
-import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.ProtocolParamsProposalStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.EpochParamStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -18,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -25,6 +24,9 @@ import java.util.List;
 public class EpochParamProcessor {
     private final EpochParamStorage epochParamStorage;
     private final ProtocolParamsProposalStorage protocolParamsProposalStorage;
+    private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+
+    private PPEraChangeRules ppEraChangeRules = new PPEraChangeRules();
 
     @EventListener
     @Transactional
@@ -46,15 +48,9 @@ public class EpochParamProcessor {
         Era prevEra = epochChangeEvent.getPreviousEra();
         Era newEra = epochChangeEvent.getEra();
 
-        ProtocolParams genesisProtocolParams = null;
-        if (newEra != prevEra) {
-            //Get default protocol params if any
-            if (newEra == Era.Shelley) {
-                genesisProtocolParams = new ShelleyGenesis(epochChangeEvent.getEventMetadata().getProtocolMagic()).getProtocolParams();
-            } else if (newEra == Era.Alonzo) {
-                genesisProtocolParams = new AlonzoGenesis(epochChangeEvent.getEventMetadata().getProtocolMagic()).getProtocolParams();
-            }
-        }
+        //Get genesis protocol params
+        Optional<ProtocolParams> genesisProtocolParams = eraGenesisProtocolParamsUtil
+                .getGenesisProtocolParameters(newEra, prevEra, epochChangeEvent.getEventMetadata().getProtocolMagic());
 
         ProtocolParams protocolParams = new ProtocolParams();
 
@@ -71,11 +67,14 @@ public class EpochParamProcessor {
 
         if (previousEpochParam != null)
             protocolParams.merge(previousEpochParam.getParams());
-        if (genesisProtocolParams != null)
-            protocolParams.merge(genesisProtocolParams);
+
+        genesisProtocolParams.ifPresent(protocolParams::merge);
 
         ppProposalsSubmittedPrevEpoch.forEach(ppProposal -> protocolParams.merge(ppProposal.getParams()));
         ppProposals.forEach(ppProposal -> protocolParams.merge(ppProposal.getParams()));
+
+        //Additional Era change specific rules
+        ppEraChangeRules.apply(newEra, prevEra, protocolParams);
 
         //merge protocol params
         if (log.isDebugEnabled())

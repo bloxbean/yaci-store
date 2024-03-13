@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

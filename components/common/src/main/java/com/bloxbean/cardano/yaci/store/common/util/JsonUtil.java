@@ -56,6 +56,10 @@ public class JsonUtil {
         return mapper.readTree(jsonContent);
     }
 
+    public static ObjectMapper getMapper() {
+        return mapper;
+    }
+
     static {
         mapper = (new ObjectMapper()).enable(SerializationFeature.INDENT_OUTPUT);
     }

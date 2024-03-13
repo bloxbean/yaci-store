@@ -3,13 +3,14 @@ package com.bloxbean.cardano.yaci.store.core.service.publisher;
 import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -52,6 +53,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
+        publisher.publishEvent(new ReadyForBalanceAggregationEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
@@ -97,7 +99,17 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
-        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+
+        var postProcessingFuture = CompletableFuture.supplyAsync(() -> {
+            publisher.publishEvent(new ReadyForBalanceAggregationEvent(lastBatchBlock.getMetadata()));
+            return true;
+        }, eventExecutor);
+
+        var commitFuture = CompletableFuture.supplyAsync(() -> {
+            publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+            return true;
+        }, eventExecutor);
+        CompletableFuture.allOf(postProcessingFuture, commitFuture).join();
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
@@ -164,8 +176,21 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             return true;
         });
 
+        //Governance
+        var governanceEvent = CompletableFuture.supplyAsync(() -> {
+            List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
+                            transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
+                    .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
+                            transaction.getBody().getProposalProcedures()))
+                    .collect(Collectors.toList());
+
+            if (txGovernanceList.size() > 0)
+                publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
+            return true;
+        });
+
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
-                txCertificateEvent, txMintBurnEvent, txUpdateEvent).join();
+                txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent).join();
     }
 
     private void processBlockSingleThread(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
@@ -212,6 +237,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .toList();
         if (txUpdates.size() > 0)
             publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
+
+        //Governance
+        List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
+                        transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
+                .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
+                        transaction.getBody().getProposalProcedures()))
+                .collect(Collectors.toList());
+
+        if (txGovernanceList.size() > 0)
+            publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
     }
 
     private CompletableFuture<Boolean> publishEventAsync(Object event) {
@@ -240,6 +275,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .txHash(transaction.getTxHash())
                 .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
                 .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
+                .plutusV3Scripts(transaction.getWitnesses().getPlutusV3Scripts())
                 .nativeScripts(transaction.getWitnesses().getNativeScripts())
                 .datums(transaction.getWitnesses().getDatums())
                 .redeemers(transaction.getWitnesses().getRedeemers())

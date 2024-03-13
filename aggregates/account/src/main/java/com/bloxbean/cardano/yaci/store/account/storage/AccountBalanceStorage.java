@@ -61,29 +61,34 @@ public interface AccountBalanceStorage {
     int deleteAddressBalanceBySlotGreaterThan(Long slot);
 
     /**
+     * Delete all address balances after the block
+     * @param block - block
+     * @return number of records deleted
+     */
+    int deleteAddressBalanceByBlockGreaterThan(Long block);
+
+    /**
      * Get stake address balance for the given address, unit at the given slot
      * @param address stake address
-     * @param unit unit
      * @param slot slot
      * @return StakeAddressBalance
      */
-    Optional<StakeAddressBalance> getStakeAddressBalance(String address, String unit, long slot);
+    Optional<StakeAddressBalance> getStakeAddressBalance(String address, long slot);
 
     /**
-     * Get stake address balance for the given address, unit at the given time in sec
+     * Get stake address balance for the given address, at the given time in sec
      * @param address stake address
-     * @param unit unit
      * @param time time in sec
      * @return StakeAddressBalance
      */
-    Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, String unit, long time);
+    Optional<StakeAddressBalance> getStakeAddressBalanceByTime(String address, long time);
 
     /**
      * Get latest stake address balance for the given address at highest slot
      * @param address address
      * @return List of StakeAddressBalance
      */
-    List<StakeAddressBalance> getStakeAddressBalance(String address);
+    Optional<StakeAddressBalance> getStakeAddressBalance(String address);
 
     /**
      * Save stake address balances
@@ -95,11 +100,10 @@ public interface AccountBalanceStorage {
      * Delete all stake address balances before the slot except the top one
      * This is called to clean history data
      * @param address address
-     * @param unit unit
      * @param slot slot
      * @return number of records deleted
      */
-    int deleteStakeBalanceBeforeSlotExceptTop(String address, String unit, long slot);
+    int deleteStakeBalanceBeforeSlotExceptTop(String address, long slot);
 
     /**
      * Delete all stake address balances after the slot
@@ -121,9 +125,4 @@ public interface AccountBalanceStorage {
      */
     List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort);
 
-    /**
-     * Get the last block for which the balance was calculated
-     * @return
-     */
-    Long getBalanceCalculationBlock();
 }

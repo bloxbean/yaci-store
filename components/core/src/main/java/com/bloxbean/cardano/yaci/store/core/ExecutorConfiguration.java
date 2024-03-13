@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;

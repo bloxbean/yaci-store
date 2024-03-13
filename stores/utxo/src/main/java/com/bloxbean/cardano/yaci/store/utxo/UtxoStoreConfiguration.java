@@ -1,11 +1,12 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.InvalidTransactionStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.api.UtxoStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.InvalidTransactionStorageImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.UtxoStorageImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.InvalidTransactionRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,13 +32,13 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, DSLContext dslContext) {
-        return new UtxoStorageImpl(utxoRepository, dslContext);
+    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext, UtxoCache utxoCache) {
+        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository) {
-        return new InvalidTransactionStorageImpl(invalidTransactionRepository);
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
+        return new UtxoStorageReaderImpl(utxoRepository, spentOutputRepository, dslContext);
     }
 }

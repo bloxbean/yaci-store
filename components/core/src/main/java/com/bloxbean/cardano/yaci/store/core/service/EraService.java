@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.store.core.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -100,6 +100,9 @@ public class EraService {
         if (_firstShelleySlot == 0) {
             _firstShelleySlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot())
                     .orElse(0L);
+
+            if (_firstShelleySlot == -1) //Genesis block is already in shelley/post shelley era
+                _firstShelleySlot = 0;
         }
 
         return _firstShelleySlot;

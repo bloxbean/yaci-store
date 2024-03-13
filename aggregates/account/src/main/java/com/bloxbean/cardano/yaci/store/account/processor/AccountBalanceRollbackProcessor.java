@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
+import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class AccountBalanceRollbackProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
+    private final AccountConfigService accountConfigService;
 
     @EventListener
     @Transactional

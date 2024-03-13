@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
-import com.bloxbean.cardano.yaci.store.blocks.storage.api.BlockStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;

@@ -1,12 +1,29 @@
+server:
+  port: 8081
+
 spring:
   banner:
     location: classpath:/banner.txt
-
+  application:
+    name: Yaci Store Aggregator App
+  boot:
+    admin:
+      client:
+        enabled: false
 store:
+  event-publisher-id: 1000
   account:
-    batch-balance-aggregation-enabled: true
-    batch-balance-aggregation-scheduler-enabled: true
-    balance-aggregation-enabled: false
+    enabled: true
+    balance-aggregation-enabled: true
     history-cleanup-enabled: false
+    api-enabled: true
+  extensions:
+    utxo-storage-type: dummydb
 
 apiPrefix: /api/v1
+
+logging:
+  file:
+    name: ./logs/yaci-store-aggr.log
+
+

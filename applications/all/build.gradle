@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '3.1.4'
+    id 'org.springframework.boot' version '3.2.2'
 }
 
 dependencies {
@@ -15,13 +15,17 @@ dependencies {
     implementation project(':starters:mir-spring-boot-starter')
     implementation project(':starters:live-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
-
+    implementation project(':starters:governance-spring-boot-starter')
     implementation project(':starters:account-spring-boot-starter')
+    implementation project(':starters:epoch-aggr-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
-    runtimeOnly 'mysql:mysql-connector-java:8.0.32'
-    runtimeOnly 'org.postgresql:postgresql:42.6.0'
+    implementation libs.spring.boot.admin.client
+
+    runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
+
 }
 

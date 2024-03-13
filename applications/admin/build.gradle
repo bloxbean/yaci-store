@@ -1,0 +1,8 @@
+plugins {
+    id 'org.springframework.boot' version '3.2.2'
+}
+
+dependencies {
+    implementation libs.spring.boot.admin.server
+//    implementation("org.springframework.boot:spring-boot-starter-security")
+}

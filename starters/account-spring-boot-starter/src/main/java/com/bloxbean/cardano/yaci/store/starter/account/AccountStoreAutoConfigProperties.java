@@ -8,19 +8,24 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class AccountStoreAutoConfigProperties {
-    private Account account;
+    private Account account = new Account();
 
     @Getter
     @Setter
     public static final class Account {
         private boolean enabled = false;
+        private boolean apiEnabled = false;
+
         private boolean balanceAggregationEnabled = false;
         private boolean historyCleanupEnabled = false;
-        private boolean batchBalanceAggregationEnabled = false;
-        private boolean batchBalanceAggregationSchedulerEnabled=false;
-        private int batchBalanceAggregationScheduleDelay = 5; //5 sec
-        private int batchBalanceAggregationBatchSize = 4320; //~ 1 day (4320 blocks)
-        private int batchBalanceAggregationSafeBlockDiff = 500;
+
+        private int maxBalanceRecordsPerAddressPerBatch = 3;
+        private boolean stakeAddressBalanceEnabled = true;
+
+        //parallel write & batch size settings
+        private boolean parallelWrite = false;
+        private int perThreadBatchSize = 6000;
+        private int jooqWriteBatchSize = 3000;
     }
 
 }

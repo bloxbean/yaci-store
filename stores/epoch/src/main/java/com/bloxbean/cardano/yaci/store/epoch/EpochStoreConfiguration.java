@@ -1,13 +1,15 @@
 package com.bloxbean.cardano.yaci.store.epoch;
 
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.epoch.storage.api.ProtocolParamsProposalStorage;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.EpochParamStorageImpl;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.ProtocolParamsProposalStorageImpl;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.mapper.ProtocolParamsMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.repository.CostModelRepository;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.repository.EpochParamRepository;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.jpa.repository.ProtocolParamsProposalRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorageReader;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.EpochParamStorageImpl;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.ProtocolParamsProposalStorageImpl;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.ProtocolParamsProposalStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.mapper.ProtocolParamsMapper;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.CostModelRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.EpochParamRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.ProtocolParamsProposalRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -42,5 +44,12 @@ public class EpochStoreConfiguration {
     public EpochParamStorage epochParamStorage(EpochParamRepository epochParamRepository, CostModelRepository costModelRepository,
                                                ProtocolParamsMapper protocolParamsMapper) {
         return new EpochParamStorageImpl(epochParamRepository, costModelRepository, protocolParamsMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ProtocolParamsProposalStorageReader protocolParamsProposalStorageReader(ProtocolParamsProposalRepository protocolParamsProposalReadRepository,
+                                                                            ProtocolParamsMapper protocolParamsMapper) {
+        return new ProtocolParamsProposalStorageReaderImpl(protocolParamsProposalReadRepository, protocolParamsMapper);
     }
 }

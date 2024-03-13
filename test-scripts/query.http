@@ -172,16 +172,16 @@ accept: */*
 ###
 
 # Assets tx by policy
-GET http://localhost:8080/api/v1/assets/txs/policy/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb337999
+GET http://localhost:8080/api/v1/assets/policy/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb337999
 
 ###  Assets tx fingerprint
-GET http://localhost:8080/api/v1/assets/txs/fingerprint/asset14p0rxzq3wc2a8tuftzkvjt5xt067rteaf8wqr3
+GET http://localhost:8080/api/v1/assets/fingerprint/asset14p0rxzq3wc2a8tuftzkvjt5xt067rteaf8wqr3
 
 ### Assets tx by unit
-GET http://localhost:8080/api/v1/assets/txs/unit/39086ef91d452d1b6ea9c8c92a2f3243467ddf93bf7c142d370e7d6443617264616e6f4275647a483253363434
+GET http://localhost:8080/api/v1/assets/unit/39086ef91d452d1b6ea9c8c92a2f3243467ddf93bf7c142d370e7d6443617264616e6f4275647a483253363434
 
 ### Unit
-GET http://localhost:8080/api/v1/assets/txs/unit/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb33799953554d4d495441574152445344656669
+GET http://localhost:8080/api/v1/assets/unit/e2bab64ca481afc5a695b7db22fd0a7df4bf930158dfa652fb33799953554d4d495441574152445344656669
 
 ### supply unit
 GET http://localhost:8080/api/v1/assets/supply/unit/42f0e3706d2e0a0761db8da21387aadabe609a7cf328d249ebc2eeff96f0ab7cec670d934f369bfecab402f0387983733238b93be6213e61c94ea16f
@@ -228,3 +228,68 @@ GET http://localhost:8080/api/v1/txs/ee0d811b75e0fbbd5d2bca9542b37225d2c5a58b8f3
 ###
 GET http://localhost:8080/api/v1/txs/8179c0867476f1d7a06c6abae22864ac280e2dc7083481f01ffd16382b7e3c59/witnesses
 
+### Governance Data
+# TODO: Replace all placeholder values with actual data  when governance data becomes available in preprod
+
+### Get GovActionProposal list
+GET http://localhost:8080/api/v1/governance/proposals?page=0&count=10
+
+### Get GovActionProposal list by transaction hash
+GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}
+
+### Get GovActionProposal list by governance action type
+GET http://localhost:8080/api/v1/governance/proposals/gov-action-type/{gov_action_type}?page=0&count=10
+
+### Get most recent governance action for a specific type
+GET http://localhost:8080/api/v1/governance/proposals/latest/gov-action-type/{gov_action_type}
+
+### Get GovActionProposal list by return address
+GET http://localhost:8080/api/v1/governance/proposals/return-address/{address}?page=0&count=10
+
+### Get Voting Procedures list
+GET http://localhost:8080/api/v1/governance/votes?page=0&count=10
+
+### Get Voting Procedures by transaction hash
+GET http://localhost:8080/api/v1/governance/votes/txs/{tx_hash}
+
+### Get Voting Procedures by id
+GET http://localhost:8080/api/v1/governance/votes/id/{id}
+
+### Get Voting Procedures by GovActionProposal transaction hash
+GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/voting-procedures?page=0&count=10
+
+### Get Voting Procedures by GovActionProposal transaction hash and index in this transaction
+GET http://localhost:8080/api/v1/governance/proposals/{tx_hash}/{index_in_transaction}/voting-procedures?page=0&count=10
+
+### Get committee registrations
+GET http://localhost:8080/api/v1/governance/committees/registrations?page=0&count=10
+
+### Get committee de-registrations
+GET http://localhost:8080/api/v1/governance/committees/deregistrations?page=0&count=10
+
+### Get delegation vote list
+GET http://localhost:8080/api/v1/governance/delegation-votes?page=0&count=10
+
+### Get delegations by DRep ID
+GET http://localhost:8080/api/v1/governance/delegation-votes/drep/{dRepId}?page=0&count=10
+
+### Get delegations by address
+GET http://localhost:8080/api/v1/governance/delegation-votes/address/{address}?page=0&count=10
+
+### Get dRep registrations
+GET http://localhost:8080/api/v1/governance/dreps/registrations?page=0&count=10
+
+### Get dRep deregistrations
+GET http://localhost:8080/api/v1/governance/dreps/deregistrations?page=0&count=10
+
+### Get dRep updates
+GET http://localhost:8080/api/v1/governance/dreps/updates?page=0&count=10
+
+### Get withdrawals
+GET http://localhost:8080/api/v1/txs/withdrawals?page=0&count=10
+
+### Get withdrawals by tx hash
+GET http://localhost:8080/api/v1/txs/2c949bed7703080773954ad7f752e75bbb4bc7109aec68a9c84a5f1a9af17348/withdrawals
+
+### Get withdrawals by address
+GET http://localhost:8080/api/v1/accounts/stake1uywjy7h05jmhx9y3wzy94td6xz4txynuccgam0zfn800v8qq33z29/withdrawals?page=1&count=10

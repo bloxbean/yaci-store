@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.epoch;
 
+import com.bloxbean.cardano.yaci.store.api.epoch.EpochApiConfiguration;
 import com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +10,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(EpochStoreProperties.class)
-@Import(EpochStoreConfiguration.class)
+@Import({EpochStoreConfiguration.class, EpochApiConfiguration.class})
 @Slf4j
 public class EpochStoreAutoConfiguration {
 
