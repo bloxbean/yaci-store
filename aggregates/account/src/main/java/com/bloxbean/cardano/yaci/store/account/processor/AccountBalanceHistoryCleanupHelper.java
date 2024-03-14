@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +14,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 @Slf4j
 public class AccountBalanceHistoryCleanupHelper {
-    @Value("${store.account.balance-cleanup-slot-count:43200}")
-    private int cleanupSlotCount; //TODO: Make it configurable
-
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountStoreProperties accountStoreProperties;
 
@@ -28,9 +24,12 @@ public class AccountBalanceHistoryCleanupHelper {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - cleanupSlotCount;
+        long slot = currentSlot - accountStoreProperties.getBalanceCleanupSlotCount();
         if(slot < 0)
             return;
+
+        log.info("\tDeleting balance history data before : "
+                + (accountStoreProperties.getBalanceCleanupSlotCount() / 86400.0) + " days");
 
         addressUnits.forEach(addressUnit -> {
             int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
@@ -38,15 +37,15 @@ public class AccountBalanceHistoryCleanupHelper {
         });
 
         long count = deleteCountAddrBal.get();
-        if (count > 0 && count % 10000 == 0)
-            log.info("Total address balances deleted: " + count);
+        // if (count > 0 && count % 10000 == 0)
+        log.info("\tTotal address balances deleted: " + count);
     }
 
     public void deleteStakeBalanceBeforeConfirmedSlot(List<String> addresses, long currentSlot) {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - cleanupSlotCount;
+        long slot = currentSlot - accountStoreProperties.getBalanceCleanupSlotCount();
         if(slot < 0)
             return;
 
@@ -56,7 +55,7 @@ public class AccountBalanceHistoryCleanupHelper {
         });
 
         long count = deleteCountStakeBal.get();
-        if (count > 0 && count % 10000 == 0)
-            log.info("Total stake addr balances deleted: " + count);
+        //if (count > 0 && count % 10000 == 0)
+            log.info("\tTotal stake addr balances deleted: " + count);
     }
 }
