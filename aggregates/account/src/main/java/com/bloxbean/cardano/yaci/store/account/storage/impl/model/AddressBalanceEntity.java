@@ -44,12 +44,6 @@ public class AddressBalanceEntity extends BlockAwareEntity {
     @Column(name = "asset_name")
     private String assetName;
 
-    @Column(name = "payment_credential")
-    private String paymentCredential;
-
-    @Column(name = "stake_address")
-    private String stakeAddress;
-
     @Column(name = "block_hash")
     private String blockHash;
 
