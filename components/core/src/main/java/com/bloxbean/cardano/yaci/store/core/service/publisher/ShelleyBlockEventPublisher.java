@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.service.timing.BlockBatchTimer;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -15,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,17 +37,26 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private final ExecutorService blockExecutor;
     private final ExecutorService eventExecutor;
     private final StoreProperties storeProperties;
+    private final BlockBatchTimer blockBatchTimer;
+
+    private int batchSize;
+    private int partitionSize;
 
     public ShelleyBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                       @Qualifier("blockEventExecutor") ExecutorService eventExecutor,
                                       ApplicationEventPublisher publisher,
                                       CursorService cursorService,
-                                      StoreProperties storeProperties) {
+                                      StoreProperties storeProperties,
+                                      BlockBatchTimer blockBatchTimer) {
         this.blockExecutor = blockExecutor;
         this.eventExecutor = eventExecutor;
         this.publisher = publisher;
         this.cursorService = cursorService;
         this.storeProperties = storeProperties;
+        this.blockBatchTimer = blockBatchTimer;
+
+        this.batchSize = storeProperties.getBlocksBatchSize();
+        this.partitionSize = storeProperties.getBlocksPartitionSize();
     }
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
@@ -67,10 +78,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     private void handleBlockBatchInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
-        if (batchBlockList.size() != storeProperties.getBlocksBatchSize())
+        if (batchBlockList.size() != batchSize)
             return;
 
+        Pair<Integer, Integer> batchAndPartitionSize = blockBatchTimer.startBatch(batchSize, partitionSize);
+        batchSize = batchAndPartitionSize.getFirst();
+        partitionSize = batchAndPartitionSize.getSecond();
+
         processBlocksInParallel();
+
+        blockBatchTimer.stop();
 
     }
 
@@ -78,7 +95,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         if (batchBlockList.size() == 0)
             return;
 
-        List<List<BatchBlock>> partitions = partition(batchBlockList, storeProperties.getBlocksPartitionSize());
+        List<List<BatchBlock>> partitions = partition(batchBlockList, partitionSize);
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
