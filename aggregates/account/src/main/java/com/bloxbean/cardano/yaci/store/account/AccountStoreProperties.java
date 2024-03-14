@@ -21,7 +21,14 @@ public class AccountStoreProperties {
     @Builder.Default
     private boolean parallelWrite = false;
     @Builder.Default
-    private int perThreadBatchSize = 6000;
+    private int writeThreadDefaultBatchSize = 6000;
     @Builder.Default
     private int jooqWriteBatchSize = 3000;
+    @Builder.Default
+    private int writeThreadCount = 5;
+
+    @Builder.Default
+    private int balanceHistoryCleanupInterval = 300;
+    @Builder.Default
+    private long balanceCleanupSlotCount = 43200; //2160 blocks
 }
