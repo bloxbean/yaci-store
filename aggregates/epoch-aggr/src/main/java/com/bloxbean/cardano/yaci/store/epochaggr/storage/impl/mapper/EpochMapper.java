@@ -1,16 +1,16 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.Epoch;
-import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.EpochEntityJpa;
+import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.JpaEpochEntity;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring", implementationName = "EpochMapperJpa")
 public abstract class EpochMapper {
 
-    public abstract Epoch toEpoch(EpochEntityJpa blockEntity);
-    public abstract EpochEntityJpa toEpochEntity(Epoch blockEntity);
+    public abstract Epoch toEpoch(JpaEpochEntity blockEntity);
+    public abstract JpaEpochEntity toEpochEntity(Epoch blockEntity);
 
-    public EpochEntityJpa updateEntity(Epoch epoch, EpochEntityJpa targetEntity) {
+    public JpaEpochEntity updateEntity(Epoch epoch, JpaEpochEntity targetEntity) {
         targetEntity.setTotalOutput(epoch.getTotalOutput());
         targetEntity.setTransactionCount(epoch.getTransactionCount());
         targetEntity.setBlockCount(epoch.getBlockCount());

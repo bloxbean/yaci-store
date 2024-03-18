@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -16,8 +16,8 @@ import java.math.BigInteger;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "epoch")
-@EqualsAndHashCode(callSuper = true)
-public class EpochEntityJpa extends JpaBaseEntity {
+@EqualsAndHashCode(callSuper = false)
+public class JpaEpochEntity extends BaseEntity {
 
     @Id
     @Column(name = "number")

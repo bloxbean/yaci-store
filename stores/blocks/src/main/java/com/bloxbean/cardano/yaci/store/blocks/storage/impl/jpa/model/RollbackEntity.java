@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @Entity
 @Table(name = "rollback")
-public class JpaRollbackEntity extends JpaBaseEntity {
+public class RollbackEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Id
     @Column(name = "id")

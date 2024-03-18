@@ -3,11 +3,11 @@ package com.bloxbean.cardano.yaci.store.script;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.script.storage.*;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.*;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepository;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.ScriptRepository;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.*;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.JpaScriptMapper;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaDatumRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaTxScriptRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,53 +20,48 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.script",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.script"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.script"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.script"})
 @EnableTransactionManagement
+@EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.script")
+@ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.script")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.*")
+@ConditionalOnProperty(prefix = "store.script", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ScriptStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TxScriptStorage txScriptStorage(TxScriptRepository txScriptRepository, ScriptMapper scriptMapper) {
-        return new TxScriptStorageImpl(txScriptRepository, scriptMapper);
+    public TxScriptStorage txScriptStorage(JpaTxScriptRepository jpaTxScriptRepository, JpaScriptMapper jpaScriptMapper) {
+        return new JpaTxScriptStorage(jpaTxScriptRepository, jpaScriptMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public DatumStorage datumStorage(DatumRepository datumRepository, DSLContext dslContext, ParallelExecutor executorHelper,
+    public DatumStorage datumStorage(JpaDatumRepository jpaDatumRepository, DSLContext dslContext, ParallelExecutor executorHelper,
                                      StoreProperties storeProperties, PlatformTransactionManager platformTransactionManager) {
-        return new DatumStorageImpl(datumRepository, dslContext, executorHelper, storeProperties, platformTransactionManager);
+        return new JpaDatumStorage(jpaDatumRepository, dslContext, executorHelper, storeProperties, platformTransactionManager);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ScriptStorage scriptStorage(ScriptRepository scriptRepository, ScriptMapper scriptMapper, DSLContext dslContext,
+    public ScriptStorage scriptStorage(JpaScriptRepository jpaScriptRepository, JpaScriptMapper jpaScriptMapper, DSLContext dslContext,
                                        ParallelExecutor executorHelper, StoreProperties storeProperties, PlatformTransactionManager platformTransactionManager) {
-        return new ScriptStorageImpl(scriptRepository, scriptMapper, dslContext, executorHelper, storeProperties, platformTransactionManager);
+        return new JpaScriptStorage(jpaScriptRepository, jpaScriptMapper, dslContext, executorHelper, storeProperties, platformTransactionManager);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public TxScriptStorageReader txScriptStorageReader(TxScriptRepository txScriptRepository, ScriptMapper scriptMapper) {
-        return new TxScriptStorageReaderImpl(txScriptRepository, scriptMapper);
+    public TxScriptStorageReader txScriptStorageReader(JpaTxScriptRepository jpaTxScriptRepository, JpaScriptMapper jpaScriptMapper) {
+        return new JpaTxScriptStorageReader(jpaTxScriptRepository, jpaScriptMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public DatumStorageReader datumStorageReader(DatumRepository datumRepository) {
-        return new DatumStorageReaderImpl(datumRepository);
+    public DatumStorageReader datumStorageReader(JpaDatumRepository jpaDatumRepository) {
+        return new JpaDatumStorageReader(jpaDatumRepository);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ScriptStorageReader scriptStorageReader(ScriptRepository scriptRepository, ScriptMapper scriptMapper) {
-        return new ScriptStorageReaderImpl(scriptRepository, scriptMapper);
+    public ScriptStorageReader scriptStorageReader(JpaScriptRepository jpaScriptRepository, JpaScriptMapper jpaScriptMapper) {
+        return new JpaScriptStorageReader(jpaScriptRepository, jpaScriptMapper);
     }
 }

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
@@ -18,7 +18,7 @@ import org.hibernate.annotations.Type;
 @Builder
 @Entity
 @Table(name = "invalid_transaction")
-public class InvalidTransactionEntityJpa extends JpaBaseEntity {
+public class InvalidTransactionEntity extends BaseEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

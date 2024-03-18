@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.epoch.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
@@ -9,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.annotations.Type;
 
 @Data
@@ -16,30 +16,30 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@IdClass(ProtocolParamsProposalId.class)
-@Table(name = "protocol_params_proposal")
-public class ProtocolParamsProposalEntityJpa extends JpaBlockAwareEntity {
+@Table(name = "epoch_param")
+@Slf4j
+public class JpaEpochParamEntity extends JpaBlockAwareEntity {
     @Id
-    @Column(name = "tx_hash")
-    private String txHash;
-
-    @Id
-    @Column(name = "key_hash")
-    private String keyHash;
+    @Column(name = "epoch")
+    private Integer epoch;
 
     @Type(JsonType.class)
     @Column(name = "params", columnDefinition = "json")
     private ProtocolParams params;
 
-    @Column(name = "target_epoch")
-    private Integer targetEpoch;
-
-    @Column(name = "epoch")
-    private Integer epoch;
+    @Column(name = "cost_model_hash")
+    private String costModelHash;
 
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "era")
-    private Era era;
+    @PrePersist
+    public void preSave() {
+        if (this.getParams() == null)
+            return;
+
+        //reset these fields
+        if (this.getParams().getCostModels() != null)
+            this.getParams().setCostModels(null);
+    }
 }

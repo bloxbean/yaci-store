@@ -20,7 +20,7 @@ import java.util.Map;
 @SuperBuilder
 @Entity
 @Table(name = "cost_model")
-public class CostModelEntityJpa extends JpaBlockAwareEntity {
+public class JpaCostModelEntity extends JpaBlockAwareEntity {
     @Id
     @Column(name = "hash")
     private String hash;

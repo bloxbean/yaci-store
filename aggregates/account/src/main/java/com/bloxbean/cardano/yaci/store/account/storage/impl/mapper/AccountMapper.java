@@ -2,9 +2,9 @@ package com.bloxbean.cardano.yaci.store.account.storage.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntityJpa;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.JpaAddressBalanceEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressEntity;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntityJpa;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.JpaStakeAddressBalanceEntity;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
@@ -14,11 +14,11 @@ import org.mapstruct.factory.Mappers;
 public interface AccountMapper {
     AccountMapper INSTANCE = Mappers.getMapper(AccountMapper.class);
 
-    AddressBalance toAddressBalance(AddressBalanceEntityJpa entity);
-    AddressBalanceEntityJpa toAddressBalanceEntity(AddressBalance addressBalance);
+    AddressBalance toAddressBalance(JpaAddressBalanceEntity entity);
+    JpaAddressBalanceEntity toAddressBalanceEntity(AddressBalance addressBalance);
 
-    StakeAddressBalance toStakeBalance(StakeAddressBalanceEntityJpa entity);
-    StakeAddressBalanceEntityJpa toStakeBalanceEntity(StakeAddressBalance stakeBalance);
+    StakeAddressBalance toStakeBalance(JpaStakeAddressBalanceEntity entity);
+    JpaStakeAddressBalanceEntity toStakeBalanceEntity(StakeAddressBalance stakeBalance);
 
     AddressEntity toAddressEntity(AddressBalance addressBalance);
 }

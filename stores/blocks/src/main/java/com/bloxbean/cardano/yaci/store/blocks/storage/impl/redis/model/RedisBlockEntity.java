@@ -1,22 +1,23 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.model;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
 import com.redis.om.spring.annotations.Document;
 import com.redis.om.spring.annotations.Indexed;
 import com.redis.om.spring.annotations.NumericIndexed;
 import com.redis.om.spring.annotations.Searchable;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 
 @Data
 @Document
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
-public class RedisBlockEntity extends JpaBaseEntity {
+public class RedisBlockEntity {
 
     @Id
     private String hash;
@@ -70,4 +71,12 @@ public class RedisBlockEntity extends JpaBaseEntity {
 
     @Searchable
     private String slotLeader;
+
+    @CreatedDate
+    @EqualsAndHashCode.Exclude
+    private LocalDateTime createDateTime;
+
+    @LastModifiedDate
+    @EqualsAndHashCode.Exclude
+    private LocalDateTime updateDateTime;
 }

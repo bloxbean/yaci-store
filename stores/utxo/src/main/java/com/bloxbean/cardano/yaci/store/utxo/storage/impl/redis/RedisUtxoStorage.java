@@ -4,8 +4,8 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.redis.mapper.RedisTxInputMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.redis.mapper.RedisUtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.redis.repository.RedisTxInputRepository;
@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -92,10 +91,8 @@ public class RedisUtxoStorage implements UtxoStorage {
 
     @Override
     public void saveUnspent(List<AddressUtxo> addressUtxoList) {
-        LocalDateTime localDateTime = LocalDateTime.now();
         redisUtxoRepository.saveAll(addressUtxoList.stream()
                 .map(mapper::toAddressUtxoEntity)
-                .peek(redisAddressUtxoEntity -> redisAddressUtxoEntity.setUpdateDateTime(localDateTime))
                 .toList());
         addressUtxoList.forEach(utxoCache::add);
     }

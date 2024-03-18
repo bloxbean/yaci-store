@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.script.storage.impl;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaDatumRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +28,9 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.DATUM;
 
 @RequiredArgsConstructor
 @Slf4j
-public class DatumStorageImpl implements DatumStorage {
-    private final DatumRepository datumRepository;
+public class JpaDatumStorage implements DatumStorage {
+
+    private final JpaDatumRepository jpaDatumRepository;
     private final DSLContext dsl;
     private final ParallelExecutor executorHelper;
     private final StoreProperties storeProperties;

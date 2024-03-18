@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "cursor_")
 @IdClass(JpaCursorId.class)
-public class JpaCursorEntity extends JpaBaseEntity {
+public class JpaCursorEntity extends BaseEntity {
     @Id
     @Column(name = "id")
     private Long id;

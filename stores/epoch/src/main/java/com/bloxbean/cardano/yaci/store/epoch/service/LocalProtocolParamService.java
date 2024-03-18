@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.LocalProtocolParamsEntityJpa;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.JpaLocalProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalProtocolParamsRepository;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import jakarta.annotation.PostConstruct;
@@ -78,7 +78,7 @@ public class LocalProtocolParamService {
                     log.error("Local protocol param sync error {}", throwable.getMessage());
                 })
                 .subscribe(protocolParamUpdate -> {
-                    LocalProtocolParamsEntityJpa entity = new LocalProtocolParamsEntityJpa();
+                    JpaLocalProtocolParamsEntity entity = new JpaLocalProtocolParamsEntity();
                     entity.setId(1L);
                     entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
 

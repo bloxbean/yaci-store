@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 //        @TypeDef(name = "json", typeClass = JsonType.class)
 //})
 @MappedSuperclass
-public class JpaBaseEntity {
+public class BaseEntity {
 
     @CreationTimestamp
     @Column(name = "create_datetime")

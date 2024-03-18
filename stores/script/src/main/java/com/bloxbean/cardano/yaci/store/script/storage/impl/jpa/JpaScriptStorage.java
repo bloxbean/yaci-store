@@ -1,12 +1,12 @@
-package com.bloxbean.cardano.yaci.store.script.storage.impl;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.ScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.JpaScriptMapper;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaScriptRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +28,9 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.SCRIPT;
 
 @RequiredArgsConstructor
 @Slf4j
-public class ScriptStorageImpl implements ScriptStorage {
-    private final ScriptRepository scriptRepository;
-    private final ScriptMapper scriptMapper;
+public class JpaScriptStorage implements ScriptStorage {
+    private final JpaScriptRepository jpaScriptRepository;
+    private final JpaScriptMapper jpaScriptMapper;
     private final DSLContext dsl;
     private final ParallelExecutor executorHelper;
     private final StoreProperties storeProperties;

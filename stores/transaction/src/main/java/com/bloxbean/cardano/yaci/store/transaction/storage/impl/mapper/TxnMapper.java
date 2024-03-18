@@ -20,6 +20,6 @@ public abstract class TxnMapper {
     public abstract Withdrawal toWithdrawal(WithdrawalEntityJpa withdrawalEntity);
     public abstract WithdrawalEntityJpa toWithdrawalEntity(Withdrawal withdrawal);
 
-    public abstract InvalidTransactionEntityJpa toInvalidTransactionEntity(InvalidTransaction invalidTransaction);
-    public abstract InvalidTransaction toInvalidTransaction(InvalidTransactionEntityJpa invalidTransactionEntity);
+    public abstract InvalidTransactionEntity toInvalidTransactionEntity(InvalidTransaction invalidTransaction);
+    public abstract InvalidTransaction toInvalidTransaction(InvalidTransactionEntity invalidTransactionEntity);
 }

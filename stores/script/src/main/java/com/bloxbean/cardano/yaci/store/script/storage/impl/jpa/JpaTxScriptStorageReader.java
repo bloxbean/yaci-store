@@ -1,29 +1,30 @@
-package com.bloxbean.cardano.yaci.store.script.storage.impl;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa;
 
 import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorageReader;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntityJpa;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.mapper.JpaScriptMapper;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model.JpaTxScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.repository.JpaTxScriptRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
 @RequiredArgsConstructor
-public class TxScriptStorageReaderImpl implements TxScriptStorageReader {
-    private final TxScriptRepository txScriptRepository;
-    private final ScriptMapper scriptMapper;
+public class JpaTxScriptStorageReader implements TxScriptStorageReader {
+
+    private final JpaTxScriptRepository jpaTxScriptRepository;
+    private final JpaScriptMapper jpaScriptMapper;
 
     @Override
     public List<TxScript> findByTxHash(String txHash) {
-        List<Object[]> results = txScriptRepository.findByTxHash(txHash);
+        List<Object[]> results = jpaTxScriptRepository.findByTxHash(txHash);
         return results.stream()
                 .map(result -> {
-                    TxScriptEntityJpa txScriptEntity = (TxScriptEntityJpa) result[0];
+                    JpaTxScriptEntity txScriptEntity = (JpaTxScriptEntity) result[0];
                     var datum = (String)result[1];
                     var redeemerData = (String)result[2];
 
-                    var txScript = scriptMapper.toTxScript(txScriptEntity);
+                    var txScript = jpaScriptMapper.toTxScript(txScriptEntity);
 
                     if (datum != null) {
                         txScript.setDatum(datum);

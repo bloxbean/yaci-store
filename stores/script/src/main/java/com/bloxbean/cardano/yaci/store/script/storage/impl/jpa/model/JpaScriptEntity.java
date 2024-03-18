@@ -1,22 +1,21 @@
-package com.bloxbean.cardano.yaci.store.script.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Type;
 
 @Data
+@Entity
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@Entity
 @Table(name = "script")
-public class ScriptEntityJpa extends JpaBaseEntity {
+@EqualsAndHashCode(callSuper = false)
+public class JpaScriptEntity extends BaseEntity {
+
     @Id
     @Column(name = "script_hash")
     private String scriptHash;

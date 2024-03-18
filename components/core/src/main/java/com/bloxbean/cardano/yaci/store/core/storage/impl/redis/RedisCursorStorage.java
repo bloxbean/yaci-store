@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.store.core.storage.impl.redis.repository.RedisC
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Slf4j
@@ -19,10 +18,14 @@ public class RedisCursorStorage implements CursorStorage {
 
     @Override
     public void saveCursor(Long eventPublisherId, Cursor cursor) {
-        LocalDateTime localDateTime = LocalDateTime.now();
-        RedisCursorEntity redisCursorEntity = new RedisCursorEntity(eventPublisherId + "-" + cursor.getBlockHash(),
-                eventPublisherId, cursor.getBlockHash(), cursor.getSlot(), cursor.getBlock(), cursor.getPrevBlockHash(),
-                cursor.getEra() != null ? cursor.getEra().getValue() : null, localDateTime, localDateTime);
+        RedisCursorEntity redisCursorEntity = new RedisCursorEntity();
+        redisCursorEntity.setCursorId(eventPublisherId + "-" + cursor.getBlockHash());
+        redisCursorEntity.setEventPublisherId(eventPublisherId);
+        redisCursorEntity.setBlockHash(cursor.getBlockHash());
+        redisCursorEntity.setSlot(cursor.getSlot());
+        redisCursorEntity.setBlock(cursor.getBlock());
+        redisCursorEntity.setPrevBlockHash(cursor.getPrevBlockHash());
+        redisCursorEntity.setEra(cursor.getEra() != null ? cursor.getEra().getValue() : null);
         redisCursorRepository.save(redisCursorEntity);
     }
 

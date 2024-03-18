@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBaseEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,8 +18,8 @@ import java.math.BigInteger;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "block")
-@EqualsAndHashCode(callSuper = true)
-public class JpaBlockEntity extends JpaBaseEntity {
+@EqualsAndHashCode(callSuper = false)
+public class JpaBlockEntity extends BaseEntity {
     @Id
     @Column(name = "hash")
     private String hash;

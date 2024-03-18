@@ -15,7 +15,7 @@ import java.util.List;
 @Data
 @Document
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public class RedisAddressUtxoEntity extends RedisBlockAwareEntity {
 
