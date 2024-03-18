@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
+import com.bloxbean.cardano.yaci.store.account.domain.event.AddressTxAmountBatchEvent;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
@@ -13,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
@@ -31,9 +33,12 @@ public class AddressTxAmountProcessor {
 
     private final AddressTxAmountStorage addressTxAmountStorage;
     private final UtxoClient utxoClient;
+    private final ApplicationEventPublisher publisher;
 
     private List<Pair<EventMetadata, TxInputOutput>> pendingTxInputOutputListCache = Collections.synchronizedList(new ArrayList<>());
     private List<AddressTxAmount> addressTxAmountListCache = Collections.synchronizedList(new ArrayList<>());
+
+    private Set<AddressTxAmount> batchAddressTxAmountList = Collections.synchronizedSet(new HashSet<>());
 
     @EventListener
     @Transactional
@@ -54,6 +59,8 @@ public class AddressTxAmountProcessor {
 
             addressTxAmountList.addAll(txAddressTxAmountEntities);
         }
+
+        batchAddressTxAmountList.addAll(addressTxAmountList);
 
         if (addressTxAmountList.size() > BLOCK_ADDRESS_TX_AMT_THRESHOLD) {
             if (log.isDebugEnabled())
@@ -175,6 +182,7 @@ public class AddressTxAmountProcessor {
 
             if (addressTxAmountList.size() > 0) {
                 addressTxAmountListCache.addAll(addressTxAmountList);
+                batchAddressTxAmountList.addAll(addressTxAmountList);
             }
 
             long t1 = System.currentTimeMillis();
@@ -185,9 +193,13 @@ public class AddressTxAmountProcessor {
             long t2 = System.currentTimeMillis();
             log.info("Time taken to save additional address_tx_amounts records : {}, time: {} ms", addressTxAmountListCache.size(),  (t2 - t1));
 
+            if (batchAddressTxAmountList.size() > 0)
+                publisher.publishEvent(new AddressTxAmountBatchEvent(readyForBalanceAggregationEvent.getMetadata(), batchAddressTxAmountList.stream().toList()));
+
         } finally {
             pendingTxInputOutputListCache.clear();
             addressTxAmountListCache.clear();
+            batchAddressTxAmountList.clear();
         }
     }
 

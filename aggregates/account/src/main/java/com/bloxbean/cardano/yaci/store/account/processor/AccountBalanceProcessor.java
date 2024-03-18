@@ -22,6 +22,7 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
@@ -41,6 +42,7 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnExpression("!${store.account.balance.address-tx-mode:true}")
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
