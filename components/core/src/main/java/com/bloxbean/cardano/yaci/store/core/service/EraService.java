@@ -6,16 +6,16 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
-import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
-import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.core.storage.CursorStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.EraStorage;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-@Component
-@RequiredArgsConstructor
 @Slf4j
+@Component
 public class EraService {
+
     private final EraStorage eraStorage;
     private final CursorStorage cursorStorage;
     private final EpochConfig epochConfig;
@@ -29,15 +29,22 @@ public class EraService {
     private long _firstShelleySlot;
     private long _shelleyStartTime;
 
+    @Autowired
+    public EraService(EraStorage eraStorage, CursorStorage cursorStorage, EpochConfig epochConfig, GenesisConfig genesisConfig, StoreProperties storeProperties) {
+        this.eraStorage = eraStorage;
+        this.cursorStorage = cursorStorage;
+        this.epochConfig = epochConfig;
+        this.genesisConfig = genesisConfig;
+        this.storeProperties = storeProperties;
+    }
+
     public boolean checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
             long blockNumber = blockHeader.getHeaderBody().getBlockNumber();
             String prevBlockHash = blockHeader.getHeaderBody().getPrevHash();
             if (blockNumber > 0) {
                 cursorStorage.findByBlockHash(storeProperties.getEventPublisherId(), prevBlockHash)
-                        .ifPresent(prevBlock -> {
-                            prevEra = prevBlock.getEra();
-                        });
+                        .ifPresent(prevBlock -> prevEra = prevBlock.getEra());
             }
         }
 
@@ -63,17 +70,16 @@ public class EraService {
 
     public int getEpochNo(Era era, long slot) {
         if (shelleyStartSlot == -1) {
-            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
+            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(CardanoEra::getStartSlot) // For local devnet, it could be babbage era
                     .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
         }
 
-        final int epochNumber = epochConfig.epochFromSlot(shelleyStartSlot, era, slot);
-        return epochNumber;
+        return epochConfig.epochFromSlot(shelleyStartSlot, era, slot);
     }
 
     public int getShelleyEpochSlot(long shelleyAbsoluteSlot) {
         if (shelleyStartSlot == -1) {
-            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
+            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(CardanoEra::getStartSlot) // For local devnet, it could be babbage era
                     .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
         }
 
@@ -98,7 +104,7 @@ public class EraService {
     private long firstShelleySlot() {
         //calculate Byron Era last slot time
         if (_firstShelleySlot == 0) {
-            _firstShelleySlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot())
+            _firstShelleySlot = eraStorage.findFirstNonByronEra().map(CardanoEra::getStartSlot)
                     .orElse(0L);
 
             if (_firstShelleySlot == -1) //Genesis block is already in shelley/post shelley era

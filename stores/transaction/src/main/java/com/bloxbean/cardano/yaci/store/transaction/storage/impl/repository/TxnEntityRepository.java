@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntityJpa;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -8,11 +8,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface TxnEntityRepository extends JpaRepository<TxnEntity, String> {
+public interface TxnEntityRepository extends JpaRepository<TxnEntityJpa, String> {
 
-    Optional<TxnEntity> findByTxHash(String txHash);
-    List<TxnEntity> findAllByBlockHash(String blockHash);
-    List<TxnEntity> findAllByBlockNumber(Long blockNumber);
+    Optional<TxnEntityJpa> findByTxHash(String txHash);
+    List<TxnEntityJpa> findAllByBlockHash(String blockHash);
+    List<TxnEntityJpa> findAllByBlockNumber(Long blockNumber);
 
     int deleteBySlotGreaterThan(Long slot);
 }

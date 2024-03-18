@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationEntity;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationEntityJpa;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -10,10 +10,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface DelegationRepository
-        extends JpaRepository<DelegationEntity, DelegationId> {
+        extends JpaRepository<DelegationEntityJpa, DelegationId> {
 
-    @Query("select d from DelegationEntity d")
-    Slice<DelegationEntity> findDelegations(Pageable pageable);
+    @Query("select d from DelegationEntityJpa d")
+    Slice<DelegationEntityJpa> findDelegations(Pageable pageable);
 
     int deleteBySlotGreaterThan(Long slot);
 }

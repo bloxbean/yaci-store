@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.epoch.storage.impl;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.mapper.ProtocolParamsMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.CostModelEntity;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.EpochParamEntity;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.CostModelEntityJpa;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.EpochParamEntityJpa;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.CostModelRepository;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.EpochParamRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
         epochParamRepository.findById(epochParam.getEpoch())
                 .ifPresent(epochParamEntity -> epochParamRepository.delete(epochParamEntity));
 
-        EpochParamEntity entity = mapper.toEntity(epochParam);
+        EpochParamEntityJpa entity = mapper.toEntity(epochParam);
 
         //Save cost model if required
         var costModels = epochParam.getParams().getCostModels();
@@ -34,7 +34,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
         if (costModelHash != null && costModels != null) {
             boolean costModelExists = costModelRepository.existsById(costModelHash);
             if (!costModelExists) {
-                var costModelEntity = CostModelEntity.builder()
+                var costModelEntity = CostModelEntityJpa.builder()
                         .costs(costModels)
                         .hash(costModelHash)
                         .slot(epochParam.getSlot())

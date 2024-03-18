@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.VotingProcedureEntity;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.VotingProcedureEntityJpa;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.VotingProcedureId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -12,14 +12,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface VotingProcedureRepository extends JpaRepository<VotingProcedureEntity, VotingProcedureId> {
-    Optional<VotingProcedureEntity> findById(UUID id);
+public interface VotingProcedureRepository extends JpaRepository<VotingProcedureEntityJpa, VotingProcedureId> {
+    Optional<VotingProcedureEntityJpa> findById(UUID id);
 
     int deleteBySlotGreaterThan(Long slot);
 
-    List<VotingProcedureEntity> findByTxHash(String txHash);
+    List<VotingProcedureEntityJpa> findByTxHash(String txHash);
 
-    Slice<VotingProcedureEntity> findByGovActionTxHash(String txHash, Pageable pageable);
+    Slice<VotingProcedureEntityJpa> findByGovActionTxHash(String txHash, Pageable pageable);
 
-    Slice<VotingProcedureEntity> findByGovActionTxHashAndIndex(String govActionTxHash, long govActionIndex, Pageable pageable);
+    Slice<VotingProcedureEntityJpa> findByGovActionTxHashAndIndex(String govActionTxHash, long govActionIndex, Pageable pageable);
 }

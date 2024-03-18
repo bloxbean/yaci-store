@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.InvalidTransactionEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.InvalidTransactionEntityJpa;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +16,7 @@ public class InvalidTransactionStorageImpl implements InvalidTransactionStorage 
 
     @Override
     public InvalidTransaction save(InvalidTransaction invalidTransaction) {
-        InvalidTransactionEntity entity =
+        InvalidTransactionEntityJpa entity =
                 repository.save(mapper.toInvalidTransactionEntity(invalidTransaction));
         return mapper.toInvalidTransaction(entity);
     }

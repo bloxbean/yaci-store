@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntityJpa;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +44,7 @@ public class TransactionStorageReaderImpl implements TransactionStorageReader {
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
-        List<Txn> transactions = query.fetch().into(TxnEntity.class)
+        List<Txn> transactions = query.fetch().into(TxnEntityJpa.class)
                 .stream().map(mapper::toTxn).collect(Collectors.toList());
 
         return transactions;

@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRegistrationEnity;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRetirementEntity;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRetirementEntityJpa;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRegistrationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRetirementRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class PoolStorageImpl implements PoolStorage {
 
     @Override
     public void savePoolRetirements(List<PoolRetirement> poolRetirements) {
-        List<PoolRetirementEntity> poolRetirementEntities = poolRetirements.stream()
+        List<PoolRetirementEntityJpa> poolRetirementEntities = poolRetirements.stream()
                 .map(mapper::toPoolRetirementEntity)
                 .collect(Collectors.toList());
 

@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.jpa.repository.JpaUtxoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +19,7 @@ public class UtxoRollbackProcessorIT {
     private UtxoRollbackProcessor utxoRollbackProcessor;
 
     @Autowired
-    private UtxoRepository utxoRepository;
+    private JpaUtxoRepository jpaUtxoRepository;
 
 
     @Test
@@ -34,7 +34,7 @@ public class UtxoRollbackProcessorIT {
 
         utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
-        int count = utxoRepository.findAll().size();
+        int count = jpaUtxoRepository.findAll().size();
         assertThat(count).isEqualTo(14);
     }
 

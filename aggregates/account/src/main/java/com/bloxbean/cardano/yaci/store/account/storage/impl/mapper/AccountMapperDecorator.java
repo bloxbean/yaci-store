@@ -2,9 +2,9 @@ package com.bloxbean.cardano.yaci.store.account.storage.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntityJpa;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressEntity;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntityJpa;
 
 public class AccountMapperDecorator implements AccountMapper{
     public static final int MAX_ADDR_SIZE = 500;
@@ -15,7 +15,7 @@ public class AccountMapperDecorator implements AccountMapper{
     }
 
     @Override
-    public AddressBalance toAddressBalance(AddressBalanceEntity entity) {
+    public AddressBalance toAddressBalance(AddressBalanceEntityJpa entity) {
         AddressBalance addressBalance = delegate.toAddressBalance(entity);
 
         if (entity.getAddrFull() != null && entity.getAddrFull().length() > 0)
@@ -25,8 +25,8 @@ public class AccountMapperDecorator implements AccountMapper{
     }
 
     @Override
-    public AddressBalanceEntity toAddressBalanceEntity(AddressBalance addressBalance) {
-        AddressBalanceEntity entity = delegate.toAddressBalanceEntity(addressBalance);
+    public AddressBalanceEntityJpa toAddressBalanceEntity(AddressBalance addressBalance) {
+        AddressBalanceEntityJpa entity = delegate.toAddressBalanceEntity(addressBalance);
 
         if (addressBalance.getAddress() != null && addressBalance.getAddress().length() > MAX_ADDR_SIZE) {
             entity.setAddress(addressBalance.getAddress().substring(0, MAX_ADDR_SIZE));
@@ -37,12 +37,12 @@ public class AccountMapperDecorator implements AccountMapper{
     }
 
     @Override
-    public StakeAddressBalance toStakeBalance(StakeAddressBalanceEntity entity) {
+    public StakeAddressBalance toStakeBalance(StakeAddressBalanceEntityJpa entity) {
         return delegate.toStakeBalance(entity);
     }
 
     @Override
-    public StakeAddressBalanceEntity toStakeBalanceEntity(StakeAddressBalance stakeBalance) {
+    public StakeAddressBalanceEntityJpa toStakeBalanceEntity(StakeAddressBalance stakeBalance) {
         return delegate.toStakeBalanceEntity(stakeBalance);
     }
 

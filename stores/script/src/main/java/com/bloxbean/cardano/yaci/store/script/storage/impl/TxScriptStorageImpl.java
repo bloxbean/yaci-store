@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.script.storage.impl;
 import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntityJpa;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -17,7 +17,7 @@ public class TxScriptStorageImpl implements TxScriptStorage {
 
     @Override
     public void saveAll(List<TxScript> txScripts) {
-        List<TxScriptEntity> txScriptEntities = txScripts.stream().map(scriptMapper::toTxScriptEntity).collect(Collectors.toList());
+        List<TxScriptEntityJpa> txScriptEntities = txScripts.stream().map(scriptMapper::toTxScriptEntity).collect(Collectors.toList());
         txScriptRepository.saveAll(txScriptEntities);
     }
 

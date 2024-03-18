@@ -4,8 +4,8 @@ import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.StakingMapper;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationEntity;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationEntity;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationEntityJpa;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationEntityJpa;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.DelegationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.StakeRegistrationRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ public class StakeStorageImpl implements StakingStorage {
 
     @Override
     public void saveRegistrations(List<StakeRegistrationDetail> stakeRegistration) {
-        List<StakeRegistrationEntity> stakeRegistrationEntities = stakeRegistration.stream()
+        List<StakeRegistrationEntityJpa> stakeRegistrationEntities = stakeRegistration.stream()
                         .map(stakeRegistrationDetail -> mapper.toStakeResistrationEntity(stakeRegistrationDetail))
                                 .collect(Collectors.toList());
         registrationRepository.saveAll(stakeRegistrationEntities);
@@ -29,7 +29,7 @@ public class StakeStorageImpl implements StakingStorage {
 
     @Override
     public void saveDelegations(List<Delegation> delegations) {
-        List<DelegationEntity> delegationEntities = delegations.stream()
+        List<DelegationEntityJpa> delegationEntities = delegations.stream()
                 .map(delegation -> mapper.toDelegationEntity(delegation))
                 .collect(Collectors.toList());
         delegationRepository.saveAll(delegationEntities);

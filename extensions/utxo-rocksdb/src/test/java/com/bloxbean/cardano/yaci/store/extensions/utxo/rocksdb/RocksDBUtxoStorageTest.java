@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoCache;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;

@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.metadata.storage.impl;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorage;
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.mapper.MetadataMapper;
-import com.bloxbean.cardano.yaci.store.metadata.storage.impl.model.TxMetadataLabelEntity;
+import com.bloxbean.cardano.yaci.store.metadata.storage.impl.model.TxMetadataLabelEntityJpa;
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.repository.TxMetadataLabelRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +17,11 @@ public class TxMetadataStorageImpl implements TxMetadataStorage {
 
     @Override
     public List<TxMetadataLabel> saveAll(@NonNull List<TxMetadataLabel> txMetadataLabelList) {
-        List<TxMetadataLabelEntity> txMetadataLabelEntities = txMetadataLabelList.stream()
+        List<TxMetadataLabelEntityJpa> txMetadataLabelEntities = txMetadataLabelList.stream()
                 .map(metadataMapper::toTxMetadataLabelEntity)
                 .toList();
 
-        List<TxMetadataLabelEntity> savedEntities = metadataLabelRepository.saveAll(txMetadataLabelEntities);
+        List<TxMetadataLabelEntityJpa> savedEntities = metadataLabelRepository.saveAll(txMetadataLabelEntities);
         return savedEntities.stream()
                 .map(metadataMapper::toTxMetadataLabel)
                 .toList();

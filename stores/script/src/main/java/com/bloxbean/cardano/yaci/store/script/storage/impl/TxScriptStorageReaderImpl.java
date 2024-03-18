@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.script.storage.impl;
 import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorageReader;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
-import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntity;
+import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntityJpa;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -19,7 +19,7 @@ public class TxScriptStorageReaderImpl implements TxScriptStorageReader {
         List<Object[]> results = txScriptRepository.findByTxHash(txHash);
         return results.stream()
                 .map(result -> {
-                    TxScriptEntity txScriptEntity = (TxScriptEntity) result[0];
+                    TxScriptEntityJpa txScriptEntity = (TxScriptEntityJpa) result[0];
                     var datum = (String)result[1];
                     var redeemerData = (String)result[2];
 

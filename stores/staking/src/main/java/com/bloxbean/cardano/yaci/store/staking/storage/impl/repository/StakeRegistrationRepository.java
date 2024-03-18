@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationEntity;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationEntityJpa;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -10,13 +10,13 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StakeRegistrationRepository
-        extends JpaRepository<StakeRegistrationEntity, StakeRegistrationId> {
+        extends JpaRepository<StakeRegistrationEntityJpa, StakeRegistrationId> {
 
-    @Query("select r from StakeRegistrationEntity r where r.type = 'STAKE_REGISTRATION'")
-    Slice<StakeRegistrationEntity> findRegistrations(Pageable pageable);
+    @Query("select r from StakeRegistrationEntityJpa r where r.type = 'STAKE_REGISTRATION'")
+    Slice<StakeRegistrationEntityJpa> findRegistrations(Pageable pageable);
 
-    @Query("select r from StakeRegistrationEntity r where r.type = 'STAKE_DEREGISTRATION'")
-    Slice<StakeRegistrationEntity> findDeregestrations(Pageable pageable);
+    @Query("select r from StakeRegistrationEntityJpa r where r.type = 'STAKE_DEREGISTRATION'")
+    Slice<StakeRegistrationEntityJpa> findDeregestrations(Pageable pageable);
 
     int deleteBySlotGreaterThan(Long slot);
 }

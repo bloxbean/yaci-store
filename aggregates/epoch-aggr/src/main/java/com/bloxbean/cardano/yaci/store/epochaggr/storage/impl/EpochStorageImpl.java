@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.epochaggr.storage.impl;
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.EpochStorage;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.mapper.EpochMapper;
-import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.EpochEntity;
+import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.EpochEntityJpa;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.repository.EpochRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -17,7 +17,7 @@ public class EpochStorageImpl implements EpochStorage {
 
     @Override
     public void save(Epoch epoch) {
-        EpochEntity updatedEpochEntity = epochRepository.findById(epoch.getNumber())
+        EpochEntityJpa updatedEpochEntity = epochRepository.findById(epoch.getNumber())
                 .map(epochEntity -> {
                     epochMapper.updateEntity(epoch, epochEntity);
                     return epochEntity;

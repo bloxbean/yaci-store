@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
-import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.EraStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,10 +24,7 @@ public class InitService {
     }
 
     private void findNetworkType() {
-        if (storeProperties.getProtocolMagic() == NetworkType.MAINNET.getProtocolMagic())
-            storeProperties.setMainnet(true);
-        else
-            storeProperties.setMainnet(false);
+        storeProperties.setMainnet(storeProperties.getProtocolMagic() == NetworkType.MAINNET.getProtocolMagic());
     }
 
     private void checkIfCustomStartPoint() {
@@ -35,7 +32,7 @@ public class InitService {
             return;
 
         Optional<CardanoEra> era = eraStorage.findFirstNonByronEra();
-        if (!era.isEmpty())
+        if (era.isPresent())
             return;
 
         //Era is empty, let's fill shelley era start if it's a known network or configure from properties
