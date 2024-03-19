@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.domain;
 
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -29,6 +30,8 @@ public class DelegationVote extends BlockAwareDomain {
     private String drepHash;
 
     private String drepId;
+
+    private DrepType drepType;
 
     private String credential;
 
