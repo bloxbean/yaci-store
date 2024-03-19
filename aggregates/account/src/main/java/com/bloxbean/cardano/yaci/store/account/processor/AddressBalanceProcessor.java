@@ -38,6 +38,8 @@ public class AddressBalanceProcessor {
                 .map(accountConfigEntity -> accountConfigEntity.getSlot())
                 .orElse(-2L); //Because Block No start from -1 (Genesis Block
 
+        //TODO -- check if last balance record is not available
+
         if (lastBalanceProcessedSlot > event.getMetadata().getSlot())
             throw new IllegalStateException("Last processed slot is greater than current slot. Last processed slot : " + lastBalanceProcessedSlot + ", Current slot : " + event.getMetadata().getSlot());
 
@@ -51,9 +53,6 @@ public class AddressBalanceProcessor {
     private void calculateAddressBalance(AddressTxAmountBatchEvent event, Long lastBalanceProcessedSlot) {
         Map<AddressUnit, AddressTxAmount> addressTxAmountMap = new HashMap<>();
         for (AddressTxAmount addressTxAmount : event.getAddressTxAmountList()) {
-            if (addressTxAmount.getSlot() <= lastBalanceProcessedSlot)
-                continue;
-
             var key = new AddressUnit(addressTxAmount.getAddress(), addressTxAmount.getUnit());
 
             //check if map already contains the key
@@ -105,6 +104,12 @@ public class AddressBalanceProcessor {
                                     .build()
                             );
 
+                    if (currentBalance.getSlot().equals(addressTxAmount.getSlot())) {
+                        log.warn("Duplicate balance record found in address_balance for address : " + addressTxAmount.getAddress() + ", slot : " + addressTxAmount.getSlot());
+                        log.warn("Skipping address_balance calculation for this batch");
+                        return;
+                    }
+
                     var newBalance = currentBalance.getQuantity().add(addressTxAmount.getQuantity());
 
                     var newAddrBalance = AddressBalance.builder()
@@ -153,9 +158,6 @@ public class AddressBalanceProcessor {
 
         Map<String, AddressTxAmount> addressTxAmountMap = new HashMap<>();
         for (AddressTxAmount addressTxAmount : lovelaceTxAmounts) {
-            if (addressTxAmount.getSlot() <= lastBalanceProcessedSlot)
-                continue;
-
             String key = addressTxAmount.getStakeAddress();
             //check if map already contains the key
             if (addressTxAmountMap.containsKey(key)) {
@@ -214,6 +216,12 @@ public class AddressBalanceProcessor {
                                     .epoch(null)
                                     .build()
                             );
+
+                    if (currentBalance.getSlot().equals(addressTxAmount.getSlot())) {
+                        log.warn("Duplicate balance record found in stake_address_balance for address : " + addressTxAmount.getAddress() + ", slot : " + addressTxAmount.getSlot());
+                        log.warn("Skipping stake_address_balance calculation for this batch");
+                        return;
+                    }
 
                     var newBalance = currentBalance.getQuantity().add(addressTxAmount.getQuantity());
 
