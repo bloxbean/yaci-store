@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.epochaggr.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.EpochsPage;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.EpochStorageReader;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.mapper.EpochMapper;
-import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.JpaEpochEntity;
+import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.model.EpochEntity;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.impl.repository.EpochRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,7 +32,7 @@ public class EpochStorageReaderImpl implements EpochStorageReader {
         Pageable sortedByEpoch =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Page<JpaEpochEntity> epochsEntityPage = epochRepository.findAll(sortedByEpoch);
+        Page<EpochEntity> epochsEntityPage = epochRepository.findAll(sortedByEpoch);
         long total = epochsEntityPage.getTotalElements();
         int totalPage = epochsEntityPage.getTotalPages();
 

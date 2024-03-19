@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.aggregation.config;
 
-import com.bloxbean.cardano.yaci.store.aggregation.storage.DummyDBUtxoStorageImpl;
+import com.bloxbean.cardano.yaci.store.aggregation.storage.DummyDBUtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
@@ -20,6 +20,6 @@ public class DefaultConfig {
     @Bean
     public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository,
                                    DSLContext dsl, UtxoCache utxoCache) {
-        return new DummyDBUtxoStorageImpl(utxoRepository, spentOutputRepository, dsl, utxoCache);
+        return new DummyDBUtxoStorage(utxoRepository, spentOutputRepository, dsl, utxoCache);
     }
 }

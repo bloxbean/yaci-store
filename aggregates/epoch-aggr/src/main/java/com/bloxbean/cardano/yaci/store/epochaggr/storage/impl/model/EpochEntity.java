@@ -17,7 +17,7 @@ import java.math.BigInteger;
 @AllArgsConstructor
 @Table(name = "epoch")
 @EqualsAndHashCode(callSuper = false)
-public class JpaEpochEntity extends BaseEntity {
+public class EpochEntity extends BaseEntity {
 
     @Id
     @Column(name = "number")

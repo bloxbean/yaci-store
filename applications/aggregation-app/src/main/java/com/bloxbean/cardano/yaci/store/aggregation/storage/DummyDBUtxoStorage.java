@@ -13,9 +13,9 @@ import java.util.List;
 /**
  * UtxoStorage implementation which doesn't do any write to DB
  */
-public class DummyDBUtxoStorageImpl extends UtxoStorageImpl {
+public class DummyDBUtxoStorage extends UtxoStorageImpl {
 
-    public DummyDBUtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl, UtxoCache utxoCache) {
+    public DummyDBUtxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl, UtxoCache utxoCache) {
         super(utxoRepository, spentOutputRepository, dsl, utxoCache);
     }
 
