@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "voting_procedure")
 @IdClass(VotingProcedureId.class)
-public class VotingProcedureEntityJpa extends JpaBlockAwareEntity {
+public class VotingProcedureEntityJpa extends BlockAwareEntity {
 
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;

@@ -5,8 +5,8 @@ import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AccountMapper;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.JpaAddressBalanceEntity;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.JpaStakeAddressBalanceEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntity;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
@@ -80,7 +80,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Transactional
     @Override
     public void saveAddressBalances(@NonNull List<AddressBalance> addressBalances) {
-        List<JpaAddressBalanceEntity> entities = addressBalances.stream().map(mapper::toAddressBalanceEntity)
+        List<AddressBalanceEntity> entities = addressBalances.stream().map(mapper::toAddressBalanceEntity)
                 .toList();
 
         if (accountStoreProperties.isParallelWrite()) {
@@ -97,7 +97,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         saveAddressBatch(addressBalances);
     }
 
-    private void saveAddrBalanceBatch(List<JpaAddressBalanceEntity> addressBalanceEntities) {
+    private void saveAddrBalanceBatch(List<AddressBalanceEntity> addressBalanceEntities) {
         if (enableJPAInsert) {
             if (log.isTraceEnabled())
                 log.trace("Inserting address balances using JPA batch");
@@ -117,7 +117,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         }
     }
 
-    private void saveAddrBalanceBatchJOOQ(List<JpaAddressBalanceEntity> addressBalanceEntities) {
+    private void saveAddrBalanceBatchJOOQ(List<AddressBalanceEntity> addressBalanceEntities) {
         LocalDateTime localDateTime = LocalDateTime.now();
 
         dsl.batched(c -> {
@@ -213,7 +213,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Transactional
     @Override
     public void saveStakeAddressBalances(List<StakeAddressBalance> stakeBalances) {
-        List<JpaStakeAddressBalanceEntity> entities = stakeBalances.stream().map(mapper::toStakeBalanceEntity)
+        List<StakeAddressBalanceEntity> entities = stakeBalances.stream().map(mapper::toStakeBalanceEntity)
                 .toList();
 
         if (accountStoreProperties.isParallelWrite()) {
@@ -224,7 +224,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         }
     }
 
-    private void saveStakeBalanceBatch(List<JpaStakeAddressBalanceEntity> stakeAddressBalances) {
+    private void saveStakeBalanceBatch(List<StakeAddressBalanceEntity> stakeAddressBalances) {
         if (enableJPAInsert) {
             if (log.isTraceEnabled())
                 log.trace("\tInserting stake address balances using JPA batch");
@@ -244,7 +244,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         }
     }
 
-    private void saveStakeBalanceBatchJOOQ(List<JpaStakeAddressBalanceEntity> stakeAddressBalances) {
+    private void saveStakeBalanceBatchJOOQ(List<StakeAddressBalanceEntity> stakeAddressBalances) {
         LocalDateTime localDateTime = LocalDateTime.now();
         dsl.batched(c -> {
             for (var stakeAddrBalance : stakeAddressBalances) {

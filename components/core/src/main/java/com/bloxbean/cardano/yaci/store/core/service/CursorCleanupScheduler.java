@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
-import com.bloxbean.cardano.yaci.store.core.storage.CursorStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,7 +31,7 @@ public class CursorCleanupScheduler {
         if (fromBlock < 0)
             return;
 
-        Integer blocks = cursorStorage.deleteCursorBefore(storeProperties.getEventPublisherId(), fromBlock);
+        int blocks = cursorStorage.deleteCursorBefore(storeProperties.getEventPublisherId(), fromBlock);
         log.info("Deleted {} cursors before block {}", blocks, fromBlock);
     }
 }

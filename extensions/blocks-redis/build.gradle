@@ -1,0 +1,15 @@
+dependencies {
+    api project(":components:common")
+    api project(":stores:blocks")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Block Redis Storage'
+                description = 'Yaci Store Block - Redis Storage Extension'
+            }
+        }
+    }
+}

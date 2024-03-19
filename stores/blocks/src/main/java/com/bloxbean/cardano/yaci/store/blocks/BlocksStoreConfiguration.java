@@ -3,17 +3,12 @@ package com.bloxbean.cardano.yaci.store.blocks;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.RollbackStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.config.JpaConfig;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.config.RedisConfig;
-import com.bloxbean.cardano.yaci.store.blocks.storage.config.StorageConfig;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.mapper.JpaBlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.mapper.RedisBlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.JpaBlockRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.JpaRollbackRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.repository.RedisBlockRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.repository.RedisRollbackRepository;
-import com.redis.om.spring.annotations.EnableRedisDocumentRepositories;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageImpl;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.RollbackStorageImpl;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.RollbackRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -27,48 +22,27 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Configuration
 @ConditionalOnProperty(prefix = "store.blocks", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
-@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.*")
-@EnableRedisDocumentRepositories(basePackages = "com.bloxbean.cardano.yaci.store.blocks.storage.impl.redis.*")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
 @EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
 @EnableTransactionManagement
 @EnableScheduling
 public class BlocksStoreConfiguration {
 
     @Bean
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${spring.data.redis.host:}')")
-    public RedisConfig redisBlockConfig(RedisBlockRepository redisBlockRepository, RedisBlockMapper redisBlockMapper,
-                                     RedisRollbackRepository redisRollbackRepository) {
-        return new RedisConfig(redisBlockRepository, redisBlockMapper, redisRollbackRepository);
-    }
-
-    @Bean
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${spring.datasource.url:}')")
-    public JpaConfig JpaBlockConfig(JpaBlockRepository jpaBlockRepository, JpaBlockMapper jpaBlockMapper,
-                               JpaRollbackRepository jpaRollbackRepository) {
-        return new JpaConfig(jpaBlockRepository, jpaBlockMapper, jpaRollbackRepository);
+    @ConditionalOnMissingBean
+    public BlockStorage blockStorage(BlockRepository blockRepository, BlockMapper blockMapper) {
+        return new BlockStorageImpl(blockRepository, blockMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public StorageConfig blockStorageConfig(RedisConfig redisBlockConfig, JpaConfig JpaBlockConfig) {
-        return redisBlockConfig != null ? redisBlockConfig :  JpaBlockConfig;
+    public BlockStorageReader blockStorageReader(BlockRepository blockReadRepository, BlockMapper blockMapper) {
+        return new BlockStorageReaderImpl(blockReadRepository, blockMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockStorage blockStorage(StorageConfig blockStorageConfig) {
-        return blockStorageConfig.blockStorage();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public BlockStorageReader blockStorageReader(StorageConfig blockStorageConfig) {
-        return blockStorageConfig.blockStorageReader();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public RollbackStorage rollbackStorage(StorageConfig blockStorageConfig) {
-        return blockStorageConfig.rollbackStorage();
+    public RollbackStorage rollbackStorage(RollbackRepository rollbackRepository) {
+        return new RollbackStorageImpl(rollbackRepository);
     }
 }

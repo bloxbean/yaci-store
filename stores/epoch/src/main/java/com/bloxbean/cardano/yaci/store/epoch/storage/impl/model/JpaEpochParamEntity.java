@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.epoch.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -18,7 +18,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @Table(name = "epoch_param")
 @Slf4j
-public class JpaEpochParamEntity extends JpaBlockAwareEntity {
+public class JpaEpochParamEntity extends BlockAwareEntity {
     @Id
     @Column(name = "epoch")
     private Integer epoch;

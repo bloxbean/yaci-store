@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.assets.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,7 +17,7 @@ import java.util.UUID;
 @SuperBuilder
 @Entity
 @Table(name = "assets")
-public class TxAssetEntityJpa extends JpaBlockAwareEntity {
+public class TxAssetEntityJpa extends BlockAwareEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)

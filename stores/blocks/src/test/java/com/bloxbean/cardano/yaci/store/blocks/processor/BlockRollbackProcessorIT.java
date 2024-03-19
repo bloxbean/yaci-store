@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.jpa.repository.JpaBlockRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ class BlockRollbackProcessorIT {
     private BlockProcessor blockProcessor;
 
     @Autowired
-    private JpaBlockRepository jpaBlockRepository;
+    private BlockRepository blockRepository;
 
     @Test
     @SqlGroup({
@@ -32,7 +32,7 @@ class BlockRollbackProcessorIT {
 
         blockProcessor.handleRollbackEvent(rollbackEvent);
 
-        int count = jpaBlockRepository.findAll().size();
+        int count = blockRepository.findAll().size();
         assertThat(count).isEqualTo(1);
     }
 }

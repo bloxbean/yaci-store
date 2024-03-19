@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "stake_registration")
 @IdClass(StakeRegistrationId.class)
-public class StakeRegistrationEntityJpa extends JpaBlockAwareEntity {
+public class StakeRegistrationEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

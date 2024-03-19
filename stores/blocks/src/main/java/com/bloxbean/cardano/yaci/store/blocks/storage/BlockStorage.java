@@ -10,5 +10,5 @@ public interface BlockStorage {
     Optional<Block> findRecentBlock();
     void save(Block block);
     List<Block> findBlocksByEpoch(int epochNumber);
-    Integer deleteBySlotGreaterThan(long slot);
+    int deleteBySlotGreaterThan(long slot);
 }

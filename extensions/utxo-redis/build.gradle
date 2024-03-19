@@ -1,0 +1,15 @@
+dependencies {
+    api project(":components:common")
+    api project(":stores:utxo")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store UTxO Redis Storage'
+                description = 'Yaci Store UTxO - Redis Storage Extension'
+            }
+        }
+    }
+}

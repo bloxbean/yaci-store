@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.Relay;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.Set;
 @Table(name = "pool_registration")
 @IdClass(PoolRegistrationId.class)
 @DynamicUpdate
-public class PoolRegistrationEnity extends JpaBlockAwareEntity {
+public class PoolRegistrationEnity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

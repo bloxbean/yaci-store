@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.metadata.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @SuperBuilder
 @Entity
 @Table(name = "transaction_metadata")
-public class TxMetadataLabelEntityJpa extends JpaBlockAwareEntity {
+public class TxMetadataLabelEntityJpa extends BlockAwareEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)

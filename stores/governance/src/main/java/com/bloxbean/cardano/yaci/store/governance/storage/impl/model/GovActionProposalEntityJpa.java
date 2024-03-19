@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
@@ -20,7 +20,7 @@ import java.math.BigInteger;
 @Entity
 @Table(name = "gov_action_proposal")
 @IdClass(GovActionProposalId.class)
-public class GovActionProposalEntityJpa extends JpaBlockAwareEntity {
+public class GovActionProposalEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

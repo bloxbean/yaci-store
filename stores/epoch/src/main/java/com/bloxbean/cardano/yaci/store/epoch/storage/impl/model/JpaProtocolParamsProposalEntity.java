@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.epoch.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -18,7 +18,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @IdClass(ProtocolParamsProposalId.class)
 @Table(name = "protocol_params_proposal")
-public class JpaProtocolParamsProposalEntity extends JpaBlockAwareEntity {
+public class JpaProtocolParamsProposalEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -24,7 +24,7 @@ import java.util.Set;
 @SuperBuilder
 @Entity
 @Table(name = "transaction")
-public class TxnEntityJpa extends JpaBlockAwareEntity {
+public class TxnEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

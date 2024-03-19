@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
-import com.bloxbean.cardano.yaci.store.core.storage.CursorStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -91,7 +91,7 @@ public class CursorService {
     @Transactional
     public void rollback(long slot) {
         log.info("Rollback cursor_ to slot : " + slot);
-        Integer count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
+        int count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
         log.info("Rollback -- {} cursor records", count);
 
         Cursor cursor

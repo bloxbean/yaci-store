@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,7 +16,7 @@ import org.hibernate.annotations.DynamicUpdate;
 @Table(name = "pool_retirement")
 @IdClass(PoolRetirementId.class)
 @DynamicUpdate
-public class PoolRetirementEntityJpa extends JpaBlockAwareEntity {
+public class PoolRetirementEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

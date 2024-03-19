@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,7 +18,7 @@ import java.math.BigInteger;
 @Entity
 @Table(name = "drep_registration")
 @IdClass(DRepRegistrationId.class)
-public class DRepRegistrationEntityJpa extends JpaBlockAwareEntity {
+public class DRepRegistrationEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

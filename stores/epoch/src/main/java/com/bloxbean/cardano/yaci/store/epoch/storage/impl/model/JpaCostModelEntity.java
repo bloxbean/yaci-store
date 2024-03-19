@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,7 +20,7 @@ import java.util.Map;
 @SuperBuilder
 @Entity
 @Table(name = "cost_model")
-public class JpaCostModelEntity extends JpaBlockAwareEntity {
+public class JpaCostModelEntity extends BlockAwareEntity {
     @Id
     @Column(name = "hash")
     private String hash;

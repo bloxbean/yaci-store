@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.model;
 
 import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -20,7 +20,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Table(name = "transaction_scripts")
 @EqualsAndHashCode(callSuper = false)
-public class JpaTxScriptEntity extends JpaBlockAwareEntity {
+public class JpaTxScriptEntity extends BlockAwareEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

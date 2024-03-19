@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorag
 import com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb.RocksDBUtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.rocks.types.config.RocksDBConfig;
 import com.bloxbean.rocks.types.config.RocksDBProperties;
 import com.bloxbean.rocks.types.serializer.JacksonSerializer;

@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.JpaBlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,7 +16,7 @@ import java.math.BigInteger;
 @Entity
 @Table(name = "withdrawal")
 @IdClass(WithdrawalId.class)
-public class WithdrawalEntityJpa extends JpaBlockAwareEntity {
+public class WithdrawalEntityJpa extends BlockAwareEntity {
     @Id
     @Column(name = "address")
     private String address;

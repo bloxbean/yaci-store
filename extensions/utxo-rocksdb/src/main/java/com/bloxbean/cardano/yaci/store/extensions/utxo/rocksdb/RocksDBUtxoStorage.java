@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.rocks.types.collection.RocksMap;
 import com.bloxbean.rocks.types.collection.RocksMultiZSet;
 import com.bloxbean.rocks.types.collection.RocksZSet;

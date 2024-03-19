@@ -66,3 +66,5 @@ include ':starters:epoch-aggr-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
 include ':extensions:account-rocksdb'
+include ':extensions:blocks-redis'
+include ':extensions:utxo-redis'
