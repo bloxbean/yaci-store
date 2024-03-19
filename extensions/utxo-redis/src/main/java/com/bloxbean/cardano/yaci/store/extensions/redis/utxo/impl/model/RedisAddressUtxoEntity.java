@@ -1,36 +1,41 @@
-package com.bloxbean.cardano.yaci.store.common.domain;
+package com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.redis.om.spring.annotations.Document;
+import com.redis.om.spring.annotations.Indexed;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
+import jakarta.persistence.Id;
+import lombok.*;
+import org.hibernate.annotations.Type;
 
-import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.List;
 
 @Data
+@Document
 @NoArgsConstructor
-@AllArgsConstructor
-@SuperBuilder
 @EqualsAndHashCode(callSuper = false)
-@JsonIgnoreProperties(ignoreUnknown = true)
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AddressUtxo extends BlockAwareDomain implements Serializable {
+@AllArgsConstructor(access = AccessLevel.PROTECTED)
+public class RedisAddressUtxoEntity extends RedisBlockAwareEntity {
+
+    @Id
+    private String id;
+
+    @Indexed
     private String txHash;
+
+    @Indexed
     private Integer outputIndex;
     private Long slot;
     private String blockHash;
     private Integer epoch;
     private String ownerAddr;
+    private String ownerAddrFull;
     private String ownerStakeAddr;
     private String ownerPaymentCredential;
     private String ownerStakeCredential;
     private BigInteger lovelaceAmount;
+    @Type(JsonType.class)
     private List<Amt> amounts;
     private String dataHash;
     private String inlineDatum;

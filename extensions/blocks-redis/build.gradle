@@ -1,6 +1,7 @@
 dependencies {
     api project(":components:common")
     api project(":stores:blocks")
+    api 'com.redis.om:redis-om-spring:0.8.9'
 }
 
 publishing {

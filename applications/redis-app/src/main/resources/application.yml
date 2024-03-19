@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: Yaci Store Redis App
+
+  boot:
+    admin:
+      client:
+        enabled: false
+
+  flyway:
+    locations: classpath:db/store/{vendor}
+    out-of-order: true
+
+apiPrefix: /api/v1
+
+logging:
+  file:
+    name: ./logs/yaci-store.log
+
+
