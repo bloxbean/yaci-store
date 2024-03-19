@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntityJpa;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ public class TransactionStorageImpl implements TransactionStorage {
 
     @Override
     public void saveAll(List<Txn> txnList) {
-        List<TxnEntityJpa> txnEntities = txnList.stream().map(mapper::toTxnEntity).collect(Collectors.toList());
+        List<TxnEntity> txnEntities = txnList.stream().map(mapper::toTxnEntity).collect(Collectors.toList());
         txnEntityRepository.saveAll(txnEntities);
     }
 

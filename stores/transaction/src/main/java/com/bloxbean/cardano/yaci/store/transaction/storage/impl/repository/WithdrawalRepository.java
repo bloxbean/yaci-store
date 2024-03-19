@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalEntityJpa;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -11,14 +11,14 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface WithdrawalRepository extends JpaRepository<WithdrawalEntityJpa, WithdrawalId> {
+public interface WithdrawalRepository extends JpaRepository<WithdrawalEntity, WithdrawalId> {
 
-    List<WithdrawalEntityJpa> findByTxHash(String txHash);
+    List<WithdrawalEntity> findByTxHash(String txHash);
 
-    @Query("select w from WithdrawalEntityJpa w")
-    Slice<WithdrawalEntityJpa> findAllWithdrawals(Pageable pageable);
+    @Query("select w from WithdrawalEntity w")
+    Slice<WithdrawalEntity> findAllWithdrawals(Pageable pageable);
 
-    Slice<WithdrawalEntityJpa> findByAddress(String address, Pageable pageable);
+    Slice<WithdrawalEntity> findByAddress(String address, Pageable pageable);
 
     int deleteBySlotGreaterThan(Long slot);
 }

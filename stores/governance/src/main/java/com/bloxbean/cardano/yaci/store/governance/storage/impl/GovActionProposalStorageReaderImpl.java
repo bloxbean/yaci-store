@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalEntityJpa;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalEntity;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,13 +28,13 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
         Pageable sortedBySlot =
                 PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
-        Slice<GovActionProposalEntityJpa> govActionProposalEntities = govActionProposalRepository.findAll(sortedBySlot);
+        Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findAll(sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 
     @Override
     public List<GovActionProposal> findByTxHash(String txHash) {
-        List<GovActionProposalEntityJpa> govActionProposalEntities = govActionProposalRepository.findByTxHash(txHash);
+        List<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByTxHash(txHash);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 
@@ -43,7 +43,7 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
         Pageable sortedBySlot =
                 PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
-        Slice<GovActionProposalEntityJpa> govActionProposalEntities = govActionProposalRepository.findByType(govActionType, sortedBySlot);
+        Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByType(govActionType, sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 
@@ -52,7 +52,7 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
         Pageable sortedBySlot =
                 PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
 
-        Slice<GovActionProposalEntityJpa> govActionProposalEntities = govActionProposalRepository.findByReturnAddress(address, sortedBySlot);
+        Slice<GovActionProposalEntity> govActionProposalEntities = govActionProposalRepository.findByReturnAddress(address, sortedBySlot);
         return govActionProposalEntities.stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 

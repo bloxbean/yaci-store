@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.mapper.ProtocolParamsMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.JpaProtocolParamsProposalEntity;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.ProtocolParamsProposalEntity;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.ProtocolParamsProposalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +27,9 @@ public class ProtocolParamsProposalStorageReaderImpl implements ProtocolParamsPr
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot");
 
-        Page<JpaProtocolParamsProposalEntity> entityPageable = protocolParamsProposalReadRepository.findAll(pageable);
+        Page<ProtocolParamsProposalEntity> entityPageable = protocolParamsProposalReadRepository.findAll(pageable);
 
-        List<JpaProtocolParamsProposalEntity> entities = entityPageable.getContent();
+        List<ProtocolParamsProposalEntity> entities = entityPageable.getContent();
         if (entities == null || entities.isEmpty())
             return Collections.EMPTY_LIST;
 

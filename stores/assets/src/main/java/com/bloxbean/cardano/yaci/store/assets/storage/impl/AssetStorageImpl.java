@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.assets.storage.impl;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.mapper.AssetMapper;
-import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntityJpa;
+import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntity;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.repository.TxAssetRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -16,7 +16,7 @@ public class AssetStorageImpl implements AssetStorage {
 
     @Override
     public void saveAll(List<TxAsset> txAssetList) {
-        List<TxAssetEntityJpa> txAssetEntities = txAssetList.stream().map(assetMapper::toTxAssetEntity).toList();
+        List<TxAssetEntity> txAssetEntities = txAssetList.stream().map(assetMapper::toTxAssetEntity).toList();
         txAssetRepository.saveAll(txAssetEntities);
     }
 

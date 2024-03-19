@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
 import com.bloxbean.cardano.yaci.store.transaction.storage.WithdrawalStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapperImpl;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalEntityJpa;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.WithdrawalEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.WithdrawalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,7 @@ class WithdrawalStorageImplTest {
 
         withdrawalStorage.save(List.of(withdrawal1, withdrawal2));
 
-        List<WithdrawalEntityJpa> withdrawalsEntities = withdrawalRepository.findAll();
+        List<WithdrawalEntity> withdrawalsEntities = withdrawalRepository.findAll();
         var savedWithdrawals = withdrawalsEntities.stream()
                         .map(mapper::toWithdrawal).toList();
         assertNotNull(withdrawalsEntities);
@@ -111,7 +111,7 @@ class WithdrawalStorageImplTest {
 
         withdrawalStorage.deleteBySlotGreaterThan(2003L);
 
-        List<WithdrawalEntityJpa> withdrawalsEntities = withdrawalRepository.findAll();
+        List<WithdrawalEntity> withdrawalsEntities = withdrawalRepository.findAll();
         var savedWithdrawals = withdrawalsEntities.stream()
                 .map(mapper::toWithdrawal).toList();
         assertNotNull(withdrawalsEntities);

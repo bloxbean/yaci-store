@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.assets.storage.impl;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorageReader;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.mapper.AssetMapper;
-import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntityJpa;
+import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntity;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.repository.TxAssetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +22,7 @@ public class AssetStorageReaderImpl implements AssetStorageReader {
 
     @Override
     public List<TxAsset> findByTxHash(String txHash) {
-        List<TxAssetEntityJpa> txAssetEntities = txAssetRepository.findByTxHash(txHash);
+        List<TxAssetEntity> txAssetEntities = txAssetRepository.findByTxHash(txHash);
         return txAssetEntities.stream().map(assetMapper::toTxAsset).toList();
     }
 
