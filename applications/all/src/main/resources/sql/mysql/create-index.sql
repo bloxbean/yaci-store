@@ -64,11 +64,12 @@ CREATE INDEX idx_address_balance_unit
 CREATE INDEX idx_address_balance_policy
     ON address_balance (policy);
 
-CREATE INDEX idx_address_stake_address
-    ON address_balance (stake_address);
-
 CREATE INDEX idx_address_balance_policy_asset
     ON address_balance (policy, asset_name);
+
+-- address
+CREATE INDEX idx_address_stake_address
+    ON address (stake_address);
 
 -- stake address balance
 
