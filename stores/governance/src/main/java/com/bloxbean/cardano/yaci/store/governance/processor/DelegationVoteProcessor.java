@@ -81,6 +81,7 @@ public class DelegationVoteProcessor {
                 .blockNumber(eventMetadata.getBlock())
                 .blockTime(eventMetadata.getBlockTime())
                 .epoch(eventMetadata.getEpochNumber())
+                .drepType(drep.getType())
                 .credType(stakeCredential.getType())
                 .credential(stakeCredential.getHash())
                 .build();

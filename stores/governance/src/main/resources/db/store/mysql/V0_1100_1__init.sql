@@ -106,6 +106,7 @@ CREATE TABLE delegation_vote
     address         varchar(255), -- bech32 stake address
     drep_hash       varchar(56),
     drep_id         varchar(255),
+    drep_type       varchar(40),
     epoch           int,
     credential      varchar(56),
     cred_type       varchar(40),
