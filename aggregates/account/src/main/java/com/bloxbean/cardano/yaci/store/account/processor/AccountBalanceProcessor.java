@@ -67,12 +67,16 @@ public class AccountBalanceProcessor {
     @Transactional
     @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
+            return;
         addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
     }
 
     @EventListener
     @Transactional
     public void handlePostProcessingEvent(ReadyForBalanceAggregationEvent event) {
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
+            return;
 
         log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
         try {
