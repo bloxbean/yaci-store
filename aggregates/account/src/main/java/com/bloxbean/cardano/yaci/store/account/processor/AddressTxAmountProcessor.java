@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregatio
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
 
@@ -64,6 +66,7 @@ public class AddressTxAmountProcessor {
         }
     }
 
+    @SneakyThrows
     private List<AddressTxAmount> processAddressAmountForTx(EventMetadata metadata, TxInputOutput txInputOutput,
                                                             boolean throwExceptionOnFailure) {
         var txHash = txInputOutput.getTxHash();
@@ -80,6 +83,15 @@ public class AddressTxAmountProcessor {
                 .stream()
                 .filter(Objects::nonNull)
                 .toList();
+
+        if (throwExceptionOnFailure && inputAddressUtxos.size() != inputUtxoKeys.size()) {
+            //Retry after 2 seconds
+            TimeUnit.SECONDS.sleep(2);
+            inputAddressUtxos = utxoClient.getUtxosByIds(inputUtxoKeys)
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
 
         if (inputAddressUtxos.size() != inputUtxoKeys.size()) {
             log.debug("Unable to get inputs for all input keys for account balance calculation. Add this Tx to cache to process later : " + txHash);
