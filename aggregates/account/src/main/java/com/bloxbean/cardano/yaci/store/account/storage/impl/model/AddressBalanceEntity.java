@@ -38,15 +38,6 @@ public class AddressBalanceEntity extends BlockAwareEntity {
     @Column(name = "addr_full")
     private String addrFull;
 
-    @Column(name = "policy")
-    private String policy;
-
-    @Column(name = "asset_name")
-    private String assetName;
-
-    @Column(name = "block_hash")
-    private String blockHash;
-
     @Column(name = "epoch")
     private Integer epoch;
 
