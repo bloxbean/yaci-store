@@ -59,9 +59,9 @@ public class AddressStorageImpl implements AddressStorage {
         int partitionSize = totalSize;
         if (totalSize > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
             partitionSize = totalSize / accountStoreProperties.getWriteThreadCount();
-            log.info("\tAddress Tx Amt Partition size : {}", partitionSize);
+            log.info("\tAddress Partition size : {}", partitionSize);
         } else {
-            log.info("\tAddress Tx Amt Partition size : {}", partitionSize);
+            log.info("\tAddress Partition size : {}", partitionSize);
         }
         return partitionSize;
     }

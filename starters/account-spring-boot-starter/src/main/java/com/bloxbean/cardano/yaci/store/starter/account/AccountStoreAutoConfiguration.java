@@ -35,6 +35,8 @@ public class AccountStoreAutoConfiguration {
 
         accountStoreProperties.setBalanceCleanupSlotCount(properties.getAccount().getBalanceCleanupSlotCount());
 
+        accountStoreProperties.setAddressCacheSize(properties.getAccount().getAddressCacheSize());
+        accountStoreProperties.setAddressCacheExpiryAfterAccess(properties.getAccount().getAddressCacheExpiryAfterAccess());
         return accountStoreProperties;
     }
 }
