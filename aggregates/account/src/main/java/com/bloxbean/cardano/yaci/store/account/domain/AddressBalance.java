@@ -22,10 +22,5 @@ public class AddressBalance extends BlockAwareDomain {
     private String unit;
     private Long slot;
     private BigInteger quantity;
-    private String policy;
-    private String assetName;
-    private String paymentCredential;
-    private String stakeAddress;
-    private String blockHash;
     private Integer epoch;
 }

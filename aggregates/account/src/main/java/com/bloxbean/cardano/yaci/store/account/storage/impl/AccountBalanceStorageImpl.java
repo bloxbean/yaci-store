@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AccountMapper;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntity;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
@@ -30,8 +29,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
-import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -94,8 +93,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         } else {
             saveAddrBalanceBatch(entities);
         }
-
-        saveAddressBatch(addressBalances);
     }
 
     private void saveAddrBalanceBatch(List<AddressBalanceEntity> addressBalanceEntities) {
@@ -129,9 +126,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         .set(ADDRESS_BALANCE.SLOT, addressBalance.getSlot())
                         .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
                         .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
-                        .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
-                        .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
-                        .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
                         .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
                         .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
                         .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
@@ -139,32 +133,10 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         .onDuplicateKeyUpdate()
                         .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
                         .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
-                        .set(ADDRESS_BALANCE.POLICY, addressBalance.getPolicy())
-                        .set(ADDRESS_BALANCE.ASSET_NAME, addressBalance.getAssetName())
-                        .set(ADDRESS_BALANCE.BLOCK_HASH, addressBalance.getBlockHash())
                         .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
                         .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
                         .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
                         .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
-                        .execute();
-            }
-        });
-    }
-
-    private void saveAddressBatch(List<AddressBalance> addressBalances) {
-        LocalDateTime localDateTime = LocalDateTime.now();
-
-        dsl.batched(c -> {
-            for (var addressBalance : addressBalances) {
-                var addressTuple = getAddress(addressBalance.getAddress());
-
-                c.dsl().insertInto(ADDRESS)
-                        .set(ADDRESS.ADDRESS_, addressTuple._1)
-                        .set(ADDRESS.ADDR_FULL, addressTuple._2)
-                        .set(ADDRESS.STAKE_ADDRESS, addressBalance.getStakeAddress())
-                        .set(ADDRESS.PAYMENT_CREDENTIAL, addressBalance.getPaymentCredential())
-                        .set(ADDRESS.UPDATE_DATETIME, localDateTime)
-                        .onDuplicateKeyIgnore()
                         .execute();
             }
         });
@@ -253,16 +225,12 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         .set(STAKE_ADDRESS_BALANCE.ADDRESS, stakeAddrBalance.getAddress())
                         .set(STAKE_ADDRESS_BALANCE.SLOT, stakeAddrBalance.getSlot())
                         .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
-                        .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
-                        .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH, stakeAddrBalance.getBlockHash())
                         .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
                         .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
                         .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())
                         .set(STAKE_ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)
                         .onDuplicateKeyUpdate()
                         .set(STAKE_ADDRESS_BALANCE.QUANTITY, stakeAddrBalance.getQuantity())
-                        .set(STAKE_ADDRESS_BALANCE.STAKE_CREDENTIAL, stakeAddrBalance.getStakeCredential())
-                        .set(STAKE_ADDRESS_BALANCE.BLOCK_HASH, stakeAddrBalance.getBlockHash())
                         .set(STAKE_ADDRESS_BALANCE.BLOCK, stakeAddrBalance.getBlockNumber())
                         .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, stakeAddrBalance.getBlockTime())
                         .set(STAKE_ADDRESS_BALANCE.EPOCH, stakeAddrBalance.getEpoch())

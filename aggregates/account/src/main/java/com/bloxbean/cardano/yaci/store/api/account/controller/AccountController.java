@@ -155,19 +155,15 @@ public class AccountController {
         var amts = addresssBalances.stream()
                 .map(addressBalance -> Amt.builder()
                         .unit(addressBalance.getUnit())
-                        .assetName(addressBalance.getAssetName())
-                        .policyId(addressBalance.getPolicy())
                         .quantity(addressBalance.getQuantity())
                         .build()).toList();
 
         Long lastTxBlock = 0L;
-        String lastTxBlockHash = null;
         Long lastTxSlot = 0L;
         Long lastTxBlockTime = 0L;
         for (AddressBalance addressBalance: addresssBalances) {
             if (addressBalance.getBlockNumber() > lastTxBlock) {
                 lastTxBlock = addressBalance.getBlockNumber();
-                lastTxBlockHash = addressBalance.getBlockHash();
                 lastTxSlot = addressBalance.getSlot();
                 lastTxBlockTime = addressBalance.getBlockTime();
             }
@@ -175,11 +171,8 @@ public class AccountController {
 
         var addressBalanceDto = new AddressBalanceDto();
         addressBalanceDto.setAddress(addresssBalances.get(0).getAddress());
-        addressBalanceDto.setPaymentCredential(addresssBalances.get(0).getPaymentCredential());
-        addressBalanceDto.setStakeAddress(addresssBalances.get(0).getStakeAddress());
         addressBalanceDto.setAmounts(amts);
         addressBalanceDto.setBlockNumber(lastTxBlock);
-        addressBalanceDto.setBlockHash(lastTxBlockHash);
         addressBalanceDto.setSlot(lastTxSlot);
         addressBalanceDto.setBlockTime(lastTxBlockTime);
 
@@ -197,18 +190,13 @@ public class AccountController {
 
         var amts =  Amt.builder()
                         .unit(addressBalance.getUnit())
-                        .assetName(addressBalance.getAssetName())
-                        .policyId(addressBalance.getPolicy())
                         .quantity(addressBalance.getQuantity())
                         .build();
 
         AddressBalanceDto addressBalanceDto = new AddressBalanceDto();
         addressBalanceDto.setAddress(addressBalance.getAddress());
-        addressBalanceDto.setPaymentCredential(addressBalance.getPaymentCredential());
-        addressBalanceDto.setStakeAddress(addressBalance.getStakeAddress());
         addressBalanceDto.setAmounts(List.of(amts));
         addressBalanceDto.setBlockNumber(addressBalance.getBlockNumber());
-        addressBalanceDto.setBlockHash(addressBalance.getBlockHash());
         addressBalanceDto.setSlot(addressBalance.getSlot());
         addressBalanceDto.setBlockTime(addressBalance.getBlockTime());
 

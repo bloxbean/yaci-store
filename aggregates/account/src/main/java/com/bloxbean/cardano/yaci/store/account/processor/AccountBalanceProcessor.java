@@ -67,12 +67,16 @@ public class AccountBalanceProcessor {
     @Transactional
     @SneakyThrows
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
+            return;
         addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
     }
 
     @EventListener
     @Transactional
     public void handlePostProcessingEvent(ReadyForBalanceAggregationEvent event) {
+        if (!accountStoreProperties.isBalanceAggregationEnabled())
+            return;
 
         log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
         try {
@@ -80,7 +84,7 @@ public class AccountBalanceProcessor {
 
             var accountConfigOpt = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
             Long lastProcessedBlock = accountConfigOpt.map(accountConfigEntity -> accountConfigEntity.getBlock())
-                    .orElse(null);
+                    .orElse(0L);
 
             List<AddressUtxoEvent> sortedAddressEventUtxo = addressUtxoEvents.stream()
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
@@ -362,14 +366,9 @@ public class AccountBalanceProcessor {
                                 .address(key.getAddress())
                                 .slot(slotAmount.getEventMetadata().getSlot())
                                 .blockNumber(slotAmount.getEventMetadata().getBlock())
-                                .blockHash(slotAmount.getEventMetadata().getBlockHash())
                                 .blockTime(slotAmount.getEventMetadata().getBlockTime())
                                 .epoch(slotAmount.getEventMetadata().getEpochNumber())
-                                .paymentCredential(key.getPaymentCredential())
-                                .stakeAddress(key.getStakeAddress())
                                 .unit(key.getUnit())
-                                .policy(key.getPolicyId())
-                                .assetName(key.getAssetName())
                                 .quantity(quantity)
                                 .build();
 
@@ -417,10 +416,8 @@ public class AccountBalanceProcessor {
 
                         newStakeAddrBalance = StakeAddressBalance.builder()
                                 .address(stakeAddrInfoKey.getAddress())
-                                .stakeCredential(stakeAddrInfoKey.getStakeCredential())
                                 .slot(slotAmount.getEventMetadata().getSlot())
                                 .blockNumber(slotAmount.getEventMetadata().getBlock())
-                                .blockHash(slotAmount.getEventMetadata().getBlockHash())
                                 .blockTime(slotAmount.getEventMetadata().getBlockTime())
                                 .epoch(slotAmount.getEventMetadata().getEpochNumber())
                                 .quantity(quantity)
@@ -474,15 +471,11 @@ public class AccountBalanceProcessor {
 
                     AddressBalance addressBalance = AddressBalance.builder()
                             .address(genesisBalance.getAddress())
-                            .blockHash(genesisBlockEvent.getBlockHash())
                             .slot(genesisBlockEvent.getSlot())
                             .blockNumber(genesisBlockEvent.getBlock())
                             .blockTime(genesisBlockEvent.getBlockTime())
                             .unit(LOVELACE)
-                            .assetName(LOVELACE)
                             .quantity(genesisBalance.getBalance())
-                            .paymentCredential(paymentCredential)
-                            .stakeAddress(stakeAddress)
                             .build();
                     return addressBalance;
                 }).toList();
@@ -502,12 +495,11 @@ public class AccountBalanceProcessor {
                     Address stakeAddress = AddressProvider.getStakeAddress(address);
                     StakeAddressBalance stakeAddrBalance = StakeAddressBalance.builder()
                             .address(stakeAddress.toBech32())
-                            .blockHash(genesisBlockEvent.getBlockHash())
                             .slot(genesisBlockEvent.getSlot())
                             .blockNumber(genesisBlockEvent.getBlock())
                             .blockTime(genesisBlockEvent.getBlockTime())
                             .quantity(genesisBalance.getBalance())
-                            .stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get().getBytes()))
+                            //.stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get().getBytes()))
                             .build();
                     return stakeAddrBalance;
                 }).toList();
