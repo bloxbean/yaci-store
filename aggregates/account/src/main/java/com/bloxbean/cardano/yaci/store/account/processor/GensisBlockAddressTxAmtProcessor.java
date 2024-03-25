@@ -4,10 +4,13 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
+import com.bloxbean.cardano.yaci.store.account.domain.event.AddressTxAmountBatchEvent;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +27,7 @@ import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddres
 @Slf4j
 public class GensisBlockAddressTxAmtProcessor {
     private final AddressTxAmountStorage addressTxAmountStorage;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -79,6 +83,17 @@ public class GensisBlockAddressTxAmtProcessor {
 
         if (genesisAddressTxAmtList.size() > 0) {
             addressTxAmountStorage.save(genesisAddressTxAmtList);
+
+            //publish event
+            publisher.publishEvent(new AddressTxAmountBatchEvent(EventMetadata.builder()
+                    .block(genesisBlockEvent.getBlock())
+                    .slot(genesisBlockEvent.getSlot())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .blockHash(genesisBlockEvent.getBlockHash())
+                    .epochNumber(0)
+                    .era(genesisBlockEvent.getEra())
+                    .build(),
+                    genesisAddressTxAmtList));
         }
     }
 
