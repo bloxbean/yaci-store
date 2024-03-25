@@ -84,7 +84,7 @@ public class AccountBalanceProcessor {
 
             var accountConfigOpt = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
             Long lastProcessedBlock = accountConfigOpt.map(accountConfigEntity -> accountConfigEntity.getBlock())
-                    .orElse(null);
+                    .orElse(0L);
 
             List<AddressUtxoEvent> sortedAddressEventUtxo = addressUtxoEvents.stream()
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
