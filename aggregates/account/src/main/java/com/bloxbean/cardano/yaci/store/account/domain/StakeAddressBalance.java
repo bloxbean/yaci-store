@@ -21,8 +21,6 @@ public class StakeAddressBalance extends BlockAwareDomain {
     private String address;
     private Long slot;
     private BigInteger quantity;
-    private String stakeCredential;
-    private String blockHash;
     private Integer epoch;
 }
 

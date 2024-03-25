@@ -1,8 +1,13 @@
 package com.bloxbean.cardano.yaci.store.account;
 
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.account.storage.AddressStorage;
+import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.AccountBalanceStorageImpl;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.AddressStorageImpl;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.AddressTxAmountStorageImpl;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
+import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressTxAmountRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import org.jooq.DSLContext;
@@ -42,6 +47,19 @@ public class AccountStoreConfiguration {
     @ConditionalOnMissingBean
     public AccountService accountService() {
         return new AccountService(null);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AddressTxAmountStorage addressTxAmountStorage(AddressTxAmountRepository addressTxAmountRepository,
+                                                         DSLContext dslContext, AccountStoreProperties accountStoreProperties) {
+        return new AddressTxAmountStorageImpl(addressTxAmountRepository, dslContext, accountStoreProperties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AddressStorage addressStorage(DSLContext dslContext, AccountStoreProperties accountStoreProperties) {
+        return new AddressStorageImpl(dslContext, accountStoreProperties);
     }
 
 }

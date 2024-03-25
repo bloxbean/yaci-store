@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
+import com.bloxbean.cardano.yaci.store.account.domain.Address;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
+import com.bloxbean.cardano.yaci.store.account.storage.AddressStorage;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
@@ -12,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregatio
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
 
@@ -30,10 +34,12 @@ public class AddressTxAmountProcessor {
     public static final int BLOCK_ADDRESS_TX_AMT_THRESHOLD = 100; //Threshold to save address_tx_amounts records for block
 
     private final AddressTxAmountStorage addressTxAmountStorage;
+    private final AddressStorage addressStorage;
     private final UtxoClient utxoClient;
 
     private List<Pair<EventMetadata, TxInputOutput>> pendingTxInputOutputListCache = Collections.synchronizedList(new ArrayList<>());
     private List<AddressTxAmount> addressTxAmountListCache = Collections.synchronizedList(new ArrayList<>());
+    private Set<Address> addresseCache = Collections.synchronizedSet(new HashSet<>());
 
     @EventListener
     @Transactional
@@ -49,6 +55,17 @@ public class AddressTxAmountProcessor {
         List<AddressTxAmount> addressTxAmountList = new ArrayList<>();
 
         for (var txInputOutput : txInputOutputList) {
+            //Get Addresses
+            var addresses = txInputOutput.getOutputs().stream()
+                    .map(addressUtxo -> Address.builder()
+                            .address(addressUtxo.getOwnerAddr())
+                            .stakeAddress(addressUtxo.getOwnerStakeAddr())
+                            .paymentCredential(addressUtxo.getOwnerPaymentCredential())
+                            .stakeCredential(addressUtxo.getOwnerStakeCredential())
+                            .build())
+                    .toList();
+            addresseCache.addAll(addresses);
+
             var txAddressTxAmountEntities = processAddressAmountForTx(addressUtxoEvent.getEventMetadata(), txInputOutput, false);
             if (txAddressTxAmountEntities == null || txAddressTxAmountEntities.isEmpty()) continue;
 
@@ -60,10 +77,11 @@ public class AddressTxAmountProcessor {
                 log.debug("Saving address_tx_amounts records : {} -- {}", addressTxAmountList.size(), addressUtxoEvent.getEventMetadata().getBlock());
             addressTxAmountStorage.save(addressTxAmountList); //Save
         } else if (addressTxAmountList.size() > 0) {
-           addressTxAmountListCache.addAll(addressTxAmountList);
+            addressTxAmountListCache.addAll(addressTxAmountList);
         }
     }
 
+    @SneakyThrows
     private List<AddressTxAmount> processAddressAmountForTx(EventMetadata metadata, TxInputOutput txInputOutput,
                                                             boolean throwExceptionOnFailure) {
         var txHash = txInputOutput.getTxHash();
@@ -80,6 +98,15 @@ public class AddressTxAmountProcessor {
                 .stream()
                 .filter(Objects::nonNull)
                 .toList();
+
+        if (throwExceptionOnFailure && inputAddressUtxos.size() != inputUtxoKeys.size()) {
+            //Retry after 2 seconds
+            TimeUnit.SECONDS.sleep(2);
+            inputAddressUtxos = utxoClient.getUtxosByIds(inputUtxoKeys)
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
 
         if (inputAddressUtxos.size() != inputUtxoKeys.size()) {
             log.debug("Unable to get inputs for all input keys for account balance calculation. Add this Tx to cache to process later : " + txHash);
@@ -182,12 +209,18 @@ public class AddressTxAmountProcessor {
                 addressTxAmountStorage.save(addressTxAmountListCache);
             }
 
+            if (addresseCache.size() > 0) {
+                addressStorage.save(addresseCache);
+            }
+
             long t2 = System.currentTimeMillis();
-            log.info("Time taken to save additional address_tx_amounts records : {}, time: {} ms", addressTxAmountListCache.size(),  (t2 - t1));
+            log.info("Time taken to save additional address_tx_amounts records : {}, address records: {}, time: {} ms",
+                    addressTxAmountListCache.size(), addresseCache.size(), (t2 - t1));
 
         } finally {
             pendingTxInputOutputListCache.clear();
             addressTxAmountListCache.clear();
+            addresseCache.clear();
         }
     }
 

@@ -1,18 +1,3 @@
--- set search_path  to mainnet;
-
--- transaction store
-CREATE INDEX idx_transaction_block
-    ON transaction(block);
-
-CREATE INDEX idx_transaction_block_hash
-    ON transaction(block_hash);
-
-CREATE INDEX idx_withdrawal_address
-    ON withdrawal(address);
-
-CREATE INDEX idx_withdrawal_tx_hash
-    ON withdrawal(tx_hash);
-
 -- utxo store
 
 CREATE INDEX idx_address_utxo_owner_addr
@@ -29,23 +14,6 @@ CREATE INDEX idx_address_utxo_owner_stakekey_hash
 
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
-
--- asset store
-
-CREATE INDEX idx_assets_tx_hash
-    ON assets(tx_hash);
-
-CREATE INDEX idx_assets_policy
-    ON assets(policy);
-
-CREATE INDEX idx_assets_policy_assetname
-    ON assets(policy, asset_name);
-
-CREATE INDEX idx_assets_unit
-    ON assets(unit);
-
-CREATE INDEX idx_assets_fingerprint
-    ON assets(fingerprint);
 
 -- account balance
 
@@ -75,21 +43,3 @@ CREATE INDEX idx_stake_addr_balance_block_time
 
 CREATE INDEX idx_stake_addr_balance_epoch
     ON stake_address_balance (epoch);
-
--- transaction_witness
-
-CREATE INDEX idx_transaction_witness_tx_hash
-    ON transaction_witness(tx_hash);
-
--- metadata
-
-CREATE INDEX idx_txn_metadata_tx_hash
-    ON transaction_metadata(tx_hash);
-
-CREATE INDEX idx_txn_metadata_label
-    ON transaction_metadata(label);
-
--- scripts
-
-CREATE INDEX idx_txn_scripts_tx_hash
-    ON transaction_scripts (tx_hash);

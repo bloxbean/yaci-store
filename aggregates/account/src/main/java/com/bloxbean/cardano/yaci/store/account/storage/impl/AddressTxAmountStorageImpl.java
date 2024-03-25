@@ -18,7 +18,6 @@ import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.account.jooq.tables.AddressTxAmount.ADDRESS_TX_AMOUNT;
 
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class AddressTxAmountStorageImpl implements AddressTxAmountStorage {
