@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
@@ -33,6 +34,7 @@ public class AddressTxAmountProcessor {
 
     private final AddressTxAmountStorage addressTxAmountStorage;
     private final UtxoClient utxoClient;
+    private final AccountStoreProperties accountStoreProperties;
 
     private List<Pair<EventMetadata, TxInputOutput>> pendingTxInputOutputListCache = Collections.synchronizedList(new ArrayList<>());
     private List<AddressTxAmount> addressTxAmountListCache = Collections.synchronizedList(new ArrayList<>());
@@ -147,6 +149,8 @@ public class AddressTxAmountProcessor {
 
         return (List<AddressTxAmount>) addressTxAmountMap.entrySet()
                 .stream()
+                .filter(entry -> accountStoreProperties.isAddressTxAmountIncludeZeroAmount() ||
+                        entry.getValue().compareTo(BigInteger.ZERO) != 0)
                 .map(entry -> {
                     var addressDetails = addressToAddressDetailsMap.get(entry.getKey().getFirst());
 

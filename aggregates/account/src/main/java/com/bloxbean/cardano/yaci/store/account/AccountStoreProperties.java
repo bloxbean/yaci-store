@@ -37,4 +37,7 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private int addressCacheExpiryAfterAccess = 15;
+
+    @Builder.Default
+    private boolean addressTxAmountIncludeZeroAmount = false;
 }

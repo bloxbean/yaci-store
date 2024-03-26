@@ -33,6 +33,8 @@ public class AccountStoreAutoConfigProperties {
 
         private int addressCacheSize = 2_000_000;
         private int addressCacheExpiryAfterAccess = 15;
+
+        private boolean addressTxAmountIncludeZeroAmount = false;
     }
 
 }
