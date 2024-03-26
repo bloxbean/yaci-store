@@ -3,22 +3,22 @@ drop view if exists address_balance_view;
 drop view if exists stake_address_balance_view;
 
 -- drop indexes
-drop index if exists idx_address_balance_policy;
-drop index if exists idx_address_balance_policy_asset;
+drop index idx_address_balance_policy on address_balance;
+drop index idx_address_balance_policy_asset on address_balance;
 
 -- drop columns in address_balance
 alter table address_balance
-drop column if exists policy,
-drop column if exists asset_name,
-drop column if exists block_hash;
+drop column policy,
+drop column asset_name,
+drop column block_hash;
 
 -- drop columns in stake_address_balance
 alter table stake_address_balance
-drop column if exists stake_credential,
-drop column if exists block_hash;
+drop column stake_credential,
+drop column block_hash;
 
 -- add stake_credential column in address table
-alter table address add column if not exists stake_credential varchar(56);
+alter table address add column stake_credential varchar(56);
 
 -- recreate views
 create view address_balance_view as
