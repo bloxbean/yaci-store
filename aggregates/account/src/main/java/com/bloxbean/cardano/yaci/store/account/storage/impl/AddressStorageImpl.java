@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.Set;
 
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS;
 import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
@@ -26,7 +25,7 @@ public class AddressStorageImpl implements AddressStorage {
 
     @Transactional
     @Override
-    public void save(Set<Address> addresses) {
+    public void save(Collection<Address> addresses) {
         if (accountStoreProperties.isParallelWrite()
                 && addresses.size() > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
             int partitionSize = getPartitionSize(addresses.size());

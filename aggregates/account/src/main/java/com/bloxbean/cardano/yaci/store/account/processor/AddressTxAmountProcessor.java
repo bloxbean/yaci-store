@@ -147,10 +147,8 @@ public class AddressTxAmountProcessor {
 
         return (List<AddressTxAmount>) addressTxAmountMap.entrySet()
                 .stream()
-                .filter(entry -> entry.getValue().compareTo(BigInteger.ZERO) != 0)
                 .map(entry -> {
                     var addressDetails = addressToAddressDetailsMap.get(entry.getKey().getFirst());
-                    var assetDetails = unitToAssetDetailsMap.get(entry.getKey().getSecond());
 
                     //address and full address if the address is too long
                     var addressTuple = getAddress(entry.getKey().getFirst());

@@ -15,9 +15,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -28,7 +27,7 @@ public class AddressProcessor {
     private final AccountStoreProperties accountStoreProperties;
 
     private Cache<String, String> cache;
-    private Set<Address> addresseCache = Collections.synchronizedSet(new HashSet<>());
+    private Map<String, Address> addresseCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -44,21 +43,19 @@ public class AddressProcessor {
     @EventListener
     public void handleAddress(AddressUtxoEvent addressUtxoEvent) {
         //Get Addresses
-        var addresses = addressUtxoEvent.getTxInputOutputs()
+        addressUtxoEvent.getTxInputOutputs()
                 .stream().flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
                 .filter(addressUtxo -> cache.getIfPresent(addressUtxo.getOwnerAddr()) == null)
-                .map(addressUtxo -> Address.builder()
-                        .address(addressUtxo.getOwnerAddr())
-                        .stakeAddress(addressUtxo.getOwnerStakeAddr())
-                        .paymentCredential(addressUtxo.getOwnerPaymentCredential())
-                        .stakeCredential(addressUtxo.getOwnerStakeCredential())
-                        .build())
-                .toList();
+                .forEach(addressUtxo -> {
+                    var address = Address.builder()
+                            .address(addressUtxo.getOwnerAddr())
+                            .stakeAddress(addressUtxo.getOwnerStakeAddr())
+                            .paymentCredential(addressUtxo.getOwnerPaymentCredential())
+                            .stakeCredential(addressUtxo.getOwnerStakeCredential())
+                            .build();
 
-        if (addresses.isEmpty())
-            return;
-
-        addresseCache.addAll(addresses);
+                    addresseCache.putIfAbsent(address.getAddress(), address);
+                });
     }
 
     @EventListener
@@ -67,15 +64,15 @@ public class AddressProcessor {
         try {
             if (addresseCache.size() > 0) {
                 long t1 = System.currentTimeMillis();
-                addressStorage.save(addresseCache);
+                addressStorage.save(addresseCache.values());
 
                 if (!commitEvent.getMetadata().isSyncMode()) { //Store only for initial sync
-                    addresseCache.stream()
+                    addresseCache.values()
                             .forEach(address -> cache.put(address.getAddress(), ""));
                 }
 
                 long t2 = System.currentTimeMillis();
-                log.info("Address save size : {}, time: {} ms", addresseCache.size(),  (t2 - t1));
+                log.info("Address save size : {}, time: {} ms", addresseCache.size(), (t2 - t1));
                 log.info("Address Cache Size: {}", cache.size());
             }
         } finally {
