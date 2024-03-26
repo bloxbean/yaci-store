@@ -53,16 +53,6 @@ public class AccountBalanceProcessor {
 
     private Map<Long, AddressUtxoEvent> addressUtxoEventsMap = Collections.synchronizedMap(new HashMap<>());
 
-    private final PlatformTransactionManager transactionManager;
-    private TransactionTemplate transactionTemplate;
-
-    @PostConstruct
-    void init() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-    }
-
     @EventListener
     @Transactional
     @SneakyThrows
