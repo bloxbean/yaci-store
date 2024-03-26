@@ -21,7 +21,7 @@ public class AccountStoreProperties {
     @Builder.Default
     private boolean parallelWrite = false;
     @Builder.Default
-    private int writeThreadDefaultBatchSize = 6000;
+    private int writeThreadDefaultBatchSize = 1000;
     @Builder.Default
     private int jooqWriteBatchSize = 3000;
     @Builder.Default
