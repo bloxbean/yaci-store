@@ -1,0 +1,17 @@
+dependencies {
+    api project(":components:common")
+    api project(":stores:blocks")
+    api 'com.redis.om:redis-om-spring:0.8.9'
+    annotationProcessor "com.redis.om:redis-om-spring:0.8.9"
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Block Redis Storage'
+                description = 'Yaci Store Block - Redis Storage Extension'
+            }
+        }
+    }
+}

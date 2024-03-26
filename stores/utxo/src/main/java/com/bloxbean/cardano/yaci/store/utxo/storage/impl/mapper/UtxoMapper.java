@@ -10,7 +10,7 @@ import org.mapstruct.factory.Mappers;
 
 @Mapper
 @DecoratedWith(UtxoMapperDecorator.class)
-public interface  UtxoMapper {
+public interface UtxoMapper {
     UtxoMapper INSTANCE = Mappers.getMapper(UtxoMapper.class);
 
     AddressUtxoEntity toAddressUtxoEntity(AddressUtxo addressUtxo);

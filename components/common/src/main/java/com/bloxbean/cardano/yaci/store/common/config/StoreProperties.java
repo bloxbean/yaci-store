@@ -51,9 +51,11 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     @Builder.Default
     private int cursorCleanupInterval = 3600;
 
+    @Builder.Default
     private int keepAliveInterval = 10000;
 
     //Only required if the genesis hash can't be fetched
+    @Builder.Default
     private String defaultGenesisHash = "Genesis";
 
     //derived from protocol magic. No need to set
@@ -76,6 +78,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private boolean useVirtualThreadForBatchProcessing;
     private boolean useVirtualThreadForEventProcessing;
 
+    @Builder.Default
     private int dbBatchSize = 200;
+
+    @Builder.Default
     private boolean dbParallelInsert = true;
 }

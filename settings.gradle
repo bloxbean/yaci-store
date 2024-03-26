@@ -12,6 +12,7 @@ include 'applications:utxo-indexer'
 include 'applications:gateway'
 include 'applications:aggregation-app'
 include 'applications:admin'
+include 'applications:redis-app'
 
 include 'components:core'
 include 'components:events'
@@ -66,3 +67,5 @@ include ':starters:epoch-aggr-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
 include ':extensions:account-rocksdb'
+include ':extensions:blocks-redis'
+include ':extensions:utxo-redis'

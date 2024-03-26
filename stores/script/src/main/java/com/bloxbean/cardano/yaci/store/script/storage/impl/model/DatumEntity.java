@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "datum")
 public class DatumEntity extends BaseEntity {
+
     @Id
     @Column(name = "hash", nullable = false, length = 256)
     private String hash;

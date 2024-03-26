@@ -8,9 +8,12 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public abstract class ScriptMapper {
+
     public abstract ScriptEntity toScriptEntity(Script script);
+
     public abstract Script toScript(ScriptEntity entity);
 
     public abstract TxScriptEntity toTxScriptEntity(TxScript txScript);
+
     public abstract TxScript toTxScript(TxScriptEntity entity);
 }

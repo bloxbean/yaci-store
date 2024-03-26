@@ -20,15 +20,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.blocks",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.blocks"})
+@ConditionalOnProperty(prefix = "store.blocks", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
+@EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.blocks")
 @EnableTransactionManagement
 @EnableScheduling
 public class BlocksStoreConfiguration {

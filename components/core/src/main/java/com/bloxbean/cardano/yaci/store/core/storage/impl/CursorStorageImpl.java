@@ -9,9 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
 public class CursorStorageImpl implements CursorStorage {
+
     private final CursorRepository cursorRepository;
 
     @Override
@@ -32,19 +33,19 @@ public class CursorStorageImpl implements CursorStorage {
     @Override
     public Optional<Cursor> getCurrentCursor(long eventPublisherId) {
         return cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId)
-                .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
+                .map(CursorStorageImpl::cursorEntityToCursor);
     }
 
     @Override
     public Optional<Cursor> getPreviousCursor(long eventPublisherId, long slot) {
         return cursorRepository.findTopByIdAndSlotBeforeOrderBySlotDesc(eventPublisherId, slot)
-                .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
+                .map(CursorStorageImpl::cursorEntityToCursor);
     }
 
     @Override
     public Optional<Cursor> findByBlockHash(long eventPublisherId, String blockHash) {
         return cursorRepository.findByIdAndBlockHash(eventPublisherId, blockHash)
-                .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
+                .map(CursorStorageImpl::cursorEntityToCursor);
     }
 
     @Transactional

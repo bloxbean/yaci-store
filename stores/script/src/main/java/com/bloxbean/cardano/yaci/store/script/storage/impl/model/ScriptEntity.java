@@ -4,10 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.Type;
 
 @Data

@@ -13,7 +13,7 @@ import java.util.*;
 @Component
 @Slf4j
 public class UtxoCache { //TODO -- auto expiry
-    private Map<String, AddressUtxo> utxoCache = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, AddressUtxo> utxoCache = Collections.synchronizedMap(new HashMap<>());
 
     @SneakyThrows
     public Optional<AddressUtxo> get(String txHash, int outputIndex) {
