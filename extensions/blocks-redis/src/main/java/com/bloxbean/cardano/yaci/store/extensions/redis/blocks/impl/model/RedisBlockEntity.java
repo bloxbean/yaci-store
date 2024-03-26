@@ -14,7 +14,7 @@ import java.math.BigInteger;
 import java.time.LocalDateTime;
 
 @Data
-@Document
+@Document("block")
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public class RedisBlockEntity {

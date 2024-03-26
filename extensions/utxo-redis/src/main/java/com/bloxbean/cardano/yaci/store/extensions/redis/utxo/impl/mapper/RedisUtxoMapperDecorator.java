@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisAddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisAmt;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisTxInputEntity;
 
 public class RedisUtxoMapperDecorator implements RedisUtxoMapper {
@@ -40,6 +42,11 @@ public class RedisUtxoMapperDecorator implements RedisUtxoMapper {
     @Override
     public TxInput toTxInput(RedisTxInputEntity redisTxInputEntity) {
         return delegate.toTxInput(redisTxInputEntity);
+    }
+
+    @Override
+    public Amt toAmt(RedisAmt redisAmt) {
+        return delegate.toAmt(redisAmt);
     }
 
 }

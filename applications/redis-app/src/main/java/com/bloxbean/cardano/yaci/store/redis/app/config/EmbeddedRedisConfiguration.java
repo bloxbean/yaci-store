@@ -37,20 +37,20 @@ public class EmbeddedRedisConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(RedisUtxoRepository utxoRepository, RedisTxInputRepository txInputRepository, EntityStream entityStream) {
-        return new RedisUtxoStorageReader(utxoRepository, txInputRepository, entityStream);
+    public UtxoStorageReader utxoStorageReader(RedisUtxoRepository utxoRepository, RedisTxInputRepository txInputRepository) {
+        return new RedisUtxoStorageReader(utxoRepository, txInputRepository);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockStorage blockStorage(RedisBlockRepository blockRepository, RedisBlockMapper blockMapper) {
-        return new RedisBlockStorage(blockRepository, blockMapper);
+    public BlockStorage blockStorage(RedisBlockRepository blockRepository, RedisBlockMapper blockMapper, EntityStream entityStream) {
+        return new RedisBlockStorage(blockRepository, blockMapper, entityStream);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockStorageReader blockStorageReader(RedisBlockRepository blockReadRepository, RedisBlockMapper blockMapper) {
-        return new RedisBlockStorageReader(blockReadRepository, blockMapper);
+    public BlockStorageReader blockStorageReader(RedisBlockRepository blockReadRepository, RedisBlockMapper blockMapper, EntityStream entityStream) {
+        return new RedisBlockStorageReader(blockReadRepository, blockMapper, entityStream);
     }
 
     @Bean

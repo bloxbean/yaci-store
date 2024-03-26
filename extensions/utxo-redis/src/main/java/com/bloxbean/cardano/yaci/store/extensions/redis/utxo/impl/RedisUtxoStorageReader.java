@@ -5,19 +5,20 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisBlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper.RedisUtxoMapper;
+import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisBlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisTxInputRepository;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisUtxoRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
-import com.redis.om.spring.search.stream.EntityStream;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,138 +27,160 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
 
     private final RedisUtxoRepository redisUtxoRepository;
     private final RedisTxInputRepository redisTxInputRepository;
-    private final EntityStream entityStream;
     private final RedisUtxoMapper mapper = RedisUtxoMapper.INSTANCE;
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
-        return redisUtxoRepository.findById(txHash+"#"+outputIndex)
+        return redisUtxoRepository.findById(txHash + "#" + outputIndex)
                 .map(mapper::toAddressUtxo);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByAddress(@NonNull String address, int page, int count, Order order) {
-        Pageable pageable = getPageable(page, count, order);
-
-
-//        return redisUtxoRepository.findUnspentByOwnerAddr(address, pageable)
-//                .stream()
-//                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
-//                .toList();
-        return null;
+        Pageable pageable = PageRequest.of(page, count)
+                .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerAddr(address)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
-    public List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order) {
+    public List<AddressUtxo> findUtxosByAsset(@NonNull String unit, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
 
-//        return entityStream.of(RedisAddressUtxoEntity.class)
-//                .filter()
-
-//        var query = dsl
-//                .select(ADDRESS_UTXO.fields())
-//                .from(ADDRESS_UTXO)
-//                .leftJoin(TX_INPUT)
-//                .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-//                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
-//                .and(TX_INPUT.TX_HASH.isNull())
-//                //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
-//                .offset(pageable.getOffset())
-//                .limit(pageable.getPageSize());
-
-//        return query.fetch().into(AddressUtxo.class);
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByAmounts_Unit(unit)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
-    public List<AddressUtxo> findUtxoByAddressAndAsset(String address, String unit, int page, int count, Order order) {
+    public List<AddressUtxo> findUtxoByAddressAndAsset(@NonNull String address, @NonNull String unit, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
-
-//        var query = dsl
-//                .select(ADDRESS_UTXO.fields())
-//                .from(ADDRESS_UTXO)
-//                .leftJoin(TX_INPUT)
-//                .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-//                .where(ADDRESS_UTXO.OWNER_ADDR.eq(address))
-//                .and(TX_INPUT.TX_HASH.isNull())
-//                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
-//                //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
-//                .offset(pageable.getOffset())
-//                .limit(pageable.getPageSize());
-//
-//        return query.fetch().into(AddressUtxo.class);
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerAddrAndAmounts_Unit(address, unit)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByPaymentCredential(@NonNull String paymentCredential, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
-
-//        return redisUtxoRepository.findUnspentByOwnerPaymentCredential(paymentCredential, pageable)
-//                .stream()
-//                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
-//                .toList();
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerPaymentCredential(paymentCredential)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
-    public List<AddressUtxo> findUtxoByPaymentCredentialAndAsset(String paymentCredential, String unit, int page, int count, Order order) {
+    public List<AddressUtxo> findUtxoByPaymentCredentialAndAsset(@NonNull String paymentCredential, @NonNull String unit, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
-
-//        var query = dsl
-//                .select(ADDRESS_UTXO.fields())
-//                .from(ADDRESS_UTXO)
-//                .leftJoin(TX_INPUT)
-//                .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-//                .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
-//                .and(TX_INPUT.TX_HASH.isNull())
-//                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
-//                //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc()) //TODO ordering
-//                .offset(pageable.getOffset())
-//                .limit(pageable.getPageSize());
-//
-//        return query.fetch().into(AddressUtxo.class);
-
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerPaymentCredentialAndAmounts_Unit(paymentCredential, unit)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByStakeAddress(@NonNull String stakeAddress, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
-
-//        return redisUtxoRepository.findUnspentByOwnerStakeAddr(stakeAddress, pageable)
-//                .stream()
-//                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
-//                .toList();
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerStakeAddr(stakeAddress)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
-    public List<AddressUtxo> findUtxoByStakeAddressAndAsset(@NonNull String stakeAddress, String unit, int page, int count, Order order) {
-        stakeAddress = stakeAddress.trim();
-
+    public List<AddressUtxo> findUtxoByStakeAddressAndAsset(@NonNull String stakeAddress, @NonNull String unit, int page, int count, Order order) {
         Pageable pageable = PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
-
-//        var query = dsl
-//                .select(ADDRESS_UTXO.fields())
-//                .from(ADDRESS_UTXO)
-//                .leftJoin(TX_INPUT)
-//                .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-//                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-//                .and(TX_INPUT.TX_HASH.isNull())
-//                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
-//                // .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: ordering
-//                .offset(pageable.getOffset())
-//                .limit(pageable.getPageSize());
-//
-//        return query.fetch().into(AddressUtxo.class);
-        return null;
+        List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerStakeAddrAndAmounts_Unit(stakeAddress, unit)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .map(mapper::toAddressUtxo)
+                .toList());
+        Comparator<AddressUtxo> comparator;
+        if (order.equals(Order.asc)) {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime);
+        } else {
+            comparator = Comparator.comparing(AddressUtxo::getBlockTime).reversed();
+        }
+        utxosByAddress.sort(comparator);
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), utxosByAddress.size());
+        return utxosByAddress.subList(start, end);
     }
 
     @Override
@@ -171,7 +194,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
     @Override
     public List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys) {
         List<String> redisUtxoIds = utxoKeys.stream()
-                .map(utxoKey -> utxoKey.getTxHash()+"#"+utxoKey.getOutputIndex())
+                .map(utxoKey -> utxoKey.getTxHash() + "#" + utxoKey.getOutputIndex())
                 .toList();
 
         return redisUtxoRepository.findAllById(redisUtxoIds)
@@ -186,28 +209,12 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
     @Override
     public List<Tuple<AddressUtxo, TxInput>> findSpentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
-        return null;
-//        List<Object[]> objects = redisUtxoRepository.findBySpentAtBlockBetween(startBlock, endBlock);
-//        if (objects == null)
-//            return Collections.emptyList();
-//
-//        return objects.stream().map(result -> {
-//            var addressUtxoEntity = (RedisAddressUtxoEntity) result[0];
-//            var addressUtxo = mapper.toAddressUtxo(addressUtxoEntity);
-//
-//            var txInputEntity = (RedisTxInputEntity) result[1];
-//            var txInput = mapper.toTxInput(txInputEntity);
-//
-//            return new Tuple<>(addressUtxo, txInput);
-//        }).collect(Collectors.toList());
-
-    }
-
-    private static PageRequest getPageable(int page, int count, Order order) {
-        return PageRequest.of(page, count)
-                .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
+        return redisTxInputRepository.findBySpentAtBlockBetween(startBlock, endBlock).stream()
+                .map(redisTxInputEntity -> new Tuple<>(
+                        redisUtxoRepository.findById(redisTxInputEntity.getTxHash() + "#" + redisTxInputEntity.getOutputIndex())
+                                .map(mapper::toAddressUtxo).orElse(null),
+                        mapper.toTxInput(redisTxInputEntity))).toList();
     }
 }

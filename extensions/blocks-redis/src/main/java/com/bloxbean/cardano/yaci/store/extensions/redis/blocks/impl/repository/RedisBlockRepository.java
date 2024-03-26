@@ -10,13 +10,11 @@ import java.util.Optional;
 @Repository
 public interface RedisBlockRepository extends RedisDocumentRepository<RedisBlockEntity, String> {
 
-    Optional<RedisBlockEntity> findTopByOrderByNumberDesc();
-
     Optional<RedisBlockEntity> findByNumber(Long number);
 
     List<RedisBlockEntity> findByEpochNumber(int epochNumber);
 
-    List<RedisBlockEntity> getBlockEntitiesBySlotLeaderAndEpochNumber(String slotLeader, int epochNumber);
+    List<RedisBlockEntity> findBySlotLeaderAndEpochNumber(String slotLeader, int epochNumber);
 
     Integer deleteBySlotGreaterThan(Long slot);
 }

@@ -17,6 +17,7 @@ import org.springframework.context.event.EventListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -24,7 +25,7 @@ public class RedisUtxoStorage implements UtxoStorage {
 
     private final RedisUtxoRepository redisUtxoRepository;
     private final RedisTxInputRepository redisTxInputRepository;
-//    private final DSLContext dsl;
+    //    private final DSLContext dsl;
     private final RedisUtxoMapper mapper = RedisUtxoMapper.INSTANCE;
     private final RedisTxInputMapper redisTxInputMapper = RedisTxInputMapper.INSTANCE;
     private final UtxoCache utxoCache;
@@ -35,7 +36,7 @@ public class RedisUtxoStorage implements UtxoStorage {
         if (cacheUtxo.isPresent())
             return cacheUtxo;
         else {
-            var savedUtxo = redisUtxoRepository.findById(txHash+"#"+outputIndex)
+            var savedUtxo = redisUtxoRepository.findById(txHash + "#" + outputIndex)
                     .map(mapper::toAddressUtxo);
             savedUtxo.ifPresent(utxoCache::add);
 
@@ -53,7 +54,7 @@ public class RedisUtxoStorage implements UtxoStorage {
         List<UtxoKey> notFoundKeys = cacheResult._2;
 
         List<String> redisUtxoIds = notFoundKeys.stream()
-                .map(utxoKey -> utxoKey.getTxHash()+"#"+utxoKey.getOutputIndex())
+                .map(utxoKey -> utxoKey.getTxHash() + "#" + utxoKey.getOutputIndex())
                 .toList();
 
         var savedUtxos = redisUtxoRepository.findAllById(redisUtxoIds)
@@ -61,8 +62,7 @@ public class RedisUtxoStorage implements UtxoStorage {
                 .toList();
 
         //Add remaining utxos to cache
-        if (savedUtxos != null)
-            savedUtxos.forEach(utxoCache::add);
+        savedUtxos.forEach(utxoCache::add);
 
         List<AddressUtxo> finalUtxos = new ArrayList<>();
         finalUtxos.addAll(cacheResult._1);
@@ -85,8 +85,13 @@ public class RedisUtxoStorage implements UtxoStorage {
 
     @Override
     public int deleteBySpentAndBlockLessThan(Long block) {
-//        return redisUtxoRepository.deleteBySpentAndBlockLessThan(block); TODO
-        return 0;
+        AtomicReference<Integer> cnt = new AtomicReference<>(0);
+        redisTxInputRepository.findByTxHashIsNotNullAndSpentAtBlockLessThan(block)
+                .forEach(redisTxInputEntity -> {
+                    Integer count = redisUtxoRepository.deleteByTxHashAndOutputIndex(redisTxInputEntity.getTxHash(), redisTxInputEntity.getOutputIndex());
+                    cnt.updateAndGet(v -> v + count);
+                });
+        return cnt.get();
     }
 
     @Override
@@ -108,44 +113,4 @@ public class RedisUtxoStorage implements UtxoStorage {
     public void handleCommit(CommitEvent commitEvent) {
         utxoCache.clear();
     }
-
-/**   Remove this method after testing
- @EventListener
- @Transactional
- public void handleCommit(CommitEvent event) {
- //        try {
- //            LocalDateTime localDateTime = LocalDateTime.now();
- //            dsl.batched(c -> {
- //                for (AddressUtxo addressUtxo : spentUtxoCache) {
- //                    c.dsl().insertInto(ADDRESS_UTXO)
- //                            .set(ADDRESS_UTXO.TX_HASH, addressUtxo.getTxHash())
- //                            .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
- //                            .set(ADDRESS_UTXO.SPENT, true)
- //                            .set(ADDRESS_UTXO.SPENT_AT_SLOT, addressUtxo.getSpentAtSlot())
- //                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK, addressUtxo.getSpentAtBlock())
- //                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK_HASH, addressUtxo.getSpentAtBlockHash())
- //                            .set(ADDRESS_UTXO.SPENT_BLOCK_TIME, addressUtxo.getSpentBlockTime())
- //                            .set(ADDRESS_UTXO.SPENT_EPOCH, addressUtxo.getSpentEpoch())
- //                            .set(ADDRESS_UTXO.SPENT_TX_HASH, addressUtxo.getSpentTxHash())
- //                            .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
- //                            .onDuplicateKeyUpdate()
- //                            .set(ADDRESS_UTXO.SPENT, true)
- //                            .set(ADDRESS_UTXO.SPENT_AT_SLOT, addressUtxo.getSpentAtSlot())
- //                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK, addressUtxo.getSpentAtBlock())
- //                            .set(ADDRESS_UTXO.SPENT_AT_BLOCK_HASH, addressUtxo.getSpentAtBlockHash())
- //                            .set(ADDRESS_UTXO.SPENT_BLOCK_TIME, addressUtxo.getSpentBlockTime())
- //                            .set(ADDRESS_UTXO.SPENT_EPOCH, addressUtxo.getSpentEpoch())
- //                            .set(ADDRESS_UTXO.SPENT_TX_HASH, addressUtxo.getSpentTxHash())
- //                            .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
- //                            .execute();
- //                }
- //            });
- //
- //        } finally {
- //            spentUtxoCache.clear();
- //        }
- }
- **/
-
-
 }

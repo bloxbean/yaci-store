@@ -7,22 +7,30 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface RedisUtxoRepository extends RedisDocumentRepository<RedisAddressUtxoEntity, String> {
 
-//    @Query("SELECT a FROM JpaAddressUtxoEntity a LEFT JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-//        "WHERE a.ownerAddr = :ownerAddress AND s.txHash IS NULL")
-//    Optional<List<RedisAddressUtxoEntity>> findUnspentByOwnerAddr(String ownerAddress, Pageable page);
-//
-//    @Query("SELECT a FROM JpaAddressUtxoEntity a LEFT JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-//        "WHERE a.ownerStakeAddr = :ownerAddress AND s.txHash IS NULL")
-//    Optional<List<RedisAddressUtxoEntity>> findUnspentByOwnerStakeAddr(String ownerAddress, Pageable page);
-//
-//
-//    @Query("SELECT a FROM JpaAddressUtxoEntity a LEFT JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-//        "WHERE a.ownerPaymentCredential = :paymentKeyHash AND s.txHash IS NULL")
-//    Optional<List<RedisAddressUtxoEntity>> findUnspentByOwnerPaymentCredential(String paymentKeyHash, Pageable page);
+    // TODO Remove After Bug Fix
+    List<RedisAddressUtxoEntity> findByOwnerAddr(String ownerAddress);
+
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerAddrAndTxHashIsNull(String ownerAddress, Pageable page);
+
+    // TODO Remove After Bug Fix
+    List<RedisAddressUtxoEntity> findByOwnerStakeAddr(String ownerStakeAddress);
+
+    // TODO Remove After Bug Fix
+    List<RedisAddressUtxoEntity> findByOwnerStakeAddrAndAmounts_Unit(String ownerStakeAddress, String unit);
+
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerStakeAddrAndTxHashIsNull(String ownerAddress, Pageable page);
+
+    // TODO Remove After Bug Fix
+    List<RedisAddressUtxoEntity> findByOwnerPaymentCredential(String paymentKeyHash);
+
+    List<RedisAddressUtxoEntity> findByOwnerPaymentCredentialAndAmounts_Unit(String paymentKeyHash, String unit);
+
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerPaymentCredentialAndTxHashIsNull(String paymentKeyHash, Pageable page);
 //
 //    @Query("SELECT a FROM JpaAddressUtxoEntity a LEFT JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
 //            "WHERE a.ownerStakeCredential = :delegationHash AND s.txHash IS NULL")
@@ -42,11 +50,12 @@ public interface RedisUtxoRepository extends RedisDocumentRepository<RedisAddres
 //    @QueryHints({ @QueryHint(name = "org.hibernate.cacheable", value = "false"),
 //            @QueryHint(name = "org.hibernate.readOnly", value = "true") })
 //    List<Object[]> findBySpentAtBlockBetween(Long startBlock, Long endBlock);
-//
-//    @Modifying
-//    @Transactional
-//    @Query("DELETE FROM JpaAddressUtxoEntity a WHERE a IN (SELECT au FROM JpaAddressUtxoEntity au JOIN JpaTxInputEntity s ON " +
-//            "au.txHash = s.txHash AND au.outputIndex = s.outputIndex AND s.spentAtBlock < :block)")
-//    int deleteBySpentAndBlockLessThan(Long block);
+
+
+    Integer deleteByTxHashAndOutputIndex(String txHash, long outputIndex);
+
+    List<RedisAddressUtxoEntity> findByOwnerAddrAndAmounts_Unit(String address, String unit);
+
+    List<RedisAddressUtxoEntity> findByAmounts_Unit(String unit);
 }
 

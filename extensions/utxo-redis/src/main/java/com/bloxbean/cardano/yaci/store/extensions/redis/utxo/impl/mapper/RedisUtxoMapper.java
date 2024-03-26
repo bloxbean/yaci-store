@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisAddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisAmt;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisTxInputEntity;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
@@ -18,4 +20,6 @@ public interface RedisUtxoMapper {
     AddressUtxo toAddressUtxo(RedisAddressUtxoEntity entity);
 
     TxInput toTxInput(RedisTxInputEntity redisTxInputEntity);
+
+    Amt toAmt(RedisAmt redisAmt);
 }

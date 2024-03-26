@@ -2,12 +2,12 @@ package com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model;
 
 import com.redis.om.spring.annotations.Document;
 import com.redis.om.spring.annotations.Indexed;
-import jakarta.persistence.Id;
+import org.springframework.data.annotation.Id;
 import lombok.*;
 
 @Data
 @Builder
-@Document
+@Document("tx_input")
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public class RedisTxInputEntity {

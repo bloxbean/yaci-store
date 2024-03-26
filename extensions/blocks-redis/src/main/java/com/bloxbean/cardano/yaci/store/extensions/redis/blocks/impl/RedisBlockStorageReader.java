@@ -7,12 +7,15 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.mapper.RedisBlockMapper;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.model.RedisBlockEntity;
+import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.model.RedisBlockEntity$;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.repository.RedisBlockRepository;
+import com.redis.om.spring.search.stream.EntityStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
+import redis.clients.jedis.search.aggr.SortedField;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,11 +26,13 @@ public class RedisBlockStorageReader implements BlockStorageReader {
 
     private final RedisBlockRepository redisBlockRepository;
     private final RedisBlockMapper blockDetailsMapper;
+    private final EntityStream entityStream;
 
     @Override
     public Optional<Block> findRecentBlock() {
-        return redisBlockRepository.findTopByOrderByNumberDesc()
-                .map(blockDetailsMapper::toBlock);
+        return Optional.of(entityStream.of(RedisBlockEntity.class)
+                .sorted(RedisBlockEntity$.NUMBER, SortedField.SortOrder.DESC)
+                .collect(Collectors.toList()).getFirst()).map(blockDetailsMapper::toBlock);
     }
 
     @Override
@@ -73,7 +78,7 @@ public class RedisBlockStorageReader implements BlockStorageReader {
 
     @Override
     public List<PoolBlock> findBlocksBySlotLeaderAndEpoch(String slotLeader, int epoch) {
-        return redisBlockRepository.getBlockEntitiesBySlotLeaderAndEpochNumber(slotLeader, epoch)
+        return redisBlockRepository.findBySlotLeaderAndEpochNumber(slotLeader, epoch)
                 .stream()
                 .map(redisBlockEntity -> PoolBlock.builder()
                         .hash(redisBlockEntity.getHash())

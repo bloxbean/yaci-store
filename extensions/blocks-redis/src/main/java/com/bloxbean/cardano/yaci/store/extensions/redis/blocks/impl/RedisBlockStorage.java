@@ -4,8 +4,11 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.mapper.RedisBlockMapper;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.model.RedisBlockEntity;
+import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.model.RedisBlockEntity$;
 import com.bloxbean.cardano.yaci.store.extensions.redis.blocks.impl.repository.RedisBlockRepository;
+import com.redis.om.spring.search.stream.EntityStream;
 import lombok.RequiredArgsConstructor;
+import redis.clients.jedis.search.aggr.SortedField;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,11 +19,13 @@ public class RedisBlockStorage implements BlockStorage {
 
     private final RedisBlockRepository redisBlockRepository;
     private final RedisBlockMapper blockDetailsMapper;
+    private final EntityStream entityStream;
 
     @Override
     public Optional<Block> findRecentBlock() {
-        return redisBlockRepository.findTopByOrderByNumberDesc()
-                .map(blockDetailsMapper::toBlock);
+        return Optional.of(entityStream.of(RedisBlockEntity.class)
+                .sorted(RedisBlockEntity$.NUMBER, SortedField.SortOrder.DESC)
+                .collect(Collectors.toList()).getFirst()).map(blockDetailsMapper::toBlock);
     }
 
     @Override
