@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public abstract class EpochMapper {
-
     public abstract Epoch toEpoch(EpochEntity blockEntity);
     public abstract EpochEntity toEpochEntity(Epoch blockEntity);
 

@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import java.io.File;
@@ -21,7 +20,6 @@ import java.util.Map;
 
 @Data
 @ToString
-@EqualsAndHashCode(callSuper = false)
 public class ByronGenesis extends GenesisFile {
     public static final String ATTR_START_TIME = "startTime";
     public static final String ATTR_BLOCK_VERSION_DATA = "blockVersionData";

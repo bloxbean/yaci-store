@@ -1,11 +1,10 @@
 version: "3.9"
 services:
   redis:
-    image: redis/redis-stack:latest
+    image: redis/redis-stack-server:latest
     restart: always
     ports:
       - "6379:6379"
-      - "8001:8001"
     environment:
       - "REDIS_ARGS=--appendonly yes"
     volumes:

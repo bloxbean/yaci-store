@@ -4,11 +4,10 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Data
-@Entity
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = true)
+@Builder
+@Entity
 public class Error extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

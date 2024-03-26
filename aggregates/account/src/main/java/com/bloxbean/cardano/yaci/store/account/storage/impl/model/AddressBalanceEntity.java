@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
@@ -12,16 +11,14 @@ import org.hibernate.annotations.DynamicUpdate;
 import java.math.BigInteger;
 
 @Data
-@Entity
-@SuperBuilder
-@DynamicUpdate
 @NoArgsConstructor
 @AllArgsConstructor
+@SuperBuilder
+@Entity
 @Table(name = "address_balance")
 @IdClass(AddressBalanceId.class)
-@EqualsAndHashCode(callSuper = false)
+@DynamicUpdate
 public class AddressBalanceEntity extends BlockAwareEntity {
-
     @Id
     @Column(name = "address")
     private String address;

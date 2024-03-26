@@ -9,7 +9,6 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import java.io.File;
@@ -20,7 +19,6 @@ import java.util.List;
 
 @Data
 @ToString
-@EqualsAndHashCode(callSuper = false)
 public class ShelleyGenesis extends GenesisFile {
     public static final String ATTR_SYSTEM_START = "systemStart";
     public static final String ATTR_SLOT_LENGTH = "slotLength";

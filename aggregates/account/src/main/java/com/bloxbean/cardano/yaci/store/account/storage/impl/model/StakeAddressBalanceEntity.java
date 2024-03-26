@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
@@ -12,14 +11,13 @@ import org.hibernate.annotations.DynamicUpdate;
 import java.math.BigInteger;
 
 @Data
-@Entity
-@SuperBuilder
-@DynamicUpdate
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = false)
-@IdClass(StakeAddressBalanceId.class)
+@SuperBuilder
+@Entity
 @Table(name = "stake_address_balance")
+@IdClass(StakeAddressBalanceId.class)
+@DynamicUpdate
 public class StakeAddressBalanceEntity extends BlockAwareEntity {
 
     @Id

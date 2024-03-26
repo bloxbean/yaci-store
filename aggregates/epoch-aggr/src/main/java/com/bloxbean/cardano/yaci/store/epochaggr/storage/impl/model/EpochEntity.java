@@ -9,14 +9,12 @@ import lombok.*;
 
 import java.math.BigInteger;
 
-
 @Data
-@Entity
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@Entity
 @Table(name = "epoch")
-@EqualsAndHashCode(callSuper = false)
 public class EpochEntity extends BaseEntity {
 
     @Id

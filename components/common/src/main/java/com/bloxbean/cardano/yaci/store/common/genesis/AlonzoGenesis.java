@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 import java.io.File;
 import java.io.InputStream;
@@ -19,7 +18,6 @@ import java.util.SortedMap;
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.*;
 
 @Data
-@EqualsAndHashCode(callSuper = false)
 public class AlonzoGenesis extends GenesisFile {
     private static final String LOVELACE_PER_UTXO_WORD = "lovelacePerUTxOWord";
     private static final String EXECUTION_PRICES = "executionPrices";
