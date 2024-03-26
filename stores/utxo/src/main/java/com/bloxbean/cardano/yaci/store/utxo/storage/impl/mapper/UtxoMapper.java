@@ -11,10 +11,10 @@ import org.mapstruct.factory.Mappers;
 @Mapper
 @DecoratedWith(UtxoMapperDecorator.class)
 public interface UtxoMapper {
-
     UtxoMapper INSTANCE = Mappers.getMapper(UtxoMapper.class);
 
     AddressUtxoEntity toAddressUtxoEntity(AddressUtxo addressUtxo);
     AddressUtxo toAddressUtxo(AddressUtxoEntity entity);
+
     TxInput toTxInput(TxInputEntity txInputEntity);
 }

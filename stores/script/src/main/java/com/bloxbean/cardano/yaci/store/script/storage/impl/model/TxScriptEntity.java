@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
@@ -14,14 +13,12 @@ import java.math.BigInteger;
 import java.util.UUID;
 
 @Data
-@Entity
-@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
+@SuperBuilder
+@Entity
 @Table(name = "transaction_scripts")
-@EqualsAndHashCode(callSuper = false)
 public class TxScriptEntity extends BlockAwareEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)

@@ -15,7 +15,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "cursor_")
 @IdClass(CursorId.class)
 public class CursorEntity extends BaseEntity {
-
     @Id
     @Column(name = "id")
     private Long id;

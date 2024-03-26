@@ -14,7 +14,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoService {
-    
     private final UtxoStorageReader utxoStorage;
 
     public Optional<AddressUtxo> getUtxo(String txHash, int index) {

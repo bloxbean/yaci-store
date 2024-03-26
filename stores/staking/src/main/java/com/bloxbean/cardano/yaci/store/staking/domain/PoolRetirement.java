@@ -8,22 +8,16 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-/**
- * Pool Retirement
- */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-@EqualsAndHashCode(callSuper = false)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class PoolRetirement extends BlockAwareDomain {
-
     private String txHash;
     private int certIndex;
     private String poolId;

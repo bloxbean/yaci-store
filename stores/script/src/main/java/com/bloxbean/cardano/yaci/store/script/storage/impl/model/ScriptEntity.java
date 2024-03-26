@@ -8,14 +8,12 @@ import lombok.*;
 import org.hibernate.annotations.Type;
 
 @Data
-@Entity
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@Entity
 @Table(name = "script")
-@EqualsAndHashCode(callSuper = false)
 public class ScriptEntity extends BaseEntity {
-
     @Id
     @Column(name = "script_hash")
     private String scriptHash;

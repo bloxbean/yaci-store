@@ -19,7 +19,6 @@ import java.math.BigInteger;
 @IdClass(StakeAddressBalanceId.class)
 @DynamicUpdate
 public class StakeAddressBalanceEntity extends BlockAwareEntity {
-
     @Id
     @Column(name = "address")
     private String address;

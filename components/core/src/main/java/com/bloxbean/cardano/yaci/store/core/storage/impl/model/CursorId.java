@@ -6,12 +6,11 @@ import lombok.*;
 import java.io.Serializable;
 
 @Getter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
+@Builder
 public class CursorId implements Serializable {
-
     @Column(name = "id")
     private Long id;
     @Column(name = "block_hash")
