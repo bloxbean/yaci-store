@@ -4,19 +4,20 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper.RedisTxInputMapper;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper.RedisUtxoMapper;
-import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisTxInputRepository;
+import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisAddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisUtxoRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.event.EventListener;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
@@ -24,10 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RedisUtxoStorage implements UtxoStorage {
 
     private final RedisUtxoRepository redisUtxoRepository;
-    private final RedisTxInputRepository redisTxInputRepository;
-    //    private final DSLContext dsl;
     private final RedisUtxoMapper mapper = RedisUtxoMapper.INSTANCE;
-    private final RedisTxInputMapper redisTxInputMapper = RedisTxInputMapper.INSTANCE;
     private final UtxoCache utxoCache;
 
     @Override
@@ -73,24 +71,35 @@ public class RedisUtxoStorage implements UtxoStorage {
 
     @Override
     public int deleteUnspentBySlotGreaterThan(Long slot) {
-        Integer count = redisUtxoRepository.deleteBySlotGreaterThan(slot);
-        return count == null ? 0 : count;
+        AtomicInteger cnt = new AtomicInteger(0);
+        redisUtxoRepository.findBySlotGreaterThan(slot)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
+                .forEach(redisAddressUtxoEntity -> {
+                    redisUtxoRepository.deleteById(redisAddressUtxoEntity.getId());
+                    cnt.incrementAndGet();
+        });
+        return cnt.get();
     }
 
     @Override
     public int deleteSpentBySlotGreaterThan(Long slot) {
-        Integer count = redisTxInputRepository.deleteBySpentAtSlotGreaterThan(slot);
-        return count == null ? 0 : count;
+        AtomicInteger cnt = new AtomicInteger(0);
+        redisUtxoRepository.findBySlotGreaterThan(slot)
+                .stream()
+                .filter(redisAddressUtxoEntity -> StringUtils.isNotBlank(redisAddressUtxoEntity.getSpentTxHash()))
+                .forEach(redisAddressUtxoEntity -> {
+                    redisUtxoRepository.deleteById(redisAddressUtxoEntity.getId());
+                    cnt.incrementAndGet();
+                });
+        return cnt.get();
     }
 
     @Override
     public int deleteBySpentAndBlockLessThan(Long block) {
-        AtomicReference<Integer> cnt = new AtomicReference<>(0);
-        redisTxInputRepository.findByTxHashIsNotNullAndSpentAtBlockLessThan(block)
-                .forEach(redisTxInputEntity -> {
-                    Integer count = redisUtxoRepository.deleteByTxHashAndOutputIndex(redisTxInputEntity.getTxHash(), redisTxInputEntity.getOutputIndex());
-                    cnt.updateAndGet(v -> v + count);
-                });
+        List<RedisAddressUtxoEntity> redisAddressUtxoEntities = redisUtxoRepository.findBySpentAtBlockLessThan(block);
+        AtomicReference<Integer> cnt = new AtomicReference<>(redisAddressUtxoEntities.size());
+        redisUtxoRepository.deleteAll(redisAddressUtxoEntities);
         return cnt.get();
     }
 
@@ -106,7 +115,15 @@ public class RedisUtxoStorage implements UtxoStorage {
     public void saveSpent(List<TxInput> txInputs) {
         if (txInputs == null || txInputs.isEmpty())
             return;
-        redisTxInputRepository.saveAll(txInputs.stream().map(redisTxInputMapper::toRedisTxInputEntity).toList());
+        txInputs.forEach(txInput -> redisUtxoRepository.findById(txInput.getTxHash() + "#" + txInput.getOutputIndex())
+                .ifPresent(redisAddressUtxoEntity -> {
+                    redisAddressUtxoEntity.setSpentAtSlot(txInput.getSpentAtSlot());
+                    redisAddressUtxoEntity.setSpentAtBlock(txInput.getSpentAtBlock());
+                    redisAddressUtxoEntity.setSpentAtBlockHash(txInput.getSpentAtBlockHash());
+                    redisAddressUtxoEntity.setSpentEpoch(txInput.getSpentEpoch());
+                    redisAddressUtxoEntity.setSpentTxHash(txInput.getSpentTxHash());
+                    redisUtxoRepository.save(redisAddressUtxoEntity);
+        }));
     }
 
     @EventListener

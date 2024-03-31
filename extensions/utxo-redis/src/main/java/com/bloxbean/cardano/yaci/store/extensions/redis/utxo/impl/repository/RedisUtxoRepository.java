@@ -12,50 +12,58 @@ import java.util.Optional;
 @Repository
 public interface RedisUtxoRepository extends RedisDocumentRepository<RedisAddressUtxoEntity, String> {
 
-    // TODO Remove After Bug Fix
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerAddr(String ownerAddress);
 
-    Optional<List<RedisAddressUtxoEntity>> findByOwnerAddrAndTxHashIsNull(String ownerAddress, Pageable page);
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerAddrAndSpentTxHashIsNull(String ownerAddress, Pageable page);
 
-    // TODO Remove After Bug Fix
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerStakeAddr(String ownerStakeAddress);
 
-    // TODO Remove After Bug Fix
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerStakeAddrAndSpentTxHashIsNull(String ownerStakeAddress, Pageable page);
+
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerStakeAddrAndAmounts_Unit(String ownerStakeAddress, String unit);
 
-    Optional<List<RedisAddressUtxoEntity>> findByOwnerStakeAddrAndTxHashIsNull(String ownerAddress, Pageable page);
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerStakeAddrAndSpentTxHashIsNullAndAmounts_Unit(String ownerStakeAddress, Pageable page);
 
-    // TODO Remove After Bug Fix
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerPaymentCredential(String paymentKeyHash);
 
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerPaymentCredentialAndSpentTxHashIsNull(String paymentKeyHash, Pageable page);
+
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerPaymentCredentialAndAmounts_Unit(String paymentKeyHash, String unit);
 
-    Optional<List<RedisAddressUtxoEntity>> findByOwnerPaymentCredentialAndTxHashIsNull(String paymentKeyHash, Pageable page);
-//
-//    @Query("SELECT a FROM JpaAddressUtxoEntity a LEFT JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-//            "WHERE a.ownerStakeCredential = :delegationHash AND s.txHash IS NULL")
-//    Optional<List<RedisAddressUtxoEntity>> findUnspentByOwnerStakeCredential(String delegationHash, Pageable page);
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerPaymentCredentialAndSpentTxHashIsNullAndAmounts_Unit(String paymentKeyHash, String unit, Pageable page);
 
-    Integer deleteBySlotGreaterThan(Long slot);
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
+    List<RedisAddressUtxoEntity> findBySlotGreaterThan(Long slot);
 
-    //Required for account balance aggregation
+    List<RedisAddressUtxoEntity> findBySlotGreaterThanAndSpentTxHashIsNull(Long slot);
+
+    List<RedisAddressUtxoEntity> findBySlotGreaterThanAndSpentTxHashIsNotNull(Long slot);
+
     Page<RedisAddressUtxoEntity> findDistinctByBlockNumberGreaterThanEqualOrderByBlockNumberAsc(Long blockNumber, Pageable pageable);
 
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     //Find unspent between blocks
     List<RedisAddressUtxoEntity> findByBlockNumberBetween(Long startBlock, Long endBlock);
 
+    Optional<List<RedisAddressUtxoEntity>> findByBlockNumberBetweenAndSpentTxHashIsNull(Long startBlock, Long endBlock);
 
-//    @Query("SELECT a,s FROM JpaAddressUtxoEntity a JOIN JpaTxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-//            "WHERE s.spentAtBlock BETWEEN :startBlock AND :endBlock")
-//    @QueryHints({ @QueryHint(name = "org.hibernate.cacheable", value = "false"),
-//            @QueryHint(name = "org.hibernate.readOnly", value = "true") })
-//    List<Object[]> findBySpentAtBlockBetween(Long startBlock, Long endBlock);
-
-
-    Integer deleteByTxHashAndOutputIndex(String txHash, long outputIndex);
-
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByOwnerAddrAndAmounts_Unit(String address, String unit);
 
+    Optional<List<RedisAddressUtxoEntity>> findByOwnerAddrAndSpentTxHashIsNullAndAmounts_Unit(String address, String unit);
+
+    // TODO Remove After Bug Fix https://github.com/redis/redis-om-spring/issues/399
     List<RedisAddressUtxoEntity> findByAmounts_Unit(String unit);
+
+    List<RedisAddressUtxoEntity> findBySpentTxHashIsNullAndAmounts_Unit(String unit);
+
+    List<RedisAddressUtxoEntity> findBySpentAtBlockLessThan(Long block);
+
+    List<RedisAddressUtxoEntity> findBySpentAtBlockBetween(Long start, Long end);
 }
 

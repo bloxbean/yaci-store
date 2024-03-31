@@ -5,7 +5,6 @@ plugins {
 dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
-    implementation project(':starters:blocks-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -16,6 +15,7 @@ dependencies {
 
     implementation libs.spring.boot.admin.client
 
-
+    runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
 }
 

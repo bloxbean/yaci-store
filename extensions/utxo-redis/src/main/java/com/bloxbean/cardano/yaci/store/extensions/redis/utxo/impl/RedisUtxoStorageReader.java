@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.mapper.RedisUtxoMapper;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.model.RedisBlockAwareEntity;
-import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisTxInputRepository;
 import com.bloxbean.cardano.yaci.store.extensions.redis.utxo.impl.repository.RedisUtxoRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
@@ -26,7 +25,6 @@ import java.util.Optional;
 public class RedisUtxoStorageReader implements UtxoStorageReader {
 
     private final RedisUtxoRepository redisUtxoRepository;
-    private final RedisTxInputRepository redisTxInputRepository;
     private final RedisUtxoMapper mapper = RedisUtxoMapper.INSTANCE;
 
     @Override
@@ -41,7 +39,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerAddr(address)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -63,7 +61,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
 
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByAmounts_Unit(unit)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -84,7 +82,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerAddrAndAmounts_Unit(address, unit)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -105,7 +103,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerPaymentCredential(paymentCredential)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -147,7 +145,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerStakeAddr(stakeAddress)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -168,7 +166,7 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
         List<AddressUtxo> utxosByAddress = new ArrayList<>(redisUtxoRepository.findByOwnerStakeAddrAndAmounts_Unit(stakeAddress, unit)
                 .stream()
-                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getTxHash()))
+                .filter(redisAddressUtxoEntity -> StringUtils.isBlank(redisAddressUtxoEntity.getSpentTxHash()))
                 .map(mapper::toAddressUtxo)
                 .toList());
         Comparator<AddressUtxo> comparator;
@@ -211,10 +209,9 @@ public class RedisUtxoStorageReader implements UtxoStorageReader {
 
     @Override
     public List<Tuple<AddressUtxo, TxInput>> findSpentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
-        return redisTxInputRepository.findBySpentAtBlockBetween(startBlock, endBlock).stream()
-                .map(redisTxInputEntity -> new Tuple<>(
-                        redisUtxoRepository.findById(redisTxInputEntity.getTxHash() + "#" + redisTxInputEntity.getOutputIndex())
-                                .map(mapper::toAddressUtxo).orElse(null),
-                        mapper.toTxInput(redisTxInputEntity))).toList();
+        return redisUtxoRepository.findBySpentAtBlockBetween(startBlock, endBlock).stream()
+                .map(redisAddressUtxoEntity -> new Tuple<>(
+                        mapper.toAddressUtxo(redisAddressUtxoEntity),
+                        mapper.toTxInput(redisAddressUtxoEntity))).toList();
     }
 }
