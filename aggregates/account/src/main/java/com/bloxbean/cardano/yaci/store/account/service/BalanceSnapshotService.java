@@ -13,8 +13,6 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.*;
 
 @Service
@@ -26,8 +24,6 @@ public class BalanceSnapshotService {
 
     private final JobLauncher jobLauncher;
     private final Job accountBalanceJob;
-
-    private final AtomicBoolean isTakingBalanceSnapshot = new AtomicBoolean(false);
 
     @SneakyThrows
     public void scheduleBalanceSnapshot(EventMetadata eventMetadata) {
