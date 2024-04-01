@@ -40,4 +40,6 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private boolean addressTxAmountIncludeZeroAmount = false;
+
+    private long initialBalanceSnapshotBlock;
 }

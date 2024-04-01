@@ -1,6 +1,9 @@
 dependencies {
     api project(":stores:utxo")
+    api project(":components:core")
     implementation(libs.guava)
+
+    implementation("org.springframework.boot:spring-boot-starter-batch")
 }
 
 publishing {
