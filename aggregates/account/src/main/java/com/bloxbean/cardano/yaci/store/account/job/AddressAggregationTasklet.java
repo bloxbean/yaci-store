@@ -45,7 +45,6 @@ public class AddressAggregationTasklet implements Tasklet {
         log.info("Processing addresses from {}, limit: {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, limit, to, finalEndOffset, chunkContext.getStepContext().getId());
 
         calculateAddressBalance(startOffset, limit, snapshotSlot);
-        calculateStakeAddressBalance(startOffset, limit, snapshotSlot);
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));
@@ -78,34 +77,6 @@ public class AddressAggregationTasklet implements Tasklet {
                                                        block = EXCLUDED.block,
                                                        block_time = EXCLUDED.block_time,
                                                        epoch = EXCLUDED.epoch;                                    
-                """;
-
-        jdbcTemplate.update(sql, startOffset, limit, snapshotSlot);
-    }
-
-    private void calculateStakeAddressBalance(long startOffset, long limit, Long snapshotSlot) {
-        String sql = """
-                with incremental as (select stake_address,
-                                            sum(quantity)   as quantity,
-                                            max(slot)       as slot,
-                                            max(block)      as block,
-                                            max(block_time) as block_time,
-                                            max(epoch)      as epoch
-                                     from address_tx_amount ata
-                                     where ata.stake_address is not null
-                                        and ata.stake_address in (select address.stake_address from address where stake_address is not null offset ? limit ?)
-                                        and ata.slot <= ?
-                                     group by stake_address)
-                insert
-                into stake_address_balance (address,  quantity, slot, block, block_time, epoch, update_datetime)
-                select stake_address, quantity, slot, block, block_time, epoch, now()
-                from incremental inc
-                ON CONFLICT (address, slot) DO UPDATE SET
-                                                                quantity = EXCLUDED.quantity,
-                                                                slot = EXCLUDED.slot,
-                                                                block = EXCLUDED.block,
-                                                                block_time = EXCLUDED.block_time,
-                                                                epoch = EXCLUDED.epoch;
                 """;
 
         jdbcTemplate.update(sql, startOffset, limit, snapshotSlot);
