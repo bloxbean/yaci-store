@@ -37,6 +37,9 @@ public class AccountStoreAutoConfigProperties {
         private boolean addressTxAmountIncludeZeroAmount = false;
 
         private long initialBalanceSnapshotBlock;
+
+        private int balanceCalcJobBatchSize = 1000;
+        private int balanceCalcJobPartitionSize = 10;
     }
 
 }

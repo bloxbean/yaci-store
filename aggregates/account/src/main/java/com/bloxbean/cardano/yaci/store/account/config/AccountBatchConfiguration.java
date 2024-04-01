@@ -1,7 +1,11 @@
 package com.bloxbean.cardano.yaci.store.account.config;
 
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
+import com.bloxbean.cardano.yaci.store.account.job.AccountConfigUpdateTasklet;
 import com.bloxbean.cardano.yaci.store.account.job.AddressAggregationTasklet;
 import com.bloxbean.cardano.yaci.store.account.job.AddressRangePartitioner;
+import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
+import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -27,18 +31,22 @@ public class AccountBatchConfiguration {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final JdbcTemplate jdbcTemplate;
+    private final AccountConfigService accountConfigService;
+    private final StartService startService;
+    private final AccountStoreProperties accountStoreProperties;
 
     @Bean
     public Job accountBalanceJob() {
         return new JobBuilder("addressAggregationJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(accountBalanceMasterStep())
+                .next(accountConfigUpdateStep())
                 .build();
     }
 
     @Bean
     public Step accountBalanceMasterStep() {
-        return new StepBuilder("masterStep", jobRepository)
+        return new StepBuilder("balanceCalcStep", jobRepository)
                 .partitioner(accountBalanceSlaveStep().getName(), accountBalancePartitioner())
                 .partitionHandler(accountBalanceartitionHandler())
                 .build();
@@ -54,20 +62,32 @@ public class AccountBatchConfiguration {
         TaskExecutorPartitionHandler partitionHandler = new TaskExecutorPartitionHandler();
         partitionHandler.setStep(accountBalanceSlaveStep());
         partitionHandler.setTaskExecutor(accountBalanceTaskExecutor());
-        partitionHandler.setGridSize(10); // Adjust based on your needs and system capabilities
+        partitionHandler.setGridSize(accountStoreProperties.getBalanceCalcJobPartitionSize());
         return partitionHandler;
     }
 
     @Bean
     public Step accountBalanceSlaveStep() {
-        return new StepBuilder("slaveStep", jobRepository)
+        return new StepBuilder("accountBalanceCalculationStep", jobRepository)
                 .tasklet(accountBalanceTasklet(), transactionManager) // Pass the batchSize to the tasklet
                 .build();
     }
 
     @Bean
+    public Step accountConfigUpdateStep() {
+        return new StepBuilder("accountConfigUpdateStep", jobRepository)
+                .tasklet(accountConfigUpdateTasklet(), transactionManager)
+                .build();
+    }
+
+    @Bean
     public Tasklet accountBalanceTasklet() {
-        return new AddressAggregationTasklet(jdbcTemplate);
+        return new AddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+    }
+
+    @Bean
+    public Tasklet accountConfigUpdateTasklet() {
+        return new AccountConfigUpdateTasklet(accountConfigService, startService);
     }
 
     @Bean
