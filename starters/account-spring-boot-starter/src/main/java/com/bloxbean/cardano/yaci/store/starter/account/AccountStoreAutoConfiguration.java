@@ -39,6 +39,7 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setAddressCacheExpiryAfterAccess(properties.getAccount().getAddressCacheExpiryAfterAccess());
 
         accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());
+        accountStoreProperties.setInitialBalanceSnapshotBlock(properties.getAccount().getInitialBalanceSnapshotBlock());
         return accountStoreProperties;
     }
 }

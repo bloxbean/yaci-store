@@ -49,6 +49,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
+    private AtomicBoolean scheduleToStop = new AtomicBoolean(false);
     private Thread keepAliveThread;
 
     //Required to publish EpochChangeEvent
@@ -58,6 +59,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
+        if (scheduleToStop.get()) {
+            log.debug("Stopping BlockFetchService as scheduled");
+            return;
+        }
+
         checkError();
         byronBlockEventPublisher.processBlocksInParallel();
 
@@ -253,6 +259,14 @@ public class BlockFetchService implements BlockChainDataListener {
             blockSync.stop();
     }
 
+    public void stop() {
+        scheduleToStop.set(true);
+        if (blockRangeSync != null)
+            blockRangeSync.stop();
+        if (blockSync != null)
+            blockSync.stop();
+    }
+
     @Transactional
     @Override
     public void onRollback(Point point) {
@@ -315,6 +329,8 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startFetch(Point from, Point to) {
+        scheduleToStop.set(false);
+
         stopKeepAliveThread();
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
@@ -325,6 +341,8 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startSync(Point from) {
+        scheduleToStop.set(false);
+
         stopKeepAliveThread();
         blockSync.startSync(from, this);
         syncMode = true;

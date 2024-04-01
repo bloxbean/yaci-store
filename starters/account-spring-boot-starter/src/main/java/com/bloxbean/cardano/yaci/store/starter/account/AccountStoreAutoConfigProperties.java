@@ -35,6 +35,8 @@ public class AccountStoreAutoConfigProperties {
         private int addressCacheExpiryAfterAccess = 15;
 
         private boolean addressTxAmountIncludeZeroAmount = false;
+
+        private long initialBalanceSnapshotBlock;
     }
 
 }
