@@ -9,6 +9,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.END_OFFSET;
+import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.START_OFFSET;
+
 @RequiredArgsConstructor
 @Slf4j
 public class AddressRangePartitioner implements Partitioner {
@@ -28,8 +31,8 @@ public class AddressRangePartitioner implements Partitioner {
             // For the last partition, it correctly goes to totalAddresses
             int endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
 
-            executionContext.putLong("startOffset", startOffset);
-            executionContext.putLong("endOffset", endOffset);
+            executionContext.putLong(START_OFFSET, startOffset);
+            executionContext.putLong(END_OFFSET, endOffset);
 
             result.put("partition" + i, executionContext);
         }

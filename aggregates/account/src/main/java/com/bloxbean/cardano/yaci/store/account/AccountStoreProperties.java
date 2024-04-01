@@ -42,4 +42,10 @@ public class AccountStoreProperties {
     private boolean addressTxAmountIncludeZeroAmount = false;
 
     private long initialBalanceSnapshotBlock;
+
+    @Builder.Default
+    private int balanceCalcJobBatchSize = 1000;
+
+    @Builder.Default
+    private int balanceCalcJobPartitionSize = 10;
 }
