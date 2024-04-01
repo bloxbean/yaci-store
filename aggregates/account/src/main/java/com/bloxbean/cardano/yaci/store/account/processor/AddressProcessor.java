@@ -1,8 +1,11 @@
 package com.bloxbean.cardano.yaci.store.account.processor;
 
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.Address;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressStorage;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -16,8 +19,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -78,6 +83,43 @@ public class AddressProcessor {
         } finally {
             addresseCache.clear();
         }
+    }
+
+    @EventListener
+    @Transactional
+    public void handleGenesisBalances(GenesisBlockEvent genesisBlockEvent) {
+        var genesisBalances = genesisBlockEvent.getGenesisBalances();
+        if (genesisBalances == null || genesisBalances.isEmpty()) {
+            log.info("No genesis balances found");
+            return;
+        }
+
+        Set<Address> addresses = genesisBalances.stream().map(genesisBalance -> {
+            String paymentCredential = null;
+            String stakeCredential = null;
+            String stakeAddress = null;
+            try {
+                com.bloxbean.cardano.client.address.Address address = new com.bloxbean.cardano.client.address.Address(genesisBalance.getAddress());
+                paymentCredential = address.getPaymentCredential().map(credential -> HexUtil.encodeHexString(credential.getBytes()))
+                        .orElse(null);
+
+                stakeCredential = address.getDelegationCredential().map(delegCred -> HexUtil.encodeHexString(delegCred.getBytes()))
+                        .orElse(null);
+                stakeAddress = address.getDelegationCredential().map(delegCred -> AddressProvider.getStakeAddress(address).toBech32())
+                        .orElse(null);
+            } catch (Exception e) {
+                //Not a valid shelley address
+            }
+
+            return Address.builder()
+                    .address(genesisBalance.getAddress())
+                    .paymentCredential(paymentCredential)
+                    .stakeCredential(stakeCredential)
+                    .stakeAddress(stakeAddress)
+                    .build();
+        }).collect(Collectors.toSet());
+
+        addressStorage.save(addresses);
     }
 
     @EventListener

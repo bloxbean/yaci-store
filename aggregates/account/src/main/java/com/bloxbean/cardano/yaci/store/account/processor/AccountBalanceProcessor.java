@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
+import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
@@ -44,6 +45,7 @@ public class AccountBalanceProcessor {
     private final AccountStoreProperties accountStoreProperties;
     private final UtxoClient utxoClient;
     private final AccountConfigService accountConfigService;
+    private final BalanceSnapshotService balanceSnapshotService;
     private final ParallelExecutor parallelExecutor;
 
     private int nAddrBalanceRecordToKeep = 3;
@@ -65,8 +67,13 @@ public class AccountBalanceProcessor {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             return;
 
-        log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
         try {
+            if (event.getMetadata().getBlock() < accountStoreProperties.getInitialBalanceSnapshotBlock()) {
+                log.info("Ignore balance calculation as the block is less than the initial balance snapshot block {}", accountStoreProperties.getInitialBalanceSnapshotBlock());
+                return;
+            }
+
+            log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
             Collection<AddressUtxoEvent> addressUtxoEvents = addressUtxoEventsMap.values();
 
             var accountConfigOpt = accountConfigService.getConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK);
@@ -88,6 +95,11 @@ public class AccountBalanceProcessor {
                 log.warn("The last processed block for account balance calculation is not the same as the expected last block.");
                 log.warn("Last processed block for account balance: {}", lastProcessedBlock);
                 log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
+
+                if (accountStoreProperties.getInitialBalanceSnapshotBlock() > 0) {
+                    balanceSnapshotService.scheduleBalanceSnapshot(event.getMetadata());
+                }
+
                 return;
             }
 

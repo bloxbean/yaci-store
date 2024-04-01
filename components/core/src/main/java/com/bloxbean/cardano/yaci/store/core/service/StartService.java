@@ -143,4 +143,18 @@ public class StartService {
             blockFetchService.startFetch(from, to);
         }
     }
+
+    public void stop() {
+        log.info("Stopping the StartService >>>> ");
+        if (blockFetchService.isRunning()) {
+            try {
+                blockFetchService.stop();
+            } catch (Exception e) {
+                log.debug("Error stopping blockFetchService", e);
+            }
+        }
+
+        alreadyStarted = false;
+    }
+
 }
