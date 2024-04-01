@@ -344,6 +344,8 @@ public class AccountBalanceProcessor {
 
                     List<SlotAmount> slotAmountValues = entry.getValue();
 
+                    List<AddressBalance> addressSlotBalances = new ArrayList<>();
+
                     //Sort slot values from low to high
                     List<SlotAmount> slotAmounts = null;
                     if (slotAmountValues.size() > 1)
@@ -352,7 +354,14 @@ public class AccountBalanceProcessor {
                         slotAmounts = slotAmountValues;
 
                     var savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1);
-                    List<AddressBalance> addressSlotBalances = new ArrayList<>();
+                    if (savedAddressBalance.isEmpty()) {
+                        log.debug("Checking if the address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                        savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot());
+                        if (savedAddressBalance.isPresent()) {
+                            log.debug("Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                            return addressSlotBalances;
+                        }
+                    }
 
                     BigInteger quantity = savedAddressBalance.map(addressBalance -> addressBalance.getQuantity())
                             .orElse(BigInteger.ZERO);
@@ -378,7 +387,6 @@ public class AccountBalanceProcessor {
                             if (savedAddressBalance.isPresent()) {
                                 log.info("Previous amount : " + savedAddressBalance.get().getQuantity());
                                 log.info("SlotAmounts >> " + slotAmounts);
-                                //log.info("Amount to add / deduct : " + totalQuantity);
                                 log.info("Unit: " + savedAddressBalance.get().getUnit());
                             }
                             log.error("Existing AddressBalance >> " + savedAddressBalance);
@@ -405,6 +413,15 @@ public class AccountBalanceProcessor {
 
                     var savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
                     List<StakeAddressBalance> stakeAddressBalances = new ArrayList<>();
+
+                    if (savedStakeAddressBalance.isEmpty()) {
+                        log.debug("Checking if the stake address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                        savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot());
+                        if (savedStakeAddressBalance.isPresent()) {
+                            log.debug("Stake Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                            return stakeAddressBalances;
+                        }
+                    }
 
                     BigInteger quantity = savedStakeAddressBalance.map(stakeAddrBalance -> stakeAddrBalance.getQuantity())
                             .orElse(BigInteger.ZERO);

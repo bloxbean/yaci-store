@@ -40,6 +40,10 @@ public class AccountStoreAutoConfiguration {
 
         accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());
         accountStoreProperties.setInitialBalanceSnapshotBlock(properties.getAccount().getInitialBalanceSnapshotBlock());
+
+        accountStoreProperties.setBalanceCalcJobBatchSize(properties.getAccount().getBalanceCalcJobBatchSize());
+        accountStoreProperties.setBalanceCalcJobPartitionSize(properties.getAccount().getBalanceCalcJobPartitionSize());
+
         return accountStoreProperties;
     }
 }
