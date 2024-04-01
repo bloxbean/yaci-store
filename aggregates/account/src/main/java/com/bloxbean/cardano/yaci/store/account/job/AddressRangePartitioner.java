@@ -26,7 +26,7 @@ public class AddressRangePartitioner implements Partitioner {
             int startOffset = i * partitionSize;
             // Adjust endOffset to be one less than the startOffset of the next partition
             // For the last partition, it correctly goes to totalAddresses
-            int endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize) - 1;
+            int endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
 
             executionContext.putLong("startOffset", startOffset);
             executionContext.putLong("endOffset", endOffset);
