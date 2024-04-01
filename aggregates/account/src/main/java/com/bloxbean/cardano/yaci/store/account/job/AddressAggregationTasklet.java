@@ -18,7 +18,7 @@ public class AddressAggregationTasklet implements Tasklet {
     private long batchSize = 1000;
 
     @Override
-    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         ExecutionContext executionContext = chunkContext.getStepContext().getStepExecution().getExecutionContext();
         long startOffset = executionContext.getLong("startOffset", 0L); // Default to 0 if not set
         long finalEndOffset = executionContext.getLong("endOffset");
@@ -32,8 +32,7 @@ public class AddressAggregationTasklet implements Tasklet {
             limit = finalEndOffset - startOffset;
         }
 
-        log.info("Step Context Id: ", chunkContext.getStepContext().getId());
-        log.info("Processing addresses from {}, limit: {}", startOffset, limit);
+        log.info("Processing addresses from {}, limit: {}, endOffSet: {}, FinalEndOffSet {}, stepId: {}", startOffset, limit, endOffset, finalEndOffset, chunkContext.getStepContext().getId());
 
         String sql = """
                     with incremental as (select address,
@@ -49,7 +48,13 @@ public class AddressAggregationTasklet implements Tasklet {
                                                insert
                                                into address_balance
                                                select *
-                                               from incremental                                    
+                                               from incremental
+                                               ON CONFLICT (address, unit, slot) DO UPDATE SET
+                                                       quantity = EXCLUDED.quantity,
+                                                       slot = EXCLUDED.slot,
+                                                       block = EXCLUDED.block,
+                                                       block_time = EXCLUDED.block_time,
+                                                       epoch = EXCLUDED.epoch;                                    
                 """;
 
         jdbcTemplate.update(sql, startOffset, limit);
