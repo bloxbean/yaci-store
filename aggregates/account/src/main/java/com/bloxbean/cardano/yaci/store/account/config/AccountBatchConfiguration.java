@@ -1,9 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.config;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
-import com.bloxbean.cardano.yaci.store.account.job.AccountConfigUpdateTasklet;
-import com.bloxbean.cardano.yaci.store.account.job.AddressAggregationTasklet;
-import com.bloxbean.cardano.yaci.store.account.job.AddressRangePartitioner;
+import com.bloxbean.cardano.yaci.store.account.job.*;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
@@ -40,13 +38,15 @@ public class AccountBatchConfiguration {
         return new JobBuilder("addressAggregationJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(accountBalanceMasterStep())
+                .next(stakeAddressBalanceMasterStep())
                 .next(accountConfigUpdateStep())
                 .build();
     }
 
+    //--- Account Balance Calculation
     @Bean
     public Step accountBalanceMasterStep() {
-        return new StepBuilder("balanceCalcStep", jobRepository)
+        return new StepBuilder("accountBalanceCalcStep", jobRepository)
                 .partitioner(accountBalanceSlaveStep().getName(), accountBalancePartitioner())
                 .partitionHandler(accountBalanceartitionHandler())
                 .build();
@@ -61,7 +61,7 @@ public class AccountBatchConfiguration {
     public TaskExecutorPartitionHandler accountBalanceartitionHandler() {
         TaskExecutorPartitionHandler partitionHandler = new TaskExecutorPartitionHandler();
         partitionHandler.setStep(accountBalanceSlaveStep());
-        partitionHandler.setTaskExecutor(accountBalanceTaskExecutor());
+        partitionHandler.setTaskExecutor(balanceTaskExecutor());
         partitionHandler.setGridSize(accountStoreProperties.getBalanceCalcJobPartitionSize());
         return partitionHandler;
     }
@@ -74,15 +74,49 @@ public class AccountBatchConfiguration {
     }
 
     @Bean
-    public Step accountConfigUpdateStep() {
-        return new StepBuilder("accountConfigUpdateStep", jobRepository)
-                .tasklet(accountConfigUpdateTasklet(), transactionManager)
+    public Tasklet accountBalanceTasklet() {
+        return new AddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+    }
+
+    //--- Stake Address Balance Calculation
+    public Step stakeAddressBalanceMasterStep() {
+        return new StepBuilder("stakeAddressBalanceCalcStep", jobRepository)
+                .partitioner(stakeAddressBalanceSlaveStep().getName(), stakeAddressBalancePartitioner())
+                .partitionHandler(stakeAddressBalancePartitionHandler())
                 .build();
     }
 
     @Bean
-    public Tasklet accountBalanceTasklet() {
-        return new AddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+    public Partitioner stakeAddressBalancePartitioner() {
+        return new StakeAddressRangePartitioner(jdbcTemplate);
+    }
+
+    @Bean
+    public TaskExecutorPartitionHandler stakeAddressBalancePartitionHandler() {
+        TaskExecutorPartitionHandler partitionHandler = new TaskExecutorPartitionHandler();
+        partitionHandler.setStep(stakeAddressBalanceSlaveStep());
+        partitionHandler.setTaskExecutor(balanceTaskExecutor());
+        partitionHandler.setGridSize(accountStoreProperties.getBalanceCalcJobPartitionSize());
+        return partitionHandler;
+    }
+
+    @Bean
+    public Step stakeAddressBalanceSlaveStep() {
+        return new StepBuilder("stakeAddressBalanceCalculationStep", jobRepository)
+                .tasklet(stakeAddressBalanceTasklet(), transactionManager) // Pass the batchSize to the tasklet
+                .build();
+    }
+
+    @Bean
+    public Tasklet stakeAddressBalanceTasklet() {
+        return new StakeAddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+    }
+
+    @Bean
+    public Step accountConfigUpdateStep() {
+        return new StepBuilder("accountConfigUpdateStep", jobRepository)
+                .tasklet(accountConfigUpdateTasklet(), transactionManager)
+                .build();
     }
 
     @Bean
@@ -91,7 +125,7 @@ public class AccountBatchConfiguration {
     }
 
     @Bean
-    public TaskExecutor accountBalanceTaskExecutor() {
+    public TaskExecutor balanceTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(10);
         executor.setMaxPoolSize(20);
