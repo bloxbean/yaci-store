@@ -34,8 +34,6 @@ public class AddressAggregationTasklet implements Tasklet {
         var snapshotSlot = chunkContext.getStepContext().getStepExecution()
                 .getJobParameters().getLong(SNAPSHOT_SLOT);
 
-        log.info("Snapshot Block: {}, Slot: {}", snapshotBlock, snapshotSlot);
-
         long limit = accountStoreProperties.getBalanceCalcJobBatchSize();
 
         long to = startOffset + limit;
@@ -49,7 +47,7 @@ public class AddressAggregationTasklet implements Tasklet {
 
         calculateAddressBalance(startOffset, limit, snapshotSlot);
 
-        //log.info("Total addresses processed: {}", count.addAndGet(limit));
+        log.info("Snapshot Block: {}, Slot: {} . Total addresses processed: {}", snapshotBlock, snapshotSlot, count.addAndGet(limit));
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));
