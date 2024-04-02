@@ -20,7 +20,7 @@ public class StakeAddressRangePartitioner implements Partitioner {
 
     public Map<String, ExecutionContext> partition(int gridSize) {
         log.info("Partitioning stake addresses into {} partitions", gridSize);
-        int totalAddresses = jdbcTemplate.queryForObject("SELECT COUNT(distinct stake_address) FROM address where stake_address is not null", Integer.class);
+        int totalAddresses = jdbcTemplate.queryForObject("select count(*) from (SELECT stake_address FROM address where stake_address is not null group by stake_address) as sa", Integer.class);
         int partitionSize = totalAddresses / gridSize;
 
         Map<String, ExecutionContext> result = new HashMap<>();
