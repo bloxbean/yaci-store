@@ -188,8 +188,6 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setDbBatchSize(properties.getDb().getBatchSize());
         storeProperties.setDbParallelInsert(properties.getDb().isParallelInsert());
 
-        storeProperties.setEnableAdminApi(properties.isEnableAdminApi());
-
         return storeProperties;
     }
 

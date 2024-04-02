@@ -353,13 +353,18 @@ public class AccountBalanceProcessor {
                     else
                         slotAmounts = slotAmountValues;
 
+                    boolean firstBlockAlreadyProcessed = false;
+
                     var savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot() - 1);
                     if (savedAddressBalance.isEmpty()) {
-                        log.debug("Checking if the address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                        if (log.isDebugEnabled())
+                            log.debug("Checking if the address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+
                         savedAddressBalance = accountBalanceStorage.getAddressBalance(key.getAddress(), key.getUnit(), firstBlockMetadata.getSlot());
                         if (savedAddressBalance.isPresent()) {
-                            log.debug("Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
-                            return addressSlotBalances;
+                            if (log.isDebugEnabled())
+                                log.debug("Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                            firstBlockAlreadyProcessed = true;
                         }
                     }
 
@@ -367,6 +372,10 @@ public class AccountBalanceProcessor {
                             .orElse(BigInteger.ZERO);
 
                     for (SlotAmount slotAmount : slotAmounts) {
+                        if (firstBlockAlreadyProcessed && slotAmount.getEventMetadata().getSlot() == firstBlockMetadata.getSlot()) { //Ignore this slot amount as it's already processed
+                            continue;
+                        }
+
                         AddressBalance newAddressBalance = null;
                         quantity = quantity.add(slotAmount.getQuantity());
 
@@ -414,12 +423,17 @@ public class AccountBalanceProcessor {
                     var savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot() - 1);
                     List<StakeAddressBalance> stakeAddressBalances = new ArrayList<>();
 
+                    boolean firstBlockAlreadyProcessed = false;
+
                     if (savedStakeAddressBalance.isEmpty()) {
-                        log.debug("Checking if the stake address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                        if (log.isDebugEnabled())
+                            log.debug("Checking if the stake address balance is already there for current block {}, slot {}", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+
                         savedStakeAddressBalance = accountBalanceStorage.getStakeAddressBalance(stakeAddrInfoKey.getAddress(), firstBlockMetadata.getSlot());
                         if (savedStakeAddressBalance.isPresent()) {
-                            log.debug("Stake Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
-                            return stakeAddressBalances;
+                            if (log.isDebugEnabled())
+                                log.debug("Stake Address balance is already there for current block {}, slot {}. Ignoring the balance calculation", firstBlockMetadata.getBlock(), firstBlockMetadata.getSlot());
+                            firstBlockAlreadyProcessed = true;
                         }
                     }
 
@@ -427,6 +441,10 @@ public class AccountBalanceProcessor {
                             .orElse(BigInteger.ZERO);
 
                     for (SlotAmount slotAmount : slotAmounts) {
+                        if (firstBlockAlreadyProcessed && slotAmount.getEventMetadata().getSlot() == firstBlockMetadata.getSlot()) { //Ignore this slot amount as it's already processed
+                            continue;
+                        }
+
                         StakeAddressBalance newStakeAddrBalance = null;
                         quantity = quantity.add(slotAmount.getQuantity());
 
