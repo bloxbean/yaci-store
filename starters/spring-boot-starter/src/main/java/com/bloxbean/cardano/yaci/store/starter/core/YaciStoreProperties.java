@@ -16,7 +16,6 @@ public class YaciStoreProperties {
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
     private String utxoClientUrl;
-    private boolean enableAdminApi = false;
 
     @Getter
     @Setter
