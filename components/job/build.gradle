@@ -1,0 +1,15 @@
+dependencies {
+    api project(":components:common")
+    implementation("org.springframework.boot:spring-boot-starter-batch")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Job Config Module'
+                description = 'Yaci Store - Job Config Module'
+            }
+        }
+    }
+}
