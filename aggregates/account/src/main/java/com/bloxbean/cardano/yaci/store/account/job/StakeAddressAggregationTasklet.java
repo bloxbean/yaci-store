@@ -10,6 +10,8 @@ import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
     private final JdbcTemplate jdbcTemplate;
     private final AccountStoreProperties accountStoreProperties;
+    private final static AtomicLong count = new AtomicLong(0);
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
@@ -43,6 +46,8 @@ public class StakeAddressAggregationTasklet implements Tasklet {
         log.info("Processing stake addresses from {}, limit: {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, limit, to, finalEndOffset, chunkContext.getStepContext().getId());
 
         calculateStakeAddressBalance(startOffset, limit, snapshotSlot);
+
+        //log.info("Total stake addresses processed: {}", count.addAndGet(limit));
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));

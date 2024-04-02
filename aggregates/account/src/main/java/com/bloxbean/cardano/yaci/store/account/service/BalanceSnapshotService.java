@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
-import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +25,12 @@ public class BalanceSnapshotService {
     private final Job accountBalanceJob;
 
     @SneakyThrows
-    public void scheduleBalanceSnapshot(EventMetadata eventMetadata) {
+    public synchronized void scheduleBalanceSnapshot() {
+        if (!startService.isStarted()) {
+            log.info("Looks like sync process has not been started or balanced snapshot is in progress. Skipping balance snapshot");
+            return;
+        }
+
         startService.stop();
 
         Thread.startVirtualThread(() -> {
@@ -35,7 +39,7 @@ public class BalanceSnapshotService {
     }
 
     @SneakyThrows
-    public void takeBalanceSnapshot() {
+    private void takeBalanceSnapshot() {
         log.info("Taking balance snapshot at current cursor...");
         var cursor = cursorService.getCursor().orElse(null);
 
