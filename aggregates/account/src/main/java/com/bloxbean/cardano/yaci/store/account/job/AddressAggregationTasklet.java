@@ -3,23 +3,26 @@ package com.bloxbean.cardano.yaci.store.account.job;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.CommonTableExpression;
+import org.jooq.DSLContext;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
 @Slf4j
 public class AddressAggregationTasklet implements Tasklet {
 
-    private final JdbcTemplate jdbcTemplate;
     private final AccountStoreProperties accountStoreProperties;
+    private final DSLContext dsl;
     private final static AtomicLong count = new AtomicLong(0);
 
     @Override
@@ -58,31 +61,62 @@ public class AddressAggregationTasklet implements Tasklet {
     }
 
     private void calculateAddressBalance(long startOffset, long limit, Long snapshotSlot) {
-        String sql = """
-                    with incremental as (select address,
-                                                unit,
-                                                sum(quantity)   as quantity,
-                                                max(slot)       as slot,
-                                                max(block)      as block,
-                                                max(block_time) as block_time,
-                                                max(epoch)      as epoch
-                                                                    from address_tx_amount ata
-                                                                    where ata.address in (select address from address offset ? limit ?)
-                                                                    and ata.slot <= ?
-                                                                    group by address, unit)
-                                               insert
-                                               into address_balance (address, unit, quantity, slot, block, block_time, epoch, update_datetime)
-                                               select address, unit, quantity, slot, block, block_time, epoch, now()
-                                               from incremental
-                                               ON CONFLICT (address, unit, slot) DO UPDATE SET
-                                                       quantity = EXCLUDED.quantity,
-                                                       slot = EXCLUDED.slot,
-                                                       block = EXCLUDED.block,
-                                                       block_time = EXCLUDED.block_time,
-                                                       epoch = EXCLUDED.epoch;                                    
-                """;
 
-        jdbcTemplate.update(sql, startOffset, limit, snapshotSlot);
+        CommonTableExpression<?> incremental = name("incremental").as(
+                select(field(ADDRESS_TX_AMOUNT.ADDRESS).as("address"),
+                        field(ADDRESS_TX_AMOUNT.UNIT).as("unit"),
+                        coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).as("quantity"),
+                        max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
+                        max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
+                        max(field(ADDRESS_TX_AMOUNT.BLOCK_TIME)).as("block_time"),
+                        max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch")
+                )
+                        .from(ADDRESS_TX_AMOUNT)
+                        .where(ADDRESS_TX_AMOUNT.SLOT.le(snapshotSlot)
+                                .and(ADDRESS_TX_AMOUNT.ADDRESS
+                                        .in(select(ADDRESS.ADDRESS_)
+                                                .from(ADDRESS)
+                                                .offset(startOffset)
+                                                .limit(limit)
+                                        )
+                                )
+                        )
+                        .groupBy(ADDRESS_TX_AMOUNT.ADDRESS, ADDRESS_TX_AMOUNT.UNIT)
+        );
+
+        dsl.with(incremental)
+                .insertInto(ADDRESS_BALANCE,
+                        ADDRESS_BALANCE.ADDRESS,
+                        ADDRESS_BALANCE.UNIT,
+                        ADDRESS_BALANCE.QUANTITY,
+                        ADDRESS_BALANCE.SLOT,
+                        ADDRESS_BALANCE.BLOCK,
+                        ADDRESS_BALANCE.BLOCK_TIME,
+                        ADDRESS_BALANCE.EPOCH,
+                        ADDRESS_BALANCE.UPDATE_DATETIME
+                ).select(select(
+                        incremental.field(ADDRESS_BALANCE.ADDRESS),
+                        incremental.field(ADDRESS_BALANCE.UNIT),
+                        incremental.field(ADDRESS_BALANCE.QUANTITY),
+                        incremental.field(ADDRESS_BALANCE.SLOT),
+                        incremental.field(ADDRESS_BALANCE.BLOCK),
+                        incremental.field(ADDRESS_BALANCE.BLOCK_TIME),
+                        incremental.field(ADDRESS_BALANCE.EPOCH),
+                        currentLocalDateTime())
+                        .from(incremental)
+                )
+                .onConflict(
+                        ADDRESS_BALANCE.ADDRESS,
+                        ADDRESS_BALANCE.UNIT,
+                        ADDRESS_BALANCE.SLOT
+                )
+                .doUpdate()
+                .set(ADDRESS_BALANCE.QUANTITY, excluded(ADDRESS_BALANCE.QUANTITY))
+                .set(ADDRESS_BALANCE.SLOT, excluded(ADDRESS_BALANCE.SLOT))
+                .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
+                .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
+                .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH))
+                .execute();
     }
 
 }
