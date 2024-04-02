@@ -47,7 +47,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
         calculateStakeAddressBalance(startOffset, limit, snapshotSlot);
 
-        //log.info("Total stake addresses processed: {}", count.addAndGet(limit));
+        log.info("Total stake addresses processed: {}", count.addAndGet(limit));
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));

@@ -329,6 +329,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startFetch(Point from, Point to) {
+        isError.set(false);
         scheduleToStop.set(false);
 
         stopKeepAliveThread();
@@ -341,6 +342,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startSync(Point from) {
+        isError.set(false);
         scheduleToStop.set(false);
 
         stopKeepAliveThread();
