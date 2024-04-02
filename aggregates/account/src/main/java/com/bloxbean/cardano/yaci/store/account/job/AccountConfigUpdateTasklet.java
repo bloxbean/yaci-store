@@ -10,7 +10,7 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 
-import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.*;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -31,7 +31,7 @@ public class AccountConfigUpdateTasklet implements Tasklet {
                 .getJobParameters().getLong(SNAPSHOT_SLOT);
 
         var updateAccountConfig = chunkContext.getStepContext().getStepExecution()
-                .getJobParameters().getString(JobConstants.UPDATE_ACCOUNT_CONFIG);
+                .getJobParameters().getString(AccountJobConstants.UPDATE_ACCOUNT_CONFIG);
 
         if (updateAccountConfig == null || !updateAccountConfig.equals("true")) {
             log.info("Update account config is not set to true. Skipping account config update");

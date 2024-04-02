@@ -13,7 +13,7 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.stereotype.Service;
 
-import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.*;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @Service
 @RequiredArgsConstructor

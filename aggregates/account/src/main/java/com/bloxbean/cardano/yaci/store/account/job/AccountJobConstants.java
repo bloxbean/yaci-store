@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.job;
 
-public class JobConstants {
+public class AccountJobConstants {
     public final static String START_OFFSET = "startOffset";
     public final static String END_OFFSET = "endOffset";
     public final static String SNAPSHOT_SLOT = "snapshotSlot";

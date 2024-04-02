@@ -10,7 +10,7 @@ import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.*;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @RequiredArgsConstructor
 @Slf4j
