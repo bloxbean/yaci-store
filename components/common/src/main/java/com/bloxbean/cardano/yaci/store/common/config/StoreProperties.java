@@ -78,6 +78,4 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private int dbBatchSize = 200;
     private boolean dbParallelInsert = true;
-
-    private boolean enableAdminApi = false;
 }
