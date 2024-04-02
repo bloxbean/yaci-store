@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.END_OFFSET;
-import static com.bloxbean.cardano.yaci.store.account.job.JobConstants.START_OFFSET;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.END_OFFSET;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.START_OFFSET;
 
 @RequiredArgsConstructor
 @Slf4j
