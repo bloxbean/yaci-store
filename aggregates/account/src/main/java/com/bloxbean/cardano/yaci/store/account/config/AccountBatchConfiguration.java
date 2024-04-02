@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.DSLContext;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -32,6 +33,7 @@ public class AccountBatchConfiguration {
     private final AccountConfigService accountConfigService;
     private final StartService startService;
     private final AccountStoreProperties accountStoreProperties;
+    private final DSLContext dsl;
 
     @Bean
     public Job accountBalanceJob() {
@@ -75,7 +77,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet accountBalanceTasklet() {
-        return new AddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+        return new AddressAggregationTasklet(accountStoreProperties, dsl);
     }
 
     //--- Stake Address Balance Calculation
@@ -109,7 +111,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet stakeAddressBalanceTasklet() {
-        return new StakeAddressAggregationTasklet(jdbcTemplate, accountStoreProperties);
+        return new StakeAddressAggregationTasklet(accountStoreProperties, dsl);
     }
 
     @Bean
