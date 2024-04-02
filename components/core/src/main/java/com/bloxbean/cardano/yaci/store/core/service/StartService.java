@@ -157,4 +157,8 @@ public class StartService {
         alreadyStarted = false;
     }
 
+    public boolean isStarted() {
+        return alreadyStarted;
+    }
+
 }

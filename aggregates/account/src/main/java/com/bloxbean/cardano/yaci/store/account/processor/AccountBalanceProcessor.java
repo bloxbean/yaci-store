@@ -97,7 +97,7 @@ public class AccountBalanceProcessor {
                 log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
 
                 if (accountStoreProperties.getInitialBalanceSnapshotBlock() > 0) {
-                    balanceSnapshotService.scheduleBalanceSnapshot(event.getMetadata());
+                    balanceSnapshotService.scheduleBalanceSnapshot();
                 }
 
                 return;
