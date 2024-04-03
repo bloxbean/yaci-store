@@ -16,6 +16,8 @@ public class YaciStoreProperties {
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
     private String utxoClientUrl;
+    private boolean mvstoreEnabled = false;
+    private String mvstorePath = "./.mvstore";
 
     @Getter
     @Setter
