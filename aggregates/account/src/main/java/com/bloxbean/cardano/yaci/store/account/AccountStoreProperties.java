@@ -33,7 +33,10 @@ public class AccountStoreProperties {
     private long balanceCleanupSlotCount = 43200; //2160 blocks
 
     @Builder.Default
-    private int addressCacheSize = 2_000_000;
+    private boolean addressCacheEnabled = false;
+
+    @Builder.Default
+    private int addressCacheSize = 50000;
 
     @Builder.Default
     private int addressCacheExpiryAfterAccess = 15;

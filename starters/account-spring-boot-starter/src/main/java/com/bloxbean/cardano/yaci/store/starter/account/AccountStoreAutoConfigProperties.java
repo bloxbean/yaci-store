@@ -31,7 +31,8 @@ public class AccountStoreAutoConfigProperties {
         private int balanceHistoryCleanupInterval = 300;
         private long balanceCleanupSlotCount = 43200; //2160 blocks
 
-        private int addressCacheSize = 2_000_000;
+        private boolean addressCacheEnabled = false;
+        private int addressCacheSize = 50000;
         private int addressCacheExpiryAfterAccess = 15;
 
         private boolean addressTxAmountIncludeZeroAmount = false;

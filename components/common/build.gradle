@@ -19,7 +19,7 @@ dependencies {
 
     runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'
 
-    runtimeOnly 'com.h2database:h2'
+    api 'com.h2database:h2'
 
     implementation 'org.flywaydb:flyway-core'
     implementation "org.flywaydb:flyway-mysql"

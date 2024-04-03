@@ -5,12 +5,16 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.Address;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressStorage;
+import com.bloxbean.cardano.yaci.store.cache.GuavaCache;
+import com.bloxbean.cardano.yaci.store.cache.NoCache;
+import com.bloxbean.cardano.yaci.store.common.cache.Cache;
+import com.bloxbean.cardano.yaci.store.common.cache.MVMapCache;
+import com.bloxbean.cardano.yaci.store.common.cache.MVStoreFactory;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Component
@@ -30,6 +33,7 @@ import java.util.stream.Collectors;
 public class AddressProcessor {
     private final AddressStorage addressStorage;
     private final AccountStoreProperties accountStoreProperties;
+    private final StoreProperties storeProperties;
 
     private Cache<String, String> cache;
     private Map<String, Address> addresseCache = new ConcurrentHashMap<>();
@@ -38,19 +42,28 @@ public class AddressProcessor {
     public void init() {
         log.info("-- Address Processor Initialized with address cache size: {}, expiry: {} min"
                 , accountStoreProperties.getAddressCacheSize(), accountStoreProperties.getAddressCacheExpiryAfterAccess());
-        cache = CacheBuilder.newBuilder()
-                .maximumSize(accountStoreProperties.getAddressCacheSize())
-                .expireAfterAccess(accountStoreProperties.getAddressCacheExpiryAfterAccess(),
-                        TimeUnit.MINUTES)
-                .build();
+
+        if (accountStoreProperties.isAddressCacheEnabled() && !storeProperties.isMvstoreEnabled()) {
+            cache = new GuavaCache<>(accountStoreProperties.getAddressCacheSize(),
+                    accountStoreProperties.getAddressCacheExpiryAfterAccess());
+            log.info("<< Using Guava Cache for Address >>");
+        } else if (!accountStoreProperties.isAddressCacheEnabled()) {
+            log.info("<< Address Cache is disabled >>");
+            cache = new NoCache<>();
+        }
     }
 
     @EventListener
     public void handleAddress(AddressUtxoEvent addressUtxoEvent) {
+        if (cache == null && accountStoreProperties.isAddressCacheEnabled() && storeProperties.isMvstoreEnabled()) {
+            cache = new MVMapCache<>(MVStoreFactory.getInstance().getStore(), "address");
+            log.info("<< Using MVStore Cache for Address >>");
+        }
+
         //Get Addresses
         addressUtxoEvent.getTxInputOutputs()
                 .stream().flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
-                .filter(addressUtxo -> cache.getIfPresent(addressUtxo.getOwnerAddr()) == null)
+                .filter(addressUtxo -> cache.get(addressUtxo.getOwnerAddr()) == null)
                 .forEach(addressUtxo -> {
                     var address = Address.builder()
                             .address(addressUtxo.getOwnerAddr())
@@ -126,6 +139,7 @@ public class AddressProcessor {
     @Transactional
     public void handleRollback(RollbackEvent rollbackEvent) {
         addresseCache.clear();
-        cache.invalidateAll();
+        if (cache != null)
+            cache.clear();
     }
 }
