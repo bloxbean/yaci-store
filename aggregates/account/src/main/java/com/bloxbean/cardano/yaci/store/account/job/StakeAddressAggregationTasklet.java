@@ -3,23 +3,26 @@ package com.bloxbean.cardano.yaci.store.account.job;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.CommonTableExpression;
+import org.jooq.DSLContext;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
 @Slf4j
 public class StakeAddressAggregationTasklet implements Tasklet {
 
-    private final JdbcTemplate jdbcTemplate;
     private final AccountStoreProperties accountStoreProperties;
+    private final DSLContext dsl;
     private final static AtomicLong count = new AtomicLong(0);
 
     @Override
@@ -58,31 +61,58 @@ public class StakeAddressAggregationTasklet implements Tasklet {
     }
 
     private void calculateStakeAddressBalance(long startOffset, long limit, Long snapshotSlot) {
-        String sql = """
-                with incremental as (select stake_address,
-                                            sum(quantity)   as quantity,
-                                            max(slot)       as slot,
-                                            max(block)      as block,
-                                            max(block_time) as block_time,
-                                            max(epoch)      as epoch
-                                     from address_tx_amount ata
-                                     where ata.stake_address is not null
-                                        and ata.stake_address in (select distinct address.stake_address from address where stake_address is not null offset ? limit ?)
-                                        and ata.slot <= ?
-                                     group by stake_address)
-                insert
-                into stake_address_balance (address,  quantity, slot, block, block_time, epoch, update_datetime)
-                select stake_address, quantity, slot, block, block_time, epoch, now()
-                from incremental inc
-                ON CONFLICT (address, slot) DO UPDATE SET
-                                                                quantity = EXCLUDED.quantity,
-                                                                slot = EXCLUDED.slot,
-                                                                block = EXCLUDED.block,
-                                                                block_time = EXCLUDED.block_time,
-                                                                epoch = EXCLUDED.epoch;
-                """;
+        CommonTableExpression<?> incremental = name("incremental").as(
+                select(field(ADDRESS_TX_AMOUNT.STAKE_ADDRESS).as("stake_address"),
+                        coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).as("quantity"),
+                        max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
+                        max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
+                        max(field(ADDRESS_TX_AMOUNT.BLOCK_TIME)).as("block_time"),
+                        max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch")
+                )
+                        .from(ADDRESS_TX_AMOUNT)
+                        .where(ADDRESS_TX_AMOUNT.STAKE_ADDRESS.isNotNull()
+                                .and(ADDRESS_TX_AMOUNT.SLOT.le(snapshotSlot))
+                                .and(ADDRESS_TX_AMOUNT.STAKE_ADDRESS
+                                        .in(selectDistinct(ADDRESS.STAKE_ADDRESS)
+                                                .from(ADDRESS)
+                                                .where(ADDRESS.STAKE_ADDRESS.isNotNull())
+                                                .offset(startOffset)
+                                                .limit(limit)
+                                        )
+                                )
+                        )
+                        .groupBy(ADDRESS_TX_AMOUNT.STAKE_ADDRESS)
+        );
 
-        jdbcTemplate.update(sql, startOffset, limit, snapshotSlot);
+        dsl.with(incremental)
+                .insertInto(STAKE_ADDRESS_BALANCE,
+                        STAKE_ADDRESS_BALANCE.ADDRESS,
+                        STAKE_ADDRESS_BALANCE.QUANTITY,
+                        STAKE_ADDRESS_BALANCE.SLOT,
+                        STAKE_ADDRESS_BALANCE.BLOCK,
+                        STAKE_ADDRESS_BALANCE.BLOCK_TIME,
+                        STAKE_ADDRESS_BALANCE.EPOCH,
+                        STAKE_ADDRESS_BALANCE.UPDATE_DATETIME
+                ).select(select(
+                        incremental.field(STAKE_ADDRESS_BALANCE.ADDRESS),
+                        incremental.field(STAKE_ADDRESS_BALANCE.QUANTITY),
+                        incremental.field(STAKE_ADDRESS_BALANCE.SLOT),
+                        incremental.field(STAKE_ADDRESS_BALANCE.BLOCK),
+                        incremental.field(STAKE_ADDRESS_BALANCE.BLOCK_TIME),
+                        incremental.field(STAKE_ADDRESS_BALANCE.EPOCH),
+                        currentLocalDateTime())
+                        .from(incremental))
+                .onConflict(
+                        STAKE_ADDRESS_BALANCE.ADDRESS,
+                        STAKE_ADDRESS_BALANCE.SLOT
+                )
+                .doUpdate()
+                .set(STAKE_ADDRESS_BALANCE.QUANTITY, excluded(STAKE_ADDRESS_BALANCE.QUANTITY))
+                .set(STAKE_ADDRESS_BALANCE.SLOT, excluded(STAKE_ADDRESS_BALANCE.SLOT))
+                .set(STAKE_ADDRESS_BALANCE.BLOCK, excluded(STAKE_ADDRESS_BALANCE.BLOCK))
+                .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, excluded(STAKE_ADDRESS_BALANCE.BLOCK_TIME))
+                .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH))
+                .execute();
     }
 
 }
