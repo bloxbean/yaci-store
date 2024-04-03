@@ -62,7 +62,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
     private void calculateStakeAddressBalance(long startOffset, long limit, Long snapshotSlot) {
         CommonTableExpression<?> incremental = name("incremental").as(
-                select(field(ADDRESS_TX_AMOUNT.STAKE_ADDRESS).as("stake_address"),
+                select(field(ADDRESS_TX_AMOUNT.STAKE_ADDRESS).as("address"),
                         coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).as("quantity"),
                         max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
                         max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
