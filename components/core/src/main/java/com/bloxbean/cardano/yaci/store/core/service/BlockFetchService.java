@@ -49,7 +49,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
-    private AtomicBoolean scheduleToStop = new AtomicBoolean(false);
+    private AtomicBoolean scheduledToStop = new AtomicBoolean(false);
     private Thread keepAliveThread;
 
     //Required to publish EpochChangeEvent
@@ -59,7 +59,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
-        if (scheduleToStop.get()) {
+        if (scheduledToStop.get()) {
             log.debug("Stopping BlockFetchService as scheduled");
             return;
         }
@@ -260,7 +260,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public void stop() {
-        scheduleToStop.set(true);
+        scheduledToStop.set(true);
         if (blockRangeSync != null)
             blockRangeSync.stop();
         if (blockSync != null)
@@ -330,7 +330,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public synchronized void startFetch(Point from, Point to) {
         isError.set(false);
-        scheduleToStop.set(false);
+        scheduledToStop.set(false);
 
         stopKeepAliveThread();
         blockRangeSync.restart(this);
@@ -343,7 +343,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public synchronized void startSync(Point from) {
         isError.set(false);
-        scheduleToStop.set(false);
+        scheduledToStop.set(false);
 
         stopKeepAliveThread();
         blockSync.startSync(from, this);
@@ -382,6 +382,14 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         return blockRangeSync.getLastKeepAliveResponseTime();
+    }
+
+    public boolean isScheduledToStop() {
+        return scheduledToStop.get();
+    }
+
+    public boolean isError() {
+        return isError.get();
     }
 
     private void setError() {
