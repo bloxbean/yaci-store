@@ -15,6 +15,8 @@ public class HealthService {
 
         return HealthStatus.builder()
                 .isConnectionAlive(blockFetchService.isRunning())
+                .isScheduleToStop(blockFetchService.isScheduledToStop())
+                .isError(blockFetchService.isError())
                 .lastKeepAliveResponseCookie(blockFetchService.getLastKeepAliveResponseCookie())
                 .lastKeepAliveResponseTime(blockFetchService.getLastKeepAliveResponseTime())
                 .build();
