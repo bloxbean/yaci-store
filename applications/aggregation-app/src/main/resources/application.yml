@@ -10,6 +10,10 @@ spring:
     admin:
       client:
         enabled: false
+  batch:
+    job:
+      enabled: false
+
 store:
   event-publisher-id: 1000
   account:
