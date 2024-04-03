@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,26 +18,36 @@ import java.util.concurrent.TimeUnit;
 
 @RestController("AdminController")
 @RequestMapping("${apiPrefix}")
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnExpression("${store.admin.api-enabled:false}")
 @Tag(name = "Admin API", description = "Admin API for managing the store")
 public class AdminController {
-
-    private final BalanceSnapshotService balanceSnapshotService;
     private final StartService startService;
+    private final BalanceSnapshotService balanceSnapshotService;
+
+    public AdminController(@Autowired(required = true) StartService startService,
+                           @Autowired(required = false) BalanceSnapshotService balanceSnapshotService) {
+        this.startService = startService;
+        this.balanceSnapshotService = balanceSnapshotService;
+    }
 
     @PostMapping("/admin/balance-snapshot")
     @Operation(description = "Take Balance snapshot")
     public String takeBalanceSnapshot() {
-        return balanceSnapshotService.scheduleBalanceSnapshot()? "Balance snapshot scheduled" : "Skipped";
+        if (balanceSnapshotService == null)
+            return "Balance snapshot service is not enabled. Skipped";
+        else
+            return balanceSnapshotService.scheduleBalanceSnapshot()? "Balance snapshot scheduled" : "Skipped";
 
     }
 
     @PostMapping("/admin/balance-snapshot/block/{block}/slot/{slot}/hash/{blockHash}")
     @Operation(description = "Take Balance snapshot")
     public String takeBalanceSnapshotAtBlock(@PathVariable long block, @PathVariable long slot, @PathVariable String blockHash) {
-        return balanceSnapshotService.scheduleBalanceSnapshot(block, slot, blockHash)? "Balance snapshot scheduled" : "Skipped";
+        if (balanceSnapshotService  == null) {
+            return "Balance snapshot service is not enabled. Skipped";
+        } else
+            return balanceSnapshotService.scheduleBalanceSnapshot(block, slot, blockHash)? "Balance snapshot scheduled" : "Skipped";
     }
 
     @PostMapping("/admin/restart-sync")
