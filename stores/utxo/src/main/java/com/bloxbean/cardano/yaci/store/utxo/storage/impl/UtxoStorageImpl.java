@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
 import org.springframework.context.event.EventListener;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -78,96 +79,161 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     @Override
+    @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
         return utxoRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
+    @Transactional
     public int deleteSpentBySlotGreaterThan(Long slot) {
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
     }
 
     @Override
+    @Transactional
     public int deleteBySpentAndBlockLessThan(Long block) {
         return utxoRepository.deleteBySpentAndBlockLessThan(block);
     }
 
     @Override
+    @Transactional
     public void saveUnspent(List<AddressUtxo> addressUtxoList) {
         List<AddressUtxoEntity> addressUtxoEntities = addressUtxoList.stream()
                 .map(mapper::toAddressUtxoEntity)
                 .toList();
 
         LocalDateTime localDateTime = LocalDateTime.now();
-        dsl.batched(c -> {
-            for (AddressUtxoEntity addressUtxo : addressUtxoEntities) {
-                c.dsl().insertInto(ADDRESS_UTXO)
-                        .set(ADDRESS_UTXO.TX_HASH, addressUtxo.getTxHash())
-                        .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
-                        .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
-                        .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
-                        .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
-                        .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
-                        .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
-                        .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
-                        .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
-                        .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
-                        .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
-                        .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
-                        .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
-                        .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
-                        .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
-                        .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
-                        .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
-                        .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
-                        .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
-                        .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
-                        .onDuplicateKeyUpdate()
-                        .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
-                        .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
-                        .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
-                        .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
-                        .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
-                        .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
-                        .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
-                        .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
-                        .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
-                        .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
-                        .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
-                        .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
-                        .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
-                        .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
-                        .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
-                        .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
-                        .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
-                        .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
-                        .execute();
-            }
-        });
+        var inserts = addressUtxoEntities.stream()
+                .map(addressUtxo -> dsl.insertInto(ADDRESS_UTXO)
+                                .set(ADDRESS_UTXO.TX_HASH, addressUtxo.getTxHash())
+                                .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
+                                .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
+                                .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
+                                .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
+                                .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
+                                .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
+                                .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
+                                .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
+                                .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
+                                .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
+                                .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
+                                .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
+                                .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
+                                .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
+                                .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
+                                .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
+                                .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
+                                .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
+                                .onDuplicateKeyUpdate()
+                                .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
+                                .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
+                                .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
+                                .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
+                                .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
+                                .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
+                                .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
+                                .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
+                                .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
+                                .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
+                                .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
+                                .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
+                                .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
+                                .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
+                                .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
+                                .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
+                                .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)).toList();
+
+        dsl.batch(inserts).execute();
+
+        //TODO -- remove later
+//        dsl.batched(c -> {
+//            for (AddressUtxoEntity addressUtxo : addressUtxoEntities) {
+//                c.dsl().insertInto(ADDRESS_UTXO)
+//                        .set(ADDRESS_UTXO.TX_HASH, addressUtxo.getTxHash())
+//                        .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
+//                        .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
+//                        .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
+//                        .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
+//                        .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+//                        .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
+//                        .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
+//                        .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
+//                        .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
+//                        .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
+//                        .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
+//                        .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
+//                        .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
+//                        .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
+//                        .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
+//                        .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
+//                        .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
+//                        .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
+//                        .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
+//                        .onDuplicateKeyUpdate()
+//                        .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
+//                        .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
+//                        .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
+//                        .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+//                        .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
+//                        .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
+//                        .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
+//                        .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
+//                        .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
+//                        .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
+//                        .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
+//                        .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
+//                        .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
+//                        .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
+//                        .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
+//                        .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
+//                        .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
+//                        .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
+//                        .execute();
+//            }
+//        });
 
         addressUtxoList.forEach(utxoCache::add);
     }
 
     @Override
+    @Transactional
     public void saveSpent(List<TxInput> txInputs) {
         if (txInputs == null || txInputs.isEmpty())
             return;
 
-        dsl.batched(c -> {
-            for (TxInput spentOutput : txInputs) {
-                c.dsl().insertInto(TX_INPUT)
-                        .set(TX_INPUT.TX_HASH, spentOutput.getTxHash())
-                        .set(TX_INPUT.OUTPUT_INDEX, spentOutput.getOutputIndex())
-                        .set(TX_INPUT.SPENT_AT_SLOT, spentOutput.getSpentAtSlot())
-                        .set(TX_INPUT.SPENT_AT_BLOCK, spentOutput.getSpentAtBlock())
-                        .set(TX_INPUT.SPENT_AT_BLOCK_HASH, spentOutput.getSpentAtBlockHash())
-                        .set(TX_INPUT.SPENT_BLOCK_TIME, spentOutput.getSpentBlockTime())
-                        .set(TX_INPUT.SPENT_EPOCH, spentOutput.getSpentEpoch())
-                        .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash())
-                        .onDuplicateKeyIgnore()
-                        .execute();
-            }
-        });
+        var inserts = txInputs.stream()
+                        .map(spentOutput -> dsl.insertInto(TX_INPUT)
+                                .set(TX_INPUT.TX_HASH, spentOutput.getTxHash())
+                                .set(TX_INPUT.OUTPUT_INDEX, spentOutput.getOutputIndex())
+                                .set(TX_INPUT.SPENT_AT_SLOT, spentOutput.getSpentAtSlot())
+                                .set(TX_INPUT.SPENT_AT_BLOCK, spentOutput.getSpentAtBlock())
+                                .set(TX_INPUT.SPENT_AT_BLOCK_HASH, spentOutput.getSpentAtBlockHash())
+                                .set(TX_INPUT.SPENT_BLOCK_TIME, spentOutput.getSpentBlockTime())
+                                .set(TX_INPUT.SPENT_EPOCH, spentOutput.getSpentEpoch())
+                                .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash())
+                                .onDuplicateKeyIgnore())
+                                .toList();
+
+        dsl.batch(inserts).execute();
+
+//        dsl.batched(c -> {
+//            for (TxInput spentOutput : txInputs) {
+//                c.dsl().insertInto(TX_INPUT)
+//                        .set(TX_INPUT.TX_HASH, spentOutput.getTxHash())
+//                        .set(TX_INPUT.OUTPUT_INDEX, spentOutput.getOutputIndex())
+//                        .set(TX_INPUT.SPENT_AT_SLOT, spentOutput.getSpentAtSlot())
+//                        .set(TX_INPUT.SPENT_AT_BLOCK, spentOutput.getSpentAtBlock())
+//                        .set(TX_INPUT.SPENT_AT_BLOCK_HASH, spentOutput.getSpentAtBlockHash())
+//                        .set(TX_INPUT.SPENT_BLOCK_TIME, spentOutput.getSpentBlockTime())
+//                        .set(TX_INPUT.SPENT_EPOCH, spentOutput.getSpentEpoch())
+//                        .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash())
+//                        .onDuplicateKeyIgnore()
+//                        .execute();
+//            }
+//        });
     }
 
     @EventListener
