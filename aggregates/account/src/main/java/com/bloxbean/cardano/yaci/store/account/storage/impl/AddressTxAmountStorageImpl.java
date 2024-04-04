@@ -42,7 +42,7 @@ public class AddressTxAmountStorageImpl implements AddressTxAmountStorage {
         if (accountStoreProperties.isParallelWrite()
                 && addressTxAmtEntities.size() > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
             int partitionSize = getPartitionSize(addressTxAmtEntities.size());
-            ListUtil.partitionAndApplyInParallel(addressTxAmtEntities, partitionSize, this::saveBatch);
+            ListUtil.partitionAndApply(addressTxAmtEntities, partitionSize, this::saveBatch);
         } else {
             saveBatch(addressTxAmtEntities);
         }
