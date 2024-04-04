@@ -29,7 +29,7 @@ public class AddressStorageImpl implements AddressStorage {
         if (accountStoreProperties.isParallelWrite()
                 && addresses.size() > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
             int partitionSize = getPartitionSize(addresses.size());
-            ListUtil.partitionAndApplyInParallel(addresses.stream().toList(), partitionSize, this::saveBatch);
+            ListUtil.partitionAndApply(addresses.stream().toList(), partitionSize, this::saveBatch);
         } else {
             saveBatch(addresses);
         }

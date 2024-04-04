@@ -82,7 +82,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 log.info("\tInsert Batch Size -- {}", accountStoreProperties.getJooqWriteBatchSize());
 
             int partitionSize = getPartitionSize(entities.size());
-            ListUtil.partitionAndApplyInParallel(entities, partitionSize, this::saveAddrBalanceBatch);
+            ListUtil.partitionAndApply(entities, partitionSize, this::saveAddrBalanceBatch);
         } else {
             saveAddrBalanceBatch(entities);
         }
@@ -176,7 +176,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
         if (accountStoreProperties.isParallelWrite()) {
             int partitionSize = getPartitionSize(entities.size());
-            ListUtil.partitionAndApplyInParallel(entities, partitionSize, this::saveStakeBalanceBatch);
+            ListUtil.partitionAndApply(entities, partitionSize, this::saveStakeBalanceBatch);
         } else {
             saveStakeBalanceBatch(entities);
         }
