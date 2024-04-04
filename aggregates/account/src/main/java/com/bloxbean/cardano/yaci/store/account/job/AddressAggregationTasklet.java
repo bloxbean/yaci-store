@@ -3,14 +3,15 @@ package com.bloxbean.cardano.yaci.store.account.job;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
+import org.jooq.impl.SQLDataType;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
 
+import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
@@ -61,31 +62,7 @@ public class AddressAggregationTasklet implements Tasklet {
     }
 
     private void calculateAddressBalance(long startOffset, long limit, Long snapshotSlot) {
-
-        CommonTableExpression<?> incremental = name("incremental").as(
-                select(field(ADDRESS_TX_AMOUNT.ADDRESS).as("address"),
-                        field(ADDRESS_TX_AMOUNT.UNIT).as("unit"),
-                        coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).as("quantity"),
-                        max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
-                        max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
-                        max(field(ADDRESS_TX_AMOUNT.BLOCK_TIME)).as("block_time"),
-                        max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch")
-                )
-                        .from(ADDRESS_TX_AMOUNT)
-                        .where(ADDRESS_TX_AMOUNT.SLOT.le(snapshotSlot)
-                                .and(ADDRESS_TX_AMOUNT.ADDRESS
-                                        .in(select(ADDRESS.ADDRESS_)
-                                                .from(ADDRESS)
-                                                .offset(startOffset)
-                                                .limit(limit)
-                                        )
-                                )
-                        )
-                        .groupBy(ADDRESS_TX_AMOUNT.ADDRESS, ADDRESS_TX_AMOUNT.UNIT)
-        );
-
-        dsl.with(incremental)
-                .insertInto(ADDRESS_BALANCE,
+        var insertQuery = dsl.insertInto(ADDRESS_BALANCE,
                         ADDRESS_BALANCE.ADDRESS,
                         ADDRESS_BALANCE.UNIT,
                         ADDRESS_BALANCE.QUANTITY,
@@ -94,16 +71,26 @@ public class AddressAggregationTasklet implements Tasklet {
                         ADDRESS_BALANCE.BLOCK_TIME,
                         ADDRESS_BALANCE.EPOCH,
                         ADDRESS_BALANCE.UPDATE_DATETIME
-                ).select(select(
-                        incremental.field(ADDRESS_BALANCE.ADDRESS),
-                        incremental.field(ADDRESS_BALANCE.UNIT),
-                        incremental.field(ADDRESS_BALANCE.QUANTITY),
-                        incremental.field(ADDRESS_BALANCE.SLOT),
-                        incremental.field(ADDRESS_BALANCE.BLOCK),
-                        incremental.field(ADDRESS_BALANCE.BLOCK_TIME),
-                        incremental.field(ADDRESS_BALANCE.EPOCH),
-                        currentLocalDateTime())
-                        .from(incremental)
+                ).select(select(field(ADDRESS_TX_AMOUNT.ADDRESS).as("address"),
+                                field(ADDRESS_TX_AMOUNT.UNIT).as("unit"),
+                                coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), BigDecimal.ZERO).cast(SQLDataType.DECIMAL_INTEGER(38)).as("quantity"),
+                                max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
+                                max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
+                                max(field(ADDRESS_TX_AMOUNT.BLOCK_TIME)).as("block_time"),
+                                max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch"),
+                                currentLocalDateTime()
+                        )
+                                .from(ADDRESS_TX_AMOUNT)
+                                .where(ADDRESS_TX_AMOUNT.SLOT.le(snapshotSlot)
+                                        .and(ADDRESS_TX_AMOUNT.ADDRESS
+                                                .in(select(ADDRESS.ADDRESS_)
+                                                        .from(ADDRESS)
+                                                        .offset(startOffset)
+                                                        .limit(limit)
+                                                )
+                                        )
+                                )
+                                .groupBy(ADDRESS_TX_AMOUNT.ADDRESS, ADDRESS_TX_AMOUNT.UNIT)
                 )
                 .onConflict(
                         ADDRESS_BALANCE.ADDRESS,
@@ -115,8 +102,8 @@ public class AddressAggregationTasklet implements Tasklet {
                 .set(ADDRESS_BALANCE.SLOT, excluded(ADDRESS_BALANCE.SLOT))
                 .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
                 .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
-                .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH))
-                .execute();
+                .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH));
+        insertQuery.execute();
     }
 
 }
