@@ -20,3 +20,5 @@ spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
 
 rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
+
+parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
