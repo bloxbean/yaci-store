@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.account.job;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
+import org.jooq.impl.SQLDataType;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
@@ -61,13 +61,21 @@ public class StakeAddressAggregationTasklet implements Tasklet {
     }
 
     private void calculateStakeAddressBalance(long startOffset, long limit, Long snapshotSlot) {
-        CommonTableExpression<?> incremental = name("incremental").as(
-                select(field(ADDRESS_TX_AMOUNT.STAKE_ADDRESS).as("address"),
-                        coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).as("quantity"),
+        dsl.insertInto(STAKE_ADDRESS_BALANCE,
+                        STAKE_ADDRESS_BALANCE.ADDRESS,
+                        STAKE_ADDRESS_BALANCE.QUANTITY,
+                        STAKE_ADDRESS_BALANCE.SLOT,
+                        STAKE_ADDRESS_BALANCE.BLOCK,
+                        STAKE_ADDRESS_BALANCE.BLOCK_TIME,
+                        STAKE_ADDRESS_BALANCE.EPOCH,
+                        STAKE_ADDRESS_BALANCE.UPDATE_DATETIME
+                ).select(select(field(ADDRESS_TX_AMOUNT.STAKE_ADDRESS).as("address"),
+                        coalesce(sum(field(ADDRESS_TX_AMOUNT.QUANTITY)), 0).cast(SQLDataType.DECIMAL_INTEGER(38)).as("quantity"),
                         max(field(ADDRESS_TX_AMOUNT.SLOT)).as("slot"),
                         max(field(ADDRESS_TX_AMOUNT.BLOCK)).as("block"),
                         max(field(ADDRESS_TX_AMOUNT.BLOCK_TIME)).as("block_time"),
-                        max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch")
+                        max(field(ADDRESS_TX_AMOUNT.EPOCH)).as("epoch"),
+                        currentLocalDateTime()
                 )
                         .from(ADDRESS_TX_AMOUNT)
                         .where(ADDRESS_TX_AMOUNT.STAKE_ADDRESS.isNotNull()
@@ -81,27 +89,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                                         )
                                 )
                         )
-                        .groupBy(ADDRESS_TX_AMOUNT.STAKE_ADDRESS)
-        );
-
-        dsl.with(incremental)
-                .insertInto(STAKE_ADDRESS_BALANCE,
-                        STAKE_ADDRESS_BALANCE.ADDRESS,
-                        STAKE_ADDRESS_BALANCE.QUANTITY,
-                        STAKE_ADDRESS_BALANCE.SLOT,
-                        STAKE_ADDRESS_BALANCE.BLOCK,
-                        STAKE_ADDRESS_BALANCE.BLOCK_TIME,
-                        STAKE_ADDRESS_BALANCE.EPOCH,
-                        STAKE_ADDRESS_BALANCE.UPDATE_DATETIME
-                ).select(select(
-                        incremental.field(STAKE_ADDRESS_BALANCE.ADDRESS),
-                        incremental.field(STAKE_ADDRESS_BALANCE.QUANTITY),
-                        incremental.field(STAKE_ADDRESS_BALANCE.SLOT),
-                        incremental.field(STAKE_ADDRESS_BALANCE.BLOCK),
-                        incremental.field(STAKE_ADDRESS_BALANCE.BLOCK_TIME),
-                        incremental.field(STAKE_ADDRESS_BALANCE.EPOCH),
-                        currentLocalDateTime())
-                        .from(incremental))
+                        .groupBy(ADDRESS_TX_AMOUNT.STAKE_ADDRESS))
                 .onConflict(
                         STAKE_ADDRESS_BALANCE.ADDRESS,
                         STAKE_ADDRESS_BALANCE.SLOT
