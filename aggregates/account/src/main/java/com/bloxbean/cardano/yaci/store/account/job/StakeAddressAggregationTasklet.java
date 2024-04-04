@@ -60,7 +60,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
         return shouldContinue ? RepeatStatus.CONTINUABLE : RepeatStatus.FINISHED;
     }
 
-    private void calculateStakeAddressBalance(long startOffset, long limit, Long snapshotSlot) {
+    private void calculateStakeAddressBalance(long startOffset, long to, Long snapshotSlot) {
         dsl.insertInto(STAKE_ADDRESS_BALANCE,
                         STAKE_ADDRESS_BALANCE.ADDRESS,
                         STAKE_ADDRESS_BALANCE.QUANTITY,
@@ -83,9 +83,8 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                                 .and(ADDRESS_TX_AMOUNT.STAKE_ADDRESS
                                         .in(selectDistinct(ADDRESS.STAKE_ADDRESS)
                                                 .from(ADDRESS)
-                                                .where(ADDRESS.STAKE_ADDRESS.isNotNull())
-                                                .offset(startOffset)
-                                                .limit(limit)
+                                                .where(ADDRESS.STAKE_ADDRESS.isNotNull().
+                                                        and(ADDRESS.ID.between(startOffset, to)))
                                         )
                                 )
                         )

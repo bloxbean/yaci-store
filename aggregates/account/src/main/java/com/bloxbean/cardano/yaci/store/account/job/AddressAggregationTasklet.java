@@ -61,7 +61,7 @@ public class AddressAggregationTasklet implements Tasklet {
         return shouldContinue ? RepeatStatus.CONTINUABLE : RepeatStatus.FINISHED;
     }
 
-    private void calculateAddressBalance(long startOffset, long limit, Long snapshotSlot) {
+    private void calculateAddressBalance(long startOffset, long to, Long snapshotSlot) {
         var insertQuery = dsl.insertInto(ADDRESS_BALANCE,
                         ADDRESS_BALANCE.ADDRESS,
                         ADDRESS_BALANCE.UNIT,
@@ -85,8 +85,7 @@ public class AddressAggregationTasklet implements Tasklet {
                                         .and(ADDRESS_TX_AMOUNT.ADDRESS
                                                 .in(select(ADDRESS.ADDRESS_)
                                                         .from(ADDRESS)
-                                                        .offset(startOffset)
-                                                        .limit(limit)
+                                                        .where(ADDRESS.ID.between(startOffset, to))
                                                 )
                                         )
                                 )
