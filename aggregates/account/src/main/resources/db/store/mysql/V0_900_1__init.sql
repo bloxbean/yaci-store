@@ -92,7 +92,7 @@ CREATE INDEX idx_address_stake_address
 drop table if exists address_tx_amount;
 create table address_tx_amount
 (
-    address            varchar(500),
+    address            varchar(500) character set latin1,
     unit               varchar(255),
     tx_hash            varchar(64),
     slot               bigint,
