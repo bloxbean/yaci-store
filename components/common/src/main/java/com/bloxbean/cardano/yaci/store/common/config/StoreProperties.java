@@ -78,4 +78,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private int dbBatchSize = 200;
     private boolean dbParallelInsert = true;
+
+    @Builder.Default
+    private boolean mvstoreEnabled = false;
+    @Builder.Default
+    private String mvstorePath = "./.mvstore";
 }
