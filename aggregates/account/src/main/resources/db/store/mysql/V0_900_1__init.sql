@@ -76,12 +76,13 @@ CREATE INDEX idx_stake_addr_balance_epoch
 drop table if exists address;
 create table address
 (
-    address            varchar(500),
+    id                 bigint not null auto_increment,
+    address            varchar(500) unique not null,
     addr_full          text,
     payment_credential varchar(56),
     stake_address      varchar(255),
     update_datetime    timestamp,
-    primary key (address)
+    primary key (id)
 );
 
 CREATE INDEX idx_address_stake_address
@@ -92,7 +93,7 @@ CREATE INDEX idx_address_stake_address
 drop table if exists address_tx_amount;
 create table address_tx_amount
 (
-    address            varchar(500),
+    address            varchar(500) character set latin1,
     unit               varchar(255),
     tx_hash            varchar(64),
     slot               bigint,

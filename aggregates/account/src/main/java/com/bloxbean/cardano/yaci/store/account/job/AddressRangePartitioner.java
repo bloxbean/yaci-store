@@ -20,7 +20,7 @@ public class AddressRangePartitioner implements Partitioner {
 
     public Map<String, ExecutionContext> partition(int gridSize) {
         log.info("Partitioning address data into {} partitions", gridSize);
-        int totalAddresses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM address", Integer.class);
+        int totalAddresses = jdbcTemplate.queryForObject("SELECT max(id) FROM address", Integer.class);
         int partitionSize = totalAddresses / gridSize;
 
         Map<String, ExecutionContext> result = new HashMap<>();
