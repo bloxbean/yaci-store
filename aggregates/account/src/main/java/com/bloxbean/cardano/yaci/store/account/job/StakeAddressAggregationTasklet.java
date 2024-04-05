@@ -37,20 +37,20 @@ public class StakeAddressAggregationTasklet implements Tasklet {
         var snapshotSlot = chunkContext.getStepContext().getStepExecution()
                 .getJobParameters().getLong(SNAPSHOT_SLOT);
 
-        long limit = accountStoreProperties.getBalanceCalcJobBatchSize();
+        long batchSize = accountStoreProperties.getBalanceCalcJobBatchSize();
 
-        long to = startOffset + limit;
+        long to = startOffset + batchSize;
 
         if (to > finalEndOffset) {
             to = finalEndOffset;
-            limit = finalEndOffset - startOffset;
+            batchSize = finalEndOffset - startOffset;
         }
 
-        log.info("Processing stake addresses from {}, limit: {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, limit, to, finalEndOffset, chunkContext.getStepContext().getId());
+        log.info("Processing stake addresses from {}, batchSize: {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, batchSize, to, finalEndOffset, chunkContext.getStepContext().getId());
 
-        calculateStakeAddressBalance(startOffset, limit, snapshotSlot);
+        calculateStakeAddressBalance(startOffset, to, snapshotSlot);
 
-        log.info("Total stake addresses processed: {}", count.addAndGet(limit));
+        log.info("Total stake addresses processed: {}", count.addAndGet(batchSize));
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));

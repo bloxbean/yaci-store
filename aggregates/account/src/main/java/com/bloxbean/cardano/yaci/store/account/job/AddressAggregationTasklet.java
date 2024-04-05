@@ -38,20 +38,19 @@ public class AddressAggregationTasklet implements Tasklet {
         var snapshotSlot = chunkContext.getStepContext().getStepExecution()
                 .getJobParameters().getLong(SNAPSHOT_SLOT);
 
-        long limit = accountStoreProperties.getBalanceCalcJobBatchSize();
+        long batchSize = accountStoreProperties.getBalanceCalcJobBatchSize();
 
-        long to = startOffset + limit;
+        long to = startOffset + batchSize;
 
         if (to > finalEndOffset) {
             to = finalEndOffset;
-            limit = finalEndOffset - startOffset;
         }
 
-        log.info("Processing addresses from {}, limit: {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, limit, to, finalEndOffset, chunkContext.getStepContext().getId());
+        log.info("Processing addresses from {}, to: {}, FinalEndOffSet {}, stepId: {}", startOffset, to, finalEndOffset, chunkContext.getStepContext().getId());
 
-        calculateAddressBalance(startOffset, limit, snapshotSlot);
+        calculateAddressBalance(startOffset, to, snapshotSlot);
 
-        log.info("Snapshot Block: {}, Slot: {} . Total addresses processed: {}", snapshotBlock, snapshotSlot, count.addAndGet(limit));
+        log.info("Snapshot Block: {}, Slot: {} . Total addresses processed: {}", snapshotBlock, snapshotSlot, count.addAndGet(batchSize));
 
         // Update ExecutionContext with the new startOffset for the next chunk
         executionContext.putLong(START_OFFSET, Long.valueOf(to));
@@ -61,7 +60,7 @@ public class AddressAggregationTasklet implements Tasklet {
         return shouldContinue ? RepeatStatus.CONTINUABLE : RepeatStatus.FINISHED;
     }
 
-    private void calculateAddressBalance(long startOffset, long to, Long snapshotSlot) {
+    private void calculateAddressBalance(long from, long to, Long snapshotSlot) {
         var insertQuery = dsl.insertInto(ADDRESS_BALANCE,
                         ADDRESS_BALANCE.ADDRESS,
                         ADDRESS_BALANCE.UNIT,
@@ -85,7 +84,7 @@ public class AddressAggregationTasklet implements Tasklet {
                                         .and(ADDRESS_TX_AMOUNT.ADDRESS
                                                 .in(select(ADDRESS.ADDRESS_)
                                                         .from(ADDRESS)
-                                                        .where(ADDRESS.ID.between(startOffset, to))
+                                                        .where(ADDRESS.ID.between(from, to))
                                                 )
                                         )
                                 )
