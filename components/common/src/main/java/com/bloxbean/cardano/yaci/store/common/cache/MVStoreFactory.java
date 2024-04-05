@@ -6,23 +6,15 @@ public class MVStoreFactory {
     private boolean isInitialized = false;
     private MVStore store;
 
-    private static MVStoreFactory instance;
-
     private MVStoreFactory() {
     }
 
-    public static MVStoreFactory getInstance() {
-        if(instance == null) {
-            instance = new MVStoreFactory();
-        }
-        return instance;
-    }
-
     public synchronized void init(String dbPath) {
-        if(isInitialized)
+        if (isInitialized)
             throw new IllegalStateException("MVStore is already initialized");
 
         store = new MVStore.Builder().fileName(dbPath).compress().open();
+        isInitialized = true;
     }
 
     public MVStore getStore() {
@@ -34,5 +26,13 @@ public class MVStoreFactory {
             store.close();
             store = null;
         }
+    }
+
+    private static class SingletonHelper {
+        private static final MVStoreFactory INSTANCE = new MVStoreFactory();
+    }
+
+    public static MVStoreFactory getInstance() {
+        return SingletonHelper.INSTANCE;
     }
 }
