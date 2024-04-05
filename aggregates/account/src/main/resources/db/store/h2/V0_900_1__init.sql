@@ -76,7 +76,7 @@ drop table if exists address;
 create table address
 (
     id                 bigint not null auto_increment,
-    address            varchar(500),
+    address            varchar(500) unique not null,
     addr_full          text,
     payment_credential varchar(56),
     stake_address      varchar(255),
