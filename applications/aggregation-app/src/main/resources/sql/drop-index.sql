@@ -11,8 +11,6 @@ drop index idx_address_balance_block_time;
 drop index idx_address_balance_epoch;
 drop index idx_address_balance_unit;
 
--- address
-drop index idx_address_stake_address;
 
 -- stake address balance
 
