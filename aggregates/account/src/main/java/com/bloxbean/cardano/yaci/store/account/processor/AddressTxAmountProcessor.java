@@ -24,6 +24,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
 
 @Component
@@ -149,8 +150,8 @@ public class AddressTxAmountProcessor {
 
         return (List<AddressTxAmount>) addressTxAmountMap.entrySet()
                 .stream()
-                .filter(entry -> accountStoreProperties.isAddressTxAmountIncludeZeroAmount() ||
-                        entry.getValue().compareTo(BigInteger.ZERO) != 0)
+                .filter(entry -> (accountStoreProperties.isAddressTxAmountIncludeZeroAmount() && entry.getKey().getSecond().equals(LOVELACE))
+                        || entry.getValue().compareTo(BigInteger.ZERO) != 0)
                 .map(entry -> {
                     var addressDetails = addressToAddressDetailsMap.get(entry.getKey().getFirst());
 

@@ -188,6 +188,9 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setDbBatchSize(properties.getDb().getBatchSize());
         storeProperties.setDbParallelInsert(properties.getDb().isParallelInsert());
 
+        storeProperties.setMvstoreEnabled(properties.isMvstoreEnabled());
+        storeProperties.setMvstorePath(properties.getMvstorePath());
+
         return storeProperties;
     }
 
