@@ -15,10 +15,10 @@ import org.springframework.context.annotation.ComponentScan;
 @SpringBootApplication
 @ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store")
 @EntityScan(basePackages = "com.bloxbean.cardano.yaci.store")
-public class YaciStoreApplication {
+public class YaciStoreRedisApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(YaciStoreApplication.class, args);
+        SpringApplication.run(YaciStoreRedisApplication.class, args);
     }
 
     @Bean

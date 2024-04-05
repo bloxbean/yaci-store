@@ -16,6 +16,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * This custom storage optional class will only keep UTxOs that contain specific
+ * DEX's liquidity pools information such as specific LP Tokens (Minswap, Muesliswap, WingRiders)
+ * or specific Payment Address (Sundaeswap use case)
+ * This use case is used by <a href="https://github.com/adabox-aio/dextreme-sdk">Adabox Dextreme</a>
+ * to allow dex aggregation capabilities.
+ */
 @Slf4j
 @Component
 public class CustomUtxoStorage extends RedisUtxoStorage {
