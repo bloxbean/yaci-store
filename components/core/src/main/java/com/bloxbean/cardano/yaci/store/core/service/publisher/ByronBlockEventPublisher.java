@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
@@ -84,7 +85,9 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
             futures.add(future);
         }
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
+                .join();
 
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         publisher.publishEvent(new ReadyForBalanceAggregationEvent(lastBlockCache.getMetadata()));
