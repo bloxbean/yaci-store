@@ -39,10 +39,36 @@ public class AccountBatchConfiguration {
     public Job accountBalanceJob() {
         return new JobBuilder("addressAggregationJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
-                .start(accountBalanceMasterStep())
+                .start(createStakeAddressStep())
+                .next(accountBalanceMasterStep())
                 .next(stakeAddressBalanceMasterStep())
+                .next(dropStakeAddressStep())
                 .next(accountConfigUpdateStep())
                 .build();
+    }
+
+    @Bean
+    public Step createStakeAddressStep() {
+        return new StepBuilder("createStakeAddressStep", jobRepository)
+                .tasklet(createStakeAddressTasklet(), transactionManager)
+                .build();
+    }
+
+    @Bean
+    public Tasklet createStakeAddressTasklet() {
+        return new CreateStakeAddressTableTasklet(dsl);
+    }
+
+    @Bean
+    public Step dropStakeAddressStep() {
+        return new StepBuilder("dropStakeAddressStep", jobRepository)
+                .tasklet(dropStakeAddressTasklet(), transactionManager)
+                .build();
+    }
+
+    @Bean
+    public Tasklet dropStakeAddressTasklet() {
+        return new DropStakeAddressTableTasklet(dsl);
     }
 
     //--- Account Balance Calculation
