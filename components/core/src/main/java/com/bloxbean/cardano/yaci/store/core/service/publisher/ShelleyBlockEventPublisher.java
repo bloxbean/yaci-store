@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
@@ -93,6 +94,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         }
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
                 .join();
 
         BatchBlock lastBatchBlock = batchBlockList.getLast();
@@ -109,7 +111,9 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
             return true;
         }, eventExecutor);
-        CompletableFuture.allOf(postProcessingFuture, commitFuture).join();
+        CompletableFuture.allOf(postProcessingFuture, commitFuture)
+                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
+                .join();
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
@@ -174,7 +178,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txUpdates.size() > 0)
                 publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
             return true;
-        });
+        }, eventExecutor);
 
         //Governance
         var governanceEvent = CompletableFuture.supplyAsync(() -> {
@@ -187,10 +191,12 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txGovernanceList.size() > 0)
                 publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
             return true;
-        });
+        }, eventExecutor);
 
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
-                txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent).join();
+                txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent)
+                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
+                .join();
     }
 
     private void processBlockSingleThread(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {

@@ -83,4 +83,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private boolean mvstoreEnabled = false;
     @Builder.Default
     private String mvstorePath = "./.mvstore";
+
+    @Builder.Default
+    private int processingThreadsTimeout = 5; //5 min
 }
