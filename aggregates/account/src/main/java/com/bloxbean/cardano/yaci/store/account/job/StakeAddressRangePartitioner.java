@@ -9,8 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.END_OFFSET;
-import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.START_OFFSET;
+import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -20,16 +19,16 @@ public class StakeAddressRangePartitioner implements Partitioner {
 
     public Map<String, ExecutionContext> partition(int gridSize) {
         log.info("Partitioning stake addresses into {} partitions", gridSize);
-        int totalAddresses = jdbcTemplate.queryForObject("SELECT max(id) FROM address", Integer.class);
-        int partitionSize = totalAddresses / gridSize;
+        long totalAddresses = jdbcTemplate.queryForObject("SELECT max(id) FROM " + STAKE_ADDRESS_TEMP_TABLE, Long.class);
+        long partitionSize = totalAddresses / gridSize;
 
         Map<String, ExecutionContext> result = new HashMap<>();
         for (int i = 0; i < gridSize; i++) {
             ExecutionContext executionContext = new ExecutionContext();
-            int startOffset = i * partitionSize;
+            long startOffset = i * partitionSize;
             // Adjust endOffset to be one less than the startOffset of the next partition
             // For the last partition, it correctly goes to totalAddresses
-            int endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
+            long endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
 
             executionContext.putLong(START_OFFSET, startOffset);
             executionContext.putLong(END_OFFSET, endOffset);

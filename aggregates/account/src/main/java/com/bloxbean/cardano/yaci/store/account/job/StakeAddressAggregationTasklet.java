@@ -13,8 +13,10 @@ import org.springframework.batch.repeat.RepeatStatus;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_TX_AMOUNT;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
@@ -81,12 +83,11 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                         .where(ADDRESS_TX_AMOUNT.STAKE_ADDRESS.isNotNull()
                                 .and(ADDRESS_TX_AMOUNT.SLOT.le(snapshotSlot))
                                 .and(ADDRESS_TX_AMOUNT.STAKE_ADDRESS
-                                        .in(selectDistinct(ADDRESS.STAKE_ADDRESS)
-                                                .from(ADDRESS)
-                                                .where(ADDRESS.STAKE_ADDRESS.isNotNull().
-                                                        and(ADDRESS.ID.between(startOffset, to)))
+                                        .in(select(field("address", String.class))
+                                                .from(table(STAKE_ADDRESS_TEMP_TABLE))
+                                                .where(field("id", Long.class).between(startOffset, to))
                                         )
-                                )
+                                ).and(ADDRESS_TX_AMOUNT.UNIT.eq(LOVELACE))
                         )
                         .groupBy(ADDRESS_TX_AMOUNT.STAKE_ADDRESS))
                 .onConflict(
