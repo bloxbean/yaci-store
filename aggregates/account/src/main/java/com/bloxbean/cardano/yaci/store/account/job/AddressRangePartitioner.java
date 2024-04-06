@@ -20,16 +20,16 @@ public class AddressRangePartitioner implements Partitioner {
 
     public Map<String, ExecutionContext> partition(int gridSize) {
         log.info("Partitioning address data into {} partitions", gridSize);
-        int totalAddresses = jdbcTemplate.queryForObject("SELECT max(id) FROM address", Integer.class);
-        int partitionSize = totalAddresses / gridSize;
+        long totalAddresses = jdbcTemplate.queryForObject("SELECT max(id) FROM address", Long.class);
+        long partitionSize = totalAddresses / gridSize;
 
         Map<String, ExecutionContext> result = new HashMap<>();
         for (int i = 0; i < gridSize; i++) {
             ExecutionContext executionContext = new ExecutionContext();
-            int startOffset = i * partitionSize;
+            long startOffset = i * partitionSize;
             // Adjust endOffset to be one less than the startOffset of the next partition
             // For the last partition, it correctly goes to totalAddresses
-            int endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
+            long endOffset = (i == gridSize - 1) ? totalAddresses : (startOffset + partitionSize);
 
             executionContext.putLong(START_OFFSET, startOffset);
             executionContext.putLong(END_OFFSET, endOffset);
