@@ -85,6 +85,7 @@ public class AddressAggregationTasklet implements Tasklet {
                                                 .in(select(ADDRESS.ADDRESS_)
                                                         .from(ADDRESS)
                                                         .where(ADDRESS.ID.between(from, to))
+                                                        .limit(to - from + 1)
                                                 )
                                         )
                                 )
