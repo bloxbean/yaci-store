@@ -38,8 +38,11 @@ public class AccountConfigUpdateTasklet implements Tasklet {
             return RepeatStatus.FINISHED;
         }
 
+        log.info(">>> Updating account config with snapshot block: {}, snapshot block hash: {}, snapshot slot: {}", snapshotBlock, snapshotBlockHash, snapshotSlot);
+
         accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
 
+        log.info("<<<< Starting the sync process after updating account config >>>>");
         startService.start();
 
         return RepeatStatus.FINISHED;
