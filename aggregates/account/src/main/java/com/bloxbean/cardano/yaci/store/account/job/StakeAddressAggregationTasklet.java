@@ -59,6 +59,10 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
         boolean shouldContinue = to < finalEndOffset;
 
+        if (!shouldContinue) {
+            log.info("Stake address aggregation completed for partition. {}", chunkContext.getStepContext().getId());
+        }
+
         return shouldContinue ? RepeatStatus.CONTINUABLE : RepeatStatus.FINISHED;
     }
 

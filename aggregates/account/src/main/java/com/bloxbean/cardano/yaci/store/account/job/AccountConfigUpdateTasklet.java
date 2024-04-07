@@ -10,6 +10,8 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 
+import java.util.concurrent.TimeUnit;
+
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @RequiredArgsConstructor
@@ -43,7 +45,15 @@ public class AccountConfigUpdateTasklet implements Tasklet {
         accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
 
         log.info("<<<< Starting the sync process after updating account config >>>>");
-        startService.start();
+
+        Thread.startVirtualThread(() -> {
+            log.info("Waiting for 10 seconds before starting the sync process ...");
+            try {
+                TimeUnit.SECONDS.sleep(10);
+            } catch (InterruptedException e) {
+            }
+            startService.start();
+        });
 
         return RepeatStatus.FINISHED;
     }
