@@ -101,6 +101,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                 .set(STAKE_ADDRESS_BALANCE.BLOCK, excluded(STAKE_ADDRESS_BALANCE.BLOCK))
                 .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, excluded(STAKE_ADDRESS_BALANCE.BLOCK_TIME))
                 .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH))
+                .queryTimeout(300)
                 .execute();
     }
 

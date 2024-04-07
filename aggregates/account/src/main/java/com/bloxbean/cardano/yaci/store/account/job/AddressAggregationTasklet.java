@@ -102,7 +102,7 @@ public class AddressAggregationTasklet implements Tasklet {
                 .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
                 .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
                 .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH));
-        insertQuery.execute();
+        insertQuery.queryTimeout(300).execute();
     }
 
 }
