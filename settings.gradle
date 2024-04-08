@@ -48,7 +48,7 @@ include 'stores-api:governance-api'
 
 include 'aggregates:account'
 include 'aggregates:epoch-aggr'
-
+include 'aggregates:governance-rules'
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
 include ':starters:transaction-spring-boot-starter'
