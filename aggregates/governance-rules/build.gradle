@@ -1,0 +1,15 @@
+dependencies {
+//    api libs.cardano.client.lib
+    api project(':components:common')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Governance Rules Module'
+                description = 'Yaci Store Governance Rules Module'
+            }
+        }
+    }
+}
