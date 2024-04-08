@@ -34,6 +34,7 @@ public class AccountBatchConfiguration {
     private final StartService startService;
     private final AccountStoreProperties accountStoreProperties;
     private final DSLContext dsl;
+    private final PlatformTransactionManager platformTransactionManager;
 
     @Bean
     public Job accountBalanceJob() {
@@ -103,7 +104,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet accountBalanceTasklet() {
-        return new AddressAggregationTasklet(accountStoreProperties, dsl);
+        return new AddressAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
     }
 
     //--- Stake Address Balance Calculation
@@ -137,7 +138,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet stakeAddressBalanceTasklet() {
-        return new StakeAddressAggregationTasklet(accountStoreProperties, dsl);
+        return new StakeAddressAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
     }
 
     @Bean
@@ -149,7 +150,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet accountConfigUpdateTasklet() {
-        return new AccountConfigUpdateTasklet(accountConfigService, startService);
+        return new AccountConfigUpdateTasklet(accountConfigService, startService, platformTransactionManager);
     }
 
     @Bean

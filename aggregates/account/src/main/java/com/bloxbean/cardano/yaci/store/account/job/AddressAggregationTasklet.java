@@ -10,6 +10,9 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,6 +27,8 @@ public class AddressAggregationTasklet implements Tasklet {
 
     private final AccountStoreProperties accountStoreProperties;
     private final DSLContext dsl;
+    private final PlatformTransactionManager transactionManager;
+
     private final static AtomicLong count = new AtomicLong(0);
 
     @Override
@@ -102,7 +107,14 @@ public class AddressAggregationTasklet implements Tasklet {
                 .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
                 .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
                 .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH));
-        insertQuery.queryTimeout(300).execute();
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        transactionTemplate.execute(status -> {
+            insertQuery.queryTimeout(300).execute();
+            return true;
+        });
     }
 
 }

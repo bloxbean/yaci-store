@@ -10,6 +10,9 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -25,6 +28,8 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
     private final AccountStoreProperties accountStoreProperties;
     private final DSLContext dsl;
+    private final PlatformTransactionManager transactionManager;
+
     private final static AtomicLong count = new AtomicLong(0);
 
     @Override
@@ -67,7 +72,7 @@ public class StakeAddressAggregationTasklet implements Tasklet {
     }
 
     private void calculateStakeAddressBalance(long from, long to, Long snapshotSlot) {
-        dsl.insertInto(STAKE_ADDRESS_BALANCE,
+        var insertQuery = dsl.insertInto(STAKE_ADDRESS_BALANCE,
                         STAKE_ADDRESS_BALANCE.ADDRESS,
                         STAKE_ADDRESS_BALANCE.QUANTITY,
                         STAKE_ADDRESS_BALANCE.SLOT,
@@ -104,9 +109,15 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                 .set(STAKE_ADDRESS_BALANCE.SLOT, excluded(STAKE_ADDRESS_BALANCE.SLOT))
                 .set(STAKE_ADDRESS_BALANCE.BLOCK, excluded(STAKE_ADDRESS_BALANCE.BLOCK))
                 .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, excluded(STAKE_ADDRESS_BALANCE.BLOCK_TIME))
-                .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH))
-                .queryTimeout(300)
-                .execute();
+                .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH));
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        transactionTemplate.execute(status -> {
+            insertQuery.queryTimeout(300).execute();
+            return null;
+        });
     }
 
 }

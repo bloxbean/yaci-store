@@ -9,6 +9,9 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.concurrent.TimeUnit;
 
@@ -20,6 +23,7 @@ public class AccountConfigUpdateTasklet implements Tasklet {
 
     private final AccountConfigService accountConfigService;
     private final StartService startService;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
@@ -42,7 +46,12 @@ public class AccountConfigUpdateTasklet implements Tasklet {
 
         log.info(">>> Updating account config with snapshot block: {}, snapshot block hash: {}, snapshot slot: {}", snapshotBlock, snapshotBlockHash, snapshotSlot);
 
-        accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactionTemplate.execute(status -> {
+            accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
+            return null;
+        });
 
         log.info("<<<< Starting the sync process after updating account config >>>>");
 
