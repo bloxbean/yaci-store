@@ -100,7 +100,6 @@ public class BalanceSnapshotService {
         //Take balance snapshot
         log.info("Trying to take balance snapshot at block : {}, slot: {}", block, slot);
         JobParameters jobParameters = new JobParametersBuilder()
-                .addLong("time", System.currentTimeMillis())
                 .addLong(SNAPSHOT_BLOCK, block)
                 .addLong(SNAPSHOT_SLOT, slot)
                 .addString(SNAPSHOT_BLOCKHASH, blockHash)
