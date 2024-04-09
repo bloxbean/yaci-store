@@ -9,6 +9,11 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
@@ -18,6 +23,7 @@ public class AccountConfigUpdateTasklet implements Tasklet {
 
     private final AccountConfigService accountConfigService;
     private final StartService startService;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
@@ -38,9 +44,25 @@ public class AccountConfigUpdateTasklet implements Tasklet {
             return RepeatStatus.FINISHED;
         }
 
-        accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
+        log.info(">>> Updating account config with snapshot block: {}, snapshot block hash: {}, snapshot slot: {}", snapshotBlock, snapshotBlockHash, snapshotSlot);
 
-        startService.start();
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactionTemplate.execute(status -> {
+            accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, snapshotBlock, snapshotBlockHash, snapshotSlot);
+            return null;
+        });
+
+        log.info("<<<< Starting the sync process after updating account config >>>>");
+
+        Thread.startVirtualThread(() -> {
+            log.info("Waiting for 10 seconds before starting the sync process ...");
+            try {
+                TimeUnit.SECONDS.sleep(10);
+            } catch (InterruptedException e) {
+            }
+            startService.start();
+        });
 
         return RepeatStatus.FINISHED;
     }

@@ -10,6 +10,9 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -25,6 +28,8 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
     private final AccountStoreProperties accountStoreProperties;
     private final DSLContext dsl;
+    private final PlatformTransactionManager transactionManager;
+
     private final static AtomicLong count = new AtomicLong(0);
 
     @Override
@@ -59,11 +64,15 @@ public class StakeAddressAggregationTasklet implements Tasklet {
 
         boolean shouldContinue = to < finalEndOffset;
 
+        if (!shouldContinue) {
+            log.info("Stake address aggregation completed for partition. {}", chunkContext.getStepContext().getId());
+        }
+
         return shouldContinue ? RepeatStatus.CONTINUABLE : RepeatStatus.FINISHED;
     }
 
-    private void calculateStakeAddressBalance(long startOffset, long to, Long snapshotSlot) {
-        dsl.insertInto(STAKE_ADDRESS_BALANCE,
+    private void calculateStakeAddressBalance(long from, long to, Long snapshotSlot) {
+        var insertQuery = dsl.insertInto(STAKE_ADDRESS_BALANCE,
                         STAKE_ADDRESS_BALANCE.ADDRESS,
                         STAKE_ADDRESS_BALANCE.QUANTITY,
                         STAKE_ADDRESS_BALANCE.SLOT,
@@ -85,7 +94,8 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                                 .and(ADDRESS_TX_AMOUNT.STAKE_ADDRESS
                                         .in(select(field("address", String.class))
                                                 .from(table(STAKE_ADDRESS_TEMP_TABLE))
-                                                .where(field("id", Long.class).between(startOffset, to))
+                                                .where(field("id", Long.class).between(from, to))
+                                                .limit(to - from + 1)
                                         )
                                 ).and(ADDRESS_TX_AMOUNT.UNIT.eq(LOVELACE))
                         )
@@ -99,8 +109,15 @@ public class StakeAddressAggregationTasklet implements Tasklet {
                 .set(STAKE_ADDRESS_BALANCE.SLOT, excluded(STAKE_ADDRESS_BALANCE.SLOT))
                 .set(STAKE_ADDRESS_BALANCE.BLOCK, excluded(STAKE_ADDRESS_BALANCE.BLOCK))
                 .set(STAKE_ADDRESS_BALANCE.BLOCK_TIME, excluded(STAKE_ADDRESS_BALANCE.BLOCK_TIME))
-                .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH))
-                .execute();
+                .set(STAKE_ADDRESS_BALANCE.EPOCH, excluded(STAKE_ADDRESS_BALANCE.EPOCH));
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        transactionTemplate.execute(status -> {
+            insertQuery.queryTimeout(300).execute();
+            return null;
+        });
     }
 
 }
