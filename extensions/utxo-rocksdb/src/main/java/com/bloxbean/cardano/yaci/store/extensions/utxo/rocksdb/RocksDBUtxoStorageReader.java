@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.extensions.utxo.rocksdb;
 
-import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
@@ -122,21 +121,6 @@ public class RocksDBUtxoStorageReader implements UtxoStorageReader {
 
     @Override
     public List<AddressUtxo> findUtxoByStakeAddressAndAsset(String stakeAddress, String unit, int page, int count, Order order) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
-    public List<Long> findNextAvailableBlocks(Long block, int limit) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
-    public List<AddressUtxo> findUnspentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
-    public List<Tuple<AddressUtxo, TxInput>> findSpentUtxosBetweenBlocks(Long startBlock, Long endBlock) {
         throw new UnsupportedOperationException("Not implemented");
     }
 

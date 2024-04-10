@@ -39,5 +39,6 @@ logging:
 store:
   cardano:
     protocol-magic: 764824073
+  sync-auto-start: false
 
 

@@ -39,8 +39,4 @@ public class DummyDBUtxoStorage extends UtxoStorageImpl {
         return 0;
     }
 
-    @Override
-    public int deleteBySpentAndBlockLessThan(Long block) {
-        return 0;
-    }
 }

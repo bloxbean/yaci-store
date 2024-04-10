@@ -30,6 +30,15 @@ CREATE INDEX idx_address_utxo_owner_stakekey_hash
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
 
+CREATE INDEX idx_utxo_amount_unit
+    ON utxo_amount(unit);
+
+CREATE INDEX idx_utxo_amount_policy
+    ON utxo_amount(policy);
+
+CREATE INDEX idx_utxo_amount_asset_name
+    ON utxo_amount(asset_name);
+
 -- asset store
 
 CREATE INDEX idx_assets_tx_hash

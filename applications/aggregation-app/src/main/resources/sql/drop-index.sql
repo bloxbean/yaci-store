@@ -5,6 +5,10 @@ drop index idx_address_utxo_owner_paykey_hash;
 drop index idx_address_utxo_owner_stakekey_hash;
 drop index idx_address_utxo_epoch;
 
+drop index idx_utxo_amount_unit;
+drop index idx_utxo_amount_policy;
+drop index idx_utxo_amount_asset_name;
+
 -- account balance
 drop index idx_address_balance_address;
 drop index idx_address_balance_block_time;
