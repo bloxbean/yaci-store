@@ -2,7 +2,6 @@ dependencies {
     api project(":stores:utxo")
     api project(":components:core")
     api project(":components:job")
-    implementation(libs.guava)
     implementation(libs.parallel.collector)
 
     implementation("org.springframework.boot:spring-boot-starter-batch")

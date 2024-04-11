@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.cache;
+package com.bloxbean.cardano.yaci.store.utxo.cache;
 
 import com.bloxbean.cardano.yaci.store.common.cache.Cache;
 

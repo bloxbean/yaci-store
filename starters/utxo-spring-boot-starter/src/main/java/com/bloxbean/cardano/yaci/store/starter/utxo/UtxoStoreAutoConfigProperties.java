@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
-public class UtxoStoreProperties {
-    private Utxo utxo;
+public class UtxoStoreAutoConfigProperties {
+    private Utxo utxo = new Utxo();
 
     @Getter
     @Setter
@@ -15,6 +15,11 @@ public class UtxoStoreProperties {
        private boolean enabled = true;
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
+
+       private boolean saveAddress = false;
+       private boolean addressCacheEnabled = false;
+       private int addressCacheSize = 50000;
+       private int addressCacheExpiryAfterAccess = 15;
     }
 
     @Getter
