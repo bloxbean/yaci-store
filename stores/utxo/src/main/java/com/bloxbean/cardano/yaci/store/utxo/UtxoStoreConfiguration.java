@@ -1,7 +1,10 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
@@ -40,5 +43,11 @@ public class UtxoStoreConfiguration {
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
         return new UtxoStorageReaderImpl(utxoRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AddressStorage addressStorage(DSLContext dslContext, StoreProperties storeProperties) {
+        return new AddressStorageImpl(dslContext, storeProperties);
     }
 }

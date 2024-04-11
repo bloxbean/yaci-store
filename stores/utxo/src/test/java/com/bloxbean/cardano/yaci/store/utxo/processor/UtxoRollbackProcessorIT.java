@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.AmtRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
@@ -29,6 +30,9 @@ public class UtxoRollbackProcessorIT {
 
     @Autowired
     private AmtRepository amtRepository;
+
+    @Autowired
+    private UtxoStoreProperties utxoStoreProperties;
 
     @Autowired
     private UtxoStorage utxoStorage;

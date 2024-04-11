@@ -82,5 +82,11 @@ public class YaciStoreProperties {
     public static final class Db {
         private int batchSize = 200;
         private boolean parallelInsert = true;
+
+        //parallel write & batch size settings
+        private boolean parallelWrite = false;
+        private int writeThreadDefaultBatchSize = 1000;
+        private int jooqWriteBatchSize = 3000;
+        private int writeThreadCount = 5;
     }
 }

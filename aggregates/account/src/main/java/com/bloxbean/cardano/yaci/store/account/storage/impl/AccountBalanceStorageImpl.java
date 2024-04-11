@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.account.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
@@ -9,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalance
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import jakarta.annotation.PostConstruct;
@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -35,18 +34,17 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_
 public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     private final AddressBalanceRepository addressBalanceRepository;
     private final StakeBalanceRepository stakeBalanceRepository;
-    private final AccountMapper mapper = AccountMapper.INSTANCE;
     private final DSLContext dsl;
+    private final StoreProperties storeProperties;
 
-    private final AccountStoreProperties accountStoreProperties;
-    private final PlatformTransactionManager transactionManager;
+    private final AccountMapper mapper = AccountMapper.INSTANCE;
 
     @Value("${store.account.enable-jpa-insert:false}")
     private boolean enableJPAInsert = false;
 
     @PostConstruct
     public void postConstruct() {
-        this.dsl.settings().setBatchSize(accountStoreProperties.getJooqWriteBatchSize());
+        this.dsl.settings().setBatchSize(storeProperties.getJooqWriteBatchSize());
     }
 
     @Override
@@ -76,10 +74,10 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         List<AddressBalanceEntity> entities = addressBalances.stream().map(mapper::toAddressBalanceEntity)
                 .toList();
 
-        if (accountStoreProperties.isParallelWrite()) {
-            log.info("\tWriting address balances in parallel. Using {}, Per Thread Batch size : {} ", enableJPAInsert ? "JPA" : "JOOQ", accountStoreProperties.getWriteThreadDefaultBatchSize());
+        if (storeProperties.isParallelWrite()) {
+            log.info("\tWriting address balances in parallel. Using {}, Per Thread Batch size : {} ", enableJPAInsert ? "JPA" : "JOOQ", storeProperties.getWriteThreadDefaultBatchSize());
             if (!enableJPAInsert)
-                log.info("\tInsert Batch Size -- {}", accountStoreProperties.getJooqWriteBatchSize());
+                log.info("\tInsert Batch Size -- {}", storeProperties.getJooqWriteBatchSize());
 
             int partitionSize = getPartitionSize(entities.size());
             ListUtil.partitionAndApply(entities, partitionSize, this::saveAddrBalanceBatch);
@@ -174,7 +172,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         List<StakeAddressBalanceEntity> entities = stakeBalances.stream().map(mapper::toStakeBalanceEntity)
                 .toList();
 
-        if (accountStoreProperties.isParallelWrite()) {
+        if (storeProperties.isParallelWrite()) {
             int partitionSize = getPartitionSize(entities.size());
             ListUtil.partitionAndApply(entities, partitionSize, this::saveStakeBalanceBatch);
         } else {
@@ -245,8 +243,8 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     private int getPartitionSize(int totalSize) {
         int partitionSize = totalSize;
-        if (totalSize > accountStoreProperties.getWriteThreadDefaultBatchSize()) {
-            partitionSize = totalSize / accountStoreProperties.getWriteThreadCount();
+        if (totalSize > storeProperties.getWriteThreadDefaultBatchSize()) {
+            partitionSize = totalSize / storeProperties.getWriteThreadCount();
             log.info("\tPartition size : {}", partitionSize);
         } else {
             log.info("\tPartition size : {}", partitionSize);

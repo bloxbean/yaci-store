@@ -92,3 +92,20 @@ CREATE INDEX idx_tx_input_slot
 CREATE INDEX idx_tx_input_block
     ON tx_input(spent_at_block);
 
+-- address
+
+drop table if exists address;
+create table address
+(
+    id                 bigint not null auto_increment,
+    address            varchar(500) unique not null,
+    addr_full          text,
+    payment_credential varchar(56),
+    stake_address      varchar(255),
+    stake_credential   varchar(56),
+    update_datetime    timestamp,
+    primary key (id)
+);
+
+CREATE INDEX idx_address_stake_address
+    ON address (stake_address);

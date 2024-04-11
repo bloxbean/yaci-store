@@ -19,28 +19,12 @@ public class AccountStoreProperties {
     private boolean stakeAddressBalanceEnabled = true;
 
     @Builder.Default
-    private boolean parallelWrite = false;
-    @Builder.Default
-    private int writeThreadDefaultBatchSize = 1000;
-    @Builder.Default
-    private int jooqWriteBatchSize = 3000;
-    @Builder.Default
-    private int writeThreadCount = 5;
-
-    @Builder.Default
     private int balanceHistoryCleanupInterval = 300;
     @Builder.Default
     private long balanceCleanupSlotCount = 43200; //2160 blocks
 
     @Builder.Default
-    private boolean addressCacheEnabled = false;
-
-    @Builder.Default
-    private int addressCacheSize = 50000;
-
-    @Builder.Default
-    private int addressCacheExpiryAfterAccess = 15;
-
+    private boolean saveAddressTxAmount = false;
     @Builder.Default
     private boolean addressTxAmountIncludeZeroAmount = false;
 

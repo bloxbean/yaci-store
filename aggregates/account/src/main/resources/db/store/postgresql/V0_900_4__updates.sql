@@ -17,8 +17,6 @@ alter table stake_address_balance
 drop column if exists stake_credential,
 drop column if exists block_hash;
 
--- add stake_credential column in address table
-alter table address add column if not exists stake_credential varchar(56);
 
 -- recreate views
 create view address_balance_view as
