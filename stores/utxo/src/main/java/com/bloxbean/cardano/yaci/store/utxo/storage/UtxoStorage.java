@@ -15,5 +15,4 @@ public interface UtxoStorage {
     List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys);
     int deleteUnspentBySlotGreaterThan(Long slot);
     int deleteSpentBySlotGreaterThan(Long slot);
-    int deleteBySpentAndBlockLessThan(Long block);
 }

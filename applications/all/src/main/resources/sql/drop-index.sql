@@ -14,6 +14,10 @@ drop index idx_address_utxo_owner_paykey_hash;
 drop index idx_address_utxo_owner_stakekey_hash;
 drop index idx_address_utxo_epoch;
 
+drop index idx_utxo_amount_unit;
+drop index idx_utxo_amount_policy;
+drop index idx_utxo_amount_asset_name;
+
 -- assets store
 drop index idx_assets_tx_hash;
 drop index idx_assets_policy;
