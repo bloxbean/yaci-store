@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.account.util;
+package com.bloxbean.cardano.yaci.store.common.util;
 
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.account.domain;
+package com.bloxbean.cardano.yaci.store.utxo.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;

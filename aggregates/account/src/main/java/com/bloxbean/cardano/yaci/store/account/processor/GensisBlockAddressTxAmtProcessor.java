@@ -14,12 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
-import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
+import static com.bloxbean.cardano.yaci.store.common.util.AddressUtil.getAddress;
 
 @Component
 @RequiredArgsConstructor
@@ -31,6 +29,9 @@ public class GensisBlockAddressTxAmtProcessor {
     @EventListener
     @Transactional
     public void handleAddressTxAmtForGenesisBlock(GenesisBlockEvent genesisBlockEvent) {
+        if (!accountStoreProperties.isSaveAddressTxAmount())
+            return;
+
         var genesisBalances = genesisBlockEvent.getGenesisBalances();
         if (genesisBalances == null || genesisBalances.isEmpty()) {
             log.info("No genesis balances found");
@@ -38,7 +39,6 @@ public class GensisBlockAddressTxAmtProcessor {
         }
 
         List<AddressTxAmount> genesisAddressTxAmtList = new ArrayList<>();
-        Set<com.bloxbean.cardano.yaci.store.account.domain.Address> addresses = new HashSet<>();
         for (var genesisBalance : genesisBalances) {
             var receiverAddress = genesisBalance.getAddress();
             var txnHash = genesisBalance.getTxnHash();

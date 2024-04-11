@@ -25,7 +25,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
-import static com.bloxbean.cardano.yaci.store.account.util.AddressUtil.getAddress;
+import static com.bloxbean.cardano.yaci.store.common.util.AddressUtil.getAddress;
 
 @Component
 @RequiredArgsConstructor
@@ -43,6 +43,9 @@ public class AddressTxAmountProcessor {
     @EventListener
     @Transactional
     public void processAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
+        if (!accountStoreProperties.isSaveAddressTxAmount())
+            return;
+
         //Ignore Genesis Txs as it's handled by GEnesisBlockAddressTxAmtProcessor
         if (addressUtxoEvent.getEventMetadata().getSlot() == -1)
             return;
@@ -175,6 +178,9 @@ public class AddressTxAmountProcessor {
     @EventListener
     @Transactional //We can also listen to CommitEvent here
     public void handleRemainingTxInputOuputs(ReadyForBalanceAggregationEvent readyForBalanceAggregationEvent) {
+        if (!accountStoreProperties.isSaveAddressTxAmount())
+            return;
+
         try {
             List<AddressTxAmount> addressTxAmountList = new ArrayList<>();
             for (var pair : pendingTxInputOutputListCache) {
