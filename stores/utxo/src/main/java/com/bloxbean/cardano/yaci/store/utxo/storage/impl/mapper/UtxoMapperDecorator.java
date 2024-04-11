@@ -22,6 +22,14 @@ public class UtxoMapperDecorator implements UtxoMapper {
             entity.setOwnerAddrFull(addressUtxo.getOwnerAddr());
         }
 
+        entity.getAmounts()
+                .stream()
+                .forEach(amtEntity -> {
+                    amtEntity.setTxHash(entity.getTxHash());
+                    amtEntity.setOutputIndex(entity.getOutputIndex());
+                    amtEntity.setSlot(entity.getSlot());
+                });
+
         return entity;
     }
 
