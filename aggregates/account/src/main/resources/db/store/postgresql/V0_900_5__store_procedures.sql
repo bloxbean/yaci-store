@@ -65,7 +65,7 @@ commit;
 END;
 $$;
 
-drop procedure if exists calculate_address_balance;
+drop procedure if exists take_address_balance_snapshot;
 CREATE OR REPLACE PROCEDURE
     take_address_balance_snapshot(_from numeric, _to numeric, _batch_size numeric, _lastSnapshotSlot numeric)
     LANGUAGE plpgsql
