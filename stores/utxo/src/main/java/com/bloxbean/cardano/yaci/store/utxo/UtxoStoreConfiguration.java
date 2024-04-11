@@ -39,6 +39,6 @@ public class UtxoStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository, spentOutputRepository, dslContext);
+        return new UtxoStorageReaderImpl(utxoRepository);
     }
 }

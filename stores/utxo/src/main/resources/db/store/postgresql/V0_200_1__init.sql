@@ -2,13 +2,12 @@
 drop table if exists address_utxo;
 create table address_utxo
 (
-    output_index          smallint      not null,
     tx_hash               varchar(64) not null,
+    output_index          smallint    not null,
     slot                  bigint,
     block_hash            varchar(64),
     epoch                 integer,
     lovelace_amount       bigint       null,
-    amounts               jsonb,
     data_hash             varchar(64),
     inline_datum          text,
     owner_addr            varchar(500),
@@ -45,6 +44,31 @@ CREATE INDEX idx_reference_script_hash
 
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
+
+drop table if exists utxo_amount;
+create table utxo_amount
+(
+    tx_hash                 varchar(64) not null,
+    output_index            smallint    not null,
+    unit                    varchar(255),
+    quantity                numeric(38)  null,
+    policy                  varchar(56),
+    asset_name              varchar(255),
+    slot                    bigint,
+    primary key (tx_hash, output_index, unit)
+);
+
+CREATE INDEX idx_utxo_amount_slot
+    ON utxo_amount(slot);
+
+CREATE INDEX idx_utxo_amount_unit
+    ON utxo_amount(unit);
+
+CREATE INDEX idx_utxo_amount_policy
+    ON utxo_amount(policy);
+
+CREATE INDEX idx_utxo_amount_asset_name
+    ON utxo_amount(asset_name);
 
 
 -- tx_input
