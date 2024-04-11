@@ -9,27 +9,13 @@ import jakarta.persistence.StoredProcedureQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
-import org.springframework.batch.item.ExecutionContext;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.SqlOutParameter;
-import org.springframework.jdbc.core.SqlParameter;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.SqlParameterSource;
-import org.springframework.jdbc.core.simple.SimpleJdbcCall;
 import org.springframework.stereotype.Service;
 
-import java.sql.Connection;
-import java.sql.Types;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-
-import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @Service
 @RequiredArgsConstructor
@@ -125,7 +111,7 @@ public class BalanceSnapshotService {
 
         long partitionSize = totalAddresses / gridSize;
 
-        runParallel(partitionSize, batchSize, gridSize, totalAddresses);
+        runParallel(partitionSize, batchSize, gridSize, slot);
 
         log.info("Take snapshot at block : {}, slot: {}, take total time: [{} ms]", block, slot, System.currentTimeMillis() - startTime);
 
@@ -167,7 +153,7 @@ public class BalanceSnapshotService {
         storedProcedure.setParameter("_lastSnapshotSlot", _lastSnapshotSlot);
 
         storedProcedure.execute();
-        log.info("call address_balance [from:{} - to:{}], take[{} ms]", _from, _to, System.currentTimeMillis() - startTime);
+        log.info("call take_address_balance_snapshot({},{},{}) with address [from:{} - to:{}], take[{} ms]", _from, _to, _lastSnapshotSlot, _from, _to, System.currentTimeMillis() - startTime);
     }
 
 }

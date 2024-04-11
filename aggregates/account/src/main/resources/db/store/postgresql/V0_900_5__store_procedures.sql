@@ -12,12 +12,22 @@ create table address_balance_snapshot
     update_datetime timestamp without time zone,
     primary key (address, unit, slot)
 );
+
 -- create index idx_address_balance_snapshot_address on address_balance_snapshot using btree (address);
 -- create index idx_address_balance_snapshot_block on address_balance_snapshot using btree (block);
 -- create index idx_address_balance_snapshot_block_time on address_balance_snapshot using btree (block_time);
 -- create index idx_address_balance_snapshot_epoch on address_balance_snapshot using btree (epoch);
 -- create index idx_address_balance_snapshot_slot on address_balance_snapshot using btree (slot);
 -- create index idx_address_balance_snapshot_unit on address_balance_snapshot using btree (unit);
+
+
+drop table if exists take_snapshot_time_log;
+create table take_snapshot_time_log
+(
+    from_id    numeric,
+    to_id      numeric,
+    time_taken numeric,
+);
 
 drop procedure if exists calculate_address_balance;
 CREATE OR REPLACE PROCEDURE
@@ -74,14 +84,20 @@ $$
 DECLARE
 current_from      numeric;
     current_to        numeric;
+    start_insert_time timestamp;
+    time_taken        numeric;
 BEGIN
     current_from := _from;
-    WHILE current_from <= _to
+    WHILE (current_from + _batch_size) <= _to
         LOOP
             current_to := current_from + _batch_size;
-call calculate_address_balance(current_from, current_to, _lastSnapshotSlot);
-commit;
+            start_insert_time := clock_timestamp();
+            call calculate_address_balance(current_from, current_to, _lastSnapshotSlot);
+            time_taken := EXTRACT(EPOCH FROM clock_timestamp() - start_insert_time);
+            insert into take_snapshot_time_log(from_id, to_id, time_taken)
+            values (current_from, current_to, time_taken);
+            commit;
             current_from := current_to;
-END LOOP;
+        END LOOP;
 END;
 $$;
