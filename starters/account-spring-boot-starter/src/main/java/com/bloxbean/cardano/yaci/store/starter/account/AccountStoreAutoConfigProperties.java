@@ -22,19 +22,10 @@ public class AccountStoreAutoConfigProperties {
         private int maxBalanceRecordsPerAddressPerBatch = 3;
         private boolean stakeAddressBalanceEnabled = true;
 
-        //parallel write & batch size settings
-        private boolean parallelWrite = false;
-        private int writeThreadDefaultBatchSize = 1000;
-        private int jooqWriteBatchSize = 3000;
-        private int writeThreadCount = 5;
-
         private int balanceHistoryCleanupInterval = 300;
         private long balanceCleanupSlotCount = 43200; //2160 blocks
 
-        private boolean addressCacheEnabled = false;
-        private int addressCacheSize = 50000;
-        private int addressCacheExpiryAfterAccess = 15;
-
+        private boolean saveAddressTxAmount = false;
         private boolean addressTxAmountIncludeZeroAmount = false;
 
         private long initialBalanceSnapshotBlock;

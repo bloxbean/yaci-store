@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS;
 import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor

@@ -28,17 +28,9 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setMaxBalanceRecordsPerAddressPerBatch(properties.getAccount().getMaxBalanceRecordsPerAddressPerBatch());
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
 
-        accountStoreProperties.setParallelWrite(properties.getAccount().isParallelWrite());
-        accountStoreProperties.setWriteThreadDefaultBatchSize(properties.getAccount().getWriteThreadDefaultBatchSize());
-        accountStoreProperties.setJooqWriteBatchSize(properties.getAccount().getJooqWriteBatchSize());
-        accountStoreProperties.setWriteThreadCount(properties.getAccount().getWriteThreadCount());
-
         accountStoreProperties.setBalanceCleanupSlotCount(properties.getAccount().getBalanceCleanupSlotCount());
 
-        accountStoreProperties.setAddressCacheEnabled(properties.getAccount().isAddressCacheEnabled());
-        accountStoreProperties.setAddressCacheSize(properties.getAccount().getAddressCacheSize());
-        accountStoreProperties.setAddressCacheExpiryAfterAccess(properties.getAccount().getAddressCacheExpiryAfterAccess());
-
+        accountStoreProperties.setSaveAddressTxAmount(properties.getAccount().isSaveAddressTxAmount());
         accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());
         accountStoreProperties.setInitialBalanceSnapshotBlock(properties.getAccount().getInitialBalanceSnapshotBlock());
 

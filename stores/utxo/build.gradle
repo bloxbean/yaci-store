@@ -3,6 +3,8 @@ dependencies {
     api project(":components:events")
     api project(":components:client")
 
+    implementation(libs.guava)
+
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     testImplementation project(':starters:spring-boot-starter')

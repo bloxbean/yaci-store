@@ -1,12 +1,12 @@
-package com.bloxbean.cardano.yaci.store.account.processor;
+package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
-import com.bloxbean.cardano.yaci.store.account.domain.Address;
-import com.bloxbean.cardano.yaci.store.account.storage.AddressStorage;
-import com.bloxbean.cardano.yaci.store.cache.GuavaCache;
-import com.bloxbean.cardano.yaci.store.cache.NoCache;
+
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
+import com.bloxbean.cardano.yaci.store.utxo.cache.GuavaCache;
+import com.bloxbean.cardano.yaci.store.utxo.cache.NoCache;
+import com.bloxbean.cardano.yaci.store.utxo.domain.Address;
 import com.bloxbean.cardano.yaci.store.common.cache.Cache;
 import com.bloxbean.cardano.yaci.store.common.cache.MVMapCache;
 import com.bloxbean.cardano.yaci.store.common.cache.MVStoreFactory;
@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AddressProcessor {
     private final AddressStorage addressStorage;
-    private final AccountStoreProperties accountStoreProperties;
+    private final UtxoStoreProperties utxoStoreProperties;
     private final StoreProperties storeProperties;
 
     private Cache<String, String> cache;
@@ -41,13 +42,13 @@ public class AddressProcessor {
     @PostConstruct
     public void init() {
         log.info("-- Address Processor Initialized with address cache size: {}, expiry: {} min"
-                , accountStoreProperties.getAddressCacheSize(), accountStoreProperties.getAddressCacheExpiryAfterAccess());
+                , utxoStoreProperties.getAddressCacheSize(), utxoStoreProperties.getAddressCacheExpiryAfterAccess());
 
-        if (accountStoreProperties.isAddressCacheEnabled() && !storeProperties.isMvstoreEnabled()) {
-            cache = new GuavaCache<>(accountStoreProperties.getAddressCacheSize(),
-                    accountStoreProperties.getAddressCacheExpiryAfterAccess());
+        if (utxoStoreProperties.isAddressCacheEnabled() && !storeProperties.isMvstoreEnabled()) {
+            cache = new GuavaCache<>(utxoStoreProperties.getAddressCacheSize(),
+                    utxoStoreProperties.getAddressCacheExpiryAfterAccess());
             log.info("<< Using Guava Cache for Address >>");
-        } else if (!accountStoreProperties.isAddressCacheEnabled()) {
+        } else if (!utxoStoreProperties.isAddressCacheEnabled()) {
             log.info("<< Address Cache is disabled >>");
             cache = new NoCache<>();
         }
@@ -55,7 +56,11 @@ public class AddressProcessor {
 
     @EventListener
     public void handleAddress(AddressUtxoEvent addressUtxoEvent) {
-        if (cache == null && accountStoreProperties.isAddressCacheEnabled() && storeProperties.isMvstoreEnabled()) {
+        if (!utxoStoreProperties.isSaveAddress()) {
+            return;
+        }
+
+        if (cache == null && utxoStoreProperties.isAddressCacheEnabled() && storeProperties.isMvstoreEnabled()) {
             cache = new MVMapCache<>(MVStoreFactory.getInstance().getStore(), "address");
             log.info("<< Using MVStore Cache for Address >>");
         }
@@ -79,6 +84,10 @@ public class AddressProcessor {
     @EventListener
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
+        if (!utxoStoreProperties.isSaveAddress()) {
+            return;
+        }
+
         try {
             if (addresseCache.size() > 0) {
                 long t1 = System.currentTimeMillis();
@@ -101,6 +110,10 @@ public class AddressProcessor {
     @EventListener
     @Transactional
     public void handleGenesisBalances(GenesisBlockEvent genesisBlockEvent) {
+        if (!utxoStoreProperties.isSaveAddress()) {
+            return;
+        }
+
         var genesisBalances = genesisBlockEvent.getGenesisBalances();
         if (genesisBalances == null || genesisBalances.isEmpty()) {
             log.info("No genesis balances found");

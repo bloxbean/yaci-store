@@ -188,6 +188,11 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setDbBatchSize(properties.getDb().getBatchSize());
         storeProperties.setDbParallelInsert(properties.getDb().isParallelInsert());
 
+        storeProperties.setParallelWrite(properties.getDb().isParallelWrite());
+        storeProperties.setWriteThreadDefaultBatchSize(properties.getDb().getWriteThreadDefaultBatchSize());
+        storeProperties.setJooqWriteBatchSize(properties.getDb().getJooqWriteBatchSize());
+        storeProperties.setWriteThreadCount(properties.getDb().getWriteThreadCount());
+
         storeProperties.setMvstoreEnabled(properties.isMvstoreEnabled());
         storeProperties.setMvstorePath(properties.getMvstorePath());
 

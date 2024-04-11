@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.account.storage.impl.mapper;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressBalanceEntity;
-import com.bloxbean.cardano.yaci.store.account.storage.impl.model.AddressEntity;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.model.StakeAddressBalanceEntity;
 
 public class AccountMapperDecorator implements AccountMapper{
@@ -44,17 +43,5 @@ public class AccountMapperDecorator implements AccountMapper{
     @Override
     public StakeAddressBalanceEntity toStakeBalanceEntity(StakeAddressBalance stakeBalance) {
         return delegate.toStakeBalanceEntity(stakeBalance);
-    }
-
-    @Override
-    public AddressEntity toAddressEntity(AddressBalance addressBalance) {
-        AddressEntity entity = delegate.toAddressEntity(addressBalance);
-
-        if (addressBalance.getAddress() != null && addressBalance.getAddress().length() > MAX_ADDR_SIZE) {
-            entity.setAddress(addressBalance.getAddress().substring(0, MAX_ADDR_SIZE));
-            entity.setAddrFull(addressBalance.getAddress());
-        }
-
-        return entity;
     }
 }
