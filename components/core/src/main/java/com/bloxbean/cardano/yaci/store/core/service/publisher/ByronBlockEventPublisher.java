@@ -44,6 +44,10 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         this.storeProperties = storeProperties;
     }
 
+    public void reset() {
+        byronBatchBlockList.clear();
+    }
+
     @Transactional
     @Override
     public void publishBlockEvents(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {

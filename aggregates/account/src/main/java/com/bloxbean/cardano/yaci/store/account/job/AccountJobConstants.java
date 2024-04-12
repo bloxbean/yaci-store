@@ -7,6 +7,7 @@ public class AccountJobConstants {
     public final static String SNAPSHOT_EPOCH = "snapshotEpoch";
     public final static String SNAPSHOT_BLOCK = "snapshotBlock";
     public final static String SNAPSHOT_BLOCKHASH = "snapshotBlockHash";
+    public final static String SNAPSHOT_BLOCKTIME = "snapshotBlockTime";
     public final static String UPDATE_ACCOUNT_CONFIG = "updateAccountConfig";
 
     public final static String STAKE_ADDRESS_TEMP_TABLE = "_stake_address_";

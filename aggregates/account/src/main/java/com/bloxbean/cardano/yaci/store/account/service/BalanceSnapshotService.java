@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -10,6 +11,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -20,11 +22,19 @@ import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 @RequiredArgsConstructor
 @Slf4j
 public class BalanceSnapshotService {
+    private final static String UTXO_BATCH_MODE = "utxo";
+    private final static String TX_AMOUNT_BATCH_MODE = "tx-amount";
+
     private final CursorService cursorService;
     private final StartService startService;
+    private final EraService eraService;
 
     private final JobLauncher jobLauncher;
     private final Job accountBalanceJob;
+    private final Job utxoAccountBalanceJob;
+
+    @Value("${store.account.balance-calc-batch-mode:utxo}")
+    private String balanceCalcBatchMode;
 
     /**
      * Schedule balance snapshot at current cursor block
@@ -69,7 +79,14 @@ public class BalanceSnapshotService {
         }
 
         Thread.startVirtualThread(() -> {
-            takeBalanceSnapshot(block, slot, blockHash, false);
+            long epoch = 0L;
+            long blockTime = 0L;
+            if (cursor.getEra() != null && cursor.getSlot() > 0) {
+                epoch = eraService.getEpochNo(cursor.getEra(), cursor.getSlot());
+                blockTime = eraService.blockTime(cursor.getEra(), cursor.getSlot());
+            }
+
+            takeBalanceSnapshot(block, slot, blockHash, epoch, blockTime, false);
         });
 
         return true;
@@ -91,23 +108,41 @@ public class BalanceSnapshotService {
             return false;
         }
 
-        takeBalanceSnapshot(cursor.getBlock(), cursor.getSlot(), cursor.getBlockHash(), true);
+        long epoch = 0L;
+        long blockTime = 0L;
+        if (cursor.getEra() != null && cursor.getSlot() > 0) {
+            epoch = eraService.getEpochNo(cursor.getEra(), cursor.getSlot());
+            blockTime = eraService.blockTime(cursor.getEra(), cursor.getSlot());
+        }
+
+        takeBalanceSnapshot(cursor.getBlock(), cursor.getSlot(), cursor.getBlockHash(), epoch, blockTime, true);
         return true;
     }
 
     @SneakyThrows
-    private void takeBalanceSnapshot(long block, long slot, String blockHash, boolean updateConfig) {
+    private void takeBalanceSnapshot(long block, long slot, String blockHash, long epoch, long blockTime, boolean updateConfig) {
         //Take balance snapshot
         log.info("Trying to take balance snapshot at block : {}, slot: {}", block, slot);
         JobParameters jobParameters = new JobParametersBuilder()
                 .addLong(SNAPSHOT_BLOCK, block)
                 .addLong(SNAPSHOT_SLOT, slot)
                 .addString(SNAPSHOT_BLOCKHASH, blockHash)
+                .addLong(SNAPSHOT_EPOCH, epoch)
+                .addLong(SNAPSHOT_BLOCKTIME, blockTime)
                 .addString(UPDATE_ACCOUNT_CONFIG, updateConfig? "true": "false")
                 .toJobParameters();
 
-        JobExecution jobExecution = jobLauncher.run(accountBalanceJob, jobParameters);
-        log.info("Job Execution Status: " + jobExecution.getStatus());
+        if (balanceCalcBatchMode.equals(UTXO_BATCH_MODE)) {
+            log.info("Running UTXO balance snapshot job >>");
+            JobExecution jobExecution = jobLauncher.run(utxoAccountBalanceJob, jobParameters);
+            log.info("Job Execution Status: " + jobExecution.getStatus());
+        } else if (balanceCalcBatchMode.equals(TX_AMOUNT_BATCH_MODE)) {
+            log.info("Running TX_AMOUNT balance snapshot job >>");
+            JobExecution jobExecution = jobLauncher.run(accountBalanceJob, jobParameters);
+            log.info("Job Execution Status: " + jobExecution.getStatus());
+        } else {
+            log.error("Invalid balance-calc-batch-mode : {}. Skipping balance snapshot", balanceCalcBatchMode);
+        }
     }
 
 }
