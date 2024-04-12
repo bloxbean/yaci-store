@@ -38,6 +38,13 @@ public class CreateStakeAddressTableTasklet implements Tasklet {
 
         log.info("<< Temp table created for stake addresses >>");
 
+        log.info("<< Creating index on address_utxo >> ");
+        String addrIndexQuery = "CREATE INDEX if not exists idx_address_utxo_owner_addr ON address_utxo(owner_addr)";
+        String stakeAddrIndexQuery = "CREATE INDEX if not exists idx_address_utxo_owner_stake_addr ON address_utxo(owner_stake_addr)";
+
+        dsl.batch(addrIndexQuery, stakeAddrIndexQuery).execute();
+        log.info("<< Index created on address_utxo >>");
+
         return RepeatStatus.FINISHED;
     }
 }

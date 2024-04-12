@@ -21,6 +21,11 @@ public class DropStakeAddressTableTasklet implements Tasklet {
         dsl.dropTableIfExists(STAKE_ADDRESS_TEMP_TABLE).execute();
 
         log.info("<< Cleaned up temp table for stake addresses >>");
+
+        dsl.dropIndex("idx_address_utxo_owner_addr").execute();
+        dsl.dropIndex("idx_address_utxo_owner_stake_addr").execute();
+
+        log.info("<< Dropped index on address_utxo >>");
         return RepeatStatus.FINISHED;
     }
 }

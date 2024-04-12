@@ -51,6 +51,10 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
 
+    public void reset() {
+        batchBlockList.clear();
+    }
+
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);

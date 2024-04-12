@@ -396,6 +396,11 @@ public class BlockFetchService implements BlockChainDataListener {
         isError.set(true);
     }
 
+    public synchronized void reset() {
+        byronBlockEventPublisher.reset();
+        postShelleyBlockEventPublisher.reset();
+    }
+
     private void checkError() {
         if (isError.get())
             throw new IllegalStateException("Fetcher has already been stopped due to error.");
