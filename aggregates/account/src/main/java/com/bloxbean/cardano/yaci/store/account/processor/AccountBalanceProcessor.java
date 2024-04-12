@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
+import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
@@ -87,7 +88,6 @@ public class AccountBalanceProcessor {
                 log.info("Ignore balance calculation as the block is less than the initial balance snapshot block {}", accountStoreProperties.getInitialBalanceSnapshotBlock());
                 return;
             }
-
             log.info("### Starting account balance calculation upto block: {} ###", event.getMetadata().getBlock());
             Collection<AddressUtxoEvent> addressUtxoEvents = addressUtxoEventsMap.values();
 
@@ -99,7 +99,20 @@ public class AccountBalanceProcessor {
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
                     .collect(toList());
 
-            //Create final address balance records for saving
+
+            //Required when we are starting from a balance snapshot
+            var isLastBlockAtBalanceSnapshot = accountConfigOpt.map(accountConfigEntity -> accountConfigEntity.getStatus())
+                    .map(status -> status.equals(ConfigStatus.BALANCE_SNAPSHOT))
+                    .orElse(false);
+
+            //If the last block is at balance snapshot and most probably a rollback event for first block, ignore the balance calculation for the last block
+            if (isLastBlockAtBalanceSnapshot && lastProcessedBlock != 0
+                    && lastProcessedBlock == sortedAddressEventUtxo.get(0).getEventMetadata().getBlock()) {
+                log.info("Last block is at balance snapshot. Ignoring the balance calculation for block {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
+                sortedAddressEventUtxo.remove(0);
+            }
+
+                //Create final address balance records for saving
             //Required to get balance before the slot mention in the metadata
             EventMetadata firstBlockInBatchMetadata = sortedAddressEventUtxo.get(0).getEventMetadata();
 

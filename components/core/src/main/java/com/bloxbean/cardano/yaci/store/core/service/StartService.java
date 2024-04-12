@@ -53,6 +53,7 @@ public class StartService {
         log.info("###########################");
 
         initService.init();
+        blockFetchService.reset();
 
         alreadyStarted = true;
         log.info("Application is ready. Let's start the sync process ...");
@@ -160,5 +161,4 @@ public class StartService {
     public boolean isStarted() {
         return alreadyStarted;
     }
-
 }
