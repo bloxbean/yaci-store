@@ -48,13 +48,13 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         this.storeProperties = storeProperties;
     }
 
-    private List<BatchBlock> batchBlockList = new ArrayList<>();
+    private final List<BatchBlock> batchBlockList = new ArrayList<>();
 
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
         publisher.publishEvent(new ReadyForBalanceAggregationEvent(eventMetadata));
-        publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
+        publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
                 eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
@@ -75,7 +75,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     public void processBlocksInParallel() {
-        if (batchBlockList.size() == 0)
+        if (batchBlockList.isEmpty())
             return;
 
         List<List<BatchBlock>> partitions = partition(batchBlockList, storeProperties.getBlocksPartitionSize());

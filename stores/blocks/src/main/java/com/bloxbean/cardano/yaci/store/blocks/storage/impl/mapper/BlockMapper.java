@@ -27,21 +27,14 @@ public abstract class BlockMapper {
     }
 
     private String getEra(Integer era) {
-        switch (era) {
-            case 1:
-                return "Byron";
-            case 2:
-                return "Shelley";
-            case 3:
-                return "Allegra";
-            case 4:
-                return "Mary";
-            case 5:
-                return "Alonzo";
-            case 6:
-                return "Babbage";
-            default:
-                return String.valueOf(era);
-        }
+        return switch (era) {
+            case 1 -> "Byron";
+            case 2 -> "Shelley";
+            case 3 -> "Allegra";
+            case 4 -> "Mary";
+            case 5 -> "Alonzo";
+            case 6 -> "Babbage";
+            default -> String.valueOf(era);
+        };
     }
 }

@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "committee_registration")
 @IdClass(CommitteeRegistrationId.class)
-public class CommitteeRegistrationEntity extends BlockAwareEntity{
+public class CommitteeRegistrationEntity extends BlockAwareEntity {
     @Id
     @Column(name = "tx_hash")
     private String txHash;

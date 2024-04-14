@@ -13,20 +13,21 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class BlockStorageImpl implements BlockStorage {
+
     private final BlockRepository blockRepository;
     private final BlockMapper blockDetailsMapper;
 
     @Override
     public Optional<Block> findRecentBlock() {
         return blockRepository.findTopByOrderByNumberDesc()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override
     public List<Block> findBlocksByEpoch(int epochNumber) {
         return blockRepository.findByEpochNumber(epochNumber)
                 .stream()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity))
+                .map(blockDetailsMapper::toBlock)
                 .collect(Collectors.toList());
     }
 

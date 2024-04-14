@@ -60,5 +60,4 @@ public class TxScriptEntity extends BlockAwareEntity {
 
     @Column(name = "redeemer_datahash")
     private String redeemerDatahash;
-
 }

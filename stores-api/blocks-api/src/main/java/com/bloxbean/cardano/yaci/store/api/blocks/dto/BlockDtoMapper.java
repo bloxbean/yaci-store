@@ -17,7 +17,7 @@ public class BlockDtoMapper {
         String vrfVkey = block.getVrfVkey() != null? Bech32.encode(HexUtil.decodeHexString(block.getVrfVkey()), VRF_VK_PREFIX)
                 : null;
 
-        BlockDto blockDto = BlockDto.builder()
+        return BlockDto.builder()
                 .time(block.getBlockTime())
                 .height(block.getNumber())
                 .number(block.getNumber())
@@ -46,7 +46,5 @@ public class BlockDtoMapper {
                 .blockBodyHash(block.getBlockBodyHash())
                 .protocolVersion(block.getProtocolVersion())
                 .build();
-
-        return blockDto;
     }
 }

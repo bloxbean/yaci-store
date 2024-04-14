@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +22,10 @@ public class CursorService {
     private final CursorStorage cursorStorage;
     private final StoreProperties storeProperties;
     private final BlockFinder blockFinder;
-
-    private AtomicLong lastBlock = new AtomicLong(0);
+    private final AtomicLong lastBlock = new AtomicLong(0);
     private Instant lastProcessedTime = Instant.now();
+    @Setter
+    @Getter
     private boolean syncMode;
 
     public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
@@ -94,14 +97,6 @@ public class CursorService {
         Cursor cursor
                 = cursorStorage.getCurrentCursor(storeProperties.getEventPublisherId()).orElse(new Cursor());
         log.info("Cursor : Slot=" + cursor.getSlot() + ", Hash=" + cursor.getBlockHash());
-    }
-
-    public boolean isSyncMode() {
-        return syncMode;
-    }
-
-    public void setSyncMode(boolean syncMode) {
-        this.syncMode = syncMode;
     }
 
     private void printLog(long block, Era era) {

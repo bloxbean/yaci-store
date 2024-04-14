@@ -27,7 +27,7 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
     @Override
     public Optional<Block> findRecentBlock() {
         return blockRepository.findTopByOrderByNumberDesc()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override
@@ -41,7 +41,7 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
 //      int totalPage = blocksEntityPage.getTotalPages();
 
         List<BlockSummary> blockSummaryList = blocksEntityPage.stream()
-                .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
+                .map(blockDetailsMapper::toBlockSummary)
                 .collect(Collectors.toList());
 
         return BlocksPage.builder()
@@ -55,20 +55,20 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
     public List<Block> findBlocksByEpoch(int epochNumber) {
         return blockRepository.findByEpochNumber(epochNumber)
                 .stream()
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity))
+                .map(blockDetailsMapper::toBlock)
                 .collect(Collectors.toList());
     }
 
     @Override
     public Optional<Block> findByBlockHash(String blockHash) {
         return blockRepository.findByHash(blockHash)
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override
     public Optional<Block> findByBlock(long block) {
         return blockRepository.findByNumber(block)
-                .map(blockEntity -> blockDetailsMapper.toBlock(blockEntity));
+                .map(blockDetailsMapper::toBlock);
     }
 
     @Override

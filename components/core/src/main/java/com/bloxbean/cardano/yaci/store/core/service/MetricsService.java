@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.model.CursorEntity;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -22,7 +23,7 @@ public class MetricsService {
 
     private Supplier<Number> getTopBlockNo() {
         return () -> cursorRepository.findTopByIdOrderBySlotDesc(storeProperties.getEventPublisherId())
-                .map(cursorEntity -> cursorEntity.getBlock())
+                .map(CursorEntity::getBlock)
                 .orElse(0L);
     }
 }

@@ -18,15 +18,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.utxo",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.utxo"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.utxo"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.utxo"})
+@ConditionalOnProperty(prefix = "store.utxo", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.utxo")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.utxo")
+@EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.utxo")
 @EnableTransactionManagement
 public class UtxoStoreConfiguration {
 

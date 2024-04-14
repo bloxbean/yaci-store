@@ -20,16 +20,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@ConditionalOnProperty(
-        prefix = "store.script",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.script"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.script"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.script"})
 @EnableTransactionManagement
+@EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.script")
+@ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.script")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.script.storage.impl.jpa.*")
+@ConditionalOnProperty(prefix = "store.script", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ScriptStoreConfiguration {
 
     @Bean

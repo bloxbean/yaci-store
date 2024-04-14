@@ -17,19 +17,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-@Configuration
-@ConditionalOnProperty(
-        prefix = "store.core",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.core"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.core"})
-@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.core"})
-@EnableTransactionManagement
-@EnableScheduling
 @Slf4j
+@Configuration
+@EnableScheduling
+@EnableTransactionManagement
+@EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.core")
+@ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.core")
+@EnableJpaRepositories(basePackages = "com.bloxbean.cardano.yaci.store.core")
+@ConditionalOnProperty(prefix = "store.core", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class StoreConfiguration {
     @Bean
     @ConditionalOnMissingBean

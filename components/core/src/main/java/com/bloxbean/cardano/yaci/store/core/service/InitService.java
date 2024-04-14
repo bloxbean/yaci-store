@@ -24,10 +24,7 @@ public class InitService {
     }
 
     private void findNetworkType() {
-        if (storeProperties.getProtocolMagic() == NetworkType.MAINNET.getProtocolMagic())
-            storeProperties.setMainnet(true);
-        else
-            storeProperties.setMainnet(false);
+        storeProperties.setMainnet(storeProperties.getProtocolMagic() == NetworkType.MAINNET.getProtocolMagic());
     }
 
     private void checkIfCustomStartPoint() {
@@ -35,7 +32,7 @@ public class InitService {
             return;
 
         Optional<CardanoEra> era = eraStorage.findFirstNonByronEra();
-        if (!era.isEmpty())
+        if (era.isPresent())
             return;
 
         //Era is empty, let's fill shelley era start if it's a known network or configure from properties

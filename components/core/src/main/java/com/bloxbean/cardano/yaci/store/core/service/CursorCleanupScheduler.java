@@ -23,7 +23,7 @@ public class CursorCleanupScheduler {
         Optional<Cursor> cursor = cursorStorage.getCurrentCursor(storeProperties.getEventPublisherId());
         log.info("Current cursor: {}", cursor);
 
-        if (!cursor.isPresent())
+        if (cursor.isEmpty())
             return;
 
         //Block no to delete from
