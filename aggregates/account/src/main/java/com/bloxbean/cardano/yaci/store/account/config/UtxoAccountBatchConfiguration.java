@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.account.config;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.job.*;
+import com.bloxbean.cardano.yaci.store.account.job.utxo.AddressUtxoAggregationTasklet;
+import com.bloxbean.cardano.yaci.store.account.job.utxo.StakeAddressUtxoAggregationTasklet;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +27,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
-@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "tx-amount", matchIfMissing = false)
+@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "utxo", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
-public class AccountBatchConfiguration {
+public class UtxoAccountBatchConfiguration {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final JdbcTemplate jdbcTemplate;
@@ -39,8 +41,8 @@ public class AccountBatchConfiguration {
     private final PlatformTransactionManager platformTransactionManager;
 
     @Bean
-    public Job accountBalanceJob() {
-        return new JobBuilder("addressAggregationJob", jobRepository)
+    public Job utxoAccountBalanceJob() {
+        return new JobBuilder("utxoAddressAggregationJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(createStakeAddressStep())
                 .next(accountBalanceMasterStep())
@@ -106,7 +108,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet accountBalanceTasklet() {
-        return new AddressAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
+        return new AddressUtxoAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
     }
 
     //--- Stake Address Balance Calculation
@@ -140,7 +142,7 @@ public class AccountBatchConfiguration {
 
     @Bean
     public Tasklet stakeAddressBalanceTasklet() {
-        return new StakeAddressAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
+        return new StakeAddressUtxoAggregationTasklet(accountStoreProperties, dsl, platformTransactionManager);
     }
 
     @Bean
