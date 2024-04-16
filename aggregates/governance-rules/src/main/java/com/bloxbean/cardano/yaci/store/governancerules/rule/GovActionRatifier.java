@@ -21,7 +21,8 @@ public class GovActionRatifier {
      * Determines the ratification result for a governance action.
      *
      * @param govAction              The governance action for which ratification result is needed.
-     * @param ccYesVote              The total votes of the Constitution Committee that voted 'Yes'.
+     * @param ccYesVote              The total votes of the Constitution Committee that voted 'Yes':
+     *                                  the number of registered, unexpired, unresigned committee members that voted yes
      * @param ccQuorum               The quorum of the Constitution Committee.
      * @param spoYesVoteStake        The total delegated stake from SPO that voted 'Yes'.
      * @param spoAbstainVoteStake    The total delegated stake from SPO that voted 'Abstain'.
@@ -137,6 +138,24 @@ public class GovActionRatifier {
         return RatificationResult.CONTINUE;
     }
 
+    /**
+     * Determines the ratification result for a No Confidence governance action.
+     *
+     * @param noConfidence             The No Confidence governance action for which ratification result is needed.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param dRepYesVoteStake         The total stake of:
+     *                                 1. Registered dReps that voted 'Yes', plus
+     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the No Confidence action.
+     */
     public static RatificationResult getRatificationResultForNoConfidenceAction(NoConfidence noConfidence, BigInteger spoYesVoteStake,
                                                                                 BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                 BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
@@ -147,6 +166,25 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for an Update Committee governance action.
+     *
+     * @param updateCommittee          The Update Committee governance action for which ratification result is needed.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param dRepYesVoteStake         The total stake of:
+     *                                 1. Registered dReps that voted 'Yes', plus
+     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param ccState                  The current Constitution Committee state.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the Update Committee action.
+     */
     public static RatificationResult getRatificationResultForUpdateCommitteeAction(UpdateCommittee updateCommittee, BigInteger spoYesVoteStake,
                                                                                    BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
@@ -157,6 +195,27 @@ public class GovActionRatifier {
                 ccState, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for an Info governance action.
+     *
+     * @param infoAction               The Info governance action for which ratification result is needed.
+     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
+     *                                      the number of registered, unexpired, unresigned committee members that voted yes
+     * @param ccQuorum                 The quorum of the Constitution Committee.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param dRepYesVoteStake         The total stake of:
+     *                                 1. Registered dReps that voted 'Yes', plus
+     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the Info action.
+     */
     public static RatificationResult getRatificationResultForInfoAction(InfoAction infoAction, Integer ccYesVote, Integer ccQuorum,
                                                                         BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                         BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
@@ -167,6 +226,27 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for a Hard Fork Initiation governance action.
+     *
+     * @param hardForkInitiationAction The Hard Fork Initiation governance action for which ratification result is needed.
+     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
+     *                                      the number of registered, unexpired, unresigned committee members that voted yes
+     * @param ccQuorum                 The quorum of the Constitution Committee.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param dRepYesVoteStake         The total stake of:
+     *                                 1. Registered dReps that voted 'Yes', plus
+     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the Hard Fork Initiation action.
+     */
     public static RatificationResult getRatificationResultForHardForkInitiationAction(HardForkInitiationAction hardForkInitiationAction,
                                                                                       Integer ccYesVote, Integer ccQuorum,
                                                                                       BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
@@ -178,6 +258,22 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for a New Constitution governance action.
+     *
+     * @param newConstitution          The New Constitution governance action for which ratification result is needed.
+     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
+     *                                      the number of registered, unexpired, unresigned committee members that voted yes
+     * @param ccQuorum                 The quorum of the Constitution Committee.
+     * @param dRepYesVoteStake         The total stake of registered dReps that voted 'Yes'.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the New Constitution action.
+     */
     public static RatificationResult getRatificationResultForNewConstitutionAction(NewConstitution newConstitution,
                                                                                    Integer ccYesVote, Integer ccQuorum,
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
@@ -188,6 +284,20 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for a Treasury Withdrawals governance action.
+     *
+     * @param treasuryWithdrawalsAction The Treasury Withdrawals governance action for which ratification result is needed.
+     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
+     *                                      the number of registered, unexpired, unresigned committee members that voted yes
+     * @param ccQuorum                 The quorum of the Constitution Committee.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the Treasury Withdrawals action.
+     */
     public static RatificationResult getRatificationResultForTreasuryWithdrawalsAction(TreasuryWithdrawalsAction treasuryWithdrawalsAction,
                                                                                        Integer ccYesVote, Integer ccQuorum,
                                                                                        BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
@@ -198,6 +308,27 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
+    /**
+     * Determines the ratification result for a Protocol Parameters Change governance action.
+     *
+     * @param parameterChangeAction    The Parameter Change governance action for which ratification result is needed.
+     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
+     *                                      the number of registered, unexpired, unresigned committee members that voted yes
+     * @param ccQuorum                 The quorum of the Constitution Committee.
+     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
+     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
+     * @param spoTotalStake            The total delegated stake from SPO.
+     * @param dRepYesVoteStake         The total stake of:
+     *                                 1. Registered dReps that voted 'Yes', plus
+     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
+     * @param dRepNoVoteStake          The total stake of:
+     *                                 1. Registered dReps that voted 'No', plus
+     *                                 2. Registered dReps that did not vote for this action, plus
+     *                                 3. The AlwaysNoConfidence dRep.
+     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
+     * @param currentEpochParam        The current epoch parameters.
+     * @return The ratification result for the Parameter Change action.
+     */
     public static RatificationResult getRatificationResultForParameterChangeAction(ParameterChangeAction parameterChangeAction,
                                                                                    Integer ccYesVote, Integer ccQuorum,
                                                                                    BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
