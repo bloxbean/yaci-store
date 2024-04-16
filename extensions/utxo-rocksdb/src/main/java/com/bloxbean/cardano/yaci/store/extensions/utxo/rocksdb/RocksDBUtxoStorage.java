@@ -173,6 +173,11 @@ public class RocksDBUtxoStorage implements UtxoStorage {
 
     }
 
+    @Override
+    public int deleteBySpentAndBlockLessThan(Long block) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
     @SneakyThrows
     @EventListener
     public void handleCommitEvent(CommitEvent commitEvent) {
