@@ -89,6 +89,12 @@ public class UtxoStorageImpl implements UtxoStorage {
 
     @Override
     @Transactional
+    public int deleteBySpentAndBlockLessThan(Long block) {
+        return utxoRepository.deleteBySpentAndBlockLessThan(block);
+    }
+
+    @Override
+    @Transactional
     public void saveUnspent(List<AddressUtxo> addressUtxoList) {
         List<AddressUtxoEntity> addressUtxoEntities = addressUtxoList.stream()
                 .map(mapper::toAddressUtxoEntity)

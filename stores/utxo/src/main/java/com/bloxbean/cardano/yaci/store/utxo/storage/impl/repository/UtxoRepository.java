@@ -4,8 +4,10 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -67,5 +69,10 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
 
     int deleteBySlotGreaterThan(Long slot);
 
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM AddressUtxoEntity a WHERE a IN (SELECT au FROM AddressUtxoEntity au JOIN TxInputEntity s ON " +
+            "au.txHash = s.txHash AND au.outputIndex = s.outputIndex AND s.spentAtBlock < :block)")
+    int deleteBySpentAndBlockLessThan(Long block);
 }
 
