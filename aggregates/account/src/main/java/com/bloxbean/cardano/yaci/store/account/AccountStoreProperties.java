@@ -22,6 +22,8 @@ public class AccountStoreProperties {
     private int balanceHistoryCleanupInterval = 300;
     @Builder.Default
     private long balanceCleanupSlotCount = 43200; //2160 blocks
+    @Builder.Default
+    private long balanceCleanupBatchThreshold = 20000;
 
     @Builder.Default
     private boolean saveAddressTxAmount = false;

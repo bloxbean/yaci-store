@@ -75,6 +75,10 @@ public class YaciStoreProperties {
         private int blocksPartitionSize=10;
         private boolean useVirtualThreadForBatchProcessing;
         private boolean useVirtualThreadForEventProcessing;
+        /**
+         * Timeout in seconds for processing threads
+         */
+        private int processingThreadsTimeout = 5;
     }
 
     @Getter

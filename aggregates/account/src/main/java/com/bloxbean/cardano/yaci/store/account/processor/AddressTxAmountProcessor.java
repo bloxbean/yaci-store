@@ -12,9 +12,9 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
@@ -22,23 +22,32 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.common.util.AddressUtil.getAddress;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class AddressTxAmountProcessor {
     public static final int BLOCK_ADDRESS_TX_AMT_THRESHOLD = 100; //Threshold to save address_tx_amounts records for block
 
     private final AddressTxAmountStorage addressTxAmountStorage;
     private final UtxoClient utxoClient;
+    private final UtxoClient retryableUtxoClient;
     private final AccountStoreProperties accountStoreProperties;
 
     private List<Pair<EventMetadata, TxInputOutput>> pendingTxInputOutputListCache = Collections.synchronizedList(new ArrayList<>());
     private List<AddressTxAmount> addressTxAmountListCache = Collections.synchronizedList(new ArrayList<>());
+
+    public AddressTxAmountProcessor(AddressTxAmountStorage addressTxAmountStorage,
+                                    UtxoClient utxoClient,
+                                    @Qualifier("retryableUtxoClient") UtxoClient retryableUtxoClient,
+                                    AccountStoreProperties accountStoreProperties) {
+        this.addressTxAmountStorage = addressTxAmountStorage;
+        this.utxoClient = utxoClient;
+        this.retryableUtxoClient = retryableUtxoClient;
+        this.accountStoreProperties = accountStoreProperties;
+    }
 
     @EventListener
     @Transactional
@@ -85,14 +94,13 @@ public class AddressTxAmountProcessor {
                 .map(input -> new UtxoKey(input.getTxHash(), input.getOutputIndex()))
                 .toList();
 
-        var inputAddressUtxos = utxoClient.getUtxosByIds(inputUtxoKeys)
-                .stream()
-                .filter(Objects::nonNull)
-                .toList();
-
-        if (throwExceptionOnFailure && inputAddressUtxos.size() != inputUtxoKeys.size()) {
-            //Retry after 2 seconds
-            TimeUnit.SECONDS.sleep(2);
+        List<AddressUtxo> inputAddressUtxos;
+        if (throwExceptionOnFailure) {
+            inputAddressUtxos = retryableUtxoClient.getUtxosByIds(inputUtxoKeys)
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+        } else {
             inputAddressUtxos = utxoClient.getUtxosByIds(inputUtxoKeys)
                     .stream()
                     .filter(Objects::nonNull)
