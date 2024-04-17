@@ -42,7 +42,7 @@ public class GovernanceActionUtil {
         if (committeeMaxTermLength == null) {
             return true;
         }
-        Map<Credential, Integer> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
+        final Map<Credential, Integer> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
         if (newMembersAndTerms != null) {
             var memberWithInvalidTerm = newMembersAndTerms.values().stream().filter(term -> term != null && term > committeeMaxTermLength).findFirst();
             return memberWithInvalidTerm.isEmpty();
@@ -52,7 +52,7 @@ public class GovernanceActionUtil {
     }
 
     public static boolean withdrawalCanWithdraw(TreasuryWithdrawalsAction treasuryWithdrawalsAction, BigInteger treasury) {
-        Map<String, BigInteger> withdrawals = treasuryWithdrawalsAction.getWithdrawals();
+        final Map<String, BigInteger> withdrawals = treasuryWithdrawalsAction.getWithdrawals();
         if (withdrawals == null) {
             return true;
         }
