@@ -2,6 +2,7 @@ dependencies {
     api project(":stores:utxo")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.retry:spring-retry'
 
     testImplementation project(':starters:spring-boot-starter')
 }

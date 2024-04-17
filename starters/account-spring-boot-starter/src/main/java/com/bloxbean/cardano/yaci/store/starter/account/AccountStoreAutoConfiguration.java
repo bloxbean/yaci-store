@@ -29,6 +29,7 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
 
         accountStoreProperties.setBalanceCleanupSlotCount(properties.getAccount().getBalanceCleanupSlotCount());
+        accountStoreProperties.setBalanceCleanupBatchThreshold(properties.getAccount().getBalanceCleanupBatchThreshold());
 
         accountStoreProperties.setSaveAddressTxAmount(properties.getAccount().isSaveAddressTxAmount());
         accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());

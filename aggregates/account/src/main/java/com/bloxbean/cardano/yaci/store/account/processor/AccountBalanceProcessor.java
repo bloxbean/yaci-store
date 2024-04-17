@@ -24,6 +24,7 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
@@ -43,7 +44,6 @@ import static com.pivovarit.collectors.ParallelCollectors.parallel;
 import static java.util.stream.Collectors.toList;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;
@@ -53,13 +53,31 @@ public class AccountBalanceProcessor {
     private final AccountConfigService accountConfigService;
     private final BalanceSnapshotService balanceSnapshotService;
     private final ParallelExecutor parallelExecutor;
+    private final PlatformTransactionManager transactionManager;
 
     private int nAddrBalanceRecordToKeep = 3;
 
     private Map<Long, AddressUtxoEvent> addressUtxoEventsMap = new ConcurrentHashMap<>();
 
-    private final PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
+
+    public AccountBalanceProcessor(AccountBalanceStorage accountBalanceStorage,
+                                   AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper,
+                                   AccountStoreProperties accountStoreProperties,
+                                   @Qualifier("retryableUtxoClient") UtxoClient utxoClient,
+                                   AccountConfigService accountConfigService,
+                                   BalanceSnapshotService balanceSnapshotService,
+                                   ParallelExecutor parallelExecutor,
+                                   PlatformTransactionManager transactionManager) {
+        this.accountBalanceStorage = accountBalanceStorage;
+        this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
+        this.accountStoreProperties = accountStoreProperties;
+        this.utxoClient = utxoClient;
+        this.accountConfigService = accountConfigService;
+        this.balanceSnapshotService = balanceSnapshotService;
+        this.parallelExecutor = parallelExecutor;
+        this.transactionManager = transactionManager;
+    }
 
     @PostConstruct
     void init() {

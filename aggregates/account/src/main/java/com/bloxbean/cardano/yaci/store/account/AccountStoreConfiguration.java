@@ -37,8 +37,8 @@ public class AccountStoreConfiguration {
     @ConditionalOnMissingBean
     public AccountBalanceStorage accountBalanceStorage(AddressBalanceRepository addressBalanceRepository,
                                                        StakeBalanceRepository stakeBalanceRepository, DSLContext dslContext,
-                                                       StoreProperties storeProperties) {
-        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository, dslContext, storeProperties);
+                                                       StoreProperties storeProperties, AccountStoreProperties accountStoreProperties) {
+        return new AccountBalanceStorageImpl(addressBalanceRepository, stakeBalanceRepository, dslContext, storeProperties, accountStoreProperties);
     }
 
     @Bean

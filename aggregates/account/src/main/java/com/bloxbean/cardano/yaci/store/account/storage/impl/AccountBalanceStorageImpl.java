@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
@@ -11,20 +12,27 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBala
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.util.Pair;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
@@ -36,11 +44,15 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     private final StakeBalanceRepository stakeBalanceRepository;
     private final DSLContext dsl;
     private final StoreProperties storeProperties;
+    private final AccountStoreProperties accountStoreProperties;
 
     private final AccountMapper mapper = AccountMapper.INSTANCE;
 
     @Value("${store.account.enable-jpa-insert:false}")
     private boolean enableJPAInsert = false;
+
+    private Map<Pair<String, String>, Long> addressBalanceKeysToDeleteCache = new ConcurrentHashMap<>();
+    private Map<String, Long> stakeBalanceKeysToDeleteCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void postConstruct() {
@@ -135,6 +147,22 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     @Transactional
     @Override
+    public int deleteAddressBalanceBeforeSlotExceptTop(List<Pair<String, String>> addresses, long slot) {
+        //Add to cache and delete once the cache size reaches a threshold
+        addresses.forEach(addressUnit -> {
+            addressBalanceKeysToDeleteCache.put(addressUnit, slot);
+        });
+
+        return 0;
+    }
+
+    @Override
+    public boolean isBatchDeleteSupported() {
+        return true;
+    }
+
+    @Transactional
+    @Override
     public int deleteAddressBalanceBySlotGreaterThan(Long slot) {
         return addressBalanceRepository.deleteBySlotGreaterThan(slot);
     }
@@ -225,6 +253,16 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .map(addressBalanceEntity -> stakeBalanceRepository.deleteAllBeforeSlot(address, addressBalanceEntity.getSlot() - 1)).orElse(0);
     }
 
+    @Override
+    public int deleteStakeBalanceBeforeSlotExceptTop(List<String> addresses, long slot) {
+        //Add to cache and delete once the cache size reaches a threshold
+        addresses.forEach(address -> {
+            stakeBalanceKeysToDeleteCache.put(address, slot);
+        });
+
+        return 0;
+    }
+
     @Transactional
     @Override
     public int deleteStakeAddressBalanceBySlotGreaterThan(Long slot) {
@@ -239,6 +277,53 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         return addressBalanceRepository.findLatestAddressBalanceByUnit(unit, sortedBySlot).stream()
                 .map(mapper::toAddressBalance)
                 .toList();
+    }
+
+    @EventListener
+    @Transactional
+    public void handleBalanceDeleteOnCommit(CommitEvent commitEvent) {
+        //Delete address balances if cache size reaches a threshold
+        if (commitEvent.getMetadata().isSyncMode()) {
+            performBalanceDelete(true); //Ignore threshold check. Delete always
+        } else {
+            performBalanceDelete(false);
+        }
+    }
+
+    private long performBalanceDelete(boolean ignoreThresholdCheck) {
+        long t1 = System.currentTimeMillis();
+
+        if (!ignoreThresholdCheck && addressBalanceKeysToDeleteCache.size() < accountStoreProperties.getBalanceCleanupBatchThreshold())
+            return 0;
+
+        log.info("<< Start: Deleting balances : cache size {} >>",addressBalanceKeysToDeleteCache.size() + stakeBalanceKeysToDeleteCache.size());
+
+        var addressBalanceDeleteQueries = addressBalanceKeysToDeleteCache.entrySet().stream()
+                .map(pairLongEntry -> dsl.deleteFrom(ADDRESS_BALANCE)
+                        .where(ADDRESS_BALANCE.ADDRESS.eq(pairLongEntry.getKey().getFirst()))
+                        .and(ADDRESS_BALANCE.UNIT.eq(pairLongEntry.getKey().getSecond()))
+                        .and(ADDRESS_BALANCE.SLOT.lt(pairLongEntry.getValue())));
+
+        var stakeBalanceDeleteQueries = stakeBalanceKeysToDeleteCache.entrySet().stream()
+                .map(entry -> dsl.deleteFrom(STAKE_ADDRESS_BALANCE)
+                        .where(
+                                STAKE_ADDRESS_BALANCE.ADDRESS.eq(entry.getKey())
+                                        .and(STAKE_ADDRESS_BALANCE.SLOT.lt(entry.getValue()))
+                        ));
+
+        var allDeleteQueries = Stream.concat(addressBalanceDeleteQueries, stakeBalanceDeleteQueries).toList();
+
+        int[] deletedRows = dsl.batch(allDeleteQueries).execute();
+
+        int totalCount = Arrays.stream(deletedRows).sum();
+
+        long t2 = System.currentTimeMillis();
+        log.info("<< End: Deleted balance rows: {}, Time taken: {} ms >>", totalCount, (t2 - t1));
+
+        addressBalanceKeysToDeleteCache.clear();
+        stakeBalanceKeysToDeleteCache.clear();
+
+        return totalCount;
     }
 
     private int getPartitionSize(int totalSize) {
