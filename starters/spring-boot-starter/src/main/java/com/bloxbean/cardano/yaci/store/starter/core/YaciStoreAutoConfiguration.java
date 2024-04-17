@@ -185,6 +185,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setUseVirtualThreadForBatchProcessing(properties.getExecutor().isUseVirtualThreadForBatchProcessing());
         storeProperties.setUseVirtualThreadForEventProcessing(properties.getExecutor().isUseVirtualThreadForEventProcessing());
 
+        storeProperties.setProcessingThreadsTimeout(properties.getExecutor().getProcessingThreadsTimeout());
+
         storeProperties.setDbBatchSize(properties.getDb().getBatchSize());
         storeProperties.setDbParallelInsert(properties.getDb().isParallelInsert());
 

@@ -31,14 +31,19 @@ public class AccountBalanceHistoryCleanupHelper {
         log.info("\tDeleting balance history data before : "
                 + (accountStoreProperties.getBalanceCleanupSlotCount() / 86400.0) + " days");
 
-        addressUnits.forEach(addressUnit -> {
-            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
+        if (accountBalanceStorage.isBatchDeleteSupported()) {
+            log.debug("Trying batch delete >>");
+            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnits, slot);
             deleteCountAddrBal.addAndGet(delCount);
-        });
+        } else {
+            addressUnits.forEach(addressUnit -> {
+                int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
+                deleteCountAddrBal.addAndGet(delCount);
+            });
 
-        long count = deleteCountAddrBal.get();
-        // if (count > 0 && count % 10000 == 0)
-        log.info("\tTotal address balances deleted: " + count);
+            long count = deleteCountAddrBal.get();
+            log.info("\tTotal address balances deleted: " + count);
+        }
     }
 
     public void deleteStakeBalanceBeforeConfirmedSlot(List<String> addresses, long currentSlot) {
@@ -49,13 +54,20 @@ public class AccountBalanceHistoryCleanupHelper {
         if(slot < 0)
             return;
 
-        addresses.forEach(address -> {
-            int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(address,  slot);
+        if (accountBalanceStorage.isBatchDeleteSupported()) {
+            log.debug("Trying batch delete for stake balances>>");
+            int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(addresses, slot);
             deleteCountStakeBal.addAndGet(delCount);
-        });
+        } else {
+            addresses.forEach(address -> {
+                int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(address, slot);
+                deleteCountStakeBal.addAndGet(delCount);
+            });
 
-        long count = deleteCountStakeBal.get();
-        //if (count > 0 && count % 10000 == 0)
+            long count = deleteCountStakeBal.get();
+            //if (count > 0 && count % 10000 == 0)
             log.info("\tTotal stake addr balances deleted: " + count);
+        }
+
     }
 }

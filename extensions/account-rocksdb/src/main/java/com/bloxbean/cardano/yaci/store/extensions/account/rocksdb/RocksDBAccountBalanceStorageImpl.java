@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.util.Pair;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -137,6 +138,11 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public int deleteAddressBalanceBeforeSlotExceptTop(List<Pair<String, String>> addressUnitPairs, long slot) {
+        throw new UnsupportedOperationException("Not supported");
+    }
+
     @SneakyThrows
     @Override
     public int deleteAddressBalanceBySlotGreaterThan(Long slot) {
@@ -230,6 +236,11 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
 
     @Override
     public int deleteStakeBalanceBeforeSlotExceptTop(String address, long slot) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public int deleteStakeBalanceBeforeSlotExceptTop(List<String> addresses, long slot) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
