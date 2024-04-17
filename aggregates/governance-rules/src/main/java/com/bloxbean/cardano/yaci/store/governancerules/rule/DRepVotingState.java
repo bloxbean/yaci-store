@@ -20,7 +20,7 @@ import static com.bloxbean.cardano.yaci.store.governancerules.util.NumericUtil.t
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class DRepVotesState extends VotesState {
+public class DRepVotingState extends VotingState {
     private BigInteger yesVoteStake;
     private BigInteger noVoteStake;
     private DrepVoteThresholds dRepVotingThresholds;

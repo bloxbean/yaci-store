@@ -17,7 +17,7 @@ import static com.bloxbean.cardano.yaci.store.governancerules.util.NumericUtil.t
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class SPOVotesState extends VotesState {
+public class SPOVotingState extends VotingState {
     private BigInteger yesVoteStake;
     private BigInteger abstainVoteStake;
     private BigInteger totalStake;
