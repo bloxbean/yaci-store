@@ -28,32 +28,13 @@ public class DRepVotesState extends VotesState {
 
     @Override
     public boolean isAccepted() {
-        final double acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(yesVoteStake.add(noVoteStake)) ;
+        final double acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(yesVoteStake.add(noVoteStake));
         final GovActionType govActionType = govAction.getType();
         boolean result;
 
         switch (govActionType) {
             case PARAMETER_CHANGE_ACTION:
-                List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(
-                        ((ParameterChangeAction) govAction).getProtocolParamUpdate());
-
-                // Since an individual update can contain multiple groups, the actual thresholds are then
-                // given by taking the maximum of all those thresholds
-                double maxThreshold = 0;
-
-                for (var ppGroup : ppGroupChangeList) {
-                    if (ppGroup == ProtocolParamGroup.NETWORK) {
-                        maxThreshold = toDouble(dRepVotingThresholds.getDvtPPNetworkGroup());
-                    } else if (ppGroup == ProtocolParamGroup.ECONOMIC) {
-                        maxThreshold = Math.max(maxThreshold, toDouble(dRepVotingThresholds.getDvtPPEconomicGroup()));
-                    } else if (ppGroup == ProtocolParamGroup.GOVERNANCE) {
-                        maxThreshold = Math.max(maxThreshold, toDouble(dRepVotingThresholds.getDvtPPEconomicGroup()));
-                    } else if (ppGroup == ProtocolParamGroup.TECHNICAL) {
-                        maxThreshold = Math.max(maxThreshold, toDouble(dRepVotingThresholds.getDvtPPTechnicalGroup()));
-                    }
-                }
-
-                result = acceptedStakeRatio >= maxThreshold;
+                result = isAcceptedForParameterChangeAction(acceptedStakeRatio);
                 break;
             case TREASURY_WITHDRAWALS_ACTION:
                 result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtTreasuryWithdrawal());
@@ -84,4 +65,30 @@ public class DRepVotesState extends VotesState {
 
         return result;
     }
+
+    // Since an individual update can contain multiple groups, the actual thresholds are then
+    // given by taking the maximum of all those thresholds
+    private boolean isAcceptedForParameterChangeAction(double acceptedStakeRatio) {
+        List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(
+                ((ParameterChangeAction) govAction).getProtocolParamUpdate());
+
+        double maxThreshold = 0;
+
+        for (var ppGroup : ppGroupChangeList) {
+            maxThreshold = Math.max(maxThreshold, getThresholdForParamGroup(ppGroup));
+        }
+
+        return acceptedStakeRatio >= maxThreshold;
+    }
+
+    private double getThresholdForParamGroup(ProtocolParamGroup ppGroup) {
+        return switch (ppGroup) {
+            case NETWORK -> toDouble(dRepVotingThresholds.getDvtPPNetworkGroup());
+            case ECONOMIC -> toDouble(dRepVotingThresholds.getDvtPPEconomicGroup());
+            case GOVERNANCE -> toDouble(dRepVotingThresholds.getDvtPPGovGroup());
+            case TECHNICAL -> toDouble(dRepVotingThresholds.getDvtPPTechnicalGroup());
+            default -> throw new IllegalArgumentException("Unsupported protocol parameter group: " + ppGroup);
+        };
+    }
+
 }
