@@ -48,9 +48,9 @@ public class GovActionRatifier {
         final int currentEpoch = currentEpochParam.getEpoch();
         final int expiredEpoch = currentEpochParam.getEpoch() + currentEpochParam.getParams().getGovActionLifetime();
 
-        DRepVotesState dRepVotesState;
-        SPOVotesState spoVotesState;
-        CommitteeVotesState committeeVotesState;
+        DRepVotingState dRepVotingState;
+        SPOVotingState spoVotingState;
+        CommitteeVotingState committeeVotingState;
         boolean isAccepted = false;
         boolean isExpired = GovernanceActionUtil.isExpired(expiredEpoch, currentEpoch);
         boolean isNotDelayed = false;
@@ -58,9 +58,9 @@ public class GovActionRatifier {
         switch (govActionType) {
             case NO_CONFIDENCE:
                 NoConfidence noConfidence = (NoConfidence) govAction;
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                isAccepted = dRepVotesState.isAccepted() && spoVotesState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                isAccepted = dRepVotingState.isAccepted() && spoVotingState.isAccepted();
                 isNotDelayed = GovernanceActionUtil.verifyPrevGovAction(govActionType, noConfidence.getGovActionId(), lastEnactedGovActionId);
 
                 break;
@@ -68,59 +68,59 @@ public class GovActionRatifier {
                 //TODO: check if committee term is valid
                 UpdateCommittee updateCommittee = (UpdateCommittee) govAction;
 
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                isAccepted = dRepVotesState.isAccepted() && spoVotesState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                isAccepted = dRepVotingState.isAccepted() && spoVotingState.isAccepted();
                 isNotDelayed = GovernanceActionUtil.verifyPrevGovAction(govActionType, updateCommittee.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case HARD_FORK_INITIATION_ACTION:
                 HardForkInitiationAction hardForkInitiationAction = (HardForkInitiationAction) govAction;
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                committeeVotesState = buildCommitteeVotesStake(govAction, ccYesVote, ccQuorum);
-                isAccepted = committeeVotesState.isAccepted() && dRepVotesState.isAccepted() && spoVotesState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccQuorum);
+                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
                 isNotDelayed = GovernanceActionUtil.verifyPrevGovAction(govActionType, hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case NEW_CONSTITUTION:
                 NewConstitution newConstitution = (NewConstitution) govAction;
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                committeeVotesState = buildCommitteeVotesStake(govAction, ccYesVote, ccQuorum);
-                isAccepted = committeeVotesState.isAccepted() && dRepVotesState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccQuorum);
+                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
                 isNotDelayed = GovernanceActionUtil.verifyPrevGovAction(govActionType, newConstitution.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case TREASURY_WITHDRAWALS_ACTION:
                 //TODO: check if withdrawal is possible
-                spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                committeeVotesState = buildCommitteeVotesStake(govAction, ccYesVote, ccQuorum);
-                isAccepted = committeeVotesState.isAccepted() && spoVotesState.isAccepted();
+                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccQuorum);
+                isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted();
                 isNotDelayed = true;
 
                 break;
             case PARAMETER_CHANGE_ACTION:
                 ParameterChangeAction parameterChangeAction = (ParameterChangeAction) govAction;
-                committeeVotesState = buildCommitteeVotesStake(govAction, ccYesVote, ccQuorum);
+                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccQuorum);
 
                 List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 isNotDelayed = GovernanceActionUtil.verifyPrevGovAction(govActionType, parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
 
                 if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
-                    spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                    spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
                     if (ppGroupChangeList.size() == 1) {
-                        isAccepted = committeeVotesState.isAccepted() && spoVotesState.isAccepted();
+                        isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted();
                     } else
-                        isAccepted = committeeVotesState.isAccepted() && spoVotesState.isAccepted() && dRepVotesState.isAccepted();
+                        isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted() && dRepVotingState.isAccepted();
                 } else
-                    isAccepted = committeeVotesState.isAccepted() && dRepVotesState.isAccepted();
+                    isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
                 break;
             case INFO_ACTION:
-                dRepVotesState = buildDRepVotesState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                spoVotesState = buildSPOVotesState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                committeeVotesState = buildCommitteeVotesStake(govAction, ccYesVote, ccQuorum);
-                isAccepted = committeeVotesState.isAccepted() && dRepVotesState.isAccepted() && spoVotesState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccQuorum);
+                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
 
                 isNotDelayed = true;
 
@@ -340,11 +340,11 @@ public class GovActionRatifier {
                 null, lastEnactedGovActionId, currentEpochParam);
     }
 
-    private static DRepVotesState buildDRepVotesState(GovAction govAction, BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
-                                                      ConstitutionCommitteeState ccState,
-                                                      EpochParam currentEpochParam) {
+    private static DRepVotingState buildDRepVotingState(GovAction govAction, BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
+                                                        ConstitutionCommitteeState ccState,
+                                                        EpochParam currentEpochParam) {
 
-        return DRepVotesState.builder()
+        return DRepVotingState.builder()
                 .govAction(govAction)
                 .dRepVotingThresholds(currentEpochParam.getParams().getDrepVotingThresholds())
                 .yesVoteStake(dRepYesVoteStake)
@@ -353,9 +353,9 @@ public class GovActionRatifier {
                 .build();
     }
 
-    private static SPOVotesState buildSPOVotesState(GovAction govAction, BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
-                                                    ConstitutionCommitteeState ccState, EpochParam currentEpochParam) {
-        return SPOVotesState.builder()
+    private static SPOVotingState buildSPOVotingState(GovAction govAction, BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
+                                                      ConstitutionCommitteeState ccState, EpochParam currentEpochParam) {
+        return SPOVotingState.builder()
                 .govAction(govAction)
                 .poolVotingThresholds(currentEpochParam.getParams().getPoolVotingThresholds())
                 .yesVoteStake(spoYesVoteStake)
@@ -365,9 +365,9 @@ public class GovActionRatifier {
                 .build();
     }
 
-    private static CommitteeVotesState buildCommitteeVotesStake(GovAction govAction,
-                                                                Integer ccYesVote, Integer ccQuorum) {
-        return CommitteeVotesState.builder()
+    private static CommitteeVotingState buildCommitteeVotingState(GovAction govAction,
+                                                                  Integer ccYesVote, Integer ccQuorum) {
+        return CommitteeVotingState.builder()
                 .govAction(govAction)
                 .yesVote(ccYesVote)
                 .ccQuorum(ccQuorum)

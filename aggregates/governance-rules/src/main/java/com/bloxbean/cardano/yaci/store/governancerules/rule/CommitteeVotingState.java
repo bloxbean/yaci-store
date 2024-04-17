@@ -1,7 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governancerules.rule;
 
-
-import com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,8 +9,13 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public abstract class VotesState {
-    protected GovAction govAction;
+public class CommitteeVotingState extends VotingState {
+    private Integer ccQuorum;
+    private Integer yesVote;
 
-    abstract boolean isAccepted();
+    @Override
+    public boolean isAccepted() {
+        return yesVote >= ccQuorum;
+    }
+
 }
