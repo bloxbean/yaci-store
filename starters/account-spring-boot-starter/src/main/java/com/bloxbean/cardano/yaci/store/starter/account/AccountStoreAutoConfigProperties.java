@@ -33,6 +33,7 @@ public class AccountStoreAutoConfigProperties {
 
         private int balanceCalcJobBatchSize = 1000;
         private int balanceCalcJobPartitionSize = 10;
+        private String balanceCalcBatchMode = "utxo";
     }
 
 }
