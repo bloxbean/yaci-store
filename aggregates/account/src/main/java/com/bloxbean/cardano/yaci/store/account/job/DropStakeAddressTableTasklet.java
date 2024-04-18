@@ -24,6 +24,7 @@ public class DropStakeAddressTableTasklet implements Tasklet {
 
         dsl.dropIndex("idx_address_utxo_owner_addr").execute();
         dsl.dropIndex("idx_address_utxo_owner_stake_addr").execute();
+        dsl.dropIndex("idx_utxo_amount_owner_addr").execute();
 
         log.info("<< Dropped index on address_utxo >>");
         return RepeatStatus.FINISHED;
