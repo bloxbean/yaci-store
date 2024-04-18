@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.account.service;
 import com.bloxbean.cardano.yaci.store.core.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -11,6 +10,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +19,6 @@ import java.util.concurrent.TimeUnit;
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.*;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class BalanceSnapshotService {
     private final static String UTXO_BATCH_MODE = "utxo";
@@ -33,6 +32,20 @@ public class BalanceSnapshotService {
     private final Job accountBalanceJob;
     private final Job utxoAccountBalanceJob;
 
+    public BalanceSnapshotService(CursorService cursorService,
+                                  StartService startService,
+                                  EraService eraService,
+                                  JobLauncher jobLauncher,
+                                  @Autowired(required = false) Job accountBalanceJob,
+                                  @Autowired(required = false) Job utxoAccountBalanceJob) {
+        this.cursorService = cursorService;
+        this.startService = startService;
+        this.eraService = eraService;
+        this.jobLauncher = jobLauncher;
+        this.accountBalanceJob = accountBalanceJob;
+        this.utxoAccountBalanceJob = utxoAccountBalanceJob;
+    }
+
     @Value("${store.account.balance-calc-batch-mode:utxo}")
     private String balanceCalcBatchMode;
 
@@ -42,6 +55,11 @@ public class BalanceSnapshotService {
      */
     @SneakyThrows
     public synchronized boolean scheduleBalanceSnapshot() {
+        if (accountBalanceJob == null && utxoAccountBalanceJob == null) {
+            log.info("Balance snapshot job is not enabled. Skipping balance snapshot.");
+            return false;
+        }
+
         if (!startService.isStarted()) {
             log.info("Looks like sync process has not been started or balanced snapshot is in progress. Skipping balance snapshot");
             return false;

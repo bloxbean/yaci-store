@@ -4,7 +4,7 @@ dependencies {
     api project(":components:job")
     implementation(libs.parallel.collector)
 
-    implementation("org.springframework.boot:spring-boot-starter-batch")
+    api("org.springframework.boot:spring-boot-starter-batch")
 }
 
 publishing {
