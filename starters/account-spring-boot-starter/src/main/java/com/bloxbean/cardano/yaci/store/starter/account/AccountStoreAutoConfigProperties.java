@@ -28,6 +28,7 @@ public class AccountStoreAutoConfigProperties {
 
         private boolean saveAddressTxAmount = false;
         private boolean addressTxAmountIncludeZeroAmount = false;
+        private boolean addressTxAmountExcludeZeroTokenAmount = true;
 
         private long initialBalanceSnapshotBlock;
 
