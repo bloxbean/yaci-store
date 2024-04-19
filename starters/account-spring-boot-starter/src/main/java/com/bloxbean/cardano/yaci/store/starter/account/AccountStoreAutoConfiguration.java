@@ -33,7 +33,7 @@ public class AccountStoreAutoConfiguration {
 
         accountStoreProperties.setSaveAddressTxAmount(properties.getAccount().isSaveAddressTxAmount());
         accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());
-        accountStoreProperties.setAddressTxAmountIncludeZeroTokenAmount(properties.getAccount().isAddressTxAmountIncludeZeroTokenAmount());
+        accountStoreProperties.setAddressTxAmountExcludeTokenZeroAmount(properties.getAccount().isAddressTxAmountExcludeZeroTokenAmount());
         accountStoreProperties.setInitialBalanceSnapshotBlock(properties.getAccount().getInitialBalanceSnapshotBlock());
 
         accountStoreProperties.setBalanceCalcJobBatchSize(properties.getAccount().getBalanceCalcJobBatchSize());
