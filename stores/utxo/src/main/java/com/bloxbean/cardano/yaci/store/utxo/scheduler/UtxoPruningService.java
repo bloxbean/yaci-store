@@ -48,7 +48,7 @@ public class UtxoPruningService {
 
     @EventListener
     @Transactional
-    public void handleCommitEvent(EpochChangeEvent epochChangeEvent) {
+    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
         if (isPruning.get()) {
             log.info("Utxo pruning is already in progress. Skipping this run !!!");
             return;
