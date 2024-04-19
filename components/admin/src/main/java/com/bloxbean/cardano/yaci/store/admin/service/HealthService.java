@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.admin.service;
 
-import com.bloxbean.cardano.yaci.store.core.domain.HealthStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.HealthStatus;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFetchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -2,9 +2,9 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.store.common.cache.MVStoreFactory;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
