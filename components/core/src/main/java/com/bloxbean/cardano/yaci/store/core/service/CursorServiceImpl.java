@@ -3,7 +3,8 @@ package com.bloxbean.cardano.yaci.store.core.service;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @Slf4j
-public class CursorService {
+public class CursorServiceImpl implements CursorService {
     private final CursorStorage cursorStorage;
     private final StoreProperties storeProperties;
     private final BlockFinder blockFinder;
@@ -25,12 +26,13 @@ public class CursorService {
     private Instant lastProcessedTime = Instant.now();
     private boolean syncMode;
 
-    public CursorService(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
+    public CursorServiceImpl(CursorStorage cursorStorage, StoreProperties storeProperties, BlockFinder blockFinder) {
         this.cursorStorage = cursorStorage;
         this.storeProperties = storeProperties;
         this.blockFinder = blockFinder;
     }
 
+    @Override
     public void setCursor(Cursor cursor) {
         if (cursor.getBlockHash() == null)
             throw new RuntimeException("BlockHash can't be null.");
@@ -39,6 +41,7 @@ public class CursorService {
         printLog(cursor.getBlock(), cursor.getEra());
     }
 
+    @Override
     public Optional<Cursor> getStartCursor() {
         Cursor _currentCursor = null;
 
@@ -73,19 +76,23 @@ public class CursorService {
         }
     }
 
+    @Override
     public Optional<Cursor> getCursor() {
         return cursorStorage.getCurrentCursor(storeProperties.getEventPublisherId());
     }
 
+    @Override
     public Optional<Cursor> getPreviousCursor(long slot) {
         return cursorStorage.getPreviousCursor(storeProperties.getEventPublisherId(), slot);
     }
 
+    @Override
     public Optional<Cursor> getCursorByBlockHash(String blockHash) {
         return cursorStorage.findByBlockHash(storeProperties.getEventPublisherId(), blockHash);
     }
 
     @Transactional
+    @Override
     public void rollback(long slot) {
         log.info("Rollback cursor_ to slot : " + slot);
         int count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
@@ -96,10 +103,12 @@ public class CursorService {
         log.info("Cursor : Slot=" + cursor.getSlot() + ", Hash=" + cursor.getBlockHash());
     }
 
+    @Override
     public boolean isSyncMode() {
         return syncMode;
     }
 
+    @Override
     public void setSyncMode(boolean syncMode) {
         this.syncMode = syncMode;
     }

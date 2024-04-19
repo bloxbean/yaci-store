@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.model.CursorEntity;
 import lombok.RequiredArgsConstructor;

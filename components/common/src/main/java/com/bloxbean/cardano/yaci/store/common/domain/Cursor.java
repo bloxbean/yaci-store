@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core.domain;
+package com.bloxbean.cardano.yaci.store.common.domain;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import lombok.*;

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
-import com.bloxbean.cardano.yaci.store.core.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.SneakyThrows;
