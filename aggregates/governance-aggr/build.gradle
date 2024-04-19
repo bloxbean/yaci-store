@@ -1,0 +1,14 @@
+dependencies {
+
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Governance Aggregator Module'
+                description = 'Yaci Store Governance Aggregator Module'
+            }
+        }
+    }
+}
