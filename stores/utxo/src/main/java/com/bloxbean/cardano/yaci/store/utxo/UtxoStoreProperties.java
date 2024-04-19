@@ -21,4 +21,13 @@ public class UtxoStoreProperties {
 
     @Builder.Default
     private int addressCacheExpiryAfterAccess = 15;
+
+    @Builder.Default
+    private boolean pruningEnabled = false;
+
+    @Builder.Default
+    private int pruningInterval = 1440; //In minutes
+
+    @Builder.Default
+    private int pruningSafeBlocks = 2160;
 }

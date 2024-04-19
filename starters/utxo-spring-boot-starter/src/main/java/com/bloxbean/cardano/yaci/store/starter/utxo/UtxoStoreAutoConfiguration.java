@@ -28,6 +28,10 @@ public class UtxoStoreAutoConfiguration {
         utxoStoreProperties.setAddressCacheSize(properties.getUtxo().getAddressCacheSize());
         utxoStoreProperties.setAddressCacheExpiryAfterAccess(properties.getUtxo().getAddressCacheExpiryAfterAccess());
 
+        utxoStoreProperties.setPruningEnabled(properties.getUtxo().isPruningEnabled());
+        utxoStoreProperties.setPruningInterval(properties.getUtxo().getPruningInterval());
+        utxoStoreProperties.setPruningSafeBlocks(properties.getUtxo().getPruningSafeBlocks());
+
         return utxoStoreProperties;
     }
 }
