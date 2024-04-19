@@ -83,7 +83,7 @@ public class AddressUtxoAggregationTasklet implements Tasklet {
                         ADDRESS_BALANCE.EPOCH,
                         ADDRESS_BALANCE.UPDATE_DATETIME
                 ).select(
-                        select(field(ADDRESS_UTXO.OWNER_ADDR).as("address"),
+                        select(field(UTXO_AMOUNT.OWNER_ADDR).as("address"),
                                 field(UTXO_AMOUNT.UNIT).as("unit"),
                                 coalesce(sum(field(UTXO_AMOUNT.QUANTITY)), BigDecimal.ZERO).cast(SQLDataType.DECIMAL_INTEGER(38)).as("quantity"),
                                 val(snapshotSlot),
@@ -92,13 +92,11 @@ public class AddressUtxoAggregationTasklet implements Tasklet {
                                 val(snapshotEpoch),
                                 currentLocalDateTime()
                         )
-                                .from(ADDRESS_UTXO)
-                                .innerJoin(UTXO_AMOUNT)
-                                    .on(ADDRESS_UTXO.TX_HASH.eq(UTXO_AMOUNT.TX_HASH).and(ADDRESS_UTXO.OUTPUT_INDEX.eq(UTXO_AMOUNT.OUTPUT_INDEX)))
+                                .from(UTXO_AMOUNT)
                                 .leftJoin(TX_INPUT)
-                                    .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH).and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
-                                .where(ADDRESS_UTXO.SLOT.le(snapshotSlot)
-                                        .and(ADDRESS_UTXO.OWNER_ADDR
+                                    .on(UTXO_AMOUNT.TX_HASH.eq(TX_INPUT.TX_HASH).and(UTXO_AMOUNT.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
+                                .where(UTXO_AMOUNT.SLOT.le(snapshotSlot)
+                                        .and(UTXO_AMOUNT.OWNER_ADDR
                                                 .in(select(ADDRESS.ADDRESS_)
                                                         .from(ADDRESS)
                                                         .where(ADDRESS.ID.between(from, to))
@@ -107,7 +105,7 @@ public class AddressUtxoAggregationTasklet implements Tasklet {
                                         )
                                         .and(TX_INPUT.TX_HASH.isNull().or(TX_INPUT.SPENT_AT_SLOT.gt(snapshotSlot)))
                                 )
-                                .groupBy(ADDRESS_UTXO.OWNER_ADDR, UTXO_AMOUNT.UNIT)
+                                .groupBy(UTXO_AMOUNT.OWNER_ADDR, UTXO_AMOUNT.UNIT)
                 )
                 .onConflict(
                         ADDRESS_BALANCE.ADDRESS,

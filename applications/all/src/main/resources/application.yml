@@ -9,6 +9,10 @@ spring:
       client:
         enabled: false
 
+  batch:
+    job:
+      enabled: false
+
 #  jpa:
 #    hibernate:
 #      ddl-auto: none
