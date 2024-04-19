@@ -30,7 +30,7 @@ public class AccountStoreProperties {
     @Builder.Default
     private boolean addressTxAmountIncludeZeroAmount = false;
     @Builder.Default
-    private boolean addressTxAmountIncludeZeroTokenAmount = false;
+    private boolean addressTxAmountExcludeTokenZeroAmount = true;
     private long initialBalanceSnapshotBlock;
 
     @Builder.Default
