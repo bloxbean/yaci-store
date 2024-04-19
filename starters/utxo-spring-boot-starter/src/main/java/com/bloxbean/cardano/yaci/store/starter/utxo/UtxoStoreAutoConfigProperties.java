@@ -20,6 +20,19 @@ public class UtxoStoreAutoConfigProperties {
        private boolean addressCacheEnabled = false;
        private int addressCacheSize = 50000;
        private int addressCacheExpiryAfterAccess = 15;
+
+        /**
+         * Enable pruning of UTXO
+         */
+        private boolean pruningEnabled = false;
+        /**
+         * Utxo Pruning interval in minutes
+         */
+        private int pruningInterval = 1440; //In minutes
+        /**
+         * No of safe blocks to keep before pruning the UTXO
+         */
+        private int pruningSafeBlocks = 2160;
     }
 
     @Getter

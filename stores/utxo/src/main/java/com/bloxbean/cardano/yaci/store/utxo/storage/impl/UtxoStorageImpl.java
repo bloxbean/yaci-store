@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
+import static org.jooq.impl.DSL.exists;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -90,7 +91,27 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteBySpentAndBlockLessThan(Long block) {
-        return utxoRepository.deleteBySpentAndBlockLessThan(block);
+        var addressUtxoDelQuery = dsl.deleteFrom(ADDRESS_UTXO)
+                .where(exists(dsl.selectOne()
+                        .from(TX_INPUT)
+                        .where(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH)
+                                .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
+                                .and(TX_INPUT.SPENT_AT_BLOCK.lt(block)))));
+
+        var utxoAmtDelQuery = dsl.deleteFrom(UTXO_AMOUNT)
+                .where(exists(dsl.selectOne()
+                        .from(TX_INPUT)
+                        .where(UTXO_AMOUNT.TX_HASH.eq(TX_INPUT.TX_HASH)
+                                .and(UTXO_AMOUNT.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
+                                .and(TX_INPUT.SPENT_AT_BLOCK.lt(block)))));
+
+        var deleteTxInputQuery = dsl.deleteFrom(TX_INPUT)
+                .where(TX_INPUT.SPENT_AT_BLOCK.lt(block));
+
+        var count = dsl.batch(addressUtxoDelQuery, utxoAmtDelQuery).execute().length;
+        count += deleteTxInputQuery.execute();
+
+        return count;
     }
 
     @Override

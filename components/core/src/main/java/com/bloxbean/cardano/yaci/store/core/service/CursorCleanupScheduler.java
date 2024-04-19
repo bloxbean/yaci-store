@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

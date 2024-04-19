@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.storage.api;
 
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 
 import java.util.Optional;
 
