@@ -162,6 +162,7 @@ public class AddressTxAmountProcessor {
         return (List<AddressTxAmount>) addressTxAmountMap.entrySet()
                 .stream()
                 .filter(entry -> (accountStoreProperties.isAddressTxAmountIncludeZeroAmount() && entry.getKey().getSecond().equals(LOVELACE))
+                        || (accountStoreProperties.isAddressTxAmountIncludeZeroTokenAmount() && !entry.getKey().getSecond().equals(LOVELACE))
                         || entry.getValue().compareTo(BigInteger.ZERO) != 0)
                 .map(entry -> {
                     var addressDetails = addressToAddressDetailsMap.get(entry.getKey().getFirst());
