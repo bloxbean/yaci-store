@@ -28,6 +28,7 @@ public class UtxoMapperDecorator implements UtxoMapper {
                     amtEntity.setTxHash(entity.getTxHash());
                     amtEntity.setOutputIndex(entity.getOutputIndex());
                     amtEntity.setSlot(entity.getSlot());
+                    amtEntity.setOwnerAddr(entity.getOwnerAddr());
                 });
 
         return entity;

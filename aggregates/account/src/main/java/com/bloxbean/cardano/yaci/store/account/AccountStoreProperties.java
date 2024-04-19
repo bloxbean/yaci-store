@@ -37,4 +37,7 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private int balanceCalcJobPartitionSize = 10;
+
+    @Builder.Default
+    private String balanceCalcBatchMode = "utxo";
 }

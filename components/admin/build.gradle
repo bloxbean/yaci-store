@@ -1,7 +1,8 @@
 dependencies {
     api project(":components:common")
     api project(":components:core")
-    api project(":aggregates:account")
+
+    compileOnly project(":aggregates:account")
 }
 
 publishing {

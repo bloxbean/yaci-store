@@ -53,6 +53,7 @@ create table utxo_amount
     output_index            smallint      not null,
     unit                    varchar(255),
     quantity                numeric(38)  null,
+    owner_addr              varchar(500),
     policy                  varchar(56),
     asset_name              varchar(255),
     slot                    bigint,
@@ -64,6 +65,9 @@ CREATE INDEX idx_utxo_amount_slot
 
 CREATE INDEX idx_utxo_amount_unit
     ON utxo_amount(unit);
+
+CREATE INDEX idx_utxo_amount_owner_addr
+    ON utxo_amount(owner_addr);
 
 CREATE INDEX idx_utxo_amount_policy
     ON utxo_amount(policy);

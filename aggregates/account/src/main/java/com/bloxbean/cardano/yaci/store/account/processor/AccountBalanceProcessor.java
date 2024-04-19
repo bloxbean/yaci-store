@@ -577,6 +577,11 @@ public class AccountBalanceProcessor {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             return; //Balance aggregation is disabled
 
+        if (accountStoreProperties.getInitialBalanceSnapshotBlock() > 0) {
+            //If balance snapshot is enabled, ignore the genesis balance
+            return;
+        }
+
         List<GenesisBalance> genesisBalanceList = genesisBlockEvent.getGenesisBalances();
         if (genesisBalanceList == null || genesisBalanceList.size() == 0)
             return;

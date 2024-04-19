@@ -27,6 +27,9 @@ public class AmtEntity {
     @Column(name = "unit")
     private String unit;
 
+    @Column(name = "owner_addr")
+    private String ownerAddr;
+
     @Column(name = "policy")
     private String policyId;
 

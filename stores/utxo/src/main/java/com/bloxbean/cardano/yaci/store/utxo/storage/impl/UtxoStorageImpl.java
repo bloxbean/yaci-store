@@ -150,11 +150,13 @@ public class UtxoStorageImpl implements UtxoStorage {
                         .set(UTXO_AMOUNT.OUTPUT_INDEX, amount.getOutputIndex())
                         .set(UTXO_AMOUNT.UNIT, amount.getUnit())
                         .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
+                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
                         .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
                         .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
                         .set(UTXO_AMOUNT.SLOT, amount.getSlot())
                         .onDuplicateKeyUpdate()
                         .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
+                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
                         .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
                         .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
                         .set(UTXO_AMOUNT.SLOT, amount.getSlot())).toList();
