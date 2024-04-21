@@ -10,12 +10,16 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,9 +37,18 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
     private final UtxoCache utxoCache;
+    private final PlatformTransactionManager transactionManager;
+
+    private TransactionTemplate transactionTemplate;
 
     @Value("${store.utxo.pruning-batch-size:3000}")
     private int pruningBatchSize = 3000;
+
+    @PostConstruct
+    public void init() {
+        transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
@@ -97,38 +110,43 @@ public class UtxoStorageImpl implements UtxoStorage {
         int count = 0;
         int totalCount = 0;
 
+        int limit = pruningBatchSize;
+
         do {
-            int limit = pruningBatchSize;
-            var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
-                    .from(TX_INPUT)
-                    .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
-                    .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                    .limit(limit);
+            count = transactionTemplate.execute(status ->  {
+                var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                        .from(TX_INPUT)
+                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
+                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
+                        .limit(limit);
 
-            int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
-                    .using(spentSubQuery)
-                    .where(ADDRESS_UTXO.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
-                            .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
-                    .execute();
+                int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
+                        .using(spentSubQuery)
+                        .where(ADDRESS_UTXO.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
+                                .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
+                        .execute();
 
-            int utxoAmountCount = dsl.deleteFrom(UTXO_AMOUNT)
-                    .using(spentSubQuery)
-                    .where(UTXO_AMOUNT.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
-                            .and(UTXO_AMOUNT.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
-                    .execute();
+                int utxoAmountCount = dsl.deleteFrom(UTXO_AMOUNT)
+                        .using(spentSubQuery)
+                        .where(UTXO_AMOUNT.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
+                                .and(UTXO_AMOUNT.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
+                        .execute();
 
-            var txInputQuery = dsl.deleteFrom(TX_INPUT)
-                    .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
-                    .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                    .limit(limit);
+                var txInputQuery = dsl.deleteFrom(TX_INPUT)
+                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
+                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
+                        .limit(limit);
 
-            int txInputCount = txInputQuery.execute();
+                int txInputCount = txInputQuery.execute();
 
-            if (log.isDebugEnabled())
-                log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
-                        addressUtxoCount, utxoAmountCount, txInputCount);
+                if (log.isDebugEnabled())
+                    log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
+                            addressUtxoCount, utxoAmountCount, txInputCount);
 
-            count = addressUtxoCount + utxoAmountCount + txInputCount;
+                int delCount  = addressUtxoCount + utxoAmountCount + txInputCount;
+                return delCount;
+            });
+
             totalCount += count;
         } while(count > 0);
 
