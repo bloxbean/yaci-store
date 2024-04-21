@@ -40,4 +40,13 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private String balanceCalcBatchMode = "utxo";
+
+    @Builder.Default
+    private boolean pruningEnabled = false;
+
+    @Builder.Default
+    private int pruningBatchSize = 3000;
+
+    @Builder.Default
+    private int pruningInterval = 86400;
 }

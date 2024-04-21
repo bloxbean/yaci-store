@@ -39,6 +39,10 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setBalanceCalcJobPartitionSize(properties.getAccount().getBalanceCalcJobPartitionSize());
         accountStoreProperties.setBalanceCalcBatchMode(properties.getAccount().getBalanceCalcBatchMode());
 
+        accountStoreProperties.setPruningEnabled(properties.getAccount().isPruningEnabled());
+        accountStoreProperties.setPruningBatchSize(properties.getAccount().getPruningBatchSize());
+        accountStoreProperties.setPruningInterval(properties.getAccount().getPruningInterval());
+
         return accountStoreProperties;
     }
 }
