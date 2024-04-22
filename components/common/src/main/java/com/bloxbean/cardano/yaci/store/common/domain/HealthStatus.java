@@ -20,4 +20,5 @@ public class HealthStatus {
 
     private int lastKeepAliveResponseCookie;
     private long lastKeepAliveResponseTime;
+    private long lastReceivedBlockTime;
 }

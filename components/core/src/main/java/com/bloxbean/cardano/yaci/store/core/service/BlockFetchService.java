@@ -19,7 +19,9 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventP
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -57,6 +59,10 @@ public class BlockFetchService implements BlockChainDataListener {
     private Integer previousEpoch;
     private Era previousEra;
 
+    @Setter
+    @Getter
+    private long lastReceivedBlockTime;
+
     @Transactional
     @Override
     public void onBlock(Era era, Block block, List<Transaction> transactions) {
@@ -66,6 +72,7 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         checkError();
+        setLastReceivedBlockTime(System.currentTimeMillis());
         byronBlockEventPublisher.processBlocksInParallel();
 
         final BlockHeader blockHeader = block.getHeader();
@@ -136,6 +143,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
         checkError();
+        setLastReceivedBlockTime(System.currentTimeMillis());
         try {
             long epochSlot = byronBlock.getHeader().getConsensusData().getSlotId().getSlot();
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
@@ -205,6 +213,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
         checkError();
+        setLastReceivedBlockTime(System.currentTimeMillis());
         try {
             final long absoluteSlot = genesisConfig.absoluteSlot(Era.Byron,
                     byronEbBlock.getHeader().getConsensusData().getEpoch(), 0);
@@ -245,6 +254,7 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         checkError();
+        setLastReceivedBlockTime(System.currentTimeMillis());
         log.info("Writing genesis block to cursor -->");
         cursorService.setCursor(new Cursor(genesisBlockEvent.getSlot(), genesisBlockEvent.getBlockHash(), 0L, null, genesisBlockEvent.getEra()));
         if (genesisBlockEvent.getEra().getValue() > Era.Byron.getValue()) { //If Genesis block is not byron era. Possible for preview and local devnet
