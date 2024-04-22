@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.scheduler;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -29,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class BalancePruningService {
     private final CursorService cursorService;
+    private final EraService eraService;
     private final AccountStoreProperties accountStoreProperties;
     private final DSLContext dslContext;
     private final PlatformTransactionManager transactionManager;
@@ -47,13 +50,12 @@ public class BalancePruningService {
     @Scheduled(fixedRateString = "${store.account.pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 60)
     public void handleUtxoPruning() {
         if (accountStoreProperties.isHistoryCleanupEnabled()) {
-            if (log.isDebugEnabled())
-                log.debug("Account balance pruning is disabled as history cleanup is enabled. Skipping this run !!!");
+            log.info("Account balance pruning is disabled as history cleanup is enabled. Skipping this run !!!");
             return;
         }
 
         if (isPruning.get()) {
-            log.info("Account balance pruning is already in progress. Skipping this run !!!");
+            log.debug("Account balance pruning is already in progress. Skipping this run !!!");
             return;
         }
 
@@ -69,7 +71,7 @@ public class BalancePruningService {
         }
 
         if (isPruning.get()) {
-            log.info("Account Balance pruning is already in progress. Skipping this run !!!");
+            log.debug("Account Balance pruning is already in progress. Skipping this run !!!");
             return;
         }
 
@@ -80,18 +82,23 @@ public class BalancePruningService {
         isPruning.set(true);
         try {;
             cursorService.getCursor().ifPresent(cursor -> {
-                long deleteBlockCount = accountStoreProperties.getBalanceCleanupSlotCount() / 20;
-                var block = cursor.getBlock() - deleteBlockCount;
+                var fromSlot = cursor.getSlot() - accountStoreProperties.getBalanceCleanupSlotCount();
 
-                log.info(">> Pruning account balance records before block: {}", cursor.getBlock() - deleteBlockCount);
+                log.info(">> Pruning account balance records before slot: {}", fromSlot);
 
-                if (block > 0) {
+                if (cursor.getEra() != null) {
+                    long blockTime = eraService.blockTime(cursor.getEra(), fromSlot);
+                    Instant instant = Instant.ofEpochMilli(blockTime * 1000);
+                    log.info(">> Pruning account balance records before {}", instant.toString());
+                }
+
+                if (fromSlot > 0) {
                     long t1 = System.currentTimeMillis();
-                    long deleteCount = performAddressBalanceDelete(block);
-                    long deleteStakeCount = performStakeAddressBalanceDelete(block);
+                    long deleteCount = performAddressBalanceDelete(fromSlot);
+                    long deleteStakeCount = performStakeAddressBalanceDelete(fromSlot);
                     long t2 = System.currentTimeMillis();
-                    log.info(">> Deleted {} address_balance, {} stake_address_balance - before block {}, Time taken: {} ms",
-                            deleteCount, deleteStakeCount, block, (t2 - t1));
+                    log.info(">> Deleted {} address_balance, {} stake_address_balance - before slot {}, Time taken: {} ms",
+                            deleteCount, deleteStakeCount, fromSlot, (t2 - t1));
                 }
             });
         } finally {
@@ -99,7 +106,7 @@ public class BalancePruningService {
         }
     }
 
-    private long performAddressBalanceDelete(long block) {
+    private long performAddressBalanceDelete(long fromSlot) {
         int count = 0;
         long totalCount = 0;
         int limit = accountStoreProperties.getPruningBatchSize();
@@ -110,12 +117,12 @@ public class BalancePruningService {
                 String query = """
                                 WITH rows_to_delete AS (SELECT address, unit, slot
                                                         FROM address_balance a1
-                                                        WHERE a1.block < ?
+                                                        WHERE a1.slot < ?
                                                           AND EXISTS (SELECT 1
                                                                       FROM address_balance a2
                                                                       WHERE a1.address = a2.address
                                                                         AND a1.unit = a2.unit
-                                                                        AND a1.block < a2.block)                                                          
+                                                                        AND a1.slot < a2.slot)                                                          
                                                         LIMIT ?
                                                         )
                                 delete
@@ -123,7 +130,7 @@ public class BalancePruningService {
                                 WHERE (address, unit, slot) IN (SELECT address, unit, slot FROM rows_to_delete)
                             """;
 
-                return dslContext.execute(query, block, limit);
+                return dslContext.execute(query, fromSlot, limit);
             });
 
             totalCount += count;
@@ -140,7 +147,7 @@ public class BalancePruningService {
         return totalCount;
     }
 
-    private long performStakeAddressBalanceDelete(long block) {
+    private long performStakeAddressBalanceDelete(long fromSlot) {
         int count = 0;
         long totalCount = 0;
         int limit = accountStoreProperties.getPruningBatchSize();
@@ -151,11 +158,11 @@ public class BalancePruningService {
                 String query = """
                                 WITH rows_to_delete AS (SELECT address, slot
                                                         FROM stake_address_balance a1
-                                                        WHERE a1.block < ?
+                                                        WHERE a1.slot < ?
                                                           AND EXISTS (SELECT 1
                                                                       FROM stake_address_balance a2
                                                                       WHERE a1.address = a2.address                                                                    
-                                                                        AND a1.block < a2.block)                                                          
+                                                                        AND a1.slot < a2.slot)                                                          
                                                         LIMIT ?
                                                         )
                                 delete
@@ -163,7 +170,7 @@ public class BalancePruningService {
                                 WHERE (address, slot) IN (SELECT address, slot FROM rows_to_delete)
                             """;
 
-                return dslContext.execute(query, block, limit);
+                return dslContext.execute(query, fromSlot, limit);
             });
 
             totalCount += count;
