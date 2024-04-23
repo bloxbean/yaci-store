@@ -23,7 +23,7 @@ public class TransactionAutoConfigProperties {
         /**
          * Transaction Pruning interval in seconds
          */
-        private int pruningInterval = 144000;
+        private int pruningInterval = 86400;
         /**
          * safe slot count to keep before pruning the Transaction
          */

@@ -15,7 +15,7 @@ public class TransactionStoreProperties {
     private boolean pruningEnabled = false;
 
     @Builder.Default
-    private int pruningInterval = 144000;
+    private int pruningInterval = 86400;
 
     @Builder.Default
     private int pruningSafeSlot = 43200; // 2160 blocks
