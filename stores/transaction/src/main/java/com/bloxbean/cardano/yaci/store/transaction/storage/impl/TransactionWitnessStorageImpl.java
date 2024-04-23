@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWi
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -32,6 +33,7 @@ public class TransactionWitnessStorageImpl implements TransactionWitnessStorage 
     }
 
     @Override
+    @Transactional
     public int deleteBySlotLessThan(long slot) {
         return dsl.deleteFrom(TRANSACTION_WITNESS).where(TRANSACTION_WITNESS.SLOT.lessThan(slot)).execute();
     }
