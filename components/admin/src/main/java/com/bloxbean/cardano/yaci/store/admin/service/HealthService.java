@@ -20,6 +20,7 @@ public class HealthService {
                 .isError(blockFetchService.isError())
                 .lastKeepAliveResponseCookie(blockFetchService.getLastKeepAliveResponseCookie())
                 .lastKeepAliveResponseTime(blockFetchService.getLastKeepAliveResponseTime())
+                .lastReceivedBlockTime(blockFetchService.getLastReceivedBlockTime())
                 .build();
     }
 }
