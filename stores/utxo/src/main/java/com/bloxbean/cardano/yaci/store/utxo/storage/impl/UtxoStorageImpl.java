@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
+import static org.jooq.impl.DSL.row;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -123,9 +124,8 @@ public class UtxoStorageImpl implements UtxoStorage {
                         .limit(limit);
 
                 int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
-                        .using(spentSubQuery)
-                        .where(ADDRESS_UTXO.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
-                                .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
+                        .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
+                                .in(spentSubQuery))
                         .execute();
 
                 var txInputQuery = dsl.deleteFrom(TX_INPUT)
