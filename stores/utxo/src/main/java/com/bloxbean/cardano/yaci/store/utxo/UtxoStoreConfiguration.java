@@ -38,14 +38,18 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext, UtxoCache utxoCache, PlatformTransactionManager transactionManager) {
+    public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
+                                   TxInputRepository spentOutputRepository,
+                                   DSLContext dslContext,
+                                   UtxoCache utxoCache,
+                                   PlatformTransactionManager transactionManager) {
         return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository);
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext) {
+        return new UtxoStorageReaderImpl(utxoRepository, dslContext);
     }
 
     @Bean

@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 @Repository
 public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId> {
@@ -34,38 +33,6 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
     Optional<List<AddressUtxoEntity>> findUnspentByOwnerStakeCredential(String delegationHash, Pageable page);
 
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
-
-    @Query("""
-             SELECT a FROM AddressUtxoEntity a 
-             LEFT JOIN AmtEntity amt ON a.txHash = amt.txHash AND a.outputIndex = amt.outputIndex           
-             LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex 
-             WHERE  amt.unit = :unit AND s.txHash IS NULL"""
-    )
-    Stream<AddressUtxoEntity> findByAssetUnit(String unit, Pageable page);
-
-    @Query("""
-             SELECT a FROM AddressUtxoEntity a 
-             LEFT JOIN AmtEntity amt ON a.txHash = amt.txHash AND a.outputIndex = amt.outputIndex           
-             LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex 
-             WHERE  a.ownerAddr = :address and amt.unit = :unit AND s.txHash IS NULL"""
-    )
-    Stream<AddressUtxoEntity> findByAddressAndAssetUnit(String address, String unit, Pageable page);
-
-    @Query("""
-             SELECT a FROM AddressUtxoEntity a 
-             LEFT JOIN AmtEntity amt ON a.txHash = amt.txHash AND a.outputIndex = amt.outputIndex           
-             LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex 
-             WHERE  a.ownerPaymentCredential = :paymentKeyHash and amt.unit = :unit AND s.txHash IS NULL"""
-    )
-    Stream<AddressUtxoEntity> findByOwnerPaymentCredentialAndAssetUnit(String paymentKeyHash, String unit, Pageable page);
-
-    @Query("""
-             SELECT a FROM AddressUtxoEntity a 
-             LEFT JOIN AmtEntity amt ON a.txHash = amt.txHash AND a.outputIndex = amt.outputIndex           
-             LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex 
-             WHERE  a.ownerStakeAddr = :stakeAddress and amt.unit = :unit AND s.txHash IS NULL"""
-    )
-    Stream<AddressUtxoEntity> findByOwnerStakeAddressAndAssetUnit(String stakeAddress, String unit, Pageable page);
 
     int deleteBySlotGreaterThan(Long slot);
 

@@ -25,7 +25,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
-@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "tx-amount", matchIfMissing = false)
+@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "tx-amount", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class AccountBatchConfiguration {

@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
@@ -14,6 +15,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.JSON;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -126,12 +128,6 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
                         .execute();
 
-                int utxoAmountCount = dsl.deleteFrom(UTXO_AMOUNT)
-                        .using(spentSubQuery)
-                        .where(UTXO_AMOUNT.TX_HASH.eq(spentSubQuery.field(TX_INPUT.TX_HASH))
-                                .and(UTXO_AMOUNT.OUTPUT_INDEX.eq(spentSubQuery.field(TX_INPUT.OUTPUT_INDEX))))
-                        .execute();
-
                 var txInputQuery = dsl.deleteFrom(TX_INPUT)
                         .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
                         .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
@@ -141,9 +137,9 @@ public class UtxoStorageImpl implements UtxoStorage {
 
                 if (log.isDebugEnabled())
                     log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
-                            addressUtxoCount, utxoAmountCount, txInputCount);
+                            addressUtxoCount, txInputCount);
 
-                int delCount  = addressUtxoCount + utxoAmountCount + txInputCount;
+                int delCount  = addressUtxoCount + txInputCount;
                 return delCount;
             });
 
@@ -169,6 +165,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
                                 .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
                                 .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
                                 .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
                                 .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
                                 .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
@@ -187,6 +184,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
                                 .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
                                 .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
                                 .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
                                 .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
                                 .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
@@ -201,30 +199,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
                                 .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)).toList();
 
-//        dsl.batch(inserts).execute();
-
-        var amtInserts = addressUtxoEntities.stream()
-                .flatMap(addressUtxo -> addressUtxo.getAmounts().stream())
-                .map(amount -> dsl.insertInto(UTXO_AMOUNT)
-                        .set(UTXO_AMOUNT.TX_HASH, amount.getTxHash())
-                        .set(UTXO_AMOUNT.OUTPUT_INDEX, amount.getOutputIndex())
-                        .set(UTXO_AMOUNT.UNIT, amount.getUnit())
-                        .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
-                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
-                        .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
-                        .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
-                        .set(UTXO_AMOUNT.SLOT, amount.getSlot())
-                        .onDuplicateKeyUpdate()
-                        .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
-                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
-                        .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
-                        .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
-                        .set(UTXO_AMOUNT.SLOT, amount.getSlot())).toList();
-
-        List finalInserts = new ArrayList(inserts);
-        finalInserts.addAll(amtInserts);
-
-        dsl.batch(finalInserts).execute();
+        dsl.batch(inserts).execute();
 
         addressUtxoList.forEach(utxoCache::add);
     }
