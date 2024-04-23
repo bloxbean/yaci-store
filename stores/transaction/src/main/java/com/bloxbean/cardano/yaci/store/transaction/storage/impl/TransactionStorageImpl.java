@@ -8,9 +8,12 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEn
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -28,5 +31,11 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Override
     public int deleteBySlotGreaterThan(long slot) {
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    @Override
+    @Transactional
+    public int deleteBySlotLessThan(long slot) {
+        return dsl.deleteFrom(TRANSACTION).where(TRANSACTION.SLOT.lessThan(slot)).execute();
     }
 }
