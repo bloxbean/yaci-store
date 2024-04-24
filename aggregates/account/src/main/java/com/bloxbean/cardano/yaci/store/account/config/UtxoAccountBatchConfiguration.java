@@ -26,8 +26,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@Configuration
-@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "utxo", matchIfMissing = true)
+//TODO -- Not used
+//@Configuration
+//@ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "utxo", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class UtxoAccountBatchConfiguration {

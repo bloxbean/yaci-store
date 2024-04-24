@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -7,6 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Type;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -55,8 +58,8 @@ public class AddressUtxoEntity extends BlockAwareEntity {
     @Column(name = "lovelace_amount")
     private BigInteger lovelaceAmount;
 
-    @OneToMany(mappedBy = "addressUtxo", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    private List<AmtEntity> amounts;
+    @Type(JsonType.class)
+    private List<Amt> amounts;
 
     @Column(name = "data_hash")
     private String dataHash;

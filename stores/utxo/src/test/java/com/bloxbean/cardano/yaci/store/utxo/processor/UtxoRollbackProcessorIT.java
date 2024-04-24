@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.AmtRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,9 +26,6 @@ public class UtxoRollbackProcessorIT {
 
     @Autowired
     private UtxoRepository utxoRepository;
-
-    @Autowired
-    private AmtRepository amtRepository;
 
     @Autowired
     private UtxoStoreProperties utxoStoreProperties;
@@ -129,12 +125,10 @@ public class UtxoRollbackProcessorIT {
                         .toList();
 
         var savedUtxos = utxoStorage.findAllByIds(utxoKeys);
-        var saveAmts = amtRepository.findAll();
 
         //Assert saved data
         assertThat(savedUtxos.size()).isEqualTo(4);
         assertThat(savedUtxos.get(0).getAmounts().size() > 0);
-        assertThat(saveAmts.size()).isEqualTo(8);
 
         //Rollback
         RollbackEvent rollbackEvent = RollbackEvent.builder()
@@ -145,10 +139,8 @@ public class UtxoRollbackProcessorIT {
         utxoRollbackProcessor.handleRollbackEvent(rollbackEvent);
 
         var allUtxos = utxoRepository.findAll();
-        var allAmts = amtRepository.findAll();
 
         assertThat(allUtxos).hasSize(2);
-        assertThat(allAmts).hasSize(5);
 
         assertThat(allUtxos.get(0).getTxHash()).isEqualTo(utxo1.getTxHash());
         assertThat(allUtxos.get(0).getOutputIndex()).isEqualTo(utxo1.getOutputIndex());

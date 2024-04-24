@@ -34,7 +34,20 @@ public class AccountStoreAutoConfigProperties {
 
         private int balanceCalcJobBatchSize = 1000;
         private int balanceCalcJobPartitionSize = 10;
-        private String balanceCalcBatchMode = "utxo";
+        private String balanceCalcBatchMode = "tx-amount";
+
+        /**
+         * Enable Address Balance and Stake Address Balance Pruning (History records)
+         */
+        private boolean pruningEnabled = false;
+        /**
+         * Pruning batch size
+         */
+        private int pruningBatchSize = 3000;
+        /**
+         * Pruning interval in seconds
+         */
+        private int pruningInterval = 86400;
     }
 
 }

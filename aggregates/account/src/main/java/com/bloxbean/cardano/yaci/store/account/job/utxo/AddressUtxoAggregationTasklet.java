@@ -22,6 +22,7 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANC
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.*;
 
+//TODO -- Not used
 @RequiredArgsConstructor
 @Slf4j
 public class AddressUtxoAggregationTasklet implements Tasklet {
@@ -73,59 +74,59 @@ public class AddressUtxoAggregationTasklet implements Tasklet {
     }
 
     private void calculateAddressBalance(long from, long to, Long snapshotSlot, Long snapshotBlock, Long snapshotBlockTime, int snapshotEpoch) {
-        var insertQuery = dsl.insertInto(ADDRESS_BALANCE,
-                        ADDRESS_BALANCE.ADDRESS,
-                        ADDRESS_BALANCE.UNIT,
-                        ADDRESS_BALANCE.QUANTITY,
-                        ADDRESS_BALANCE.SLOT,
-                        ADDRESS_BALANCE.BLOCK,
-                        ADDRESS_BALANCE.BLOCK_TIME,
-                        ADDRESS_BALANCE.EPOCH,
-                        ADDRESS_BALANCE.UPDATE_DATETIME
-                ).select(
-                        select(field(UTXO_AMOUNT.OWNER_ADDR).as("address"),
-                                field(UTXO_AMOUNT.UNIT).as("unit"),
-                                coalesce(sum(field(UTXO_AMOUNT.QUANTITY)), BigDecimal.ZERO).cast(SQLDataType.DECIMAL_INTEGER(38)).as("quantity"),
-                                val(snapshotSlot),
-                                val(snapshotBlock),
-                                val(snapshotBlockTime),
-                                val(snapshotEpoch),
-                                currentLocalDateTime()
-                        )
-                                .from(UTXO_AMOUNT)
-                                .leftJoin(TX_INPUT)
-                                    .on(UTXO_AMOUNT.TX_HASH.eq(TX_INPUT.TX_HASH).and(UTXO_AMOUNT.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
-                                .where(UTXO_AMOUNT.SLOT.le(snapshotSlot)
-                                        .and(UTXO_AMOUNT.OWNER_ADDR
-                                                .in(select(ADDRESS.ADDRESS_)
-                                                        .from(ADDRESS)
-                                                        .where(ADDRESS.ID.between(from, to))
-                                                        .limit(to - from + 1)
-                                                )
-                                        )
-                                        .and(TX_INPUT.TX_HASH.isNull().or(TX_INPUT.SPENT_AT_SLOT.gt(snapshotSlot)))
-                                )
-                                .groupBy(UTXO_AMOUNT.OWNER_ADDR, UTXO_AMOUNT.UNIT)
-                )
-                .onConflict(
-                        ADDRESS_BALANCE.ADDRESS,
-                        ADDRESS_BALANCE.UNIT,
-                        ADDRESS_BALANCE.SLOT
-                )
-                .doUpdate()
-                .set(ADDRESS_BALANCE.QUANTITY, excluded(ADDRESS_BALANCE.QUANTITY))
-                .set(ADDRESS_BALANCE.SLOT, excluded(ADDRESS_BALANCE.SLOT))
-                .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
-                .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
-                .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH));
-
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        transactionTemplate.execute(status -> {
-            insertQuery.queryTimeout(300).execute();
-            return true;
-        });
+//        var insertQuery = dsl.insertInto(ADDRESS_BALANCE,
+//                        ADDRESS_BALANCE.ADDRESS,
+//                        ADDRESS_BALANCE.UNIT,
+//                        ADDRESS_BALANCE.QUANTITY,
+//                        ADDRESS_BALANCE.SLOT,
+//                        ADDRESS_BALANCE.BLOCK,
+//                        ADDRESS_BALANCE.BLOCK_TIME,
+//                        ADDRESS_BALANCE.EPOCH,
+//                        ADDRESS_BALANCE.UPDATE_DATETIME
+//                ).select(
+//                        select(field(UTXO_AMOUNT.OWNER_ADDR).as("address"),
+//                                field(UTXO_AMOUNT.UNIT).as("unit"),
+//                                coalesce(sum(field(UTXO_AMOUNT.QUANTITY)), BigDecimal.ZERO).cast(SQLDataType.DECIMAL_INTEGER(38)).as("quantity"),
+//                                val(snapshotSlot),
+//                                val(snapshotBlock),
+//                                val(snapshotBlockTime),
+//                                val(snapshotEpoch),
+//                                currentLocalDateTime()
+//                        )
+//                                .from(UTXO_AMOUNT)
+//                                .leftJoin(TX_INPUT)
+//                                    .on(UTXO_AMOUNT.TX_HASH.eq(TX_INPUT.TX_HASH).and(UTXO_AMOUNT.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
+//                                .where(UTXO_AMOUNT.SLOT.le(snapshotSlot)
+//                                        .and(UTXO_AMOUNT.OWNER_ADDR
+//                                                .in(select(ADDRESS.ADDRESS_)
+//                                                        .from(ADDRESS)
+//                                                        .where(ADDRESS.ID.between(from, to))
+//                                                        .limit(to - from + 1)
+//                                                )
+//                                        )
+//                                        .and(TX_INPUT.TX_HASH.isNull().or(TX_INPUT.SPENT_AT_SLOT.gt(snapshotSlot)))
+//                                )
+//                                .groupBy(UTXO_AMOUNT.OWNER_ADDR, UTXO_AMOUNT.UNIT)
+//                )
+//                .onConflict(
+//                        ADDRESS_BALANCE.ADDRESS,
+//                        ADDRESS_BALANCE.UNIT,
+//                        ADDRESS_BALANCE.SLOT
+//                )
+//                .doUpdate()
+//                .set(ADDRESS_BALANCE.QUANTITY, excluded(ADDRESS_BALANCE.QUANTITY))
+//                .set(ADDRESS_BALANCE.SLOT, excluded(ADDRESS_BALANCE.SLOT))
+//                .set(ADDRESS_BALANCE.BLOCK, excluded(ADDRESS_BALANCE.BLOCK))
+//                .set(ADDRESS_BALANCE.BLOCK_TIME, excluded(ADDRESS_BALANCE.BLOCK_TIME))
+//                .set(ADDRESS_BALANCE.EPOCH, excluded(ADDRESS_BALANCE.EPOCH));
+//
+//        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+//        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+//
+//        transactionTemplate.execute(status -> {
+//            insertQuery.queryTimeout(300).execute();
+//            return true;
+//        });
     }
 
 }
