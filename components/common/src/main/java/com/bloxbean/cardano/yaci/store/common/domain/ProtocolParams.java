@@ -78,7 +78,7 @@ public class ProtocolParams {
     private BigInteger govActionDeposit; //30
     private BigInteger drepDeposit; //31
     private Integer drepActivity; //32
-
+    private BigInteger minFeeRefScriptCostPerByte; //33
     public void merge(ProtocolParams other) {
         if (other.minFeeA != null) {
             this.minFeeA = other.minFeeA;
@@ -200,6 +200,9 @@ public class ProtocolParams {
         }
         if (other.drepActivity != null) {
             this.drepActivity = other.drepActivity;
+        }
+        if (other.minFeeRefScriptCostPerByte != null) {
+            this.minFeeRefScriptCostPerByte = other.minFeeRefScriptCostPerByte;
         }
     }
 }
