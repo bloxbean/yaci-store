@@ -7,4 +7,5 @@ import java.util.List;
 public interface TransactionStorage {
     void saveAll(List<Txn> txList);
     int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotLessThan(long slot);
 }

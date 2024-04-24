@@ -43,7 +43,7 @@ public class TransactionStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TransactionWitnessStorage transactionWitnessStorage(TxnWitnessRepository txnWitnessRepository, TxnMapper txnMapper) {
-        return new TransactionWitnessStorageImpl(txnWitnessRepository, txnMapper);
+        return new TransactionWitnessStorageImpl(txnWitnessRepository, txnMapper, dslContext);
     }
 
     @Bean
