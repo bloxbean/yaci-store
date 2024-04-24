@@ -153,7 +153,7 @@ public class ConwayGenesis extends GenesisFile{
         var dRepActivity = dRepActivityNode != null? dRepActivityNode.asInt(): null;
 
         var minFeeRefScriptCostPerByteNode = genesisJson.get(MIN_FEE_REF_SCRIPT_COST_PER_BYTE);
-        var minFeeRefScriptCostPerByte = minFeeRefScriptCostPerByteNode != null ? minFeeRefScriptCostPerByteNode.bigIntegerValue() : null;
+        var minFeeRefScriptCostPerByte = minFeeRefScriptCostPerByteNode != null ? minFeeRefScriptCostPerByteNode.asInt() : null;
 
         protocolParams = ProtocolParams.builder()
                 .poolVotingThresholds(poolVotingThresholds)
