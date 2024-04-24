@@ -11,22 +11,23 @@ import java.math.BigDecimal;
 
 public class ConwayGenesis extends GenesisFile{
     private final static String POOL_VOTING_THRESHOLDS = "poolVotingThresholds";
-    private final static String PVT_COMMITTEE_NORMAL = "pvtCommitteeNormal";
-    private final static String PVT_COMMITTEE_NO_CONFIDENCE = "pvtCommitteeNoConfidence";
-    private final static String PVT_HARD_FORK_INITIATION = "pvtHardForkInitiation";
-    private final static String PVT_MOTION_NO_CONFIDENCE = "pvtMotionNoConfidence";
+    private final static String PVT_COMMITTEE_NORMAL = "committeeNormal";
+    private final static String PVT_COMMITTEE_NO_CONFIDENCE = "committeeNoConfidence";
+    private final static String PVT_HARD_FORK_INITIATION = "hardForkInitiation";
+    private final static String PVT_MOTION_NO_CONFIDENCE = "motionNoConfidence";
+    private final static String PVT_PP_SECURITY_GROUP = "ppSecurityGroup";
 
     private final static String D_REP_VOTING_THRESHOLDS = "dRepVotingThresholds";
-    private final static String DVT_MOTION_NO_CONFIDENCE = "dvtMotionNoConfidence";
-    private final static String DVT_COMMITTEE_NORMAL = "dvtCommitteeNormal";
-    private final static String DVT_COMMITTEE_NO_CONFIDENCE = "dvtCommitteeNoConfidence";
-    private final static String DVT_UPDATE_TO_CONSTITUTION = "dvtUpdateToConstitution";
-    private final static String DVT_HARD_FORK_INITIATION = "dvtHardForkInitiation";
-    private final static String DVT_PPNETWORK_GROUP = "dvtPPNetworkGroup";
-    private final static String DVT_PPECONOMIC_GROUP = "dvtPPEconomicGroup";
-    private final static String DVT_PPTECHNICAL_GROUP = "dvtPPTechnicalGroup";
-    private final static String DVT_PPGOV_GROUP = "dvtPPGovGroup";
-    private final static String DVT_TREASURY_WITHDRAWAL = "dvtTreasuryWithdrawal";
+    private final static String DVT_MOTION_NO_CONFIDENCE = "motionNoConfidence";
+    private final static String DVT_COMMITTEE_NORMAL = "committeeNormal";
+    private final static String DVT_COMMITTEE_NO_CONFIDENCE = "committeeNoConfidence";
+    private final static String DVT_UPDATE_TO_CONSTITUTION = "updateToConstitution";
+    private final static String DVT_HARD_FORK_INITIATION = "hardForkInitiation";
+    private final static String DVT_PPNETWORK_GROUP = "ppNetworkGroup";
+    private final static String DVT_PPECONOMIC_GROUP = "ppEconomicGroup";
+    private final static String DVT_PPTECHNICAL_GROUP = "ppTechnicalGroup";
+    private final static String DVT_PPGOV_GROUP = "ppGovGroup";
+    private final static String DVT_TREASURY_WITHDRAWAL = "treasuryWithdrawal";
 
     private final static String COMMITTEE_MIN_SIZE = "committeeMinSize";
     private final static String COMMITTEE_MAX_TERM_LENGTH = "committeeMaxTermLength";
@@ -34,7 +35,7 @@ public class ConwayGenesis extends GenesisFile{
     private final static String GOV_ACTION_DEPOSIT = "govActionDeposit";
     private final static String D_REP_DEPOSIT = "dRepDeposit";
     private final static String D_REP_ACTIVITY = "dRepActivity";
-
+    private final static String MIN_FEE_REF_SCRIPT_COST_PER_BYTE = "minFeeRefScriptCostPerByte";
     private final static String CONSTITUTION = "constitution";
     private final static String ANCHOR = "anchor";
     private final static String URL = "url";
@@ -74,11 +75,15 @@ public class ConwayGenesis extends GenesisFile{
             var pvtMotionNoConfidenceNode = poolVotingThresholdsNode.get(PVT_MOTION_NO_CONFIDENCE);
             BigDecimal pvtMotionNoConfidence = pvtMotionNoConfidenceNode.decimalValue();
 
+            var pvtPPSecurityGroup = poolVotingThresholdsNode.get(PVT_PP_SECURITY_GROUP);
+            BigDecimal pvtSecurityGroup = pvtPPSecurityGroup.decimalValue();
+
             poolVotingThresholds = PoolVotingThresholds.builder()
                     .pvtCommitteeNormal(pvtCommitteNormal)
                     .pvtCommitteeNoConfidence(pvtCommitteeNoConfidence)
                     .pvtHardForkInitiation(pvtHardForkInitiation)
                     .pvtMotionNoConfidence(pvtMotionNoConfidence)
+                    .pvtPPSecurityGroup(pvtSecurityGroup)
                     .build();
         }
 
@@ -147,6 +152,9 @@ public class ConwayGenesis extends GenesisFile{
         var dRepActivityNode = genesisJson.get(D_REP_ACTIVITY);
         var dRepActivity = dRepActivityNode != null? dRepActivityNode.asInt(): null;
 
+        var minFeeRefScriptCostPerByteNode = genesisJson.get(MIN_FEE_REF_SCRIPT_COST_PER_BYTE);
+        var minFeeRefScriptCostPerByte = minFeeRefScriptCostPerByteNode != null ? minFeeRefScriptCostPerByteNode.bigIntegerValue() : null;
+
         protocolParams = ProtocolParams.builder()
                 .poolVotingThresholds(poolVotingThresholds)
                 .drepVotingThresholds(drepVoteThresholds)
@@ -156,6 +164,7 @@ public class ConwayGenesis extends GenesisFile{
                 .govActionDeposit(govActionDeposit)
                 .drepDeposit(dRepDeposit)
                 .drepActivity(dRepActivity)
+                .minFeeRefScriptCostPerByte(minFeeRefScriptCostPerByte)
                 .build();
     }
 
