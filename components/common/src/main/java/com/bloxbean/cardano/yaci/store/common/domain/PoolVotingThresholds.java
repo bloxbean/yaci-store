@@ -21,4 +21,5 @@ public class PoolVotingThresholds {
     private BigDecimal pvtCommitteeNormal;
     private BigDecimal pvtCommitteeNoConfidence;
     private BigDecimal pvtHardForkInitiation;
+    private BigDecimal pvtPPSecurityGroup;
 }
