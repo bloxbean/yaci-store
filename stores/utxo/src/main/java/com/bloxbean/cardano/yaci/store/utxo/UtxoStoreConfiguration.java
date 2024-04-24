@@ -19,6 +19,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
@@ -37,14 +38,18 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext, UtxoCache utxoCache) {
-        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache);
+    public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
+                                   TxInputRepository spentOutputRepository,
+                                   DSLContext dslContext,
+                                   UtxoCache utxoCache,
+                                   PlatformTransactionManager transactionManager) {
+        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository);
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext) {
+        return new UtxoStorageReaderImpl(utxoRepository, dslContext);
     }
 
     @Bean

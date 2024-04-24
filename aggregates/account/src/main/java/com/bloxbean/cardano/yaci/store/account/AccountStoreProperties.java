@@ -40,5 +40,14 @@ public class AccountStoreProperties {
     private int balanceCalcJobPartitionSize = 10;
 
     @Builder.Default
-    private String balanceCalcBatchMode = "utxo";
+    private String balanceCalcBatchMode = "tx-amount";
+
+    @Builder.Default
+    private boolean pruningEnabled = false;
+
+    @Builder.Default
+    private int pruningBatchSize = 3000;
+
+    @Builder.Default
+    private int pruningInterval = 86400;
 }

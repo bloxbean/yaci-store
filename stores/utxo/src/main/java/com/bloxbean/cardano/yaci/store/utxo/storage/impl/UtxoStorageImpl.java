@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
@@ -10,11 +11,17 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.JSON;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,7 +29,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
-import static org.jooq.impl.DSL.exists;
+import static org.jooq.impl.DSL.row;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -33,6 +40,18 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
     private final UtxoCache utxoCache;
+    private final PlatformTransactionManager transactionManager;
+
+    private TransactionTemplate transactionTemplate;
+
+    @Value("${store.utxo.pruning-batch-size:3000}")
+    private int pruningBatchSize = 3000;
+
+    @PostConstruct
+    public void init() {
+        transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
@@ -91,27 +110,43 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteBySpentAndBlockLessThan(Long block) {
-        var addressUtxoDelQuery = dsl.deleteFrom(ADDRESS_UTXO)
-                .where(exists(dsl.selectOne()
+        int count = 0;
+        int totalCount = 0;
+
+        int limit = pruningBatchSize;
+
+        do {
+            count = transactionTemplate.execute(status ->  {
+                var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
                         .from(TX_INPUT)
-                        .where(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH)
-                                .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
-                                .and(TX_INPUT.SPENT_AT_BLOCK.lt(block)))));
+                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
+                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
+                        .limit(limit);
 
-        var utxoAmtDelQuery = dsl.deleteFrom(UTXO_AMOUNT)
-                .where(exists(dsl.selectOne()
-                        .from(TX_INPUT)
-                        .where(UTXO_AMOUNT.TX_HASH.eq(TX_INPUT.TX_HASH)
-                                .and(UTXO_AMOUNT.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
-                                .and(TX_INPUT.SPENT_AT_BLOCK.lt(block)))));
+                int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
+                        .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
+                                .in(spentSubQuery))
+                        .execute();
 
-        var deleteTxInputQuery = dsl.deleteFrom(TX_INPUT)
-                .where(TX_INPUT.SPENT_AT_BLOCK.lt(block));
+                var txInputQuery = dsl.deleteFrom(TX_INPUT)
+                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
+                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
+                        .limit(limit);
 
-        var count = dsl.batch(addressUtxoDelQuery, utxoAmtDelQuery).execute().length;
-        count += deleteTxInputQuery.execute();
+                int txInputCount = txInputQuery.execute();
 
-        return count;
+                if (log.isDebugEnabled())
+                    log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
+                            addressUtxoCount, txInputCount);
+
+                int delCount  = addressUtxoCount + txInputCount;
+                return delCount;
+            });
+
+            totalCount += count;
+        } while(count > 0);
+
+        return totalCount;
     }
 
     @Override
@@ -130,6 +165,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
                                 .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
                                 .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
                                 .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
                                 .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
                                 .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
@@ -148,6 +184,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
                                 .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
                                 .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
+                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
                                 .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
                                 .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
                                 .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
@@ -162,30 +199,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
                                 .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)).toList();
 
-//        dsl.batch(inserts).execute();
-
-        var amtInserts = addressUtxoEntities.stream()
-                .flatMap(addressUtxo -> addressUtxo.getAmounts().stream())
-                .map(amount -> dsl.insertInto(UTXO_AMOUNT)
-                        .set(UTXO_AMOUNT.TX_HASH, amount.getTxHash())
-                        .set(UTXO_AMOUNT.OUTPUT_INDEX, amount.getOutputIndex())
-                        .set(UTXO_AMOUNT.UNIT, amount.getUnit())
-                        .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
-                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
-                        .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
-                        .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
-                        .set(UTXO_AMOUNT.SLOT, amount.getSlot())
-                        .onDuplicateKeyUpdate()
-                        .set(UTXO_AMOUNT.QUANTITY, amount.getQuantity())
-                        .set(UTXO_AMOUNT.OWNER_ADDR, amount.getOwnerAddr())
-                        .set(UTXO_AMOUNT.POLICY, amount.getPolicyId())
-                        .set(UTXO_AMOUNT.ASSET_NAME, amount.getAssetName())
-                        .set(UTXO_AMOUNT.SLOT, amount.getSlot())).toList();
-
-        List finalInserts = new ArrayList(inserts);
-        finalInserts.addAll(amtInserts);
-
-        dsl.batch(finalInserts).execute();
+        dsl.batch(inserts).execute();
 
         addressUtxoList.forEach(utxoCache::add);
     }
