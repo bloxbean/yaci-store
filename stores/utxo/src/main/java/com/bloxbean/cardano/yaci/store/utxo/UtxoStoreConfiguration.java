@@ -22,6 +22,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
+import javax.sql.DataSource;
+
 @Configuration
 @ConditionalOnProperty(
         prefix = "store.utxo",
@@ -48,8 +50,8 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository, dslContext);
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext, DataSource dataSource) {
+        return new UtxoStorageReaderImpl(utxoRepository, dslContext, dataSource);
     }
 
     @Bean
