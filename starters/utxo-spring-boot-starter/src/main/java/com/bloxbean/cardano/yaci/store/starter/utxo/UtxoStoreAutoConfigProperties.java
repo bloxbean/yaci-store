@@ -26,9 +26,9 @@ public class UtxoStoreAutoConfigProperties {
          */
         private boolean pruningEnabled = false;
         /**
-         * Utxo Pruning interval in minutes
+         * Utxo Pruning interval in seconds
          */
-        private int pruningInterval = 1440; //In minutes
+        private int pruningInterval = 86400;
         /**
          * No of safe blocks to keep before pruning the UTXO
          */
