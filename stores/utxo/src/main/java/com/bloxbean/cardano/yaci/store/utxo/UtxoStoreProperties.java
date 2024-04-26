@@ -26,7 +26,7 @@ public class UtxoStoreProperties {
     private boolean pruningEnabled = false;
 
     @Builder.Default
-    private int pruningInterval = 1440; //In minutes
+    private int pruningInterval = 86400;
 
     @Builder.Default
     private int pruningSafeBlocks = 2160;
