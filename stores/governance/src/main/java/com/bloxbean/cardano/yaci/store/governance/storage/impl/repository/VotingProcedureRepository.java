@@ -22,4 +22,5 @@ public interface VotingProcedureRepository extends JpaRepository<VotingProcedure
     Slice<VotingProcedureEntity> findByGovActionTxHash(String txHash, Pageable pageable);
 
     Slice<VotingProcedureEntity> findByGovActionTxHashAndIndex(String govActionTxHash, long govActionIndex, Pageable pageable);
+    Slice<VotingProcedureEntity> findBySlotIsGreaterThanEqual(Long slot, Pageable pageable);
 }
