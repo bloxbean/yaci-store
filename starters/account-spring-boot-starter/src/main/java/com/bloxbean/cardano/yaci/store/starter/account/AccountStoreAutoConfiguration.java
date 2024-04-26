@@ -29,6 +29,22 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setStakeAddressBalanceEnabled(properties.getAccount().isStakeAddressBalanceEnabled());
         accountStoreProperties.setAddressBalanceEnabled(properties.getAccount().isAddressBalanceEnabled());
 
+        accountStoreProperties.setBalanceCleanupSlotCount(properties.getAccount().getBalanceCleanupSlotCount());
+        accountStoreProperties.setBalanceCleanupBatchThreshold(properties.getAccount().getBalanceCleanupBatchThreshold());
+
+        accountStoreProperties.setSaveAddressTxAmount(properties.getAccount().isSaveAddressTxAmount());
+        accountStoreProperties.setAddressTxAmountIncludeZeroAmount(properties.getAccount().isAddressTxAmountIncludeZeroAmount());
+        accountStoreProperties.setAddressTxAmountExcludeTokenZeroAmount(properties.getAccount().isAddressTxAmountExcludeZeroTokenAmount());
+        accountStoreProperties.setInitialBalanceSnapshotBlock(properties.getAccount().getInitialBalanceSnapshotBlock());
+
+        accountStoreProperties.setBalanceCalcJobBatchSize(properties.getAccount().getBalanceCalcJobBatchSize());
+        accountStoreProperties.setBalanceCalcJobPartitionSize(properties.getAccount().getBalanceCalcJobPartitionSize());
+        accountStoreProperties.setBalanceCalcBatchMode(properties.getAccount().getBalanceCalcBatchMode());
+
+        accountStoreProperties.setPruningEnabled(properties.getAccount().isPruningEnabled());
+        accountStoreProperties.setPruningBatchSize(properties.getAccount().getPruningBatchSize());
+        accountStoreProperties.setPruningInterval(properties.getAccount().getPruningInterval());
+
         return accountStoreProperties;
     }
 }

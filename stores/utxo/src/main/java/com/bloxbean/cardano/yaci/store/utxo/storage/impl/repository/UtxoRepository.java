@@ -2,14 +2,12 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
-import jakarta.persistence.QueryHint;
-import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -37,20 +35,6 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
     List<AddressUtxoEntity> findAllById(Iterable<UtxoId> utxoIds);
 
     int deleteBySlotGreaterThan(Long slot);
-
-    //Required for account balance aggregation
-    @Query("SELECT distinct ab.blockNumber FROM AddressUtxoEntity  ab where ab.blockNumber >= :block order by ab.blockNumber ASC LIMIT :limit")
-    List<Long> findNextAvailableBlocks(Long block, int limit);
-
-    //Find unspent between blocks
-    List<AddressUtxoEntity> findByBlockNumberBetween(Long startBlock, Long endBlock);
-
-
-    @Query("SELECT a,s FROM AddressUtxoEntity a JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
-            "WHERE s.spentAtBlock BETWEEN :startBlock AND :endBlock")
-    @QueryHints({ @QueryHint(name = "org.hibernate.cacheable", value = "false"),
-            @QueryHint(name = "org.hibernate.readOnly", value = "true") })
-    List<Object[]> findBySpentAtBlockBetween(Long startBlock, Long endBlock);
 
     @Modifying
     @Transactional

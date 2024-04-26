@@ -17,6 +17,37 @@ public class AccountStoreProperties {
     private int maxBalanceRecordsPerAddressPerBatch = 3;
     @Builder.Default
     private boolean stakeAddressBalanceEnabled = true;
+
     @Builder.Default
-    private boolean addressBalanceEnabled = true;
+    private int balanceHistoryCleanupInterval = 300;
+    @Builder.Default
+    private long balanceCleanupSlotCount = 43200; //2160 blocks
+    @Builder.Default
+    private long balanceCleanupBatchThreshold = 20000;
+
+    @Builder.Default
+    private boolean saveAddressTxAmount = false;
+    @Builder.Default
+    private boolean addressTxAmountIncludeZeroAmount = false;
+    @Builder.Default
+    private boolean addressTxAmountExcludeTokenZeroAmount = true;
+    private long initialBalanceSnapshotBlock;
+
+    @Builder.Default
+    private int balanceCalcJobBatchSize = 1000;
+
+    @Builder.Default
+    private int balanceCalcJobPartitionSize = 10;
+
+    @Builder.Default
+    private String balanceCalcBatchMode = "tx-amount";
+
+    @Builder.Default
+    private boolean pruningEnabled = false;
+
+    @Builder.Default
+    private int pruningBatchSize = 3000;
+
+    @Builder.Default
+    private int pruningInterval = 86400;
 }

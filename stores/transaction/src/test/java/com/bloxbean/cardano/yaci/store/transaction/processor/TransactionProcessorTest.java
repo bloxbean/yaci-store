@@ -7,9 +7,11 @@ import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
+import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,16 +47,21 @@ class TransactionProcessorTest {
     @Mock
     private ApplicationEventPublisher publisher;
 
+    @Mock
+    private InvalidTransactionStorage invalidTransactionStorage;
+
     private TransactionProcessor transactionProcessor;
     @Captor
     private ArgumentCaptor<List<Txn>> txnListCaptor;
     @Captor
     private ArgumentCaptor<List<TxnWitness>> txnWitnessesCaptor;
+    @Captor
+    private ArgumentCaptor<InvalidTransaction> invalidTxCaptor;
 
     @BeforeEach
     public void setup() {
         feeResolver = new FeeResolver(new DummyUtxoClient());
-        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, new ObjectMapper(), feeResolver, publisher);
+        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher);
     }
 
     @Test
@@ -67,6 +74,7 @@ class TransactionProcessorTest {
         transactionProcessor.handleTransactionEvent(transactionEvent);
 
         verify(transactionStorage, Mockito.times(1)).saveAll(txnListCaptor.capture());
+        verify(invalidTransactionStorage, Mockito.never()).save(invalidTxCaptor.capture());
         List<Txn> txnList = txnListCaptor.getValue();
 
         assertThat(txnList).hasSize(1);
@@ -165,6 +173,22 @@ class TransactionProcessorTest {
                 assertThat(txWitness.getAdditionalData().get("attributes").asText()).isEqualTo("a1024101");
             }
         }
+    }
+
+    @Test
+    void givenTransactionEvent_withInvalidTransaction_shouldSaveInvalidTransaction() {
+        var transactions = transactions();
+        transactions.get(0).setInvalid(true);
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(eventMetadata())
+                .build();
+
+        transactionProcessor.handleTransactionEvent(transactionEvent);
+
+        verify(transactionStorage, Mockito.times(1)).saveAll(txnListCaptor.capture());
+        verify(invalidTransactionStorage, Mockito.times(1)).save(invalidTxCaptor.capture());
     }
 
     private EventMetadata eventMetadata() {

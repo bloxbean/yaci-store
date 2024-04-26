@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +14,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 @Slf4j
 public class AccountBalanceHistoryCleanupHelper {
-    @Value("${store.account.balance-cleanup-slot-count:43200}")
-    private int cleanupSlotCount; //TODO: Make it configurable
-
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountStoreProperties accountStoreProperties;
 
@@ -28,35 +24,50 @@ public class AccountBalanceHistoryCleanupHelper {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - cleanupSlotCount;
+        long slot = currentSlot - accountStoreProperties.getBalanceCleanupSlotCount();
         if(slot < 0)
             return;
 
-        addressUnits.forEach(addressUnit -> {
-            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
-            deleteCountAddrBal.addAndGet(delCount);
-        });
+        log.info("\tDeleting balance history data before : "
+                + (accountStoreProperties.getBalanceCleanupSlotCount() / 86400.0) + " days");
 
-        long count = deleteCountAddrBal.get();
-        if (count > 0 && count % 10000 == 0)
-            log.info("Total address balances deleted: " + count);
+        if (accountBalanceStorage.isBatchDeleteSupported()) {
+            log.debug("Trying batch delete >>");
+            int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnits, slot);
+            deleteCountAddrBal.addAndGet(delCount);
+        } else {
+            addressUnits.forEach(addressUnit -> {
+                int delCount = accountBalanceStorage.deleteAddressBalanceBeforeSlotExceptTop(addressUnit.getFirst(), addressUnit.getSecond(), slot);
+                deleteCountAddrBal.addAndGet(delCount);
+            });
+
+            long count = deleteCountAddrBal.get();
+            log.info("\tTotal address balances deleted: " + count);
+        }
     }
 
     public void deleteStakeBalanceBeforeConfirmedSlot(List<String> addresses, long currentSlot) {
         if (!accountStoreProperties.isHistoryCleanupEnabled())
             return;
 
-        long slot = currentSlot - cleanupSlotCount;
+        long slot = currentSlot - accountStoreProperties.getBalanceCleanupSlotCount();
         if(slot < 0)
             return;
 
-        addresses.forEach(address -> {
-            int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(address,  slot);
+        if (accountBalanceStorage.isBatchDeleteSupported()) {
+            log.debug("Trying batch delete for stake balances>>");
+            int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(addresses, slot);
             deleteCountStakeBal.addAndGet(delCount);
-        });
+        } else {
+            addresses.forEach(address -> {
+                int delCount = accountBalanceStorage.deleteStakeBalanceBeforeSlotExceptTop(address, slot);
+                deleteCountStakeBal.addAndGet(delCount);
+            });
 
-        long count = deleteCountStakeBal.get();
-        if (count > 0 && count % 10000 == 0)
-            log.info("Total stake addr balances deleted: " + count);
+            long count = deleteCountStakeBal.get();
+            //if (count > 0 && count % 10000 == 0)
+            log.info("\tTotal stake addr balances deleted: " + count);
+        }
+
     }
 }

@@ -6,8 +6,9 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.GenesisBlockFinder;
 import com.bloxbean.cardano.yaci.helper.model.StartPoint;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
@@ -53,6 +54,7 @@ public class StartService {
         log.info("###########################");
 
         initService.init();
+        blockFetchService.reset();
 
         alreadyStarted = true;
         log.info("Application is ready. Let's start the sync process ...");
@@ -142,5 +144,22 @@ public class StartService {
         } else {
             blockFetchService.startFetch(from, to);
         }
+    }
+
+    public void stop() {
+        log.info("Stopping the StartService >>>> ");
+        if (blockFetchService.isRunning()) {
+            try {
+                blockFetchService.stop();
+            } catch (Exception e) {
+                log.debug("Error stopping blockFetchService", e);
+            }
+        }
+
+        alreadyStarted = false;
+    }
+
+    public boolean isStarted() {
+        return alreadyStarted;
     }
 }

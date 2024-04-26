@@ -21,9 +21,6 @@ import java.util.List;
 public class AddressBalanceDto extends BlockAwareDomain {
     private String address;
     private List<Amt> amounts;
-    private String paymentCredential;
-    private String stakeAddress;
-    private String blockHash;
     private Long slot;
 
     private Long lastBalanceCalculationBlock;

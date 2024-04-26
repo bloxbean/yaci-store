@@ -11,12 +11,15 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
+import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +49,7 @@ public class TransactionProcessor {
     private final TransactionStorage transactionStorage;
 
     private final TransactionWitnessStorage transactionWitnessStorage;
+    private final InvalidTransactionStorage invalidTransactionStorage;
     private final ObjectMapper objectMapper;
     private final FeeResolver feeResolver;
     private final ApplicationEventPublisher publisher;
@@ -120,6 +124,8 @@ public class TransactionProcessor {
                 txList.add(txn);
             }
 
+            if (transaction.isInvalid())
+                saveInvalidTransaction(event.getMetadata(), transaction);
         });
 
         if (txList.size() > 0) {
@@ -158,6 +164,17 @@ public class TransactionProcessor {
         } finally {
             invalidUnresolvedFeeTxns.clear();
         }
+    }
+
+    private void saveInvalidTransaction(EventMetadata metadata, Transaction transaction) {
+        //insert invalid transactions
+        InvalidTransaction invalidTransaction = InvalidTransaction.builder()
+                .txHash(transaction.getTxHash())
+                .slot(metadata.getSlot())
+                .blockHash(metadata.getBlockHash())
+                .transaction(transaction)
+                .build();
+        invalidTransactionStorage.save(invalidTransaction);
     }
 
 

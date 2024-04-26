@@ -26,9 +26,7 @@ drop index idx_address_balance_address on address_balance;
 drop index idx_address_balance_block_time on address_balance;
 drop index idx_address_balance_epoch on address_balance;
 drop index idx_address_balance_unit on address_balance;
-drop index idx_address_balance_policy on address_balance;
-drop index idx_address_stake_address on address_balance;
-drop index idx_address_balance_policy_asset on address_balance;
+
 
 -- stake address balance
 

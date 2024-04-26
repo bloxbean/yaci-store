@@ -1,0 +1,21 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    api project(":components:admin")
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Admin Spring Boot Starter'
+                description = 'Yaci Store Admin Spring Boot Starter'
+            }
+        }
+    }
+}

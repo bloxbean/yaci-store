@@ -78,4 +78,21 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private int dbBatchSize = 200;
     private boolean dbParallelInsert = true;
+
+    @Builder.Default
+    private boolean mvstoreEnabled = false;
+    @Builder.Default
+    private String mvstorePath = "./.mvstore";
+
+    @Builder.Default
+    private int processingThreadsTimeout = 5; //5 min
+
+    @Builder.Default
+    private boolean parallelWrite = false;
+    @Builder.Default
+    private int writeThreadDefaultBatchSize = 1000;
+    @Builder.Default
+    private int jooqWriteBatchSize = 3000;
+    @Builder.Default
+    private int writeThreadCount = 5;
 }

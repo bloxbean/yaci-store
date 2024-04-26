@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.core.service.publisher;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.core.domain.Cursor;
-import com.bloxbean.cardano.yaci.store.core.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
@@ -41,6 +42,10 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         this.publisher = publisher;
         this.cursorService = cursorService;
         this.storeProperties = storeProperties;
+    }
+
+    public void reset() {
+        byronBatchBlockList.clear();
     }
 
     @Transactional
@@ -84,7 +89,9 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
             futures.add(future);
         }
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
+                .join();
 
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));

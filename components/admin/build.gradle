@@ -1,0 +1,17 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:core")
+
+    compileOnly project(":aggregates:account")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Admin Module'
+                description = 'Yaci Store - Admin Module'
+            }
+        }
+    }
+}

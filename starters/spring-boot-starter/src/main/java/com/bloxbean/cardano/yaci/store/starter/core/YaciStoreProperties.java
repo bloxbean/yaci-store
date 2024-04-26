@@ -16,6 +16,8 @@ public class YaciStoreProperties {
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
     private String utxoClientUrl;
+    private boolean mvstoreEnabled = false;
+    private String mvstorePath = "./.mvstore";
 
     @Getter
     @Setter
@@ -73,6 +75,10 @@ public class YaciStoreProperties {
         private int blocksPartitionSize=10;
         private boolean useVirtualThreadForBatchProcessing;
         private boolean useVirtualThreadForEventProcessing;
+        /**
+         * Timeout in seconds for processing threads
+         */
+        private int processingThreadsTimeout = 5;
     }
 
     @Getter
@@ -80,5 +86,11 @@ public class YaciStoreProperties {
     public static final class Db {
         private int batchSize = 200;
         private boolean parallelInsert = true;
+
+        //parallel write & batch size settings
+        private boolean parallelWrite = false;
+        private int writeThreadDefaultBatchSize = 1000;
+        private int jooqWriteBatchSize = 3000;
+        private int writeThreadCount = 5;
     }
 }

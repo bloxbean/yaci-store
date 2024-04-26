@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction;
 import com.bloxbean.cardano.yaci.store.transaction.storage.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.WithdrawalRepository;
@@ -42,7 +43,7 @@ public class TransactionStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TransactionWitnessStorage transactionWitnessStorage(TxnWitnessRepository txnWitnessRepository, TxnMapper txnMapper) {
-        return new TransactionWitnessStorageImpl(txnWitnessRepository, txnMapper);
+        return new TransactionWitnessStorageImpl(txnWitnessRepository, txnMapper, dslContext);
     }
 
     @Bean
@@ -67,5 +68,12 @@ public class TransactionStoreConfiguration {
     @ConditionalOnMissingBean
     public WithdrawalStorageReader withdrawalStorageReader(WithdrawalRepository withdrawalRepository, TxnMapper mapper) {
         return new WithdrawalStorageReaderImpl(withdrawalRepository, mapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository,
+                                                               TxnMapper txnMapper) {
+        return new InvalidTransactionStorageImpl(invalidTransactionRepository, txnMapper);
     }
 }

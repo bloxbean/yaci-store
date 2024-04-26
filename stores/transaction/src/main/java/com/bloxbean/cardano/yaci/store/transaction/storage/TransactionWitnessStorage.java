@@ -7,4 +7,5 @@ import java.util.List;
 public interface TransactionWitnessStorage {
     void saveAll(List<TxnWitness> txnWitnesses);
     int deleteBySlotGreaterThan(long slot);
+    int deleteBySlotLessThan(long slot);
 }

@@ -6,11 +6,13 @@ dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
     implementation project(':starters:account-spring-boot-starter')
+    implementation project(':starters:admin-spring-boot-starter')
 
     implementation project(':extensions:utxo-rocksdb')
     implementation project(':extensions:account-rocksdb')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     implementation libs.spring.boot.admin.client

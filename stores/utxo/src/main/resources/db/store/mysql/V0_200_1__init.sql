@@ -2,8 +2,8 @@
 drop table if exists address_utxo;
 create table address_utxo
 (
-    output_index          smallint    not null,
     tx_hash               varchar(64) not null,
+    output_index          smallint    not null,
     slot                  bigint,
     block_hash            varchar(64),
     epoch                 int,
@@ -46,6 +46,7 @@ CREATE INDEX idx_reference_script_hash
 CREATE INDEX idx_address_utxo_epoch
     ON address_utxo(epoch);
 
+
 -- tx_input
 drop table if exists tx_input;
 create table tx_input
@@ -67,18 +68,20 @@ CREATE INDEX idx_tx_input_slot
 CREATE INDEX idx_tx_input_block
     ON tx_input(spent_at_block);
 
--- invalid_transaction
-drop table if exists invalid_transaction;
-create table invalid_transaction
+-- address
+
+drop table if exists address;
+create table address
 (
-    tx_hash     varchar(64) not null
-        primary key,
-    slot            bigint not null,
-    block_hash      varchar(64),
-    transaction      json         null,
-    create_datetime  timestamp,
-    update_datetime  timestamp
+    id                 bigint not null auto_increment,
+    address            varchar(500) unique not null,
+    addr_full          text,
+    payment_credential varchar(56),
+    stake_address      varchar(255),
+    stake_credential   varchar(56),
+    update_datetime    timestamp,
+    primary key (id)
 );
 
-CREATE INDEX idx_invalid_transaction_slot
-    ON invalid_transaction(slot);
+CREATE INDEX idx_address_stake_address
+    ON address (stake_address);

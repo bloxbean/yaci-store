@@ -18,4 +18,5 @@ public interface AccountMapper {
 
     StakeAddressBalance toStakeBalance(StakeAddressBalanceEntity entity);
     StakeAddressBalanceEntity toStakeBalanceEntity(StakeAddressBalance stakeBalance);
+
 }

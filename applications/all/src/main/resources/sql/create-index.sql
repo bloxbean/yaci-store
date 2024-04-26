@@ -30,6 +30,7 @@ CREATE INDEX if not exists idx_address_utxo_owner_stakekey_hash
 CREATE INDEX if not exists idx_address_utxo_epoch
     ON address_utxo(epoch);
 
+
 -- asset store
 
 CREATE INDEX if not exists idx_assets_tx_hash
@@ -61,14 +62,6 @@ CREATE INDEX if not exists idx_address_balance_epoch
 CREATE INDEX if not exists idx_address_balance_unit
     ON address_balance (unit);
 
-CREATE INDEX if not exists idx_address_balance_policy
-    ON address_balance (policy);
-
-CREATE INDEX if not exists idx_address_stake_address
-    ON address_balance (stake_address);
-
-CREATE INDEX if not exists idx_address_balance_policy_asset
-    ON address_balance (policy, asset_name);
 
 -- stake address balance
 

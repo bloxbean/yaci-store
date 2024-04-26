@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.account.storage;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import org.springframework.data.util.Pair;
 
 import java.util.List;
 import java.util.Optional;
@@ -44,13 +45,37 @@ public interface AccountBalanceStorage {
 
     /**
      * Delete all address balances before the slot except the top one
+     * This method is called when {@link #isBatchDeleteSupported()} returns false.
      * This is called to clean history data
+     * <p></p>
+     * This is deprecated and should not be used. Use {@link #deleteAddressBalanceBeforeSlotExceptTop(List, long)}
+     *
      * @param address address
      * @param unit unit
      * @param slot slot
      * @return number of records deleted
      */
+    @Deprecated
     int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot);
+
+    /**
+     * Delete all address balance records before the slot except the top one. This method is called when batch delete is supported.
+     * {@link #isBatchDeleteSupported()}
+     * This is called to clean history data
+     * @param addresUnits List of Pairs of address and unit
+     * @param slot slot
+     * @return number of records deleted
+     */
+    int deleteAddressBalanceBeforeSlotExceptTop(List<Pair<String,String>> addresUnits, long slot);
+
+    /**
+     * Check if batch delete is supported.
+     * If supported, {@link #deleteAddressBalanceBeforeSlotExceptTop(List, long)} will be called during history cleanup.
+     * @return
+     */
+    default boolean isBatchDeleteSupported() {
+        return false;
+    }
 
     /**
      * Delete all address balances after the slot
@@ -99,11 +124,23 @@ public interface AccountBalanceStorage {
     /**
      * Delete all stake address balances before the slot except the top one
      * This is called to clean history data
+     * <p></p>
+     * This method is deprecated and should not be used. Use {@link #deleteStakeBalanceBeforeSlotExceptTop(List, long)}
      * @param address address
      * @param slot slot
      * @return number of records deleted
      */
     int deleteStakeBalanceBeforeSlotExceptTop(String address, long slot);
+
+    /**
+     * Delete all stake address balances before the slot except the top. This method is called when batch delete is supported.
+     * {@link #isBatchDeleteSupported()}
+     * This is called to clean history data
+     * @param addresses List of addresses
+     * @param slot slot
+     * @return number of records deleted
+     */
+    int deleteStakeBalanceBeforeSlotExceptTop(List<String> addresses, long slot);
 
     /**
      * Delete all stake address balances after the slot

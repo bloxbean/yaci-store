@@ -1,5 +1,5 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.3.0-beta12-627cb58-SNAPSHOT"
+yaci = "com.bloxbean.cardano:yaci:0.3.0-beta13-3f7445e-SNAPSHOT"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.5.1"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.5.1"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.5.1"
@@ -21,4 +21,4 @@ spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
 rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 
-cf-rewards="org.cardanofoundation:cf-rewards-calculation:0.8.0"
+parallel-collector="com.pivovarit:parallel-collectors:3.0.0"

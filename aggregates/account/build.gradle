@@ -1,5 +1,10 @@
 dependencies {
     api project(":stores:utxo")
+    api project(":components:core")
+    api project(":components:job")
+    implementation(libs.parallel.collector)
+
+    api("org.springframework.boot:spring-boot-starter-batch")
 }
 
 publishing {
