@@ -1,5 +1,6 @@
 dependencies {
     api project(":stores:governance")
+    api project(":aggregates:governance-rules")
 }
 
 publishing {
