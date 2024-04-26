@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class TransactionAutoConfigProperties {
-    private Transaction transaction;
+    private Transaction transaction = new Transaction();
 
     @Getter
     @Setter
