@@ -22,3 +22,4 @@ rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 
 parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
+cf-rewards="org.cardanofoundation:cf-rewards-calculation:0.11.1"
