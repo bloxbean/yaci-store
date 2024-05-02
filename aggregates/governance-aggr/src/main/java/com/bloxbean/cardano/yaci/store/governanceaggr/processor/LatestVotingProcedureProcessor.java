@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedu
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.LatestVotingProcedureService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureId;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

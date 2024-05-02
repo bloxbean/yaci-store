@@ -22,7 +22,6 @@ public class LatestVotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Id
     @Column(name = "tx_hash")
     private String txHash;
 
