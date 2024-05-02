@@ -66,6 +66,7 @@ include ':starters:remote-spring-boot-starter'
 include ':starters:account-spring-boot-starter'
 include ':starters:governance-spring-boot-starter'
 include ':starters:epoch-aggr-spring-boot-starter'
+include ':starters:governance-aggr-spring-boot-starter'
 include ':starters:admin-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
