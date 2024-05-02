@@ -27,7 +27,7 @@ public class LatestVotingProcedureEntity extends BlockAwareEntity {
     private String txHash;
 
     @Column(name = "idx")
-    private long index;
+    private Integer index;
 
     @Embedded
     @AttributeOverrides({

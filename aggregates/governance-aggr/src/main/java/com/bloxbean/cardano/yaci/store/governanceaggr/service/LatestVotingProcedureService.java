@@ -31,7 +31,7 @@ public class LatestVotingProcedureService {
     private final LatestVotingProcedureStorage latestVotingProcedureStorage;
     private final LatestVotingProcedureMapper latestVotingProcedureMapper;
 
-    void syncUpLatestVotingProcedure() {
+    public void syncUpLatestVotingProcedure() {
         long startTime = System.currentTimeMillis();
         log.info("Sync up Latest Voting Procedure Job: -------Start------");
 
