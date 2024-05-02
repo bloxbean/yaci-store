@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.StakingMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.DelegationEntity;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.StakeRegistrationEntity;
@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public class StakeStorageImpl implements StakingStorage {
+public class StakeCertificateStorageImpl implements StakingCertificateStorage {
     private final StakeRegistrationRepository registrationRepository;
     private final DelegationRepository delegationRepository;
     private final StakingMapper mapper;

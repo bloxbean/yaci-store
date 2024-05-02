@@ -6,6 +6,7 @@ dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
     implementation project(':starters:account-spring-boot-starter')
+    implementation project(':starters:adapot-spring-boot-starter')
     implementation project(':starters:admin-spring-boot-starter')
 
     implementation project(':extensions:utxo-rocksdb')

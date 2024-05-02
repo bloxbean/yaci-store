@@ -31,7 +31,7 @@ public class PoolRegistration extends BlockAwareDomain {
     private BigInteger pledge;
     private BigInteger cost;
     private double margin;
-    private String rewardAccount;
+    private String rewardAccount; //stake address
     private Set<String> poolOwners;
     private List<Relay> relays;
     //pool_metadata
