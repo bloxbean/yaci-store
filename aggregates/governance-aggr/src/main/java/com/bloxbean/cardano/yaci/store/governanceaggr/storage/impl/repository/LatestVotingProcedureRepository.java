@@ -22,4 +22,6 @@ public interface LatestVotingProcedureRepository extends JpaRepository<LatestVot
                             + "WHERE lvp.latestVotingProcedureId IN :votingProcedureIds")
     List<LatestVotingProcedureEntity> getAllByIdIn(
             @Param("votingProcedureIds") Collection<LatestVotingProcedureId> votingProcedureIds);
+
+    int deleteBySlotGreaterThan(long slot);
 }
