@@ -91,8 +91,8 @@ public class LatestVotingProcedureProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        latestVotingProcedureStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-
+        int count = latestVotingProcedureStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} latest voting procedure records", count);
         latestVotingProcedureService.syncUpLatestVotingProcedure();
     }
 }
