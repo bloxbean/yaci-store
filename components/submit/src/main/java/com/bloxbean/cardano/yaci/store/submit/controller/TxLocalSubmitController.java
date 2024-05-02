@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.TxResult;
 import com.bloxbean.cardano.yaci.store.submit.service.OgmiosService;
 import com.bloxbean.cardano.yaci.store.submit.service.TxSubmissionService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Tag(name = "Local Tx Submission Service")
 @RequestMapping("${apiPrefix}/tx")
 @RequiredArgsConstructor
 @ConditionalOnBean(TxSubmissionService.class)

@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.common.domain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.*;
 
 import java.math.BigInteger;
@@ -40,6 +42,7 @@ public class Utxo {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public static class Amount {
         private String unit;
+        @JsonSerialize(using = ToStringSerializer.class)
         private BigInteger quantity;
     }
 }

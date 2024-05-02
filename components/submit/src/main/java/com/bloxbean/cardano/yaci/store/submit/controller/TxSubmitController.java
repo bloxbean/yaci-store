@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.submit.controller;
 
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 @RestController
+@Tag(name = "Tx Submission Service")
 @RequestMapping("${apiPrefix}/tx")
 @RequiredArgsConstructor
 @ConditionalOnExpression("'${store.cardano.submit-api-url:}' != ''")
