@@ -1,7 +1,16 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.LatestVotingProcedureRepository;
+import org.jooq.DSLContext;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -22,4 +31,18 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableScheduling
 public class GovernanceAggrConfiguration {
 
+    @Bean
+    @ConditionalOnMissingBean
+    public LatestVotingProcedureStorage latestVotingProposalStorage(LatestVotingProcedureRepository latestVotingProcedureRepository,
+                                                                    LatestVotingProcedureMapper latestVotingProcedureMapper,
+                                                                    DSLContext dsl) {
+        return new LatestVotingProcedureStorageImpl(latestVotingProcedureRepository, latestVotingProcedureMapper, dsl);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LatestVotingProcedureStorageReader latestVotingProposalStorageReader(LatestVotingProcedureRepository latestVotingProcedureRepository,
+                                                                                LatestVotingProcedureMapper latestVotingProcedureMapper) {
+        return new LatestVotingProcedureStorageReaderImpl(latestVotingProcedureRepository, latestVotingProcedureMapper);
+    }
 }
