@@ -59,7 +59,7 @@ if (!name.equalsIgnoreCase("stores") && !name.equalsIgnoreCase("components")) {
 
 //JOOQ generator
 //Add store modules to this array
-def jooq_modules = ['utxo', 'transaction', 'script', 'account']
+def jooq_modules = ['utxo', 'transaction', 'script', 'account','governance-aggr']
 if (jooq_modules.contains(name)) {
     configurations {
         flywayMigration
