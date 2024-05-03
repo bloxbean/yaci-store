@@ -16,7 +16,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@Table(name = "voting_procedure")
+@Table(name = "latest_voting_procedure")
 @IdClass(LatestVotingProcedureId.class)
 public class LatestVotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "id", updatable = false, nullable = false)
