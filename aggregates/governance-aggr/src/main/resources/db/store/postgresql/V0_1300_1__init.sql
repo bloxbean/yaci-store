@@ -30,7 +30,7 @@ create table if not exists latest_voting_procedure
     block              bigint,
     block_time         bigint,
     update_datetime    timestamp,
-    repeat_vote        boolean,
+    repeat_vote        boolean default false,
     primary key (voter_hash, gov_action_tx_hash, gov_action_index)
     );
 
