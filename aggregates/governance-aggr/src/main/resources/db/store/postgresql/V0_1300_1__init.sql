@@ -34,3 +34,15 @@ create table if not exists latest_voting_procedure
     primary key (voter_hash, gov_action_tx_hash, gov_action_index)
     );
 
+create table if not exists committee_vote
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    yes_cnt            int,
+    no_cnt             int,
+    abstain_cnt        int,
+    status             varchar(64),
+    slot               bigint,
+    update_datetime    timestamp,
+    primary key (gov_action_tx_hash, gov_action_index, slot)
+);

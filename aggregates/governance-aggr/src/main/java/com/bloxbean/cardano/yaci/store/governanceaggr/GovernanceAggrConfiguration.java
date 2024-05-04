@@ -1,10 +1,14 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.CommitteeVoteStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.CommitteeVoteMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.CommitteeVoteRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.LatestVotingProcedureRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -44,5 +48,12 @@ public class GovernanceAggrConfiguration {
     public LatestVotingProcedureStorageReader latestVotingProposalStorageReader(LatestVotingProcedureRepository latestVotingProcedureRepository,
                                                                                 LatestVotingProcedureMapper latestVotingProcedureMapper) {
         return new LatestVotingProcedureStorageReaderImpl(latestVotingProcedureRepository, latestVotingProcedureMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeVoteStorageReader committeeVotesStorageReader(CommitteeVoteRepository committeeVoteRepository,
+                                                                  CommitteeVoteMapper committeeVoteMapper) {
+        return new CommitteeVoteStorageReaderImpl(committeeVoteRepository, committeeVoteMapper);
     }
 }
