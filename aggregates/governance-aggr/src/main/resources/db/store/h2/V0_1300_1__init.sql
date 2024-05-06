@@ -13,15 +13,17 @@ create table gov_action_proposal_info
     primary key (tx_hash, idx)
 );
 
+drop table if exists latest_voting_procedure;
 create table if not exists latest_voting_procedure
 (
     id                 uuid        not null,
-    tx_hash            varchar(64) not null,
+    tx_hash            varchar(64)  not null,
     idx                int         not null,
     voter_type         varchar(50),
     voter_hash         varchar(56),
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
+    vote_in_prev_aggr_slot  varchar(10),
     vote               varchar(10),
     anchor_url         varchar,
     anchor_hash        varchar(64),
@@ -34,3 +36,16 @@ create table if not exists latest_voting_procedure
     primary key (voter_hash, gov_action_tx_hash, gov_action_index)
     );
 
+drop table if exists committee_vote;
+create table if not exists committee_vote
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    yes_cnt            int,
+    no_cnt             int,
+    abstain_cnt        int,
+    status             varchar(64),
+    slot               bigint,
+    update_datetime    timestamp,
+    primary key (gov_action_tx_hash, gov_action_index, slot)
+    );

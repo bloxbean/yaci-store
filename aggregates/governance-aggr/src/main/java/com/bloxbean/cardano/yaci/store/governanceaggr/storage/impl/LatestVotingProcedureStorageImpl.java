@@ -52,6 +52,7 @@ public class LatestVotingProcedureStorageImpl implements LatestVotingProcedureSt
                         .set(LATEST_VOTING_PROCEDURE.TX_HASH, excluded(LATEST_VOTING_PROCEDURE.TX_HASH))
                         .set(LATEST_VOTING_PROCEDURE.VOTER_TYPE, excluded(LATEST_VOTING_PROCEDURE.VOTER_TYPE))
                         .set(LATEST_VOTING_PROCEDURE.SLOT, excluded(LATEST_VOTING_PROCEDURE.SLOT))
+                        .set(LATEST_VOTING_PROCEDURE.VOTE_IN_PREV_AGGR_SLOT, LATEST_VOTING_PROCEDURE.VOTE)
                         .set(LATEST_VOTING_PROCEDURE.VOTE, excluded(LATEST_VOTING_PROCEDURE.VOTE))
                         .set(LATEST_VOTING_PROCEDURE.ANCHOR_URL, excluded(LATEST_VOTING_PROCEDURE.ANCHOR_URL))
                         .set(LATEST_VOTING_PROCEDURE.ANCHOR_HASH, excluded(LATEST_VOTING_PROCEDURE.ANCHOR_HASH))

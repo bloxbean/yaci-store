@@ -15,12 +15,11 @@ import java.util.List;
 public interface CommitteeVoteRepository extends JpaRepository<CommitteeVoteEntity, CommitteeVoteId> {
 
     @Query("SELECT cv FROM CommitteeVoteEntity cv JOIN " +
-            "(SELECT c.govActionTxHash, c.govActionIndex, MAX(c.slot) as maxSlot" +
-            " FROM CommitteeVoteEntity c GROUP BY c.govActionTxHash, c.govActionIndex) maxCV" +
+            "(SELECT c.govActionTxHash AS govActionTxHash, c.govActionIndex AS govActionIndex, MAX(c.slot) AS maxSlot" +
+            " FROM CommitteeVoteEntity c GROUP BY c.govActionTxHash, c.govActionIndex) AS maxCV" +
             " ON cv.govActionTxHash = maxCV.govActionTxHash" +
             " AND cv.govActionIndex = maxCV.govActionIndex" +
             " AND cv.slot = maxCV.maxSlot" +
             " WHERE (cv.govActionTxHash, cv.govActionIndex) IN :govActionIds")
     List<CommitteeVoteEntity> findByGovActionTxHashAndGovActionIndexPairsWithMaxSlot(@Param("govActionIds") List<GovActionId> govActionIds);
-
 }
