@@ -8,5 +8,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CommitteeVoteRepository extends JpaRepository<CommitteeVoteEntity, CommitteeVoteId> {
-
+    int deleteBySlotGreaterThan(long slot);
 }
