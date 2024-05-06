@@ -33,7 +33,7 @@ public class LatestVotingProcedureService {
 
     public void syncUpLatestVotingProcedure() {
         long startTime = System.currentTimeMillis();
-        log.info("Sync up Latest Voting Procedure Job: -------Start------");
+        log.info("Sync up Latest Voting Procedure: -------Start------");
 
         Long latestSlot = latestVotingProcedureStorageReader.findLatestSlotOfVotingProcedure().orElse(0L);
         Pageable pageable =
@@ -53,7 +53,7 @@ public class LatestVotingProcedureService {
         }
 
         log.info(
-                "Sync up Latest Voting Procedure Job: -------End------, time: {} ms",
+                "Sync up Latest Voting Procedure: -------End------, time: {} ms",
                 System.currentTimeMillis() - startTime);
     }
 
@@ -83,6 +83,7 @@ public class LatestVotingProcedureService {
                         latestVotingProcedure = latestVotingProcedureMapper.fromVotingProcedure(votingProcedure);
                         latestVotingProcedure.setRepeatVote(false);
                     } else if (!latestVotingProcedure.getId().equals(votingProcedure.getId())) {
+                        latestVotingProcedure.setVoteInPrevAggrSlot(latestVotingProcedure.getVote());
                         latestVotingProcedureMapper.updateByVotingProcedure(latestVotingProcedure, votingProcedure);
                         latestVotingProcedure.setRepeatVote(true);
                     }
