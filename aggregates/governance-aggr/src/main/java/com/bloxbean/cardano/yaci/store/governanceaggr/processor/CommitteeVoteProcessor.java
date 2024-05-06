@@ -2,80 +2,69 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
-import com.bloxbean.cardano.yaci.core.model.governance.Voter;
-import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
-import com.bloxbean.cardano.yaci.core.model.governance.VotingProcedure;
-import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.CommitteeVote;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionId;
+import com.bloxbean.cardano.yaci.store.governanceaggr.event.VotingEvent;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.CommitteeVoteId;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.bloxbean.cardano.yaci.core.model.governance.VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CommitteeVoteProcessor {
-    private final Map<CommitteeVoteId, VoteCount> voteCountMap = new ConcurrentHashMap<>();
     private final CommitteeVoteStorageReader committeeVoteStorageReader;
+    private final CommitteeVoteStorage committeeVoteStorage;
+    private final Map<Long, VotingEvent> votingEventsMap = new ConcurrentHashMap<>();
 
     @EventListener
     @Transactional
-    public void handleCommitteeVotingProcedure(GovernanceEvent governanceEvent) {
-
-        for (TxGovernance txGovernance : governanceEvent.getTxGovernanceList()) {
-            if (txGovernance.getVotingProcedures() == null) {
-                continue;
-            }
-
-            Map<Voter, Map<com.bloxbean.cardano.yaci.core.model.governance.GovActionId, VotingProcedure>>
-                    voting = txGovernance.getVotingProcedures().getVoting();
-
-            for (var entry : voting.entrySet()) {
-                Voter voter = entry.getKey();
-                var votingInfoMap = entry.getValue();
-                if (voter.getType().equals(VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH)) {
-                    for (var votingInfoEntry : votingInfoMap.entrySet()) {
-                        var govActionId = votingInfoEntry.getKey();
-                        var votingInfo = votingInfoEntry.getValue();
-                        var voteCount = voteCountMap.putIfAbsent(CommitteeVoteId.builder()
-                                .govActionIndex(govActionId.getGov_action_index())
-                                .govActionTxHash(govActionId.getTransactionId())
-                                .slot(governanceEvent.getMetadata().getSlot())
-                                .build(), new VoteCount());
-
-                        if (votingInfo.getVote().equals(Vote.YES)) {
-                            voteCount.plusYes();
-                        } else if (votingInfo.getVote().equals(Vote.NO)) {
-                            voteCount.plusNo();
-                        } else {
-                            voteCount.plusAbstain();
-                        }
-                    }
-                }
-            }
-        }
+    public void handleCommitteeVotingProcedure(VotingEvent votingEvent) {
+        votingEventsMap.put(votingEvent.getMetadata().getSlot(), votingEvent);
     }
 
     @EventListener
     @Transactional
     public void handleCommitEvent(CommitEvent commitEvent) {
+        if (votingEventsMap.isEmpty()) {
+            return;
+        }
+
         try {
+            Map<CommitteeVoteId, VoteCount> voteCountMap = new LinkedHashMap<>();
+            List<VotingEvent> sortedVotingEvents = votingEventsMap.entrySet().stream()
+                    .sorted(Comparator.comparingLong(Map.Entry::getKey))
+                    .map(Map.Entry::getValue)
+                    .collect(Collectors.toList());
+
+            for (VotingEvent votingEvent : sortedVotingEvents) {
+                votingEvent.getTxVotes().stream()
+                        .filter(txVote -> txVote.getVoterType().equals(CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH))
+                        .forEach(txVote -> {
+                            CommitteeVoteId committeeVoteId = CommitteeVoteId.builder()
+                                    .govActionIndex(txVote.getGovActionIndex())
+                                    .govActionTxHash(txVote.getGovActionTxHash())
+                                    .slot(votingEvent.getMetadata().getSlot())
+                                    .build();
+
+                            VoteCount voteCount = voteCountMap.computeIfAbsent(committeeVoteId, k -> new VoteCount());
+
+                            updateVoteCount(voteCount, txVote.getVote(), true);
+                            updateVoteCount(voteCount, txVote.getVoteInPrevAggrSlot(), false);
+                        });
+            }
             List<CommitteeVote> committeeVoteToSave = new ArrayList<>();
 
             Map<GovActionId, CommitteeVote> committeeVotesMap =
@@ -114,11 +103,31 @@ public class CommitteeVoteProcessor {
                 }
                 committeeVoteToSave.add(committeeVotes);
             });
-
+            committeeVoteStorage.saveAll(committeeVoteToSave);
         } finally {
-            voteCountMap.clear();
+            votingEventsMap.clear();
+        }
+    }
+
+    private void updateVoteCount(VoteCount voteCount, Vote vote, boolean isAdd) {
+        if (vote == null) {
+            return;
         }
 
+        switch (vote) {
+            case YES:
+                if (isAdd) voteCount.addYes();
+                else voteCount.subtractYes();
+                break;
+            case NO:
+                if (isAdd) voteCount.addNo();
+                else voteCount.subtractNo();
+                break;
+            default:
+                if (isAdd) voteCount.addAbstain();
+                else voteCount.subtractAbstain();
+                break;
+        }
     }
 
     @Getter
@@ -134,16 +143,38 @@ public class CommitteeVoteProcessor {
             this.abstain = 0;
         }
 
-        void plusYes() {
+        void addYes() {
             this.yes++;
         }
 
-        void plusNo() {
+        void addNo() {
             this.no++;
         }
 
-        void plusAbstain() {
+        void addAbstain() {
             this.abstain++;
         }
+
+        void subtractYes() {
+            this.yes--;
+        }
+
+        void subtractNo() {
+            this.no--;
+        }
+
+        void subtractAbstain() {
+            this.abstain--;
+        }
+    }
+
+    @EqualsAndHashCode
+    @Builder
+    @Getter
+    @Setter
+    private static class CommitteeVoteId {
+        private String govActionTxHash;
+        private int govActionIndex;
+        private long slot;
     }
 }
