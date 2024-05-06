@@ -1,12 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.domain;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
+import lombok.*;
 
 @EqualsAndHashCode
 @Builder
 @AllArgsConstructor
+@Setter
+@Getter
 public class GovActionId {
     private String govActionTxHash;
     private Integer govActionIndex;

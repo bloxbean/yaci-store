@@ -1,10 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
 import jakarta.persistence.Column;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.io.Serializable;
 
@@ -12,6 +9,8 @@ import java.io.Serializable;
 @Builder
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class CommitteeVoteId implements Serializable {
     @Column(name = "gov_action_tx_hash")
     private String govActionTxHash;

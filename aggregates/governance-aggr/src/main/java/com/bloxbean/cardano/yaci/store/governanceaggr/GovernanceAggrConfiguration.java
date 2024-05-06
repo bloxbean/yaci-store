@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.CommitteeVoteStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.CommitteeVoteStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageReaderImpl;
@@ -29,7 +31,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         matchIfMissing = true
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
-@EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
+@EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EnableTransactionManagement
 @EnableScheduling
@@ -53,7 +55,15 @@ public class GovernanceAggrConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public CommitteeVoteStorageReader committeeVotesStorageReader(CommitteeVoteRepository committeeVoteRepository,
-                                                                  CommitteeVoteMapper committeeVoteMapper) {
-        return new CommitteeVoteStorageReaderImpl(committeeVoteRepository, committeeVoteMapper);
+                                                                  CommitteeVoteMapper committeeVoteMapper,
+                                                                  DSLContext dsl) {
+        return new CommitteeVoteStorageReaderImpl(committeeVoteRepository, committeeVoteMapper, dsl);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeVoteStorage committeeVotesStorage(CommitteeVoteRepository committeeVoteRepository,
+                                                      CommitteeVoteMapper committeeVoteMapper) {
+        return new CommitteeVoteStorageImpl(committeeVoteRepository, committeeVoteMapper);
     }
 }
