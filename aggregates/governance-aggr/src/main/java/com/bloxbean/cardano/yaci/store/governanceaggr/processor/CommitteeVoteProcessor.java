@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.CommitteeVote;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionId;
@@ -107,6 +108,13 @@ public class CommitteeVoteProcessor {
         } finally {
             votingEventsMap.clear();
         }
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        int count = committeeVoteStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} committee_vote records", count);
     }
 
     private void updateVoteCount(VoteCount voteCount, Vote vote, boolean isAdd) {

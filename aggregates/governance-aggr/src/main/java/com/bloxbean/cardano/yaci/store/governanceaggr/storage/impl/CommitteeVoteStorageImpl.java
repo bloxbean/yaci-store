@@ -19,4 +19,9 @@ public class CommitteeVoteStorageImpl implements CommitteeVoteStorage {
         committeeVoteRepository.saveAll(committeeVotes.stream().map(committeeVoteMapper::toCommitteeVotesEntity)
                 .collect(Collectors.toList()));
     }
+
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return committeeVoteRepository.deleteBySlotGreaterThan(slot);
+    }
 }
