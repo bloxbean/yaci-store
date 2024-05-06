@@ -36,6 +36,8 @@ public class LatestVotingProcedure extends BlockAwareDomain {
 
     private Integer govActionIndex;
 
+    private Vote voteInPrevAggrSlot; // TODO: rename
+
     private Vote vote;
 
     private String anchorUrl;
