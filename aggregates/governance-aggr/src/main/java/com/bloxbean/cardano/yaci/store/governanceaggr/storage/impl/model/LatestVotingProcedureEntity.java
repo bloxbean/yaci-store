@@ -61,6 +61,10 @@ public class LatestVotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "gov_action_index")
     private Integer govActionIndex;
 
+    @Column(name = "vote_in_prev_aggr_slot")
+    @Enumerated(EnumType.STRING)
+    private Vote voteInPrevAggrSlot;
+
     @Column(name = "vote")
     @Enumerated(EnumType.STRING)
     private Vote vote;
