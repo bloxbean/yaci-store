@@ -7,16 +7,21 @@ import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
+import com.bloxbean.cardano.yaci.store.governanceaggr.event.VotingEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.LatestVotingProcedureService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,7 +30,10 @@ import java.util.UUID;
 @Slf4j
 public class LatestVotingProcedureProcessor {
     private final LatestVotingProcedureStorage latestVotingProcedureStorage;
+    private final LatestVotingProcedureStorageReader latestVotingProcedureStorageReader;
     private final LatestVotingProcedureService latestVotingProcedureService;
+    private final LatestVotingProcedureMapper latestVotingProcedureMapper;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -85,6 +93,23 @@ public class LatestVotingProcedureProcessor {
         if (!latestVotingProcedureMap.isEmpty()) {
             latestVotingProcedureStorage.saveOrUpdate(latestVotingProcedureMap.values());
         }
+
+        List<LatestVotingProcedure> savedVotingProcedure = latestVotingProcedureStorageReader
+                .getAllByIdIn(latestVotingProcedureMap.values().stream()
+                        .map(latestVotingProcedure -> LatestVotingProcedureId.builder()
+                                .voterHash(latestVotingProcedure.getVoterHash())
+                                .govActionTxHash(latestVotingProcedure.getGovActionTxHash())
+                                .govActionIndex(latestVotingProcedure.getGovActionIndex())
+                                .build()).toList());
+
+        if (savedVotingProcedure.isEmpty()) {
+            return;
+        }
+
+        publisher.publishEvent(VotingEvent.builder()
+                .metadata(eventMetadata)
+                .txVotes(savedVotingProcedure.stream().map(latestVotingProcedureMapper::toTxVote).toList())
+                .build());
     }
 
     @EventListener
