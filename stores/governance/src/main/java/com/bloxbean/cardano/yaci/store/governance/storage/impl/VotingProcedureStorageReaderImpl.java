@@ -64,8 +64,8 @@ public class VotingProcedureStorageReaderImpl implements VotingProcedureStorageR
     }
 
     @Override
-    public Slice<VotingProcedure> findBySlotIsGreaterThanEqual(Long slot, Pageable pageable) {
-        return votingProcedureRepository.findBySlotIsGreaterThanEqual(slot, pageable).map(votingProcedureMapper::toVotingProcedure);
+    public Slice<VotingProcedure> findBySlotGreaterThan(Long slot, Pageable pageable) {
+        return votingProcedureRepository.findBySlotGreaterThan(slot, pageable).map(votingProcedureMapper::toVotingProcedure);
     }
 
 }
