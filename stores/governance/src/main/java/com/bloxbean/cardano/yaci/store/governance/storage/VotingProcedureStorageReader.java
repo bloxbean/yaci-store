@@ -20,5 +20,5 @@ public interface VotingProcedureStorageReader {
     List<VotingProcedure> findByGovActionTxHash(String govActionTxHash, int page, int count, Order order);
 
     List<VotingProcedure> findByGovActionTxHashAndGovActionIndex(String govActionTxHash, int index, int page, int count, Order order);
-    Slice<VotingProcedure> findBySlotIsGreaterThanEqual(Long slot, Pageable pageable);
+    Slice<VotingProcedure> findBySlotGreaterThan(Long slot, Pageable pageable);
 }

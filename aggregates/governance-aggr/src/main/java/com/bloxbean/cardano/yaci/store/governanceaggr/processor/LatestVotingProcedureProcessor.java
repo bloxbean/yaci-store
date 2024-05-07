@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.Voter;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
-import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.event.VotingEvent;
@@ -90,9 +89,11 @@ public class LatestVotingProcedureProcessor {
             }
         }
 
-        if (!latestVotingProcedureMap.isEmpty()) {
-            latestVotingProcedureStorage.saveOrUpdate(latestVotingProcedureMap.values());
+        if (latestVotingProcedureMap.isEmpty()) {
+            return;
         }
+
+        latestVotingProcedureStorage.saveOrUpdate(latestVotingProcedureMap.values());
 
         List<LatestVotingProcedure> savedVotingProcedure = latestVotingProcedureStorageReader
                 .getAllByIdIn(latestVotingProcedureMap.values().stream()
@@ -102,21 +103,9 @@ public class LatestVotingProcedureProcessor {
                                 .govActionIndex(latestVotingProcedure.getGovActionIndex())
                                 .build()).toList());
 
-        if (savedVotingProcedure.isEmpty()) {
-            return;
-        }
-
         publisher.publishEvent(VotingEvent.builder()
                 .metadata(eventMetadata)
                 .txVotes(savedVotingProcedure.stream().map(latestVotingProcedureMapper::toTxVote).toList())
                 .build());
-    }
-
-    @EventListener
-    @Transactional
-    public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        int count = latestVotingProcedureStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-        log.info("Rollback -- {} latest voting procedure records", count);
-        latestVotingProcedureService.syncUpLatestVotingProcedure();
     }
 }

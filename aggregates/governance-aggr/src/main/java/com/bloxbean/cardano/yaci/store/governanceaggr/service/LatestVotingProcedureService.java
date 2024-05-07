@@ -41,13 +41,13 @@ public class LatestVotingProcedureService {
                         0, DEFAULT_PAGE_SIZE, Sort.by(Sort.Direction.ASC, "slot"));
 
         Slice<VotingProcedure> votingProcedureSlice =
-                votingProcedureStorageReader.findBySlotIsGreaterThanEqual(latestSlot, pageable);
+                votingProcedureStorageReader.findBySlotGreaterThan(latestSlot, pageable);
         saveLatestVotingProcedure(votingProcedureSlice.getContent());
 
         while (votingProcedureSlice.hasNext()) {
             pageable = votingProcedureSlice.nextPageable();
             votingProcedureSlice =
-                    votingProcedureStorageReader.findBySlotIsGreaterThanEqual(
+                    votingProcedureStorageReader.findBySlotGreaterThan(
                             latestSlot, pageable);
             saveLatestVotingProcedure(votingProcedureSlice.getContent());
         }
