@@ -26,4 +26,12 @@ public class LatestVotingProcedureStorageReaderImpl implements LatestVotingProce
                 .map(latestVotingProcedureMapper::toLatestVotingProcedure)
                 .toList();
     }
+
+    @Override
+    public List<LatestVotingProcedure> findBySlotGreaterThan(Long slot) {
+        return latestVotingProcedureRepository.findBySlotGreaterThan(slot)
+                .stream()
+                .map(latestVotingProcedureMapper::toLatestVotingProcedure)
+                .toList();
+    }
 }
