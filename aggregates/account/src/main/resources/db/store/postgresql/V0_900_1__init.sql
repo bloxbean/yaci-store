@@ -88,7 +88,51 @@ create table address_tx_amount
     block_time         bigint,
     epoch              integer,
     primary key (address, unit, tx_hash)
-);
+) PARTITION BY HASH (address);
+
+DO $$
+DECLARE
+partition_num INTEGER := 0;
+    max_partitions INTEGER := 100; -- number of partitions
+    sql_command TEXT;
+BEGIN
+    WHILE partition_num < max_partitions LOOP
+        sql_command := format('CREATE TABLE address_tx_amount_p%s PARTITION OF address_tx_amount FOR VALUES WITH (MODULUS %s, REMAINDER %s);', partition_num::TEXT, max_partitions::TEXT, partition_num::TEXT);
+EXECUTE sql_command;
+partition_num := partition_num + 1;
+END LOOP;
+END$$;
+
 
 CREATE INDEX idx_address_tx_amount_slot
     ON address_tx_amount(slot);
+
+
+drop table if exists address_balance_snapshot;
+create table address_balance_snapshot
+(
+    address         character varying(500) not null,
+    unit            character varying(255) not null,
+    slot            bigint                 not null,
+    quantity        numeric(38, 0),
+    addr_full       text,
+    block           bigint,
+    block_time      bigint,
+    epoch           integer,
+    update_datetime timestamp without time zone,
+    primary key (address, unit, slot)
+) PARTITION BY HASH (address);
+
+DO $$
+DECLARE
+partition_num INTEGER := 0;
+    max_partitions INTEGER := 100; -- number of partitions
+    sql_command TEXT;
+BEGIN
+    WHILE partition_num < max_partitions LOOP
+        sql_command := format('CREATE TABLE address_balance_snapshot_p%s PARTITION OF address_balance_snapshot FOR VALUES WITH (MODULUS %s, REMAINDER %s);', partition_num::TEXT, max_partitions::TEXT, partition_num::TEXT);
+EXECUTE sql_command;
+partition_num := partition_num + 1;
+END LOOP;
+END$$;
+

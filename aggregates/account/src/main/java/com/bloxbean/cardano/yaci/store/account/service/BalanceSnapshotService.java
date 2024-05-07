@@ -34,8 +34,7 @@ public class BalanceSnapshotService {
     private DSLContext dsl;
 
     private final JobLauncher jobLauncher;
-    private final Job accountBalanceJob;
-    private final Job utxoAccountBalanceJob;
+    private final Job balanceByHashedBaseJob;
 
     public BalanceSnapshotService(CursorService cursorService,
                                   StartService startService,
@@ -43,7 +42,7 @@ public class BalanceSnapshotService {
                                   AccountStoreProperties accountStoreProperties,
                                   DSLContext dsl,
                                   JobLauncher jobLauncher,
-                                  @Autowired(required = false) Job accountBalanceJob,
+                                  @Autowired(required = false) Job balanceByHashedBaseJob,
                                   @Autowired(required = false) Job utxoAccountBalanceJob) {
         this.cursorService = cursorService;
         this.startService = startService;
@@ -52,8 +51,7 @@ public class BalanceSnapshotService {
         this.dsl = dsl;
 
         this.jobLauncher = jobLauncher;
-        this.accountBalanceJob = accountBalanceJob;
-        this.utxoAccountBalanceJob = utxoAccountBalanceJob;
+        this.balanceByHashedBaseJob = balanceByHashedBaseJob;
     }
 
     /**
@@ -62,7 +60,7 @@ public class BalanceSnapshotService {
      */
     @SneakyThrows
     public synchronized boolean scheduleBalanceSnapshot() {
-        if (accountBalanceJob == null && utxoAccountBalanceJob == null) {
+        if (balanceByHashedBaseJob == null ) {
             log.info("Balance snapshot job is not enabled. Skipping balance snapshot.");
             return false;
         }
@@ -90,7 +88,7 @@ public class BalanceSnapshotService {
     @SneakyThrows
     public synchronized boolean scheduleBalanceSnapshot(long block, long slot, String blockHash) {
         log.info("Taking balance snapshot ...");
-        if (accountBalanceJob == null && utxoAccountBalanceJob == null) {
+        if (balanceByHashedBaseJob == null ) {
             log.info("Balance snapshot job is not enabled. Skipping balance snapshot.");
             return false;
         }
@@ -161,19 +159,9 @@ public class BalanceSnapshotService {
                 .addString(UPDATE_ACCOUNT_CONFIG, updateConfig? "true": "false")
                 .toJobParameters();
 
-        if (accountStoreProperties.getBalanceCalcBatchMode().equals(UTXO_BATCH_MODE)) {
-            log.info("Running UTXO balance snapshot job >>");
-
-            if (alreadyHashBalanceRecords()) {
-                log.warn("Balance records already exist. Balance snapshot job will not run.");
-                return;
-            }
-
-            JobExecution jobExecution = jobLauncher.run(utxoAccountBalanceJob, jobParameters);
-            log.info("Job Execution Status: " + jobExecution.getStatus());
-        } else if (accountStoreProperties.getBalanceCalcBatchMode().equals(TX_AMOUNT_BATCH_MODE)) {
+      if (accountStoreProperties.getBalanceCalcBatchMode().equals(TX_AMOUNT_BATCH_MODE)) {
             log.info("Running TX_AMOUNT balance snapshot job >>");
-            JobExecution jobExecution = jobLauncher.run(accountBalanceJob, jobParameters);
+            JobExecution jobExecution = jobLauncher.run(balanceByHashedBaseJob, jobParameters);
             log.info("Job Execution Status: " + jobExecution.getStatus());
         } else {
             log.error("Invalid balance-calc-batch-mode : {}. Skipping balance snapshot", accountStoreProperties.getBalanceCalcBatchMode());

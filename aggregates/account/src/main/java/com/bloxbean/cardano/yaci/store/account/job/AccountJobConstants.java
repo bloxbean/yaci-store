@@ -11,4 +11,7 @@ public class AccountJobConstants {
     public final static String UPDATE_ACCOUNT_CONFIG = "updateAccountConfig";
 
     public final static String STAKE_ADDRESS_TEMP_TABLE = "_stake_address_";
+    public final static String PARTITION = "partition";
+    public final static String START_PARTITION = "startPartition";
+    public final static String END_PARTITION = "endPartition";
 }

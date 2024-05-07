@@ -73,15 +73,27 @@ CREATE INDEX idx_tx_input_block
 drop table if exists address;
 create table address
 (
-    id                 bigserial,
     address            varchar(500) unique not null,
     addr_full          text,
     payment_credential varchar(56),
     stake_address      varchar(255),
     stake_credential   varchar(56),
     update_datetime    timestamp,
-    primary key (id)
-);
+    primary key (address)
+) PARTITION BY HASH (address);
+
+DO $$
+DECLARE
+partition_num INTEGER := 0;
+    max_partitions INTEGER := 100; -- number of partitions
+    sql_command TEXT;
+BEGIN
+    WHILE partition_num < max_partitions LOOP
+        sql_command := format('CREATE TABLE address_p%s PARTITION OF address FOR VALUES WITH (MODULUS %s, REMAINDER %s);', partition_num::TEXT, max_partitions::TEXT, partition_num::TEXT);
+EXECUTE sql_command;
+partition_num := partition_num + 1;
+END LOOP;
+END$$;
 
 CREATE INDEX idx_address_stake_address
     ON address (stake_address);
