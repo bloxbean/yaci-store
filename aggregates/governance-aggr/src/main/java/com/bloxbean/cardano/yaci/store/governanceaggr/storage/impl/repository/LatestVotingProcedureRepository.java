@@ -24,4 +24,6 @@ public interface LatestVotingProcedureRepository extends JpaRepository<LatestVot
             @Param("votingProcedureIds") Collection<LatestVotingProcedureId> votingProcedureIds);
 
     int deleteBySlotGreaterThan(long slot);
+
+    List<LatestVotingProcedureEntity> findBySlotGreaterThan(Long slot);
 }
