@@ -46,7 +46,7 @@ public class CommitteeVoteService {
         List<CommitteeVote> committeeVotesToSave = new ArrayList<>();
 
         Map<GovActionId, CommitteeVote> committeeVotesMap =
-                committeeVoteStorageReader.findByGovActionTxHashAndGovActionIndexPairsWithMaxSlot(
+                committeeVoteStorageReader.findByGovActionIdsWithMaxSlot(
                                 voteCountMap.keySet().stream().map(committeeVoteId ->
                                         GovActionId.builder()
                                                 .govActionTxHash(committeeVoteId.getGovActionTxHash())
@@ -63,9 +63,10 @@ public class CommitteeVoteService {
                     .govActionTxHash(committeeVoteId.getGovActionTxHash())
                     .govActionIndex(committeeVoteId.getGovActionIndex())
                     .build();
-            var committeeVote = committeeVotesMap.get(govActionId);
-            if (committeeVote == null) {
-                committeeVote = CommitteeVote.builder()
+            var committeeVoteCheckpoint = committeeVotesMap.get(govActionId);
+
+            if (committeeVoteCheckpoint == null) {
+                committeeVoteCheckpoint = CommitteeVote.builder()
                         .govActionTxHash(committeeVoteId.getGovActionTxHash())
                         .govActionIndex(committeeVoteId.getGovActionIndex())
                         .slot(committeeVoteId.getSlot())
@@ -73,13 +74,23 @@ public class CommitteeVoteService {
                         .noCnt(voteCount.getNo())
                         .abstainCnt(voteCount.getAbstain())
                         .build();
+
+                committeeVotesMap.put(govActionId, committeeVoteCheckpoint);
             } else {
-                committeeVote.setSlot(committeeVoteId.getSlot());
-                committeeVote.setYesCnt(committeeVote.getYesCnt() + voteCount.getYes());
-                committeeVote.setNoCnt(committeeVote.getNoCnt() + voteCount.getNo());
-                committeeVote.setAbstainCnt(committeeVote.getAbstainCnt() + voteCount.getAbstain());
+                committeeVoteCheckpoint.setSlot(committeeVoteId.getSlot());
+                committeeVoteCheckpoint.setYesCnt(committeeVoteCheckpoint.getYesCnt() + voteCount.getYes());
+                committeeVoteCheckpoint.setNoCnt(committeeVoteCheckpoint.getNoCnt() + voteCount.getNo());
+                committeeVoteCheckpoint.setAbstainCnt(committeeVoteCheckpoint.getAbstainCnt() + voteCount.getAbstain());
             }
-            committeeVotesToSave.add(committeeVote);
+
+            committeeVotesToSave.add(CommitteeVote.builder()
+                    .govActionTxHash(committeeVoteCheckpoint.getGovActionTxHash())
+                    .govActionIndex(committeeVoteCheckpoint.getGovActionIndex())
+                    .slot(committeeVoteCheckpoint.getSlot())
+                    .yesCnt(committeeVoteCheckpoint.getYesCnt())
+                    .noCnt(committeeVoteCheckpoint.getNoCnt())
+                    .abstainCnt(committeeVoteCheckpoint.getAbstainCnt())
+                    .build());
         });
 
         if (!committeeVotesToSave.isEmpty()) {
