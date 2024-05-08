@@ -1,0 +1,13 @@
+{
+  "overview": "Overview",
+  "design": "Design",
+  "build_run": "Build & Run",
+  "usage": {
+    "title": "Usage"
+  },
+  "stores": "Stores",
+  "about": {
+    "title": "About",
+    "type": "page"
+  }
+}

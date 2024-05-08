@@ -1,14 +1,14 @@
 # Use Yaci Store as a Library
 
 The power of Yaci Store is that it can be used as a library in your own application. This allows you to build your own application on top of Yaci Store.
-You have full control over what data you want to index. This is achieved by using modular architecture. Not only you can include required stores in 
-your application, you can also override the default behavior of the stores. For example, you can override the default behavior of the Utxo store to store 
+You have full control over what data you want to index. This is achieved by using modular architecture. Not only you can include required stores in
+your application, you can also override the default behavior of the stores. For example, you can override the default behavior of the Utxo store to store
 utxos in a different database, or store only utxos specific to an address or store metadata with specific labels. This is achieved by using the
 spring framework's dependency injection feature.
 
 In this guide, we will show you how to use Yaci Store as a library in your own application.
 
-**Sample applications:** 
+**Sample applications:**
 - Sample [Metadata Indexer](https://github.com/bloxbean/metadata-indexer) project using Yaci Store as a library.
 - A scoped indexer for [Ada Handler](https://github.com/cardano-foundation/adahandle-resolver)
 
@@ -19,7 +19,7 @@ In this guide, we will show you how to use Yaci Store as a library in your own a
 
 ## Create a Spring Boot application
 
-You can use the [Spring Initializr](https://start.spring.io/) to create a Spring Boot application. 
+You can use the [Spring Initializr](https://start.spring.io/) to create a Spring Boot application.
 
 ## Add Dependencies
 
@@ -58,7 +58,7 @@ For pom.xml
 </dependency>
 ```
 
-**Note:** You can add multiple store starters to your project. Full list of supported starters can be found [here](./overview.md?#spring-boot-starter)
+**Note:** You can add multiple store starters to your project. Full list of supported starters can be found [here](overview.md?#spring-boot-starter)
 
 ## Configuration
 
@@ -76,7 +76,7 @@ apiPrefix: /api/v1
 **Note:** If you are using Yaci Store 0.0.11 or earlier, use `classpath:db/migration/{vendor}` as the location.
 
 You can add your application specific flyway configuration as well. **For example,** you may want to add another location for your application.
-Flyway ``location`` property allows you to specify multiple locations. 
+Flyway ``location`` property allows you to specify multiple locations.
 
 ### Yaci Store Configuration (Mandatory)
 
@@ -137,21 +137,21 @@ start syncing the blockchain data and publish them as events and process them.
 
 ### **Custom Storage**
 
-Yaci Store provides a default storage implementation which stores all data in yaci store defined table. 
+Yaci Store provides a default storage implementation which stores all data in yaci store defined table.
 But you can override this default implementation and provide your own storage implementation. Check out sample projects mentioned above for more details.
 
-**For example:** If you only want to store a specific metadata label, you can extend the default storage implementation and filter out the labels you want to store. 
+**For example:** If you only want to store a specific metadata label, you can extend the default storage implementation and filter out the labels you want to store.
 
 ### **Custom Processor**
 
-Ideally you don't need to have your own custom processor, but if you want to do some custom processing, you can listen to both core or derived events and do your custom processing. 
+Ideally you don't need to have your own custom processor, but if you want to do some custom processing, you can listen to both core or derived events and do your custom processing.
 
 ### **Rollback Handling**
 
 If you are using default storage implementation or a custom storage by extending default storage, Yaci Store will automatically handle rollbacks.
 
 But if you have your own custom processor or different storage implementation using separate database/table, you need to handle rollbacks in your custom processor by listening to RollbackEvent.
-For more details on how to handle rollbacks, check [Rollback Handling](./design.md#handling-rollbacks) and also make sure all your operations are idempotent.
+For more details on how to handle rollbacks, check [Rollback Handling](design.md#handling-rollbacks) and also make sure all your operations are idempotent.
 
 
 
