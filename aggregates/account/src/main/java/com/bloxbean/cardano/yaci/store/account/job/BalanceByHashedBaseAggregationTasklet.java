@@ -42,7 +42,7 @@ public class BalanceByHashedBaseAggregationTasklet implements Tasklet {
 
         log.info("Processing partition {}, endPartition {}, stepId: {}", startPartition, endPartition, chunkContext.getStepContext().getId());
 
-        calculateAddressBalance(snapshotSlot, "address_p" + startPartition);
+        calculateAddressBalance(snapshotSlot, "address_tx_amount_p" + startPartition);
 
         log.info("Processed partition {}, endPartition {}, stepId: {}, take [{} ms]", startPartition, endPartition, chunkContext.getStepContext().getId(), System.currentTimeMillis() - startTime);
 
@@ -57,37 +57,34 @@ public class BalanceByHashedBaseAggregationTasklet implements Tasklet {
     private void calculateAddressBalance(Long snapshotSlot, String partitionName) {
         String sql = String.format("""
                 insert into address_balance_snapshot (address,
-                                                          unit,
-                                                          quantity,
-                                                          slot,
-                                                          block,
-                                                          block_time,
-                                                          epoch,
-                                                          update_datetime)
-                    select address_tx_amount.address         as address,
-                           address_tx_amount.unit            as unit,
-                           cast(coalesce(
-                                   sum(address_tx_amount.quantity),
-                                   0
-                                ) as decimal(38))            as quantity,
-                           max(address_tx_amount.slot)       as slot,
-                           max(address_tx_amount.block)      as block,
-                           max(address_tx_amount.block_time) as block_time,
-                           max(address_tx_amount.epoch)      as epoch,
-                           current_timestamp
-                    from address_tx_amount
-                    where (
-                              address_tx_amount.slot <= ?
-                                  and address_tx_amount.address in (select address from %s)
-                              )
-                    group by address_tx_amount.address, address_tx_amount.unit
-                    on conflict (address, unit, slot)
-                        do update
-                        set quantity   = excluded.quantity,
-                            slot       = excluded.slot,
-                            block      = excluded.block,
-                            block_time = excluded.block_time,
-                            epoch      = excluded.epoch;
+                                                      unit,
+                                                      quantity,
+                                                      slot,
+                                                      block,
+                                                      block_time,
+                                                      epoch,
+                                                      update_datetime)
+                select ata.address            as address,
+                       ata.unit               as unit,
+                       cast(coalesce(
+                               sum(ata.quantity),
+                               0
+                            ) as decimal(38)) as quantity,
+                       max(ata.slot)          as slot,
+                       max(ata.block)         as block,
+                       max(ata.block_time)    as block_time,
+                       max(ata.epoch)         as epoch,
+                       current_timestamp
+                from %s ata
+                where (ata.slot <= ?)
+                group by ata.address, ata.unit
+                on conflict (address, unit, slot)
+                    do update
+                    set quantity   = excluded.quantity,
+                        slot       = excluded.slot,
+                        block      = excluded.block,
+                        block_time = excluded.block_time,
+                        epoch      = excluded.epoch;
                 """, partitionName);
 
         var insertQuery = dsl.query(sql, snapshotSlot);
