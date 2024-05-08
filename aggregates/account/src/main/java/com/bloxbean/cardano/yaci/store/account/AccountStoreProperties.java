@@ -40,6 +40,9 @@ public class AccountStoreProperties {
     private int balanceCalcJobPartitionSize = 10;
 
     @Builder.Default
+    private int numPartitions = 100;
+
+    @Builder.Default
     private String balanceCalcBatchMode = "tx-amount";
 
     @Builder.Default

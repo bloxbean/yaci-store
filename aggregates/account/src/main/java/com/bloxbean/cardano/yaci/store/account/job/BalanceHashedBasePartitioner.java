@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.account.job;
 
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.partition.support.Partitioner;
@@ -14,13 +15,14 @@ import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.ST
 @RequiredArgsConstructor
 @Slf4j
 public class BalanceHashedBasePartitioner implements Partitioner {
+    private final AccountStoreProperties accountStoreProperties;
 
     public Map<String, ExecutionContext> partition(int numThreads) {
         log.info("Partitioning address data into {} partitions", numThreads);
 
         Map<String, ExecutionContext> partitionMap = new HashMap<>();
 
-        int numPartitions = 100;
+        int numPartitions = accountStoreProperties.getNumPartitions();
         int partitionsPerThread = numPartitions / numThreads;
         int remainingPartitions = numPartitions % numThreads;
 

@@ -61,7 +61,7 @@ public class HashedBaseBatchConfiguration {
 
     @Bean
     public Partitioner takeBalanceByHashedBasePartitioner() {
-        return new BalanceHashedBasePartitioner();
+        return new BalanceHashedBasePartitioner(accountStoreProperties);
     }
 
     @Bean
