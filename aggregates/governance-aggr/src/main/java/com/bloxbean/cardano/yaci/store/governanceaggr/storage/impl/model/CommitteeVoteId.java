@@ -16,6 +16,8 @@ public class CommitteeVoteId implements Serializable {
     private String govActionTxHash;
     @Column(name = "gov_action_index")
     private int govActionIndex;
+    @Column(name = "voter_hash")
+    private String voterHash;
     @Column(name = "slot")
     private long slot;
 }

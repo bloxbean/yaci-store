@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.domain;
 
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -27,6 +28,10 @@ public class CommitteeVote {
     private int noCnt;
 
     private int abstainCnt;
+
+    private String voterHash;
+
+    private Vote vote;
 
     private String status;
 }

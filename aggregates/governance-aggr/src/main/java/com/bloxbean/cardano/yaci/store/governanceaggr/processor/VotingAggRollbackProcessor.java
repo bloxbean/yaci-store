@@ -27,9 +27,6 @@ public class VotingAggRollbackProcessor {
         log.info("Rollback -- {} latest voting procedure records", count);
         count = committeeVoteStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} committee_vote records", count);
-
         latestVotingProcedureService.syncUpLatestVotingProcedure();
-        log.info("Re Calculate Committee Vote after Rollback");
-        committeeVoteService.calculateAndSaveCommitteeVoteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
     }
 }
