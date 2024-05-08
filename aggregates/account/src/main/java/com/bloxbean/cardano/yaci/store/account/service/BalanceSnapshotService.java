@@ -161,8 +161,9 @@ public class BalanceSnapshotService {
 
       if (accountStoreProperties.getBalanceCalcBatchMode().equals(TX_AMOUNT_BATCH_MODE)) {
             log.info("Running TX_AMOUNT balance snapshot job >>");
+            long startTime = System.currentTimeMillis();
             JobExecution jobExecution = jobLauncher.run(balanceByHashedBaseJob, jobParameters);
-            log.info("Job Execution Status: " + jobExecution.getStatus());
+            log.info("Job Execution Status: {}, take [{} ms]", jobExecution.getStatus(), System.currentTimeMillis() - startTime);
         } else {
             log.error("Invalid balance-calc-batch-mode : {}. Skipping balance snapshot", accountStoreProperties.getBalanceCalcBatchMode());
         }
