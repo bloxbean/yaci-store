@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
-import com.bloxbean.cardano.yaci.store.governanceaggr.event.VotingEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.LatestVotingProcedureService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -95,17 +93,17 @@ public class LatestVotingProcedureProcessor {
 
         latestVotingProcedureStorage.saveOrUpdate(latestVotingProcedureMap.values());
 
-        List<LatestVotingProcedure> savedVotingProcedure = latestVotingProcedureStorageReader
-                .getAllByIdIn(latestVotingProcedureMap.values().stream()
-                        .map(latestVotingProcedure -> LatestVotingProcedureId.builder()
-                                .voterHash(latestVotingProcedure.getVoterHash())
-                                .govActionTxHash(latestVotingProcedure.getGovActionTxHash())
-                                .govActionIndex(latestVotingProcedure.getGovActionIndex())
-                                .build()).toList());
-
-        publisher.publishEvent(VotingEvent.builder()
-                .metadata(eventMetadata)
-                .txVotes(savedVotingProcedure.stream().map(latestVotingProcedureMapper::toTxVote).toList())
-                .build());
+//        List<LatestVotingProcedure> savedVotingProcedure = latestVotingProcedureStorageReader
+//                .getAllByIdIn(latestVotingProcedureMap.values().stream()
+//                        .map(latestVotingProcedure -> LatestVotingProcedureId.builder()
+//                                .voterHash(latestVotingProcedure.getVoterHash())
+//                                .govActionTxHash(latestVotingProcedure.getGovActionTxHash())
+//                                .govActionIndex(latestVotingProcedure.getGovActionIndex())
+//                                .build()).toList());
+//
+//        publisher.publishEvent(VotingEvent.builder()
+//                .metadata(eventMetadata)
+//                .txVotes(savedVotingProcedure.stream().map(latestVotingProcedureMapper::toTxVote).toList())
+//                .build());
     }
 }

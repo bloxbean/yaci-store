@@ -44,8 +44,10 @@ create table if not exists committee_vote
     yes_cnt            int,
     no_cnt             int,
     abstain_cnt        int,
+    voter_hash         varchar(56),
+    vote               varchar(10),
     status             varchar(64),
     slot               bigint,
     update_datetime    timestamp,
-    primary key (gov_action_tx_hash, gov_action_index, slot)
+    primary key (gov_action_tx_hash, gov_action_index, voter_hash, slot)
     );

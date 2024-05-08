@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -38,6 +39,13 @@ public class CommitteeVoteEntity {
 
     @Column(name = "abstain_cnt")
     private int abstainCnt;
+
+    @Column(name = "voter_hash")
+    private String voterHash;
+
+    @Column(name = "vote")
+    @Enumerated(EnumType.STRING)
+    private Vote vote;
 
     @Column(name = "status")
     private String status;
