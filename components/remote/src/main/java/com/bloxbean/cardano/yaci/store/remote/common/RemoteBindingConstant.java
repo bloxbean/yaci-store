@@ -12,4 +12,5 @@ public class RemoteBindingConstant {
     public static String rollbackEvent =  "rollbackEvent";
     public static String scriptEvent = "scriptEvent";
     public static String transactionEvent = "transactionEvent";
+    public static String governanceEvent = "governanceEvent";
 }

@@ -175,4 +175,17 @@ public class RemoteEventPublisher {
         ScriptEvent remoteEvent = new ScriptEvent(metadata, event.getTxScriptsList());
         publish(RemoteBindingConstant.scriptEvent, remoteEvent);
     }
+
+    @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")
+    public void handleGovernanceEvent(@NonNull GovernanceEvent event) {
+        if (log.isDebugEnabled())
+            log.debug("Publishing event to Kafka: "
+                    + event);
+
+        EventMetadata metadata = event.getMetadata().toBuilder()
+                .remotePublish(true)
+                .build();
+        GovernanceEvent governanceEvent = new GovernanceEvent(metadata, event.getTxGovernanceList());
+        publish(RemoteBindingConstant.governanceEvent, governanceEvent);
+    }
 }
