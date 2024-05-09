@@ -128,6 +128,16 @@ public class RemoteEventConsumer {
     }
 
     @Bean
+    public Consumer<String> governanceEvent() {
+        return governanceEventStr -> {
+            GovernanceEvent governanceEvent = parseJson(governanceEventStr, GovernanceEvent.class);
+            if(log.isDebugEnabled())
+                log.debug("Received: " + governanceEvent);
+            publisher.publishEvent(governanceEvent);
+        };
+    }
+
+    @Bean
     public Consumer<String> genesisBlockEvent() {
         return genesisBlockEventStr -> {
             GenesisBlockEvent genesisBlockEvent = parseJson(genesisBlockEventStr, GenesisBlockEvent.class);
