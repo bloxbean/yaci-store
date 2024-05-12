@@ -33,6 +33,9 @@ STORE_AUTO_INDEX_MANAGEMENT=true
 # STORE_ADMIN_AUTO_RECOVERY_ENABLED=true
 # STORE_ADMIN_HEALTH_CHECK_INTERVAL=60
 
+# Keep alive interval in milliseconds for Cardano node
+#STORE_CARDANO_KEEP_ALIVE_INTERVAL=5000
+
 # Enable submit api endpoint
 #STORE_CARDANO_SUBMIT_API_URL=http://submit-api-host:8090/api/submit/tx
 
