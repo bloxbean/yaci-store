@@ -1,6 +1,7 @@
 {
   "index": "Overview",
   "design": "Design",
+  "docker": "Docker",
   "build_run": "Build & Run",
   "usage": {
     "title": "Usage"

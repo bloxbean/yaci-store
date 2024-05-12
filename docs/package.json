@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "export": "next build && next export"
+    "export": "next build"
   },
   "repository": {
     "type": "git",
@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/bloxbean/yaci-store#readme",
   "dependencies": {
-    "next": "^13.0.6",
+    "next": "^14.1.1",
     "nextra": "latest",
     "nextra-theme-docs": "latest",
     "pnpm": "^9.0.6",
