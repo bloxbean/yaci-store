@@ -1,4 +1,4 @@
-# Use out-of-the-box applications
+## Use out-of-the-box applications
 
 Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is.
 
@@ -9,16 +9,15 @@ For steps to run this application, please refer to [Aggregation App Getting Star
 
 The Jar files for these applications are available in the release section.
 
-<hr>
 
-#  Run Yaci Store All or Yaci Store Utxo Indexer
+##  Run Yaci Store All or Yaci Store Utxo Indexer
 
 1. [Configuration](#configuration)
 2. [Run As Jar](#run_as_jar)
 3. [Run As Docker Container](#docker)
 4. [Swagger UI](#swagger-ui)
 
-## 1. Configuration <a id="configuration"></a>
+## Configuration
 
 Download the application.properties file from the release section and place it in a folder named "config" in the same directory as the jar file.
 The application will automatically pick up the configuration file.
@@ -135,20 +134,20 @@ store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3
 #store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
 ```
 
-## 2. Run As Jar <a id="run_as_jar"></a>
+## Run As Jar
 
 For Yaci Store All, use the following command.
 
 ```shell
-java -jar yaci-store-all-<version>.jar 
+java -jar yaci-store-all-<version>.jar
 ```
 
 For Yaci Store Utxo Indexer, use the following command.
 ```shell
-java -jar yaci-store-utxo-indexer-<version>.jar 
+java -jar yaci-store-utxo-indexer-<version>.jar
 ```
 
-## 3. Run As Docker <a id="docker"></a>
+## Run As Docker
 
 To run the application as a docker container, you can refer to application.properties file in ``docker run`` command or create an env file.
 
@@ -162,7 +161,7 @@ docker run --env-file config/application.properties -p 8080:8080 bloxbean/yaci-s
 
 #### Yaci Store Utxo Indexer docker image
 
-``` 
+```
 docker run --env-file config/application.properties -p 8080:8080 bloxbean/yaci-store-utxo-indexer:0.1.0-rc1
 ```
 
@@ -213,6 +212,6 @@ docker run --env-file env -p 8080:8080 bloxbean/yaci-store-all:0.1.0-rc1
 docker run --env-file env -p 8080:8080 bloxbean/yaci-store-utxo-indexer:0.1.0-rc1
 ```
 
-## 4. Swagger UI <a id="swagger-ui"></a>
+## Swagger UI
 
 By default, swagger UI for the application is available at http://localhost:8080/swagger-ui/index.html
