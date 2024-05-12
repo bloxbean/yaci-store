@@ -8,11 +8,6 @@ in the same directory as the jar file. The application will automatically pick u
 
 Swagger UI is available at http://localhost:8081/swagger-ui.html
 
-1. [Mode 1 - Companion Mode](#mode1)
-2. [Mode 2 - Standalone Mode](#mode2)
-3. [Mode 3 - Standalone Mode with RocksDB Utxo Storage](#mode3)
-4. [How to run as Docker Container](#docker)
-
 This application can be run in three modes.
 
 ## Mode 1 - Companion Mode 
