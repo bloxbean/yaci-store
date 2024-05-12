@@ -115,13 +115,3 @@ java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 ```
 java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
 ```
-
-## How to run as Docker Container
-
-To run the application as docker container, create an env file named "**env**" and set the required environment variables.
-
-Please set the correct version in the docker command.
-
-```
-docker run --env-file env -p 8081:8081 bloxbean/yaci-store-aggregation-app:0.1.0-rc1
-```
