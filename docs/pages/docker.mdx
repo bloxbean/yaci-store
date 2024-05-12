@@ -1,0 +1,75 @@
+# Run with Docker Compose
+
+You can run out-of-the-box applications with Docker Compose. The Docker Compose YAML files for the applications are inside
+the [**docker**](https://github.com/bloxbean/yaci-store/tree/main/docker) folder in GitHub repository.
+
+- Please **clone** the [repository](https://github.com/bloxbean/yaci-store) to access the Docker Compose files.
+- Verify compose yaml file are pointing to the correct application image version.
+
+## Pre-requisites
+
+- Docker
+
+## Environment Files
+
+The minimum required environment variables are stored in two environment files: `env` and `env-aggr`.
+
+- The `env` file is a common environment file for all applications. You can set the shared environment variables in this file.
+- The `env-aggr` file is specific to the Aggregation application. You can set the Aggregation app specific environment variables in this file.
+
+## Docker Compose Files
+
+In the following sections, we will use `*-monolith.yml` files. These files help to run both Postgres and the application
+through a single Docker Compose file. If you want to run the application with an external database, you can use application-specific
+Docker Compose files, such as `yaci-store-all.yml`, `yaci-store-utxo-indexer.yml`, or `yaci-store-aggregation.yml`.
+
+#### Additional environment properties:
+
+Check the [application.properties](https://github.com/bloxbean/yaci-store/tree/main/config) file for additional optional environment properties.
+
+## Run Yaci Store ALL application
+
+This application includes **all** stores.
+
+By **default**, the **submit** endpoint is disabled. You can refer to the [Enable Submit Endpoint](#enable-submit-endpoint) section for instructions on how to enable it.
+
+One of the advantages of Yaci Store is that you can decide what data to store. If you want to disable any specific store
+or its API endpoints, you have that flexibility.
+
+- To disable a specific store, you can set the `STORE_<STORE_NAME>_ENABLED` environment variable to `false`.
+- To disable a specific store's API endpoints, you can set the `STORE_<STORE_NAME>_API_ENABLED` environment variable to `false`.
+
+**Note:** It also includes the **account** aggregation module, but it is disabled by default. Instead of enabling this module,
+it's recommended to run the **aggregation-app** separately for calculating account balances.
+
+```shell
+docker compose -f yaci-store-all-monolith.yml up -d
+```
+
+You can access swagger-ui at http://localhost:8080/swagger-ui/index.html
+
+## Run Utxo Indexer application
+
+The Utxo Indexer application consists of the **utxo store**, **epoch store**, and **submit** component.
+
+By **default**, the **submit** endpoint is disabled. You can refer to the [Enable Submit Endpoint](#enable-submit-endpoint)  section for instructions on how to enable it.
+
+```shell
+docker compose -f yaci-store-utxo-indexer-monolith.yml up -d
+```
+
+## Run Aggregation App to calculate account balances
+
+Aggregation App is a separate application that calculates account balances by aggregating the UTXO store data.
+
+```shell
+docker compose -f yaci-store-aggregation-monolith.yml up -d
+```
+
+## Enable Submit Endpoint
+
+Both the **yaci-store-all** and **yaci-store-utxo-indexer** applications provide **submit** and **script cost evaluation** endpoints.
+However, these endpoints are disabled by default.
+
+- To enable the **submit** endpoint, you need to configure the `STORE_CARDANO_SUBMIT_API_URL` endpoint in the `env` file.
+- To enable both the **submit** and **script cost evaluation** endpoints, you need to set the `STORE_CARDANO_OGMIOS_URL` in the `env` file.

@@ -6,14 +6,14 @@ networks:
 services:
   yaci-store-postgres:
     extends:
-      file: postgres-compose.yaml
+      file: postgres-compose.yml
       service: yaci-store-postgres
     networks:
       - yaci-store-net
 
   yaci-store-all:
     extends:
-      file: yaci-store-all.yaml
+      file: yaci-store-all.yml
       service: yaci-store-all
     depends_on:
       yaci-store-postgres:
