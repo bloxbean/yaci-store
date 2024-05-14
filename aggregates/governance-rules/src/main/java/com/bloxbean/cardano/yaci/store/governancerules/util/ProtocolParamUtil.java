@@ -12,9 +12,9 @@ public class ProtocolParamUtil {
 
     public static List<ProtocolParamGroup> getGroupsWithNonNullField(ProtocolParamUpdate params) {
         List<ProtocolParamGroup> groups = new ArrayList<>();
-        // todo: Economic: check monetary expansion (rho), treasury expansion (tau), minimum Lovelace deposit per byte of serialized UTxO (coinsPerUTxOByte)
+        // todo: Economic: check monetary expansion (rho), treasury expansion (tau)
         if (isNonNull(params.getMinFeeA(), params.getMinFeeB(), params.getKeyDeposit(), params.getPoolDeposit(),
-                params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep())) {
+                params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep(), params.getAdaPerUtxoByte())) {
             groups.add(ProtocolParamGroup.ECONOMIC);
         }
 
@@ -34,10 +34,10 @@ public class ProtocolParamUtil {
                 params.getDrepDeposit(), params.getDrepActivity())) {
             groups.add(ProtocolParamGroup.GOVERNANCE);
         }
-        /// todo: Security: check minimum Lovelace deposit per byte of serialized UTxO (coinsPerUTxOByte)
+
         if (isNonNull(params.getMaxBlockSize(), params.getMaxTxSize(), params.getMaxBlockHeaderSize(),
                 params.getMaxValSize(), params.getMaxBlockExMem(), params.getMaxBlockExSteps(), params.getMinFeeA(),
-                params.getMinFeeB(), params.getGovActionDeposit(), params.getMinFeeRefScriptCostPerByte())) {
+                params.getMinFeeB(), params.getGovActionDeposit(), params.getMinFeeRefScriptCostPerByte(), params.getAdaPerUtxoByte())) {
             groups.add(ProtocolParamGroup.SECURITY);
         }
 
