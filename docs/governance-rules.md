@@ -43,6 +43,9 @@ Parameters:
 Returns:
 - The ratification result.
 
+Note: For `HardForkInitiation` all SPOs that didn't vote are considered as `No` votes. 
+Whereas, for all other `GovAction`s, SPOs that didn't vote are considered as `Abstain` votes.
+
 ### getRatificationResultForNoConfidenceAction
 
 This method determines the ratification result for a No Confidence governance action.
