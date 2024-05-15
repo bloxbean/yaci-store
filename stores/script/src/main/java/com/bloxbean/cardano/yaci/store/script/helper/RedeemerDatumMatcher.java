@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
 import com.bloxbean.cardano.yaci.core.model.TransactionInput;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.core.model.governance.Voter;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
@@ -69,6 +70,16 @@ public class RedeemerDatumMatcher {
                         if (log.isDebugEnabled())
                             log.info("Redeemer Reward : " + transaction.getTxHash());
                         scriptContext = findRewardScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Voting) {
+                        if (log.isDebugEnabled())
+                            log.info("Redeemer Voting : " + transaction.getTxHash());
+                        scriptContext = findVotingScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Proposing) {
+                        if (log.isDebugEnabled())
+                            log.info("Redeemer Proposing : " + transaction.getTxHash());
+                        scriptContext = findProposingScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
                         scriptContext.setRedeemer(redeemer);
                     } else {
                         scriptContext = new ScriptContext();
@@ -179,6 +190,58 @@ public class RedeemerDatumMatcher {
 
         String policyId = policies.get(index);
         PlutusScript plutusScript = scriptMap.get(policyId);
+
+        ScriptContext scriptContext = new ScriptContext();
+        scriptContext.setPlutusScript(plutusScript);
+
+        return Optional.of(scriptContext);
+    }
+
+    public Optional<ScriptContext> findVotingScriptForRedeemer(Redeemer redeemer, Transaction transaction, Map<String, PlutusScript> scriptMap) {
+        var votingProcedures = transaction.getBody().getVotingProcedures();
+        if (votingProcedures == null || votingProcedures.getVoting() == null || votingProcedures.getVoting().size() == 0)
+            return Optional.empty();
+
+        Set<Voter> voters = ((LinkedHashMap)votingProcedures.getVoting()).keySet();
+
+        int i = 0;
+        Voter voter = null;
+        for (Voter v : voters) {
+            if (redeemer.getIndex() == i) {
+                voter = v;
+                break;
+            }
+            i++;
+        }
+
+        var hash = voter.getHash();
+
+        PlutusScript plutusScript = null;
+        if (hash != null)
+            plutusScript = scriptMap.get(hash);
+
+        ScriptContext scriptContext = new ScriptContext();
+        scriptContext.setPlutusScript(plutusScript);
+
+        return Optional.of(scriptContext);
+    }
+
+    public Optional<ScriptContext> findProposingScriptForRedeemer(Redeemer redeemer, Transaction transaction, Map<String, PlutusScript> scriptMap) {
+        var proposalProcedures = transaction.getBody().getProposalProcedures();
+        if (proposalProcedures == null || proposalProcedures.size() == 0)
+            return Optional.empty();
+
+        if (redeemer.getIndex() >= proposalProcedures.size())
+            return Optional.empty();
+
+        var rewardAccount = proposalProcedures.get(redeemer.getIndex()).getRewardAccount();
+
+        Address address = new Address(HexUtil.decodeHexString(rewardAccount));
+        String delegationHash = HexUtil.encodeHexString(address.getDelegationCredential().get().getBytes());
+
+        PlutusScript plutusScript = null;
+        if (delegationHash != null)
+            plutusScript = scriptMap.get(delegationHash);
 
         ScriptContext scriptContext = new ScriptContext();
         scriptContext.setPlutusScript(plutusScript);
