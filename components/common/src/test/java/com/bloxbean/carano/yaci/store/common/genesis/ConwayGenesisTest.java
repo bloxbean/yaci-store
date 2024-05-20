@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,6 +70,6 @@ public class ConwayGenesisTest {
         assertThat(protocolParams.getGovActionDeposit()).isEqualTo(BigInteger.valueOf(50000000000L));
         assertThat(protocolParams.getDrepDeposit()).isEqualTo(500000000);
         assertThat(protocolParams.getDrepActivity()).isEqualTo(20);
-        assertThat(protocolParams.getMinFeeRefScriptCostPerByte()).isEqualTo(44);
+        assertThat(protocolParams.getMinFeeRefScriptCostPerByte()).isEqualTo(BigDecimal.valueOf(44));
     }
 }
