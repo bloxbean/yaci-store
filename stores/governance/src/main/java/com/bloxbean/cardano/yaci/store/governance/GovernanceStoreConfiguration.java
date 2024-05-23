@@ -109,4 +109,19 @@ public class GovernanceStoreConfiguration {
                                                                        DRepRegistrationMapper drepRegistrationMapper) {
         return new DRepRegistrationStorageReaderImpl(drepRegistrationRepository, drepRegistrationMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeMemberStorage committeeMemberStorage(CommitteeMemberRepository committeeMemberRepository,
+                                                         CommitteeMemberMapper committeeMemberMapper) {
+        return new CommitteeMemberStorageImpl(committeeMemberRepository, committeeMemberMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeMemberStorageReader committeeMemberStorageReader(CommitteeMemberRepository committeeMemberRepository,
+                                                         CommitteeMemberMapper committeeMemberMapper) {
+        return new CommitteeMemberStorageReaderImpl(committeeMemberRepository, committeeMemberMapper);
+    }
+
 }
