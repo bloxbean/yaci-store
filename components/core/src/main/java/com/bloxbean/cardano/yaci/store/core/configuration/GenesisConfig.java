@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@Getter
 public class GenesisConfig {
     public static final int PREVIEW_EPOCH_LENGTH = 86400;
     public static final int DEFAULT_SECURITY_PARAM = 2160;
@@ -41,6 +43,7 @@ public class GenesisConfig {
     private double shelleySlotLength;
 
     private double activeSlotsCoeff;
+    private int securityParam;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
     public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
@@ -142,6 +145,7 @@ public class GenesisConfig {
         shelleyStartTime = shelleyGenesis.getSystemStart();
         shelleySlotLength = shelleyGenesis.getSlotLength();
         activeSlotsCoeff = shelleyGenesis.getActiveSlotsCoeff();
+        securityParam = shelleyGenesis.getSecurityParam();
         maxLovelaceSupply = shelleyGenesis.getMaxLovelaceSupply();
         epochLength = shelleyGenesis.getEpochLength();
 
@@ -180,6 +184,10 @@ public class GenesisConfig {
             genesisBalances.addAll(shelleyGenesis.getInitialFunds());
 
         return genesisBalances;
+    }
+
+    public long getRandomnessStabilisationWindow() {
+        return Math.round((4 * securityParam) / activeSlotsCoeff);
     }
 
     @SneakyThrows

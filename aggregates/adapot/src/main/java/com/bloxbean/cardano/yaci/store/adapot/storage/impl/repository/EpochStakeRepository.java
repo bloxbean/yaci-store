@@ -27,4 +27,10 @@ public interface EpochStakeRepository extends JpaRepository<EpochStakeEntity, Ep
 
     @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch")
     List<EpochStakeEntity> getAllActiveStakesByEpoch(Integer epoch, Pageable pageable);
+
+    @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch and e.poolId = :poolId")
+    List<EpochStakeEntity> getAllByActiveEpochAndPool(Integer epoch, String poolId, Pageable pageable);
+
+    @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch and e.poolId in :poolIds")
+    List<EpochStakeEntity> getAllByActiveEpochAndPools(Integer epoch, List<String> poolIds);
 }

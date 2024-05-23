@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.adapot.controller;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
+import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +24,7 @@ import java.util.List;
 @Tag(name = "EpochStake API", description = "APIs for epoch stake related data.")
 public class EpochStakeController {
     private final EpochStakeStorage epochStakeStorage;
+    private final EpochRewardCalculationService epochRewardCalculationService;
 
     @GetMapping("/epochs/{epoch}/total-stake")
     @Operation(description = "Get total active stake for an epoch")
@@ -53,6 +56,12 @@ public class EpochStakeController {
         if (p > 0)
             p = p - 1;
         return epochStakeStorage.getAllActiveStakesByEpoch(epoch, p, count);
+    }
+
+    //TODO -- Temporary endpoint
+    @PostMapping("/calculate-rewards/epoch/{epoch}")
+    public void calculateRewardsForEpoch(Integer epoch) {
+        epochRewardCalculationService.fetchRewardCalcInputs(epoch);
     }
 
     record EpochActiveStake(Integer epoch, BigInteger activeStake) {

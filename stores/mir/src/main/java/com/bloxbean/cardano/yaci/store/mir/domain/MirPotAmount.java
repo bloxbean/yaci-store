@@ -1,6 +1,5 @@
-package com.bloxbean.cardano.yaci.store.staking.domain;
+package com.bloxbean.cardano.yaci.store.mir.domain;
 
-import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -14,18 +13,10 @@ import java.math.BigInteger;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@SuperBuilder(toBuilder = true)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Pool extends BlockAwareDomain {
-    private String poolId;
-    private String txHash;
-    private Integer certIndex;
-    private PoolStatusType status;
-    private BigInteger amount;
-    private Integer epoch;
-    private Integer activeEpoch;
-    private Integer retireEpoch;
-    private Long slot;
-    private String blockHash;
+public class MirPotAmount {
+    private MirPot mirPot;
+    private BigInteger totalRewards;
 }

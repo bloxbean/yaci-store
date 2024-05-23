@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.staking.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.StakingMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.*;
+import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -60,7 +61,13 @@ public class StakingStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public PoolStorage depositStorage(PoolStatusRepository depositRepository, PoolMapper poolMapper) {
+    public PoolStorage poolStorage(PoolStatusRepository depositRepository, PoolMapper poolMapper) {
         return new PoolStorageImpl(depositRepository, poolMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PoolStorageReader poolStorageReader(DSLContext dslContext) {
+        return new PoolStorageReaderImpl(dslContext);
     }
 }

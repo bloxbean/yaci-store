@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
@@ -118,6 +119,7 @@ public class PoolStatusProcessor {
                         .status(PoolStatusType.REGISTRATION)
                         .amount(ppPoolDeposit)
                         .epoch(metadata.getEpochNumber())
+                        .activeEpoch(metadata.getEpochNumber() + 2)
                         .slot(metadata.getSlot())
                         .blockNumber(metadata.getBlock())
                         .blockHash(metadata.getBlockHash())
@@ -134,6 +136,7 @@ public class PoolStatusProcessor {
                         .status(PoolStatusType.UPDATE)
                         .amount(BigInteger.ZERO)
                         .epoch(metadata.getEpochNumber())
+                        .activeEpoch(metadata.getEpochNumber() + 3)
                         .slot(metadata.getSlot())
                         .blockNumber(metadata.getBlock())
                         .blockHash(metadata.getBlockHash())
@@ -214,5 +217,13 @@ public class PoolStatusProcessor {
 
         //Publish PoolRetiredEvent to trigger adapot refund calculation
         publisher.publishEvent(new PoolRetiredEvent(metadata, retiredPools));
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRollback(RollbackEvent rollbackEvent) {
+        long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
+        int deleted = poolStorage.deleteBySlotGreaterThan(rollBackToSlot);
+        log.info("Rollback -- {} pool records", deleted);
     }
 }

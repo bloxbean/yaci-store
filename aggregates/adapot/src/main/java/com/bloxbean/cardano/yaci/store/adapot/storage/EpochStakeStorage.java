@@ -15,4 +15,10 @@ public interface EpochStakeStorage {
     Optional<BigInteger> getActiveStakeByPoolAndEpoch(String poolId, Integer epoch);
 
     List<EpochStake> getAllActiveStakesByEpoch(Integer epoch, int page , int count);
+
+    List<EpochStake> getAllActiveStakesByEpochAndPool(Integer epoch, String poolId, int page , int count);
+
+    List<EpochStake> getAllActiveStakesByEpochAndPool(Integer epoch, String poolId);
+
+    List<EpochStake> getAllActiveStakesByEpochAndPools(Integer epoch, List<String> poolIds);
 }

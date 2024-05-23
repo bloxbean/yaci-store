@@ -7,6 +7,7 @@ dependencies {
     implementation project(':starters:staking-spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
     implementation project(':starters:blocks-spring-boot-starter')
+    implementation project(':starters:mir-spring-boot-starter')
     implementation project(':starters:account-spring-boot-starter')
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"

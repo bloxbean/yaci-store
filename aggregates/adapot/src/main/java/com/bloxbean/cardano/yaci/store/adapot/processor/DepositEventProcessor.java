@@ -73,7 +73,7 @@ public class DepositEventProcessor {
         batchDepositAmount = totalDepositAmount;
     }
 
-    //Handles pool deposit refund for retire pool durin epoch change
+    //Handles pool deposit refund for retire pool during epoch change
     @EventListener
     @Transactional
     public void handlePoolRetiredEvent(PoolRetiredEvent poolRetiredEvent) {

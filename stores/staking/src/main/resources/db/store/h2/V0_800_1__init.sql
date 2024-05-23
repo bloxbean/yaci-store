@@ -136,6 +136,7 @@ create table pool
     status          varchar(50),
     amount          numeric(38),
     epoch           int,
+    active_epoch    int,
     retire_epoch    int,
     slot            bigint,
     block_hash      varchar(64),

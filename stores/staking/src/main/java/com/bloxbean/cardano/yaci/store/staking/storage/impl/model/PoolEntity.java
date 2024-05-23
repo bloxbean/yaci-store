@@ -44,6 +44,9 @@ public class PoolEntity extends BlockAwareEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
+    @Column(name = "active_epoch")
+    private Integer activeEpoch;
+
     @Column(name = "retire_epoch")
     private Integer retireEpoch;
 

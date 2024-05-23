@@ -82,6 +82,15 @@ public class EraService {
         return epochConfig.shelleyEpochSlot(shelleyStartSlot, shelleyAbsoluteSlot);
     }
 
+    public long getShelleyAbsoluteSlot(int epoch, int epochSlot) {
+        if (shelleyStartSlot == -1) {
+            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
+                    .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
+        }
+
+        return epochConfig.epochSlotToAbsoluteSlot(shelleyStartSlot, epoch, epochSlot);
+    }
+
     public long shelleyEraStartTime() {
         if (_shelleyStartTime != 0)
             return _shelleyStartTime;

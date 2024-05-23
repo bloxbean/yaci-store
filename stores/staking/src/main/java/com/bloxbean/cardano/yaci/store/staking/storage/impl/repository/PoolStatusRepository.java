@@ -17,12 +17,12 @@ public interface PoolStatusRepository extends JpaRepository<PoolEntity, PoolId> 
     Optional<PoolEntity> findRecentByPoolIdAndStatus(String poolId, PoolStatusType status, Integer epoch);
 
     @Query("SELECT ps FROM PoolEntity ps WHERE ps.status = 'RETIRING' AND ps.retireEpoch = :retireEpoch AND NOT EXISTS (" +
-            "SELECT ps2 FROM PoolEntity ps2 WHERE ps2.poolId = ps.poolId AND (ps2.status = 'RETIRING' OR ps2.status = 'UPDATE') " +
+            "SELECT ps2 FROM PoolEntity ps2 WHERE ps2.poolId = ps.poolId AND (ps2.status = 'RETIRING' OR ps2.status = 'UPDATE') AND ps2.epoch < :retireEpoch " +
             "AND (ps2.slot > ps.slot OR (ps2.slot = ps.slot AND ps2.certIndex > ps.certIndex)))")
     List<PoolEntity> findRetiringPoolsByRetireEpoch(Integer retireEpoch);
 
     @Query("SELECT ps FROM PoolEntity ps WHERE ps.poolId = :poolId AND ps.status = 'RETIRING' AND ps.retireEpoch = :retireEpoch AND NOT EXISTS (" +
-            "SELECT ps2 FROM PoolEntity ps2 WHERE ps2.poolId = ps.poolId AND (ps2.status = 'RETIRING' OR ps2.status = 'UPDATE') " +
+            "SELECT ps2 FROM PoolEntity ps2 WHERE ps2.poolId = ps.poolId AND (ps2.status = 'RETIRING' OR ps2.status = 'UPDATE') AND ps2.epoch < :retireEpoch " +
             "AND (ps2.slot > ps.slot OR (ps2.slot = ps.slot AND ps2.certIndex > ps.certIndex)))")
     Optional<PoolEntity> findRecentPoolRetirement(String poolId, Integer retireEpoch);
 
