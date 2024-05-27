@@ -86,4 +86,11 @@ public class TxnEntity extends BlockAwareEntity {
 
     @Column(name = "invalid")
     private Boolean invalid;
+
+    @Column(name = "size")
+    private int size;
+
+    @Column(name = "script_size")
+    private int scriptSize;
+
 }
