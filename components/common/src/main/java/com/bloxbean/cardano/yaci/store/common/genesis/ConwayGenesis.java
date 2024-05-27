@@ -1,13 +1,18 @@
 package com.bloxbean.cardano.yaci.store.common.genesis;
 
 import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
+import com.bloxbean.cardano.yaci.store.common.domain.GenesisCommitteeMember;
 import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Getter;
 
 import java.io.File;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.util.*;
+
+import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V3;
 
 public class ConwayGenesis extends GenesisFile{
     private final static String POOL_VOTING_THRESHOLDS = "poolVotingThresholds";
@@ -43,7 +48,13 @@ public class ConwayGenesis extends GenesisFile{
 
     private final static String COMMITTEE = "committee";
     private final static String MEMBERS = "members";
-    private final static String QUORUM = "quorum";
+    private final static String THRESHOLD = "threshold";
+    private final static String PLUTUS_V3_COST_MODEL = "plutusV3CostModel";
+
+    @Getter
+    private List<GenesisCommitteeMember> committeeMembers;
+    @Getter
+    private Double committeeThreshold;
 
     public ConwayGenesis(File file) {
         super(file);
@@ -59,6 +70,8 @@ public class ConwayGenesis extends GenesisFile{
 
     @Override
     protected void readGenesisData(JsonNode genesisJson) {
+        committeeMembers = new ArrayList<>();
+
         var poolVotingThresholdsNode = genesisJson.get(POOL_VOTING_THRESHOLDS);
 
         PoolVotingThresholds poolVotingThresholds = null;
@@ -166,10 +179,53 @@ public class ConwayGenesis extends GenesisFile{
                 .drepActivity(dRepActivity)
                 .minFeeRefScriptCostPerByte(minFeeRefScriptCostPerByte)
                 .build();
+        var committeeNode = genesisJson.get(COMMITTEE);
+
+        if (committeeNode != null) {
+            var membersNode = committeeNode.get(MEMBERS);
+
+            if (membersNode != null) {
+                Iterator<Map.Entry<String, JsonNode>> fields = membersNode.fields();
+
+                while (fields.hasNext()) {
+                    Map.Entry<String, JsonNode> field = fields.next();
+                    String key = field.getKey();
+                    Integer expiredEpoch = field.getValue().asInt();
+                    Boolean hasScript = key.contains("scriptHash");
+                    String hash = key.split("-")[1];
+
+                    GenesisCommitteeMember member = GenesisCommitteeMember.builder()
+                            .hash(hash)
+                            .hasScript(hasScript)
+                            .expiredEpoch(expiredEpoch)
+                            .build();
+                    committeeMembers.add(member);
+                }
+            }
+
+            committeeThreshold = committeeNode.get(THRESHOLD) != null ? committeeNode.get(THRESHOLD).asDouble() : null;
+        }
+
+        var plutusV3CostModelNode = genesisJson.get(PLUTUS_V3_COST_MODEL);
+
+        if (plutusV3CostModelNode != null && plutusV3CostModelNode.isArray()) {
+            Map<String, long[]> costModelMap = new HashMap<>();
+
+            List<Long> costModelList = new ArrayList<>();
+            for (JsonNode node : plutusV3CostModelNode) {
+                costModelList.add(node.longValue());
+            }
+
+            long[] plutusV3CostModelArray = costModelList.stream().mapToLong(Long::longValue).toArray();
+            costModelMap.put(PLUTUS_V3, plutusV3CostModelArray);
+            protocolParams.setCostModels(costModelMap);
+            protocolParams.setCostModelsHash("genesis.conway");
+        }
     }
 
     @Override
     protected String getFileName() {
         return "conway-genesis.json";
     }
+
 }

@@ -7,6 +7,8 @@ import com.bloxbean.cardano.yaci.store.common.genesis.AlonzoGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,7 @@ import java.util.Optional;
 //TODO -- Write tests
 public class EraGenesisProtocolParamsUtil {
     private final StoreProperties storeProperties;
+    private final EpochParamStorage epochParamStorage;
 
     public Optional<ProtocolParams> getGenesisProtocolParameters(Era newEra, Era prevEra, long protocolMagic) {
         ProtocolParams genesisProtocolParams = null;
@@ -54,6 +57,22 @@ public class EraGenesisProtocolParamsUtil {
                     genesisProtocolParams.merge(conwayPP);
                 } else {
                     genesisProtocolParams = getConwayGenesisProtocolParams(protocolMagic);
+
+                    var ppCostModels = genesisProtocolParams.getCostModels();
+                    Integer dbEpoch = epochParamStorage.getMaxEpoch();
+                    EpochParam previousEpochParam = epochParamStorage.getProtocolParams(dbEpoch).orElse(null);
+
+                    if (ppCostModels != null && previousEpochParam != null && previousEpochParam.getParams() != null) {
+                        var ppCostModelsPrev = previousEpochParam.getParams().getCostModels();
+                        if (ppCostModelsPrev != null) {
+                            ppCostModelsPrev.forEach((k, v) -> {
+                                if (!ppCostModels.containsKey(k)) {
+                                    ppCostModels.put(k, v);
+                                }
+                            });
+                        }
+                        genesisProtocolParams.setCostModels(ppCostModels);
+                    }
                 }
             } else {
                 log.warn("No genesis protocol parameters handled for era {}", newEra);
