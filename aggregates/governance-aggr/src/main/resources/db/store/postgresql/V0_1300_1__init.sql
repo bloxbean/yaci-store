@@ -51,3 +51,19 @@ create table if not exists committee_vote
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index, voter_hash, slot)
 );
+
+drop table if exists drep_info;
+CREATE TABLE IF NOT EXISTS drep_info
+(
+    drep_hash         varchar(56),
+    drep_id           varchar(255),
+    anchor_url        varchar,
+    anchor_hash       varchar(64),
+    delegators        integer,
+    total_stake       bigint,
+    created_at        bigint,
+    status            varchar(10),
+    update_datetime   timestamp,
+    primary key (drep_hash)
+);
+
