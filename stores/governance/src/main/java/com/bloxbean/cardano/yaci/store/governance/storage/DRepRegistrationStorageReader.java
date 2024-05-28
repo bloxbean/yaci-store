@@ -11,4 +11,6 @@ public interface DRepRegistrationStorageReader {
     List<DRepRegistration> findDeRegistrations(int page, int count, Order order);
 
     List<DRepRegistration> findUpdates(int page, int count, Order order);
+
+    List<DRepRegistration> findAll(int page, int count, Order order);
 }
