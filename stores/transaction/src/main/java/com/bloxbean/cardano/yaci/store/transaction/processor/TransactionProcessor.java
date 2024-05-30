@@ -13,14 +13,12 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
-import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionSize;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
-import com.bloxbean.cardano.yaci.store.transaction.util.TransactionSizeUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -80,7 +78,6 @@ public class TransactionProcessor {
                         .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
                         .collect(Collectors.toList());
             }
-            TransactionSize transactionSizeAndScriptSize = TransactionSizeUtil.getTransactionSizeAndScriptSize(transaction);
 
             Txn txn = Txn.builder()
                     .txHash(transaction.getTxHash())
@@ -102,8 +99,8 @@ public class TransactionProcessor {
                     .collateralReturn(new UtxoKey(transaction.getTxHash(), outputs.size()))
                     .referenceInputs(referenceInputs)
                     .invalid(transaction.isInvalid())
-                    .size(transactionSizeAndScriptSize.getSize())
-                    .scriptSize(transactionSizeAndScriptSize.getScriptSize())
+                    .size(transaction.getTxSize())
+                    .scriptSize(transaction.getTxScriptSize())
                     .build();
 
             txList.add(txn);
