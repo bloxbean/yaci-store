@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.AdaPotMapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.AdaPotRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.EpochStakeRepository;
-import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardAccountRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,20 +40,14 @@ public class AdaPotConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RewardStorage rewardStorage(RewardRepository repository, Mapper rewardMapper) {
-        return new RewardStorageImpl(repository, rewardMapper);
+    public RewardStorage rewardStorage(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository, Mapper rewardMapper) {
+        return new RewardStorageImpl(instantRewardRepository, rewardRepository, rewardMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public RewardStorageReader rewardStorageReader(RewardRepository repository, Mapper rewardMapper) {
-        return new RewardStorageReaderImpl(repository, rewardMapper);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public RewardAccountStorage rewardAccountStorage(RewardAccountRepository rewardAccountRepository, Mapper rewardMapper) {
-        return new RewardAccountStorageImpl(rewardAccountRepository, rewardMapper);
+    public RewardStorageReader rewardStorageReader(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository, Mapper rewardMapper) {
+        return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardMapper);
     }
 
     @Bean

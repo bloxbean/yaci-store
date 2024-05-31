@@ -30,8 +30,8 @@ create table epoch_stake
     primary key (epoch, address)
 );
 
-drop table if exists reward;
-create table reward
+drop table if exists instant_reward;
+create table instant_reward
 (
     id              uuid not null primary key,
     address         varchar(255),
@@ -46,24 +46,16 @@ create table reward
     update_datetime timestamp
 );
 
-drop table if exists reward_account;
-create table reward_account
+drop table if exists reward;
+create table reward
 (
-    address         varchar(255) not null,
-    slot            bigint       not null,
+    address         varchar(255),
+    earned_epoch    integer,
     amount          numeric(38),
-    withdrawable    numeric(38),
-    epoch           integer,
-    block           bigint,
-    block_time      bigint,
+    type            varchar(50),
+    pool_id         varchar(56),
+    spendable_epoch integer,
+    slot            bigint,
     update_datetime timestamp,
-    primary key (address, slot)
+    primary key (address, earned_epoch)
 );
-
-drop view if exists reward_account_view;
-CREATE VIEW reward_account_view AS
-SELECT ra.*
-FROM reward_account ra
-         INNER JOIN (SELECT address, MAX(slot) AS max_slot
-                     FROM reward_account
-                     GROUP BY address) max_ra ON ra.address = max_ra.address AND ra.slot = max_ra.max_slot;

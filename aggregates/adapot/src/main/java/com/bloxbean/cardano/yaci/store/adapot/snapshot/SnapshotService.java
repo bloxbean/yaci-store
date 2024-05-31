@@ -22,7 +22,7 @@ public class SnapshotService {
 
     private Integer shelleyStartEpoch;
 
-    @Scheduled(fixedRate = 10, timeUnit = TimeUnit.SECONDS)
+//    @Scheduled(fixedRate = 10, timeUnit = TimeUnit.SECONDS)
     public void takeSnapshot() {
         if (getShelleyStartEpoch() == null) {
             log.info("Shelley start epoch is not available yet");

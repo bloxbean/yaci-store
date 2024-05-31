@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.domain;
 
-import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
+import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigInteger;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,12 +19,13 @@ import java.math.BigInteger;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Reward {
+public class InstantReward extends BlockAwareDomain {
+    private UUID id;
     private String address;
     private BigInteger amount;
-    private RewardType type;
-    private String poolId;
+    private InstantRewardType type;
+    private String txHash;
+    private Long slot;
     private Integer earnedEpoch;
     private Integer spendableEpoch;
-    private Long slot;
 }

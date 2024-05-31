@@ -4,11 +4,13 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
@@ -25,6 +27,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.cardanofoundation.rewards.calculation.constants.RewardConstants.*;
@@ -46,6 +49,9 @@ public class EpochRewardCalculationService {
     private final PoolStateService poolStateService;
     private final EraService eraService;
     private final StakeRegistrationService stakeRegistrationService;
+    private final SharedPoolRewardAddresses sharedPoolRewardAddresses; //TOD -- remove later
+
+    private final RewardStorage rewardStorage;
 
     public RewardsCalcInput fetchRewardCalcInputs(int epoch) {
         //Calculating rewards at epoch "epoch"
@@ -148,7 +154,7 @@ public class EpochRewardCalculationService {
         List<String> poolIds = blocksMadeByPoolsInEpoch.stream().map(PoolBlock::getPoolId).distinct().toList();
 
         List<PoolState> poolStates = poolStateService.getHistoryOfAllPoolsInEpoch(epoch -2, blocksMadeByPoolsInEpoch);
-        List<String> bech32PoolIds = poolIds.stream().map(poolId -> PoolUtil.getPoolId(poolId)).toList();
+        List<String> bech32PoolIds = poolIds.stream().map(poolId -> PoolUtil.getBech32PoolId(poolId)).toList();
 
         System.out.println("Pool ids\n" + JsonUtil.getPrettyJson(bech32PoolIds.stream().sorted().toList()));
         HashSet<String> deregisteredAccounts;
@@ -173,7 +179,7 @@ public class EpochRewardCalculationService {
             deregisteredAccountsOnEpochBoundary = deregisteredAccounts;
         }
 
-        HashSet<String> sharedPoolRewardAddressesWithoutReward = new HashSet<>();
+        HashSet<String> sharedPoolRewardAddressesWithoutReward = new HashSet<>(sharedPoolRewardAddresses.getSharedPoolRewardAddressesWithoutReward(epoch));
         if (epoch - 2 < MAINNET_ALLEGRA_HARDFORK_EPOCH) {
             //TODO -- Hardcode for now
            // sharedPoolRewardAddressesWithoutReward = dataProvider.findSharedPoolRewardAddressWithoutReward(epoch - 2);
@@ -192,8 +198,9 @@ public class EpochRewardCalculationService {
         }
 
         int lastEpoch = epoch - 1;
-        long startSlotOfEpoch = eraService.getShelleyAbsoluteSlot(epoch, 0);
-        long lastEpochStabilityWindowAbsoluteSlot = startSlotOfEpoch - stabilityWindow;
+        long startSlotOfEpochLastEpoch = eraService.getShelleyAbsoluteSlot(lastEpoch, 0);
+        long lastEpochStabilityWindowAbsoluteSlot = startSlotOfEpochLastEpoch + stabilityWindow;
+       // long lastEpochStabilityWindowAbsoluteSlot = startSlotOfEpoch - stabilityWindow;
        // long lastEpochStabilityWindowAbsoluteSlot = eraService.getShelleyAbsoluteSlot(lastEpoch, (int)stabilityWindow);
         log.info("Last epoch stability window slot : " + lastEpoch);
         log.info("Last epoch stability window slot : " + lastEpochStabilityWindowAbsoluteSlot);
@@ -207,8 +214,8 @@ public class EpochRewardCalculationService {
         HashSet<String> registeredAccountsUntilNow = new HashSet<>(registeredAccountsUntilNowList);
 
         //Remove
-        registeredAccountsSinceLastEpoch.add("stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k");
-        registeredAccountsUntilNow.add("stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k");
+//        registeredAccountsSinceLastEpoch.add("stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k");
+//        registeredAccountsUntilNow.add("stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k");
 
         RewardsCalcInput rewardsCalcInput = RewardsCalcInput.builder()
                 .epoch(epoch)
@@ -310,6 +317,57 @@ public class EpochRewardCalculationService {
         var epochCalculationResult = calculateEpochRewards(epoch);
         if(epochCalculationResult != null) {
             adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves());
+
+            //Update member rewards
+            updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
+        }
+    }
+
+    private void updateRewards(int epoch, List<PoolRewardCalculationResult> poolRewardCalculationResults) {
+        if(poolRewardCalculationResults == null || poolRewardCalculationResults.isEmpty())
+            return;
+
+        var spendableEpochStartAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch, 0);
+
+        for(PoolRewardCalculationResult poolRewardCalculationResult: poolRewardCalculationResults) {
+            String poolRewardAccount = poolRewardCalculationResult.getRewardAddress();
+            BigInteger leaderRewardAmt = poolRewardCalculationResult.getOperatorReward();
+
+            List<com.bloxbean.cardano.yaci.store.adapot.domain.Reward> poolRewards = new ArrayList<>();
+            String poolHash = PoolUtil.getPoolHash(poolRewardCalculationResult.getPoolId());
+            var leaderReward = com.bloxbean.cardano.yaci.store.adapot.domain.Reward.builder()
+                    .address(poolRewardAccount)
+                    .amount(leaderRewardAmt)
+                    .poolId(poolHash)
+                    .earnedEpoch(epoch - 2)
+                    .spendableEpoch(epoch)
+                    .type(RewardType.leader)
+                    .slot(spendableEpochStartAbsoluteSlot)
+                    .build();
+
+            poolRewards.add(leaderReward);
+
+            Set<Reward> memberRewards = poolRewardCalculationResult.getMemberRewards();
+
+            if(memberRewards != null && !memberRewards.isEmpty()) {
+
+                var memberRewardsList = memberRewards.stream().map(reward -> {
+                   return com.bloxbean.cardano.yaci.store.adapot.domain.Reward.builder()
+                           .address(reward.getStakeAddress())
+                           .amount(reward.getAmount())
+                           .poolId(poolHash)
+                           .earnedEpoch(epoch - 2)
+                           .spendableEpoch(epoch)
+                           .type(RewardType.member)
+                           .slot(spendableEpochStartAbsoluteSlot)
+                           .build();
+               }).toList();
+
+               poolRewards.addAll(memberRewardsList);
+            }
+
+            rewardStorage.saveRewards(poolRewards);
+            log.info("Rewards updated for pool : " + poolRewardAccount + " for epoch " + epoch + " with rewards : " + poolRewards.size());
         }
     }
 }

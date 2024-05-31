@@ -9,13 +9,10 @@ import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.cardanofoundation.rewards.calculation.DepositsCalculation;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Component

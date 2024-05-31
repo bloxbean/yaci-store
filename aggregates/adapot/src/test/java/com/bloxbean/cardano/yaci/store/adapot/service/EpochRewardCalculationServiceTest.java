@@ -1,8 +1,11 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
 import com.bloxbean.cardano.yaci.store.adapot.service.model.EpochValidationInput;
+import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.cardanofoundation.rewards.calculation.domain.PoolState;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,10 +24,21 @@ class EpochRewardCalculationServiceTest {
     @Autowired
     private EpochRewardCalculationService epochRewardCalculationService;
 
+    @Autowired
+    private StakeSnapshotService snapshotService;
+
+    @Autowired
+    private StoreProperties storeProperties;
+
+    @BeforeEach
+    public void setup() {
+        storeProperties.setMainnet(true);
+    }
+
     @Test
     void fetchRewardCalcInputs() throws IOException {
-        var rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(213);
-        var epochValidationInput = loadEpochValidationInputJson(213);
+        var rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(215);
+        var epochValidationInput = loadEpochValidationInputJson(215);
 
 
         Map<String, PoolState> rewardsCalcPoolStates = new HashMap<>();
@@ -37,9 +51,17 @@ class EpochRewardCalculationServiceTest {
             epochValidationPoolStates.put(poolState.getPoolId(), poolState);
         }
 
+        var rewardCalcPoolIdss = rewardsCalcPoolStates.values().stream()
+                .map(poolState -> poolState.getPoolId()).sorted().toList();
+        var epochValidationPoolIds = epochValidationPoolStates.values().stream()
+                .map(poolState -> poolState.getPoolId()).sorted().toList();
+
+        assertThat(rewardCalcPoolIdss).hasSameElementsAs(epochValidationPoolIds);
+
         for (String poolId : rewardsCalcPoolStates.keySet()) {
             PoolState rewardsCalcPoolState = rewardsCalcPoolStates.get(poolId);
             PoolState epochValidationPoolState = epochValidationPoolStates.get(poolId);
+
             //compare all fields of pool state
             assertThat(rewardsCalcPoolState.getPoolId()).isEqualTo(epochValidationPoolState.getPoolId());
             assertThat(rewardsCalcPoolState.getActiveStake()).isEqualTo(epochValidationPoolState.getActiveStake());
@@ -50,6 +72,11 @@ class EpochRewardCalculationServiceTest {
             assertThat(rewardsCalcPoolState.getMargin()).isEqualTo(epochValidationPoolState.getMargin());
             assertThat(rewardsCalcPoolState.getFixedCost()).isEqualTo(epochValidationPoolState.getFixedCost());
             assertThat(rewardsCalcPoolState.getPledge()).isEqualTo(epochValidationPoolState.getPledge());
+
+            if (rewardsCalcPoolState.getDelegators().size() != epochValidationPoolState.getDelegators().size()) {
+                assertThat(rewardsCalcPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList())
+                        .hasSameElementsAs(epochValidationPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList());
+            }
             assertThat(rewardsCalcPoolState.getDelegators().size()).isEqualTo(epochValidationPoolState.getDelegators().size());
             assertThat(rewardsCalcPoolState.getBlockCount()).isEqualTo(epochValidationPoolState.getBlockCount());
             assertThat(rewardsCalcPoolState.getEpoch()).isEqualTo(epochValidationPoolState.getEpoch());
@@ -77,11 +104,9 @@ class EpochRewardCalculationServiceTest {
         assertThat(rewardsCalcInput.getDeregisteredAccounts().size()).isEqualTo(epochValidationInput.getDeregisteredAccounts().size());
         assertThat(rewardsCalcInput.getLateDeregisteredAccounts().size()).isEqualTo(epochValidationInput.getLateDeregisteredAccounts().size());
 
-        //stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k
         assertThat(rewardsCalcInput.getRegisteredAccountsSinceLastEpoch()).hasSameElementsAs(epochValidationInput.getRegisteredAccountsSinceLastEpoch());
         assertThat(rewardsCalcInput.getRegisteredAccountsSinceLastEpoch().size()).isEqualTo(epochValidationInput.getRegisteredAccountsSinceLastEpoch().size());
 
-        //stake1uyqkpllunxtg98w0em0l2pgyp4etf6mnh2h9qzzr8laucdsehed4k
         assertThat(rewardsCalcInput.getRegisteredAccountsUntilNow()).hasSameElementsAs(epochValidationInput.getRegisteredAccountsUntilNow());
         assertThat(rewardsCalcInput.getRegisteredAccountsUntilNow().size()).isEqualTo(epochValidationInput.getRegisteredAccountsUntilNow().size());
 
@@ -92,7 +117,9 @@ class EpochRewardCalculationServiceTest {
 
     @Test
     void calculateEpochRewards() {
-        epochRewardCalculationService.calculateAndUpdateEpochRewards(213);
+        //snapshotService.takeStakeSnapshot(i);
+        epochRewardCalculationService.calculateAndUpdateEpochRewards(215);
+
     }
 
     private EpochValidationInput loadEpochValidationInputJson(int epoch) throws IOException {

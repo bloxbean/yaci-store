@@ -29,8 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.cardanofoundation.rewards.calculation.constants.RewardConstants.RANDOMNESS_STABILISATION_WINDOW;
-
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -69,6 +67,8 @@ public class PoolStateService {
 
                 HashSet<Delegator> delegators = delgatorStakes.stream()
                         .filter(epochStake -> epochStake.getPoolId().equals(poolId))
+                        .filter(epochStake -> epochStake.getAmount() != null
+                                && epochStake.getAmount().compareTo(BigInteger.ZERO) == 1)
                         .map(epochStake -> Delegator.builder()
                                 .stakeAddress(epochStake.getAddress())
                                 .activeStake(epochStake.getAmount())
@@ -101,12 +101,22 @@ public class PoolStateService {
                         continue;
                     }
 
+                    String rewardAccount = latestUpdate.getRewardAccount();
+                    if (storeProperties.isMainnet() && rewardAccount.startsWith("stake_test")) { //testnet addr in mainnet
+                        //convert it to mainnet address
+                        var stakeAddr = new Address(rewardAccount);
+                        var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
+                        if (stakeCred != null) {
+                            rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.mainnet()).toBech32();
+                        }
+                    }
+                    poolState.setRewardAddress(rewardAccount);
+
                     poolState.setFixedCost(latestUpdate.getCost());
                     poolState.setMargin(latestUpdate.getMargin());
-                    poolState.setRewardAddress(latestUpdate.getRewardAccount());
                     poolState.setPledge(latestUpdate.getPledge());
                     poolState.setEpoch(epoch);
-                    poolState.setPoolId(PoolUtil.getPoolId(poolId)); //bech32
+                    poolState.setPoolId(PoolUtil.getBech32PoolId(poolId)); //bech32
 
                     var poolOwnerStakeAddresses = latestUpdate.getPoolOwners()
                                     .stream()

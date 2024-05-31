@@ -9,9 +9,9 @@ import com.bloxbean.cardano.yaci.core.model.certs.MoveInstataneous;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
@@ -70,22 +70,22 @@ public class MIRProcessor {
 
     }
 
-    private Optional<RewardEvent> getRewardEvent(CertificateEvent certificateEvent, List<MoveInstataneousReward> moveInstataneousRewards) {
+    private Optional<InstantRewardEvent> getRewardEvent(CertificateEvent certificateEvent, List<MoveInstataneousReward> moveInstataneousRewards) {
         var rewardAmts = moveInstataneousRewards.stream()
                 .map(moveInstataneousReward -> {
-                    RewardType rewardType;
+                    InstantRewardType rewardType;
                     switch (moveInstataneousReward.getPot()) {
                         case TREASURY:
-                            rewardType = RewardType.treasury;
+                            rewardType = InstantRewardType.treasury;
                             break;
                         case RESERVES:
-                            rewardType = RewardType.reserves;
+                            rewardType = InstantRewardType.reserves;
                             break;
                         default:
                             rewardType = null;
                     }
 
-                    return RewardAmt.builder()
+                    return InstantRewardAmt.builder()
                             .rewardType(rewardType)
                             .txHash(moveInstataneousReward.getTxHash())
                             .amount(moveInstataneousReward.getAmount())
@@ -96,7 +96,7 @@ public class MIRProcessor {
         if (rewardAmts.isEmpty())
             return Optional.empty();
         else {
-            var rewardEvent = RewardEvent.builder()
+            var rewardEvent = InstantRewardEvent.builder()
                     .metadata(certificateEvent.getMetadata())
                     .rewards(rewardAmts)
                     .build();

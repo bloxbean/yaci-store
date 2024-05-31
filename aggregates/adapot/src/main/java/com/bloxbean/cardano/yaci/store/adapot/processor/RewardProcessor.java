@@ -1,12 +1,13 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
+import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.storage.RewardAccountStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
-import com.bloxbean.cardano.yaci.store.transaction.domain.WithdrawalEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -20,13 +21,12 @@ import java.util.List;
 @Slf4j
 public class RewardProcessor {
     private final RewardStorage rewardStorage;
-    private final RewardAccountStorage rewardAccountStorage;
 
     @EventListener
     @Transactional
-    public void handleRewardEvent(RewardEvent rewardEvent) {
+    public void handleInstantRewardEvent(InstantRewardEvent rewardEvent) {
         var metadata = rewardEvent.getMetadata();
-        List<RewardAmt> rewardAmts = rewardEvent.getRewards();
+        List<InstantRewardAmt> rewardAmts = rewardEvent.getRewards();
 
         if (rewardAmts == null || rewardAmts.isEmpty())
             return;
@@ -36,7 +36,7 @@ public class RewardProcessor {
                             //TODO - check if it's true for MIR rewards or refund
                             int epoch = metadata.getEpochNumber() + 1;
 
-                            var reward = new Reward();
+                            var reward = new InstantReward();
                             reward.setAddress(rewardAmt.getAddress());
                             reward.setAmount(rewardAmt.getAmount());
                             reward.setType(rewardAmt.getRewardType());
@@ -50,20 +50,35 @@ public class RewardProcessor {
                             return reward;
                         }).toList();
 
-        rewardStorage.save(rewards);
-
-        //Update reward account balance
-        rewardAccountStorage.addReward(rewards);
+        rewardStorage.saveInstantRewards(rewards);
     }
 
     @EventListener
     @Transactional
-    public void handleRewardWithdrawalEvent(WithdrawalEvent withdrawalEvent) {
-        var withdrawals = withdrawalEvent.getWithdrawals();
-        if (withdrawals == null || withdrawals.isEmpty())
+    public void handleRewardEvent(RewardEvent rewardEvent) {
+        var metadata = rewardEvent.getMetadata();
+        List<RewardAmt> rewardAmts = rewardEvent.getRewards();
+
+        if (rewardAmts == null || rewardAmts.isEmpty())
             return;
 
-        rewardAccountStorage.withdrawReward(withdrawals);
+        var rewards = rewardAmts.stream()
+                        .map(rewardAmt -> {
+                            int epoch = metadata.getEpochNumber() + 1;
+
+                            var reward = new Reward();
+                            reward.setAddress(rewardAmt.getAddress());
+                            reward.setAmount(rewardAmt.getAmount());
+                            reward.setType(rewardAmt.getRewardType());
+                            reward.setPoolId(rewardAmt.getPoolId());
+                            reward.setEarnedEpoch(metadata.getEpochNumber());
+                            reward.setSpendableEpoch(epoch);
+                            reward.setSlot(metadata.getSlot());
+
+                            return reward;
+                        }).toList();
+
+        rewardStorage.saveRewards(rewards);
     }
 
     @EventListener
@@ -72,8 +87,7 @@ public class RewardProcessor {
         int count = rewardStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} rewards records", count);
 
-        count = rewardAccountStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-        log.info("Rollback -- {} reward_account records", count);
+        //TODO -- What about rewards
     }
 
 }

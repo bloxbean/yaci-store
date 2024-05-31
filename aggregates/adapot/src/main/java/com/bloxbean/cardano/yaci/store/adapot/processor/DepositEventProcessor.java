@@ -3,9 +3,7 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
+import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRetiredEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.StakingDepositEvent;
@@ -124,6 +122,7 @@ public class DepositEventProcessor {
                 var rewardAmt = RewardAmt.builder()
                         .rewardType(RewardType.refund)
                         .address(rewardAccount)
+                        .poolId(pool.getPoolId())
                         .amount(poolDeposit)
                         .build();
                 rewardAmts.add(rewardAmt);

@@ -9,9 +9,9 @@ import java.math.BigInteger;
 @AllArgsConstructor
 @Builder
 @ToString
-public class RewardAmt {
-    private RewardType rewardType;
-    private String poolId;
+public class InstantRewardAmt {
+    private InstantRewardType rewardType;
+    private String txHash;
     private String address;
     private BigInteger amount;
 }

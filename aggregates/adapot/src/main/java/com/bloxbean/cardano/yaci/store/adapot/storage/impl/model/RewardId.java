@@ -6,10 +6,10 @@ import lombok.EqualsAndHashCode;
 import java.io.Serializable;
 
 @EqualsAndHashCode
-public class RewardAccountId implements Serializable {
+public class RewardId implements Serializable {
     @Column(name = "address")
     private String address;
 
-    @Column(name = "slot")
-    private Long slot;
+    @Column(name = "earned_epoch")
+    private Integer earnedEpoch;
 }
