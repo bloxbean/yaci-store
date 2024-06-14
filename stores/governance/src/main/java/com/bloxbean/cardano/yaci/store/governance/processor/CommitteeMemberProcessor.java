@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMember;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class CommitteeMemberProcessor {
     private final StoreProperties storeProperties;
     private final CommitteeMemberStorage committeeMemberStorage;
+    private final CommitteeMemberStorageReader committeeMemberStorageReader;
 
     @EventListener
     @Transactional
@@ -36,7 +38,14 @@ public class CommitteeMemberProcessor {
         long protocolMagic = epochChangeEvent.getEventMetadata().getProtocolMagic();
         long slot = epochChangeEvent.getEventMetadata().getSlot();
 
+        // store data from genesis file
         if (newEra.equals(Era.Conway) && prevEra != Era.Conway) {
+            boolean isCommitteeMemberDataPresent = committeeMemberStorageReader.findAll(0, 1, null).size() > 0;
+            if (isCommitteeMemberDataPresent) {
+                log.debug("Committee members already exists. Skipping storing committee members from genesis file");
+                return;
+            }
+
             var committeeMembers = getGenesisCommitteeMembers(protocolMagic);
             if (committeeMembers != null && !committeeMembers.isEmpty()) {
                 var committeeMembersToSave = committeeMembers.stream().map(committeeMember -> buildCommitteeMember(committeeMember, slot))
