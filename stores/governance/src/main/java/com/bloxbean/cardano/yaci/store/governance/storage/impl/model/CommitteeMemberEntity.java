@@ -30,6 +30,9 @@ public class CommitteeMemberEntity {
     @Enumerated(EnumType.STRING)
     private CredentialType credType;
 
+    @Column(name = "start_epoch")
+    private Integer startEpoch;
+
     @Column(name = "expired_epoch")
     private Integer expiredEpoch;
 
