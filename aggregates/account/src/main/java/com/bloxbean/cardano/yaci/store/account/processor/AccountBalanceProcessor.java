@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
 import com.bloxbean.cardano.yaci.store.account.service.AddressBalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
+import com.bloxbean.cardano.yaci.store.account.service.MetricCollectorService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
@@ -57,6 +58,7 @@ public class AccountBalanceProcessor {
     private final AddressBalanceSnapshotService addressBalanceSnapshotService;
     private final ParallelExecutor parallelExecutor;
     private final PlatformTransactionManager transactionManager;
+    private final MetricCollectorService metricCollectorService;
 
     private int nAddrBalanceRecordToKeep = 3;
 
@@ -75,7 +77,8 @@ public class AccountBalanceProcessor {
                                    BalanceSnapshotService balanceSnapshotService,
                                    AddressBalanceSnapshotService addressBalanceSnapshotService,
                                    ParallelExecutor parallelExecutor,
-                                   PlatformTransactionManager transactionManager) {
+                                   PlatformTransactionManager transactionManager,
+                                   MetricCollectorService metricCollectorService) {
         this.accountBalanceStorage = accountBalanceStorage;
         this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
         this.accountStoreProperties = accountStoreProperties;
@@ -85,6 +88,7 @@ public class AccountBalanceProcessor {
         this.addressBalanceSnapshotService = addressBalanceSnapshotService;
         this.parallelExecutor = parallelExecutor;
         this.transactionManager = transactionManager;
+        this.metricCollectorService = metricCollectorService;
     }
 
     @PostConstruct
@@ -101,6 +105,7 @@ public class AccountBalanceProcessor {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             return;
         addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
+
     }
 
     @EventListener
@@ -257,7 +262,7 @@ public class AccountBalanceProcessor {
             log.info("### Total balance processing and saving time {} ###\n", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
-
+            metricCollectorService.collectLastAccountBalanceProcessedBlockMetric(event.getMetadata().getBlock());
         } finally {
             addressUtxoEventsMap.clear();
         }
@@ -487,7 +492,7 @@ public class AccountBalanceProcessor {
                                 log.info("Unit: " + savedAddressBalance.get().getUnit());
                             }
                             log.error("Existing AddressBalance >> " + savedAddressBalance);
-
+                            metricCollectorService.collectNegativeBalanceAddressMetric();
                             negativeBalanceAddressList.put(key.getAddress(), true);
                             //throw new IllegalStateException("Error in address balance calculation");
                         }
@@ -563,7 +568,7 @@ public class AccountBalanceProcessor {
                             log.error("[Inputs] Negative balance for stakeAddress: " + stakeAddrInfoKey.getAddress() + " : " + newStakeAddrBalance.getQuantity());
                             log.info("SlotAmounts >> " + slotAmounts);
                             log.error("Existing StakeAddressBalance >> " + savedStakeAddressBalance);
-
+                            metricCollectorService.collectNegativeBalanceStakeAddressMetric();
                             negativeBalanceStakeAddressList.put(stakeAddrInfoKey.getAddress(), true);
                             //throw new IllegalStateException("Error in stake address balance calculation");
                         }
