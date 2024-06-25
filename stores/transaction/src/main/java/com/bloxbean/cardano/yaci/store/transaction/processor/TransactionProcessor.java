@@ -99,6 +99,8 @@ public class TransactionProcessor {
                     .collateralReturn(new UtxoKey(transaction.getTxHash(), outputs.size()))
                     .referenceInputs(referenceInputs)
                     .invalid(transaction.isInvalid())
+                    .size(transaction.getTxSize())
+                    .scriptSize(transaction.getTxScriptSize())
                     .build();
 
             txList.add(txn);

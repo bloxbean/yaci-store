@@ -40,4 +40,6 @@ public class Txn extends BlockAwareDomain {
     private BigInteger totalCollateral;
     private List<UtxoKey> referenceInputs;
     private Boolean invalid;
+    private int size;
+    private int scriptSize;
 }

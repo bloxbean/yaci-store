@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.app;
 
+import com.bloxbean.cardano.yaci.core.config.YaciConfig;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -16,6 +17,10 @@ import org.springframework.context.annotation.Bean;
 public class YaciStoreApplication {
 
     public static void main(String[] args) {
+
+        // will be removed before merge
+        YaciConfig.INSTANCE.setReturnTxSize(true);
+
         SpringApplication.run(YaciStoreApplication.class, args);
     }
 
