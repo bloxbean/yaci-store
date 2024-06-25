@@ -12,7 +12,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
@@ -127,7 +127,7 @@ public class ByronTransactionProcessor {
     //Resolve fee for unresolved fee transactions
     @EventListener
     @Transactional
-    public void handleUnresolvedFee(PreCommitEvent preCommitEvent) {
+    public void handleUnresolvedFee(CommitEvent preCommitEvent) {
         if (unresolvedFeeTxns.isEmpty())
             return;
 
