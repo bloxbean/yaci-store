@@ -23,5 +23,7 @@ public class CommitteeMember {
 
     private CredentialType credType;
 
+    private Integer startEpoch;
+
     private Integer expiredEpoch;
 }

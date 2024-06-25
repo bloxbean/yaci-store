@@ -48,7 +48,8 @@ public class CommitteeMemberProcessor {
 
             var committeeMembers = getGenesisCommitteeMembers(protocolMagic);
             if (committeeMembers != null && !committeeMembers.isEmpty()) {
-                var committeeMembersToSave = committeeMembers.stream().map(committeeMember -> buildCommitteeMember(committeeMember, slot))
+                var committeeMembersToSave = committeeMembers.stream().map(committeeMember ->
+                                buildCommitteeMember(committeeMember, epochChangeEvent.getEpoch(), slot))
                         .collect(Collectors.toList());
                 committeeMemberStorage.saveAll(committeeMembersToSave);
             }
@@ -64,9 +65,10 @@ public class CommitteeMemberProcessor {
             return new ConwayGenesis(new File(conwayGenesisFile)).getCommitteeMembers();
     }
 
-    private CommitteeMember buildCommitteeMember(GenesisCommitteeMember committeeMember, Long slot) {
+    private CommitteeMember buildCommitteeMember(GenesisCommitteeMember committeeMember, Integer startEpoch, Long slot) {
         return CommitteeMember.builder()
                 .hash(committeeMember.getHash())
+                .startEpoch(startEpoch)
                 .expiredEpoch(committeeMember.getExpiredEpoch())
                 .credType(committeeMember.getHasScript() ? CredentialType.SCRIPTHASH : CredentialType.ADDR_KEYHASH)
                 .slot(slot)

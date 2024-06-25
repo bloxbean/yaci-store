@@ -155,6 +155,7 @@ CREATE TABLE committee_member
 (
     hash            varchar(56) NOT NULL,
     cred_type       varchar(40),
+    start_epoch     int,
     expired_epoch   int,
     slot            bigint,
     update_datetime timestamp,
