@@ -118,7 +118,7 @@
 
 | Column Name       | Data Type   | Description                                                                   |
 |-------------------|-------------|-------------------------------------------------------------------------------|
-| number            | bigint      | Unique epoch identifier (not null, primary key)                               |
+| **number**        | bigint      | Unique epoch identifier (not null, primary key)                               |
 | block_count       | int         | Number of blocks produced in the epoch (nullable)                             |
 | transaction_count | bigint      | Number of transactions included in the epoch (nullable)                       |
 | total_output      | numeric(38) | Total amount of ADA distributed as outputs in the epoch (nullable)            |
@@ -131,9 +131,121 @@
 
 # V. Governance store
 
-| **Column name** | **Type** | **Description** |
-|:----------------|:---------|:----------------|
-|                 |          |                 |
+## 1. gov_action_proposal
+
+| Column Name     | Data Type    | Description                                                                 |
+|-----------------|--------------|-----------------------------------------------------------------------------|
+| **tx_hash**     | varchar(64)  | Unique transaction hash (not null, part of primary key)                     |
+| **idx**         | int          | Proposal index within the transaction (not null, part of primary key)       |
+| deposit         | bigint       | Amount of ADA required to deposit a vote on the proposal (nullable)         |
+| return_address  | varchar(255) | Address to which remaining ADA will be returned after voting (nullable)     |
+| anchor_url      | varchar      | URL for additional information about the proposal (nullable)                |
+| anchor_hash     | varchar(64)  | Hash of the off-chain data pointed to by anchor_url (nullable)              |
+| type            | varchar(50)  | Type of governance action proposed (e.g., updateProposal, withdrawProposal) |
+| details         | jsonb        | JSON document containing details about the proposal (nullable)              |
+| epoch           | int          | Epoch number when the proposal was submitted (nullable)                     |
+| slot            | bigint       | Slot number within the epoch when the proposal was submitted (nullable)     |
+| block           | bigint       | Block number where the proposal transaction is included (nullable)          |
+| block_time      | bigint       | Unix timestamp representing the time the block was produced (nullable)      |
+| update_datetime | timestamp    | Date and time the record was last updated                                   |
+
+## 2. voting_procedure
+
+| Column Name            | Data Type   | Description                                                                       |
+|------------------------|-------------|-----------------------------------------------------------------------------------|
+| **tx_hash**            | varchar(64) | Transaction hash associated with the vote (not null, part of primary key)         |
+| **voter_hash**         | varchar(56) | Hash identifying the voter (not null, part of primary key)                        |
+| **gov_action_tx_hash** | varchar(64) | Transaction hash of the corresponding governance action proposal (nullable)       |
+| **gov_action_index**   | int         | Index of the proposal within the governance action transaction (nullable)         |
+| id                     | uuid        | Unique identifier (not null, primary key)                                         |
+| idx                    | int         | Index of the voting option within the transaction (not null, part of primary key) |
+| voter_type             | varchar(50) | Type of voter (e.g., stake pool, delegation certificate)                          |
+| vote                   | varchar(10) | Cast vote (e.g., "yes", "no", "abstain")                                          |
+| anchor_url             | varchar     | URL for additional information about the vote (nullable)                          |
+| anchor_hash            | varchar(64) | Hash of the off-chain data pointed to by anchor_url (nullable)                    |
+| epoch                  | int         | Epoch number when the vote was cast (nullable)                                    |
+| slot                   | bigint      | Slot number within the epoch when the vote was cast (nullable)                    |
+| block                  | bigint      | Block number where the voting transaction is included (nullable)                  |
+| block_time             | bigint      | Unix timestamp representing the time the block was produced (nullable)            |
+| update_datetime        | timestamp   | Date and time the record was last updated                                         |
+
+## 3. committee_registration
+
+| Column Name     | Data Type   | Description                                                             |
+|-----------------|-------------|-------------------------------------------------------------------------|
+| **tx_hash**     | varchar(64) | Unique transaction hash (not null, primary key)                         |
+| **cert_index**  | int         | Index of the certificate within the transaction (not null, primary key) |
+| cold_key        | varchar     | Public key for the cold wallet (nullable)                               |
+| hot_key         | varchar     | Public key for the hot wallet (nullable)                                |
+| cred_type       | varchar(40) | Type of credential used for registration (nullable)                     |
+| epoch           | int         | Epoch number when the registration occurred (nullable)                  |
+| slot            | bigint      | Slot number within the epoch when the registration occurred (nullable)  |
+| block           | bigint      | Block number where the registration transaction is included (nullable)  |
+| block_time      | bigint      | Unix timestamp representing the time the block was produced (nullable)  |
+| update_datetime | timestamp   | Date and time the record was last updated                               |
+
+## 4. committee_deregistration
+
+| Column Name     | Data Type   | Description                                                              |
+|-----------------|-------------|--------------------------------------------------------------------------|
+| **tx_hash**     | varchar(64) | Unique transaction hash (not null, primary key)                          |
+| **cert_index**  | int         | Index of the certificate within the transaction (not null, primary key)  |
+| anchor_url      | varchar     | URL for additional information about the deregistration (nullable)       |
+| anchor_hash     | varchar(64) | Hash of the off-chain data pointed to by anchor_url (nullable)           |
+| cold_key        | varchar(64) | Public key for the cold wallet (not null)                                |
+| cred_type       | varchar(40) | Type of credential used for deregistration (nullable)                    |
+| epoch           | int         | Epoch number when the deregistration occurred (nullable)                 |
+| slot            | bigint      | Slot number within the epoch when the deregistration occurred (nullable) |
+| block           | bigint      | Block number where the deregistration transaction is included (nullable) |
+| block_time      | bigint      | Unix timestamp representing the time the block was produced (nullable)   |
+| update_datetime | timestamp   | Date and time the record was last updated                                |
+
+## 5. delegation_vote
+
+| Column Name     | Data Type    | Description                                                               |
+|-----------------|--------------|---------------------------------------------------------------------------|
+| **tx_hash**     | varchar(64)  | Unique transaction hash (not null, primary key)                           |
+| **cert_index**  | int          | Index of the certificate within the transaction (not null, primary key)   |
+| address         | varchar(255) | Bech32 encoded stake address of the delegator (nullable)                  |
+| drep_hash       | varchar(56)  | Hash of the delegation epoch reward pool (nullable)                       |
+| drep_id         | varchar(255) | Unique identifier for the delegation epoch reward pool (nullable)         |
+| drep_type       | varchar(40)  | Type of the delegation epoch reward pool (nullable)                       |
+| epoch           | int          | Epoch number for which the vote is cast (nullable)                        |
+| credential      | varchar(56)  | Hash of the credential used for voting (nullable)                         |
+| cred_type       | varchar(40)  | Type of credential used for voting (nullable)                             |
+| slot            | bigint       | Slot number within the epoch when the vote was cast (nullable)            |
+| block           | bigint       | Block number where the delegation vote transaction is included (nullable) |
+| block_time      | bigint       | Unix timestamp representing the time the block was produced (nullable)    |
+| update_datetime | timestamp    | Date and time the record was last updated                                 |
+
+## 6. drep_registration
+
+| Column Name     | Data Type    | Description                                                             |
+|-----------------|--------------|-------------------------------------------------------------------------|
+| **tx_hash**     | varchar(64)  | Unique transaction hash (not null, primary key)                         |
+| **cert_index**  | int          | Index of the certificate within the transaction (not null, primary key) |
+| type            | varchar(50)  | Type of DREP registration (e.g., stake pool registration, withdrawal)   |
+| deposit         | bigint       | Amount of ADA deposited for specific registration types (nullable)      |
+| drep_hash       | varchar(56)  | Hash of the delegation epoch reward pool (nullable)                     |
+| drep_id         | varchar(255) | Unique identifier for the delegation epoch reward pool (nullable)       |
+| anchor_url      | varchar      | URL for additional information about the registration (nullable)        |
+| anchor_hash     | varchar(64)  | Hash of the off-chain data pointed to by anchor_url (nullable)          |
+| cred_type       | varchar(40)  | Type of credential used for registration (nullable)                     |
+| epoch           | int          | Epoch number when the registration occurred (nullable)                  |
+| slot            | bigint       | Slot number within the epoch when the registration occurred (nullable)  |
+| block           | bigint       | Block number where the registration transaction is included (nullable)  |
+| block_time      | bigint       | Unix timestamp representing the time the block was produced (nullable)  |
+| update_datetime | timestamp    | Date and time the record was last updated                               |
+
+## 7. committee_member
+
+| Column Name     | Data Type   | Description                                                                                             |
+|-----------------|-------------|---------------------------------------------------------------------------------------------------------|
+| **hash**        | varchar(56) | Unique identifier for the committee member (not null, primary key)                                      |
+| **slot**        | bigint      | Slot number within the blockchain where the committee member record was updated (not null, primary key) |
+| cred_type       | varchar(40) | Type of credential used for committee membership (nullable)                                             |
+| expired_epoch   | int         | Epoch number when the committee membership expires (nullable)                                           |
+| update_datetime | timestamp   | Date and time the record was last updated                                                               |
 
 # VI. Live store
 
