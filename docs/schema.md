@@ -116,7 +116,7 @@
 
 ## 1. epoch
 
-| Column Name       | Data Type   | Description                                                                   |
+| **Column name**   | **Type**    | **Description**                                                               |
 |-------------------|-------------|-------------------------------------------------------------------------------|
 | **number**        | bigint      | Unique epoch identifier (not null, primary key)                               |
 | block_count       | int         | Number of blocks produced in the epoch (nullable)                             |
@@ -133,7 +133,7 @@
 
 ## 1. gov_action_proposal
 
-| Column Name     | Data Type    | Description                                                                 |
+| **Column name** | **Type**     | **Description**                                                             |
 |-----------------|--------------|-----------------------------------------------------------------------------|
 | **tx_hash**     | varchar(64)  | Unique transaction hash (not null, part of primary key)                     |
 | **idx**         | int          | Proposal index within the transaction (not null, part of primary key)       |
@@ -151,7 +151,7 @@
 
 ## 2. voting_procedure
 
-| Column Name            | Data Type   | Description                                                                       |
+| **Column name**        | **Type**    | **Description**                                                                   |
 |------------------------|-------------|-----------------------------------------------------------------------------------|
 | **tx_hash**            | varchar(64) | Transaction hash associated with the vote (not null, part of primary key)         |
 | **voter_hash**         | varchar(56) | Hash identifying the voter (not null, part of primary key)                        |
@@ -171,7 +171,7 @@
 
 ## 3. committee_registration
 
-| Column Name     | Data Type   | Description                                                             |
+| **Column name** | **Type**    | **Description**                                                         |
 |-----------------|-------------|-------------------------------------------------------------------------|
 | **tx_hash**     | varchar(64) | Unique transaction hash (not null, primary key)                         |
 | **cert_index**  | int         | Index of the certificate within the transaction (not null, primary key) |
@@ -186,7 +186,7 @@
 
 ## 4. committee_deregistration
 
-| Column Name     | Data Type   | Description                                                              |
+| **Column name** | **Type**    | **Description**                                                          |
 |-----------------|-------------|--------------------------------------------------------------------------|
 | **tx_hash**     | varchar(64) | Unique transaction hash (not null, primary key)                          |
 | **cert_index**  | int         | Index of the certificate within the transaction (not null, primary key)  |
@@ -202,7 +202,7 @@
 
 ## 5. delegation_vote
 
-| Column Name     | Data Type    | Description                                                               |
+| **Column name** | **Type**     | **Description**                                                           |
 |-----------------|--------------|---------------------------------------------------------------------------|
 | **tx_hash**     | varchar(64)  | Unique transaction hash (not null, primary key)                           |
 | **cert_index**  | int          | Index of the certificate within the transaction (not null, primary key)   |
@@ -220,7 +220,7 @@
 
 ## 6. drep_registration
 
-| Column Name     | Data Type    | Description                                                             |
+| **Column name** | **Type**     | **Description**                                                         |
 |-----------------|--------------|-------------------------------------------------------------------------|
 | **tx_hash**     | varchar(64)  | Unique transaction hash (not null, primary key)                         |
 | **cert_index**  | int          | Index of the certificate within the transaction (not null, primary key) |
@@ -239,7 +239,7 @@
 
 ## 7. committee_member
 
-| Column Name     | Data Type   | Description                                                                                             |
+| **Column name** | **Type**    | **Description**                                                                                         |
 |-----------------|-------------|---------------------------------------------------------------------------------------------------------|
 | **hash**        | varchar(56) | Unique identifier for the committee member (not null, primary key)                                      |
 | **slot**        | bigint      | Slot number within the blockchain where the committee member record was updated (not null, primary key) |
@@ -497,7 +497,65 @@
 | stake_credential   | varchar(56)  | Bech32 stake credential associated with the address   |
 | update_datetime    | timestamp    | Timestamp of the last update to this record.          |
 
-# XIII. Core table
+# XIII. Account aggregation
+
+## 1. address_balance
+
+| **Column Name** | **Data Type** | **Description**                                                                      |
+|-----------------|---------------|--------------------------------------------------------------------------------------|
+| **address**     | varchar(500)  | Bech32 encoded stake address or public key hash                                      |
+| **unit**        | varchar(255)  | Optional unit for the quantity (e.g., lovelace for ADA)                              |
+| **slot**        | bigint        | Slot number within the epoch when the balance was recorded                           |
+| quantity        | numeric(38)   | Numeric representation of the asset amount (nullable)                                |
+| addr_full       | text          | Full address details in Cardano format (nullable)                                    |
+| policy          | varchar(56)   | Policy ID (fingerprint) of the off-chain asset definition                            |
+| asset_name      | varchar(255)  | Optional human-readable name of the asset                                            |
+| block_hash      | varchar(64)   | Hash of the block where the transaction affecting the balance is included (nullable) |
+| block           | bigint        | Block number within the Cardano blockchain (nullable)                                |
+| block_time      | bigint        | Unix timestamp representing the time the block was produced (nullable)               |
+| epoch           | integer       | Epoch number when the balance was recorded                                           |
+| update_datetime | timestamp     | Date and time the record was last updated                                            |
+
+## 2. stake_address_balance
+
+| **Column Name**  | **Data Type** | **Description**                                                                      |
+|------------------|---------------|--------------------------------------------------------------------------------------|
+| **address**      | varchar(255)  | Bech32 encoded stake address (not null, primary key)                                 |
+| **slot**         | bigint        | Slot number within the epoch when the balance was recorded (not null, primary key)   |
+| quantity         | numeric(38)   | Numeric representation of the ADA balance (nullable)                                 |
+| stake_credential | varchar(56)   | Stake credential associated with the address (nullable)                              |
+| block_hash       | varchar(64)   | Hash of the block where the transaction affecting the balance is included (nullable) |
+| block            | bigint        | Block number within the Cardano blockchain (nullable)                                |
+| block_time       | bigint        | Unix timestamp representing the time the block was produced (nullable)               |
+| epoch            | integer       | Epoch number when the balance was recorded (nullable)                                |
+| update_datetime  | timestamp     | Date and time the record was last updated                                            |
+
+## 3. address_tx_amount
+
+| **Column Name** | **Data Type** | **Description**                                                                         |
+|-----------------|---------------|-----------------------------------------------------------------------------------------|
+| **address**     | varchar(500)  | Bech32 encoded stake address or public key hash                                         |
+| **unit**        | varchar(255)  | Optional unit for the quantity (e.g., lovelace for ADA)                                 |
+| **tx_hash**     | varchar(64)   | Unique transaction hash (not null, part of primary key)                                 |
+| slot            | bigint        | Slot number within the epoch when the transaction occurred (nullable)                   |
+| quantity        | numeric(38)   | Numeric representation of the asset amount involved in the transaction (nullable)       |
+| addr_full       | text          | Full address details in Cardano format (nullable)                                       |
+| stake_address   | varchar(255)  | Bech32 encoded stake address associated with the transaction (nullable)                 |
+| block           | bigint        | Block number within the Cardano blockchain where the transaction is included (nullable) |
+| block_time      | bigint        | Unix timestamp representing the time the block was produced (nullable)                  |
+| epoch           | integer       | Epoch number when the transaction occurred (nullable)                                   |
+
+## 4. account_config
+
+| **Column Name** | **Data Type** | **Description**                                                                                                     |
+|-----------------|---------------|---------------------------------------------------------------------------------------------------------------------|
+| **config_id**   | varchar(100)  | Unique identifier for the account configuration (primary key)                                                       |
+| status          | varchar(50)   | Current status of the account configuration (e.g., active, inactive)                                                |
+| slot            | bigint        | Slot number within the epoch when the account configuration was updated (nullable)                                  |
+| block           | bigint        | Block number within the Cardano blockchain where the transaction affecting the configuration is included (nullable) |
+| block_hash      | varchar(64)   | Hash of the block containing the transaction affecting the configuration (nullable)                                 |
+
+# XIV. Core table
 
 ## 1. cursor_
 
