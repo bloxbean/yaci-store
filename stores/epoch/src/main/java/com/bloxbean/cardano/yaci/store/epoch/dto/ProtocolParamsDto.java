@@ -85,4 +85,5 @@ public class ProtocolParamsDto {
     private BigInteger govActionDeposit;
     private BigInteger drepDeposit;
     private Integer drepActivity;
+    private BigDecimal minFeeRefScriptCostPerByte;
 }
