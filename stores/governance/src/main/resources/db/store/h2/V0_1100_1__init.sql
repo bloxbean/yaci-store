@@ -164,3 +164,16 @@ CREATE TABLE committee_member
 
 CREATE INDEX idx_committee_member_slot
     ON drep_registration (slot);
+
+CREATE TABLE constitution
+(
+    anchor_url      varchar,
+    anchor_hash     varchar(64),
+    script          varchar(64),
+    slot            bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (anchor_hash, slot)
+);
+
+CREATE INDEX idx_constitution_slot
+    ON constitution (slot);
