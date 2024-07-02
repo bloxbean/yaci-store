@@ -19,6 +19,8 @@ public class Constitution {
 
     private String anchorHash;
 
+    private Integer activeEpoch;
+
     private Long slot;
 
     private String script;

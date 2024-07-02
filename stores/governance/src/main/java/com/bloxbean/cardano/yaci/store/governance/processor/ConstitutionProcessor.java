@@ -33,7 +33,7 @@ public class ConstitutionProcessor {
         Era newEra = epochChangeEvent.getEra();
         long protocolMagic = epochChangeEvent.getEventMetadata().getProtocolMagic();
         long slot = epochChangeEvent.getEventMetadata().getSlot();
-
+        int epoch = epochChangeEvent.getEventMetadata().getEpochNumber();
         // store data from genesis file
         if (newEra.equals(Era.Conway) && prevEra != Era.Conway) {
             boolean isConstitutionDataPresent = constitutionStorageReader.findCurrentConstitution().isPresent();
@@ -43,7 +43,7 @@ public class ConstitutionProcessor {
             }
             var constitution = getGenesisConstitution(protocolMagic);
             if (constitution != null) {
-                var constitutionToSave = buildConstitution(constitution, slot);
+                var constitutionToSave = buildConstitution(constitution, epoch, slot);
                 constitutionStorage.save(constitutionToSave);
             }
         }
@@ -58,10 +58,12 @@ public class ConstitutionProcessor {
             return new ConwayGenesis(new File(conwayGenesisFile)).getConstitution();
     }
 
-    private Constitution buildConstitution(GenesisConstitution genesisConstitution, long slot) {
+    private Constitution buildConstitution(GenesisConstitution genesisConstitution, int activeEpoch, long slot) {
         return Constitution.builder()
                 .anchorUrl(genesisConstitution.getAnchorUrl())
                 .anchorHash(genesisConstitution.getAnchorHash())
+                .activeEpoch(activeEpoch)
+                .script(genesisConstitution.getScript())
                 .slot(slot)
                 .build();
     }

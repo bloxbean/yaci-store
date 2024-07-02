@@ -13,19 +13,20 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "constitution")
-@IdClass(ConstitutionId.class)
 public class ConstitutionEntity {
 
     @Column(name = "anchor_url")
     private String anchorUrl;
 
-    @Id
     @Column(name = "anchor_hash")
     private String anchorHash;
 
-    @Id
     @Column(name = "slot")
     private Long slot;
+
+    @Id
+    @Column(name = "active_epoch")
+    private Integer activeEpoch;
 
     @Column(name = "script")
     private String script;
