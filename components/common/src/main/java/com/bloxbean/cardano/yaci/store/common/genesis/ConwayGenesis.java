@@ -1,9 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.genesis;
 
-import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
-import com.bloxbean.cardano.yaci.store.common.domain.GenesisCommitteeMember;
-import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
-import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.client.backend.model.Genesis;
+import com.bloxbean.cardano.yaci.store.common.domain.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
 
@@ -45,7 +43,7 @@ public class ConwayGenesis extends GenesisFile{
     private final static String ANCHOR = "anchor";
     private final static String URL = "url";
     private final static String DATA_HASH = "dataHash";
-
+    private final static String SCRIPT = "script";
     private final static String COMMITTEE = "committee";
     private final static String MEMBERS = "members";
     private final static String THRESHOLD = "threshold";
@@ -55,6 +53,8 @@ public class ConwayGenesis extends GenesisFile{
     private List<GenesisCommitteeMember> committeeMembers;
     @Getter
     private Double committeeThreshold;
+    @Getter
+    private GenesisConstitution constitution;
 
     public ConwayGenesis(File file) {
         super(file);
@@ -220,6 +220,25 @@ public class ConwayGenesis extends GenesisFile{
             costModelMap.put(PLUTUS_V3, plutusV3CostModelArray);
             protocolParams.setCostModels(costModelMap);
             protocolParams.setCostModelsHash("genesis.conway");
+        }
+
+        var constitutionNode = genesisJson.get(CONSTITUTION);
+
+        if (constitutionNode != null) {
+            var anchorNode = constitutionNode.get(ANCHOR);
+            if (anchorNode != null) {
+                String anchorUrl = anchorNode.get(URL) != null ? anchorNode.get(URL).asText() : null;
+                String anchorHash = anchorNode.get(DATA_HASH) != null ? anchorNode.get(DATA_HASH).asText() : null;
+                constitution = GenesisConstitution.builder()
+                        .anchorHash(anchorHash)
+                        .anchorUrl(anchorUrl)
+                        .build();
+            }
+
+            String script = constitutionNode.get(SCRIPT) != null ? constitutionNode.get("script").asText() : null;
+            if (constitution != null) {
+                constitution.setScript(script);
+            }
         }
     }
 

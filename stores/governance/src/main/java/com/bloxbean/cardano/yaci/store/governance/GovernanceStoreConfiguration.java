@@ -120,8 +120,21 @@ public class GovernanceStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public CommitteeMemberStorageReader committeeMemberStorageReader(CommitteeMemberRepository committeeMemberRepository,
-                                                         CommitteeMemberMapper committeeMemberMapper) {
+                                                                     CommitteeMemberMapper committeeMemberMapper) {
         return new CommitteeMemberStorageReaderImpl(committeeMemberRepository, committeeMemberMapper);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public ConstitutionStorage constitutionStorage(ConstitutionRepository constitutionRepository,
+                                                   ConstitutionMapper constitutionMapper) {
+        return new ConstitutionStorageImpl(constitutionRepository, constitutionMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ConstitutionStorageReader constitutionStorageReader(ConstitutionRepository constitutionRepository,
+                                                               ConstitutionMapper constitutionMapper) {
+        return new ConstitutionStorageReaderImpl(constitutionRepository, constitutionMapper);
+    }
 }
