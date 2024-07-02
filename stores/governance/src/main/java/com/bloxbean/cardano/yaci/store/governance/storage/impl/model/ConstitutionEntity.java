@@ -15,6 +15,10 @@ import java.time.LocalDateTime;
 @Table(name = "constitution")
 public class ConstitutionEntity {
 
+    @Id
+    @Column(name = "active_epoch")
+    private Integer activeEpoch;
+
     @Column(name = "anchor_url")
     private String anchorUrl;
 
@@ -23,10 +27,6 @@ public class ConstitutionEntity {
 
     @Column(name = "slot")
     private Long slot;
-
-    @Id
-    @Column(name = "active_epoch")
-    private Integer activeEpoch;
 
     @Column(name = "script")
     private String script;

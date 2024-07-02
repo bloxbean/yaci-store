@@ -15,11 +15,11 @@ import lombok.experimental.SuperBuilder;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Constitution {
+    private Integer activeEpoch;
+
     private String anchorUrl;
 
     private String anchorHash;
-
-    private Integer activeEpoch;
 
     private Long slot;
 

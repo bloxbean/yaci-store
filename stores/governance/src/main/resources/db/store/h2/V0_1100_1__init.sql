@@ -167,10 +167,10 @@ CREATE INDEX idx_committee_member_slot
 
 CREATE TABLE constitution
 (
+    active_epoch    int,
     anchor_url      varchar,
     anchor_hash     varchar(64),
     script          varchar(64),
-    active_epoch    int,
     slot            bigint,
     update_datetime timestamp,
     PRIMARY KEY (active_epoch)
