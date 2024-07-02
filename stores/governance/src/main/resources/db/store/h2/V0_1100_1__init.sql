@@ -170,9 +170,10 @@ CREATE TABLE constitution
     anchor_url      varchar,
     anchor_hash     varchar(64),
     script          varchar(64),
+    active_epoch    int,
     slot            bigint,
     update_datetime timestamp,
-    PRIMARY KEY (anchor_hash, slot)
+    PRIMARY KEY (active_epoch)
 );
 
 CREATE INDEX idx_constitution_slot
