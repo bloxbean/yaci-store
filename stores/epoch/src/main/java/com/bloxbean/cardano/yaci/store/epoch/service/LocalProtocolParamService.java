@@ -34,20 +34,19 @@ public class LocalProtocolParamService {
 
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
 
-    @Value("${store.cardano.n2c-era:Babbage}")
-    private String eraStr;
-
     private Era era;
 
-    public LocalProtocolParamService(LocalClientProvider localClientProvider, LocalProtocolParamsRepository protocolParamsRepository) {
+    public LocalProtocolParamService(LocalClientProvider localClientProvider, LocalProtocolParamsRepository protocolParamsRepository,
+                                     @Value("${store.cardano.n2c-era:Babbage}") String eraStr) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.protocolParamsRepository = protocolParamsRepository;
         log.info("ProtocolParamService initialized >>>");
+
+        init(eraStr);
     }
 
-    @PostConstruct
-    public void postConstruct() {
+    public void init(String eraStr) {
         if (StringUtil.isEmpty(eraStr))
             eraStr = "Babbage";
 

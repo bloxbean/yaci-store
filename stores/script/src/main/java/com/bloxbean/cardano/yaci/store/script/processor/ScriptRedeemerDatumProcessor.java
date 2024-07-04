@@ -17,8 +17,6 @@ import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,7 +35,6 @@ import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumH
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutusScriptHash;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class ScriptRedeemerDatumProcessor {
     private final TxScriptStorage txScriptStorage;
@@ -52,7 +49,18 @@ public class ScriptRedeemerDatumProcessor {
 
     private Executor executor;
 
-    @PostConstruct
+    public ScriptRedeemerDatumProcessor(TxScriptStorage txScriptStorage, ScriptStorage scriptStorage, DatumStorage datumStorage,
+                                        RedeemerDatumMatcher redeemerMatcher, TxScriptFinder txScriptFinder, ApplicationEventPublisher publisher) {
+        this.txScriptStorage = txScriptStorage;
+        this.scriptStorage = scriptStorage;
+        this.datumStorage = datumStorage;
+        this.redeemerMatcher = redeemerMatcher;
+        this.txScriptFinder = txScriptFinder;
+        this.publisher = publisher;
+
+        init();
+    }
+
     public void init() {
         executor = Executors.newVirtualThreadPerTaskExecutor();
     }
