@@ -30,7 +30,7 @@ Parameters:
 - `govAction`: The governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
 - `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
 - `spoTotalStake`: The total delegated stake from SPO.
@@ -89,7 +89,7 @@ Parameters:
 - `infoAction`: The Info governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
 - `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
 - `spoTotalStake`: The total delegated stake from SPO.
@@ -109,7 +109,7 @@ Parameters:
 - `hardForkInitiationAction`: The Hard Fork Initiation governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
 - `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
 - `spoTotalStake`: The total delegated stake from SPO.
@@ -129,7 +129,7 @@ Parameters:
 - `newConstitution`: The New Constitution governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
 - `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
 - `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
@@ -146,7 +146,7 @@ Parameters:
 - `treasuryWithdrawalsAction`: The Treasury Withdrawals governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
 - `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
 - `spoTotalStake`: The total delegated stake from SPO.
@@ -164,7 +164,7 @@ Parameters:
 - `parameterChangeAction`: The Parameter Change governance action for which ratification result is needed.
 - `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
 - `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccQuorum`: The quorum of the Constitution Committee.
+- `ccThreshold`: The threshold of the Constitution Committee.
 - `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
 - `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
 - `spoTotalStake`: The total delegated stake from SPO.

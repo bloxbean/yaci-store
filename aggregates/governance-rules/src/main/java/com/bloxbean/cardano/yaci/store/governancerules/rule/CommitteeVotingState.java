@@ -10,13 +10,13 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
 public class CommitteeVotingState extends VotingState {
-    private Integer ccQuorum;
+    private Double threshold;
     private Integer yesVote;
     private Integer noVote;
 
     @Override
     public boolean isAccepted() {
-        return yesVote / (yesVote + noVote) >= ccQuorum;
+        return ((double) yesVote / (yesVote + noVote)) >= threshold;
     }
 
 }
