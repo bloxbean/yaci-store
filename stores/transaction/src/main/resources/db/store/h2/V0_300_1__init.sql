@@ -22,7 +22,9 @@ create table transaction
     collateral_return_json  json,
     block                   bigint,
     block_time              bigint,
-    update_datetime         timestamp
+    update_datetime         timestamp,
+    size                    smallint,
+    script_size             smallint
 );
 
 CREATE INDEX idx_transaction_slot
