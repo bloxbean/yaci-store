@@ -33,6 +33,7 @@ public class StakeRegistrationService {
          WHERE s2.address = s.address
          AND s2.epoch <= ?
          AND s2.slot > s.slot
+         AND s2.slot < ?
          AND s2.type = 'STAKE_REGISTRATION'
          )
          ORDER BY s.address;
@@ -49,6 +50,7 @@ public class StakeRegistrationService {
                         .where(s2.ADDRESS.eq(s.ADDRESS)
                                 .and(s2.EPOCH.le(epoch))
                                 .and(s2.SLOT.gt(s.SLOT))
+                                .and(s2.SLOT.lt(absoluteSlot))
                                 .and(s2.TYPE.eq("STAKE_REGISTRATION")))
         );
 
