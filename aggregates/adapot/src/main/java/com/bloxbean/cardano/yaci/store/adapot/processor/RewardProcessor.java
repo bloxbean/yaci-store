@@ -64,15 +64,13 @@ public class RewardProcessor {
 
         var rewards = rewardAmts.stream()
                         .map(rewardAmt -> {
-                            int epoch = metadata.getEpochNumber() + 1;
-
                             var reward = new Reward();
                             reward.setAddress(rewardAmt.getAddress());
                             reward.setAmount(rewardAmt.getAmount());
                             reward.setType(rewardAmt.getRewardType());
                             reward.setPoolId(rewardAmt.getPoolId());
-                            reward.setEarnedEpoch(metadata.getEpochNumber());
-                            reward.setSpendableEpoch(epoch);
+                            reward.setEarnedEpoch(rewardEvent.getEarnedEpoch());
+                            reward.setSpendableEpoch(rewardEvent.getSpendableEpoch());
                             reward.setSlot(metadata.getSlot());
 
                             return reward;

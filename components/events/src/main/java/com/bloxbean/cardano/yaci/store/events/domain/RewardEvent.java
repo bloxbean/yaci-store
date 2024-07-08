@@ -12,5 +12,7 @@ import java.util.List;
 @ToString
 public class RewardEvent {
     private EventMetadata metadata;
+    private int earnedEpoch;
+    private int spendableEpoch;
     private List<RewardAmt> rewards;
 }
