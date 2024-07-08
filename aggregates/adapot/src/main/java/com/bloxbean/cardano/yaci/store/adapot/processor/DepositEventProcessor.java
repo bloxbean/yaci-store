@@ -132,7 +132,13 @@ public class DepositEventProcessor {
         poolRefundAmount = refundAmt;
 
         //Publish reward event to process refund
-        publisher.publishEvent(new RewardEvent(poolRetiredEvent.getMetadata(), rewardAmts));
+        var rewardEvent = RewardEvent.builder()
+                .metadata(poolRetiredEvent.getMetadata())
+                .earnedEpoch(poolRetiredEvent.getMetadata().getEpochNumber())
+                .spendableEpoch(poolRetiredEvent.getMetadata().getEpochNumber())
+                .rewards(rewardAmts)
+                .build();
+        publisher.publishEvent(rewardEvent);
     }
 
     public BigInteger getBatchDepositAmount() {
