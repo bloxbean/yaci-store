@@ -160,7 +160,7 @@ public class EpochRewardCalculationService {
         HashSet<String> deregisteredAccounts;
         HashSet<String> deregisteredAccountsOnEpochBoundary;
         HashSet<String> lateDeregisteredAccounts = new HashSet<>();
-        if (epoch < MAINNET_VASIL_HARDFORK_EPOCH) { //epoch - 2 ??  //Reward calculation epoch
+        if (epoch-2 < MAINNET_VASIL_HARDFORK_EPOCH) { //epoch - 2 ??  //Reward calculation epoch
             //convert to absolute slot
             //add epoch slot to stake_registration
             long epochRandomStabilizationWindowAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch - 1, (int)RANDOMNESS_STABILISATION_WINDOW);//TODO epoch -2?
