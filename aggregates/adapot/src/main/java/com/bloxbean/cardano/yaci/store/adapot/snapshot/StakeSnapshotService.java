@@ -125,7 +125,7 @@ public class StakeSnapshotService {
                                     FROM stake_registration sd
                                     WHERE sd.address = d.address
                                     AND sd.type = 'STAKE_DEREGISTRATION'
-                                    AND sd.epoch <= d.epoch
+                                    AND sd.epoch <= :epoch
                                     AND sd.slot > d.slot
                             )
                 """;

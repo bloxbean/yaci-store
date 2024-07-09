@@ -179,8 +179,9 @@ public class EpochRewardCalculationService {
             deregisteredAccountsOnEpochBoundary = deregisteredAccounts;
         }
 
-        HashSet<String> sharedPoolRewardAddressesWithoutReward = new HashSet<>(sharedPoolRewardAddresses.getSharedPoolRewardAddressesWithoutReward(epoch));
+        HashSet<String> sharedPoolRewardAddressesWithoutReward = new HashSet<>();
         if (epoch - 2 < MAINNET_ALLEGRA_HARDFORK_EPOCH) {
+            sharedPoolRewardAddressesWithoutReward = new HashSet<>(sharedPoolRewardAddresses.getSharedPoolRewardAddressesWithoutReward(epoch));
             //TODO -- Hardcode for now
            // sharedPoolRewardAddressesWithoutReward = dataProvider.findSharedPoolRewardAddressWithoutReward(epoch - 2);
         }
