@@ -27,15 +27,17 @@ public class RewardEntity {
     @Column(name = "earned_epoch")
     private Integer earnedEpoch;
 
-    @Column(name = "amount")
-    private BigInteger amount;
-
+    @Id
     @Column(name = "type")
     @Enumerated(EnumType.STRING)
     private RewardType type;
 
+    @Id
     @Column(name = "pool_id")
     private String poolId;
+
+    @Column(name = "amount")
+    private BigInteger amount;
 
     @Column(name = "spendable_epoch")
     private Integer spendableEpoch;

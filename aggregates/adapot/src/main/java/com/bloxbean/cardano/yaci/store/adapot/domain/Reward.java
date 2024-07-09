@@ -19,10 +19,10 @@ import java.math.BigInteger;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Reward {
     private String address;
-    private BigInteger amount;
+    private Integer earnedEpoch;
     private RewardType type;
     private String poolId;
-    private Integer earnedEpoch;
+    private BigInteger amount;
     private Integer spendableEpoch;
     private Long slot;
 }

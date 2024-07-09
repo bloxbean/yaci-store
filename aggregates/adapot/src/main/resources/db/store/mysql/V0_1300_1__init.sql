@@ -51,12 +51,12 @@ create table reward
 (
     address         varchar(255),
     earned_epoch    integer,
-    amount          numeric(38),
     type            varchar(50),
     pool_id         varchar(56),
+    amount          numeric(38),
     spendable_epoch integer,
     slot            bigint,
     update_datetime timestamp,
-    primary key (address, earned_epoch)
+    primary key (address, earned_epoch, type, pool_id)
 );
 
