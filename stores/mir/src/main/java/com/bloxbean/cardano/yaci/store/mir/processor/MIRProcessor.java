@@ -75,10 +75,10 @@ public class MIRProcessor {
                 .map(moveInstataneousReward -> {
                     InstantRewardType rewardType;
                     switch (moveInstataneousReward.getPot()) {
-                        case TREASURY:
+                        case treasury:
                             rewardType = InstantRewardType.treasury;
                             break;
-                        case RESERVES:
+                        case reserves:
                             rewardType = InstantRewardType.reserves;
                             break;
                         default:
@@ -130,9 +130,9 @@ public class MIRProcessor {
     private static MoveInstataneousReward getMoveInstataneousRewardsDetails(EventMetadata eventMetadata, String txHash, MoveInstataneous mirCert, int certIndex) {
         var moveInstataneousReward = new MoveInstataneousReward();
         if (mirCert.isTreasury()) {
-            moveInstataneousReward.setPot(MirPot.TREASURY);
+            moveInstataneousReward.setPot(MirPot.treasury);
         } else if (mirCert.isReserves()) {
-            moveInstataneousReward.setPot(MirPot.RESERVES);
+            moveInstataneousReward.setPot(MirPot.reserves);
         } else {
             log.error("Invalid MIR certificate. Neither treasury nor reserves");
             return null;

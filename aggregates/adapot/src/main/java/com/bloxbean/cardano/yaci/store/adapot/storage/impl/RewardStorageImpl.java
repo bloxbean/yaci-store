@@ -33,6 +33,7 @@ public class RewardStorageImpl implements RewardStorage {
 
     @Override
     public int deleteBySlotGreaterThan(long slot) {
+        //TODO- Delete pool rewards as well
         return instantRewardRepository.deleteBySlotGreaterThan(slot);
     }
 }

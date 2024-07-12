@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +36,11 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
         return instantRewardRepository.findByEarnedEpochAndType(epoch, rewardType, sortedBySlot).stream().map(mapper::toInstantReward).toList();
+    }
+
+    @Override
+    public BigInteger findTotalInstanceRewardByEarnedEpochAndType(long epoch, InstantRewardType rewardType) {
+        return instantRewardRepository.findTotalAmountByEarnedEpoch((int) epoch, rewardType);
     }
 
     @Override

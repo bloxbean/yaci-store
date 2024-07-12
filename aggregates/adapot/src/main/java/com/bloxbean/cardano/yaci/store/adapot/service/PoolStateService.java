@@ -152,7 +152,7 @@ public class PoolStateService {
     //TODO -- Remove
     @EventListener
     public void handleBlock(BlockEvent blockEvent) {
-        if (blockEvent.getMetadata().getBlock() >= 5000000) {
+        if (blockEvent.getMetadata().getBlock() >= 5500000) {
             startService.stop();
         }
     }

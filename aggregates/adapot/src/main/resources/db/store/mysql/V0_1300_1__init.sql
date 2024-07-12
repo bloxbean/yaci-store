@@ -33,17 +33,14 @@ create table epoch_stake
 drop table if exists instant_reward;
 create table instant_reward
 (
-    id binary (16) not null primary key,
     address         varchar(255),
-    amount          numeric(38),
     type            varchar(50),
-    tx_hash         varchar(64),
-    slot            bigint,
+    amount          numeric(38),
     earned_epoch    integer,
     spendable_epoch integer,
-    block           bigint,
-    block_time      bigint,
-    update_datetime timestamp
+    slot            bigint,
+    create_datetime timestamp,
+    primary key (address, type, earned_epoch)
 );
 
 drop table if exists reward;

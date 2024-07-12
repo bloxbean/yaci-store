@@ -29,8 +29,8 @@ public class StakesnapshotServiceTest {
 
     @Test
     void takeSnapshot() throws IOException {
-        dslContext.execute("delete from epoch_stake where epoch >= 213");
-        stakeSnapshotService.takeStakeSnapshot(213);
+        dslContext.execute("delete from epoch_stake where epoch >= 207");
+        stakeSnapshotService.takeStakeSnapshot(207);
     }
 
 

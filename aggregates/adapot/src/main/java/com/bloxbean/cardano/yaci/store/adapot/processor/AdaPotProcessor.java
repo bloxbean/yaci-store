@@ -4,7 +4,8 @@ import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -23,6 +24,7 @@ public class AdaPotProcessor {
     private final UtxoPotProcessor utxoPotProcessor;
     private final GenesisConfig genesisConfig;
     private final EraService eraService;
+    private final TransactionStorageReader transactionStorageReader;
 
     private Integer nonByronEpoch;
 
@@ -56,9 +58,10 @@ public class AdaPotProcessor {
         utxoPotProcessor.reset();
     }
 
+
     @EventListener
     @Transactional
-    public void processAdaPotDuringEpochTransition(EpochTransitionCommitEvent epochTransitionCommitEvent) {
+    public void processAdaPotDuringEpochTransition(PreEpochTransitionEvent epochTransitionCommitEvent) {
 
         //Update retired pool refunds
         BigInteger poolRefundAmount = depositEventProcessor.getPoolRefundAmount();
@@ -66,10 +69,14 @@ public class AdaPotProcessor {
 
         var existingAdaPot = adaPotService.getAdaPot(epochTransitionCommitEvent.getMetadata().getEpochNumber());
 
-        //Total fee in the epoch
-        adaPotService.updateAdaPotDeposit(epochTransitionCommitEvent.getMetadata(), existingAdaPot, poolRefundAmount, existingAdaPot.getFees(), BigInteger.ZERO, refundToTreasury, true);
+        //Update Fee pot
+        var totalFeeInEpoch = transactionStorageReader.getTotalFee(epochTransitionCommitEvent.getMetadata().getEpochNumber() - 1); //Prev epoch
+        log.info("Total fee in epoch {} : {}", epochTransitionCommitEvent.getEpoch() - 1, totalFeeInEpoch);
 
+        //Total fee in the epoch
+        adaPotService.updateAdaPotDeposit(epochTransitionCommitEvent.getMetadata(), existingAdaPot, poolRefundAmount, totalFeeInEpoch, BigInteger.ZERO, refundToTreasury, true);
         log.info("AdaPot updated for epoch transition : {}", epochTransitionCommitEvent.getMetadata().getEpochNumber());
+
     }
 
     private Integer getFirstNonByronEpoch() {

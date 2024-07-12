@@ -3,16 +3,15 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
-import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorageReader;
 import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
-import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
-import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
@@ -43,8 +42,6 @@ public class EpochRewardCalculationService {
     private final EpochInfoService epochInfoService;
     private final PoolStorage poolStorage;
     private final PoolStorageReader poolStorageReader;
-    private final EpochStakeStorage epochStakeStorage;
-    private final MIRStorageReader mirStorageReader;
     private final BlockInfoService blockInfoService;
     private final PoolStateService poolStateService;
     private final EraService eraService;
@@ -52,6 +49,7 @@ public class EpochRewardCalculationService {
     private final SharedPoolRewardAddresses sharedPoolRewardAddresses; //TOD -- remove later
 
     private final RewardStorage rewardStorage;
+    private final RewardStorageReader rewardStorageReader;
 
     public RewardsCalcInput fetchRewardCalcInputs(int epoch) {
         //Calculating rewards at epoch "epoch"
@@ -123,13 +121,15 @@ public class EpochRewardCalculationService {
         }
 
         //Get MIR certificates totals by pot ..stability window ??
-        var totalRewardsTreasury = mirStorageReader.findMirPotAmountByEpoch(epoch-1, MirPot.TREASURY);
+        var totalRewardsTreasury = rewardStorageReader.findTotalInstanceRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.treasury);
+//        var totalRewardsTreasury = mirStorageReader.findMirPotAmountByEpoch(epoch-1, MirPot.TREASURY);
         var mirTreasuryCertificate = MirCertificate.builder()
                         .pot(org.cardanofoundation.rewards.calculation.enums.MirPot.TREASURY)
                                 .totalRewards(totalRewardsTreasury != null ? totalRewardsTreasury : BigInteger.ZERO)
                                         .build();
 
-        var totalRewardsReserves = mirStorageReader.findMirPotAmountByEpoch(epoch-1, MirPot.RESERVES);
+        var totalRewardsReserves = rewardStorageReader.findTotalInstanceRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.reserves);
+//        var totalRewardsReserves = mirStorageReader.findMirPotAmountByEpoch(epoch-1, MirPot.RESERVES);
         var mirCertificateReserves = MirCertificate.builder()
                 .pot(org.cardanofoundation.rewards.calculation.enums.MirPot.RESERVES)
                 .totalRewards(totalRewardsReserves != null ? totalRewardsReserves : BigInteger.ZERO)

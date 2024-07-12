@@ -71,7 +71,7 @@ create table pool_registration
     vrf_key         varchar(64),
     pledge          numeric(20,0),
     cost            numeric(20, 0),
-    margin          decimal(10, 8),
+    margin          double precision,
     reward_account  varchar(255),
     pool_owners     jsonb,
     relays          jsonb,

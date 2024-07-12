@@ -1,15 +1,15 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigInteger;
-import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -17,31 +17,31 @@ import java.util.UUID;
 @SuperBuilder
 @Entity
 @Table(name = "instant_reward")
-public class InstantRewardEntity extends BlockAwareEntity {
+@IdClass(InstantRewardId.class)
+public class InstantRewardEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
-
     @Column(name = "address")
     private String address;
 
-    @Column(name = "amount")
-    private BigInteger amount;
-
+    @Id
     @Column(name = "type")
     @Enumerated(EnumType.STRING)
     private InstantRewardType type;
 
-    @Column(name = "tx_hash")
-    private String txHash;
+    @Id
+    @Column(name = "earned_epoch")
+    private Integer earnedEpoch;
+
+    @Column(name = "amount")
+    private BigInteger amount;
+
+    @Column(name = "spendable_epoch")
+    private Integer spendableEpoch;
 
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "earned_epoch")
-    private Integer earnedEpoch;
-
-    @Column(name = "spendable_epoch")
-    private Integer spendableEpoch;
+    @UpdateTimestamp
+    @Column(name = "create_datetime")
+    private LocalDateTime createDatetime;
 }

@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.ComponentScan;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,9 +38,8 @@ class EpochRewardCalculationServiceTest {
 
     @Test
     void fetchRewardCalcInputs() throws IOException {
-        var rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(215);
-        var epochValidationInput = loadEpochValidationInputJson(215);
-
+        var rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(246);
+        var epochValidationInput = loadEpochValidationInputJson(246);
 
         Map<String, PoolState> rewardsCalcPoolStates = new HashMap<>();
         for (PoolState poolState : rewardsCalcInput.getPoolStates()) {
@@ -64,6 +64,7 @@ class EpochRewardCalculationServiceTest {
 
             //compare all fields of pool state
             assertThat(rewardsCalcPoolState.getPoolId()).isEqualTo(epochValidationPoolState.getPoolId());
+
             assertThat(rewardsCalcPoolState.getActiveStake()).isEqualTo(epochValidationPoolState.getActiveStake());
             assertThat(rewardsCalcPoolState.getRewardAddress()).isEqualTo(epochValidationPoolState.getRewardAddress());
             assertThat(rewardsCalcPoolState.getOwners()).hasSameElementsAs(epochValidationPoolState.getOwners());
@@ -76,6 +77,11 @@ class EpochRewardCalculationServiceTest {
             if (rewardsCalcPoolState.getDelegators().size() != epochValidationPoolState.getDelegators().size()) {
                 assertThat(rewardsCalcPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList())
                         .hasSameElementsAs(epochValidationPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList());
+
+                assertThat(epochValidationPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList())
+                        .hasSameElementsAs(rewardsCalcPoolState.getDelegators().stream().map(delegator -> delegator.getStakeAddress()).toList());
+
+                System.out.println("Delegators size mismatch for pool : >>>>> " + poolId);
             }
             assertThat(rewardsCalcPoolState.getDelegators().size()).isEqualTo(epochValidationPoolState.getDelegators().size());
             assertThat(rewardsCalcPoolState.getBlockCount()).isEqualTo(epochValidationPoolState.getBlockCount());
@@ -84,6 +90,9 @@ class EpochRewardCalculationServiceTest {
 
         assertThat(rewardsCalcInput.getTreasuryOfPreviousEpoch()).isEqualTo(epochValidationInput.getTreasuryOfPreviousEpoch());
         assertThat(rewardsCalcInput.getReservesOfPreviousEpoch()).isEqualTo(epochValidationInput.getReservesOfPreviousEpoch());
+//        //compare epoch stake info
+//        compareEpochStake(rewardsCalcInput.getEpochInfo().get, epochValidationInput);
+//        assertThat(rewardsCalcInput.getEpochInfo().getNumber()).isEqualTo(epochValidationInput.getEpoch());
         assertThat(rewardsCalcInput.getEpochInfo().getActiveStake()).isEqualTo(epochValidationInput.getActiveStake());
         assertThat(rewardsCalcInput.getEpochInfo().getBlockCount()).isEqualTo(epochValidationInput.getBlockCount());
         assertThat(rewardsCalcInput.getEpochInfo().getNonOBFTBlockCount()).isEqualTo(epochValidationInput.getNonOBFTBlockCount());
@@ -100,8 +109,21 @@ class EpochRewardCalculationServiceTest {
         assertThat(poolIds).hasSameElementsAs(expectedPoolIds);
 
         assertThat(rewardsCalcInput.getMirCertificates().size()).isEqualTo(epochValidationInput.getMirCertificates().size());
+
+        //Total MIR rewards
+        BigInteger totalMirRewards = rewardsCalcInput.getMirCertificates().stream().map(mirCertificate -> mirCertificate.getTotalRewards()).reduce(BigInteger.ZERO, BigInteger::add);
+        BigInteger expectedTotalMirRewards = epochValidationInput.getMirCertificates().stream().map(mirCertificate -> mirCertificate.getTotalRewards()).reduce(BigInteger.ZERO, BigInteger::add);
+        assertThat(totalMirRewards).isEqualTo(expectedTotalMirRewards);
+
+
+
+        assertThat(rewardsCalcInput.getRewardAddressesOfRetiredPoolsInEpoch()).hasSameElementsAs(epochValidationInput.getRewardAddressesOfRetiredPoolsInEpoch());
         assertThat(rewardsCalcInput.getRewardAddressesOfRetiredPoolsInEpoch().size()).isEqualTo(epochValidationInput.getRewardAddressesOfRetiredPoolsInEpoch().size());
+
+        assertThat(rewardsCalcInput.getDeregisteredAccounts()).hasSameElementsAs(epochValidationInput.getDeregisteredAccounts());
         assertThat(rewardsCalcInput.getDeregisteredAccounts().size()).isEqualTo(epochValidationInput.getDeregisteredAccounts().size());
+
+        assertThat(rewardsCalcInput.getLateDeregisteredAccounts()).hasSameElementsAs(epochValidationInput.getLateDeregisteredAccounts());
         assertThat(rewardsCalcInput.getLateDeregisteredAccounts().size()).isEqualTo(epochValidationInput.getLateDeregisteredAccounts().size());
 
         assertThat(rewardsCalcInput.getRegisteredAccountsSinceLastEpoch()).hasSameElementsAs(epochValidationInput.getRegisteredAccountsSinceLastEpoch());
@@ -110,15 +132,32 @@ class EpochRewardCalculationServiceTest {
         assertThat(rewardsCalcInput.getRegisteredAccountsUntilNow()).hasSameElementsAs(epochValidationInput.getRegisteredAccountsUntilNow());
         assertThat(rewardsCalcInput.getRegisteredAccountsUntilNow().size()).isEqualTo(epochValidationInput.getRegisteredAccountsUntilNow().size());
 
+        assertThat(rewardsCalcInput.getSharedPoolRewardAddressesWithoutReward()).hasSameElementsAs(epochValidationInput.getSharedPoolRewardAddressesWithoutReward());
         assertThat(rewardsCalcInput.getSharedPoolRewardAddressesWithoutReward().size()).isEqualTo(epochValidationInput.getSharedPoolRewardAddressesWithoutReward().size());
-        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary().size()).isEqualTo(epochValidationInput.getDeregisteredAccountsOnEpochBoundary().size());
 
+        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary()).hasSameElementsAs(epochValidationInput.getDeregisteredAccountsOnEpochBoundary());
+        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary().size()).isEqualTo(epochValidationInput.getDeregisteredAccountsOnEpochBoundary().size());
     }
 
     @Test
     void calculateEpochRewards() {
+
+        //To clean
+        /**
+         delete from mainnet.reward where type = 'member' or type = 'leader';
+         truncate mainnet.epoch_stake;
+         update adapot set treasury = null where epoch > 206;
+         update adapot set reserves = null where epoch > 206;
+         */
+
+        for (int i = 206; i <= 250; i++) {
+            epochRewardCalculationService.calculateAndUpdateEpochRewards(i);
+            snapshotService.takeStakeSnapshot(i-1);
+        }
+
+
         //snapshotService.takeStakeSnapshot(i);
-        epochRewardCalculationService.calculateAndUpdateEpochRewards(215);
+//        epochRewardCalculationService.calculateAndUpdateEpochRewards(215);
 
     }
 
