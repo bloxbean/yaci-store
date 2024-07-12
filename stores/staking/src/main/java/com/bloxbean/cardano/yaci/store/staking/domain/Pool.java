@@ -26,6 +26,7 @@ public class Pool extends BlockAwareDomain {
     private Integer epoch;
     private Integer activeEpoch;
     private Integer retireEpoch;
+    private Long registrationSlot;
     private Long slot;
     private String blockHash;
 }

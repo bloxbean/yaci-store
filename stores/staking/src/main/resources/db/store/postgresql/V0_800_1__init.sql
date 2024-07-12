@@ -137,6 +137,7 @@ create table pool
     epoch           int,
     active_epoch    int,
     retire_epoch    int,
+    registration_slot bigint,
     slot            bigint,
     block_hash      varchar(64),
     block           bigint,

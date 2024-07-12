@@ -50,6 +50,9 @@ public class PoolEntity extends BlockAwareEntity {
     @Column(name = "retire_epoch")
     private Integer retireEpoch;
 
+    @Column(name = "registration_slot")
+    private Long registrationSlot;
+
     @Column(name = "block_hash")
     private String blockHash;
 }

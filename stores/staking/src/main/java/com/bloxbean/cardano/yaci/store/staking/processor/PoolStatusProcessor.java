@@ -120,6 +120,7 @@ public class PoolStatusProcessor {
                         .amount(ppPoolDeposit)
                         .epoch(metadata.getEpochNumber())
                         .activeEpoch(metadata.getEpochNumber() + 2)
+                        .registrationSlot(metadata.getSlot()) //This is the registration slot
                         .slot(metadata.getSlot())
                         .blockNumber(metadata.getBlock())
                         .blockHash(metadata.getBlockHash())
@@ -137,6 +138,7 @@ public class PoolStatusProcessor {
                         .amount(BigInteger.ZERO)
                         .epoch(metadata.getEpochNumber())
                         .activeEpoch(metadata.getEpochNumber() + 3)
+                        .registrationSlot(poolRegistrationSlot)
                         .slot(metadata.getSlot())
                         .blockNumber(metadata.getBlock())
                         .blockHash(metadata.getBlockHash())
@@ -156,6 +158,9 @@ public class PoolStatusProcessor {
 
         for (var poolRetirement : poolRetirementEvent.getPoolRetirements()) {
             var poolId = poolRetirement.getPoolId();
+            var poolRegistrationSlot = poolStorage.findRecentPoolRegistration(poolId, metadata.getEpochNumber())
+                    .map(p -> p.getSlot())
+                    .orElse(-1L);
 
             var poolRetiring = Pool.builder()
                     .poolId(poolId)
@@ -165,6 +170,7 @@ public class PoolStatusProcessor {
                     .amount(BigInteger.ZERO)
                     .epoch(metadata.getEpochNumber())
                     .retireEpoch(poolRetirement.getRetirementEpoch())
+                    .registrationSlot(poolRegistrationSlot)
                     .slot(metadata.getSlot())
                     .blockNumber(metadata.getBlock())
                     .blockHash(metadata.getBlockHash())
@@ -204,6 +210,7 @@ public class PoolStatusProcessor {
                     .amount(poolDeposit)
                     .epoch(newEpoch)
                     .retireEpoch(newEpoch)
+                    .registrationSlot(retirement.getRegistrationSlot())
                     .slot(metadata.getSlot())
                     .blockHash(metadata.getBlockHash())
                     .blockNumber(metadata.getBlock())
