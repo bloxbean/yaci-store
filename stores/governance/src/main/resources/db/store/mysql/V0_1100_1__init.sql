@@ -150,3 +150,31 @@ CREATE INDEX idx_drep_registration_slot
 
 CREATE INDEX idx_drep_registration_type
     ON drep_registration (type);
+
+CREATE TABLE committee_member
+(
+    hash            varchar(56) NOT NULL,
+    cred_type       varchar(40),
+    start_epoch     int,
+    expired_epoch   int,
+    slot            bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (hash, slot)
+);
+
+CREATE INDEX idx_committee_member_slot
+    ON drep_registration (slot);
+
+CREATE TABLE constitution
+(
+    active_epoch    int,
+    anchor_url      varchar,
+    anchor_hash     varchar(64),
+    script          varchar(64),
+    slot            bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (active_epoch)
+);
+
+CREATE INDEX idx_constitution_slot
+    ON constitution (slot);

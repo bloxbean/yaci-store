@@ -1,0 +1,22 @@
+version: '3.9'
+
+networks:
+  yaci-store-net:
+
+services:
+  yaci-store-postgres:
+    extends:
+      file: postgres-compose.yml
+      service: yaci-store-postgres
+    networks:
+      - yaci-store-net
+
+  yaci-store-utxo-indexer:
+    extends:
+      file: yaci-store-utxo-indexer.yml
+      service: yaci-store-utxo-indexer
+    depends_on:
+      yaci-store-postgres:
+        condition: service_healthy
+    networks:
+      - yaci-store-net

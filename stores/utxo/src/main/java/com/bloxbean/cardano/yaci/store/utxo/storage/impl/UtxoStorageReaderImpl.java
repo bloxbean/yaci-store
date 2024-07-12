@@ -53,7 +53,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .from(ADDRESS_UTXO)
                 .leftJoin(TX_INPUT)
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
-                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
+                .where(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\"")
+                        .or(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\":\""+unit+"\""))
+                )
                 .and(TX_INPUT.TX_HASH.isNull())
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
                 .offset(pageable.getOffset())
@@ -73,7 +75,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_ADDR.eq(address))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\"")
+                        .or(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\":\""+unit+"\""))
+                )
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
@@ -102,7 +106,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\"")
+                        .or(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\":\""+unit+"\""))
+                )
                 //.orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc()) //TODO ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
@@ -133,7 +139,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                 .and(TX_INPUT.TX_HASH.isNull())
-                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\""))
+                .and(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \""+unit+"\"")
+                        .or(field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\":\""+unit+"\""))
+                )
                 // .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: ordering
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());

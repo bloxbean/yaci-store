@@ -2,11 +2,9 @@ package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.core.model.PlutusScript;
-import com.bloxbean.cardano.yaci.core.model.Redeemer;
-import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
-import com.bloxbean.cardano.yaci.core.model.TransactionInput;
+import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.core.model.governance.Voter;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
@@ -70,12 +68,20 @@ public class RedeemerDatumMatcher {
                             log.info("Redeemer Reward : " + transaction.getTxHash());
                         scriptContext = findRewardScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
                         scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Voting) {
+                        if (log.isDebugEnabled())
+                            log.info("Redeemer Voting : " + transaction.getTxHash());
+                        scriptContext = findVotingScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Proposing) {
+                        if (log.isDebugEnabled())
+                            log.info("Redeemer Proposing : " + transaction.getTxHash());
+                        scriptContext = findProposingScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
+                        scriptContext.setRedeemer(redeemer);
                     } else {
                         scriptContext = new ScriptContext();
                         scriptContext.setRedeemer(redeemer);
                     }
-
-                    //TODO -- Handle governance related purpose
 
                     return scriptContext;
 
@@ -147,20 +153,46 @@ public class RedeemerDatumMatcher {
             return Optional.empty();
 
         Certificate certificate = certificates.get(index);
-        StakeCredential stakeCredential = null;
-        if (certificate instanceof StakeRegistration)
-            stakeCredential = ((StakeRegistration) certificate).getStakeCredential();
-        else if (certificate instanceof StakeDelegation)
-            stakeCredential = ((StakeDelegation) certificate).getStakeCredential();
-        else if (certificate instanceof StakeDeregistration)
-            stakeCredential = ((StakeDeregistration) certificate).getStakeCredential();
+        String credentialHash;
+        if (certificate instanceof StakeRegistration cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof StakeDelegation cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof StakeDeregistration cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof RegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof UnregCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof VoteDelegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof StakeVoteDelegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof StakeRegDelegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof VoteRegDelegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof StakeVoteRegDelegCert cert)
+            credentialHash = credentialHash(cert.getStakeCredential());
+        else if (certificate instanceof AuthCommitteeHotCert cert)
+            credentialHash = credentialHash(cert.getCommitteeColdCredential());
+        else if (certificate instanceof ResignCommitteeColdCert cert)
+            credentialHash = credentialHash(cert.getCommitteeColdCredential());
+        else if (certificate instanceof RegDrepCert cert)
+            credentialHash = credentialHash(cert.getDrepCredential());
+        else if (certificate instanceof UnregDrepCert cert)
+            credentialHash = credentialHash(cert.getDrepCredential());
+        else if (certificate instanceof UpdateDrepCert cert)
+            credentialHash = credentialHash(cert.getDrepCredential());
+        else
+            credentialHash = null;
 
         //TODO -- For other certificate types ??
         //PoolRegistration, PoolRetirement, GenesisKeyDelegation, MoveInstantaneousRewardsCert
 
         PlutusScript plutusScript = null;
-        if (stakeCredential != null)
-            plutusScript = scriptMap.get(stakeCredential.getHash());
+        if (credentialHash != null)
+            plutusScript = scriptMap.get(credentialHash);
 
         ScriptContext scriptContext = new ScriptContext();
         scriptContext.setPlutusScript(plutusScript);
@@ -186,6 +218,52 @@ public class RedeemerDatumMatcher {
         return Optional.of(scriptContext);
     }
 
+    public Optional<ScriptContext> findVotingScriptForRedeemer(Redeemer redeemer, Transaction transaction, Map<String, PlutusScript> scriptMap) {
+        var votingProcedures = transaction.getBody().getVotingProcedures();
+        if (votingProcedures == null || votingProcedures.getVoting() == null || votingProcedures.getVoting().size() == 0)
+            return Optional.empty();
+
+        Set<Voter> voters = ((LinkedHashMap)votingProcedures.getVoting()).keySet();
+
+        int i = 0;
+        Voter voter = null;
+        for (Voter v : voters) {
+            if (redeemer.getIndex() == i) {
+                voter = v;
+                break;
+            }
+            i++;
+        }
+
+        var hash = voter.getHash();
+
+        PlutusScript plutusScript = null;
+        if (hash != null)
+            plutusScript = scriptMap.get(hash);
+
+        ScriptContext scriptContext = new ScriptContext();
+        scriptContext.setPlutusScript(plutusScript);
+
+        return Optional.of(scriptContext);
+    }
+
+    public Optional<ScriptContext> findProposingScriptForRedeemer(Redeemer redeemer, Transaction transaction, Map<String, PlutusScript> scriptMap) {
+        var proposalProcedures = transaction.getBody().getProposalProcedures();
+        if (proposalProcedures == null || proposalProcedures.size() == 0)
+            return Optional.empty();
+
+        if (redeemer.getIndex() >= proposalProcedures.size())
+            return Optional.empty();
+
+        //TODO - Get the constitution policy (script hash)
+        //For now set scriptHash to null
+
+        ScriptContext scriptContext = new ScriptContext();
+        scriptContext.setPlutusScript(null);
+
+        return Optional.of(scriptContext);
+    }
+
     private static List<TransactionInput> getSortedInputs(List<TransactionInput> inputs) {
         List<TransactionInput> copyInputs = inputs
                 .stream()
@@ -195,5 +273,13 @@ public class RedeemerDatumMatcher {
                         .thenComparing(TransactionInput::getIndex)
         );
         return copyInputs;
+    }
+
+    private String credentialHash(StakeCredential stakeCredential) {
+        return stakeCredential != null? stakeCredential.getHash() : null;
+    }
+
+    private String credentialHash(Credential credential) {
+        return credential != null? credential.getHash() : null;
     }
 }

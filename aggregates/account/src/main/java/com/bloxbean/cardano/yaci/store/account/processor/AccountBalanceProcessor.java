@@ -7,7 +7,9 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
+import com.bloxbean.cardano.yaci.store.account.service.AddressBalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
+import com.bloxbean.cardano.yaci.store.account.service.MetricCollectorService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
@@ -19,6 +21,7 @@ import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import jakarta.annotation.PostConstruct;
@@ -52,8 +55,10 @@ public class AccountBalanceProcessor {
     private final UtxoClient utxoClient;
     private final AccountConfigService accountConfigService;
     private final BalanceSnapshotService balanceSnapshotService;
+    private final AddressBalanceSnapshotService addressBalanceSnapshotService;
     private final ParallelExecutor parallelExecutor;
     private final PlatformTransactionManager transactionManager;
+    private final MetricCollectorService metricCollectorService;
 
     private int nAddrBalanceRecordToKeep = 3;
 
@@ -61,22 +66,29 @@ public class AccountBalanceProcessor {
 
     private TransactionTemplate transactionTemplate;
 
+    private Map<String, Boolean> negativeBalanceAddressList = new ConcurrentHashMap<>();
+    private Map<String, Boolean> negativeBalanceStakeAddressList = new ConcurrentHashMap<>();
+
     public AccountBalanceProcessor(AccountBalanceStorage accountBalanceStorage,
                                    AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper,
                                    AccountStoreProperties accountStoreProperties,
                                    @Qualifier("retryableUtxoClient") UtxoClient utxoClient,
                                    AccountConfigService accountConfigService,
                                    BalanceSnapshotService balanceSnapshotService,
+                                   AddressBalanceSnapshotService addressBalanceSnapshotService,
                                    ParallelExecutor parallelExecutor,
-                                   PlatformTransactionManager transactionManager) {
+                                   PlatformTransactionManager transactionManager,
+                                   MetricCollectorService metricCollectorService) {
         this.accountBalanceStorage = accountBalanceStorage;
         this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
         this.accountStoreProperties = accountStoreProperties;
         this.utxoClient = utxoClient;
         this.accountConfigService = accountConfigService;
         this.balanceSnapshotService = balanceSnapshotService;
+        this.addressBalanceSnapshotService = addressBalanceSnapshotService;
         this.parallelExecutor = parallelExecutor;
         this.transactionManager = transactionManager;
+        this.metricCollectorService = metricCollectorService;
     }
 
     @PostConstruct
@@ -93,6 +105,7 @@ public class AccountBalanceProcessor {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             return;
         addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
+
     }
 
     @EventListener
@@ -249,7 +262,7 @@ public class AccountBalanceProcessor {
             log.info("### Total balance processing and saving time {} ###\n", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
                     event.getMetadata().getBlockHash(), event.getMetadata().getSlot());
-
+            metricCollectorService.collectLastAccountBalanceProcessedBlockMetric(event.getMetadata().getBlock());
         } finally {
             addressUtxoEventsMap.clear();
         }
@@ -479,7 +492,9 @@ public class AccountBalanceProcessor {
                                 log.info("Unit: " + savedAddressBalance.get().getUnit());
                             }
                             log.error("Existing AddressBalance >> " + savedAddressBalance);
-                            throw new IllegalStateException("Error in address balance calculation");
+                            metricCollectorService.collectNegativeBalanceAddressMetric();
+                            negativeBalanceAddressList.put(key.getAddress(), true);
+                            //throw new IllegalStateException("Error in address balance calculation");
                         }
                     }
 
@@ -553,7 +568,9 @@ public class AccountBalanceProcessor {
                             log.error("[Inputs] Negative balance for stakeAddress: " + stakeAddrInfoKey.getAddress() + " : " + newStakeAddrBalance.getQuantity());
                             log.info("SlotAmounts >> " + slotAmounts);
                             log.error("Existing StakeAddressBalance >> " + savedStakeAddressBalance);
-                            throw new IllegalStateException("Error in stake address balance calculation");
+                            metricCollectorService.collectNegativeBalanceStakeAddressMetric();
+                            negativeBalanceStakeAddressList.put(stakeAddrInfoKey.getAddress(), true);
+                            //throw new IllegalStateException("Error in stake address balance calculation");
                         }
                     }
 
@@ -635,6 +652,47 @@ public class AccountBalanceProcessor {
                     return stakeAddrBalance;
                 }).toList();
         accountBalanceStorage.saveStakeAddressBalances(stakeAddrBalances);
+    }
+
+    @EventListener
+    @Transactional
+    public void handleNegativeBalances(CommitEvent commitEvent) {
+        try {
+            if (!accountStoreProperties.isSaveAddressTxAmount() &&
+                    (negativeBalanceAddressList.size() > 0 || negativeBalanceStakeAddressList.size() > 0)) {
+                log.error("Negative balance found for addresses: " + negativeBalanceAddressList.keySet());
+                log.error("Negative balance found for stake addresses: " + negativeBalanceStakeAddressList.keySet());
+                throw new IllegalStateException("Negative balance found for addresses. Can't recover automatically. Please check the logs.");
+            }
+
+            if (negativeBalanceAddressList.size() > 0) {
+                log.error("Negative balance found for addresses: " + negativeBalanceAddressList.keySet());
+                calculateCurrentAddrBalance(commitEvent.getMetadata(), negativeBalanceAddressList.keySet());
+            }
+
+            if (negativeBalanceStakeAddressList.size() > 0) {
+                log.error("Negative balance found for stake addresses: " + negativeBalanceStakeAddressList.keySet());
+                calculateCurrentStakeAddrBalance(commitEvent.getMetadata(), negativeBalanceStakeAddressList.keySet());
+            }
+        } finally {
+            negativeBalanceAddressList.clear();
+            negativeBalanceStakeAddressList.clear();
+        }
+    }
+
+    private void calculateCurrentAddrBalance(EventMetadata metadata, Set<String> addresses) {
+        //TODO -- Adjust batch size later
+        for (String address : addresses) {
+            addressBalanceSnapshotService.calculateAddressBalance(metadata.getSlot(), List.of(address));
+        }
+        log.info("<< Balance calculation done for negative balance addresses >>");
+    }
+
+    private void calculateCurrentStakeAddrBalance(EventMetadata metadata, Set<String> stakeAddresses) {
+        for (String stakeAddress : stakeAddresses) {
+            addressBalanceSnapshotService.calculateStakeAddressBalance(metadata.getSlot(), List.of(stakeAddress));
+        }
+        log.info("<< Balance calculation done for negative balance stake addresses >>");
     }
 
     private AddressUnitInfo getAddrBalKey(AddressUtxo input, Amt amount) {

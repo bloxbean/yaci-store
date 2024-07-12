@@ -1,4 +1,4 @@
-# Use out-of-the-box applications
+## Use out-of-the-box applications
 
 Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is.
 
@@ -9,16 +9,10 @@ For steps to run this application, please refer to [Aggregation App Getting Star
 
 The Jar files for these applications are available in the release section.
 
-<hr>
 
-#  Run Yaci Store All or Yaci Store Utxo Indexer
+##  Run Yaci Store All or Yaci Store Utxo Indexer
 
-1. [Configuration](#configuration)
-2. [Run As Jar](#run_as_jar)
-3. [Run As Docker Container](#docker)
-4. [Swagger UI](#swagger-ui)
-
-## 1. Configuration <a id="configuration"></a>
+## Configuration
 
 Download the application.properties file from the release section and place it in a folder named "config" in the same directory as the jar file.
 The application will automatically pick up the configuration file.
@@ -48,7 +42,7 @@ spring.datasource.password=
 Additional configurations for database connection pool and batch insert.
 
 ```shell
-spring.datasource.hikari.maximum-pool-size=30
+spring.datasource.hikari.maximum-pool-size=50
 spring.datasource.hikari.minimum-idle=5
 spring.jpa.properties.hibernate.jdbc.batch_size=100
 spring.jpa.properties.hibernate.order_inserts=true
@@ -63,13 +57,11 @@ your machine configuration.
 
 ```
 store.executor.enable-parallel-processing=true
-store.executor.block-processing-threads=15
-store.executor.event-processing-threads=30
 
 store.executor.blocks-batch-size=200
 store.executor.blocks-partition-size=10
 
-store.executor.use-virtual-thread-for-batch-processing=false
+store.executor.use-virtual-thread-for-batch-processing=true
 store.executor.use-virtual-thread-for-event-processing=true
 ```
 
@@ -89,8 +81,10 @@ This is only required if you are using any **custom** networks. For following pu
 Configure genesis files location for custom network
 
 ```
-store.cardano.byron-genesis-file=/Users/satya/cardano-node/files/byron-genesis.json
-store.cardano.shelley-genesis-file=/Users/satya/cardano-node/files/shelley-genesis.json
+store.cardano.byron-genesis-file=/Users/xyz/cardano-node/files/byron-genesis.json
+store.cardano.shelley-genesis-file=/Users/xyz/cardano-node/files/shelley-genesis.json
+store.cardano.alonzo-genesis-file=/Users/xyz/work/cardano-node/preprod/files/alonzo-genesis.json
+store.cardano.conway-genesis-file=/Users/xyz/work/cardano-node/preprod/files/conway-genesis.json
 ```
 
 #### N2C Configuration
@@ -135,84 +129,19 @@ store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3
 #store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
 ```
 
-## 2. Run As Jar <a id="run_as_jar"></a>
+## Run As Jar
 
 For Yaci Store All, use the following command.
 
 ```shell
-java -jar yaci-store-all-<version>.jar 
+java -jar yaci-store-all-<version>.jar
 ```
 
 For Yaci Store Utxo Indexer, use the following command.
 ```shell
-java -jar yaci-store-utxo-indexer-<version>.jar 
+java -jar yaci-store-utxo-indexer-<version>.jar
 ```
 
-## 3. Run As Docker <a id="docker"></a>
-
-To run the application as a docker container, you can refer to application.properties file in ``docker run`` command or create an env file.
-
-### Using application.properties file
-
-#### Yaci Store All docker image
-
-```
-docker run --env-file config/application.properties -p 8080:8080 bloxbean/yaci-store-all:0.1.0-rc1
-```
-
-#### Yaci Store Utxo Indexer docker image
-
-``` 
-docker run --env-file config/application.properties -p 8080:8080 bloxbean/yaci-store-utxo-indexer:0.1.0-rc1
-```
-
-### Using env file
-
-To run the application as a docker container, you need to create a env file name "**env**" and set the following environment variables
-with appropriate values.
-
-```
-STORE_CARDANO_HOST=preprod-node.world.dev.cardano.org
-STORE_CARDANO_PORT=30000
-STORE_CARDANO_PROTOCOL-MAGIC=1
-
-SPRING_DATASOURCE_URL=jdbc:postgresql://<db-host>:5432/yacistore?currentSchema=preprod
-SPRING_DATASOURCE_USERNAME=user
-SPRING_DATASOURCE_PASSWORD=
-
-SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE=30
-SPRING_DATASOURCE_HIKARI_MINIMUM-IDLE=5
-SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE=100
-SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS=true
-
-STORE_EXECUTOR_ENABLE-PARALLEL-PROCESSING=true
-STORE_EXECUTOR_BLOCK-PROCESSING-THREADS=15
-STORE_EXECUTOR_EVENT-PROCESSING-THREADS=30
-
-STORE_EXECUTOR_BLOCKS-BATCH-SIZE=200
-STORE_EXECUTOR_BLOCKS-PARTITION_SIZE=10
-
-STORE_EXECUTOR_USE-VIRTUAL-THREAD-FOR-BATCH-PROCESSING=false
-STORE_EXECUTOR_USE-VIRTUAL-THREAD-FOR-EVENT-PROCESSING=true
-```
-
-**Note:** To configure other optional properties, please refer to ``application.properties`` file or properties in the previous section.
-You need to configure the properties in the env file in the correct format.
-
-**Note:** If you are using parallel processing, you also need to configure no of threads and the database connection pool size accordingly.
-
-### Yaci Store All docker image
-
-```
-docker run --env-file env -p 8080:8080 bloxbean/yaci-store-all:0.1.0-rc1
-```
-
-### Yaic Store Utxo Indexer docker image
-
-```
-docker run --env-file env -p 8080:8080 bloxbean/yaci-store-utxo-indexer:0.1.0-rc1
-```
-
-## 4. Swagger UI <a id="swagger-ui"></a>
+## Swagger UI
 
 By default, swagger UI for the application is available at http://localhost:8080/swagger-ui/index.html

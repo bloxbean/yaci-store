@@ -41,14 +41,14 @@ $> java -jar applications/all/build/libs/yaci-store-all-<version>.jar
 ```
 
 ## Run Release Build (Jar or Docker)
-To run a release build, follow the instructions in [Getting Started - Out of Box Application](./docs/getting-started-out-of-box.md)
+To run a release build, follow the instructions in [Getting Started - Out of Box Application](docs_site/pages/usage/getting-started-out-of-box.md)
 
 ## Documents
 
-### 1. [Overview](./docs/overview.md)
-### 2. [Design](./docs/design.md)
-### 3. [Getting Started - Out of Box Application](./docs/getting-started-out-of-box.md)
-### 4. [Getting Started - Custom Application](./docs/getting-started-as-library.md)
+### 1. [Overview](https://store.yaci.xyz/)
+### 2. [Design](https://store.yaci.xyz/design)
+### 3. [Getting Started - Out of Box Application](https://store.yaci.xyz/usage/getting-started-out-of-box)
+### 4. [Getting Started - Custom Application](https://store.yaci.xyz/usage/getting-started-as-library)
 
 
 # Any questions, ideas or issues?

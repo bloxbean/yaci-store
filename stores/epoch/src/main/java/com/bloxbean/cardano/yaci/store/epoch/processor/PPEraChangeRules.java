@@ -18,21 +18,37 @@ class PPEraChangeRules {
     public void apply(@NonNull Era newEra, Era prevEra, ProtocolParams protocolParams) {
         if (newEra != prevEra) {
             if (newEra == Era.Alonzo) {
-                //https://cips.cardano.org/cip/CIP-28/
-                //minUTxOValue is no longer used. It is replaced by lovelacePerUTxOWord
-                protocolParams.setMinUtxo(null);
+                applyAlonzoRules(protocolParams);
             } else if (newEra == Era.Babbage) {
-                //Removed
-                protocolParams.setDecentralisationParam(null);
-                protocolParams.setExtraEntropy(null);
-
-                //Translation from the Alonzo era to the Babbage era
-                //https://cips.cardano.org/cip/CIP-55/
-                var utxoPerBytes = protocolParams.getAdaPerUtxoByte().divide(BigInteger.valueOf(8));
-                protocolParams.setAdaPerUtxoByte(utxoPerBytes);
+                if (prevEra == null){ //custom network starting directly from Babbage era
+                    applyAlonzoRules(protocolParams);
+                }
+                applyBabbageRules(protocolParams);
             } else if (newEra == Era.Conway) {
-                //TODO -- Conway era specific rules
+                if (prevEra == null) { //custom network starting directly from Conway era
+                    applyAlonzoRules(protocolParams);
+                    applyBabbageRules(protocolParams);
+                }
+
+                //TODO: Apply Conway specific new rules
             }
         }
+    }
+
+    private static void applyAlonzoRules(ProtocolParams protocolParams) {
+        //https://cips.cardano.org/cip/CIP-28/
+        //minUTxOValue is no longer used. It is replaced by lovelacePerUTxOWord
+        protocolParams.setMinUtxo(null);
+    }
+
+    private static void applyBabbageRules(ProtocolParams protocolParams) {
+        //Removed
+        protocolParams.setDecentralisationParam(null);
+        protocolParams.setExtraEntropy(null);
+
+        //Translation from the Alonzo era to the Babbage era
+        //https://cips.cardano.org/cip/CIP-55/
+        var utxoPerBytes = protocolParams.getAdaPerUtxoByte().divide(BigInteger.valueOf(8));
+        protocolParams.setAdaPerUtxoByte(utxoPerBytes);
     }
 }

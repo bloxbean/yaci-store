@@ -1,0 +1,46 @@
+# Common env file
+
+# Store Cardano Settings
+STORE_CARDANO_HOST=preprod-node.world.dev.cardano.org
+STORE_CARDANO_PORT=30000
+STORE_CARDANO_PROTOCOL_MAGIC=1
+
+# DB Connection info. Uncomment to connect to an external database
+#SPRING_DATASOURCE_URL=jdbc:postgresql://<db-host>:5432/yacistore?currentSchema=preprod
+#SPRING_DATASOURCE_USERNAME=
+#SPRING_DATASOURCE_PASSWORD=
+
+# Database Settings
+SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=50
+SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE=100
+SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS=true
+
+# Parallel Processing Configuration
+STORE_EXECUTOR_ENABLE_PARALLEL_PROCESSING=true
+STORE_EXECUTOR_BLOCKS_BATCH_SIZE=100
+STORE_EXECUTOR_BLOCKS_PARTITION_SIZE=10
+STORE_EXECUTOR_USE_VIRTUAL_THREAD_FOR_BATCH_PROCESSING=true
+STORE_EXECUTOR_USE_VIRTUAL_THREAD_FOR_EVENT_PROCESSING=true
+
+# Auto Index Management
+STORE_AUTO_INDEX_MANAGEMENT=true
+
+# UTxO Pruning Configuration
+# STORE_UTXO_PRUNING_ENABLED=true
+# STORE_UTXO_PRUNING_INTERVAL=600
+
+# Auto Recovery Service
+# STORE_ADMIN_AUTO_RECOVERY_ENABLED=true
+# STORE_ADMIN_HEALTH_CHECK_INTERVAL=60
+
+# Keep alive interval in milliseconds for Cardano node
+#STORE_CARDANO_KEEP_ALIVE_INTERVAL=5000
+
+# Enable submit api endpoint
+#STORE_CARDANO_SUBMIT_API_URL=http://submit-api-host:8090/api/submit/tx
+
+# Enable both submit and tx evaluate endpoint
+#STORE_CARDANO_OGMIOS_URL=http://ogmios-host:1337
+
+# Java Options
+# JDK_JAVA_OPTIONS=-Xms4G -Xmx12G
