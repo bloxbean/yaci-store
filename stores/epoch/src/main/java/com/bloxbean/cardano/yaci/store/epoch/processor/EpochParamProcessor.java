@@ -58,19 +58,13 @@ public class EpochParamProcessor {
         EpochParam previousEpochParam = epochParamStorage.getProtocolParams(newEpoch - 1).orElse(null);
 
         //Get protocol param proposals target for this era (Signature check for validity -- //TODO)
-        List<ProtocolParamsProposal> ppProposals = protocolParamsProposalStorage.getProtocolParamsProposalsByTargetEpoch(newEpoch);
-
-        //Also check any proposal target to previous epoch, but also submitted in previous epoch. Those should be considered now.
-        //Filter to check if submitted in previous epochl
-        List<ProtocolParamsProposal> ppProposalsSubmittedPrevEpoch = protocolParamsProposalStorage.getProtocolParamsProposalsByTargetEpoch(newEpoch - 1)
-                .stream().filter(protocolParamsProposal -> protocolParamsProposal.getEpoch() == newEpoch - 1).toList();
+        List<ProtocolParamsProposal> ppProposals = protocolParamsProposalStorage.getProtocolParamsProposalsByTargetEpoch(newEpoch - 1);
 
         if (previousEpochParam != null)
             protocolParams.merge(previousEpochParam.getParams());
 
         genesisProtocolParams.ifPresent(protocolParams::merge);
 
-        ppProposalsSubmittedPrevEpoch.forEach(ppProposal -> protocolParams.merge(ppProposal.getParams()));
         ppProposals.forEach(ppProposal -> protocolParams.merge(ppProposal.getParams()));
 
         //Additional Era change specific rules

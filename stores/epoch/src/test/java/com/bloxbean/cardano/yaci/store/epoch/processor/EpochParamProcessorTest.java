@@ -13,6 +13,7 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class EpochParamProcessorTest {
@@ -50,7 +51,7 @@ class EpochParamProcessorTest {
                         .build())
                 .build();
 
-        Mockito.when(epochParamStorage.getMaxEpoch()).thenReturn(28);
+        when(epochParamStorage.getMaxEpoch()).thenReturn(28);
 
         epochParamProcessor.handleEpochChangeEvent(epochChangeEvent);
         Mockito.verify(epochParamStorage, Mockito.never()).save(Mockito.any());
@@ -71,7 +72,7 @@ class EpochParamProcessorTest {
                         .build())
                 .build();
 
-        Mockito.when(epochParamStorage.getMaxEpoch()).thenReturn(30);
+        when(epochParamStorage.getMaxEpoch()).thenReturn(30);
 
         epochParamProcessor.handleEpochChangeEvent(epochChangeEvent);
         Mockito.verify(epochParamStorage, Mockito.never()).save(Mockito.any());
@@ -98,7 +99,6 @@ class EpochParamProcessorTest {
         Mockito.verify(epochParamStorage, Mockito.times(1)).save(argCaptor.capture());
 
         Mockito.verify(epochParamStorage).getProtocolParams(27);
-        Mockito.verify(protocolParamsProposalStorage).getProtocolParamsProposalsByTargetEpoch(28);
         Mockito.verify(protocolParamsProposalStorage).getProtocolParamsProposalsByTargetEpoch(27);
 
         EpochParam epochParam = argCaptor.getValue();
@@ -108,4 +108,6 @@ class EpochParamProcessorTest {
         assertThat(epochParam.getBlockNumber()).isEqualTo(177070);
         assertThat(epochParam.getBlockTime()).isEqualTo(1666342887);
     }
+
+    //TODO -- Add more test cases without mock
 }
