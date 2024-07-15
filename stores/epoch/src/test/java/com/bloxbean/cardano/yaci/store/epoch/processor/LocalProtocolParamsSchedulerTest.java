@@ -14,11 +14,11 @@ class LocalProtocolParamsSchedulerTest {
     private LocalProtocolParamService protocolParamService;
 
     @InjectMocks
-    private LocalProtocolParamsSchduler localProtocolParamsSchduler;
+    private LocalProtocolParamsScheduler localProtocolParamsSchduler;
 
     @Test
     void testScheduleFetchAndSetCurrentProtocolParams() {
-        localProtocolParamsSchduler = new LocalProtocolParamsSchduler(protocolParamService);
+        localProtocolParamsSchduler = new LocalProtocolParamsScheduler(protocolParamService);
 
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
         Mockito.verify(protocolParamService, Mockito.times(1)).fetchAndSetCurrentProtocolParams();
