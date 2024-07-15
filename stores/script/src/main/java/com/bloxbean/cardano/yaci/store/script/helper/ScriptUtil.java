@@ -113,9 +113,19 @@ public class ScriptUtil {
     }
 
     public static PlutusScript deserializeScriptRef(@NonNull AddressUtxo addressUtxo) {
+        var plutusScript = deserializeScriptRef(addressUtxo.getScriptRef());
+        if (plutusScript == null) {
+            log.error("Error deserializing plutus script in scriptRef : TxHash: " + addressUtxo.getTxHash()
+                    + "#" + addressUtxo.getOutputIndex() + ", scriptRef: " + addressUtxo.getScriptRef());
+        }
+
+        return plutusScript;
+    }
+
+    public static PlutusScript deserializeScriptRef(String scriptRef) {
         try {
             com.bloxbean.cardano.client.plutus.spec.PlutusScript cclPlutusScript
-                    = ScriptUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
+                    = ScriptUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef));
 
             var plutusScriptType = switch (cclPlutusScript.getScriptType()) {
                 case 1 -> PlutusScriptType.PlutusScriptV1;
@@ -127,8 +137,7 @@ public class ScriptUtil {
             PlutusScript plutusScript = new PlutusScript(plutusScriptType, cclPlutusScript.getCborHex());
             return plutusScript;
         } catch (Exception e) {
-            log.error("Error deserializing plutus script in scriptRef : TxHash: " + addressUtxo.getTxHash()
-                    + "#" + addressUtxo.getOutputIndex() + ", scriptRef: " + addressUtxo.getScriptRef());
+            log.error("Error deserializing script ref: {}", scriptRef);
             return null;
         }
     }
