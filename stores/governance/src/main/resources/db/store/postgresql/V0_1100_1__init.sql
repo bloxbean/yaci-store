@@ -201,3 +201,38 @@ create table committee
 
 CREATE INDEX idx_committee_slot
     ON committee (slot);
+
+DROP TABLE if exists local_gov_action_proposal_status;
+CREATE TABLE local_gov_action_proposal_status
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    status             varchar(20),
+    create_datetime    timestamp,
+    update_datetime    timestamp,
+    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
+);
+
+DROP TABLE IF EXISTS committee;
+CREATE TABLE committee
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    quorum_numerator   int,
+    quorum_denominator int,
+    slot               bigint,
+    update_datetime    timestamp,
+    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
+);
+
+DROP TABLE IF EXISTS treasury_withdrawal;
+CREATE TABLE treasury_withdrawal
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    stake_address      varchar(255),
+    amount             bigint,
+    slot               bigint,
+    update_datetime    timestamp,
+    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
+)
