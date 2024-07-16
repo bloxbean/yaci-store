@@ -163,7 +163,7 @@ CREATE TABLE committee_member
 );
 
 CREATE INDEX idx_committee_member_slot
-    ON drep_registration (slot);
+    ON committee_member (slot);
 
 CREATE TABLE constitution
 (
