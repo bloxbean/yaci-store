@@ -62,6 +62,7 @@ CREATE INDEX idx_voting_procedure_gov_action_tx_hash
 CREATE INDEX idx_voting_procedure_gov_action_tx_hash_gov_action_index
     ON voting_procedure (gov_action_tx_hash, gov_action_index);
 
+drop table if exists committee_registration;
 CREATE TABLE committee_registration
 (
     tx_hash         varchar(64) not null,
@@ -80,6 +81,7 @@ CREATE TABLE committee_registration
 CREATE INDEX idx_committee_registration_slot
     ON committee_registration (slot);
 
+drop table if exists committee_deregistration;
 CREATE TABLE committee_deregistration
 (
     tx_hash         varchar(64) not null,
@@ -99,6 +101,7 @@ CREATE TABLE committee_deregistration
 CREATE INDEX idx_committee_deregistration_slot
     ON committee_deregistration (slot);
 
+drop table if exists delegation_vote;
 CREATE TABLE delegation_vote
 (
     tx_hash         varchar(64) not null,
@@ -126,6 +129,7 @@ CREATE INDEX idx_delegation_vote_address
 CREATE INDEX idx_delegation_vote_drep_id
     ON delegation_vote (drep_id);
 
+drop table if exists drep_registration;
 CREATE TABLE drep_registration
 (
     tx_hash         varchar(64) NOT NULL,
@@ -151,6 +155,7 @@ CREATE INDEX idx_drep_registration_slot
 CREATE INDEX idx_drep_registration_type
     ON drep_registration (type);
 
+drop table if exists committee_member;
 CREATE TABLE committee_member
 (
     hash            varchar(56) NOT NULL,
@@ -165,6 +170,7 @@ CREATE TABLE committee_member
 CREATE INDEX idx_committee_member_slot
     ON committee_member (slot);
 
+drop table if exists constitution;
 CREATE TABLE constitution
 (
     active_epoch    int,
