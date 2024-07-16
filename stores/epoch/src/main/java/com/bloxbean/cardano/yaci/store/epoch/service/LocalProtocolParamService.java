@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.LocalProtocolParamsEntity;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalProtocolParamsRepository;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,11 +68,30 @@ public class LocalProtocolParamService {
                 && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Era changed to {}", era.name());
+
+            //Looks like era change, fetch protocol params
+            //This is required for custom network directly starting from latest era like Conway era. So, after first block, when correct era is detected
+            //fetch protocol params.
+            log.info("Fetching protocol params ...");
+            fetchAndSetCurrentProtocolParams();
         }
     }
 
+    /**
+     * Listen to epoch change event and fetch protocol param
+     * @param epochChangeEvent
+     */
+    @EventListener
+    public void epochEvent(EpochChangeEvent epochChangeEvent) {
+        if (!epochChangeEvent.getEventMetadata().isSyncMode())
+            return;
+
+        log.info("Epoch change event received. Fetching protocol params ...");
+        fetchAndSetCurrentProtocolParams();
+    }
+
     @Transactional
-    public void fetchAndSetCurrentProtocolParams() {
+    public synchronized void fetchAndSetCurrentProtocolParams() {
         getCurrentProtocolParamsFromNode()
                 .doOnError(throwable -> {
                     log.error("Local protocol param sync error {}", throwable.getMessage());

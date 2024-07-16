@@ -43,3 +43,13 @@ drop index idx_txn_metadata_label;
 
 -- scripts
 drop index idx_txn_scripts_tx_hash;
+
+-- governance
+drop index idx_gov_action_proposal_txhash;
+drop index idx_gov_action_proposal_return_address;
+drop index idx_gov_action_proposal_type;
+drop index idx_voting_procedure_txhash;
+drop index idx_voting_procedure_gov_action_tx_hash;
+drop index idx_voting_procedure_gov_action_tx_hash_gov_action_index;
+drop index idx_delegation_vote_address;
+drop index idx_delegation_vote_drep_id;
