@@ -1,10 +1,11 @@
-package com.bloxbean.cardano.yaci.store.epoch.controller;
+package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 
-import com.bloxbean.cardano.client.backend.model.EpochContent;
+import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochNo;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalProtocolParamService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("${apiPrefix}/epochs")
+@Tag(name = "Local Epoch Service", description = "Get epoch params directly from local Cardano Node through n2c local query")
 @Slf4j
 @ConditionalOnBean(LocalProtocolParamService.class)
 @ConditionalOnExpression("${store.epoch.endpoints.epoch.local.enabled:false}")
@@ -37,6 +39,7 @@ public class LocalEpochController {
 
     //TODO -- This is a workaround for now. As we keep only the current protocol params now
     @GetMapping("parameters")
+    @Operation(summary = "Latest Epoch's Protocol Parameters", description = "Get the protocol parameters of the latest epoch. It fetches the protocol parameters from the local node through n2c local query.")
     public ProtocolParamsDto getProtocolParams() {
        return protocolParamService.getCurrentProtocolParams()
                .map(mapper::toProtocolParamsDto)
@@ -44,11 +47,12 @@ public class LocalEpochController {
     }
 
     @GetMapping("latest/parameters")
+    @Operation(summary = "Latest Epoch's Protocol Parameters", description = "Get the protocol parameters of the latest epoch. It fetches the protocol parameters from the local node through n2c local query.")
     public ProtocolParamsDto getLatestProtocolParams() {
         return getProtocolParams();
     }
 
-    @Operation(summary = "Get protocol parameters. The {number} path variable is ignored. So any value can be passed. It always returns current protocol parameters")
+    @Operation(summary = "Get protocol parameters. The {number} path variable is ignored. So any value can be passed. It always returns current protocol parameters. It fetches the protocol parameters from the local node through n2c local query.")
     @GetMapping("{number}/parameters")
     public ProtocolParamsDto getProtocolParams(@PathVariable Integer number) {
         return getProtocolParams();
@@ -56,10 +60,7 @@ public class LocalEpochController {
 
     @Operation(summary = "This is a dummy endpoint for now. It returns a hardcode value, 1")
     @GetMapping("latest")
-    public EpochContent getLatestEpoch() {
-        return EpochContent.builder()
-                .epoch(1)
-                .build();
+    public EpochNo getLatestEpoch() {
+        return new EpochNo(1);
     }
-
 }

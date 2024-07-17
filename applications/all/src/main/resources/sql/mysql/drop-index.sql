@@ -43,3 +43,13 @@ drop index idx_txn_metadata_label on transaction_metadata;
 
 -- scripts
 drop index idx_txn_scripts_tx_hash on transaction_scripts;
+
+-- governance
+drop index idx_gov_action_proposal_txhash on gov_action_proposal;
+drop index idx_gov_action_proposal_return_address on gov_action_proposal;
+drop index idx_gov_action_proposal_type on gov_action_proposal;
+drop index idx_voting_procedure_txhash on voting_procedure;
+drop index idx_voting_procedure_gov_action_tx_hash on voting_procedure;
+drop index idx_voting_procedure_gov_action_tx_hash_gov_action_index on voting_procedure;
+drop index idx_delegation_vote_address on delegation_vote;
+drop index idx_delegation_vote_drep_id on delegation_vote;

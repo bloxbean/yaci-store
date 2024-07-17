@@ -11,10 +11,10 @@ import java.util.concurrent.TimeUnit;
 @Component
 @ConditionalOnBean(LocalProtocolParamService.class)
 @Slf4j
-public class LocalProtocolParamsSchduler {
+public class LocalProtocolParamsScheduler {
     private LocalProtocolParamService protocolParamService;
 
-    public LocalProtocolParamsSchduler(LocalProtocolParamService protocolParamService) {
+    public LocalProtocolParamsScheduler(LocalProtocolParamService protocolParamService) {
         this.protocolParamService = protocolParamService;
     }
 
