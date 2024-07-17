@@ -1,8 +1,6 @@
-version: '3.9'
-
 services:
   yaci-store-aggregation:
-    image: bloxbean/yaci-store-aggregation-app:0.1.0-rc3
+    image: bloxbean/yaci-store-aggregation-app:0.1.0-rc4
     container_name: yaci-store-aggregation
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=aggregation}
@@ -10,11 +8,14 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
     env_file:
       - env
-      - env-aggr
+      - application.properties
+      - application-aggr.properties
     ports:
       - ${YAC_STORE_PORT:-8081}:8081
     volumes:
       - $PWD/logs:/app/logs/
+      - ./application.properties:/app/config/application.properties
+      - ./application-aggr.properties:/app/config/application-aggr.properties
     logging:
       driver: "json-file"
       options:
