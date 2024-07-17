@@ -145,3 +145,12 @@ java -jar yaci-store-utxo-indexer-<version>.jar
 ## Swagger UI
 
 By default, swagger UI for the application is available at http://localhost:8080/swagger-ui/index.html
+
+## DB Indexes (After Initial Sync)
+
+During the initial sync with the **yaci-store-all** or **yaci-store-utxo-indexer** apps, the app automatically removes all optional DB indexes
+to speed up the sync process. Once the sync is completed, you need to manually re-apply those missing indexes for faster queries.
+
+The SQL file of indexes that need to be re-applied can be found in the GitHub repository:
+- **Yaci Store All App :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/create-index.sql)
+- **Utxo Indexer App   :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/utxo-indexer/src/main/resources/sql/create-index.sql)
