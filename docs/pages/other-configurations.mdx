@@ -1,0 +1,66 @@
+import { Callout } from 'nextra/components'
+
+## Other configurations
+
+Each store implementation in yaci-store has its own configuration options. We will try to highlight a few key configurations here.
+These store-specific configurations can be set in the `application.properties` file.
+
+### Pruning Configuration
+
+Sometimes you may not want to store all historical data in a store. If you are using yaci-store as a library, you can customize it
+to only store specific data in your own custom storage implementation. However, if you want to delete historical data from a store database, you can use the pruning configuration.
+
+Currently, pruning configuration is only supported for the following stores. In the future, we will add support for other stores as well.
+- utxo
+- transaction
+
+<Callout>
+**By default, pruning is disabled for all stores.**
+</Callout>
+
+#### Utxo Pruning
+
+To enable utxo pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.utxo.pruning-enabled=true
+store.utxo.pruning.interval=600
+```
+
+The above configuration will run utxo pruning every 600 seconds.
+
+There is also another configuration, `store.utxo.pruning-safe-blocks`, which can be used to specify the number of safe blocks to keep in the store.
+By default, this is set to 2160 blocks, same as the security parameter in Cardano mainnet.
+
+#### Transaction Pruning
+
+To enable transaction pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.transaction.pruning-enabled=true
+store.transaction.pruning.interval=86400
+```
+
+The above configuration will run transaction pruning every 86400 seconds or 1 day.
+
+## Auto Sync off
+
+Ideally, you should only have one write instance of yaci-store. However, if you want to set up multiple read-only yaci-store instances alongside one write instance,
+you can disable auto-sync in the read-only instances. This way, the read-only instances will only read from the database and not write to it.
+
+```properties
+store.sync-auto-start=false
+```
+
+## Store specific application
+
+Yaci Store bundles all stores by default, and you can enable or disable stores by setting a store-specific enable flag in the application.properties file.
+This makes it possible to have multiple instances of yaci-store with different stores enabled. These individual instances can write to their own separate databases with the default configuration.
+
+However, if you want to have multiple store-specific yaci-store applications writing to the same database, each application needs to maintain its own **cursor** in the `cursor_` table.
+
+This is achievable by assigning a unique event publisher ID to each yaci-store application. This can be done by setting the following configuration in each application's `application.properties` file.
+
+```properties
+store.event-publisher-id=1000  //some unique id
+```
