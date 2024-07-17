@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Run with Docker Compose
 
 There are three out-of-the-box applications available in the Yaci Store repository:
@@ -30,6 +32,16 @@ In the following sections, we will use `*-monolith.yml` files. These files help 
 through a single Docker Compose file. If you want to run the application with an external database, you can use application-specific
 Docker Compose files, such as `yaci-store-all.yml`, `yaci-store-utxo-indexer.yml`, or `yaci-store-aggregation.yml`.
 
+## DB Indexes (After Initial Sync)
+
+During the initial sync with the **yaci-store-all** or **yaci-store-utxo-indexer** apps, the app automatically removes all optional DB indexes
+to speed up the sync process. Once the sync is completed, you need to manually re-apply those missing indexes for faster queries.
+
+The SQL file of indexes that need to be re-applied can be found in the GitHub repository:
+- **Yaci Store All App :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/create-index.sql)
+- **Utxo Indexer App :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/utxo-indexer/src/main/resources/sql/create-index.sql)
+
+
 ## Run Yaci Store ALL application
 
 This application includes **all** stores.
@@ -42,19 +54,23 @@ or its API endpoints, you have that flexibility.
 - To disable a specific store, you can set the `store.<store_name>.enabled` property to `false` in `application.properties`.
 - To disable a specific store's API endpoints, you can set the `store.<store_name>.api-enabled` environment variable to `false` in `application.properties`.
 
-> **Note:**
-> When a store is disabled, the store specific data will not be processed and stored in the database. However, the store specific tables will be created in the database.
-This will be fixed in the future release.
-
-> **Note: (Account Aggregation)**
-> It also includes the **account** aggregation module, but it is disabled by default. Instead of enabling this module,
-it's recommended to run the **aggregation-app** separately for calculating account balances.
-
 ```shell
 docker compose -f yaci-store-all-monolith.yml up -d
 ```
 
 You can access swagger-ui at http://localhost:8080/swagger-ui/index.html
+
+<Callout type={"info"}>
+**Note:**
+When a store is disabled, the store specific data will not be processed and stored in the database. However, the store specific tables will be created in the database.
+This will be fixed in the future release.
+</Callout>
+
+<Callout type={"info"}>
+**Account Aggregation** :
+It also includes the **account** aggregation module, but it is disabled by default. Instead of enabling this module,
+it's recommended to run the **aggregation-app** separately for calculating account balances.
+</Callout>
 
 ## Run Utxo Indexer application
 
