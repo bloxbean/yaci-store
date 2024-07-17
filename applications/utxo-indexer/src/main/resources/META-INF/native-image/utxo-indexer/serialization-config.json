@@ -13,6 +13,9 @@
       "name": "com.bloxbean.cardano.yaci.store.common.domain.TxOuput"
     },
     {
+      "name": "java.util.LinkedHashMap"
+    },
+    {
       "name":"java.lang.Integer"
     },
     {
