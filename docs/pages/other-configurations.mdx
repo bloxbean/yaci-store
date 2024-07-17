@@ -57,7 +57,7 @@ store.sync-auto-start=false
 Yaci Store bundles all stores by default, and you can enable or disable stores by setting a store-specific enable flag in the application.properties file.
 This makes it possible to have multiple instances of yaci-store with different stores enabled. These individual instances can write to their own separate databases with the default configuration.
 
-However, if you want to have multiple store-specific yaci-store applications writing to the same database, each application needs to maintain its own **cursor** in the `_cursor` table.
+However, if you want to have multiple store-specific yaci-store applications writing to the same database, each application needs to maintain its own **cursor** in the `cursor_` table.
 
 This is achievable by assigning a unique event publisher ID to each yaci-store application. This can be done by setting the following configuration in each application's `application.properties` file.
 
