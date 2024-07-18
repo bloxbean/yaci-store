@@ -21,6 +21,7 @@ public class Pool extends BlockAwareDomain {
     private String poolId;
     private String txHash;
     private Integer certIndex;
+    private Integer txIndex;
     private PoolStatusType status;
     private BigInteger amount;
     private Integer epoch;

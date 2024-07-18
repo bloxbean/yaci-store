@@ -3,7 +3,7 @@ create table stake_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
-    block_index     int,
+    tx_index        int,
     credential      varchar(56) not null,
     cred_type       varchar(50),
     type            varchar(50),
@@ -37,6 +37,7 @@ create table delegation
 (
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
+    tx_index        int          not null,
     credential      varchar(56) not null,
     cred_type       varchar(50),
     pool_id         varchar(56), -- pool hash
@@ -67,6 +68,7 @@ create table pool_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
+    tx_index        int          not null,
     pool_id         varchar(56), -- pool hash
     vrf_key         varchar(64),
     pledge          numeric(20, 0),
@@ -103,6 +105,7 @@ create table pool_retirement
 (
     tx_hash          varchar(64) not null,
     cert_index       int          not null,
+    tx_index         int          not null,
     pool_id          varchar(56), -- pool hash
     retirement_epoch int,
     epoch            int,
@@ -133,6 +136,7 @@ create table pool
     pool_id         varchar(56),
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     status          varchar(50),
     amount          numeric(38),
     epoch           int,

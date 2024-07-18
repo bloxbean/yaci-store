@@ -30,6 +30,9 @@ public class PoolEntity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private Integer certIndex;
 
+    @Column(name = "tx_index")
+    private Integer txIndex;
+
     @Id
     @Column(name = "slot")
     private Long slot;

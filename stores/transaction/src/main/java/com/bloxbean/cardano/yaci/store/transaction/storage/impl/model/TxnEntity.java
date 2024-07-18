@@ -35,8 +35,8 @@ public class TxnEntity extends BlockAwareEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "block_index")
-    private Integer blockIndex;
+    @Column(name = "tx_index")
+    private Integer txIndex;
 
     @Column(name = "epoch")
     private Integer epoch;

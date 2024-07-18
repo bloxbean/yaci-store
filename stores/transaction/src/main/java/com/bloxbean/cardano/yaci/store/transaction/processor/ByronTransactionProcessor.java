@@ -55,7 +55,7 @@ public class ByronTransactionProcessor {
                 .collect(Collectors.toList());
 
         List<Txn> txList = new ArrayList<>();
-        int blockIndex = 0;
+        int txIndex = 0;
         for (ByronTx byronTx : byronTxList) {
 
             //find inputs
@@ -80,7 +80,7 @@ public class ByronTransactionProcessor {
                     .blockNumber(event.getMetadata().getBlock())
                     .blockTime(event.getMetadata().getBlockTime())
                     .slot(event.getMetadata().getSlot())
-                    .blockIndex(blockIndex++)
+                    .txIndex(txIndex++)
                     .epoch(event.getMetadata().getEpochNumber())
                     .inputs(inputs)
                     .outputs(outputs)

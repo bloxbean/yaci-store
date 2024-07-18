@@ -29,7 +29,7 @@ public class StakeSnapshotService {
                             cert_index,
                             ROW_NUMBER() OVER (
                                 PARTITION BY address
-                                ORDER BY slot DESC, cert_index DESC
+                                ORDER BY slot DESC, tx_index DESC, cert_index DESC
                                 ) AS rn
                         FROM
                             delegation
@@ -86,7 +86,7 @@ public class StakeSnapshotService {
                                      slot,
                                      ROW_NUMBER() OVER (
                                          PARTITION BY pool_id
-                                         ORDER BY slot DESC, cert_index DESC
+                                         ORDER BY slot DESC, tx_index DESC, cert_index DESC
                                          ) AS rn
                                  FROM
                                      pool

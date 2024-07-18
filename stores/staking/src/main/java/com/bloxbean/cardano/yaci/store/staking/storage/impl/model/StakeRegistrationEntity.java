@@ -25,8 +25,8 @@ public class StakeRegistrationEntity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private long certIndex;
 
-    @Column(name = "block_index")
-    private int blockIndex;
+    @Column(name = "tx_index")
+    private int txIndex;
 
     @Column(name = "credential")
     private String credential;

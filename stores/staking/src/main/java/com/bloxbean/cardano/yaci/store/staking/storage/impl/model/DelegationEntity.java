@@ -24,6 +24,9 @@ public class DelegationEntity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private long certIndex;
 
+    @Column(name = "tx_index")
+    private int txIndex;
+
     @Column(name = "credential")
     private String credential;
 

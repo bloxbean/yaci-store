@@ -23,6 +23,7 @@ public class Delegation extends BlockAwareDomain {
     private String poolId;
     private String txHash;
     private int certIndex;
+    private int txIndex;
     private int epoch;
     private long slot;
     private String blockHash;

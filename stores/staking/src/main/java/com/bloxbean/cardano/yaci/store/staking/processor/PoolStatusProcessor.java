@@ -4,9 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
-import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
-import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
-import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
+import com.bloxbean.cardano.yaci.store.staking.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.*;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
@@ -101,6 +99,10 @@ public class PoolStatusProcessor {
         var metadata = poolRegistrationEvent.getMetadata();
         BigInteger ppPoolDeposit = depositParamService.getPoolDeposit(metadata.getEpochNumber());
 
+        //TOD0 -- Should we sort pool registrations based on txIndex, certIndex
+        poolRegistrationEvent.getPoolRegistrations().sort(Comparator.comparingLong(PoolRegistration::getTxIndex)
+                .thenComparingLong(PoolRegistration::getCertIndex));
+
         List<Pool> poolRegsUpdates = new ArrayList<>();
         for (var poolRegistration : poolRegistrationEvent.getPoolRegistrations()) {
             var poolId = poolRegistration.getPoolId();
@@ -116,6 +118,7 @@ public class PoolStatusProcessor {
                         .poolId(poolId)
                         .txHash(poolRegistration.getTxHash())
                         .certIndex(poolRegistration.getCertIndex())
+                        .txIndex(poolRegistration.getTxIndex())
                         .status(PoolStatusType.REGISTRATION)
                         .amount(ppPoolDeposit)
                         .epoch(metadata.getEpochNumber())
@@ -134,6 +137,7 @@ public class PoolStatusProcessor {
                         .poolId(poolId)
                         .txHash(poolRegistration.getTxHash())
                         .certIndex(poolRegistration.getCertIndex())
+                        .txIndex(poolRegistration.getTxIndex())
                         .status(PoolStatusType.UPDATE)
                         .amount(BigInteger.ZERO)
                         .epoch(metadata.getEpochNumber())
@@ -156,6 +160,10 @@ public class PoolStatusProcessor {
     public void handlePoolRetirement(PoolRetirementEvent poolRetirementEvent) {
         var metadata = poolRetirementEvent.getMetadata();
 
+        //TODO -- should we sort pool retirements based on txIndex, certIndex
+        poolRetirementEvent.getPoolRetirements().sort(Comparator.comparingLong(PoolRetirement::getTxIndex)
+                .thenComparingLong(PoolRetirement::getCertIndex));
+
         for (var poolRetirement : poolRetirementEvent.getPoolRetirements()) {
             var poolId = poolRetirement.getPoolId();
             var poolRegistrationSlot = poolStorage.findRecentPoolRegistration(poolId, metadata.getEpochNumber())
@@ -166,6 +174,7 @@ public class PoolStatusProcessor {
                     .poolId(poolId)
                     .txHash(poolRetirement.getTxHash())
                     .certIndex(poolRetirement.getCertIndex())
+                    .txIndex(poolRetirement.getTxIndex())
                     .status(PoolStatusType.RETIRING)
                     .amount(BigInteger.ZERO)
                     .epoch(metadata.getEpochNumber())
@@ -206,6 +215,7 @@ public class PoolStatusProcessor {
                     .poolId(retirement.getPoolId())
                     .txHash(retirement.getTxHash())
                     .certIndex(retirement.getCertIndex())
+                    .txIndex(retirement.getTxIndex())
                     .status(PoolStatusType.RETIRED)
                     .amount(poolDeposit)
                     .epoch(newEpoch)

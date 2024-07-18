@@ -37,6 +37,7 @@ public class PoolRegistrationProcessor {
 
         for (TxCertificates txCertificates: certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
+            int txIndex = txCertificates.getBlockIndex();
             List<Certificate> certificates = txCertificates.getCertificates();
 
             List<PoolRegistration> poolRegistrations = new ArrayList<>();
@@ -53,6 +54,7 @@ public class PoolRegistrationProcessor {
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
                             .certIndex(index)
+                            .txIndex(txIndex)
                             .poolId(poolRegistrationCert.getPoolParams().getOperator())
                             .vrfKeyHash(poolRegistrationCert.getPoolParams().getVrfKeyHash())
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
@@ -77,6 +79,7 @@ public class PoolRegistrationProcessor {
                     PoolRetirement poolRetirement = PoolRetirement.builder()
                             .txHash(txHash)
                             .certIndex(index)
+                            .txIndex(txIndex)
                             .poolId(poolRetirementCert.getPoolKeyHash())
                             .retirementEpoch((int)poolRetirementCert.getEpoch())
                             .epoch(eventMetadata.getEpochNumber())

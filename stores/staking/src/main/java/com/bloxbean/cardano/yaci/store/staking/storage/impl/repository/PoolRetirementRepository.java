@@ -21,7 +21,7 @@ public interface PoolRetirementRepository
     List<PoolRetirementEntity> findByPoolIdAndEpoch(String poolId, Integer epoch);
 
     //Get all retirement certificates for the pool submitted on or before this epoch
-    @Query("select p from PoolRetirementEntity p where p.poolId = ?1 and p.epoch <= ?2 order by p.slot desc, p.certIndex desc limit 1")
+    @Query("select p from PoolRetirementEntity p where p.poolId = ?1 and p.epoch <= ?2 order by p.slot desc, p.txIndex desc, p.certIndex desc limit 1")
     Optional<PoolRetirementEntity> findRecentPoolRetirementByEpoch(String poolId, Integer epoch);
 
     //Get all retirement certificates with retirement epoch == retirementEpoch

@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public interface PoolStatusRepository extends JpaRepository<PoolEntity, PoolId> {
 
-    @Query("SELECT d FROM PoolEntity d WHERE d.poolId = :poolId AND d.status = :status AND d.epoch <= :epoch ORDER BY d.slot DESC, d.certIndex DESC limit 1")
+    @Query("SELECT d FROM PoolEntity d WHERE d.poolId = :poolId AND d.status = :status AND d.epoch <= :epoch ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
     Optional<PoolEntity> findRecentByPoolIdAndStatus(String poolId, PoolStatusType status, Integer epoch);
 
     @Query("SELECT ps FROM PoolEntity ps WHERE ps.status = 'RETIRING' AND ps.retireEpoch = :retireEpoch AND NOT EXISTS (" +

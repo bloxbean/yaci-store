@@ -26,7 +26,7 @@ public interface StakeRegistrationRepository
     Slice<String> findRegisteredStakeAddresses(Integer epoch, Pageable pageable);
 
     @Query("select r from StakeRegistrationEntity r " +
-            "where r.address = :stakeAddress and r.slot <= :slot order by r.slot desc, r.blockIndex desc, r.certIndex desc limit 1")
+            "where r.address = :stakeAddress and r.slot <= :slot order by r.slot desc, r.txIndex desc, r.certIndex desc limit 1")
     Optional<StakeRegistrationEntity> findRegistrationsByStakeAddress(String stakeAddress, Long slot);
 
     int deleteBySlotGreaterThan(Long slot);

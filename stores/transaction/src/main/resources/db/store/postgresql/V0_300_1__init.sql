@@ -20,7 +20,7 @@ create table transaction
     ttl                     bigint,
     validity_interval_start bigint,
     collateral_return_json  jsonb,
-    block_index             integer,
+    tx_index                integer,
     epoch                   integer,
     block                   bigint,
     block_time              bigint,
