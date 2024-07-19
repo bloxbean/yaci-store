@@ -364,13 +364,13 @@ transactions.
 
 * Primary Id: `script_hash`
 
-| **Column name** | **Type**    | **Description**                                                           |
-| :-------------- | :---------- | :------------------------------------------------------------------------ |
-| **script_hash** | varchar(56) | The Hash of the Script                                                    |
-| script_type     | varchar(30) | The type of the script. This is currenttly either 'timelock' or 'plutus'. |
-| content         | jsonb       | JSON representation of the timelock script, null for other script type    |
-| create_datetime | timestamp   | Date and time the record was created                                      |
-| update_datetime | timestamp   | Date and time the record was last updated                                 |
+| **Column name** | **Type**    | **Description**                                                          |
+| :-------------- | :---------- | :----------------------------------------------------------------------- |
+| **script_hash** | varchar(56) | The Hash of the Script                                                   |
+| script_type     | varchar(30) | The type of the script. (NATIVE_SCRIPT, PLUTUS_V1, PLUTUS_V2, PLUTUS_V3) |
+| content         | jsonb       | JSON representation of the script content                                |
+| create_datetime | timestamp   | Date and time the record was created                                     |
+| update_datetime | timestamp   | Date and time the record was last updated                                |
 
 ## 2. transaction_scripts
 
