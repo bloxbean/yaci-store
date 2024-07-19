@@ -2,12 +2,14 @@ package com.bloxbean.cardano.yaci.store.api.account.service;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.crypto.Bech32;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DelegationsAndRewardAccountsQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DelegationsAndRewardAccountsResult;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
+import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -24,13 +26,16 @@ import java.util.Set;
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 public class AccountService {
     private final LocalStateQueryClient localStateQueryClient;
+    private final EraStorage eraStorage;
 
-    public AccountService(@Nullable LocalClientProvider localClientProvider) {
+    public AccountService(@Nullable LocalClientProvider localClientProvider, EraStorage eraStorage) {
         if (localClientProvider != null) {
             this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
             log.info("Account Controller initialized >>>");
         } else
             localStateQueryClient = null;
+
+        this.eraStorage = eraStorage;
     }
 
     /**
@@ -47,6 +52,10 @@ public class AccountService {
 
         Address address = new Address(stakeAddress);
         DelegationsAndRewardAccountsResult delegationsAndRewardAccountsResult = null;
+        Era lqEra = eraStorage.findCurrentEra()
+                .map(cardanoEra -> cardanoEra.getEra())
+                .map(e -> Era.valueOf(e.name())).orElse(Era.Babbage);
+
         //TODO -- This is a temporary impelementation. It is not scalable with synchronized block
         synchronized (this) {
             //Try to release first before a new query to avoid stale data
@@ -57,7 +66,7 @@ public class AccountService {
             }
 
             Mono<DelegationsAndRewardAccountsResult> mono =
-                    localStateQueryClient.executeQuery(new DelegationsAndRewardAccountsQuery(Set.of(address)));
+                    localStateQueryClient.executeQuery(new DelegationsAndRewardAccountsQuery(lqEra, Set.of(address)));
             delegationsAndRewardAccountsResult = mono.block(Duration.ofSeconds(5));
         }
 
