@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
-import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
@@ -41,12 +40,12 @@ public class UtxoClientImpl implements UtxoClient {
     }
 
     @Override
-    public Optional<AddressUtxo>  getUtxoById(@NotNull UtxoKey utxoId) {
+    public Optional<AddressUtxo>  getUtxoById(UtxoKey utxoId) {
         return utxoStorage.findById(utxoId.getTxHash(), utxoId.getOutputIndex());
     }
 
     @Override
-    public List<Utxo> getUtxoByAddress(@NotNull String address, int page, int count) {
+    public List<Utxo> getUtxoByAddress(String address, int page, int count) {
         if (address == null)
             throw new IllegalArgumentException("Address cannot be null");
 

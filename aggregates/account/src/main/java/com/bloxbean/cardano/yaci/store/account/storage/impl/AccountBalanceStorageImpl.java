@@ -13,9 +13,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +35,6 @@ import java.util.stream.Stream;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 
-@RequiredArgsConstructor
 @Slf4j
 public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     private final AddressBalanceRepository addressBalanceRepository;
@@ -54,8 +51,18 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     private Map<Pair<String, String>, Long> addressBalanceKeysToDeleteCache = new ConcurrentHashMap<>();
     private Map<String, Long> stakeBalanceKeysToDeleteCache = new ConcurrentHashMap<>();
 
-    @PostConstruct
-    public void postConstruct() {
+    public AccountBalanceStorageImpl(AddressBalanceRepository addressBalanceRepository, StakeBalanceRepository stakeBalanceRepository,
+                                     DSLContext dsl, StoreProperties storeProperties, AccountStoreProperties accountStoreProperties) {
+        this.addressBalanceRepository = addressBalanceRepository;
+        this.stakeBalanceRepository = stakeBalanceRepository;
+        this.dsl = dsl;
+        this.storeProperties = storeProperties;
+        this.accountStoreProperties = accountStoreProperties;
+
+        init();
+    }
+
+    public void init() {
         this.dsl.settings().setBatchSize(storeProperties.getJooqWriteBatchSize());
     }
 

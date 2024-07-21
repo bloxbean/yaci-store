@@ -7,9 +7,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepository;
-import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.context.event.EventListener;
@@ -26,7 +24,6 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.DATUM;
 
-@RequiredArgsConstructor
 @Slf4j
 public class DatumStorageImpl implements DatumStorage {
     private final DatumRepository datumRepository;
@@ -40,7 +37,17 @@ public class DatumStorageImpl implements DatumStorage {
 
     private Set<Datum> datumCache = Collections.synchronizedSet(new HashSet<>());
 
-    @PostConstruct
+    public DatumStorageImpl(DatumRepository datumRepository, DSLContext dsl, ParallelExecutor executorHelper, StoreProperties storeProperties,
+                            PlatformTransactionManager transactionManager) {
+        this.datumRepository = datumRepository;
+        this.dsl = dsl;
+        this.executorHelper = executorHelper;
+        this.storeProperties = storeProperties;
+        this.transactionManager = transactionManager;
+
+        init();
+    }
+
     public void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

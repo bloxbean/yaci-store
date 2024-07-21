@@ -1,5 +1,6 @@
 plugins {
     id 'org.springframework.boot' version '3.2.2'
+    id 'org.graalvm.buildtools.native' version '0.10.2'
 }
 
 dependencies {
@@ -31,3 +32,19 @@ dependencies {
 
 }
 
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'yaci-store-all'
+            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.YaciStoreApplication']
+            sharedLibrary = false
+        }
+    }
+
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
