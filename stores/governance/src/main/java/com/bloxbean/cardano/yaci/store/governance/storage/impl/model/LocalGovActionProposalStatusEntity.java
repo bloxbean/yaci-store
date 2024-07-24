@@ -26,4 +26,11 @@ public class LocalGovActionProposalStatusEntity extends BaseEntity {
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private GovActionStatus status;
+
+    @Id
+    @Column(name = "epoch")
+    private Integer epoch;
+
+    @Column(name = "slot")
+    private Long slot;
 }

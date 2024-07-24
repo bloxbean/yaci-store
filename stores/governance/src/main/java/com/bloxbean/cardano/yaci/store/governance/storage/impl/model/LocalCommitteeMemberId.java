@@ -4,12 +4,9 @@ import jakarta.persistence.Column;
 import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode
-public class LocalGovActionProposalStatusId {
-    @Column(name = "gov_action_tx_hash")
-    private String govActionTxHash;
-
-    @Column(name = "gov_action_index")
-    private long govActionIndex;
+public class LocalCommitteeMemberId {
+    @Column(name = "hash")
+    private String hash;
 
     @Column(name = "epoch")
     private Integer epoch;

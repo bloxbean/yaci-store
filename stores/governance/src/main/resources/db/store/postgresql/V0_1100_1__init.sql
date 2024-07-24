@@ -208,31 +208,53 @@ CREATE TABLE local_gov_action_proposal_status
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
     status             varchar(20),
+    epoch              int,
+    slot               bigint,
     create_datetime    timestamp,
     update_datetime    timestamp,
-    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
+    PRIMARY KEY (gov_action_tx_hash, gov_action_index, epoch)
 );
 
-DROP TABLE IF EXISTS committee;
-CREATE TABLE committee
+DROP TABLE IF EXISTS local_committee;
+CREATE TABLE local_committee
+(
+    threshold          double precision,
+    epoch              int,
+    slot               bigint,
+    update_datetime    timestamp,
+    PRIMARY KEY (epoch)
+);
+
+DROP TABLE IF EXISTS local_treasury_withdrawal;
+CREATE TABLE local_treasury_withdrawal
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
-    quorum_numerator   int,
-    quorum_denominator int,
+    withdrawals        jsonb,
+    epoch              int,
     slot               bigint,
     update_datetime    timestamp,
     PRIMARY KEY (gov_action_tx_hash, gov_action_index)
 );
 
-DROP TABLE IF EXISTS treasury_withdrawal;
-CREATE TABLE treasury_withdrawal
+CREATE TABLE local_constitution
 (
-    gov_action_tx_hash varchar(64),
-    gov_action_index   int,
-    stake_address      varchar(255),
-    amount             bigint,
-    slot               bigint,
-    update_datetime    timestamp,
-    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
-)
+    anchor_url      varchar,
+    anchor_hash     varchar(64),
+    script          varchar(64),
+    epoch           int,
+    slot            bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (epoch)
+);
+
+CREATE TABLE local_committee_member
+(
+    hash            varchar(56) NOT NULL,
+    cred_type       varchar(40),
+    expired_epoch   int,
+    epoch           int,
+    slot            bigint,
+    update_datetime timestamp,
+    PRIMARY KEY (hash, epoch)
+);
