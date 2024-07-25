@@ -63,4 +63,9 @@ public class VotingProcedureStorageReaderImpl implements VotingProcedureStorageR
         return votingProcedureEntities.stream().map(votingProcedureMapper::toVotingProcedure).toList();
     }
 
+    @Override
+    public Slice<VotingProcedure> findBySlotGreaterThan(Long slot, Pageable pageable) {
+        return votingProcedureRepository.findBySlotGreaterThan(slot, pageable).map(votingProcedureMapper::toVotingProcedure);
+    }
+
 }
