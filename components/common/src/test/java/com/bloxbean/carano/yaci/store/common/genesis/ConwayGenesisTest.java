@@ -19,6 +19,8 @@ public class ConwayGenesisTest {
         ConwayGenesis conwayGenesis = new ConwayGenesis(NetworkType.MAINNET.getProtocolMagic());
         ProtocolParams protocolParams = conwayGenesis.getProtocolParams();
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
+        Integer committeeNumerator = conwayGenesis.getCommitteeNumerator();
+        Integer committeeDenominator = conwayGenesis.getCommitteeDenominator();
         Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.51);
@@ -27,26 +29,39 @@ public class ConwayGenesisTest {
         assertThat(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence().doubleValue()).isEqualTo(0.51);
         assertThat(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup().doubleValue()).isEqualTo(0.51);
 
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal().doubleValue()).isEqualTo(0.51);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence().doubleValue()).isEqualTo(0.67);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal().doubleValue()).isEqualTo(0.67);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.6);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution().doubleValue()).isEqualTo(0.75);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation().doubleValue()).isEqualTo(0.6);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup().doubleValue()).isEqualTo(0.67);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup().doubleValue()).isEqualTo(0.67);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup().doubleValue()).isEqualTo(0.67);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup().doubleValue()).isEqualTo(0.75);
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal().doubleValue()).isEqualTo(0.67);
 
-        assertThat(protocolParams.getCommitteeMinSize()).isEqualTo(0);
-        assertThat(protocolParams.getCommitteeMaxTermLength()).isEqualTo(200);
-        assertThat(protocolParams.getGovActionLifetime()).isEqualTo(10);
-        assertThat(protocolParams.getGovActionDeposit()).isEqualTo(1000000000);
-        assertThat(protocolParams.getDrepDeposit()).isEqualTo(2000000);
+        assertThat(protocolParams.getCommitteeMinSize()).isEqualTo(7);
+        assertThat(protocolParams.getCommitteeMaxTermLength()).isEqualTo(146);
+        assertThat(protocolParams.getGovActionLifetime()).isEqualTo(6);
+        assertThat(protocolParams.getGovActionDeposit()).isEqualTo(100000000000L);
+        assertThat(protocolParams.getDrepDeposit()).isEqualTo(500000000);
         assertThat(protocolParams.getDrepActivity()).isEqualTo(20);
 
-        assertThat(committeeMembers).isEmpty();
-        assertThat(committeeThreshold).isNull();
+        assertThat(committeeMembers.stream().map(GenesisCommitteeMember::getHash))
+                .contains("df0e83bde65416dade5b1f97e7f115cc1ff999550ad968850783fe50",
+                        "b6012034ba0a7e4afbbf2c7a1432f8824aee5299a48e38e41a952686",
+                        "ce8b37a72b178a37bbd3236daa7b2c158c9d3604e7aa667e6c6004b7",
+                        "f0dc2c00d92a45521267be2d5de1c485f6f9d14466d7e16062897cf7",
+                        "349e55f83e9af24813e6cb368df6a80d38951b2a334dfcdf26815558",
+                        "84aebcfd3e00d0f87af918fc4b5e00135f407e379893df7e7d392c6a",
+                        "e8165b3328027ee0d74b1f07298cb092fd99aa7697a1436f5997f625");
+
+        assertThat(committeeMembers.stream().map(GenesisCommitteeMember::getExpiredEpoch))
+                .contains(580, 580, 580, 580, 580, 580, 580);
+
+        assertThat(committeeNumerator).isEqualTo(2);
+        assertThat(committeeDenominator).isEqualTo(3);
+        assertThat(committeeThreshold).isEqualTo((double) 2/3);
     }
 
     @Test
@@ -54,6 +69,8 @@ public class ConwayGenesisTest {
         ConwayGenesis conwayGenesis = new ConwayGenesis(NetworkType.SANCHONET.getProtocolMagic());
         ProtocolParams protocolParams = conwayGenesis.getProtocolParams();
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
+        Integer committeeNumerator = conwayGenesis.getCommitteeNumerator();
+        Integer committeeDenominator = conwayGenesis.getCommitteeDenominator();
         Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.65);
@@ -92,5 +109,7 @@ public class ConwayGenesisTest {
                 .contains(500, 500, 500, 500, 500);
         assertThat(committeeMembers.stream().allMatch(GenesisCommitteeMember::getHasScript)).isTrue();
         assertThat(committeeThreshold).isEqualTo(0.67);
+        assertThat(committeeNumerator).isNull();
+        assertThat(committeeDenominator).isNull();
     }
 }
