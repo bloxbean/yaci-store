@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.common.genesis;
 
-import com.bloxbean.cardano.client.backend.model.Genesis;
 import com.bloxbean.cardano.yaci.store.common.domain.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
@@ -8,11 +7,12 @@ import lombok.Getter;
 import java.io.File;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V3;
 
-public class ConwayGenesis extends GenesisFile{
+public class ConwayGenesis extends GenesisFile {
     private final static String POOL_VOTING_THRESHOLDS = "poolVotingThresholds";
     private final static String PVT_COMMITTEE_NORMAL = "committeeNormal";
     private final static String PVT_COMMITTEE_NO_CONFIDENCE = "committeeNoConfidence";
@@ -47,12 +47,18 @@ public class ConwayGenesis extends GenesisFile{
     private final static String COMMITTEE = "committee";
     private final static String MEMBERS = "members";
     private final static String THRESHOLD = "threshold";
+    private final static String NUMERATOR = "numerator";
+    private final static String DENOMINATOR = "denominator";
     private final static String PLUTUS_V3_COST_MODEL = "plutusV3CostModel";
 
     @Getter
     private List<GenesisCommitteeMember> committeeMembers;
     @Getter
     private Double committeeThreshold;
+    @Getter
+    private BigInteger committeeNumerator;
+    @Getter
+    private BigInteger committeeDenominator;
     @Getter
     private GenesisConstitution constitution;
 
@@ -203,7 +209,21 @@ public class ConwayGenesis extends GenesisFile{
                 }
             }
 
-            committeeThreshold = committeeNode.get(THRESHOLD) != null ? committeeNode.get(THRESHOLD).asDouble() : null;
+            var ccThresholdNode = committeeNode.get(THRESHOLD);
+            if (ccThresholdNode != null) {
+                if (ccThresholdNode.isObject()) {
+                    var numeratorNode = ccThresholdNode.get(NUMERATOR);
+                    committeeNumerator = numeratorNode != null ? numeratorNode.bigIntegerValue() : null;
+                    var denominatorNode = ccThresholdNode.get(DENOMINATOR);
+                    committeeDenominator = denominatorNode != null ? denominatorNode.bigIntegerValue() : null;
+
+                    if (committeeNumerator != null && committeeDenominator != null && committeeDenominator.compareTo(BigInteger.ZERO) != 0) {
+                        committeeThreshold = committeeNumerator.doubleValue() / committeeDenominator.doubleValue();
+                    }
+                } else {
+                    committeeThreshold = ccThresholdNode.decimalValue().doubleValue();
+                }
+            }
         }
 
         var plutusV3CostModelNode = genesisJson.get(PLUTUS_V3_COST_MODEL);

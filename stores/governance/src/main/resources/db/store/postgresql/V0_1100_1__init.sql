@@ -178,3 +178,20 @@ CREATE TABLE constitution
 
 CREATE INDEX idx_constitution_slot
     ON constitution (slot);
+
+drop table if exists committee;
+create table committee
+(
+    gov_action_tx_hash       varchar(64),
+    gov_action_index         int,
+    threshold_numerator      bigint,
+    threshold_denominator    bigint,
+    threshold                double precision,
+    epoch                    int,
+    slot                     bigint,
+    update_datetime          timestamp,
+    primary key (epoch));
+)
+
+CREATE INDEX idx_committee_slot
+    ON committee (slot);
