@@ -34,12 +34,15 @@ class EraServiceTest {
     @Mock
     private StoreProperties storeProperties;
 
+    @Mock
+    private TipFinderService tipFinderService;
+
     @InjectMocks
     private EraService eraService;
 
     @BeforeEach
     void setup() {
-        eraService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties);
+        eraService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties, tipFinderService);
     }
 
     @Test
