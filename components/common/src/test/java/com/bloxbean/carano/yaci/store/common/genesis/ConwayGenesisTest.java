@@ -19,8 +19,8 @@ public class ConwayGenesisTest {
         ConwayGenesis conwayGenesis = new ConwayGenesis(NetworkType.MAINNET.getProtocolMagic());
         ProtocolParams protocolParams = conwayGenesis.getProtocolParams();
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
-        Integer committeeNumerator = conwayGenesis.getCommitteeNumerator();
-        Integer committeeDenominator = conwayGenesis.getCommitteeDenominator();
+        BigInteger committeeNumerator = conwayGenesis.getCommitteeNumerator();
+        BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
         Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.51);
@@ -69,8 +69,8 @@ public class ConwayGenesisTest {
         ConwayGenesis conwayGenesis = new ConwayGenesis(NetworkType.SANCHONET.getProtocolMagic());
         ProtocolParams protocolParams = conwayGenesis.getProtocolParams();
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
-        Integer committeeNumerator = conwayGenesis.getCommitteeNumerator();
-        Integer committeeDenominator = conwayGenesis.getCommitteeDenominator();
+        BigInteger committeeNumerator = conwayGenesis.getCommitteeNumerator();
+        BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
         Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.65);
