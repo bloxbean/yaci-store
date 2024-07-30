@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
-import com.bloxbean.cardano.yaci.store.epoch.service.LocalProtocolParamService;
+import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,16 +9,16 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class LocalProtocolParamsSchedulerTest {
+class LocalEpochParamsSchedulerTest {
     @Mock
-    private LocalProtocolParamService protocolParamService;
+    private LocalEpochParamService protocolParamService;
 
     @InjectMocks
-    private LocalProtocolParamsScheduler localProtocolParamsSchduler;
+    private LocalEpochParamsScheduler localProtocolParamsSchduler;
 
     @Test
     void testScheduleFetchAndSetCurrentProtocolParams() {
-        localProtocolParamsSchduler = new LocalProtocolParamsScheduler(protocolParamService);
+        localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService);
 
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
         Mockito.verify(protocolParamService, Mockito.times(1)).fetchAndSetCurrentProtocolParams();

@@ -8,9 +8,10 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.LocalProtocolParamsEntity;
-import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalProtocolParamsRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.LocalEpochParamsStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import jakarta.annotation.PostConstruct;
@@ -28,29 +29,31 @@ import java.util.Optional;
 @Component
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @Slf4j
-public class LocalProtocolParamService {
+public class LocalEpochParamService {
     private final LocalClientProvider localClientProvider;
     private final LocalStateQueryClient localStateQueryClient;
-    private LocalProtocolParamsRepository protocolParamsRepository;
+    private final EraService eraService;
+    private final LocalEpochParamsStorage localProtocolParamsStorage;
 
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
 
-    @Value("${store.cardano.n2c-era:Babbage}")
+    @Value("${store.cardano.n2c-era:Conway}")
     private String eraStr;
 
     private Era era;
 
-    public LocalProtocolParamService(LocalClientProvider localClientProvider, LocalProtocolParamsRepository protocolParamsRepository) {
+    public LocalEpochParamService(LocalClientProvider localClientProvider, LocalEpochParamsStorage localProtocolParamsStorage, EraService eraService) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
-        this.protocolParamsRepository = protocolParamsRepository;
+        this.localProtocolParamsStorage = localProtocolParamsStorage;
+        this.eraService = eraService;
         log.info("ProtocolParamService initialized >>>");
     }
 
     @PostConstruct
     public void postConstruct() {
         if (StringUtil.isEmpty(eraStr))
-            eraStr = "Babbage";
+            eraStr = "Conway";
 
         era = Era.valueOf(eraStr);
         log.info("N2C Era set to {}", era.name());
@@ -93,23 +96,36 @@ public class LocalProtocolParamService {
 
     @Transactional
     public synchronized void fetchAndSetCurrentProtocolParams() {
+        Integer epoch = eraService.getCurrentEpoch().orElse(null);
+        if(epoch == null) {
+            log.error("Epoch is null. Cannot fetch protocol params");
+            return;
+        }
+
         getCurrentProtocolParamsFromNode()
                 .doOnError(throwable -> {
                     log.error("Local protocol param sync error {}", throwable.getMessage());
                 })
                 .subscribe(protocolParamUpdate -> {
-                    LocalProtocolParamsEntity entity = new LocalProtocolParamsEntity();
-                    entity.setId(1L);
-                    entity.setProtocolParams(convertProtoParams(protocolParamUpdate));
-
-                    protocolParamsRepository.save(entity);
+                    EpochParam epochParam = new EpochParam();
+                    epochParam.setEpoch(epoch);
+                    epochParam.setParams(convertProtoParams(protocolParamUpdate));
+                    localProtocolParamsStorage.save(epochParam);
                 });
     }
 
     public Optional<ProtocolParams> getCurrentProtocolParams() {
-        return protocolParamsRepository.findById(Long.valueOf(1))
-                .map(protocolParamsEntity -> Optional.ofNullable(protocolParamsEntity.getProtocolParams()))
-                .orElse(Optional.empty());
+        return localProtocolParamsStorage.getLatestEpochParam()
+                .map(EpochParam::getParams);
+    }
+
+    public Optional<ProtocolParams> getProtocolParams(int epoch) {
+        return localProtocolParamsStorage.getEpochParam(epoch)
+                .map(EpochParam::getParams);
+    }
+
+    public Optional<Integer> getMaxEpoch() {
+        return localProtocolParamsStorage.getMaxEpoch();
     }
 
     public Mono<ProtocolParamUpdate> getCurrentProtocolParamsFromNode() {
@@ -125,6 +141,7 @@ public class LocalProtocolParamService {
         } catch (Exception e) {
             //Ignore the error
         }
+
 
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(era));
