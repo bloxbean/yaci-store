@@ -202,8 +202,8 @@ create table committee
 CREATE INDEX idx_committee_slot
     ON committee (slot);
 
-DROP TABLE if exists local_gov_action_proposal_status;
-CREATE TABLE local_gov_action_proposal_status
+drop table if exists local_gov_action_proposal_status;
+create table local_gov_action_proposal_status
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
@@ -212,21 +212,21 @@ CREATE TABLE local_gov_action_proposal_status
     slot               bigint,
     create_datetime    timestamp,
     update_datetime    timestamp,
-    PRIMARY KEY (gov_action_tx_hash, gov_action_index, epoch)
+    primary key (gov_action_tx_hash, gov_action_index, epoch)
 );
 
-DROP TABLE IF EXISTS local_committee;
-CREATE TABLE local_committee
+drop table if exists local_committee;
+create table local_committee
 (
     threshold          double precision,
     epoch              int,
     slot               bigint,
     update_datetime    timestamp,
-    PRIMARY KEY (epoch)
+    primary key (epoch)
 );
 
-DROP TABLE IF EXISTS local_treasury_withdrawal;
-CREATE TABLE local_treasury_withdrawal
+drop table if exists local_treasury_withdrawal;
+create table local_treasury_withdrawal
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
@@ -234,10 +234,11 @@ CREATE TABLE local_treasury_withdrawal
     epoch              int,
     slot               bigint,
     update_datetime    timestamp,
-    PRIMARY KEY (gov_action_tx_hash, gov_action_index)
+    primary key (gov_action_tx_hash, gov_action_index)
 );
 
-CREATE TABLE local_constitution
+drop table if exists local_treasury_withdrawal;
+create table local_constitution
 (
     anchor_url      varchar,
     anchor_hash     varchar(64),
@@ -245,16 +246,17 @@ CREATE TABLE local_constitution
     epoch           int,
     slot            bigint,
     update_datetime timestamp,
-    PRIMARY KEY (epoch)
+    primary key (epoch)
 );
 
-CREATE TABLE local_committee_member
+drop table if exists local_committee_member;
+create table local_committee_member
 (
-    hash            varchar(56) NOT NULL,
+    hash            varchar(56) not null,
     cred_type       varchar(40),
     expired_epoch   int,
     epoch           int,
     slot            bigint,
     update_datetime timestamp,
-    PRIMARY KEY (hash, epoch)
+    primary key (hash, epoch)
 );
