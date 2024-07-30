@@ -2,7 +2,7 @@ drop table if exists gov_action_proposal;
 create table gov_action_proposal
 (
     tx_hash         varchar(64) not null,
-    idx           int         not null,
+    idx             int         not null,
     deposit         bigint,
     return_address  varchar(255),
     anchor_url      varchar,
@@ -62,10 +62,11 @@ CREATE INDEX idx_voting_procedure_gov_action_tx_hash
 CREATE INDEX idx_voting_procedure_gov_action_tx_hash_gov_action_index
     ON voting_procedure (gov_action_tx_hash, gov_action_index);
 
-CREATE TABLE committee_registration
+drop table if exists committee_registration;
+create table committee_registration
 (
     tx_hash         varchar(64) not null,
-    cert_index      int         NOT NULL,
+    cert_index      int         not null,
     cold_key        varchar,
     hot_key         varchar,
     cred_type       varchar(40),
@@ -74,35 +75,37 @@ CREATE TABLE committee_registration
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
-    PRIMARY KEY (tx_hash, cert_index)
+    primary key (tx_hash, cert_index)
 );
 
 CREATE INDEX idx_committee_registration_slot
     ON committee_registration (slot);
 
-CREATE TABLE committee_deregistration
+drop table if exists committee_deregistration;
+create table committee_deregistration
 (
     tx_hash         varchar(64) not null,
-    cert_index      int         NOT NULL,
+    cert_index      int         not null,
     anchor_url      varchar,
     anchor_hash     varchar(64),
-    cold_key        varchar     NOT NULL,
+    cold_key        varchar     not null,
     cred_type       varchar(40),
     epoch           int,
     slot            bigint,
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
-    PRIMARY KEY (tx_hash, cert_index)
+    primary key (tx_hash, cert_index)
 );
 
 CREATE INDEX idx_committee_deregistration_slot
     ON committee_deregistration (slot);
 
-CREATE TABLE delegation_vote
+drop table if exists delegation_vote;
+create table delegation_vote
 (
     tx_hash         varchar(64) not null,
-    cert_index      int         NOT NULL,
+    cert_index      int         not null,
     address         varchar(255), -- bech32 stake address
     drep_hash       varchar(56),
     drep_id         varchar(255),
@@ -114,7 +117,7 @@ CREATE TABLE delegation_vote
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
-    PRIMARY KEY (tx_hash, cert_index)
+    primary key (tx_hash, cert_index)
 );
 
 CREATE INDEX idx_delegation_vote_slot
@@ -126,12 +129,13 @@ CREATE INDEX idx_delegation_vote_address
 CREATE INDEX idx_delegation_vote_drep_id
     ON delegation_vote (drep_id);
 
-CREATE TABLE drep_registration
+drop table if exists drep_registration;
+create table drep_registration
 (
-    tx_hash         varchar(64) NOT NULL,
-    cert_index      int         NOT NULL,
+    tx_hash         varchar(64) not null,
+    cert_index      int         not null,
     type            varchar(50),
-    deposit         bigint NULL,
+    deposit         bigint,
     drep_hash       varchar(56),
     drep_id         varchar(255),
     anchor_url      varchar,
@@ -142,7 +146,7 @@ CREATE TABLE drep_registration
     block           bigint,
     block_time      bigint,
     update_datetime timestamp,
-    PRIMARY KEY (tx_hash, cert_index)
+    primary key (tx_hash, cert_index)
 );
 
 CREATE INDEX idx_drep_registration_slot
@@ -151,21 +155,23 @@ CREATE INDEX idx_drep_registration_slot
 CREATE INDEX idx_drep_registration_type
     ON drep_registration (type);
 
-CREATE TABLE committee_member
+drop table if exists committee_member;
+create table committee_member
 (
-    hash            varchar(56) NOT NULL,
+    hash            varchar(56) not null,
     cred_type       varchar(40),
     start_epoch     int,
     expired_epoch   int,
     slot            bigint,
     update_datetime timestamp,
-    PRIMARY KEY (hash, slot)
+    primary key (hash, slot)
 );
 
 CREATE INDEX idx_committee_member_slot
-    ON drep_registration (slot);
+    ON committee_member (slot);
 
-CREATE TABLE constitution
+drop table if exists constitution;
+create table constitution
 (
     active_epoch    int,
     anchor_url      varchar,
@@ -173,7 +179,7 @@ CREATE TABLE constitution
     script          varchar(64),
     slot            bigint,
     update_datetime timestamp,
-    PRIMARY KEY (active_epoch)
+    primary key (active_epoch)
 );
 
 CREATE INDEX idx_constitution_slot
