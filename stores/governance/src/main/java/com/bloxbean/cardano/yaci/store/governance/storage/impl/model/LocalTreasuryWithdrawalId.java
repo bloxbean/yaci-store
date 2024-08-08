@@ -9,7 +9,7 @@ public class LocalTreasuryWithdrawalId {
     private String govActionTxHash;
 
     @Column(name = "gov_action_index")
-    private long govActionIndex;
+    private int govActionIndex;
 
     @Column(name = "address")
     private String address;
