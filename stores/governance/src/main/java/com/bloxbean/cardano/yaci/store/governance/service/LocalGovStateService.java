@@ -119,10 +119,10 @@ public class LocalGovStateService {
     public synchronized void fetchAndSetGovState() {
         getGovStateFromNode()
                 .doOnError(throwable -> log.error("Local gov state sync error {}", throwable.getMessage()))
-                .subscribe(this::processGovStateResult);
+                .subscribe(this::handleGovStateResult);
     }
 
-    private void processGovStateResult(GovStateResult govStateResult) {
+    private void handleGovStateResult(GovStateResult govStateResult) {
         Tip tip = tipFinderService.getTip().block();
         Integer currentEpoch = eraService.getEpochNo(com.bloxbean.cardano.yaci.core.model.Era.Conway, tip.getPoint().getSlot());
         Long slot = tip.getPoint().getSlot();
@@ -133,80 +133,93 @@ public class LocalGovStateService {
             return;
         }
 
-        List<LocalGovActionProposalStatus> govActionsInPrevEpoch = localGovActionProposalStatusStorageReader
+        List<LocalGovActionProposalStatus> expiredAndRatifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorageReader
                 .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.EXPIRED, GovActionStatus.RATIFIED));
 
-        List<LocalGovActionProposalStatus> entitiesToSave = new ArrayList<>();
+        List<LocalGovActionProposalStatus> proposalStatusListToSave = new ArrayList<>();
 
-        processExpiredProposals(govStateResult, currentEpoch, slot, entitiesToSave);
-        processRatifiedProposals(govStateResult, currentEpoch, slot, entitiesToSave);
-        processEnactedAndDroppedProposals(govActionsInPrevEpoch, govStateResult, currentEpoch, slot, entitiesToSave);
+        proposalStatusListToSave.addAll(getExpiredProposals(govStateResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getRatifiedProposals(govStateResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getEnactedAndDroppedProposals(expiredAndRatifiedGovActionsInPrevEpoch, govStateResult, currentEpoch, slot));
 
-        if (!entitiesToSave.isEmpty()) {
-            localGovActionProposalStatusStorage.saveAll(entitiesToSave);
+        if (!proposalStatusListToSave.isEmpty()) {
+            localGovActionProposalStatusStorage.saveAll(proposalStatusListToSave);
         }
 
-        processConstitution(govStateResult, currentEpoch, slot);
-        processCommittee(govStateResult, currentEpoch, slot);
-        processCommitteeMembers(govStateResult, currentEpoch, slot);
+        handleConstitution(govStateResult, currentEpoch, slot);
+        handleCommittee(govStateResult, currentEpoch, slot);
+        handleCommitteeMembers(govStateResult, currentEpoch, slot);
 
-        List<GovActionId> enactedGovActionIds = entitiesToSave.stream().filter(entity -> entity.getStatus().equals(GovActionStatus.ENACTED))
+        List<GovActionId> enactedGovActionIds = proposalStatusListToSave.stream().filter(entity -> entity.getStatus().equals(GovActionStatus.ENACTED))
                 .map(entity -> GovActionId.builder()
                         .transactionId(entity.getGovActionTxHash())
                         .gov_action_index((int) entity.getGovActionIndex())
                         .build()).toList();
 
-        processTreasuryWithdrawals(enactedGovActionIds, currentEpoch, slot);
-        processHardForkInitiation(enactedGovActionIds, currentEpoch, slot);
+        handleTreasuryWithdrawals(enactedGovActionIds, currentEpoch, slot);
+        handleHardForkInitiation(enactedGovActionIds, currentEpoch, slot);
     }
 
-    private void processExpiredProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot, List<LocalGovActionProposalStatus> entitiesToSave) {
+    private List<LocalGovActionProposalStatus> getExpiredProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+        List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
+
         List<GovActionId> expiredGovActions = govStateResult.getNextRatifyState().getExpiredGovActions();
-        expiredGovActions.forEach(govActionId -> entitiesToSave.add(buildLocalGovActionProposal(govActionId, GovActionStatus.EXPIRED, currentEpoch, slot)));
+        expiredGovActions.forEach(govActionId -> proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.EXPIRED, currentEpoch, slot)));
+
+        return proposalStatusList;
     }
 
-    private void processRatifiedProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot, List<LocalGovActionProposalStatus> entitiesToSave) {
+    private List<LocalGovActionProposalStatus> getRatifiedProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+        List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
+
         List<GovActionId> ratifiedGovActions = govStateResult.getNextRatifyState().getEnactedGovActions()
                 .stream()
                 .map(Proposal::getGovActionId)
                 .toList();
-        ratifiedGovActions.forEach(govActionId -> entitiesToSave.add(buildLocalGovActionProposal(govActionId, GovActionStatus.RATIFIED, currentEpoch, slot)));
+        ratifiedGovActions.forEach(govActionId -> proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.RATIFIED, currentEpoch, slot)));
+
+        return proposalStatusList;
     }
 
-    private void processEnactedAndDroppedProposals(List<LocalGovActionProposalStatus> govActionsInPrevEpoch, GovStateResult govStateResult, Integer currentEpoch, Long slot, List<LocalGovActionProposalStatus> entitiesToSave) {
+    private List<LocalGovActionProposalStatus> getEnactedAndDroppedProposals(
+            List<LocalGovActionProposalStatus> expiredAndRatifiedGovActionsInPrevEpoch,
+            GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+        List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
         List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
-        govActionsInPrevEpoch.forEach(govAction -> {
+        expiredAndRatifiedGovActionsInPrevEpoch.forEach(govAction -> {
             GovActionId govActionId = GovActionId.builder()
                     .transactionId(govAction.getGovActionTxHash())
                     .gov_action_index((int) govAction.getGovActionIndex())
                     .build();
 
             if (govAction.getStatus().equals(GovActionStatus.RATIFIED) && !proposalsInNextRatify.contains(govActionId)) {
-                entitiesToSave.add(buildLocalGovActionProposal(govActionId, GovActionStatus.ENACTED, currentEpoch, slot));
+                proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.ENACTED, currentEpoch, slot));
             }
 
             if (govAction.getStatus().equals(GovActionStatus.EXPIRED) && !proposalsInNextRatify.contains(govActionId)) {
-                entitiesToSave.add(buildLocalGovActionProposal(govActionId, GovActionStatus.DROPPED, currentEpoch, slot));
+                proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.DROPPED, currentEpoch, slot));
             }
         });
+
+        return proposalStatusList;
     }
 
-    private void processConstitution(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private void handleConstitution(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         Constitution constitution = govStateResult.getConstitution();
         LocalConstitution localConstitution = buildLocalConstitution(constitution, currentEpoch, slot);
 
         localConstitutionStorage.save(localConstitution);
     }
 
-    private void processCommittee(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private void handleCommittee(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         Committee committee = govStateResult.getCommittee();
         LocalCommittee localCommittee = buildLocalCommittee(committee, currentEpoch, slot);
 
         localCommitteeStorage.save(localCommittee);
     }
 
-    private void processCommitteeMembers(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private void handleCommitteeMembers(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         Committee committee = govStateResult.getCommittee();
         Map<Credential, Long> committeeColdCredentialEpoch = committee.getCommitteeColdCredentialEpoch();
         List<LocalCommitteeMember> localCommitteeMemberEntities = new ArrayList<>();
@@ -220,7 +233,7 @@ public class LocalGovStateService {
         }
     }
 
-    private void processTreasuryWithdrawals(List<GovActionId> enactedGovActionIds, Integer currentEpoch, Long slot) {
+    private void handleTreasuryWithdrawals(List<GovActionId> enactedGovActionIds, Integer currentEpoch, Long slot) {
         List<GovActionProposal> enactedTreasuryWithdrawalProposals = govActionProposalStorage.findByGovActionIds(enactedGovActionIds)
                 .stream()
                 .filter(govActionProposal -> govActionProposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION)
@@ -251,7 +264,7 @@ public class LocalGovStateService {
                         }).toList());
     }
 
-    private void processHardForkInitiation(List<GovActionId> enactedGovActionIds, Integer currentEpoch, Long slot) {
+    private void handleHardForkInitiation(List<GovActionId> enactedGovActionIds, Integer currentEpoch, Long slot) {
         List<GovActionProposal> enactedHardForkInitProposals = govActionProposalStorage.findByGovActionIds(enactedGovActionIds)
                 .stream()
                 .filter(govActionProposalEntity -> govActionProposalEntity.getType() == GovActionType.HARD_FORK_INITIATION_ACTION)
