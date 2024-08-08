@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl;
 
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalId;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -26,4 +28,16 @@ public class GovActionProposalStorageImpl implements GovActionProposalStorage {
     public int deleteBySlotGreaterThan(long slot) {
         return govActionProposalRepository.deleteBySlotGreaterThan(slot);
     }
+
+    @Override
+    public List<GovActionProposal> findByGovActionIds(List<GovActionId> govActionIds) {
+        return govActionProposalRepository.findAllById(govActionIds.stream().map(govActionId -> {
+            GovActionProposalId govActionProposalId = new GovActionProposalId();
+            govActionProposalId.setTxHash(govActionId.getTransactionId());
+            govActionProposalId.setIndex(govActionId.getGov_action_index());
+
+            return govActionProposalId;
+        }).toList()).stream().map(govActionProposalMapper::toGovActionProposal).toList();
+    }
+
 }
