@@ -139,8 +139,6 @@ public class LocalGovStateService {
             localGovActionProposalStatusStorage.saveAll(entitiesToSave);
         }
 
-        Map<ProposalType, GovActionId> lastEnactedGovActionIds = govStateResult.getNextRatifyState().getNextEnactState().getPrevGovActionIds();
-
         processConstitution(govStateResult, currentEpoch, slot);
         processCommittee(govStateResult, currentEpoch, slot);
         processCommitteeMembers(govStateResult, currentEpoch, slot);
