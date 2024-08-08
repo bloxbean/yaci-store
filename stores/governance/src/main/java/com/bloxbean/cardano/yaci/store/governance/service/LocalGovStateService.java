@@ -14,20 +14,16 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
-import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.TipFinderService;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalEntity;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalId;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -60,10 +56,13 @@ public class LocalGovStateService {
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
     private final TipFinderService tipFinderService;
     private final EraService eraService;
+    private final CursorService cursorService;
 
     @Value("${store.cardano.n2c-era:Conway}")
     private String eraStr;
     private Era era;
+
+    private static final int MAX_BLOCK_DIFFERENCE = 10;
 
     public LocalGovStateService(LocalClientProvider localClientProvider,
                                 LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage,
@@ -75,7 +74,8 @@ public class LocalGovStateService {
                                 GovActionProposalStorage govActionProposalStorage,
                                 LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage,
                                 TipFinderService tipFinderService,
-                                EraService eraService) {
+                                EraService eraService,
+                                CursorService cursorService) {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
@@ -88,6 +88,7 @@ public class LocalGovStateService {
         this.govActionProposalStorage = govActionProposalStorage;
         this.tipFinderService = tipFinderService;
         this.eraService = eraService;
+        this.cursorService = cursorService;
 
         log.info("LocalGovActionStateService initialized >>>");
     }
@@ -125,6 +126,12 @@ public class LocalGovStateService {
         Tip tip = tipFinderService.getTip().block();
         Integer currentEpoch = eraService.getEpochNo(com.bloxbean.cardano.yaci.core.model.Era.Conway, tip.getPoint().getSlot());
         Long slot = tip.getPoint().getSlot();
+        var latestCursor = cursorService.getCursor();
+
+        if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
+            log.info("The max processed block is not close to the tip, ignore fetching gov state");
+            return;
+        }
 
         List<LocalGovActionProposalStatus> govActionsInPrevEpoch = localGovActionProposalStatusStorageReader
                 .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.EXPIRED, GovActionStatus.RATIFIED));
@@ -208,7 +215,9 @@ public class LocalGovStateService {
             localCommitteeMemberEntities.add(entity);
         });
 
-        localCommitteeMemberStorage.saveAll(localCommitteeMemberEntities);
+        if (!localCommitteeMemberEntities.isEmpty()) {
+            localCommitteeMemberStorage.saveAll(localCommitteeMemberEntities);
+        }
     }
 
     private void processTreasuryWithdrawals(List<GovActionId> enactedGovActionIds, Integer currentEpoch, Long slot) {
