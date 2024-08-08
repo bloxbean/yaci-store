@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
@@ -25,11 +26,18 @@ public class LocalGovActionStateProcessor {
     private final LocalCommitteeMemberRepository localCommitteeMemberRepository;
     private final LocalCommitteeRepository localCommitteeRepository;
     private final LocalTreasuryWithdrawalRepository localTreasuryWithdrawalRepository;
+    private boolean syncMode = false;
+
+    @EventListener
+    public void blockEvent(BlockEvent blockEvent) {
+        syncMode = blockEvent.getMetadata().isSyncMode();
+    }
 
     @EventListener
     @Transactional
     public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode())
+        syncMode = epochChangeEvent.getEventMetadata().isSyncMode();
+        if (!syncMode)
             return;
 
         log.info("Epoch change event received. Fetching and updating local gov state");
@@ -54,6 +62,10 @@ public class LocalGovActionStateProcessor {
 
     @Scheduled(fixedRate = 2, timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetCurrentProtocolParams() {
+        if (!syncMode) {
+            return;
+        }
+
         log.info("Fetching gov state by scheduler....");
         localGovStateService.fetchAndSetGovState();
     }
