@@ -230,14 +230,15 @@ create table local_treasury_withdrawal
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
-    withdrawals        jsonb,
+    address            varchar(255),
+    amount             bigint,
     epoch              int,
     slot               bigint,
     update_datetime    timestamp,
-    primary key (gov_action_tx_hash, gov_action_index)
+    primary key (gov_action_tx_hash, gov_action_index, address)
 );
 
-drop table if exists local_treasury_withdrawal;
+drop table if exists local_constitution;
 create table local_constitution
 (
     anchor_url      varchar,
@@ -259,4 +260,17 @@ create table local_committee_member
     slot            bigint,
     update_datetime timestamp,
     primary key (hash, epoch)
+);
+
+drop table if exists local_hard_fork_initiation;
+create table local_hard_fork_initiation
+(
+    gov_action_tx_hash varchar(64),
+    gov_action_index   int,
+    major_version      int,
+    minor_version      int,
+    epoch              int,
+    slot               bigint,
+    update_datetime    timestamp,
+    primary key (gov_action_tx_hash, gov_action_index)
 );

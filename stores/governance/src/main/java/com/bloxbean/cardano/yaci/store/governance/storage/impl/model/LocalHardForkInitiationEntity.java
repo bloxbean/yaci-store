@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,9 +15,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "local_treasury_withdrawal")
-@IdClass(LocalTreasuryWithdrawalId.class)
-public class LocalTreasuryWithdrawalEntity {
+@Table(name = "local_hard_fork_initiation")
+@IdClass(LocalHardForkInitiationId.class)
+public class LocalHardForkInitiationEntity {
     @Id
     @Column(name = "gov_action_tx_hash")
     private String govActionTxHash;
@@ -25,12 +26,11 @@ public class LocalTreasuryWithdrawalEntity {
     @Column(name = "gov_action_index")
     private int govActionIndex;
 
-    @Id
-    @Column(name = "address")
-    private String address;
+    @Column(name = "major_version")
+    private Integer majorVersion;
 
-    @Column(name = "amount")
-    private Long amount;
+    @Column(name = "minor_version")
+    private Integer minorVersion;
 
     @Column(name = "epoch")
     private int epoch;

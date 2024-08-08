@@ -151,4 +151,53 @@ public class GovernanceStoreConfiguration {
                                                          CommitteeMapper committeeMapper) {
         return new CommitteeStorageReaderImpl(committeeRepository, committeeMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage(LocalGovActionProposalStatusRepository localGovActionProposalStatusRepository,
+                                                                                   LocalGovActionProposalStatusMapper localGovActionProposalStatusMapper) {
+        return new LocalGovActionProposalStatusStorageImpl(localGovActionProposalStatusRepository, localGovActionProposalStatusMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalGovActionProposalStatusStorageReader localGovActionProposalStatusStorageReader(LocalGovActionProposalStatusRepository localGovActionProposalStatusRepository,
+                                                                                               LocalGovActionProposalStatusMapper localGovActionProposalStatusMapper) {
+        return new LocalGovActionProposalStatusStorageReaderImpl(localGovActionProposalStatusRepository, localGovActionProposalStatusMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeMemberStorage localCommitteeMemberStorage(LocalCommitteeMemberRepository localCommitteeMemberRepository,
+                                                                   LocalCommitteeMemberMapper localCommitteeMemberMapper) {
+        return new LocalCommitteeMemberStorageImpl(localCommitteeMemberRepository, localCommitteeMemberMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalConstitutionStorage localConstitutionStorage(LocalConstitutionRepository localConstitutionRepository,
+                                                             LocalConstitutionMapper localConstitutionMapper) {
+        return new LocalConstitutionStorageImpl(localConstitutionRepository, localConstitutionMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeStorage localCommitteeStorage(LocalCommitteeRepository localCommitteeRepository,
+                                                       LocalCommitteeMapper localCommitteeMapper) {
+        return new LocalCommitteeStorageImpl(localCommitteeRepository, localCommitteeMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage(LocalTreasuryWithdrawalRepository localTreasuryWithdrawalRepository,
+                                                                         LocalTreasuryWithdrawalMapper localTreasuryWithdrawalMapper) {
+        return new LocalTreasuryWithdrawalStorageImpl(localTreasuryWithdrawalRepository, localTreasuryWithdrawalMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalHardForkInitiationStorage localHardForkInitiationStorage(LocalHardForkInitiationRepository localHardForkInitiationRepository,
+                                                                         LocalHardForkInitiationMapper localHardForkInitiationMapper) {
+        return new LocalHardForkInitiationStorageImpl(localHardForkInitiationRepository, localHardForkInitiationMapper);
+    }
 }
