@@ -1,14 +1,17 @@
 package com.bloxbean.cardano.yaci.store.epoch;
 
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.epoch.storage.LocalEpochParamsStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.EpochParamStorageImpl;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.LocalEpochParamsStorageImpl;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.ProtocolParamsProposalStorageImpl;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.ProtocolParamsProposalStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.mapper.ProtocolParamsMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.CostModelRepository;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.EpochParamRepository;
+import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.LocalEpochParamsRepository;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.ProtocolParamsProposalRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -53,5 +56,11 @@ public class EpochStoreConfiguration {
     public ProtocolParamsProposalStorageReader protocolParamsProposalStorageReader(ProtocolParamsProposalRepository protocolParamsProposalReadRepository,
                                                                             ProtocolParamsMapper protocolParamsMapper) {
         return new ProtocolParamsProposalStorageReaderImpl(protocolParamsProposalReadRepository, protocolParamsMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalEpochParamsStorage localEpochParamsStorage(LocalEpochParamsRepository localProtocolParamsRepository) {
+        return new LocalEpochParamsStorageImpl(localProtocolParamsRepository);
     }
 }

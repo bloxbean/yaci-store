@@ -111,11 +111,14 @@ The followings are optional configuration. You can leave them as-is.
 
 #### Genesis files Configuration
 
-Configure genesis files location. This is required for few stores like Utxo store, account aggregate etc.
+Configure genesis files location. This is required for few stores like Utxo store, epoch store, account aggregate etc.
+If you are using one of the public networks like `mainnet`, `preprod`, or `preview`, you don't need to configure these files as yaci store already includes them.
 
 ```
-store.cardano.byron-genesis-file=/Users/satya/cardano-node/preprod/files/byron-genesis.json
-store.cardano.shelley-genesis-file=/Users/satya/cardano-node/preprod/files/shelley-genesis.json
+store.cardano.byron-genesis-file=/Users/satya/work/cardano-node/preprod/files/byron-genesis.json
+store.cardano.shelley-genesis-file=/Users/satya/work/cardano-node/preprod/files/shelley-genesis.json
+store.cardano.alonzo-genesis-file=/Users/satya/work/cardano-node/preprod/files/alonzo-genesis.json
+store.cardano.conway-genesis-file=/Users/satya/work/cardano-node/preprod/files/conway-genesis.json
 ```
 
 #### N2C Configuration
@@ -123,7 +126,7 @@ store.cardano.shelley-genesis-file=/Users/satya/cardano-node/preprod/files/shell
 The following properties are required for node-to-client (n2c) communication. This is required for transaction submission,
 fetching protocol parameters etc. If you don't need these functionalities, you can leave them commented.
 ```
-#store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-8.1.2/db/node.socket
+#store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-9.0.0/db/node.socket
 
 # If you are accessing n2c through a relay like "socat", uncomment and edit the following properties.
 #store.cardano.n2c-host=<relay_host>
@@ -132,6 +135,19 @@ fetching protocol parameters etc. If you don't need these functionalities, you c
 
 Now you are ready to use Yaci Store in your application. During application startup, Yaci Store will create all the required tables in the database and
 start syncing the blockchain data and publish them as events and process them.
+
+#### Parallel Processing
+To enable parallel processing during the initial sync, which will significantly speed up the sync process, set the following properties:
+
+```
+store.executor.enable-parallel-processing=true
+
+store.executor.blocks-batch-size=100
+store.executor.blocks-partition-size=10
+
+store.executor.use-virtual-thread-for-batch-processing=true
+store.executor.use-virtual-thread-for-event-processing=true
+```
 
 ## Customization - Override default behavior
 
@@ -153,5 +169,11 @@ If you are using default storage implementation or a custom storage by extending
 But if you have your own custom processor or different storage implementation using separate database/table, you need to handle rollbacks in your custom processor by listening to RollbackEvent.
 For more details on how to handle rollbacks, check [Rollback Handling](design.md#handling-rollbacks) and also make sure all your operations are idempotent.
 
+## Remove Optional Indexes During Initial Sync
 
+During the initial sync, you can remove some of the optional indexes that are not required. This can help speed up the sync process.
+To get a list of all optional indexes specific to your store, you can check [drop-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/drop-index.sql)
+to find your store-specific optional indexes.
+
+However, make sure to add these indexes back after the full sync. You can also find `create-index.sql` for all optional indexes at the same location.
 

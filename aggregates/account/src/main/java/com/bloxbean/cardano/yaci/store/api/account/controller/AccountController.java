@@ -42,7 +42,7 @@ public class AccountController {
 
     @GetMapping("/addresses/{address}/balance")
     @Operation(description = "Get current balance at an address")
-    public Optional<AddressBalanceDto> getAddressBalance(String address) {
+    public Optional<AddressBalanceDto> getAddressBalance(@PathVariable @NonNull String address) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
@@ -61,7 +61,7 @@ public class AccountController {
 
     @GetMapping("/accounts/{stakeAddress}/balance")
     @Operation(description = "Get current balance at a stake address")
-    public Optional<StakeAddressBalance> getStakeAddressBalance(String stakeAddress) {
+    public Optional<StakeAddressBalance> getStakeAddressBalance(@PathVariable @NonNull String stakeAddress) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
@@ -71,7 +71,7 @@ public class AccountController {
 
     @GetMapping("/addresses/{address}/{unit}/{timeInSec}/balance")
     @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
-    public Optional<AddressBalanceDto> getAddressBalanceAtTime(String address, String unit, long timeInSec) {
+    public Optional<AddressBalanceDto> getAddressBalanceAtTime(@PathVariable String address,@PathVariable String unit,@PathVariable long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 
@@ -84,8 +84,8 @@ public class AccountController {
 
     @GetMapping("/accounts/{stakeAddress}/{timeInSec}/balance")
     @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
-    public StakeAddressBalance getStakeAddressBalanceAtTime(String stakeAddress,
-                                                            long timeInSec) {
+    public StakeAddressBalance getStakeAddressBalanceAtTime(@PathVariable @NonNull String stakeAddress,
+                                                            @PathVariable long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
 

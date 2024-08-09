@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.account;
 
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
+import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -16,8 +17,8 @@ public class AccountApiConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AccountService accountService() {
-        return new AccountService(null);
+    public AccountService accountService(EraStorage eraStorage) {
+        return new AccountService(null, eraStorage);
     }
 
 }

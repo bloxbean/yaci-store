@@ -1,10 +1,8 @@
-drop table if exists local_protocol_params;
-create table local_protocol_params
+drop table if exists local_epoch_param;
+create table local_epoch_param
 (
-    id   bigint
-        primary key,
+    epoch integer primary key,
     params json,
-    create_datetime  timestamp,
     update_datetime  timestamp
 );
 
