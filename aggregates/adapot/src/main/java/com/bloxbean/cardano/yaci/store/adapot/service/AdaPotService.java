@@ -55,6 +55,7 @@ public class AdaPotService {
                         .deposits(BigInteger.ZERO)
                         .fees(BigInteger.ZERO)
                         .utxo(BigInteger.ZERO)
+                        .epochBoundary(false)
                         .epoch(epoch)
                         .build());
         return prevAdaPot;

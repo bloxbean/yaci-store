@@ -56,9 +56,19 @@ public class RewardProcessor {
         if (epochTransitionCommitEvent.getEra() == Era.Byron)
             return;
 
+        //TODO -- Handle null previous epoch due to restart
+        if (epochTransitionCommitEvent.getPreviousEpoch() == null) {
+            return;
+        }
+
         int snapshotEpoch = epochTransitionCommitEvent.getEpoch() - 1;
         if (snapshotEpoch < 0)
             return;
+
+        if (epochTransitionCommitEvent.getPreviousEpoch() == null) {
+            log.error("Previous epoch is null. Cannot take instant reward snapshot");
+            return;
+        }
 
         instantRewardSnapshotService.takeInstantRewardSnapshot(epochTransitionCommitEvent.getMetadata(), epochTransitionCommitEvent.getPreviousEpoch());
         log.info("Instant reward snapshot taken for epoch : {}", snapshotEpoch);

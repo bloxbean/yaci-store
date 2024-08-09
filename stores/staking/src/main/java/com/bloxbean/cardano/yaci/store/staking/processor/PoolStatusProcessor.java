@@ -199,6 +199,11 @@ public class PoolStatusProcessor {
 
         var newEpoch = epochChangeEvent.getEpoch();
 
+        //TODO -- check how to handle error conditions like restart
+        if (epochChangeEvent.getPreviousEpoch() == null) {
+            return;
+        }
+
         //Find pool retirements
         List<Pool> retiringPools = poolStorage.findRetiringPools(newEpoch);
         if (retiringPools.size() == 0) {

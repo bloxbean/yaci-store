@@ -63,6 +63,11 @@ public class AdaPotProcessor {
     @Transactional
     public void processAdaPotDuringEpochTransition(PreEpochTransitionEvent epochTransitionCommitEvent) {
 
+        //TODO -- Handle null previous epoch due to restart
+        if (epochTransitionCommitEvent.getPreviousEpoch() == null) {
+            return;
+        }
+
         //Update retired pool refunds
         BigInteger poolRefundAmount = depositEventProcessor.getPoolRefundAmount();
         BigInteger refundToTreasury = depositEventProcessor.getRefundToTreasury();
