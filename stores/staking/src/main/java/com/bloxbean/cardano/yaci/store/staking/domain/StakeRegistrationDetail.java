@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.domain;
 
+import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.common.domain.BlockAwareDomain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -18,9 +19,11 @@ import lombok.experimental.SuperBuilder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class StakeRegistrationDetail extends BlockAwareDomain {
     private String credential;
+    private CredentialType credentialType;
     private String address;
     private String txHash;
     private int certIndex;
+    private int txIndex;
     private CertificateType type;
     private int epoch;
     private long slot;

@@ -26,12 +26,13 @@ import java.util.Set;
 public class PoolRegistration extends BlockAwareDomain {
     private String txHash;
     private int certIndex;
+    private int txIndex;
     private String poolId;
     private String vrfKeyHash;
     private BigInteger pledge;
     private BigInteger cost;
     private double margin;
-    private String rewardAccount;
+    private String rewardAccount; //stake address
     private Set<String> poolOwners;
     private List<Relay> relays;
     //pool_metadata

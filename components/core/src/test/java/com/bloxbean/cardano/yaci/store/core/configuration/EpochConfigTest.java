@@ -148,6 +148,38 @@ class EpochConfigTest {
             long epochSlot = epochConfig.shelleyEpochSlot(mainnetShellyStartSlot, absoluteSlot);
             assertEquals(126, epochSlot);
         }
+
+        @Test
+        void epochSlotToAbsoluteSlot_1() {
+            mainnetSetup();
+            long absoluteSlot = epochConfig.epochSlotToAbsoluteSlot(mainnetShellyStartSlot, 484, 370607);
+
+            assertEquals(124095407L, absoluteSlot);
+        }
+
+        @Test
+        void epochSlotToAbsoluteSlot_2() {
+            mainnetSetup();
+            long absoluteSlot = epochConfig.epochSlotToAbsoluteSlot(mainnetShellyStartSlot, 437, 201404);
+
+            assertEquals(103622204, absoluteSlot);
+        }
+
+        @Test
+        void epochSlotToAbsoluteSlot_3() {
+            mainnetSetup();
+            long absoluteSlot = epochConfig.epochSlotToAbsoluteSlot(mainnetShellyStartSlot, 208, 0);
+
+            assertEquals(4492800, absoluteSlot);
+        }
+
+        @Test
+        void epochSlotToAbsoluteSlot_4() {
+            mainnetSetup();
+            long absoluteSlot = epochConfig.epochSlotToAbsoluteSlot(mainnetShellyStartSlot, 208, 431980);
+
+            assertEquals(4924780, absoluteSlot);
+        }
     }
 
     @Nested

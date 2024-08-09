@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -84,6 +85,15 @@ public class EraService {
         return epochConfig.shelleyEpochSlot(shelleyStartSlot, shelleyAbsoluteSlot);
     }
 
+    public long getShelleyAbsoluteSlot(int epoch, int epochSlot) {
+        if (shelleyStartSlot == -1) {
+            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
+                    .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
+        }
+
+        return epochConfig.epochSlotToAbsoluteSlot(shelleyStartSlot, epoch, epochSlot);
+    }
+
     public long shelleyEraStartTime() {
         if (_shelleyStartTime != 0)
             return _shelleyStartTime;
@@ -97,6 +107,17 @@ public class EraService {
 
     public long slotsPerEpoch(Era era) {
         return genesisConfig.slotsPerEpoch(era);
+    }
+
+    public long getFirstNonByronSlot() {
+        return firstShelleySlot();
+    }
+
+    public Optional<Integer> getFirstNonByronEpoch() {
+        var nonByronEra = eraStorage.findFirstNonByronEra();
+        var epoch = nonByronEra.map(cardanoEra -> getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot()));
+
+        return epoch;
     }
 
     private long firstShelleySlot() {

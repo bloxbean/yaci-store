@@ -32,4 +32,12 @@ public class EpochConfig {
 
         return (int) epochSlot;
     }
+
+    public long epochSlotToAbsoluteSlot(long shelleyStartSlot, int epoch, int epochSlot) {
+        long shelleyStartEpoch = shelleyStartSlot / genesisConfig.slotsPerEpoch(Era.Byron);
+        long epochsAfterShelley = epoch - shelleyStartEpoch;
+        long currentEpochStartSlot = epochsAfterShelley * genesisConfig.slotsPerEpoch(Era.Shelley);
+
+        return currentEpochStartSlot + shelleyStartSlot + epochSlot;
+    }
 }

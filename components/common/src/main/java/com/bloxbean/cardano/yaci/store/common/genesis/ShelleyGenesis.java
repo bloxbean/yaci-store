@@ -26,6 +26,7 @@ public class ShelleyGenesis extends GenesisFile {
     public static final String ATTR_MAX_LOVELACE_SUPPLY = "maxLovelaceSupply";
     public static final String ATTR_EPOCH_LENGTH = "epochLength";
     public static final String ATTR_NETWORK_MAGIC = "networkMagic";
+    public static final String SECURITY_PARAM = "securityParam";
     public static final String MIN_FEE_A = "minFeeA";
     public static final String MIN_FEE_B = "minFeeB";
     public static final String MAX_BLOCK_BODY_SIZE = "maxBlockBodySize";
@@ -55,6 +56,7 @@ public class ShelleyGenesis extends GenesisFile {
     private BigInteger maxLovelaceSupply;
     private long epochLength;
     private long networkMagic;
+    private int securityParam;
 
     private List<GenesisBalance> initialFunds;
     private ProtocolParams protocolParams;
@@ -79,6 +81,7 @@ public class ShelleyGenesis extends GenesisFile {
         maxLovelaceSupply = new BigInteger(genesisJson.get(ATTR_MAX_LOVELACE_SUPPLY).asText());
         epochLength = genesisJson.get(ATTR_EPOCH_LENGTH).asLong();
         networkMagic = genesisJson.get(ATTR_NETWORK_MAGIC).asLong();
+        securityParam = genesisJson.get(SECURITY_PARAM).asInt();
 
         JsonNode initialFundJson = genesisJson.get("initialFunds");
         initialFunds = new ArrayList<>();
@@ -160,5 +163,4 @@ public class ShelleyGenesis extends GenesisFile {
                 .minPoolCost(minPoolCost)
                 .build();
     }
-
 }
