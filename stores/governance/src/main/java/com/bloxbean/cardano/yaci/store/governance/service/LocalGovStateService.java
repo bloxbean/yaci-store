@@ -129,7 +129,7 @@ public class LocalGovStateService {
         var latestCursor = cursorService.getCursor();
 
         if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
-            log.info("The max processed block is not close to the tip, ignore fetching gov state");
+            log.info("The max processed block is not close to the tip, ignore handling gov state");
             return;
         }
 
