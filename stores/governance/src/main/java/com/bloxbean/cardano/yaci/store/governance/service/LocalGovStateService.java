@@ -133,14 +133,14 @@ public class LocalGovStateService {
             return;
         }
 
-        List<LocalGovActionProposalStatus> expiredAndRatifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorageReader
-                .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.EXPIRED, GovActionStatus.RATIFIED));
+        List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorageReader
+                .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.RATIFIED));
 
         List<LocalGovActionProposalStatus> proposalStatusListToSave = new ArrayList<>();
 
         proposalStatusListToSave.addAll(getExpiredProposals(govStateResult, currentEpoch, slot));
         proposalStatusListToSave.addAll(getRatifiedProposals(govStateResult, currentEpoch, slot));
-        proposalStatusListToSave.addAll(getEnactedAndDroppedProposals(expiredAndRatifiedGovActionsInPrevEpoch, govStateResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getEnactedProposals(ratifiedGovActionsInPrevEpoch, govStateResult, currentEpoch, slot));
 
         if (!proposalStatusListToSave.isEmpty()) {
             localGovActionProposalStatusStorage.saveAll(proposalStatusListToSave);
@@ -181,11 +181,11 @@ public class LocalGovStateService {
         return proposalStatusList;
     }
 
-    private List<LocalGovActionProposalStatus> getEnactedAndDroppedProposals(
+    private List<LocalGovActionProposalStatus> getEnactedProposals(
             List<LocalGovActionProposalStatus> expiredAndRatifiedGovActionsInPrevEpoch,
             GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
-        List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+        List<GovActionId> proposalsInNextRatify  = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
         expiredAndRatifiedGovActionsInPrevEpoch.forEach(govAction -> {
             GovActionId govActionId = GovActionId.builder()
@@ -195,10 +195,6 @@ public class LocalGovStateService {
 
             if (govAction.getStatus().equals(GovActionStatus.RATIFIED) && !proposalsInNextRatify.contains(govActionId)) {
                 proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.ENACTED, currentEpoch, slot));
-            }
-
-            if (govAction.getStatus().equals(GovActionStatus.EXPIRED) && !proposalsInNextRatify.contains(govActionId)) {
-                proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.DROPPED, currentEpoch, slot));
             }
         });
 
