@@ -33,10 +33,10 @@ public class LocalHardForkInitiationEntity {
     private Integer minorVersion;
 
     @Column(name = "epoch")
-    private int epoch;
+    private Integer epoch;
 
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "update_datetime")
     @UpdateTimestamp
