@@ -67,7 +67,7 @@ public class LocalGovActionStateProcessor {
         }
     }
 
-    @Scheduled(fixedRate = 2, timeUnit = TimeUnit.MINUTES)
+    @Scheduled(fixedRate = 5, timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetGovState() {
         if (!syncMode) {
             return;

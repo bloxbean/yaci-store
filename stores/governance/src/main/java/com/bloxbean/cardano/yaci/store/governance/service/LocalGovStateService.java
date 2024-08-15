@@ -26,6 +26,7 @@ import com.bloxbean.cardano.yaci.store.governance.storage.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -61,7 +62,7 @@ public class LocalGovStateService {
     private String eraStr;
     private Era era;
 
-    private static final int MAX_BLOCK_DIFFERENCE = 10;
+    private static final int MAX_BLOCK_DIFFERENCE = 20;
 
     public LocalGovStateService(LocalClientProvider localClientProvider,
                                 LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage,
@@ -112,9 +113,8 @@ public class LocalGovStateService {
 
     @Transactional
     public synchronized void fetchAndSetGovState() {
-        getGovStateFromNode()
-                .doOnError(throwable -> log.error("Local gov state sync error {}", throwable.getMessage()))
-                .subscribe(this::handleGovStateResult);
+        var govStateResult = getGovStateFromNode().block(Duration.ofSeconds(10));
+        handleGovStateResult(govStateResult);
     }
 
     private void handleGovStateResult(GovStateResult govStateResult) {

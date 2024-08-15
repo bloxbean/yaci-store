@@ -106,16 +106,12 @@ public class LocalEpochParamService {
 
         Integer epoch = epochAndTip.get()._2;
 
-        getCurrentProtocolParamsFromNode()
-                .doOnError(throwable -> {
-                    log.error("Local protocol param sync error {}", throwable.getMessage());
-                })
-                .subscribe(protocolParamUpdate -> {
-                    EpochParam epochParam = new EpochParam();
-                    epochParam.setEpoch(epoch);
-                    epochParam.setParams(convertProtoParams(protocolParamUpdate));
-                    localProtocolParamsStorage.save(epochParam);
-                });
+        var protocolParamUpdate = getCurrentProtocolParamsFromNode().block(Duration.ofSeconds(5));
+
+        EpochParam epochParam = new EpochParam();
+        epochParam.setEpoch(epoch);
+        epochParam.setParams(convertProtoParams(protocolParamUpdate));
+        localProtocolParamsStorage.save(epochParam);
     }
 
     public Optional<ProtocolParams> getCurrentProtocolParams() {
@@ -145,7 +141,6 @@ public class LocalEpochParamService {
         } catch (Exception e) {
             //Ignore the error
         }
-
 
         Mono<CurrentProtocolParamQueryResult> mono =
                 localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(era));
