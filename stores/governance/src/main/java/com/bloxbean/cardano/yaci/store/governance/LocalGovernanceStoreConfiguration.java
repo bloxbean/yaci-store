@@ -29,13 +29,6 @@ public class LocalGovernanceStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public LocalGovActionProposalStatusStorageReader localGovActionProposalStatusStorageReader(LocalGovActionProposalStatusRepository localGovActionProposalStatusRepository,
-                                                                                               LocalGovActionProposalStatusMapper localGovActionProposalStatusMapper) {
-        return new LocalGovActionProposalStatusStorageReaderImpl(localGovActionProposalStatusRepository, localGovActionProposalStatusMapper);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public LocalCommitteeMemberStorage localCommitteeMemberStorage(LocalCommitteeMemberRepository localCommitteeMemberRepository,
                                                                    LocalCommitteeMemberMapper localCommitteeMemberMapper) {
         return new LocalCommitteeMemberStorageImpl(localCommitteeMemberRepository, localCommitteeMemberMapper);
