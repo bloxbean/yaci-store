@@ -18,8 +18,8 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
-import com.bloxbean.cardano.yaci.store.core.service.TipFinderService;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
@@ -54,7 +55,6 @@ public class LocalGovStateService {
     private final LocalHardForkInitiationStorage localHardForkInitiationStorage;
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
-    private final TipFinderService tipFinderService;
     private final EraService eraService;
     private final CursorService cursorService;
 
@@ -73,7 +73,6 @@ public class LocalGovStateService {
                                 LocalHardForkInitiationStorage localHardForkInitiationStorage,
                                 GovActionProposalStorage govActionProposalStorage,
                                 LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage,
-                                TipFinderService tipFinderService,
                                 EraService eraService,
                                 CursorService cursorService) {
         this.localClientProvider = localClientProvider;
@@ -86,7 +85,6 @@ public class LocalGovStateService {
         this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
-        this.tipFinderService = tipFinderService;
         this.eraService = eraService;
         this.cursorService = cursorService;
 
@@ -123,9 +121,16 @@ public class LocalGovStateService {
     }
 
     private void handleGovStateResult(GovStateResult govStateResult) {
-        Tip tip = tipFinderService.getTip().block();
-        Integer currentEpoch = eraService.getEpochNo(com.bloxbean.cardano.yaci.core.model.Era.Conway, tip.getPoint().getSlot());
-        Long slot = tip.getPoint().getSlot();
+        Optional<Tuple<Tip,Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        if (epochAndTip.isEmpty()) {
+            log.error("Tip is null. Cannot fetch gov state");
+            return;
+        }
+
+        var tip = epochAndTip.get()._1;
+        var currentEpoch = epochAndTip.get()._2;
+        var slot = tip.getPoint().getSlot();
+
         var latestCursor = cursorService.getCursor();
 
         if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
@@ -141,6 +146,7 @@ public class LocalGovStateService {
         proposalStatusListToSave.addAll(getExpiredProposals(govStateResult, currentEpoch, slot));
         proposalStatusListToSave.addAll(getRatifiedProposals(govStateResult, currentEpoch, slot));
         proposalStatusListToSave.addAll(getEnactedProposals(ratifiedGovActionsInPrevEpoch, govStateResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getActiveProposals(govStateResult, currentEpoch, slot));
 
         if (!proposalStatusListToSave.isEmpty()) {
             localGovActionProposalStatusStorage.saveAll(proposalStatusListToSave);
@@ -182,12 +188,12 @@ public class LocalGovStateService {
     }
 
     private List<LocalGovActionProposalStatus> getEnactedProposals(
-            List<LocalGovActionProposalStatus> expiredAndRatifiedGovActionsInPrevEpoch,
+            List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch,
             GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
         List<GovActionId> proposalsInNextRatify  = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
-        expiredAndRatifiedGovActionsInPrevEpoch.forEach(govAction -> {
+        ratifiedGovActionsInPrevEpoch.forEach(govAction -> {
             GovActionId govActionId = GovActionId.builder()
                     .transactionId(govAction.getGovActionTxHash())
                     .gov_action_index((int) govAction.getGovActionIndex())
@@ -199,6 +205,25 @@ public class LocalGovStateService {
         });
 
         return proposalStatusList;
+    }
+
+    private List<LocalGovActionProposalStatus> getActiveProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+        List<LocalGovActionProposalStatus> activeProposalStatusList = new ArrayList<>();
+
+        List<GovActionId> expiredGovActions = govStateResult.getNextRatifyState().getExpiredGovActions();
+        List<GovActionId> ratifiedGovActions = govStateResult.getNextRatifyState().getEnactedGovActions()
+                .stream()
+                .map(Proposal::getGovActionId)
+                .toList();
+        List<GovActionId> proposalsInNextRatify  = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+
+        proposalsInNextRatify.forEach(govActionId -> {
+            if (!expiredGovActions.contains(govActionId) && !ratifiedGovActions.contains(govActionId)) {
+                activeProposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.ACTIVE, currentEpoch, slot));
+            }
+        });
+
+        return activeProposalStatusList;
     }
 
     private void handleConstitution(GovStateResult govStateResult, Integer currentEpoch, Long slot) {

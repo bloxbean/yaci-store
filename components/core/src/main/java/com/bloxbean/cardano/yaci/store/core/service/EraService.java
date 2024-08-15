@@ -2,7 +2,9 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -128,16 +130,16 @@ public class EraService {
     }
 
     /**
-     * Get current epoch number directly from the tip
-     * This method can only be used when the node is in shelley or post shelley era
-     * @return current epoch number
+     * Get the current tip and epoch number.
+     * This method can only be used when the node is in Shelley or post-Shelley era.
+     * @return an Optional containing a Tuple with the current Tip and epoch number.
      */
-    public Optional<Integer> getCurrentEpoch() {
+    public Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
         var tip = tipFinderService.getTip().block(Duration.ofSeconds(5));
 
         if (tip != null) {
             int epoch = epochConfig.epochFromSlot(firstShelleySlot(), Era.Shelley, tip.getPoint().getSlot());
-            return Optional.of(epoch);
+            return Optional.of(new Tuple<>(tip, epoch));
         } else {
             return Optional.empty();
         }

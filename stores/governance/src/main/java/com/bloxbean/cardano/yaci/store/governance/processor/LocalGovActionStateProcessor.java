@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -21,11 +21,12 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnBean(LocalGovStateService.class)
 public class LocalGovActionStateProcessor {
     private final LocalGovStateService localGovStateService;
-    private final LocalGovActionProposalStatusRepository localGovActionProposalStatusRepository;
-    private final LocalConstitutionRepository localConstitutionRepository;
-    private final LocalCommitteeMemberRepository localCommitteeMemberRepository;
-    private final LocalCommitteeRepository localCommitteeRepository;
-    private final LocalTreasuryWithdrawalRepository localTreasuryWithdrawalRepository;
+    private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;
+    private final LocalConstitutionStorage localConstitutionStorage;
+    private final LocalCommitteeMemberStorage localCommitteeMemberStorage;
+    private final LocalCommitteeStorage localCommitteeStorage;
+    private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
+
     private boolean syncMode = false;
 
     @EventListener
@@ -48,11 +49,17 @@ public class LocalGovActionStateProcessor {
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         long slot = rollbackEvent.getRollbackTo().getSlot();
-        int count = localGovActionProposalStatusRepository.deleteBySlotGreaterThan(slot);
-        localConstitutionRepository.deleteBySlotGreaterThan(slot);
-        localCommitteeRepository.deleteBySlotGreaterThan(slot);
-        localCommitteeMemberRepository.deleteBySlotGreaterThan(slot);
-        localTreasuryWithdrawalRepository.deleteBySlotGreaterThan(slot);
+
+        int count = localGovActionProposalStatusStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_constitution records", count);
+        count = localConstitutionStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_committee records", count);
+        count = localCommitteeMemberStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_committee_member records", count);
+        count = localCommitteeStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_treasury_withdrawal records", count);
+        count = localTreasuryWithdrawalStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_gov_action_proposal_status records", count);
 
         if (count > 0) {
             log.info("Fetch gov state after rollback event...");

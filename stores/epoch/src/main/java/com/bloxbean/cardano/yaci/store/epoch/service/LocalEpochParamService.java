@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.epoch.service;
 
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
@@ -8,6 +9,7 @@ import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
@@ -96,11 +98,13 @@ public class LocalEpochParamService {
 
     @Transactional
     public synchronized void fetchAndSetCurrentProtocolParams() {
-        Integer epoch = eraService.getCurrentEpoch().orElse(null);
-        if(epoch == null) {
+        Optional<Tuple<Tip,Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        if (epochAndTip.isEmpty()) {
             log.error("Epoch is null. Cannot fetch protocol params");
             return;
         }
+
+        Integer epoch = epochAndTip.get()._2;
 
         getCurrentProtocolParamsFromNode()
                 .doOnError(throwable -> {

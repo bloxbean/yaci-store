@@ -1,11 +1,13 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -14,7 +16,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "local_gov_action_proposal_status")
 @IdClass(LocalGovActionProposalStatusId.class)
-public class LocalGovActionProposalStatusEntity extends BaseEntity {
+public class LocalGovActionProposalStatusEntity {
     @Id
     @Column(name = "gov_action_tx_hash")
     private String govActionTxHash;
@@ -33,4 +35,8 @@ public class LocalGovActionProposalStatusEntity extends BaseEntity {
 
     @Column(name = "slot")
     private Long slot;
+
+    @UpdateTimestamp
+    @Column(name = "update_datetime")
+    private LocalDateTime updateDateTime;
 }
