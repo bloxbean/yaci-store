@@ -50,15 +50,15 @@ public class LocalGovActionStateProcessor {
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         long slot = rollbackEvent.getRollbackTo().getSlot();
 
-        int count = localGovActionProposalStatusStorage.deleteBySlotGreaterThan(slot);
+        int count = localConstitutionStorage.deleteBySlotGreaterThan(slot);
         log.info("Rollback -- {} local_constitution records", count);
-        count = localConstitutionStorage.deleteBySlotGreaterThan(slot);
-        log.info("Rollback -- {} local_committee records", count);
         count = localCommitteeMemberStorage.deleteBySlotGreaterThan(slot);
-        log.info("Rollback -- {} local_committee_member records", count);
+        log.info("Rollback -- {} local_committee records", count);
         count = localCommitteeStorage.deleteBySlotGreaterThan(slot);
-        log.info("Rollback -- {} local_treasury_withdrawal records", count);
+        log.info("Rollback -- {} local_committee_member records", count);
         count = localTreasuryWithdrawalStorage.deleteBySlotGreaterThan(slot);
+        log.info("Rollback -- {} local_treasury_withdrawal records", count);
+        count = localGovActionProposalStatusStorage.deleteBySlotGreaterThan(slot);
         log.info("Rollback -- {} local_gov_action_proposal_status records", count);
 
         if (count > 0) {
