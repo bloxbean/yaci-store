@@ -48,7 +48,6 @@ public class LocalGovStateService {
     private final LocalClientProvider localClientProvider;
     private final LocalStateQueryClient localStateQueryClient;
     private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;
-    private final LocalGovActionProposalStatusStorageReader localGovActionProposalStatusStorageReader;
     private final LocalConstitutionStorage localConstitutionStorage;
     private final LocalCommitteeMemberStorage localCommitteeMemberStorage;
     private final LocalCommitteeStorage localCommitteeStorage;
@@ -66,7 +65,6 @@ public class LocalGovStateService {
 
     public LocalGovStateService(LocalClientProvider localClientProvider,
                                 LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage,
-                                LocalGovActionProposalStatusStorageReader localGovActionProposalStatusStorageReader,
                                 LocalConstitutionStorage localConstitutionStorage,
                                 LocalCommitteeMemberStorage localCommitteeMemberStorage,
                                 LocalCommitteeStorage localCommitteeStorage,
@@ -78,7 +76,6 @@ public class LocalGovStateService {
         this.localClientProvider = localClientProvider;
         this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
         this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
-        this.localGovActionProposalStatusStorageReader = localGovActionProposalStatusStorageReader;
         this.localConstitutionStorage = localConstitutionStorage;
         this.localCommitteeMemberStorage = localCommitteeMemberStorage;
         this.localCommitteeStorage = localCommitteeStorage;
@@ -138,7 +135,7 @@ public class LocalGovStateService {
             return;
         }
 
-        List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorageReader
+        List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorage
                 .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.RATIFIED));
 
         List<LocalGovActionProposalStatus> proposalStatusListToSave = new ArrayList<>();
