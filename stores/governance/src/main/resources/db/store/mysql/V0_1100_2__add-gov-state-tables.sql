@@ -36,7 +36,7 @@ create table local_treasury_withdrawal
 drop table if exists local_constitution;
 create table local_constitution
 (
-    anchor_url      varchar,
+    anchor_url      longtext,
     anchor_hash     varchar(64),
     script          varchar(64),
     epoch           int,
