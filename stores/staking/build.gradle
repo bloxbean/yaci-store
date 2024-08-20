@@ -1,6 +1,7 @@
 dependencies {
     api project(":components:common")
     api project(":components:events")
+    api project(":components:client")
     api project(":stores:epoch")
     implementation project(":components:core")
 }

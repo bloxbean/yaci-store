@@ -15,4 +15,6 @@ public interface StakingCertificateStorageReader {
     List<String> getRegisteredStakeAddresses(Integer epoch, int page, int count);
 
     Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot);
+
+    Optional<StakeRegistrationDetail> getRegistrationByPointer(long slot, int txIndex, int certIndex);
 }

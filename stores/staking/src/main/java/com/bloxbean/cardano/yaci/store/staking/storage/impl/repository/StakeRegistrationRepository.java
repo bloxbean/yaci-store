@@ -29,5 +29,9 @@ public interface StakeRegistrationRepository
             "where r.address = :stakeAddress and r.slot <= :slot order by r.slot desc, r.txIndex desc, r.certIndex desc limit 1")
     Optional<StakeRegistrationEntity> findRegistrationsByStakeAddress(String stakeAddress, Long slot);
 
+    @Query("select r from StakeRegistrationEntity r " +
+            "where r.slot = :slot and r.txIndex = :txIndex and r.certIndex = :certIndex and r.type = 'STAKE_REGISTRATION'")
+    Optional<StakeRegistrationEntity> findRegistrationByPointer(Long slot, int txIndex, int certIndex);
+
     int deleteBySlotGreaterThan(Long slot);
 }
