@@ -26,6 +26,7 @@ public class StakeSnapshotService {
                             pool_id,
                             epoch,
                             slot,
+                            tx_index,
                             cert_index,
                             ROW_NUMBER() OVER (
                                 PARTITION BY address
@@ -127,7 +128,11 @@ public class StakeSnapshotService {
                                     WHERE sd.address = d.address
                                     AND sd.type = 'STAKE_DEREGISTRATION'
                                     AND sd.epoch <= :epoch
-                                    AND sd.slot > d.slot
+                                    AND (
+                                        sd.slot > d.slot OR
+                                        (sd.slot = d.slot AND sd.tx_index > d.tx_index) OR
+                                        (sd.slot = d.slot AND sd.tx_index = d.tx_index AND sd.cert_index > d.cert_index)
+                                    )
                             )
                 """;
 
