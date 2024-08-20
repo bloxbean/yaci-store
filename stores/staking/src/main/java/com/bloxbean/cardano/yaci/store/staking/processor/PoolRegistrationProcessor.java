@@ -1,9 +1,12 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -29,6 +32,7 @@ import java.util.List;
 public class PoolRegistrationProcessor {
     private final PoolCertificateStorage poolStorage;
     private final ApplicationEventPublisher publisher;
+    private final StoreProperties storeProperties;
 
     @EventListener
     @Transactional
@@ -50,6 +54,14 @@ public class PoolRegistrationProcessor {
                             = (com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration) certificate;
 
                     Address rewardAddress = new Address(HexUtil.decodeHexString(poolRegistrationCert.getPoolParams().getRewardAccount()));
+                    String rewardAddressBech32 = rewardAddress.toBech32();
+                    if (storeProperties.isMainnet() && rewardAddressBech32.startsWith("stake_test")) { //testnet addr in mainnet
+                        //convert it to mainnet address
+                        var stakeCred = rewardAddress.getDelegationCredential().orElse(null);
+                        if (stakeCred != null) {
+                            rewardAddressBech32 = AddressProvider.getRewardAddress(stakeCred, Networks.mainnet()).toBech32();
+                        }
+                    }
 
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
@@ -60,7 +72,7 @@ public class PoolRegistrationProcessor {
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
                             .margin(poolMarginToDouble(poolRegistrationCert.getPoolParams().getMargin()))
-                            .rewardAccount(rewardAddress.toBech32())
+                            .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolRegistrationCert.getPoolParams().getPoolOwners())
                             .relays(poolRegistrationCert.getPoolParams().getRelays())
                             .metadataUrl(poolRegistrationCert.getPoolParams().getPoolMetadataUrl())
