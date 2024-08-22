@@ -10,12 +10,16 @@ import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
+import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderPoolObjectFactory;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -26,6 +30,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 @AutoConfiguration
 @EnableConfigurationProperties(YaciStoreProperties.class)
@@ -97,6 +103,40 @@ public class YaciStoreAutoConfiguration {
         log.info("LocalStateQueryClient ---> Configured (n2c host/port)--> " + properties.getCardano().getN2cHost() + ", " + properties.getCardano().getN2cPort());
         return new LocalClientProvider(properties.getCardano().getN2cHost(), properties.getCardano().getN2cPort(), properties.getCardano().getProtocolMagic());
 
+    }
+
+    @Bean(name = "localClientProviderPool")
+    @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path}' != '' and '${store.cardano.n2c-pool-enabled:false}' == 'true'")
+    @Primary
+    public GenericObjectPool<LocalClientProvider> localClientProviderPoolSocketPath() {
+        LocalClientProviderPoolObjectFactory factory = new LocalClientProviderPoolObjectFactory(
+                properties.getCardano().getN2cNodeSocketPath(),
+                properties.getCardano().getProtocolMagic());
+
+        GenericObjectPoolConfig<LocalClientProvider> config = new GenericObjectPoolConfig<>();
+        config.setMaxTotal(properties.getCardano().getN2cPoolMaxTotal());
+        config.setMinIdle(properties.getCardano().getN2cPoolMinIdle());
+        config.setMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
+        config.setMaxWait(Duration.ofMillis(properties.getCardano().getN2cPoolMaxWaitInMillis()));
+
+        return new GenericObjectPool<>(factory, config);
+    }
+
+    @Bean(name = "localClientProviderPool")
+    @ConditionalOnExpression("'${store.cardano.n2c-host}' != '' and '${store.cardano.n2c-pool-enabled:false}' == 'true'")
+    public GenericObjectPool<LocalClientProvider> localClientProviderPoolHost() {
+        LocalClientProviderPoolObjectFactory factory = new LocalClientProviderPoolObjectFactory(
+                properties.getCardano().getN2cHost(),
+                properties.getCardano().getN2cPort(),
+                properties.getCardano().getProtocolMagic());
+
+        GenericObjectPoolConfig<LocalClientProvider> config = new GenericObjectPoolConfig<>();
+        config.setMaxTotal(properties.getCardano().getN2cPoolMaxTotal());
+        config.setMinIdle(properties.getCardano().getN2cPoolMinIdle());
+        config.setMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
+        config.setMaxWait(Duration.ofMillis(properties.getCardano().getN2cPoolMaxWaitInMillis()));
+
+        return new GenericObjectPool<>(factory, config);
     }
 
     @Bean
@@ -197,6 +237,13 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setMvstoreEnabled(properties.isMvstoreEnabled());
         storeProperties.setMvstorePath(properties.getMvstorePath());
+
+        //N2C Pool properties
+        storeProperties.setN2cPoolEnabled(properties.getCardano().isN2cPoolEnabled());
+        storeProperties.setN2cPoolMaxTotal(properties.getCardano().getN2cPoolMaxTotal());
+        storeProperties.setN2cPoolMinIdle(properties.getCardano().getN2cPoolMinIdle());
+        storeProperties.setN2cPoolMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
+        storeProperties.setN2cPoolMaxWaitInMillis(properties.getCardano().getN2cPoolMaxWaitInMillis());
 
         return storeProperties;
     }

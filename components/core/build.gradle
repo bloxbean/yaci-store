@@ -6,6 +6,7 @@ dependencies {
         exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
     }
     implementation libs.cardano.client.lib
+    implementation libs.apache.commons.pool
 
     testImplementation libs.assertj.core
 }
