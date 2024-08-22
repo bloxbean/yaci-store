@@ -20,4 +20,13 @@ public class RestResponseEntityExceptionHandler
         return handleExceptionInternal(ex, bodyOfResponse,
                 new HttpHeaders(), HttpStatus.NOT_IMPLEMENTED, request);
     }
+
+    @ExceptionHandler(value
+            = { IllegalStateException.class })
+    protected ResponseEntity<Object> handleIllegalStateException(
+            RuntimeException ex, WebRequest request) {
+        String bodyOfResponse = "Unexpected error : " + ex.getMessage();
+        return handleExceptionInternal(ex, bodyOfResponse,
+                new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR, request);
+    }
 }
