@@ -61,6 +61,11 @@ public class LocalClientProviderManager {
             log.info("LocalClientProvider pool disabled");
     }
 
+    /**
+     * Get LocalClientProvider instance. If pool is enabled, it borrows the LocalClientProvider from the pool.
+     * If pool is disabled, it creates a new LocalClientProvider instance.
+     * @return LocalClientProvider
+     */
     public Optional<LocalClientProvider> getLocalClientProvider() {
         if (isPoolEnabled) {
             try {
@@ -78,6 +83,10 @@ public class LocalClientProviderManager {
         }
     }
 
+    /**
+     * Creates a new LocalClientProvider instance
+     * @return LocalClientProvider
+     */
     public Optional<LocalClientProvider> getNewLocalClientProvider() {
         LocalClientProvider localClientProvider = null;
         if (isNodeSocketFileEnabled) {
@@ -94,6 +103,10 @@ public class LocalClientProviderManager {
         return Optional.ofNullable(localClientProvider);
     }
 
+    /**
+     * Returns the LocalClientProvider to the pool if pool is enabled. If pool is disabled, it shuts down the LocalClientProvider.
+     * @param localClientProvider
+     */
     public void close(LocalClientProvider localClientProvider) {
         if (isPoolEnabled) {
             if (log.isDebugEnabled())
