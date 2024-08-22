@@ -15,6 +15,8 @@ dependencies {
     api(libs.guava)
     api(libs.springdoc.openapi.starter.webmvc.ui)
 
+    implementation libs.apache.commons.pool
+
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
 

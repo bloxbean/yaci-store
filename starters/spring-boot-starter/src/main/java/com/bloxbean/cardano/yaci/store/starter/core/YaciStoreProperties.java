@@ -57,6 +57,13 @@ public class YaciStoreProperties {
         //This is only required when the genesis hash can't be fetched from the network.
         // In that case, the default genesis hash will be used
         private String defaultGenesisHash = "Genesis";
+
+        //n2c pool configuration
+        private boolean n2cPoolEnabled = false;
+        private int n2cPoolMaxTotal = 10;
+        private int n2cPoolMinIdle = 2;
+        private int n2cPoolMaxIdle = 5;
+        private int n2cPoolMaxWaitInMillis = 10000;
     }
 
     @Getter
