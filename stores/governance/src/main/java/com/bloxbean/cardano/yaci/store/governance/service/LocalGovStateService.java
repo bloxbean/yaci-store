@@ -15,18 +15,18 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
-import com.bloxbean.cardano.yaci.helper.LocalStateQueryClient;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -46,8 +46,7 @@ import java.util.Optional;
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @Slf4j
 public class LocalGovStateService {
-    private final LocalClientProvider localClientProvider;
-    private final LocalStateQueryClient localStateQueryClient;
+    private final LocalClientProviderManager localClientProviderManager;
     private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;
     private final LocalConstitutionStorage localConstitutionStorage;
     private final LocalCommitteeMemberStorage localCommitteeMemberStorage;
@@ -64,7 +63,7 @@ public class LocalGovStateService {
 
     private static final int MAX_BLOCK_DIFFERENCE = 20;
 
-    public LocalGovStateService(LocalClientProvider localClientProvider,
+    public LocalGovStateService(@Nullable LocalClientProviderManager localClientProviderManager,
                                 LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage,
                                 LocalConstitutionStorage localConstitutionStorage,
                                 LocalCommitteeMemberStorage localCommitteeMemberStorage,
@@ -74,8 +73,7 @@ public class LocalGovStateService {
                                 LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage,
                                 EraService eraService,
                                 CursorService cursorService) {
-        this.localClientProvider = localClientProvider;
-        this.localStateQueryClient = localClientProvider.getLocalStateQueryClient();
+        this.localClientProviderManager = localClientProviderManager;
         this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
         this.localConstitutionStorage = localConstitutionStorage;
         this.localCommitteeMemberStorage = localCommitteeMemberStorage;
@@ -113,12 +111,45 @@ public class LocalGovStateService {
 
     @Transactional
     public synchronized void fetchAndSetGovState() {
-        var govStateResult = getGovStateFromNode().block(Duration.ofSeconds(10));
-        handleGovStateResult(govStateResult);
+        if (localClientProviderManager == null)
+            throw new IllegalStateException("LocalClientProvider is not initialized. Please check n2c configuration.");
+
+        Optional<LocalClientProvider> localClientProvider = localClientProviderManager.getLocalClientProvider();
+
+        try {
+            var localStateQueryClient = localClientProvider.map(LocalClientProvider::getLocalStateQueryClient).orElse(null);
+            if (localStateQueryClient == null) {
+                log.info("LocalStateQueryClient is not initialized. Please check if n2c-node-socket-path or n2c-host is configured properly.");
+                return;
+            }
+
+            //Try to release first before a new query to avoid stale data
+            try {
+                localStateQueryClient.release().block(Duration.ofSeconds(5));
+            } catch (Exception e) {
+                //Ignore the error
+            }
+
+            try {
+                localStateQueryClient.acquire().block(Duration.ofSeconds(5));
+            } catch (Exception e) {
+                // Ignore the error
+            }
+
+            Mono<GovStateResult> mono = localStateQueryClient.executeQuery(new GovStateQuery(era));
+            mono.doOnError(throwable ->
+                            log.error("Gov state sync error {}", throwable.getMessage()))
+                    .doFinally(signalType ->
+                            localClientProviderManager.close(localClientProvider.get()))
+                    .subscribe(this::handleGovStateResult);
+
+        } catch (Exception e) {
+            localClientProviderManager.close(localClientProvider.get());
+        }
     }
 
     private void handleGovStateResult(GovStateResult govStateResult) {
-        Optional<Tuple<Tip,Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
             log.error("Tip is null. Cannot fetch gov state");
             return;
@@ -188,7 +219,7 @@ public class LocalGovStateService {
             List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch,
             GovStateResult govStateResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
-        List<GovActionId> proposalsInNextRatify  = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+        List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
         ratifiedGovActionsInPrevEpoch.forEach(govAction -> {
             GovActionId govActionId = GovActionId.builder()
@@ -212,7 +243,7 @@ public class LocalGovStateService {
                 .stream()
                 .map(Proposal::getGovActionId)
                 .toList();
-        List<GovActionId> proposalsInNextRatify  = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+        List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
         proposalsInNextRatify.forEach(govActionId -> {
             if (!expiredGovActions.contains(govActionId) && !ratifiedGovActions.contains(govActionId)) {
@@ -305,22 +336,6 @@ public class LocalGovStateService {
                                     .slot(slot)
                                     .build();
                         }).toList());
-    }
-
-    public Mono<GovStateResult> getGovStateFromNode() {
-        try {
-            localStateQueryClient.release().block(Duration.ofSeconds(5));
-        } catch (Exception e) {
-            // Ignore the error
-        }
-
-        try {
-            localStateQueryClient.acquire().block(Duration.ofSeconds(5));
-        } catch (Exception e) {
-            // Ignore the error
-        }
-
-        return localStateQueryClient.executeQuery(new GovStateQuery(era));
     }
 
     private LocalGovActionProposalStatus buildLocalGovActionProposal(GovActionId govActionId, GovActionStatus status, Integer epoch, Long slot) {
