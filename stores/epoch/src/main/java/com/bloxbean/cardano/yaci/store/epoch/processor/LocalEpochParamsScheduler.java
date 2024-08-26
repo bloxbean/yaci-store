@@ -18,7 +18,7 @@ public class LocalEpochParamsScheduler {
         this.protocolParamService = protocolParamService;
     }
 
-    @Scheduled(fixedRate = 5, timeUnit = TimeUnit.MINUTES)
+    @Scheduled(fixedRateString = "${store.epoch.n2c-protocol-param-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetCurrentProtocolParams() {
         log.info("Fetching protocol params ....");
         protocolParamService.fetchAndSetCurrentProtocolParams();

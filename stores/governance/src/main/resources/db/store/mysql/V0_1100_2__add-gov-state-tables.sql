@@ -69,3 +69,15 @@ create table local_hard_fork_initiation
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index)
 );
+
+drop table if exists local_drep_dist;
+create table local_drep_dist
+(
+    drep_hash       varchar(56),
+    drep_type       varchar(40),
+    amount          bigint,
+    epoch           int,
+    slot            bigint,
+    update_datetime timestamp,
+    primary key (drep_hash, epoch)
+)

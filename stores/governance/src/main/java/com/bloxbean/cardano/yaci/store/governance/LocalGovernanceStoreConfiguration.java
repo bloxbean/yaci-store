@@ -61,4 +61,11 @@ public class LocalGovernanceStoreConfiguration {
                                                                          LocalHardForkInitiationMapper localHardForkInitiationMapper) {
         return new LocalHardForkInitiationStorageImpl(localHardForkInitiationRepository, localHardForkInitiationMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalDRepDistrStorage localDRepDistrStorage(LocalDRepDistrRepository localDRepDistrRepository,
+                                                       LocalDRepDistrMapper localDRepDistrMapper) {
+        return new LocalDRepDistrStorageImpl(localDRepDistrRepository, localDRepDistrMapper);
+    }
 }
