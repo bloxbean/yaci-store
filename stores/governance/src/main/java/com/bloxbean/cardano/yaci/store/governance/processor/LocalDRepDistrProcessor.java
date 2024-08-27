@@ -1,5 +1,8 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.service.BlockFetchService;
+import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalDRepDistrService;
@@ -21,11 +24,19 @@ import java.util.concurrent.TimeUnit;
 public class LocalDRepDistrProcessor {
     private final LocalDRepDistrService localDRepDistrService;
     private final LocalDRepDistrStorage localDRepDistrStorage;
+    private final BlockFetchService blockFetchService;
+    private boolean syncMode = false;
+
+    @EventListener
+    public void blockEvent(BlockEvent blockEvent) {
+        syncMode = blockEvent.getMetadata().isSyncMode();
+    }
 
     @EventListener
     @Transactional
     public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode())
+        syncMode = epochChangeEvent.getEventMetadata().isSyncMode();
+        if (!syncMode)
             return;
 
         log.info("Epoch change event received. Fetching and updating dRep stake distribution");
@@ -35,6 +46,10 @@ public class LocalDRepDistrProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        if (!syncMode) {
+            return;
+        }
+
         long slot = rollbackEvent.getRollbackTo().getSlot();
 
         int count = localDRepDistrStorage.deleteBySlotGreaterThan(slot);
