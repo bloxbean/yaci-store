@@ -121,9 +121,9 @@ public class LocalDRepDistrService {
                         dRepStakeDistrMap.forEach((drep, amount) -> {
                             String drepHash;
                             if (drep.getType() == DrepType.NO_CONFIDENCE) {
-                                drepHash = "no-confidence";
+                                drepHash = DrepType.NO_CONFIDENCE.name();
                             } else if (drep.getType() == DrepType.ABSTAIN) {
-                                drepHash = "abstain";
+                                drepHash = DrepType.ABSTAIN.name();
                             } else {
                                 drepHash = drep.getHash();
                             }
