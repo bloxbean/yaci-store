@@ -81,7 +81,7 @@ public class LocalDRepDistrService {
     public synchronized void fetchAndSetDRepDistr() {
         Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
-            log.error("Epoch is null. Cannot fetch protocol params");
+            log.error("Epoch is null. Cannot fetch dRep stake distribution");
             return;
         }
 
