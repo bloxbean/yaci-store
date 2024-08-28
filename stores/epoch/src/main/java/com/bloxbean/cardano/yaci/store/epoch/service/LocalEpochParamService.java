@@ -33,7 +33,7 @@ import java.util.Optional;
 @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @ConditionalOnProperty(
         prefix = "store.epoch",
-        name = "n2c-protocol-param-enabled",
+        name = "n2c-epoch-param-enabled",
         havingValue = "true",
         matchIfMissing = true)
 @Slf4j
