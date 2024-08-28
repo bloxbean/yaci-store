@@ -69,4 +69,8 @@ public class GovernanceActionUtil {
         return expiredEpoch < currentEpoch;
     }
 
+    public static boolean isDelayingAction(GovActionType govActionType) {
+        return govActionType == GovActionType.NO_CONFIDENCE || govActionType == GovActionType.NEW_CONSTITUTION
+            || govActionType == GovActionType.UPDATE_COMMITTEE || govActionType == GovActionType.HARD_FORK_INITIATION_ACTION;
+    }
 }
