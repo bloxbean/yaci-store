@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommit
 import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
+import com.bloxbean.cardano.yaci.store.governancerules.exception.GovernanceRuleException;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,11 @@ public class GovActionRatifier {
                                                            ConstitutionCommitteeState ccState, GovActionId lastEnactedGovActionId,
                                                            EpochParam currentEpochParam) {
         final GovActionType govActionType = govAction.getType();
+        if (govActionType == GovActionType.INFO_ACTION) {
+            log.error("Info actions cannot be ratified or enacted, since they do not have any effect on the protocol.");
+            throw new GovernanceRuleException("Info actions cannot be ratified or enacted");
+        }
+
         final int currentEpoch = currentEpochParam.getEpoch();
         final int expiredEpoch = currentEpochParam.getEpoch() + currentEpochParam.getParams().getGovActionLifetime();
 
@@ -119,15 +125,6 @@ public class GovActionRatifier {
                 } else
                     isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
                 break;
-            case INFO_ACTION:
-                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
-                committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
-                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
-
-                isNotDelayed = true;
-
-                break;
             default:
                 break;
         }
@@ -196,40 +193,6 @@ public class GovActionRatifier {
         return getRatificationResult(updateCommittee, null, null, null, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 dRepYesVoteStake, dRepNoVoteStake,
                 ccState, lastEnactedGovActionId, currentEpochParam);
-    }
-
-    /**
-     * Determines the ratification result for an Info governance action.
-     *
-     * @param infoAction               The Info governance action for which ratification result is needed.
-     * @param ccYesVote                The total votes of the Constitution Committee that voted 'Yes':
-     *                                      the number of registered, unexpired, unresigned committee members that voted yes
-     * @param ccNoVote               The total votes of the Constitution Committee that voted 'No':
-     *                                  - the number of registered, unexpired, unresigned committee members that voted no, plus
-     *                                  - the number of registered, unexpired, unresigned committee members that did not vote for this action
-     * @param ccThreshold              The threshold of the Constitution Committee.
-     * @param spoYesVoteStake          The total delegated stake from SPO that voted 'Yes'.
-     * @param spoAbstainVoteStake      The total delegated stake from SPO that voted 'Abstain'.
-     * @param spoTotalStake            The total delegated stake from SPO.
-     * @param dRepYesVoteStake         The total stake of:
-     *                                 1. Registered dReps that voted 'Yes', plus
-     *                                 2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
-     * @param dRepNoVoteStake          The total stake of:
-     *                                 1. Registered dReps that voted 'No', plus
-     *                                 2. Registered dReps that did not vote for this action, plus
-     *                                 3. The AlwaysNoConfidence dRep.
-     * @param lastEnactedGovActionId   The last enacted governance action ID of the same purpose.
-     * @param currentEpochParam        The current epoch parameters.
-     * @return The ratification result for the Info action.
-     */
-    public static RatificationResult getRatificationResultForInfoAction(InfoAction infoAction, Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
-                                                                        BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
-                                                                        BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
-                                                                        GovActionId lastEnactedGovActionId,
-                                                                        EpochParam currentEpochParam) {
-        return getRatificationResult(infoAction, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
-                dRepYesVoteStake, dRepNoVoteStake,
-                null, lastEnactedGovActionId, currentEpochParam);
     }
 
     /**
