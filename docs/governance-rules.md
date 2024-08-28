@@ -81,26 +81,6 @@ Parameters:
 Returns:
 - The ratification result for the Update Committee action.
 
-### getRatificationResultForInfoAction
-
-This method determines the ratification result for an Info governance action.
-
-Parameters:
-- `infoAction`: The Info governance action for which ratification result is needed.
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the Info action.
-
 ### getRatificationResultForHardForkInitiationAction
 
 This method determines the ratification result for a Hard Fork Initiation governance action.
