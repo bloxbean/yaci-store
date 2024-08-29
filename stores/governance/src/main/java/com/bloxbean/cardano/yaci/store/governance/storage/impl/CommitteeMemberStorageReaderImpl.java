@@ -28,4 +28,10 @@ public class CommitteeMemberStorageReaderImpl implements CommitteeMemberStorageR
                 .map(committeeMemberMapper::toCommitteeMember)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<CommitteeMember> findCommitteeMembersWithMaxSlot() {
+        return committeeMemberRepository.findCommitteeMemberEntitiesWithMaxSlot().stream()
+                .map(committeeMemberMapper::toCommitteeMember).toList();
+    }
 }

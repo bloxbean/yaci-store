@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface CommitteeMemberStorageReader {
     List<CommitteeMember> findAll(int page, int count, Order order);
+    List<CommitteeMember> findCommitteeMembersWithMaxSlot();
 }
