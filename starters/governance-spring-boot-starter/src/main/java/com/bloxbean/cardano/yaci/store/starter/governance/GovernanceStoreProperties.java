@@ -24,6 +24,10 @@ public class GovernanceStoreProperties {
     public static final class Endpoints {
         private Endpoint govActionProposal = new Endpoint();
         private Endpoint votingProcedure = new Endpoint();
+        private Endpoint constitution = new Endpoint();
+        private Endpoint committee = new Endpoint();
+        private Endpoint drep = new Endpoint();
+        private Endpoint delegationVote = new Endpoint();
     }
 
     @Getter
