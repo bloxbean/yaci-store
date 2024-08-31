@@ -137,4 +137,19 @@ public class GovernanceStoreConfiguration {
                                                                ConstitutionMapper constitutionMapper) {
         return new ConstitutionStorageReaderImpl(constitutionRepository, constitutionMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeStorage committeeStorage(CommitteeRepository committeeRepository,
+                                             CommitteeMapper committeeMapper) {
+        return new CommitteeStorageImpl(committeeRepository, committeeMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CommitteeStorageReader committeeStorageReader(CommitteeRepository committeeRepository,
+                                                         CommitteeMapper committeeMapper) {
+        return new CommitteeStorageReaderImpl(committeeRepository, committeeMapper);
+    }
+
 }

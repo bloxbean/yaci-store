@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressTx
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -43,8 +44,8 @@ public class AccountStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AccountService accountService() {
-        return new AccountService(null);
+    public AccountService accountService(EraStorage eraStorage) {
+        return new AccountService(null, eraStorage);
     }
 
     @Bean

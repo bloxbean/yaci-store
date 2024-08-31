@@ -8,4 +8,5 @@ public interface EraStorage {
     void saveEra(CardanoEra era);
     Optional<CardanoEra> findEra(int era);
     Optional<CardanoEra> findFirstNonByronEra();
+    Optional<CardanoEra> findCurrentEra();
 }

@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.epoch.mapper;
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.Special;
-import co.nstant.in.cbor.model.UnsignedInteger;
+import co.nstant.in.cbor.model.Number;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
@@ -66,7 +66,7 @@ public class DomainMapperDecorator implements DomainMapper {
             for (DataItem di : array.getDataItems()) {
                 if (di == Special.BREAK)
                     continue;
-                BigInteger val = ((UnsignedInteger) di).getValue();
+                BigInteger val = ((Number) di).getValue();
                 costs.add(val.longValue());
             }
 
