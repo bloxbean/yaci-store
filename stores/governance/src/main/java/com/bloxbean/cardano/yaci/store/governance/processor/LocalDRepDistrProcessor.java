@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
-import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFetchService;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
@@ -11,11 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -61,9 +57,4 @@ public class LocalDRepDistrProcessor {
         }
     }
 
-    @Scheduled(fixedRateString = "${store.governance.n2c-drep-stake-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
-    public void scheduleFetchAndSetDRepStakeDistr() {
-        log.info("Fetching dRep stake distribution by scheduler....");
-        localDRepDistrService.fetchAndSetDRepDistr();
-    }
 }

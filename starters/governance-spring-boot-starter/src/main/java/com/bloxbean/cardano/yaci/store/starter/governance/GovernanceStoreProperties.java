@@ -21,8 +21,6 @@ public class GovernanceStoreProperties {
         // n2c data configuration
         private boolean n2cGovStateEnabled = true;
         private int n2cGovStateFetchingIntervalInMinutes = 5;
-        private boolean n2cDrepStakeEnabled = true;
-        private int n2cDrepStakeFetchingIntervalInMinutes = 5;
     }
 
     @Getter
