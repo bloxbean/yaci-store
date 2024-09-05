@@ -27,7 +27,7 @@ graalvmNative {
     binaries {
         main {
             imageName = 'yaci-store-all'
-            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication', '--gc=parallel' ]
+            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
 //            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
             sharedLibrary = false
         }

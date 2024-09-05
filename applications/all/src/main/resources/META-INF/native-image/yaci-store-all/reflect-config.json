@@ -17127,5 +17127,124 @@
 },
 {
   "name":"zipkin2.reporter.Sender"
-}
+},
+  {
+    "name": "com.bloxbean.cardano.client.backend.model.TxContentUtxo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.client.backend.model.TxContentUtxoInputs",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.client.backend.model.TxContentUtxoOutputs",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressTxAmount",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressTxAmount;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "org.jooq.Record3",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lorg.jooq.Record3;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalance",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalance;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalance",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalance;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AccountConfig",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AccountConfig;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AccountMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AggrMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "org.apache.coyote.AbstractProtocol",
+    "methods": [
+      {
+        "name": "getName",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.BlockData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.OnJoinData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.AggregateData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.RecentTxs",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  }
 ]
