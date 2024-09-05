@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocalDRepDistrProcessor {
     private final LocalDRepDistrService localDRepDistrService;
     private final LocalDRepDistrStorage localDRepDistrStorage;
-    private final BlockFetchService blockFetchService;
     private boolean syncMode = false;
 
     @EventListener
