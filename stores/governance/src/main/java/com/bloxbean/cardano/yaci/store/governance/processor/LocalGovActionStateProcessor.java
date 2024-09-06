@@ -1,10 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -26,8 +28,15 @@ public class LocalGovActionStateProcessor {
     private final LocalCommitteeMemberStorage localCommitteeMemberStorage;
     private final LocalCommitteeStorage localCommitteeStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
-
+    private final StoreProperties storeProperties;
     private boolean syncMode = false;
+
+    @PostConstruct
+    void init() {
+        if (!storeProperties.isSyncAutoStart()) {
+            log.info("Auto sync is disabled. updating local governance state will be ignored");
+        }
+    }
 
     @EventListener
     public void blockEvent(BlockEvent blockEvent) {
@@ -69,7 +78,7 @@ public class LocalGovActionStateProcessor {
 
     @Scheduled(fixedRateString = "${store.governance.n2c-gov-state-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetGovState() {
-        if (!syncMode) {
+        if (!syncMode || !storeProperties.isSyncAutoStart()){
             return;
         }
 
