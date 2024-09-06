@@ -1,11 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
-import com.bloxbean.cardano.yaci.store.core.service.BlockFetchService;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalDRepDistrService;
 import com.bloxbean.cardano.yaci.store.governance.storage.LocalDRepDistrStorage;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -20,7 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocalDRepDistrProcessor {
     private final LocalDRepDistrService localDRepDistrService;
     private final LocalDRepDistrStorage localDRepDistrStorage;
+    private final StoreProperties storeProperties;
     private boolean syncMode = false;
+
+    @PostConstruct
+    void init() {
+        if (!storeProperties.isSyncAutoStart()) {
+            log.info("Auto sync is disabled. updating local dRep stake distribution will be ignored");
+        }
+    }
 
     @EventListener
     public void blockEvent(BlockEvent blockEvent) {
