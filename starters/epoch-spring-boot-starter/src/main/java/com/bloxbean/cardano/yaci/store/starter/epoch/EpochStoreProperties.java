@@ -16,6 +16,10 @@ public class EpochStoreProperties {
        private boolean enabled = true;
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
+
+        // n2c data configuration
+        private boolean n2cEpochParamEnabled = true;
+        private int n2cProtocolParamFetchingIntervalInMinutes = 5;
     }
 
     @Getter
