@@ -12,7 +12,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
-import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateResult;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
@@ -143,19 +143,19 @@ public class LocalGovStateService {
                 // Ignore the error
             }
 
-            Mono<GovStateResult> mono = localStateQueryClient.executeQuery(new GovStateQuery(era));
+            Mono<GovStateQueryResult> mono = localStateQueryClient.executeQuery(new GovStateQuery(era));
             mono.doOnError(throwable ->
                             log.error("Gov state sync error {}", throwable.getMessage()))
                     .doFinally(signalType ->
                             localClientProviderManager.close(localClientProvider.get()))
-                    .subscribe(this::handleGovStateResult);
+                    .subscribe(this::handleGovStateQueryResult);
 
         } catch (Exception e) {
             localClientProviderManager.close(localClientProvider.get());
         }
     }
 
-    private void handleGovStateResult(GovStateResult govStateResult) {
+    private void handleGovStateQueryResult(GovStateQueryResult govStateQueryResult) {
         Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
             log.error("Tip is null. Cannot fetch gov state");
@@ -178,18 +178,18 @@ public class LocalGovStateService {
 
         List<LocalGovActionProposalStatus> proposalStatusListToSave = new ArrayList<>();
 
-        proposalStatusListToSave.addAll(getExpiredProposals(govStateResult, currentEpoch, slot));
-        proposalStatusListToSave.addAll(getRatifiedProposals(govStateResult, currentEpoch, slot));
-        proposalStatusListToSave.addAll(getEnactedProposals(ratifiedGovActionsInPrevEpoch, govStateResult, currentEpoch, slot));
-        proposalStatusListToSave.addAll(getActiveProposals(govStateResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getExpiredProposals(govStateQueryResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getRatifiedProposals(govStateQueryResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getEnactedProposals(ratifiedGovActionsInPrevEpoch, govStateQueryResult, currentEpoch, slot));
+        proposalStatusListToSave.addAll(getActiveProposals(govStateQueryResult, currentEpoch, slot));
 
         if (!proposalStatusListToSave.isEmpty()) {
             localGovActionProposalStatusStorage.saveAll(proposalStatusListToSave);
         }
 
-        handleConstitution(govStateResult, currentEpoch, slot);
-        handleCommittee(govStateResult, currentEpoch, slot);
-        handleCommitteeMembers(govStateResult, currentEpoch, slot);
+        handleConstitution(govStateQueryResult, currentEpoch, slot);
+        handleCommittee(govStateQueryResult, currentEpoch, slot);
+        handleCommitteeMembers(govStateQueryResult, currentEpoch, slot);
 
         List<GovActionId> enactedGovActionIds = proposalStatusListToSave.stream().filter(entity -> entity.getStatus().equals(GovActionStatus.ENACTED))
                 .map(entity -> GovActionId.builder()
@@ -201,19 +201,19 @@ public class LocalGovStateService {
         handleHardForkInitiation(enactedGovActionIds, currentEpoch, slot);
     }
 
-    private List<LocalGovActionProposalStatus> getExpiredProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private List<LocalGovActionProposalStatus> getExpiredProposals(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
 
-        List<GovActionId> expiredGovActions = govStateResult.getNextRatifyState().getExpiredGovActions();
+        List<GovActionId> expiredGovActions = govStateQueryResult.getNextRatifyState().getExpiredGovActions();
         expiredGovActions.forEach(govActionId -> proposalStatusList.add(buildLocalGovActionProposal(govActionId, GovActionStatus.EXPIRED, currentEpoch, slot)));
 
         return proposalStatusList;
     }
 
-    private List<LocalGovActionProposalStatus> getRatifiedProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private List<LocalGovActionProposalStatus> getRatifiedProposals(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
 
-        List<GovActionId> ratifiedGovActions = govStateResult.getNextRatifyState().getEnactedGovActions()
+        List<GovActionId> ratifiedGovActions = govStateQueryResult.getNextRatifyState().getEnactedGovActions()
                 .stream()
                 .map(Proposal::getGovActionId)
                 .toList();
@@ -224,9 +224,9 @@ public class LocalGovStateService {
 
     private List<LocalGovActionProposalStatus> getEnactedProposals(
             List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch,
-            GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+            GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> proposalStatusList = new ArrayList<>();
-        List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+        List<GovActionId> proposalsInNextRatify = govStateQueryResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
         ratifiedGovActionsInPrevEpoch.forEach(govAction -> {
             GovActionId govActionId = GovActionId.builder()
@@ -242,15 +242,15 @@ public class LocalGovStateService {
         return proposalStatusList;
     }
 
-    private List<LocalGovActionProposalStatus> getActiveProposals(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
+    private List<LocalGovActionProposalStatus> getActiveProposals(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
         List<LocalGovActionProposalStatus> activeProposalStatusList = new ArrayList<>();
 
-        List<GovActionId> expiredGovActions = govStateResult.getNextRatifyState().getExpiredGovActions();
-        List<GovActionId> ratifiedGovActions = govStateResult.getNextRatifyState().getEnactedGovActions()
+        List<GovActionId> expiredGovActions = govStateQueryResult.getNextRatifyState().getExpiredGovActions();
+        List<GovActionId> ratifiedGovActions = govStateQueryResult.getNextRatifyState().getEnactedGovActions()
                 .stream()
                 .map(Proposal::getGovActionId)
                 .toList();
-        List<GovActionId> proposalsInNextRatify = govStateResult.getProposals().stream().map(Proposal::getGovActionId).toList();
+        List<GovActionId> proposalsInNextRatify = govStateQueryResult.getProposals().stream().map(Proposal::getGovActionId).toList();
 
         proposalsInNextRatify.forEach(govActionId -> {
             if (!expiredGovActions.contains(govActionId) && !ratifiedGovActions.contains(govActionId)) {
@@ -261,22 +261,22 @@ public class LocalGovStateService {
         return activeProposalStatusList;
     }
 
-    private void handleConstitution(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
-        Constitution constitution = govStateResult.getConstitution();
+    private void handleConstitution(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
+        Constitution constitution = govStateQueryResult.getConstitution();
         LocalConstitution localConstitution = buildLocalConstitution(constitution, currentEpoch, slot);
 
         localConstitutionStorage.save(localConstitution);
     }
 
-    private void handleCommittee(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
-        Committee committee = govStateResult.getCommittee();
+    private void handleCommittee(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
+        Committee committee = govStateQueryResult.getCommittee();
         LocalCommittee localCommittee = buildLocalCommittee(committee, currentEpoch, slot);
 
         localCommitteeStorage.save(localCommittee);
     }
 
-    private void handleCommitteeMembers(GovStateResult govStateResult, Integer currentEpoch, Long slot) {
-        Committee committee = govStateResult.getCommittee();
+    private void handleCommitteeMembers(GovStateQueryResult govStateQueryResult, Integer currentEpoch, Long slot) {
+        Committee committee = govStateQueryResult.getCommittee();
         Map<Credential, Long> committeeColdCredentialEpoch = committee.getCommitteeColdCredentialEpoch();
         List<LocalCommitteeMember> localCommitteeMemberEntities = new ArrayList<>();
         committeeColdCredentialEpoch.forEach((credential, expiredEpoch) -> {
