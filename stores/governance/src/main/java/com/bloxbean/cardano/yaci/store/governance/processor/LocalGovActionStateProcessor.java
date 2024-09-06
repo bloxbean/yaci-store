@@ -67,7 +67,7 @@ public class LocalGovActionStateProcessor {
         }
     }
 
-    @Scheduled(fixedRate = 5, timeUnit = TimeUnit.MINUTES)
+    @Scheduled(fixedRateString = "${store.governance.n2c-gov-state-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetGovState() {
         if (!syncMode) {
             return;
