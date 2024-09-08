@@ -12,7 +12,6 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
-import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.domain.Delegator;
 import org.cardanofoundation.rewards.calculation.domain.PoolBlock;
 import org.cardanofoundation.rewards.calculation.domain.PoolState;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
@@ -147,14 +145,6 @@ public class PoolStateService {
         }
 
         return poolHistories;
-    }
-
-    //TODO -- Remove
-    @EventListener
-    public void handleBlock(BlockEvent blockEvent) {
-        if (blockEvent.getMetadata().getBlock() >= 5500000) {
-            startService.stop();
-        }
     }
 
 }

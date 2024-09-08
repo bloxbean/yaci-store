@@ -9,3 +9,33 @@
 - [ ] Compare yaci-store with cardano-db-sync (stake snapshots)
 - [ ] Check mainnet bootstrap amount (RewardConstants.MAINNET_BOOTSTRAP_ADDRESS_AMOUNT)
 - [ ] Remove mainnet network specific constants from reward caculation project
+
+## Rollback Script For Testing
+
+```sql
+truncate cursor_;
+insert into cursor_ (id, block_hash, slot, block_number, era) values (1000, :block_hash, :slot, :block_number, :era);
+delete from adapot where slot > :slot;
+delete from address_balance where slot > :slot;
+delete from address_tx_amount where slot > :slot;
+delete from address_utxo where slot > :slot;
+delete from block where slot > :slot;
+delete from cost_model where slot > :slot;
+delete from delegation where slot > :slot;
+delete from epoch_param where slot > :slot;
+delete from epoch_stake where epoch_stake.epoch >= :epoch;
+delete from instant_reward where slot > :slot;
+delete from mir where slot > :slot;
+delete from pool where slot > :slot;
+delete from pool_registration where slot > :slot;
+delete from pool_retirement where slot > :slot;
+delete from protocol_params_proposal where slot > :slot;
+delete from reward where slot > :slot;
+delete from stake_address_balance where slot > :slot;
+delete from stake_registration where slot > :slot;
+delete from transaction where slot > :slot;
+delete  from transaction_witness where slot > :slot;
+delete from tx_input where tx_input.spent_at_slot > :slot;
+delete from withdrawal where slot > :slot;
+
+```
