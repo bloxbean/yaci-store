@@ -17242,6 +17242,12 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.RecentTx",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs",
     "allDeclaredConstructors": true,
     "allDeclaredFields": true,
