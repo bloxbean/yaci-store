@@ -21,6 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.EpochCalculation;
 import org.cardanofoundation.rewards.calculation.domain.*;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -51,6 +53,7 @@ public class EpochRewardCalculationService {
     private final RewardStorage rewardStorage;
     private final RewardStorageReader rewardStorageReader;
 
+    @Transactional(readOnly = true)
     public RewardsCalcInput fetchRewardCalcInputs(int epoch) {
         //Calculating rewards at epoch "epoch"
         //Block producing epoch is epoch - 1 (Fee + MIR + DeRegistration)
@@ -314,6 +317,17 @@ public class EpochRewardCalculationService {
         return epochCalculationResult;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateEpochRewards(int epoch, EpochCalculationResult epochCalculationResult) {
+        if(epochCalculationResult != null) {
+            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves());
+
+            //Update member rewards
+            updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
+        } else
+            log.error("Epoch calculation result is null for epoch " + epoch);
+    }
+
     public void calculateAndUpdateEpochRewards(int epoch) {
         var epochCalculationResult = calculateEpochRewards(epoch);
         if(epochCalculationResult != null) {
@@ -368,7 +382,7 @@ public class EpochRewardCalculationService {
             }
 
             rewardStorage.saveRewards(poolRewards);
-            log.info("Rewards updated for pool : " + poolRewardAccount + " for epoch " + epoch + " with rewards : " + poolRewards.size());
+            log.info("Rewards updated for pool : " + poolHash + " for epoch " + epoch + " with rewards : " + poolRewards.size());
         }
     }
 }
