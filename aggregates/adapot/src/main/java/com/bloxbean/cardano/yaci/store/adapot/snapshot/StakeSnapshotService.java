@@ -6,6 +6,7 @@ import org.jooq.DSLContext;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
@@ -15,7 +16,7 @@ public class StakeSnapshotService {
     private final DSLContext dsl;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking stake snapshot for epoch : " + epoch);
 
