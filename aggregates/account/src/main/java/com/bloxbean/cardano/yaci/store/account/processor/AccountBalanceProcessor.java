@@ -13,11 +13,13 @@ import com.bloxbean.cardano.yaci.store.account.service.MetricCollectorService;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
+import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
+import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
@@ -53,6 +55,7 @@ public class AccountBalanceProcessor {
     private final AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper;
     private final AccountStoreProperties accountStoreProperties;
     private final UtxoClient utxoClient;
+    private final StakingClient stakingClient;
     private final AccountConfigService accountConfigService;
     private final BalanceSnapshotService balanceSnapshotService;
     private final AddressBalanceSnapshotService addressBalanceSnapshotService;
@@ -73,6 +76,7 @@ public class AccountBalanceProcessor {
                                    AccountBalanceHistoryCleanupHelper accountBalanceCleanupHelper,
                                    AccountStoreProperties accountStoreProperties,
                                    @Qualifier("retryableUtxoClient") UtxoClient utxoClient,
+                                   StakingClient stakingClient,
                                    AccountConfigService accountConfigService,
                                    BalanceSnapshotService balanceSnapshotService,
                                    AddressBalanceSnapshotService addressBalanceSnapshotService,
@@ -83,6 +87,7 @@ public class AccountBalanceProcessor {
         this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
         this.accountStoreProperties = accountStoreProperties;
         this.utxoClient = utxoClient;
+        this.stakingClient = stakingClient;
         this.accountConfigService = accountConfigService;
         this.balanceSnapshotService = balanceSnapshotService;
         this.addressBalanceSnapshotService = addressBalanceSnapshotService;
@@ -130,6 +135,32 @@ public class AccountBalanceProcessor {
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
                     .collect(toList());
 
+            //Resolve pointer addresses
+            var addressUtxosToCheckForPointerAddrs = sortedAddressEventUtxo.stream()
+                    .flatMap(addressUtxoEvent -> addressUtxoEvent.getTxInputOutputs().stream())
+                    .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
+                    .filter(addressUtxo -> addressUtxo.getOwnerStakeAddr() == null && addressUtxo.getOwnerStakeCredential() != null)
+                    .toList();
+
+            for (AddressUtxo addressUtxo : addressUtxosToCheckForPointerAddrs) {
+                try {
+                    PointerAddress pointerAddress = new PointerAddress(addressUtxo.getOwnerAddr());
+                    var pointer = pointerAddress.getPointer();
+                    if (pointer != null) {
+                        if (log.isDebugEnabled())
+                            log.debug("Pointer address: {}", pointer);
+                        stakingClient.getStakeAddressFromPointer(pointer.getSlot(), pointer.getTxIndex(), pointer.getCertIndex())
+                                .ifPresent(stakeAddress -> {
+                                    if (log.isDebugEnabled())
+                                        log.debug("Stake address found for pointer: {}", stakeAddress);
+                                    addressUtxo.setOwnerStakeAddr(stakeAddress);
+                                    addressUtxo.setOwnerStakeCredential(HexUtil.encodeHexString(AddressProvider.getDelegationCredentialHash(new Address(stakeAddress)).get()));
+                                });
+                    }
+                } catch (Exception e) {
+                    log.error("Error getting stake address from pointer address: " + addressUtxo.getOwnerAddr(), e);
+                }
+            }
 
             //Required when we are starting from a balance snapshot
             var isLastBlockAtBalanceSnapshot = accountConfigOpt.map(accountConfigEntity -> accountConfigEntity.getStatus())
@@ -195,6 +226,7 @@ public class AccountBalanceProcessor {
 
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
+            /**
             CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
                     .thenAcceptAsync(addressBalances -> {
                         transactionTemplate.execute(status -> {
@@ -217,7 +249,12 @@ public class AccountBalanceProcessor {
                             return null;
                         });
                     }, parallelExecutor.getVirtualThreadExecutor());
+             **/
 
+            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> {
+//                System.out.println("Processing address balances");
+                return null;
+            });
 
             CompletableFuture<Void> stakeAddrBalFuture = null;
             if (accountStoreProperties.isStakeAddressBalanceEnabled()) {
