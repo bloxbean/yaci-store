@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.STAKE_REGISTRATION;
 import static org.jooq.impl.DSL.notExists;
@@ -53,7 +52,6 @@ public class StakeRegistrationService {
                         .from(s2)
                         .where(s2.ADDRESS.eq(s.ADDRESS)
                                 .and(s2.EPOCH.le(epoch))
-                                .and(s2.SLOT.gt(s.SLOT))
                                 .and(
                                         s2.SLOT.gt(s.SLOT)
                                         .or(s2.SLOT.eq(s.SLOT).and(s2.CERT_INDEX.gt(s.CERT_INDEX)))
@@ -64,13 +62,16 @@ public class StakeRegistrationService {
         );
 
         // Query to select distinct addresses where there is a deregistration without a later registration
-        return dsl.selectDistinct(s.ADDRESS)
+        var query = dsl.selectDistinct(s.ADDRESS)
                 .from(s)
                 .where(s.TYPE.eq("STAKE_DEREGISTRATION"))
                 .and(s.EPOCH.le(epoch))
                 .and(s.SLOT.lt(absoluteSlot))
                 .and(noLaterRegistration)
-                .orderBy(s.ADDRESS)
+                .orderBy(s.ADDRESS);
+
+        log.debug("Deregistered stake address query: {}", query.getSQL());
+        return query
                 .fetchInto(String.class);
     }
 
