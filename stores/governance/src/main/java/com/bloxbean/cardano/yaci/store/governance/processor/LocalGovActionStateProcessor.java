@@ -6,8 +6,6 @@ import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.EventListener;
@@ -18,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
 public class LocalGovActionStateProcessor {
@@ -31,8 +28,15 @@ public class LocalGovActionStateProcessor {
     private final StoreProperties storeProperties;
     private boolean syncMode = false;
 
-    @PostConstruct
-    void init() {
+    public LocalGovActionStateProcessor(LocalGovStateService localGovStateService, LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage, LocalConstitutionStorage localConstitutionStorage, LocalCommitteeMemberStorage localCommitteeMemberStorage, LocalCommitteeStorage localCommitteeStorage, LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, StoreProperties storeProperties) {
+        this.localGovStateService = localGovStateService;
+        this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
+        this.localConstitutionStorage = localConstitutionStorage;
+        this.localCommitteeMemberStorage = localCommitteeMemberStorage;
+        this.localCommitteeStorage = localCommitteeStorage;
+        this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
+        this.storeProperties = storeProperties;
+
         if (!storeProperties.isSyncAutoStart()) {
             log.info("Auto sync is disabled. updating local governance state will be ignored");
         }
