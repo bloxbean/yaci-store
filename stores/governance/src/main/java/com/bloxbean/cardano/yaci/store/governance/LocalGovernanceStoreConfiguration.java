@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance;
 
+import com.bloxbean.cardano.yaci.store.governance.domain.LocalCommittee;
+import com.bloxbean.cardano.yaci.store.governance.domain.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.*;
@@ -68,4 +70,33 @@ public class LocalGovernanceStoreConfiguration {
                                                        LocalDRepDistrMapper localDRepDistrMapper) {
         return new LocalDRepDistrStorageImpl(localDRepDistrRepository, localDRepDistrMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalConstitutionStorageReader localConstitutionStorageReader(LocalConstitutionRepository localConstitutionRepository,
+                                                             LocalConstitutionMapper localConstitutionMapper) {
+        return new LocalConstitutionStorageReaderImpl(localConstitutionRepository, localConstitutionMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeStorageReader localCommitteeStorageReader(LocalCommitteeRepository localCommitteeRepository,
+                                                                LocalCommitteeMapper localCommitteeMapper) {
+        return new LocalCommitteeStorageReaderImpl(localCommitteeRepository, localCommitteeMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeMemberStorageReader localCommitteeMemberStorageReader(LocalCommitteeMemberRepository localCommitteeMemberRepository,
+                                                                   LocalCommitteeMemberMapper localCommitteeMemberMapper) {
+        return new LocalCommitteeMemberStorageReaderImpl(localCommitteeMemberRepository, localCommitteeMemberMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalDRepDistrStorageReader localDRepDistrStorageReader(LocalDRepDistrRepository localDRepDistrRepository,
+                                                       LocalDRepDistrMapper localDRepDistrMapper) {
+        return new LocalDRepDistrStorageReaderImpl(localDRepDistrRepository, localDRepDistrMapper);
+    }
+
 }
