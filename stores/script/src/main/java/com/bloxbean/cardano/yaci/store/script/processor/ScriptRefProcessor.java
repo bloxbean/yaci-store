@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
@@ -48,5 +49,10 @@ public class ScriptRefProcessor {
         } catch (Exception e) {
             log.error("Error saving script ref in utxo. Block: {} ", transactionEvent.getMetadata().getBlock(), e);
         }
+    }
+
+    @EventListener
+    public void handleCommit(CommitEvent commitEvent) {
+        scriptStorage.handleCommit(commitEvent);
     }
 }
