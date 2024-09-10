@@ -11,7 +11,6 @@ import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -63,7 +62,6 @@ public class ScriptStorageImpl implements ScriptStorage {
         return scripts;
     }
 
-    @EventListener
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
         try {

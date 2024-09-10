@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,7 +232,6 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
     }
 
-    @EventListener
     public void handleCommit(CommitEvent commitEvent) {
         utxoCache.clear();
     }

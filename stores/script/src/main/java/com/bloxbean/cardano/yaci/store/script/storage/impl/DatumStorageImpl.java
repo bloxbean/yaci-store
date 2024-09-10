@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepos
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -65,7 +64,6 @@ public class DatumStorageImpl implements DatumStorage {
         datumCache.addAll(datumList);
     }
 
-    @EventListener
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
         try {

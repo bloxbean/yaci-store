@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -234,5 +235,10 @@ public class UtxoProcessor {
         AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo);
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
+    }
+
+    @EventListener
+    public void handleCommit(CommitEvent commitEvent) {
+        utxoStorage.handleCommit(commitEvent);
     }
 }
