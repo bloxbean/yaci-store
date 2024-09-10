@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderMan
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.LocalDRepDistrStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.LocalDRepDistrStorageReader;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +44,13 @@ import java.util.Optional;
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalDRepDistrStorage localDRepDistrStorage;
+    private final LocalDRepDistrStorageReader localDRepDistrStorageReader;
     private final EraService eraService;
 
-    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, EraService eraService) {
+    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, LocalDRepDistrStorageReader localDRepDistrStorageReader, EraService eraService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localDRepDistrStorage = localDRepDistrStorage;
+        this.localDRepDistrStorageReader = localDRepDistrStorageReader;
         this.eraService = eraService;
     }
 
@@ -144,5 +147,9 @@ public class LocalDRepDistrService {
         } catch (Exception e) {
             localClientProviderManager.close(localClientProvider.get());
         }
+    }
+
+    public Optional<LocalDRepDistr> getLocalDRepDistrByDRepHashAndEpoch(String dRepHash, Integer epoch) {
+        return localDRepDistrStorageReader.findLocalDRepDistrByDRepHashAndEpoch(dRepHash, epoch);
     }
 }
