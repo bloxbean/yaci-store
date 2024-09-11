@@ -1,11 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance;
 
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalCommittee;
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalDRepDistr;
-import com.bloxbean.cardano.yaci.store.governance.storage.*;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.impl.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -74,21 +72,21 @@ public class LocalGovernanceStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public LocalConstitutionStorageReader localConstitutionStorageReader(LocalConstitutionRepository localConstitutionRepository,
-                                                             LocalConstitutionMapper localConstitutionMapper) {
+                                                                         LocalConstitutionMapper localConstitutionMapper) {
         return new LocalConstitutionStorageReaderImpl(localConstitutionRepository, localConstitutionMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public LocalCommitteeStorageReader localCommitteeStorageReader(LocalCommitteeRepository localCommitteeRepository,
-                                                                LocalCommitteeMapper localCommitteeMapper) {
+                                                                   LocalCommitteeMapper localCommitteeMapper) {
         return new LocalCommitteeStorageReaderImpl(localCommitteeRepository, localCommitteeMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public LocalCommitteeMemberStorageReader localCommitteeMemberStorageReader(LocalCommitteeMemberRepository localCommitteeMemberRepository,
-                                                                   LocalCommitteeMemberMapper localCommitteeMemberMapper) {
+                                                                               LocalCommitteeMemberMapper localCommitteeMemberMapper) {
         return new LocalCommitteeMemberStorageReaderImpl(localCommitteeMemberRepository, localCommitteeMemberMapper);
     }
 
