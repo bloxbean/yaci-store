@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.api.governance.controller;
 
-import com.bloxbean.cardano.yaci.store.api.governance.dto.CommitteeDto;
 import com.bloxbean.cardano.yaci.store.api.governance.dto.LocalCommitteeDto;
 import com.bloxbean.cardano.yaci.store.api.governance.service.LocalCommitteeService;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
@@ -18,12 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("${apiPrefix}/local/committees")
+@RequestMapping("${apiPrefix}/governance/live/committees")
 @RequiredArgsConstructor
 @Tag(name = "Local Committee Service", description = "Get committee info directly from local Cardano Node through n2c local query.")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.committee.local.enabled:true}")
+@ConditionalOnExpression("${store.epoch.endpoints.committee.live.enabled:true}")
 public class LocalCommitteeController {
     private final LocalCommitteeService localCommitteeService;
 
