@@ -1,11 +1,11 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.EventListener;
@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
 public class LocalGovActionStateProcessor {
@@ -26,8 +25,22 @@ public class LocalGovActionStateProcessor {
     private final LocalCommitteeMemberStorage localCommitteeMemberStorage;
     private final LocalCommitteeStorage localCommitteeStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
-
+    private final StoreProperties storeProperties;
     private boolean syncMode = false;
+
+    public LocalGovActionStateProcessor(LocalGovStateService localGovStateService, LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage, LocalConstitutionStorage localConstitutionStorage, LocalCommitteeMemberStorage localCommitteeMemberStorage, LocalCommitteeStorage localCommitteeStorage, LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, StoreProperties storeProperties) {
+        this.localGovStateService = localGovStateService;
+        this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
+        this.localConstitutionStorage = localConstitutionStorage;
+        this.localCommitteeMemberStorage = localCommitteeMemberStorage;
+        this.localCommitteeStorage = localCommitteeStorage;
+        this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
+        this.storeProperties = storeProperties;
+
+        if (!storeProperties.isSyncAutoStart()) {
+            log.info("Auto sync is disabled. updating local governance state will be ignored");
+        }
+    }
 
     @EventListener
     public void blockEvent(BlockEvent blockEvent) {
@@ -69,7 +82,7 @@ public class LocalGovActionStateProcessor {
 
     @Scheduled(fixedRateString = "${store.governance.n2c-gov-state-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetGovState() {
-        if (!syncMode) {
+        if (!syncMode || !storeProperties.isSyncAutoStart()){
             return;
         }
 
