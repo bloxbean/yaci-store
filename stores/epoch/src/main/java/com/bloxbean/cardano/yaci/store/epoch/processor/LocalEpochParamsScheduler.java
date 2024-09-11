@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -13,13 +14,22 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class LocalEpochParamsScheduler {
     private LocalEpochParamService protocolParamService;
+    private StoreProperties storeProperties;
 
-    public LocalEpochParamsScheduler(LocalEpochParamService protocolParamService) {
+    public LocalEpochParamsScheduler(LocalEpochParamService protocolParamService,StoreProperties storeProperties) {
         this.protocolParamService = protocolParamService;
+        this.storeProperties = storeProperties;
+
+        if (!storeProperties.isSyncAutoStart()) {
+            log.info("Auto sync is disabled. updating epoch param will be ignored");
+        }
     }
 
     @Scheduled(fixedRateString = "${store.epoch.n2c-protocol-param-fetching-interval-in-minutes:5}", timeUnit = TimeUnit.MINUTES)
     public void scheduleFetchAndSetCurrentProtocolParams() {
+        if (!storeProperties.isSyncAutoStart()) {
+            return;
+        }
         log.info("Fetching protocol params ....");
         protocolParamService.fetchAndSetCurrentProtocolParams();
     }
