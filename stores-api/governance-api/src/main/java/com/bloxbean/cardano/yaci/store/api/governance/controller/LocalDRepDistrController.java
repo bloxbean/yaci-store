@@ -15,12 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("${apiPrefix}/local/dRep")
+@RequestMapping("${apiPrefix}/governance/live/dRep")
 @RequiredArgsConstructor
-@Tag(name = "Local Constitution Service", description = "Get constitution directly from local Cardano Node through n2c local query.")
+@Tag(name = "Local Constitution Service", description = "Get dRep stake distribution from local Cardano Node.")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.drep.local.enabled:true}")
+@ConditionalOnExpression("${store.epoch.endpoints.drep.live.enabled:true}")
 public class LocalDRepDistrController {
     private final LocalDRepDistrService localDRepDistrService;
 

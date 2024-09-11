@@ -16,12 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("${apiPrefix}/local/constitution")
+@RequestMapping("${apiPrefix}/governance/live/constitution")
 @RequiredArgsConstructor
-@Tag(name = "Local Constitution Service", description = "Get constitution directly from local Cardano Node through n2c local query.")
+@Tag(name = "Local Constitution Service", description = "Get constitution from local Cardano Node.")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.constitution.local.enabled:true}")
+@ConditionalOnExpression("${store.epoch.endpoints.constitution.live.enabled:true}")
 public class LocalConstitutionController {
     private final LocalGovStateService localGovStateService;
 
