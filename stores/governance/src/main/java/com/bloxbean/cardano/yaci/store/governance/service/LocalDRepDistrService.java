@@ -149,7 +149,7 @@ public class LocalDRepDistrService {
         }
     }
 
-    public Optional<LocalDRepDistr> getLocalDRepDistrByDRepHashAndEpoch(String dRepHash, Integer epoch) {
-        return localDRepDistrStorageReader.findLocalDRepDistrByDRepHashAndEpoch(dRepHash, epoch);
+    public Optional<LocalDRepDistr> getLatestDRepDistrByDRepHashAndEpoch(String dRepHash) {
+        return localDRepDistrStorageReader.findLatestLocalDRepDistrByDRepHash(dRepHash);
     }
 }

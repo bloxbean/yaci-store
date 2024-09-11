@@ -26,11 +26,11 @@ public class LocalDRepDistrController {
 
     @GetMapping("/{dRepHash}/stake")
     @Operation(description = "Get dRep hash distribution")
-    public ResponseEntity<LocalDRepStakeDto> getCommitteeInfo(@PathVariable String dRepHash, @RequestParam(name = "epoch") Integer epoch) {
-        return localDRepDistrService.getLocalDRepDistrByDRepHashAndEpoch(dRepHash, epoch)
+    public ResponseEntity<LocalDRepStakeDto> getCommitteeInfo(@PathVariable String dRepHash) {
+        return localDRepDistrService.getLatestDRepDistrByDRepHashAndEpoch(dRepHash)
                 .map(localDRepDistr -> ResponseEntity.ok(LocalDRepStakeDto.builder()
-                        .drepHash(dRepHash)
-                        .epoch(epoch)
+                        .drepHash(localDRepDistr.getDrepHash())
+                        .epoch(localDRepDistr.getEpoch())
                         .amount(localDRepDistr.getAmount())
                         .build()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "DRep stake not found"));

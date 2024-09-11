@@ -14,8 +14,8 @@ public class LocalDRepDistrStorageReaderImpl implements LocalDRepDistrStorageRea
     private final LocalDRepDistrMapper localDRepDistrMapper;
 
     @Override
-    public Optional<LocalDRepDistr> findLocalDRepDistrByDRepHashAndEpoch(String dRepHash, Integer epoch) {
-        return localDRepDistrRepository.findByDrepHashAndEpoch(dRepHash, epoch)
+    public Optional<LocalDRepDistr> findLatestLocalDRepDistrByDRepHash(String dRepHash) {
+        return localDRepDistrRepository.findFirstByDrepHashOrderByEpochDesc(dRepHash)
                 .map(localDRepDistrMapper::toLocalDRepDist);
     }
 }
