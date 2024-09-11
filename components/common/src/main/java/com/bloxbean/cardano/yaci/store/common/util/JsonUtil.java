@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +64,8 @@ public class JsonUtil {
 
     static {
         mapper = (new ObjectMapper()).enable(SerializationFeature.INDENT_OUTPUT);
+        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY) // Make all fields visible
+                .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
     }
 }
 
