@@ -1,6 +1,6 @@
 plugins {
-    id 'org.springframework.boot' version '3.2.2'
-    id 'org.graalvm.buildtools.native' version '0.10.2'
+    id 'org.springframework.boot' version "${springBootVersion}"
+//    id 'org.graalvm.buildtools.native' version ${graalvmBuildToolVersion}
 }
 
 dependencies {
@@ -23,17 +23,17 @@ dependencies {
 }
 
 
-graalvmNative {
-    binaries {
-        main {
-            imageName = 'yaci-store-all'
-            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
+//graalvmNative {
+//    binaries {
+//        main {
+//            imageName = 'yaci-store-all'
 //            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
-            sharedLibrary = false
-        }
-    }
-
-}
+////            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
+//            sharedLibrary = false
+//        }
+//    }
+//
+//}
 
 java {
     toolchain {

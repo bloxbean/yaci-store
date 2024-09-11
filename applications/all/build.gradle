@@ -1,6 +1,8 @@
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
-    id 'org.springframework.boot' version '3.2.2'
-    id 'org.graalvm.buildtools.native' version '0.10.2'
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
 }
 
 dependencies {
@@ -38,6 +40,30 @@ graalvmNative {
             imageName = 'yaci-store-all'
             buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.YaciStoreApplication']
             sharedLibrary = false
+
+            def os = OperatingSystem.current()
+            def vendor = System.getProperty('java.vendor')
+            def version = System.getProperty('java.version')
+            def vmName = System.getProperty('java.vm.name')
+
+            // Check for Oracle GraalVM
+            if (vendor.contains("Oracle") && !vmName.contains("Community")) {
+                // Oracle GraalVM detected, set GC to G1 for Linux systems
+                if (os.isLinux()) {
+                    buildArgs.add('--gc=G1')
+                    println "Oracle GraalVM detected, setting GC to G1"
+                } else {
+                   //use default
+                    println "Oracle GraalVM detected, setting GC to default"
+                }
+            }
+
+            // Check for Liberica NIK
+            else if (vendor.contains("BellSoft") || vendor.contains("Liberica")) {
+                // Liberica NIK detected, set GC to parallel for all environments
+                buildArgs.add('--gc=parallel')
+                println "Liberica NIK detected, setting GC to parallel"
+            }
         }
     }
 
