@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -91,7 +92,8 @@ public class EpochRewardCalculationService {
                 .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
 
         ProtocolParameters rewardProtocolParameters = ProtocolParameters.builder()
-                .decentralisation(protocolParams.getDecentralisationParam())
+                .decentralisation(protocolParams.getDecentralisationParam() != null?
+                        protocolParams.getDecentralisationParam() : BigDecimal.ZERO)
                 .treasuryGrowRate(protocolParams.getTreasuryGrowthRate())
                 .monetaryExpandRate(protocolParams.getExpansionRate())
                 .optimalPoolCount(protocolParams.getNOpt())
