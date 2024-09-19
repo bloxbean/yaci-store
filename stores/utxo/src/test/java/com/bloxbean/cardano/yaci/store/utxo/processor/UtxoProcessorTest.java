@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +57,6 @@ public class UtxoProcessorTest {
     }
 
     @Test
-    @Disabled
     public void givenTransactionEvent_whenInputsNotResolved_createBothSpentAndUnspentOutputs() {
         List<Transaction> transactions = transactions();
         TransactionEvent transactionEvent = TransactionEvent.builder()
@@ -72,7 +71,8 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
+        verify(utxoStorage, times(1)).saveSpent(argCaptor.capture());
+        verify(utxoStorage, times(1)).saveUnspent(argCaptor.capture());
 
         List<TxInput> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
@@ -97,7 +97,6 @@ public class UtxoProcessorTest {
     }
 
     @Test
-    @Disabled
     public void givenTransactionEvent_whenInvalidTxn_createBothSpentAndUnspentOutputsFromCollateral() {
         List<Transaction> transactions = transactions();
         transactions.get(0).setInvalid(true);
@@ -115,10 +114,13 @@ public class UtxoProcessorTest {
                 .build();
 
         utxoProcessor.handleTransactionEvent(transactionEvent);
-        verify(utxoStorage, times(2)).saveUnspent(argCaptor.capture());
+        verify(utxoStorage, times(1)).saveSpent(argCaptor.capture());
+        verify(utxoStorage, times(1)).saveUnspent(argCaptor.capture());
 
         List<TxInput> spentUtxos = argCaptor.getAllValues().get(0);
         List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
+
+        spentUtxos.sort(Comparator.comparing(TxInput::getTxHash));
 
         assertThat(spentUtxos).hasSize(2);
         assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
@@ -128,6 +130,40 @@ public class UtxoProcessorTest {
 
         assertThat(unspentUtxos.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(unspentUtxos.get(0).getAmounts().get(0).getQuantity()).isEqualTo(transactions.get(0).getCollateralReturnUtxo().getAmounts().get(0).getQuantity());
+    }
+
+    @Test
+    public void givenTransactionEvent_whenInvalidTxn_noCollateralReturn_createSpentFromCollateral() {
+        List<Transaction> transactions = transactions_noCollateralReturn();
+        transactions.get(0).setInvalid(true);
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .metadata(EventMetadata.builder()
+                        .block(100)
+                        .blockHash("c2f69d97f3a11684f2a97f7c75bc50dcb18c4a01a17625d32561a7ebc219aa5e")
+                        .slot(200000)
+                        .era(Era.Shelley)
+                        .syncMode(true)
+                        .build())
+                .transactions(transactions)
+                .build();
+
+        utxoProcessor.handleTransactionEvent(transactionEvent);
+        verify(utxoStorage, times(1)).saveSpent(argCaptor.capture());
+        verify(utxoStorage, times(1)).saveUnspent(argCaptor.capture());
+
+        List<TxInput> spentUtxos = argCaptor.getAllValues().get(0);
+        List<AddressUtxo> unspentUtxos = argCaptor.getAllValues().get(1);
+
+        spentUtxos.sort(Comparator.comparing(TxInput::getTxHash));
+
+        assertThat(spentUtxos).hasSize(2);
+        assertThat(spentUtxos.get(0).getTxHash()).isEqualTo("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+        assertThat(spentUtxos.get(0).getOutputIndex()).isEqualTo(4);
+        assertThat(spentUtxos.get(1).getTxHash()).isEqualTo("eeee529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+        assertThat(spentUtxos.get(1).getOutputIndex()).isEqualTo(0);
+
+        assertThat(unspentUtxos).isEmpty();
     }
 
     private List<Transaction> transactions() {
@@ -153,6 +189,29 @@ public class UtxoProcessorTest {
                                         .quantity(BigInteger.valueOf(500))
                                         .build()))
                                 .build())
+                        .build()
+                )
+                .utxos(utxos(txHash, transactionOutputs()))
+                .build();
+
+        return List.of(transaction);
+    }
+
+    private List<Transaction> transactions_noCollateralReturn() {
+        String txHash = "f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8";
+        Transaction transaction = Transaction.builder()
+                .txHash(txHash)
+                .body(TransactionBody.builder()
+                        .inputs(Set.of(
+                                new TransactionInput("aaaae529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 1),
+                                new TransactionInput("bbbbe529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 2),
+                                new TransactionInput("cccce529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 0)
+                        ))
+                        .outputs(transactionOutputs())
+                        .collateralInputs(Set.of(
+                                new TransactionInput("dddd529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 4),
+                                new TransactionInput("eeee529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 0)
+                        ))
                         .build()
                 )
                 .utxos(utxos(txHash, transactionOutputs()))
