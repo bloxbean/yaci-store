@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtoco
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
@@ -16,20 +15,14 @@ import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.LocalEpochParamsStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.Optional;
 
-@Component
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @Slf4j
 public class LocalEpochParamService {
     private final LocalClientProviderManager localClientProviderManager;
@@ -38,9 +31,6 @@ public class LocalEpochParamService {
 
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
 
-    @Value("${store.cardano.n2c-era:Conway}")
-    private String eraStr;
-
     private Era era;
 
     public LocalEpochParamService(LocalClientProviderManager localClientProviderManager,
@@ -48,16 +38,7 @@ public class LocalEpochParamService {
         this.localClientProviderManager = localClientProviderManager;
         this.localProtocolParamsStorage = localProtocolParamsStorage;
         this.eraService = eraService;
-        log.info("ProtocolParamService initialized >>>");
-    }
-
-    @PostConstruct
-    public void postConstruct() {
-        if (StringUtil.isEmpty(eraStr))
-            eraStr = "Conway";
-
-        era = Era.valueOf(eraStr);
-        log.info("N2C Era set to {}", era.name());
+        log.info("LocalEpochParamService initialized >>>");
     }
 
     /**
@@ -70,7 +51,7 @@ public class LocalEpochParamService {
             return;
 
         if (blockHeaderEvent.getMetadata().getEra() != null
-                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+                && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Era changed to {}", era.name());
 
