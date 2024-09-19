@@ -16,21 +16,20 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
-import com.bloxbean.cardano.yaci.store.governance.domain.*;
+import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
-import com.bloxbean.cardano.yaci.store.governance.storage.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Nullable;
-import jakarta.annotation.PostConstruct;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
@@ -68,8 +67,8 @@ public class LocalGovStateService {
     private final EraService eraService;
     private final CursorService cursorService;
 
-    @Value("${store.cardano.n2c-era:Conway}")
-    private String eraStr;
+    @Getter
+    @Setter
     private Era era;
 
     private static final int MAX_BLOCK_DIFFERENCE = 20;
@@ -100,23 +99,12 @@ public class LocalGovStateService {
         log.info("LocalGovActionStateService initialized >>>");
     }
 
-    @PostConstruct
-    void init() {
-        if (StringUtil.isEmpty(eraStr))
-            eraStr = "Conway";
-
-        era = Era.valueOf(eraStr);
-    }
-
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (!blockHeaderEvent.getMetadata().isSyncMode())
-            return;
-
-        if (blockHeaderEvent.getMetadata().getEra() != null
-                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Conway.value
+                &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
-            log.info("Gov State: Era changed to {}", era.name());
+            log.info("Current era: {}", era.name());
             log.info("Fetching gov state ...");
             fetchAndSetGovState();
         }
@@ -174,11 +162,6 @@ public class LocalGovStateService {
 
         var latestCursor = cursorService.getCursor();
 
-        if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
-            log.info("The max processed block is not close to the tip, ignore handling gov state");
-            return;
-        }
-
         List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorage
                 .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.RATIFIED));
 
@@ -202,6 +185,11 @@ public class LocalGovStateService {
                         .transactionId(entity.getGovActionTxHash())
                         .gov_action_index((int) entity.getGovActionIndex())
                         .build()).toList();
+
+        if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
+            log.info("The max processed block is not close to the tip, ignore handling local treasury withdrawals and local hard fork initiation data");
+            return;
+        }
 
         handleTreasuryWithdrawals(enactedGovActionIds, currentEpoch, slot);
         handleHardForkInitiation(enactedGovActionIds, currentEpoch, slot);

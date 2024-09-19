@@ -30,7 +30,10 @@ public class LocalEpochParamsScheduler {
         if (!storeProperties.isSyncAutoStart()) {
             return;
         }
-        log.info("Fetching protocol params ....");
-        protocolParamService.fetchAndSetCurrentProtocolParams();
+
+        if (protocolParamService.getEra() != null) {
+            log.info("Fetching protocol params ....");
+            protocolParamService.fetchAndSetCurrentProtocolParams();
+        }
     }
 }

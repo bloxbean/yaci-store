@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtoco
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtocolParamsQuery;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
@@ -16,9 +15,9 @@ import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.LocalEpochParamsStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
-import jakarta.annotation.PostConstruct;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
@@ -44,9 +43,8 @@ public class LocalEpochParamService {
 
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
 
-    @Value("${store.cardano.n2c-era:Conway}")
-    private String eraStr;
-
+    @Getter
+    @Setter
     private Era era;
 
     public LocalEpochParamService(LocalClientProviderManager localClientProviderManager,
@@ -57,14 +55,6 @@ public class LocalEpochParamService {
         log.info("ProtocolParamService initialized >>>");
     }
 
-    @PostConstruct
-    public void postConstruct() {
-        if (StringUtil.isEmpty(eraStr))
-            eraStr = "Conway";
-
-        era = Era.valueOf(eraStr);
-        log.info("N2C Era set to {}", era.name());
-    }
 
     /**
      * Listen to block event to set the correct era
@@ -72,13 +62,10 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (!blockHeaderEvent.getMetadata().isSyncMode())
-            return;
-
-        if (blockHeaderEvent.getMetadata().getEra() != null
-                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Shelley.value
+                &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
-            log.info("Era changed to {}", era.name());
+            log.info("Current era: {}", era.name());
 
             //Looks like era change, fetch protocol params
             //This is required for custom network directly starting from latest era like Conway era. So, after first block, when correct era is detected
@@ -96,6 +83,8 @@ public class LocalEpochParamService {
     public void epochEvent(EpochChangeEvent epochChangeEvent) {
         if (!epochChangeEvent.getEventMetadata().isSyncMode())
             return;
+
+        era = Era.valueOf(epochChangeEvent.getEra().name());
 
         log.info("Epoch change event received. Fetching protocol params ...");
         fetchAndSetCurrentProtocolParams();

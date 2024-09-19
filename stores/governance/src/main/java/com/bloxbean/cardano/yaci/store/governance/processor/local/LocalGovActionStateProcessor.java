@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor.local;
 
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
@@ -54,6 +55,8 @@ public class LocalGovActionStateProcessor {
         if (!syncMode)
             return;
 
+        localGovStateService.setEra(Era.valueOf(epochChangeEvent.getEra().name()));
+
         log.info("Epoch change event received. Fetching and updating local gov state");
         localGovStateService.fetchAndSetGovState();
     }
@@ -61,6 +64,10 @@ public class LocalGovActionStateProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        if (!syncMode) {
+            return;
+        }
+
         long slot = rollbackEvent.getRollbackTo().getSlot();
 
         int count = localConstitutionStorage.deleteBySlotGreaterThan(slot);
@@ -86,7 +93,9 @@ public class LocalGovActionStateProcessor {
             return;
         }
 
-        log.info("Fetching gov state by scheduler....");
-        localGovStateService.fetchAndSetGovState();
+        if (localGovStateService.getEra() != null) {
+            log.info("Fetching gov state by scheduler....");
+            localGovStateService.fetchAndSetGovState();
+        }
     }
 }
