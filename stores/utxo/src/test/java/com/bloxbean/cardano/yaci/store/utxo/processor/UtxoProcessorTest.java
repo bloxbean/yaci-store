@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
-import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -41,9 +40,6 @@ public class UtxoProcessorTest {
     @Mock
     private ApplicationEventPublisher publisher;
 
-    @Mock
-    private StakingClient stakingClient;
-
     @InjectMocks
     private UtxoProcessor utxoProcessor;
 
@@ -57,7 +53,7 @@ public class UtxoProcessorTest {
     @BeforeEach
     public void setup() {
 //        openMocks(this);
-        utxoProcessor = new UtxoProcessor(utxoStorage, publisher, stakingClient, meterRegistry);
+        utxoProcessor = new UtxoProcessor(utxoStorage, publisher, meterRegistry);
     }
 
     @Test
