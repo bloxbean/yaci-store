@@ -19,7 +19,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-@Configuration
 @ConditionalOnProperty(
         prefix = "store.script",
         name = "enabled",

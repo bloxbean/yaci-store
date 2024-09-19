@@ -3,23 +3,22 @@ package com.bloxbean.cardano.yaci.store.remote.publisher;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.remote.RemoteProperties;
 import com.bloxbean.cardano.yaci.store.remote.common.RemoteBindingConstant;
-import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class RemoteEventPublisher {
     private final StreamBridge streamBridge;
     private final RemoteProperties remoteProperties;
 
-    @PostConstruct
-    public void init() {
+    public RemoteEventPublisher(StreamBridge streamBridge, RemoteProperties remoteProperties) {
+        this.streamBridge = streamBridge;
+        this.remoteProperties = remoteProperties;
+
         log.info("<< RemoteEventPublisher initialized >>");
         log.info("<< Events Enabled For Remote Publish : " + remoteProperties.getPublisherEvents() + " >>");
     }

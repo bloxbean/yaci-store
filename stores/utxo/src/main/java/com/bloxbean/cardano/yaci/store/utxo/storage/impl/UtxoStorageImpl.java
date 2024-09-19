@@ -11,13 +11,10 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +28,6 @@ import java.util.Optional;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.row;
 
-@RequiredArgsConstructor
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
 
@@ -47,7 +43,17 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Value("${store.utxo.pruning-batch-size:3000}")
     private int pruningBatchSize = 3000;
 
-    @PostConstruct
+    public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
+                           UtxoCache utxoCache, PlatformTransactionManager transactionManager) {
+        this.utxoRepository = utxoRepository;
+        this.spentOutputRepository = spentOutputRepository;
+        this.dsl = dsl;
+        this.utxoCache = utxoCache;
+        this.transactionManager = transactionManager;
+
+        init();
+    }
+
     public void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -226,7 +232,6 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
     }
 
-    @EventListener
     public void handleCommit(CommitEvent commitEvent) {
         utxoCache.clear();
     }

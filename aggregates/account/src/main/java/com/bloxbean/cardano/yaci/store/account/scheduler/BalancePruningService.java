@@ -4,8 +4,6 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,7 +25,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
         havingValue = "true",
         matchIfMissing = false
 )
-@RequiredArgsConstructor
 @Slf4j
 public class BalancePruningService {
     private final CursorService cursorService;
@@ -40,7 +37,17 @@ public class BalancePruningService {
 
     private AtomicBoolean isPruning = new AtomicBoolean(false);
 
-    @PostConstruct
+    public BalancePruningService(CursorService cursorService, EraService eraService, AccountStoreProperties accountStoreProperties,
+                                 DSLContext dslContext, PlatformTransactionManager transactionManager) {
+        this.cursorService = cursorService;
+        this.eraService = eraService;
+        this.accountStoreProperties = accountStoreProperties;
+        this.dslContext = dslContext;
+        this.transactionManager = transactionManager;
+
+        init();
+    }
+
     public void init() {
         log.info("<< Balance Pruning Service Enabled >>");
         transactionTemplate = new TransactionTemplate(transactionManager);

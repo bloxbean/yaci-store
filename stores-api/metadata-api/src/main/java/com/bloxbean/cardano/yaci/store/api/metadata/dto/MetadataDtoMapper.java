@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.metadata.dto;
 
-import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.NonNull;

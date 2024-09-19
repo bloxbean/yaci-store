@@ -3,21 +3,22 @@ package com.bloxbean.cardano.yaci.store.account.service;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
-@RequiredArgsConstructor
 public class MetricCollectorService {
     private final MeterRegistry meterRegistry;
     private Counter negativeBalanceAddressCounter;
     private Counter negativeBalanceStakeAddressCounter;
     private AtomicLong lastAccountBalanceProcessedBlock;
 
-    @PostConstruct
+    public MetricCollectorService(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        init();
+    }
+
     private void init() {
         setupMetrics();
     }

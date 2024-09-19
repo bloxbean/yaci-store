@@ -179,8 +179,7 @@ public class RocksDBUtxoStorage implements UtxoStorage {
     }
 
     @SneakyThrows
-    @EventListener
-    public void handleCommitEvent(CommitEvent commitEvent) {
+    public void handleCommit(CommitEvent commitEvent) {
         try {
             Collection<AddressUtxo> addressUtxoList = utxoCache.getAll();
 

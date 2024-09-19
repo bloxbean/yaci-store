@@ -1,0 +1,168 @@
+[
+  {
+    "name":"org.springframework.data.domain.Unpaged"
+  },
+  {
+    "name":"io.netty.channel.kqueue.KQueueDomainSocketChannel",
+    "allDeclaredFields":true,
+    "allDeclaredMethods":true,
+    "allDeclaredConstructors":true,
+    "allPublicConstructors" : true,
+    "allPublicMethods" : true,
+    "allPublicFields" : true
+  },
+  {
+    "name":"com.bloxbean.cardano.client.crypto.SecretKey",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "queryAllDeclaredConstructors":true,
+    "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"setCborHex","parameterTypes":["java.lang.String"] }, {"name":"setDescription","parameterTypes":["java.lang.String"] }, {"name":"setType","parameterTypes":["java.lang.String"] }]
+  },
+  {
+    "name":"com.bloxbean.cardano.client.crypto.SecretKey",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "queryAllDeclaredConstructors":true,
+    "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"setCborHex","parameterTypes":["java.lang.String"] }, {"name":"setDescription","parameterTypes":["java.lang.String"] }, {"name":"setType","parameterTypes":["java.lang.String"] }]
+  },
+  {
+    "name":"com.bloxbean.cardano.client.crypto.VerificationKey",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "queryAllDeclaredConstructors":true,
+    "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"setCborHex","parameterTypes":["java.lang.String"] }, {"name":"setDescription","parameterTypes":["java.lang.String"] }, {"name":"setType","parameterTypes":["java.lang.String"] }]
+  },
+  {
+    "name":"java.util.TreeMap",
+    "queryAllDeclaredMethods":true,
+    "queryAllDeclaredConstructors":true,
+    "methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.MutableDynamicParameterizedType",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "methods":[{"name":"setParameterValues","parameterTypes":["java.util.Properties"] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.MutableType",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "methods":[{"name":"assemble","parameterTypes":["java.io.Serializable","java.lang.Object"] }, {"name":"deepCopy","parameterTypes":["java.lang.Object"] }, {"name":"disassemble","parameterTypes":["java.lang.Object"] }, {"name":"disassemble","parameterTypes":["java.lang.Object","org.hibernate.engine.spi.SharedSessionContractImplementor"] }, {"name":"equals","parameterTypes":["java.lang.Object","java.lang.Object"] }, {"name":"forEachDisassembledJdbcValue","parameterTypes":["java.lang.Object","int","java.lang.Object","java.lang.Object","org.hibernate.metamodel.mapping.Bindable$JdbcValuesBiConsumer","org.hibernate.engine.spi.SharedSessionContractImplementor"] }, {"name":"forEachJdbcType","parameterTypes":["int","org.hibernate.internal.util.IndexedConsumer"] }, {"name":"getBindableJavaType","parameterTypes":[] }, {"name":"getConfiguration","parameterTypes":[] }, {"name":"getExpressibleJavaType","parameterTypes":[] }, {"name":"getJavaTypeDescriptor","parameterTypes":[] }, {"name":"getJdbcMapping","parameterTypes":[] }, {"name":"getJdbcTypeDescriptor","parameterTypes":[] }, {"name":"getMappedType","parameterTypes":[] }, {"name":"getSqlType","parameterTypes":[] }, {"name":"hashCode","parameterTypes":["java.lang.Object"] }, {"name":"isMutable","parameterTypes":[] }, {"name":"nullSafeGet","parameterTypes":["java.sql.ResultSet","int","org.hibernate.engine.spi.SharedSessionContractImplementor","java.lang.Object"] }, {"name":"nullSafeSet","parameterTypes":["java.sql.PreparedStatement","java.lang.Object","int","org.hibernate.engine.spi.SharedSessionContractImplementor"] }, {"name":"replace","parameterTypes":["java.lang.Object","java.lang.Object","java.lang.Object"] }, {"name":"returnedClass","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.AbstractArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.BooleanArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.DateArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.DecimalArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.DoubleArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.EnumArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.FloatArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.IntArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.LocalDateArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.LocalDateTimeArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.LongArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.StringArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.TimestampArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.array.internal.UUIDArrayTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.json.JsonType",
+    "allDeclaredFields":true,
+    "queryAllDeclaredMethods":true,
+    "methods":[{"name":"<init>","parameterTypes":["org.hibernate.type.spi.TypeBootstrapContext"] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.json.internal.JsonJavaTypeDescriptor",
+    "methods":[{"name":"setJdbcType","parameterTypes":[] }]
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.json.internal.JsonJdbcTypeDescriptor"
+  },
+  {
+    "name":"io.hypersistence.utils.hibernate.type.util.Configuration"
+  },
+  {
+    "name": "org.hibernate.generator.internal.CurrentTimestampGeneration",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "org.hibernate.generator.internal.CustomIdGenerator",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapperImpl",
+    "methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.Datum;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.Script;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.TransactionScripts;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.transaction.jooq.tables.pojos.InvalidTransaction;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.transaction.jooq.tables.pojos.Transaction;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.transaction.jooq.tables.pojos.TransactionWitness;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.transaction.jooq.tables.pojos.Withdrawal;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.utxo.jooq.tables.pojos.Address;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.utxo.jooq.tables.pojos.AddressUtxo;"
+  },
+  {
+    "name":"[Lcom.bloxbean.cardano.yaci.store.utxo.jooq.tables.pojos.TxInput;"
+  }
+]
+
