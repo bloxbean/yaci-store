@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
@@ -15,9 +14,9 @@ import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
-import jakarta.annotation.PostConstruct;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
@@ -54,27 +53,16 @@ public class LocalDRepDistrService {
         this.eraService = eraService;
     }
 
-    @Value("${store.cardano.n2c-era:Conway}")
-    private String eraStr;
+    @Getter
+    @Setter
     private Era era;
-
-    @PostConstruct
-    void init() {
-        if (StringUtil.isEmpty(eraStr))
-            eraStr = "Conway";
-
-        era = Era.valueOf(eraStr);
-    }
 
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (!blockHeaderEvent.getMetadata().isSyncMode())
-            return;
-
-        if (blockHeaderEvent.getMetadata().getEra() != null
-                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Conway.value
+                &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
-            log.info("DRep stake distribution: Era changed to {}", era.name());
+            log.info("Current era: {}", era.name());
             log.info("Fetching dRep stake distribution ...");
             fetchAndSetDRepDistr();
         }
