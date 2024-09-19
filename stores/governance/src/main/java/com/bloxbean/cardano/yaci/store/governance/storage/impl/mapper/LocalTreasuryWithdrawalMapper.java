@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper;
 
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalTreasuryWithdrawal;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalTreasuryWithdrawal;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.LocalTreasuryWithdrawalEntity;
 import org.mapstruct.Mapper;
 

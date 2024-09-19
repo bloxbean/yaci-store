@@ -22,8 +22,10 @@ import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.*;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
@@ -61,6 +63,8 @@ public class LocalGovStateService {
     private final LocalHardForkInitiationStorage localHardForkInitiationStorage;
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
+    private final LocalConstitutionStorageReader localConstitutionStorageReader;
+    private final LocalCommitteeStorageReader localCommitteeStorageReader;
     private final EraService eraService;
     private final CursorService cursorService;
 
@@ -77,7 +81,7 @@ public class LocalGovStateService {
                                 LocalCommitteeStorage localCommitteeStorage,
                                 LocalHardForkInitiationStorage localHardForkInitiationStorage,
                                 GovActionProposalStorage govActionProposalStorage,
-                                LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage,
+                                LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, LocalConstitutionStorageReader localConstitutionStorageReader, LocalCommitteeStorageReader localCommitteeStorageReader,
                                 EraService eraService,
                                 CursorService cursorService) {
         this.localClientProviderManager = localClientProviderManager;
@@ -88,6 +92,8 @@ public class LocalGovStateService {
         this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
+        this.localConstitutionStorageReader = localConstitutionStorageReader;
+        this.localCommitteeStorageReader = localCommitteeStorageReader;
         this.eraService = eraService;
         this.cursorService = cursorService;
 
@@ -343,6 +349,10 @@ public class LocalGovStateService {
                                     .slot(slot)
                                     .build();
                         }).toList());
+    }
+
+    public Optional<LocalConstitution> getCurrentConstitution() {
+        return localConstitutionStorageReader.findByMaxSlot();
     }
 
     private LocalGovActionProposalStatus buildLocalGovActionProposal(GovActionId govActionId, GovActionStatus status, Integer epoch, Long slot) {

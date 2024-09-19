@@ -12,8 +12,9 @@ import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalDRepDistr;
-import com.bloxbean.cardano.yaci.store.governance.storage.LocalDRepDistrStorage;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +44,13 @@ import java.util.Optional;
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalDRepDistrStorage localDRepDistrStorage;
+    private final LocalDRepDistrStorageReader localDRepDistrStorageReader;
     private final EraService eraService;
 
-    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, EraService eraService) {
+    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, LocalDRepDistrStorageReader localDRepDistrStorageReader, EraService eraService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localDRepDistrStorage = localDRepDistrStorage;
+        this.localDRepDistrStorageReader = localDRepDistrStorageReader;
         this.eraService = eraService;
     }
 
@@ -144,5 +147,9 @@ public class LocalDRepDistrService {
         } catch (Exception e) {
             localClientProviderManager.close(localClientProvider.get());
         }
+    }
+
+    public Optional<LocalDRepDistr> getLatestDRepDistrByDRepHashAndEpoch(String dRepHash) {
+        return localDRepDistrStorageReader.findLatestLocalDRepDistrByDRepHash(dRepHash);
     }
 }

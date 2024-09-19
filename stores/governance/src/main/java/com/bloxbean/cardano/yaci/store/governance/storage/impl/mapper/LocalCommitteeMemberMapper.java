@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper;
 
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalCommitteeMember;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalCommitteeMember;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.LocalCommitteeMemberEntity;
 import org.mapstruct.Mapper;
 
