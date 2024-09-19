@@ -157,12 +157,9 @@ public class UtxoProcessor {
 //                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
         }
 
-        if (collateralOutputUtxo != null)
-            return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, List.of(collateralOutputUtxo)));
-        else {
-            log.warn("No input or output found for invalid transaction: " + transaction.getTxHash());
-            return Optional.empty();
-        }
+        List<AddressUtxo> outputs = collateralOutputUtxo != null? List.of(collateralOutputUtxo) : Collections.emptyList();
+
+        return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, outputs));
     }
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
