@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("${apiPrefix}/governance/live/dRep")
+@RequestMapping("${apiPrefix}/governance/live/dreps")
 @RequiredArgsConstructor
-@Tag(name = "Local Constitution Service", description = "Get dRep stake distribution from local Cardano Node.")
+@Tag(name = "Local DRep Service", description = "Get dRep stake distribution from local Cardano Node.")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
 @ConditionalOnExpression("${store.epoch.endpoints.drep.live.enabled:true}")
@@ -25,11 +25,12 @@ public class LocalDRepDistrController {
     private final LocalDRepDistrService localDRepDistrService;
 
     @GetMapping("/{dRepHash}/stake")
-    @Operation(description = "Get dRep hash distribution")
-    public ResponseEntity<LocalDRepStakeDto> getCommitteeInfo(@PathVariable String dRepHash) {
+    @Operation(description = "Get dRep stake distribution")
+    public ResponseEntity<LocalDRepStakeDto> getDRepStakeDistr(@PathVariable String dRepHash) {
         return localDRepDistrService.getLatestDRepDistrByDRepHashAndEpoch(dRepHash)
                 .map(localDRepDistr -> ResponseEntity.ok(LocalDRepStakeDto.builder()
                         .drepHash(localDRepDistr.getDrepHash())
+                        .drepType(localDRepDistr.getDrepType())
                         .epoch(localDRepDistr.getEpoch())
                         .amount(localDRepDistr.getAmount())
                         .build()))

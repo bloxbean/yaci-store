@@ -19,10 +19,10 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("${apiPrefix}/governance/live/committees")
 @RequiredArgsConstructor
-@Tag(name = "Local Committee Service", description = "Get committee info directly from local Cardano Node through n2c local query.")
+@Tag(name = "Local Committee Service", description = "Get committee info directly from local Cardano Node")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.committee.live.enabled:true}")
+@ConditionalOnExpression("${store.governance.endpoints.committee.live.enabled:true}")
 public class LocalCommitteeController {
     private final LocalCommitteeService localCommitteeService;
 

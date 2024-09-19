@@ -21,7 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Local Constitution Service", description = "Get constitution from local Cardano Node.")
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.constitution.live.enabled:true}")
+@ConditionalOnExpression("${store.governance.endpoints.constitution.live.enabled:true}")
 public class LocalConstitutionController {
     private final LocalGovStateService localGovStateService;
 
