@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ class LocalEpochParamsSchedulerTest {
     @Test
     void testScheduleFetchAndSetCurrentProtocolParams_AutoSyncEnabled() {
         Mockito.when(storeProperties.isSyncAutoStart()).thenReturn(true);
+        Mockito.when(protocolParamService.getEra()).thenReturn(Era.Shelley);
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
 
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
@@ -32,7 +34,7 @@ class LocalEpochParamsSchedulerTest {
     void testScheduleFetchAndSetCurrentProtocolParams_AutoSyncDisabled() {
         Mockito.when(storeProperties.isSyncAutoStart()).thenReturn(false);
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
-
+        
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
         Mockito.verify(protocolParamService, Mockito.never()).fetchAndSetCurrentProtocolParams();
     }

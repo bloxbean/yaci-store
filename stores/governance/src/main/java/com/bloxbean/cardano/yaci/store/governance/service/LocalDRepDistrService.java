@@ -7,22 +7,20 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
-import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
-import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import java.math.BigInteger;
@@ -54,33 +52,32 @@ public class LocalDRepDistrService {
         this.eraService = eraService;
     }
 
-    @Value("${store.cardano.n2c-era:Conway}")
-    private String eraStr;
+    @Getter
     private Era era;
-
-    @PostConstruct
-    void init() {
-        if (StringUtil.isEmpty(eraStr))
-            eraStr = "Conway";
-
-        era = Era.valueOf(eraStr);
-    }
 
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (!blockHeaderEvent.getMetadata().isSyncMode())
-            return;
-
-        if (blockHeaderEvent.getMetadata().getEra() != null
-                && !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name())) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Conway.value
+                && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
-            log.info("DRep stake distribution: Era changed to {}", era.name());
+            log.info("Current era: {}", era.name());
             log.info("Fetching dRep stake distribution ...");
             fetchAndSetDRepDistr();
         }
     }
 
-    @Transactional
+    @EventListener
+    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
+        if (!epochChangeEvent.getEventMetadata().isSyncMode()) {
+            return;
+        }
+
+        era = Era.valueOf(epochChangeEvent.getEra().name());
+
+        log.info("Epoch change event received. Fetching and updating dRep stake distribution");
+        fetchAndSetDRepDistr();
+    }
+
     public synchronized void fetchAndSetDRepDistr() {
         Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
