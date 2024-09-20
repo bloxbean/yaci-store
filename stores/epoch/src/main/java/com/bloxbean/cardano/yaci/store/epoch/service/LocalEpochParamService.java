@@ -16,13 +16,11 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.LocalEpochParamsStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -44,7 +42,6 @@ public class LocalEpochParamService {
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
 
     @Getter
-    @Setter
     private Era era;
 
     public LocalEpochParamService(LocalClientProviderManager localClientProviderManager,
@@ -62,7 +59,7 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Shelley.value
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Shelley.value
                 &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
@@ -90,7 +87,6 @@ public class LocalEpochParamService {
         fetchAndSetCurrentProtocolParams();
     }
 
-    @Transactional
     public synchronized void fetchAndSetCurrentProtocolParams() {
         Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {

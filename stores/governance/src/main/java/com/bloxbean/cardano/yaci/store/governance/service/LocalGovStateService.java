@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -27,14 +28,16 @@ import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionSt
 import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Nullable;
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 import java.math.BigInteger;
@@ -63,15 +66,13 @@ public class LocalGovStateService {
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
     private final LocalConstitutionStorageReader localConstitutionStorageReader;
-    private final LocalCommitteeStorageReader localCommitteeStorageReader;
+    private final PlatformTransactionManager transactionManager;
+
     private final EraService eraService;
-    private final CursorService cursorService;
+    private TransactionTemplate transactionTemplate;
 
     @Getter
-    @Setter
     private Era era;
-
-    private static final int MAX_BLOCK_DIFFERENCE = 20;
 
     public LocalGovStateService(@Nullable LocalClientProviderManager localClientProviderManager,
                                 LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage,
@@ -80,9 +81,9 @@ public class LocalGovStateService {
                                 LocalCommitteeStorage localCommitteeStorage,
                                 LocalHardForkInitiationStorage localHardForkInitiationStorage,
                                 GovActionProposalStorage govActionProposalStorage,
-                                LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, LocalConstitutionStorageReader localConstitutionStorageReader, LocalCommitteeStorageReader localCommitteeStorageReader,
-                                EraService eraService,
-                                CursorService cursorService) {
+                                LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, LocalConstitutionStorageReader localConstitutionStorageReader,
+                                PlatformTransactionManager transactionManager,
+                                EraService eraService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
         this.localConstitutionStorage = localConstitutionStorage;
@@ -92,17 +93,22 @@ public class LocalGovStateService {
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
         this.localConstitutionStorageReader = localConstitutionStorageReader;
-        this.localCommitteeStorageReader = localCommitteeStorageReader;
+        this.transactionManager = transactionManager;
         this.eraService = eraService;
-        this.cursorService = cursorService;
 
         log.info("LocalGovActionStateService initialized >>>");
     }
 
+    @PostConstruct
+    public void init() {
+        transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Conway.value
-                &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Conway.value
+                && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
             log.info("Fetching gov state ...");
@@ -110,7 +116,18 @@ public class LocalGovStateService {
         }
     }
 
-    @Transactional
+    @EventListener
+    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
+        if (!epochChangeEvent.getEventMetadata().isSyncMode()) {
+            return;
+        }
+
+        era = Era.valueOf(epochChangeEvent.getEra().name());
+
+        log.info("Epoch change event received. Fetching and updating local gov state");
+        fetchAndSetGovState();
+    }
+
     public synchronized void fetchAndSetGovState() {
         if (localClientProviderManager == null)
             throw new IllegalStateException("LocalClientProvider is not initialized. Please check n2c configuration.");
@@ -142,7 +159,10 @@ public class LocalGovStateService {
                             log.error("Gov state sync error {}", throwable.getMessage()))
                     .doFinally(signalType ->
                             localClientProviderManager.close(localClientProvider.get()))
-                    .subscribe(this::handleGovStateQueryResult);
+                    .subscribe(govStateQueryResult ->
+                            transactionTemplate.executeWithoutResult(status ->
+                                    handleGovStateQueryResult(govStateQueryResult))
+                    );
 
         } catch (Exception e) {
             localClientProviderManager.close(localClientProvider.get());
@@ -159,8 +179,6 @@ public class LocalGovStateService {
         var tip = epochAndTip.get()._1;
         var currentEpoch = epochAndTip.get()._2;
         var slot = tip.getPoint().getSlot();
-
-        var latestCursor = cursorService.getCursor();
 
         List<LocalGovActionProposalStatus> ratifiedGovActionsInPrevEpoch = localGovActionProposalStatusStorage
                 .findByEpochAndStatusIn(currentEpoch - 1, List.of(GovActionStatus.RATIFIED));
@@ -185,11 +203,6 @@ public class LocalGovStateService {
                         .transactionId(entity.getGovActionTxHash())
                         .gov_action_index((int) entity.getGovActionIndex())
                         .build()).toList();
-
-        if (latestCursor.isEmpty() || tip.getBlock() > latestCursor.get().getBlock() + MAX_BLOCK_DIFFERENCE) {
-            log.info("The max processed block is not close to the tip, ignore handling local treasury withdrawals and local hard fork initiation data");
-            return;
-        }
 
         handleTreasuryWithdrawals(enactedGovActionIds, currentEpoch, slot);
         handleHardForkInitiation(enactedGovActionIds, currentEpoch, slot);
