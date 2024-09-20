@@ -23,7 +23,7 @@ class LocalEpochParamsSchedulerTest {
     @Test
     void testScheduleFetchAndSetCurrentProtocolParams_AutoSyncEnabled() {
         Mockito.when(storeProperties.isSyncAutoStart()).thenReturn(true);
-
+        Mockito.when(protocolParamService.getEra()).thenReturn(Era.Shelley);
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
 
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
@@ -33,7 +33,6 @@ class LocalEpochParamsSchedulerTest {
     @Test
     void testScheduleFetchAndSetCurrentProtocolParams_AutoSyncDisabled() {
         Mockito.when(storeProperties.isSyncAutoStart()).thenReturn(false);
-        Mockito.when(protocolParamService.getEra()).thenReturn(Era.Shelley);
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
         
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
