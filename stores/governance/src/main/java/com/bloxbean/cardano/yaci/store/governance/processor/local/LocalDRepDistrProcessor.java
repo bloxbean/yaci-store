@@ -1,9 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governance.processor.local;
 
-import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalDRepDistrService;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
@@ -36,19 +34,6 @@ public class LocalDRepDistrProcessor {
     @EventListener
     public void blockEvent(BlockEvent blockEvent) {
         syncMode = blockEvent.getMetadata().isSyncMode();
-    }
-
-    @EventListener
-    @Transactional
-    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        syncMode = epochChangeEvent.getEventMetadata().isSyncMode();
-        if (!syncMode)
-            return;
-
-        localDRepDistrService.setEra(Era.valueOf(epochChangeEvent.getEra().name()));
-
-        log.info("Epoch change event received. Fetching and updating dRep stake distribution");
-        localDRepDistrService.fetchAndSetDRepDistr();
     }
 
     @EventListener

@@ -11,17 +11,16 @@ import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
+import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import java.math.BigInteger;
@@ -54,13 +53,12 @@ public class LocalDRepDistrService {
     }
 
     @Getter
-    @Setter
     private Era era;
 
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= Era.Conway.value
-                &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Conway.value
+                && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
             log.info("Fetching dRep stake distribution ...");
@@ -68,7 +66,18 @@ public class LocalDRepDistrService {
         }
     }
 
-    @Transactional
+    @EventListener
+    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
+        if (!epochChangeEvent.getEventMetadata().isSyncMode()) {
+            return;
+        }
+
+        era = Era.valueOf(epochChangeEvent.getEra().name());
+
+        log.info("Epoch change event received. Fetching and updating dRep stake distribution");
+        fetchAndSetDRepDistr();
+    }
+
     public synchronized void fetchAndSetDRepDistr() {
         Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
