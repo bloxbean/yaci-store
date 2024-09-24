@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(name = "Local DRep Service", description = "Get dRep stake distribution from local Cardano Node.")
 @Slf4j
-@ConditionalOnBean(LocalGovStateService.class)
+@ConditionalOnBean(LocalDRepDistrService.class)
 @ConditionalOnExpression("${store.epoch.endpoints.drep.live.enabled:true}")
 public class LocalDRepDistrController {
     private final LocalDRepDistrService localDRepDistrService;
