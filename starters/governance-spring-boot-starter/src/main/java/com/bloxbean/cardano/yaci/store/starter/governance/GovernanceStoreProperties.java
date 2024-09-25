@@ -27,14 +27,14 @@ public class GovernanceStoreProperties {
     @Getter
     @Setter
     public static final class Endpoints {
-        private Endpoint govActionProposal = new Endpoint();
-        private Endpoint votingProcedure = new Endpoint();
+        private Endpoint proposal = new Endpoint();
+        private Endpoint vote = new Endpoint();
         private EnhancedEndpoint constitution = new EnhancedEndpoint();
         private EnhancedEndpoint committee = new EnhancedEndpoint();
         private EnhancedEndpoint drep = new EnhancedEndpoint();
         private Endpoint delegationVote = new Endpoint();
     }
-    
+
     @Getter
     @Setter
     public static final class Endpoint {
@@ -47,7 +47,7 @@ public class GovernanceStoreProperties {
         private boolean enabled = true;
         private Live live = new Live();
     }
-    
+
     @Getter
     @Setter
     private static final class Live {
