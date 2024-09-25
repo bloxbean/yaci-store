@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.api.governance.controller.local;
 
 import com.bloxbean.cardano.yaci.store.api.governance.dto.local.LocalDRepStakeDto;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalDRepDistrService;
-import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Tag(name = "Local DRep Service", description = "Get dRep stake distribution from local Cardano Node.")
 @Slf4j
 @ConditionalOnBean(LocalDRepDistrService.class)
-@ConditionalOnExpression("${store.epoch.endpoints.drep.live.enabled:true}")
+@ConditionalOnExpression("${store.governance.endpoints.drep.live.enabled:true}")
 public class LocalDRepDistrController {
     private final LocalDRepDistrService localDRepDistrService;
 
