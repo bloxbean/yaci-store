@@ -79,20 +79,7 @@ A table for rollback history.
 
 # III. Epoch store
 
-## 1. local_protocol_params
-
-A table for protocol parameters fetched from Node using node-to-client protocol
-
-* Primary Id: `id`
-
-| **Column name** | **Type**  | **Description**                              |
-| :-------------- | :-------- | :------------------------------------------- |
-| **id**          | bigint    | Unique identifier                            |
-| params          | jsonb     | JSON document containing protocol parameters |
-| create_datetime | timestamp | Date and time the record was created         |
-| update_datetime | timestamp | Date and time the record was last updated    |
-
-## 2. protocol_params_proposal
+## 1. protocol_params_proposal
 
 A table containing block chain parameter change proposals.
 
@@ -111,7 +98,7 @@ A table containing block chain parameter change proposals.
 | block_time      | bigint      | Block creation timestamp                                                               |
 | update_datetime | timestamp   | Date and time the record was last updated                                              |
 
-## 3. epoch_param
+## 2. epoch_param
 
 The accepted protocol parameters for an epoch.
 
@@ -127,7 +114,7 @@ The accepted protocol parameters for an epoch.
 | block_time      | bigint      | Block creation timestamp                                 |
 | update_datetime | timestamp   | Date and time the record was last updated                |
 
-## 4. cost_model
+## 3. cost_model
 
 Cost model for epoch param and param proposal.
 
@@ -308,6 +295,39 @@ A table for members of the committee. A committee can have multiple members.
 | cred_type       | varchar(40) | Type of credential used for registration (ADDR_KEYHASH, SCRIPTHASH) |
 | expired_epoch   | int         | The epoch this member expires                                       |
 | update_datetime | timestamp   | Date and time the record was last updated                           |
+
+## 8. constitution
+
+A table for constitution attached to a GovActionProposal.
+
+* Primary Id: {`active_epoch`}
+
+| **Column name**  | **Type**    | **Description**                            |
+| ---------------- | ----------- | ------------------------------------------ |
+| **active_epoch** | int         | The cold key of committee member           |
+| anchor_url       | varchar     | A URL to a JSON payload of metadata        |
+| anchor_hash      | varchar(64) | A hash of the contents of the metadata URL |
+| script           | varchar(64) | Hash of the transaction script data        |
+| slot             | bigint      | Slot number                                |
+| update_datetime  | timestamp   | Date and time the record was last updated  |
+
+## 9. committee
+
+A table for new committee proposed on a GovActionProposal.
+
+* Primary Id: {`epoch`}
+
+| **Column name**       | **Type**    | **Description**                                             |
+| --------------------- | ----------- | ----------------------------------------------------------- |
+| **epoch**             | int         | Epoch number                                                |
+| gov_action_tx_hash    | varchar(64) | Hash of the tx that includes this certificate               |
+| gov_action_index      | int         | The index of this proposal procedure within its transaction |
+| threshold_numerator   | bigint      | The threshold numerator                                     |
+| threshold_denominator | bigint      | The threshold denominator                                   |
+| threshold             | float       | The threshold as a decimal number                           |
+| slot                  | bigint      | Slot number                                                 |
+| update_datetime       | timestamp   | Date and time the record was last updated                   |
+
 
 # VI. Live store
 
@@ -751,4 +771,107 @@ Conway(7);
 | block           | bigint      | Block number that marks the start of the era |
 | block_hash      | varchar(64) | Hash of the block that starts the era        |
 
+
+# XV. Local node data
+
+## 1. local_epoch_param
+
+A table for epoch parameters fetched from Node using node-to-client protocol
+
+* Primary Id: `epoch`
+
+| **Column name** | **Type**  | **Description**                                       |
+| :-------------- | :-------- | :---------------------------------------------------- |
+| **epoch**       | integer   | The first epoch for which these parameters are valid. |
+| params          | jsonb     | JSON document containing protocol parameters          |
+| update_datetime | timestamp | Date and time the record was last updated             |
+
+## 2. local_committee
+
+A table for committee fetched from Node using node-to-client protocol
+
+* Primary Id: `epoch`
+
+| **Column name** | **Type**  | **Description**                              |
+| :-------------- | :-------- | :------------------------------------------- |
+| **epoch**       | integer   | Epoch number.                                |
+| threshold       | float     | JSON document containing protocol parameters |
+| slot            | bigint    | Slot number                                  |
+| update_datetime | timestamp | Date and time the record was last updated    |
+
+## 3. local_committee_member
+
+A table for committee member fetched from Node using node-to-client protocol
+
+* Primary Id: {`hash`, `epoch`}
+
+| **Column name** | **Type**    | **Description**                                                     |
+| --------------- | ----------- | ------------------------------------------------------------------- |
+| **hash**        | varchar(56) | Hash of the tx that includes this certificate                       |
+| **epoch**       | bigint      | Epoch number                                                        |
+| cred_type       | varchar(40) | Type of credential used for registration (ADDR_KEYHASH, SCRIPTHASH) |
+| expired_epoch   | int         | The epoch this member expires                                       |
+| slot            | bigint      | Slot number                                                         |
+| update_datetime | timestamp   | Date and time the record was last updated                           |
+
+## 4. local_constitution
+
+A table for constitution fetched from Node using node-to-client protocol
+
+* Primary Id: {`epoch`}
+
+| **Column name** | **Type**    | **Description**                                     |
+| --------------- | ----------- | --------------------------------------------------- |
+| **epoch**       | int         | Epoch number                                        |
+| anchor_url      | varchar     | A URL to a JSON payload of metadata                 |
+| anchor_hash     | varchar(64) | Hash of the off-chain data pointed to by anchor_url |
+| script          | varchar(64) | Hash of the transaction script data                 |
+| slot            | bigint      | Slot number                                         |
+| update_datetime | timestamp   | Date and time the record was last updated           |
+
+## 5. local_drep_dist
+
+A table for the distribution of voting power per DRep fetched from Node using node-to-client protocol
+
+* Primary Id: {`drep_hash`,`epoch`}
+
+| **Column name** | **Type**    | **Description**                                                 |
+| --------------- | ----------- | --------------------------------------------------------------- |
+| **drep_hash**   | varchar(56) | Hash of DRep                                                    |
+| **epoch**       | int         | Epoch number                                                    |
+| drep_type       | varchar(40) | Type of DRep (ADDR_KEYHASH, SCRIPTHASH, ABSTAIN, NO_CONFIDENCE) |
+| amount          | bigint      | The total amount of voting power this DRep is delegated         |
+| slot            | bigint      | Slot number                                                     |
+| update_datetime | timestamp   | Date and time the record was last updated                       |
+
+## 6. local_gov_action_proposal_status
+
+A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal fetched from Node using node-to-client protocol
+
+* Primary Id: {`gov_action_tx_hash`, `gov_action_index`, `epoch`}
+
+| **Column name**        | **Type**    | **Description**                                                    |
+| ---------------------- | ----------- | ------------------------------------------------------------------ |
+| **gov_action_tx_hash** | varchar(64) | Hash of the tx that includes this certificate                      |
+| **gov_action_index**   | int         | The index of this proposal procedure within its transaction        |
+| **epoch**              | int         | Epoch number                                                       |
+| status                 | varchar(20) | Status of gov_action_proposal (ACTIVE, RATIFIED, ENACTED, EXPIRED) |
+| slot                   | bigint      | Slot number                                                        |
+| update_datetime        | timestamp   | Date and time the record was last updated                          |
+
+## 7. local_treasury_withdrawal
+
+A table for all treasury withdrawals proposed on a GovActionProposal fetched from Node using node-to-client protocol
+
+* Primary Id: {`gov_action_tx_hash`, `gov_action_index`, `address`}
+
+| **Column name**        | **Type**     | **Description**                                             |
+| ---------------------- | ------------ | ----------------------------------------------------------- |
+| **gov_action_tx_hash** | varchar(64)  | Hash of the tx that includes this certificate               |
+| **gov_action_index**   | int          | The index of this proposal procedure within its transaction |
+| **address**            | varchar(255) | The address that benefits from this withdrawal.             |
+| amount                 | bigint       | The amount for this withdrawl.                              |
+| epoch                  | int          | Epoch number                                                |
+| slot                   | bigint       | Slot number                                                 |
+| update_datetime        | timestamp    | Date and time the record was last updated                   |
 
