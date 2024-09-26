@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregatio
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,12 @@ import java.util.concurrent.TimeUnit;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "store",
+        name = "read-only-mode",
+        havingValue = "false",
+        matchIfMissing = true
+)
 @Slf4j
 public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBlock> {
     private final ApplicationEventPublisher publisher;

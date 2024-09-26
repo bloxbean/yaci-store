@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "store",
+        name = "read-only-mode",
+        havingValue = "false",
+        matchIfMissing = true
+)
 public class GenesisConfig {
     public static final int PREVIEW_EPOCH_LENGTH = 86400;
     public static final int DEFAULT_SECURITY_PARAM = 2160;
