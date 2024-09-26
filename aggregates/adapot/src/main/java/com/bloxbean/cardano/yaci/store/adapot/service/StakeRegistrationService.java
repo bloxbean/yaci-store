@@ -33,8 +33,8 @@ public class StakeRegistrationService {
          AND s2.epoch <= ?
          AND (
              (s2.slot > s.slot) OR
-             (s2.slot = s.slot AND s2.cert_index > s.cert_index) OR
-             (s2.slot = s.slot AND s2.cert_index = s.cert_index AND s2.tx_index > s.tx_index)
+             (s2.slot = s.slot AND s2.tx_index > s.tx_index) OR
+             (s2.slot = s.slot AND s2.tx_index = s.tx_index AND s2.cert_index > s.cert_index)
          )
          AND s2.slot < ?
          AND s2.type = 'STAKE_REGISTRATION'
@@ -54,8 +54,8 @@ public class StakeRegistrationService {
                                 .and(s2.EPOCH.le(epoch))
                                 .and(
                                         s2.SLOT.gt(s.SLOT)
-                                        .or(s2.SLOT.eq(s.SLOT).and(s2.CERT_INDEX.gt(s.CERT_INDEX)))
-                                        .or(s2.SLOT.eq(s.SLOT).and(s2.CERT_INDEX.eq(s.CERT_INDEX)).and(s2.TX_INDEX.gt(s.TX_INDEX)))
+                                        .or(s2.SLOT.eq(s.SLOT).and(s2.TX_INDEX.gt(s.TX_INDEX)))
+                                        .or(s2.SLOT.eq(s.SLOT).and(s2.TX_INDEX.eq(s.TX_INDEX)).and(s2.CERT_INDEX.gt(s.CERT_INDEX)))
                                 )
                                 .and(s2.SLOT.lt(absoluteSlot))
                                 .and(s2.TYPE.eq("STAKE_REGISTRATION")))
