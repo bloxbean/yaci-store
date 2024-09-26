@@ -875,3 +875,21 @@ A table for all treasury withdrawals proposed on a GovActionProposal fetched fro
 | slot                   | bigint       | Slot number                                                 |
 | update_datetime        | timestamp    | Date and time the record was last updated                   |
 
+## 8. local_hard_fork_initiation
+
+A table contains information about proposals on a GovActionProposal of type HARD_FORK_INITITAION that have been enacted
+fetched from Node using
+node-to-client protocol
+
+* Primary Id: {`gov_action_tx_hash`, `gov_action_index`}
+
+| **Column name**        | **Type**    | **Description**                                             |
+|------------------------|-------------|-------------------------------------------------------------|
+| **gov_action_tx_hash** | varchar(64) | Hash of the tx that includes this certificate               |
+| **gov_action_index**   | int         | The index of this proposal procedure within its transaction |
+| major_version          | int         | The major protocol version.                                 |
+| minor_version          | int         | The minor protocol version.                                 |
+| epoch                  | int         | Epoch number                                                |
+| slot                   | bigint      | Slot number                                                 |
+| update_datetime        | timestamp   | Date and time the record was last updated                   |
+
