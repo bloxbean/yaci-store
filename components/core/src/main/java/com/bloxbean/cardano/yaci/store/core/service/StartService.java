@@ -15,12 +15,19 @@ import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "store",
+        name = "read-only-mode",
+        havingValue = "false",
+        matchIfMissing = true
+)
 @RequiredArgsConstructor
 @Slf4j
 public class StartService {

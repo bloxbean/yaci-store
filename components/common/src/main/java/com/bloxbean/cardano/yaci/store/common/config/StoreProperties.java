@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class StoreProperties { //TODO - replace this with YaciStoreProperties from starter
     private Long eventPublisherId;
     private boolean syncAutoStart;
+    private boolean readOnlyMode;
     private boolean primaryInstance;
 
     private String cardanoHost;

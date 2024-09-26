@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "store",
+        name = "read-only-mode",
+        havingValue = "false",
+        matchIfMissing = true
+)
 @Slf4j
 public class CursorServiceImpl implements CursorService {
     private final CursorStorage cursorStorage;

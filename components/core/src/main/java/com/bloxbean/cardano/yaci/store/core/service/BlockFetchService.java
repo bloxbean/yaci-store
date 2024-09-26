@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "store",
+        name = "read-only-mode",
+        havingValue = "false",
+        matchIfMissing = true
+)
 @RequiredArgsConstructor
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {

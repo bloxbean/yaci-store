@@ -54,6 +54,7 @@ public class YaciStoreAutoConfiguration {
     //configuration
 
     @Bean
+    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     public TipFinder tipFinder() {
         TipFinder tipFinder = new TipFinder(properties.getCardano().getHost(), properties.getCardano().getPort(),
                 Point.ORIGIN, properties.getCardano().getProtocolMagic());
@@ -62,6 +63,7 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     @Scope("prototype")
     public BlockRangeSync blockRangeSync() {
         log.info("Creating BlockRangeSync to fetch blocks");
@@ -70,18 +72,21 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     public BlockSync blockSync() {
         BlockSync blockSync = new BlockSync(properties.getCardano().getHost(), properties.getCardano().getPort(), properties.getCardano().getProtocolMagic(), Point.ORIGIN);
         return blockSync;
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     public GenesisBlockFinder genesisBlockFinder() {
         GenesisBlockFinder genesisBlockFinder = new GenesisBlockFinder(properties.getCardano().getHost(), properties.getCardano().getPort(), properties.getCardano().getProtocolMagic());
         return genesisBlockFinder;
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     public BlockFinder blockFinder(BlockSync blockSync) {
         BlockFinder blockFinder = new BlockFinder(blockSync);
         return blockFinder;
@@ -179,6 +184,7 @@ public class YaciStoreAutoConfiguration {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setEventPublisherId(properties.getEventPublisherId());
         storeProperties.setSyncAutoStart(properties.isSyncAutoStart());
+        storeProperties.setReadOnlyMode(properties.isReadOnlyMode());
 
         storeProperties.setCardanoHost(properties.getCardano().getHost());
         storeProperties.setCardanoPort(properties.getCardano().getPort());
