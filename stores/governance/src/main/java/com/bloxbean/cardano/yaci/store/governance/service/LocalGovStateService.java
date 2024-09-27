@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupportCondition;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
@@ -30,8 +31,6 @@ import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,13 +46,12 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 @Slf4j
-@ConditionalOnProperty(
-        prefix = "store.governance",
-        name = "n2c-gov-state-enabled",
-        havingValue = "true",
-        matchIfMissing = true
+@LocalSupportCondition(
+    prefix = "store.governance",
+    name = "n2c-gov-state-enabled",
+    havingValue = "true",
+    matchIfMissing = true
 )
 public class LocalGovStateService {
     private final LocalClientProviderManager localClientProviderManager;
