@@ -15,7 +15,6 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
-import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
@@ -65,9 +64,7 @@ public class LocalGovStateService {
     private final LocalHardForkInitiationStorage localHardForkInitiationStorage;
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
-    private final LocalConstitutionStorageReader localConstitutionStorageReader;
     private final PlatformTransactionManager transactionManager;
-
     private final EraService eraService;
     private TransactionTemplate transactionTemplate;
 
@@ -92,7 +89,6 @@ public class LocalGovStateService {
         this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
-        this.localConstitutionStorageReader = localConstitutionStorageReader;
         this.transactionManager = transactionManager;
         this.eraService = eraService;
 
@@ -350,10 +346,6 @@ public class LocalGovStateService {
                                     .slot(slot)
                                     .build();
                         }).toList());
-    }
-
-    public Optional<LocalConstitution> getCurrentConstitution() {
-        return localConstitutionStorageReader.findByMaxSlot();
     }
 
     private LocalGovActionProposalStatus buildLocalGovActionProposal(GovActionId govActionId, GovActionStatus status, Integer epoch, Long slot) {
