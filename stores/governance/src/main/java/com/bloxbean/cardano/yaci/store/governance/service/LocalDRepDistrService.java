@@ -14,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -42,13 +41,12 @@ import java.util.Optional;
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalDRepDistrStorage localDRepDistrStorage;
-    private final LocalDRepDistrStorageReader localDRepDistrStorageReader;
     private final EraService eraService;
 
-    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, LocalDRepDistrStorageReader localDRepDistrStorageReader, EraService eraService) {
+    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage,
+                                 EraService eraService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localDRepDistrStorage = localDRepDistrStorage;
-        this.localDRepDistrStorageReader = localDRepDistrStorageReader;
         this.eraService = eraService;
     }
 
@@ -146,7 +144,4 @@ public class LocalDRepDistrService {
         }
     }
 
-    public Optional<LocalDRepDistr> getLatestDRepDistrByDRepHashAndEpoch(String dRepHash) {
-        return localDRepDistrStorageReader.findLatestLocalDRepDistrByDRepHash(dRepHash);
-    }
 }
