@@ -46,7 +46,6 @@ public class StoreConfiguration {
 
     @Bean
     @ConditionalOnExpression("${store.cardano.cursor-no-of-blocks-to-keep:1} > 0")
-//    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
     @ReadOnly(false)
     public CursorCleanupScheduler cursorCleanupScheduler(CursorStorage cursorStorage, StoreProperties storeProperties) {
         log.info("<<< Enable CursorCleanupScheduler >>>");
