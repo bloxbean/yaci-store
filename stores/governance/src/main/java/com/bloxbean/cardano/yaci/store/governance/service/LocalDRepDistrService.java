@@ -8,17 +8,17 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistr
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
+import com.bloxbean.cardano.yaci.store.governance.annotation.LocalDRepStake;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -31,24 +31,19 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
-@ConditionalOnProperty(
-        prefix = "store.governance",
-        name = "n2c-drep-stake-enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
+@LocalSupport
+@LocalDRepStake
+@ReadOnly(false)
 @Slf4j
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalDRepDistrStorage localDRepDistrStorage;
-    private final LocalDRepDistrStorageReader localDRepDistrStorageReader;
     private final EraService eraService;
 
-    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage, LocalDRepDistrStorageReader localDRepDistrStorageReader, EraService eraService) {
+    public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage,
+                                 EraService eraService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localDRepDistrStorage = localDRepDistrStorage;
-        this.localDRepDistrStorageReader = localDRepDistrStorageReader;
         this.eraService = eraService;
     }
 
@@ -146,7 +141,4 @@ public class LocalDRepDistrService {
         }
     }
 
-    public Optional<LocalDRepDistr> getLatestDRepDistrByDRepHashAndEpoch(String dRepHash) {
-        return localDRepDistrStorageReader.findLatestLocalDRepDistrByDRepHash(dRepHash);
-    }
 }

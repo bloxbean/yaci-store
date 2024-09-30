@@ -1,10 +1,12 @@
 package com.bloxbean.cardano.yaci.store.core.configuration;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component("EpochConfig")
+@ReadOnly(false)
 @RequiredArgsConstructor
 public class EpochConfig {
     private final GenesisConfig genesisConfig;

@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.api.governance.dto.local.LocalCommitteeMe
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalCommittee;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalCommitteeMember;
 import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
+import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateServiceReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalCommitteeMemberStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalCommitteeStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +17,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-@ConditionalOnBean(LocalGovStateService.class)
+@ConditionalOnBean(LocalGovStateServiceReader.class)
 public class LocalCommitteeService {
     private final LocalCommitteeStorageReader localCommitteeStorageReader;
     private final LocalCommitteeMemberStorageReader localCommitteeMemberStorageReader;

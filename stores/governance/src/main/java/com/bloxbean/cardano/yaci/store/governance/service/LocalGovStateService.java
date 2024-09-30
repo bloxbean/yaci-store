@@ -15,12 +15,14 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
-import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
+import com.bloxbean.cardano.yaci.store.governance.annotation.LocalGovState;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -31,8 +33,6 @@ import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,14 +48,10 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
+@LocalSupport
+@LocalGovState
+@ReadOnly(false)
 @Slf4j
-@ConditionalOnProperty(
-        prefix = "store.governance",
-        name = "n2c-gov-state-enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
 public class LocalGovStateService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;
@@ -65,9 +61,7 @@ public class LocalGovStateService {
     private final LocalHardForkInitiationStorage localHardForkInitiationStorage;
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
-    private final LocalConstitutionStorageReader localConstitutionStorageReader;
     private final PlatformTransactionManager transactionManager;
-
     private final EraService eraService;
     private TransactionTemplate transactionTemplate;
 
@@ -92,7 +86,6 @@ public class LocalGovStateService {
         this.localTreasuryWithdrawalStorage = localTreasuryWithdrawalStorage;
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
-        this.localConstitutionStorageReader = localConstitutionStorageReader;
         this.transactionManager = transactionManager;
         this.eraService = eraService;
 
@@ -350,10 +343,6 @@ public class LocalGovStateService {
                                     .slot(slot)
                                     .build();
                         }).toList());
-    }
-
-    public Optional<LocalConstitution> getCurrentConstitution() {
-        return localConstitutionStorageReader.findByMaxSlot();
     }
 
     private LocalGovActionProposalStatus buildLocalGovActionProposal(GovActionId govActionId, GovActionStatus status, Integer epoch, Long slot) {
