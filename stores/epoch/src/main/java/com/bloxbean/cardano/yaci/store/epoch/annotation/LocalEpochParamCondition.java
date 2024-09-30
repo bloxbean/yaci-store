@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core.annotation;
+package com.bloxbean.cardano.yaci.store.epoch.annotation;
 
 import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;

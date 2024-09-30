@@ -8,13 +8,13 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistr
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import com.bloxbean.cardano.yaci.store.core.annotation.LocalDRepStake;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
+import com.bloxbean.cardano.yaci.store.governance.annotation.LocalDRepStake;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorage;
 import lombok.Getter;

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.core.annotation;
+package com.bloxbean.cardano.yaci.store.governance.annotation;
 
 import org.springframework.context.annotation.Conditional;
 

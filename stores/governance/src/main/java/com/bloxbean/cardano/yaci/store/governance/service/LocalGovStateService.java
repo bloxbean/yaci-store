@@ -16,14 +16,13 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import com.bloxbean.cardano.yaci.store.core.annotation.LocalEpochParam;
-import com.bloxbean.cardano.yaci.store.core.annotation.LocalGovState;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
+import com.bloxbean.cardano.yaci.store.governance.annotation.LocalGovState;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -50,8 +49,8 @@ import java.util.Optional;
 
 @Component
 @LocalSupport
-@ReadOnly(false)
 @LocalGovState
+@ReadOnly(false)
 @Slf4j
 public class LocalGovStateService {
     private final LocalClientProviderManager localClientProviderManager;
