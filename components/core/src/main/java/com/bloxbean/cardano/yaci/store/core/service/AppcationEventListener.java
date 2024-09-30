@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.core.service;
 import com.bloxbean.cardano.yaci.store.common.cache.MVStoreFactory;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -20,7 +21,7 @@ import java.io.File;
         havingValue = "true",
         matchIfMissing = true
 )
-@ConditionalOnExpression("${store.read-only-mode:false} == false")
+@ReadOnly(false)
 @Slf4j
 public class AppcationEventListener {
     private final StartService startService;

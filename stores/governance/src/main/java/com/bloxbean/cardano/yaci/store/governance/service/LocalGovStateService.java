@@ -16,7 +16,10 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupportCondition;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalEpochParam;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalGovState;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
@@ -46,13 +49,10 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
+@LocalSupport
+@ReadOnly(false)
+@LocalGovState
 @Slf4j
-@LocalSupportCondition(
-    prefix = "store.governance",
-    name = "n2c-gov-state-enabled",
-    havingValue = "true",
-    matchIfMissing = true
-)
 public class LocalGovStateService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;

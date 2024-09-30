@@ -1,14 +1,14 @@
 package com.bloxbean.cardano.yaci.store.governance.service;
 
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalDRepDistr;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.LocalDRepDistrStorageReader;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
 @Component
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
+@LocalSupport
 public class LocalDRepDistServiceReader {
     private final LocalDRepDistrStorageReader localDRepDistrStorageReader;
 

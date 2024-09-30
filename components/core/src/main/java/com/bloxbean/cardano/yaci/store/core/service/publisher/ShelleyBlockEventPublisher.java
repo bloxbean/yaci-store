@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -30,12 +31,7 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
-@ConditionalOnProperty(
-        prefix = "store",
-        name = "read-only-mode",
-        havingValue = "false",
-        matchIfMissing = true
-)
+@ReadOnly(false)
 @Slf4j
 public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private final ApplicationEventPublisher publisher;

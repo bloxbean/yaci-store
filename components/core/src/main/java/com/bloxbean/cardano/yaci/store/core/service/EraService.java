@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -12,19 +13,13 @@ import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Optional;
 
 @Component
-@ConditionalOnProperty(
-        prefix = "store",
-        name = "read-only-mode",
-        havingValue = "false",
-        matchIfMissing = true
-)
+@ReadOnly(false)
 @RequiredArgsConstructor
 @Slf4j
 public class EraService {

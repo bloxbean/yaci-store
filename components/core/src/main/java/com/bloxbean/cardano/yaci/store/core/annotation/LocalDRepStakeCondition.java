@@ -6,18 +6,17 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 /**
- * Condition to check if local data support is enabled.
- * It is enabled if either store.cardano.n2c-node-socket-path or store.cardano.n2c-host is specified.
+ * Condition to check if store.governance.n2c-drep-stake-enabled property is set to true.
+ * This is used to enable or disable local drep stake distribution in the store.
  */
-public class LocalSupportCondition implements Condition {
+public class LocalDRepStakeCondition implements Condition {
 
     @Override
     public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
         Environment env = context.getEnvironment();
 
-        String n2cNodeSocketPath = env.getProperty("store.cardano.n2c-node-socket-path", "");
-        String n2cHost = env.getProperty("store.cardano.n2c-host", "");
+        String localEpochParamEnabled = env.getProperty("store.governance.n2c-drep-stake-enabled", "true");
 
-        return !n2cNodeSocketPath.isEmpty() || !n2cHost.isEmpty();
+        return localEpochParamEnabled.equals("true");
     }
 }

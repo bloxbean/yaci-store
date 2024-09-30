@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -12,7 +13,6 @@ import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregatio
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +26,7 @@ import java.util.concurrent.TimeUnit;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
-@ConditionalOnProperty(
-        prefix = "store",
-        name = "read-only-mode",
-        havingValue = "false",
-        matchIfMissing = true
-)
+@ReadOnly(false)
 @Slf4j
 public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBlock> {
     private final ApplicationEventPublisher publisher;

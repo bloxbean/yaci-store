@@ -1,17 +1,12 @@
 package com.bloxbean.cardano.yaci.store.core.configuration;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component("EpochConfig")
-@ConditionalOnProperty(
-        prefix = "store",
-        name = "read-only-mode",
-        havingValue = "false",
-        matchIfMissing = true
-)
+@ReadOnly(false)
 @RequiredArgsConstructor
 public class EpochConfig {
     private final GenesisConfig genesisConfig;

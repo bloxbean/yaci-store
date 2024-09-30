@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
@@ -45,7 +46,8 @@ public class StoreConfiguration {
 
     @Bean
     @ConditionalOnExpression("${store.cardano.cursor-no-of-blocks-to-keep:1} > 0")
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+//    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     public CursorCleanupScheduler cursorCleanupScheduler(CursorStorage cursorStorage, StoreProperties storeProperties) {
         log.info("<<< Enable CursorCleanupScheduler >>>");
         log.info("CursorCleanupScheduler will run every {} sec", storeProperties.getCursorCleanupInterval());
