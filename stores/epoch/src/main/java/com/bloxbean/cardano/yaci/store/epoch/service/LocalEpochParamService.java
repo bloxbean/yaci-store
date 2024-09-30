@@ -8,7 +8,9 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.CurrentProtoco
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupportCondition;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalEpochParam;
+import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
@@ -26,11 +28,9 @@ import java.time.Duration;
 import java.util.Optional;
 
 @Component
-@LocalSupportCondition(
-        prefix = "store.epoch",
-        name = "n2c-epoch-param-enabled",
-        havingValue = "true",
-        matchIfMissing = true)
+@LocalSupport
+@ReadOnly(false)
+@LocalEpochParam
 @Slf4j
 public class LocalEpochParamService {
     private final LocalClientProviderManager localClientProviderManager;

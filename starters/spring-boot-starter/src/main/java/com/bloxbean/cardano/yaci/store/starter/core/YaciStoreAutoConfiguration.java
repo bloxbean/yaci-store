@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderPoolObjectFactory;
@@ -54,7 +55,7 @@ public class YaciStoreAutoConfiguration {
     //configuration
 
     @Bean
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     public TipFinder tipFinder() {
         TipFinder tipFinder = new TipFinder(properties.getCardano().getHost(), properties.getCardano().getPort(),
                 Point.ORIGIN, properties.getCardano().getProtocolMagic());
@@ -63,7 +64,7 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     @Scope("prototype")
     public BlockRangeSync blockRangeSync() {
         log.info("Creating BlockRangeSync to fetch blocks");
@@ -72,21 +73,21 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     public BlockSync blockSync() {
         BlockSync blockSync = new BlockSync(properties.getCardano().getHost(), properties.getCardano().getPort(), properties.getCardano().getProtocolMagic(), Point.ORIGIN);
         return blockSync;
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     public GenesisBlockFinder genesisBlockFinder() {
         GenesisBlockFinder genesisBlockFinder = new GenesisBlockFinder(properties.getCardano().getHost(), properties.getCardano().getPort(), properties.getCardano().getProtocolMagic());
         return genesisBlockFinder;
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "store", name = "read-only-mode", havingValue = "false", matchIfMissing = true)
+    @ReadOnly(false)
     public BlockFinder blockFinder(BlockSync blockSync) {
         BlockFinder blockFinder = new BlockFinder(blockSync);
         return blockFinder;
