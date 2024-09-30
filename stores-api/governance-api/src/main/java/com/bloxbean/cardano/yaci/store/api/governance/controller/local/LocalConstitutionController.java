@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governance.controller.local;
 
 import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalConstitution;
-import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateService;
+import com.bloxbean.cardano.yaci.store.governance.service.LocalGovStateServiceReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,16 +20,16 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(name = "Local Constitution Service", description = "Get constitution from local Cardano Node.")
 @Slf4j
-@ConditionalOnBean(LocalGovStateService.class)
+@ConditionalOnBean(LocalGovStateServiceReader.class)
 @ConditionalOnExpression("${store.governance.endpoints.constitution.live.enabled:true}")
 public class LocalConstitutionController {
-    private final LocalGovStateService localGovStateService;
+    private final LocalGovStateServiceReader localGovStateServiceReader;
 
     @GetMapping
     @Operation(description = "Get current constitution in local node")
     public ResponseEntity<LocalConstitution> getCurrentConstitution() {
 
-        return localGovStateService.getCurrentConstitution()
+        return localGovStateServiceReader.getCurrentConstitution()
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Constitution not found"));
     }

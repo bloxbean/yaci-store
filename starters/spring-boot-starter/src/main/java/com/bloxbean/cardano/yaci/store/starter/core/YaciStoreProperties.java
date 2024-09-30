@@ -14,6 +14,7 @@ public class YaciStoreProperties {
     private Db db = new Db();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
+    private boolean readOnlyMode = false;
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
