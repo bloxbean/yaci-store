@@ -40,6 +40,6 @@ public class LocalSupportConditionImpl implements Condition {
         String fullKey = prefix + "." + name;
         String propertyValue = env.getProperty(fullKey);
 
-        return propertyValue == null || havingValue.equalsIgnoreCase(propertyValue);
+        return (propertyValue == null && Boolean.TRUE.equals(matchIfMissing))|| havingValue.equalsIgnoreCase(propertyValue);
     }
 }
