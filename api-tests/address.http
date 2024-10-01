@@ -1,0 +1,33 @@
+###
+### Get utxos by address
+GET {{base_url}}/api/v1/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/utxos?count=10&page=0&order=desc
+
+> {%
+    client.test("Get utxos by address", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length === 10, "No of returned utxos is not 10: " + response.body.length)
+    });
+%}
+
+###
+### Get transactions by address and asset
+GET {{base_url}}/api/v1/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/utxos/c2ecc337337cf48720e3747c833c9c179e08d2ea235d9bee7afbcb1741555448?count=2&page=0&order=desc
+
+> {%
+    client.test("Get utxos by address and asset", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length === 2, "No of returned utxos is not 2: " + response.body.length)
+    });
+%}
+
+###
+### Get transactions by address
+GET {{base_url}}/api/v1/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/transactions?count=10&page=0&order=desc
+
+> {%
+    client.test("Get transactions by address", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length === 10, "No of returned transactions is not 10: " + response.body.length)
+    });
+%}
+
