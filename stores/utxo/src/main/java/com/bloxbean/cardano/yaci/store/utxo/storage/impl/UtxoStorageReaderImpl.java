@@ -3,13 +3,15 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.jooq.DSLContext;
+import org.jooq.*;
+import org.jooq.impl.DSL;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -159,6 +161,45 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .stream().map(mapper::toAddressUtxo)
                 .toList();
     }
+
+    @Override
+    public List<AddressTransaction> findTransactionsByAddress(String address, int page, int count, Order order) {
+        Pageable pageable = getPageable(page, count, order);
+
+        // Define the CTEs using JOOQ
+        Select<Record3<String, Long, Long>> addressUtxoTx = dsl
+                .select(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.BLOCK, ADDRESS_UTXO.BLOCK_TIME)
+                .from(ADDRESS_UTXO)
+                .where(ADDRESS_UTXO.OWNER_ADDR.eq(address));
+
+        Select<Record3<String, Long, Long>> spentTx = dsl
+                .select(TX_INPUT.SPENT_TX_HASH.as("tx_hash"), TX_INPUT.SPENT_AT_BLOCK.as("block"), TX_INPUT.SPENT_BLOCK_TIME.as("block_time"))
+                .from(TX_INPUT)
+                .join(ADDRESS_UTXO)
+                .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                .where(ADDRESS_UTXO.OWNER_ADDR.eq(address));
+
+        // Use union to combine both CTEs
+        Select<?> combinedTx = addressUtxoTx
+                .union(spentTx);
+
+        // Fetch distinct tx_hash results with pagination and order by block in descending order
+        List<AddressTransaction> result = dsl
+                .selectDistinct(
+                        DSL.field("tx_hash", String.class).as("txHash"),
+                        DSL.field("block", Long.class).as("blockNumber"),
+                        DSL.field("block_time", Long.class).as("blockTime")
+                )
+                .from(combinedTx.asTable("combined_tx"))
+                .orderBy(order.equals(Order.desc) ? DSL.field("block").desc() : DSL.field("block").asc())
+                .limit(pageable.getPageSize())
+                .offset((int) pageable.getOffset())
+                .fetchInto(AddressTransaction.class);
+
+        return result;
+    }
+
 
     private static PageRequest getPageable(int page, int count, Order order) {
         return PageRequest.of(page, count)
