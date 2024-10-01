@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,10 @@ public class AddressService {
         return utxoStorage.findUtxoByStakeAddressAndAsset(stakeAddress, asset, page, count, order)
                 .stream()
                 .map(UtxoUtil::addressUtxoToUtxo).collect(Collectors.toList());
+    }
+
+    public List<AddressTransaction> getTransactionsByAddress(@NonNull String address, int page, int count, Order order) {
+        return utxoStorage.findTransactionsByAddress(address, page, count, order);
     }
 
     private static String getPaymentCredential(String address) {

@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.api.utxo.controller;
 import com.bloxbean.cardano.yaci.store.api.utxo.service.AddressService;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -30,7 +31,7 @@ public class AddressController {
     @GetMapping("{address}/utxos")
     @Operation(summary = "Get UTxOs for an address or address verification key hash (addr_vkh). If the address is a stake address, it will return UTXOs for all base addresses associated with the stake address")
     public List<Utxo> getUtxos(@PathVariable String address, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
-                               @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "asc") Order order) {
+                               @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "desc") Order order) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
@@ -48,7 +49,7 @@ public class AddressController {
     @GetMapping("{address}/utxos/{asset}")
     @Operation(summary = "Get UTxOs for an address or address verification key hash (addr_vkh) for a specific asset. If the address is a stake address, it will return UTXOs for all base addresses associated with the stake address")
     public List<Utxo> getUtxosForAsset(@PathVariable String address, @PathVariable String asset, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
-                                       @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "asc") Order order) {
+                                       @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "desc") Order order) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
@@ -61,5 +62,17 @@ public class AddressController {
         } else { //By address
             return addressService.getUtxoByAddressAndAsset(address, asset, p, count, order);
         }
+    }
+
+    @GetMapping("{address}/transactions")
+    @Operation(summary = "Get transactions for an address starting from the latest")
+    public List<AddressTransaction> getAddressTransactions(@PathVariable String address, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
+                                                           @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "desc") Order order) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return addressService.getTransactionsByAddress(address, p, count, order);
     }
 }
