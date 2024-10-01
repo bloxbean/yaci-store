@@ -65,7 +65,7 @@ public class AddressController {
     }
 
     @GetMapping("{address}/transactions")
-    @Operation(summary = "Get transactions for an address starting from the latest")
+    @Operation(summary = "Get transactions for an address (Base address or Payment address) starting from the latest")
     public List<AddressTransaction> getAddressTransactions(@PathVariable String address, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
                                                            @RequestParam(required = false, defaultValue = "0") @Min(0) int page, @RequestParam(required = false, defaultValue = "desc") Order order) {
         //TODO -- Fix pagination index
