@@ -83,6 +83,14 @@ subprojects {
 
     test {
         useJUnitPlatform()
+
+        testLogging {
+            showStandardStreams = true
+        }
+
+        maxHeapSize = "4g"
+
+        jvmArgs "-Xmx4096m", '-XX:+PrintGCDetails'
     }
 }
 

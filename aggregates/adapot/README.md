@@ -12,9 +12,13 @@
 
 ## Rollback Script For Testing
 
+To make sure stake address balance is calculated correctly, we need to rollback to last block of an epoch.
+
 ```sql
 truncate cursor_;
 insert into cursor_ (id, block_hash, slot, block_number, era) values (1000, :block_hash, :slot, :block_number, :era);
+truncate account_config;
+insert into account_config (config_id, status, slot, block, block_hash) values ('last_account_balance_processed_block', null, :slot, :block_number, :block_hash);
 delete from adapot where slot > :slot;
 delete from address_balance where slot > :slot;
 delete from address_tx_amount where slot > :slot;
@@ -37,5 +41,6 @@ delete from transaction where slot > :slot;
 delete  from transaction_witness where slot > :slot;
 delete from tx_input where tx_input.spent_at_slot > :slot;
 delete from withdrawal where slot > :slot;
+
 
 ```

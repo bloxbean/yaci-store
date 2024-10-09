@@ -1,0 +1,83 @@
+{
+  "epoch": 210,
+  "treasuryOfPreviousEpoch": 8332813711755,
+  "reservesOfPreviousEpoch": 13286160713028443,
+  "decentralisation": 1.0,
+  "treasuryGrowRate": 0.2,
+  "monetaryExpandRate": 0.003,
+  "optimalPoolCount": 150,
+  "poolOwnerInfluence": 0.3,
+  "fees": 10670212208,
+  "blockCount": 21556,
+  "activeStake": null,
+  "nonOBFTBlockCount": 0,
+  "rewardAddressesOfRetiredPoolsInEpoch": [
+    "stake1u8wcyusrx7ermy30fqephlu88c2jcvksr0rr573z9yvn06q0vauqp",
+    "stake1uycn6eazm8pu3028zhem4tgwq5my5k5gmhs60yhw3lsur0c76e5n9",
+    "stake1uxze8p5rer004nk9yyyqtqyqky0y3fe3sz75gnrjv7ep80qwye366",
+    "stake1u8947mgj26j6ln0jfmvr4j63ddqarw0p9l7pqsal3pd87pcknqdw0",
+    "stake1u98unm4wul8se5z4js0xn6qq8vzec9zgnhtsxcag3q3celqekgyk6",
+    "stake1u87muaxreejuzd0ayys2atk6e67fl3k358s5snnednug50qewq8e2",
+    "stake1uxnw7g8pv0wqtda55unee53uut3gtha0vx2vq3d7xevgrqstet2pw",
+    "stake1uyltvqh33snumylqpscqq3ehh5at9qcsd3vkrz2t22ce0vc23eqy4",
+    "stake1u96hz39cag8wr4xlefkat6ghcuezfrzple5ghpy64mta2tqykykzr",
+    "stake1uxzt8x9g0w9hw52hkxjuxhz0xa7gls5t0j4jrjx0ylufntcz2l3aq",
+    "stake1uxkje7amd8udvn5zs0zu2s5kmua8mkm0ry4vy8u0gwshnjgelf68v"
+  ],
+  "deregisteredAccounts": [
+    "stake1u99rwy2k4t26sr03ej24u5cklx4ypah0l25mc53mj3a7alshgawp4",
+    "stake1uxjtpzzu22tz9zdpaztd68m3qrqsf7h2u02hjhtuksymf5qxyvzpa",
+    "stake1uy2g0vrgegqed07tf9evnzq0lra608fddlu7sclhgd57q3q7js958",
+    "stake1u8pxye6s0e2lqegl7e25n0scs7v33lfy7x9rzp9haut7wqsr823uj",
+    "stake1u9t3a0tcwune5xrnfjg4q7cpvjlgx9lcv0cuqf5mhfjwrvcwrulda",
+    "stake1uxjm63fk0qwtxsk3mgfxj0pwgk4xtjx9k8hjheft7pp6luq4jw6yh",
+    "stake1uyn8kvjvj7cxus7dpduqtt3d8xm4f4sdn4y3rhcl23gurssxrftuj"
+  ],
+  "lateDeregisteredAccounts": [
+    "stake1u8ae59495mkyqvh2wgtdmnfdp22mte3f60j55ld62mvrj5qww9w5q",
+    "stake1uxtl0kfqm67c9dplz8szdfp5en9uxwsc704w0vqstjvuf3qrlzq7v",
+    "stake1uy69tus74ndzqwvvtvwutalql4r57dzhfswlgz9eu6gfc5spczkjs",
+    "stake1u9v0c8pf979f9wqkrm45mezswx02a3yydz82hj89ahalqmca35vlt"
+  ],
+  "registeredAccountsSinceLastEpoch": [
+    "stake1u8wcyusrx7ermy30fqephlu88c2jcvksr0rr573z9yvn06q0vauqp",
+    "stake1uxze8p5rer004nk9yyyqtqyqky0y3fe3sz75gnrjv7ep80qwye366",
+    "stake1uycn6eazm8pu3028zhem4tgwq5my5k5gmhs60yhw3lsur0c76e5n9",
+    "stake1u8947mgj26j6ln0jfmvr4j63ddqarw0p9l7pqsal3pd87pcknqdw0",
+    "stake1u87muaxreejuzd0ayys2atk6e67fl3k358s5snnednug50qewq8e2",
+    "stake1uyltvqh33snumylqpscqq3ehh5at9qcsd3vkrz2t22ce0vc23eqy4",
+    "stake1u96hz39cag8wr4xlefkat6ghcuezfrzple5ghpy64mta2tqykykzr",
+    "stake1uxzt8x9g0w9hw52hkxjuxhz0xa7gls5t0j4jrjx0ylufntcz2l3aq",
+    "stake1uxkje7amd8udvn5zs0zu2s5kmua8mkm0ry4vy8u0gwshnjgelf68v"
+  ],
+  "registeredAccountsUntilNow": [
+    "stake1u8wcyusrx7ermy30fqephlu88c2jcvksr0rr573z9yvn06q0vauqp",
+    "stake1uxze8p5rer004nk9yyyqtqyqky0y3fe3sz75gnrjv7ep80qwye366",
+    "stake1uycn6eazm8pu3028zhem4tgwq5my5k5gmhs60yhw3lsur0c76e5n9",
+    "stake1u8947mgj26j6ln0jfmvr4j63ddqarw0p9l7pqsal3pd87pcknqdw0",
+    "stake1u98unm4wul8se5z4js0xn6qq8vzec9zgnhtsxcag3q3celqekgyk6",
+    "stake1u87muaxreejuzd0ayys2atk6e67fl3k358s5snnednug50qewq8e2",
+    "stake1uxnw7g8pv0wqtda55unee53uut3gtha0vx2vq3d7xevgrqstet2pw",
+    "stake1uyltvqh33snumylqpscqq3ehh5at9qcsd3vkrz2t22ce0vc23eqy4",
+    "stake1u96hz39cag8wr4xlefkat6ghcuezfrzple5ghpy64mta2tqykykzr",
+    "stake1uxzt8x9g0w9hw52hkxjuxhz0xa7gls5t0j4jrjx0ylufntcz2l3aq",
+    "stake1uxkje7amd8udvn5zs0zu2s5kmua8mkm0ry4vy8u0gwshnjgelf68v"
+  ],
+  "sharedPoolRewardAddressesWithoutReward": [],
+  "deregisteredAccountsOnEpochBoundary": [
+    "stake1u99rwy2k4t26sr03ej24u5cklx4ypah0l25mc53mj3a7alshgawp4",
+    "stake1uxjtpzzu22tz9zdpaztd68m3qrqsf7h2u02hjhtuksymf5qxyvzpa",
+    "stake1u8ae59495mkyqvh2wgtdmnfdp22mte3f60j55ld62mvrj5qww9w5q",
+    "stake1uxtl0kfqm67c9dplz8szdfp5en9uxwsc704w0vqstjvuf3qrlzq7v",
+    "stake1uy69tus74ndzqwvvtvwutalql4r57dzhfswlgz9eu6gfc5spczkjs",
+    "stake1uy2g0vrgegqed07tf9evnzq0lra608fddlu7sclhgd57q3q7js958",
+    "stake1u8pxye6s0e2lqegl7e25n0scs7v33lfy7x9rzp9haut7wqsr823uj",
+    "stake1u9t3a0tcwune5xrnfjg4q7cpvjlgx9lcv0cuqf5mhfjwrvcwrulda",
+    "stake1u9v0c8pf979f9wqkrm45mezswx02a3yydz82hj89ahalqmca35vlt",
+    "stake1uxjm63fk0qwtxsk3mgfxj0pwgk4xtjx9k8hjheft7pp6luq4jw6yh",
+    "stake1uyn8kvjvj7cxus7dpduqtt3d8xm4f4sdn4y3rhcl23gurssxrftuj"
+  ],
+  "poolStates": [],
+  "mirCertificates": [],
+  "poolRewards": []
+}
