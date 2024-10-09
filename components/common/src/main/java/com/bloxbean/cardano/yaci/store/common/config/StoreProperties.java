@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class StoreProperties { //TODO - replace this with YaciStoreProperties from starter
     private Long eventPublisherId;
     private boolean syncAutoStart;
+    private boolean readOnlyMode;
     private boolean primaryInstance;
 
     private String cardanoHost;
@@ -95,4 +96,16 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int jooqWriteBatchSize = 3000;
     @Builder.Default
     private int writeThreadCount = 5;
+
+    //n2c pool configuration
+    @Builder.Default
+    private boolean n2cPoolEnabled = false;
+    @Builder.Default
+    private int n2cPoolMaxTotal = 10;
+    @Builder.Default
+    private int n2cPoolMinIdle = 2;
+    @Builder.Default
+    private int n2cPoolMaxIdle = 5;
+    @Builder.Default
+    private int n2cPoolMaxWaitInMillis = 10000;
 }

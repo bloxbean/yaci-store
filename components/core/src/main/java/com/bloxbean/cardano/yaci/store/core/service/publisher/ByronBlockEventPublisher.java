@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
+@ReadOnly(false)
 @Slf4j
 public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBlock> {
     private final ApplicationEventPublisher publisher;

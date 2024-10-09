@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.starter.core;
 
-import com.bloxbean.cardano.yaci.core.common.Constants;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,6 +14,7 @@ public class YaciStoreProperties {
     private Db db = new Db();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
+    private boolean readOnlyMode = false;
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
@@ -22,9 +22,9 @@ public class YaciStoreProperties {
     @Getter
     @Setter
     public static final class Cardano {
-        private String host = Constants.MAINNET_IOHK_RELAY_ADDR;
-        private int port = Constants.MAINNET_IOHK_RELAY_PORT;
-        private long protocolMagic = Constants.MAINNET_PROTOCOL_MAGIC;
+        private String host;
+        private int port;
+        private long protocolMagic;
         private String n2cNodeSocketPath;
         private String n2cHost;
         private int n2cPort;
@@ -57,6 +57,13 @@ public class YaciStoreProperties {
         //This is only required when the genesis hash can't be fetched from the network.
         // In that case, the default genesis hash will be used
         private String defaultGenesisHash = "Genesis";
+
+        //n2c pool configuration
+        private boolean n2cPoolEnabled = false;
+        private int n2cPoolMaxTotal = 10;
+        private int n2cPoolMinIdle = 2;
+        private int n2cPoolMaxIdle = 5;
+        private int n2cPoolMaxWaitInMillis = 10000;
     }
 
     @Getter

@@ -1,12 +1,13 @@
 package com.bloxbean.cardano.yaci.store.core.configuration;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
-import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
@@ -21,6 +22,7 @@ import java.util.List;
 
 @Component
 @Getter
+@ReadOnly(false)
 public class GenesisConfig {
     public static final int PREVIEW_EPOCH_LENGTH = 86400;
     public static final int DEFAULT_SECURITY_PARAM = 2160;

@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Delegation Vote Service")
 @RequestMapping("${apiPrefix}/governance/delegation-votes")
-@ConditionalOnExpression("${store.governance.endpoints.delegationVote.enabled:true}")
+@ConditionalOnExpression("${store.governance.endpoints.delegation-vote.enabled:true}")
 public class DelegationVoteController {
     private final DelegationVoteService delegationVoteService;
 

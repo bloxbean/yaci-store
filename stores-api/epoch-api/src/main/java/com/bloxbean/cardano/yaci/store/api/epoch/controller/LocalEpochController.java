@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochNo;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
-import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
+import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamServiceReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
@@ -21,11 +21,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("${apiPrefix}/epochs")
 @Tag(name = "Local Epoch Service", description = "Get epoch params directly from local Cardano Node through n2c local query.")
 @Slf4j
-@ConditionalOnBean(LocalEpochParamService.class)
+@ConditionalOnBean(LocalEpochParamServiceReader.class)
 @ConditionalOnExpression("${store.epoch.endpoints.epoch.local.enabled:false}")
 public class LocalEpochController {
 
-    private final LocalEpochParamService protocolParamService;
+    private final LocalEpochParamServiceReader protocolParamService;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
 
     @PostConstruct
@@ -33,16 +33,16 @@ public class LocalEpochController {
         log.info("LocalEpochController initialized >>>");
     }
 
-    public LocalEpochController(LocalEpochParamService protocolParamService) {
+    public LocalEpochController(LocalEpochParamServiceReader protocolParamService) {
         this.protocolParamService = protocolParamService;
     }
 
     @GetMapping("parameters")
     @Operation(summary = "Latest Epoch's Protocol Parameters", description = "Get the protocol parameters of the latest epoch. It fetches the protocol parameters from the local node through n2c local query.")
     public ProtocolParamsDto getProtocolParams() {
-       return protocolParamService.getCurrentProtocolParams()
-               .map(mapper::toProtocolParamsDto)
-               .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
+        return protocolParamService.getCurrentProtocolParams()
+                .map(mapper::toProtocolParamsDto)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 
     @GetMapping("latest/parameters")

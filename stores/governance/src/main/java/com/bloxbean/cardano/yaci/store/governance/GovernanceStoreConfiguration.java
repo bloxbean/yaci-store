@@ -151,4 +151,5 @@ public class GovernanceStoreConfiguration {
                                                          CommitteeMapper committeeMapper) {
         return new CommitteeStorageReaderImpl(committeeRepository, committeeMapper);
     }
+
 }
