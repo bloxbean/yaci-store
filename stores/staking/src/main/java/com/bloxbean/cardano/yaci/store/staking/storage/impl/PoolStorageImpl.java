@@ -1,49 +1,68 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
-import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
+import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
+import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRegistrationEnity;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolRetirementEntity;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRegistrationRepository;
-import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolRetirementRepository;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolStatusRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class PoolStorageImpl implements PoolStorage {
-    private final PoolRegistrationRepository poolRegistrationRepository;
-    private final PoolRetirementRepository poolRetirementRepository;
-    private final PoolMapper mapper;
+
+    private final PoolStatusRepository poolStatusRepository;
+    private final PoolMapper poolMapper;
 
     @Override
-    public void savePoolRegistrations(List<PoolRegistration> poolRegistrations) {
-        List<PoolRegistrationEnity> poolRegistrationEnities = poolRegistrations.stream()
-                .map(mapper::toPoolRegistrationEntity)
-                .collect(Collectors.toList());
+    public void save(List<Pool> poolStatuses) {
+        if (poolStatuses == null || poolStatuses.isEmpty())
+            return;
 
-        poolRegistrationRepository.saveAll(poolRegistrationEnities);
+        poolStatusRepository.saveAll(poolStatuses.stream()
+                .map(poolMapper::toDepositEntity).collect(Collectors.toList()));
     }
 
     @Override
-    public void savePoolRetirements(List<PoolRetirement> poolRetirements) {
-        List<PoolRetirementEntity> poolRetirementEntities = poolRetirements.stream()
-                .map(mapper::toPoolRetirementEntity)
-                .collect(Collectors.toList());
-
-        poolRetirementRepository.saveAll(poolRetirementEntities);
+    public Optional<Pool> findRecentPoolRegistration(String poolId, Integer maxEpoch) {
+        return poolStatusRepository.findRecentByPoolIdAndStatus(poolId, PoolStatusType.REGISTRATION, maxEpoch)
+                .map(poolMapper::toDeposit);
     }
 
     @Override
-    public int deleteRegistrationsBySlotGreaterThan(Long slot) {
-        return poolRegistrationRepository.deleteBySlotGreaterThan(slot);
+    public Optional<Pool> findRecentPoolUpdate(String poolId, Integer maxEpoch) {
+        return poolStatusRepository.findRecentByPoolIdAndStatus(poolId, PoolStatusType.UPDATE, maxEpoch)
+                .map(poolMapper::toDeposit);
     }
 
     @Override
-    public int deleteRetirementsBySlotGreaterThan(Long slot) {
-        return poolRetirementRepository.deleteBySlotGreaterThan(slot);
+    public Optional<Pool> findRecentPoolRetirement(String poolId, Integer maxEpoch) {
+        return poolStatusRepository.findRecentPoolRetirement(poolId, maxEpoch)
+                .map(poolMapper::toDeposit);
+    }
+
+    @Override
+    public Optional<Pool> findRecentPoolRetired(String poolId, Integer maxEpoch) {
+        return poolStatusRepository.findRecentByPoolIdAndStatus(poolId, PoolStatusType.RETIRED, maxEpoch)
+                .map(poolMapper::toDeposit);
+    }
+
+    @Override
+    public List<Pool> findRetiringPools(Integer epoch) {
+        return poolStatusRepository.findRetiringPoolsByRetireEpoch(epoch)
+                .stream().map(poolMapper::toDeposit).collect(Collectors.toList());
+    }
+
+    @Override
+    public Integer getMaxEpoch() {
+        return poolStatusRepository.getMaxEpoch();
+    }
+
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return poolStatusRepository.deleteBySlotGreaterThan(slot);
     }
 }

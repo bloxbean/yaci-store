@@ -1,11 +1,15 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl.model;
 
 import jakarta.persistence.Column;
-import lombok.EqualsAndHashCode;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 
-@EqualsAndHashCode
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class PoolRegistrationId implements Serializable {
     @Column(name = "tx_hash")
     private String txHash;

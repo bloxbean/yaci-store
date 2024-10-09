@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.mir.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.storage.impl.model.MIREntity;
 import com.bloxbean.cardano.yaci.store.mir.storage.impl.projection.MIRSummary;
 import org.springframework.context.annotation.Primary;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @Repository
@@ -25,4 +27,8 @@ public interface MIRRepository
             "GROUP BY m.txHash, m.pot, m.certIndex, m.slot, m.blockNumber, m.blockTime " +
             "ORDER BY m.slot DESC")
     Page<MIRSummary> findRecentMIRSummaries(Pageable pageable);
+
+    @Query("SELECT SUM(m.amount) FROM MIREntity m WHERE m.epoch=:epoch and m.pot=:pot")
+    BigInteger findMirPotAmountByEpoch(int epoch, MirPot pot);
+
 }
