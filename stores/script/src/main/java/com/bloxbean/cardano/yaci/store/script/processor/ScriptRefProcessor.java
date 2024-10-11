@@ -3,13 +3,11 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
-import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
-import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +19,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.*;
+import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.toPlutusScript;
+import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.toScriptType;
 
 @Component
 @RequiredArgsConstructor
@@ -38,7 +37,15 @@ public class ScriptRefProcessor {
                     .flatMap(transaction -> transaction.getBody().getOutputs().stream())
                     .map(transactionOutput -> transactionOutput.getScriptRef())
                     .filter(Objects::nonNull)
-                    .map(scriptRef -> ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef))) //todo: refactor with ccl
+                    .map(scriptRef -> {
+                        com.bloxbean.cardano.client.spec.Script script = null;
+                        try {
+                            script = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef));
+                        } catch (Exception e) {
+                            log.error("Script deserialization failed. Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
+                        }
+                        return script;
+                    })
                     .filter(Objects::nonNull)
                     .map(script -> {
                         ScriptType scriptType = toScriptType(script);
