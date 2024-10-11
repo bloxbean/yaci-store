@@ -74,6 +74,19 @@ public class ScriptUtil {
             throw new IllegalArgumentException("Invalid plutus script type : " + strType);
     }
 
+    public static ScriptType toScriptType(com.bloxbean.cardano.client.spec.Script cclScript) {
+        if (cclScript.getScriptType() == 0) {
+            return ScriptType.NATIVE_SCRIPT;
+        } else if (cclScript.getScriptType() == 1) {
+            return ScriptType.PLUTUS_V1;
+        } else if (cclScript.getScriptType() == 2) {
+            return ScriptType.PLUTUS_V2;
+        } else if (cclScript.getScriptType() == 3) {
+            return ScriptType.PLUTUS_V3;
+        } else
+            throw new IllegalArgumentException("Invalid script type: " + cclScript.getScriptType());
+    }
+
     /**
      * Deserialize to {@link PlutusV1Script} or {@link PlutusV2Script} based on the type in serialized bytes.
      * Serialized bytes is a Cbor Array follows cardano-cli format. This is a fallback method if the standard deserialization is
@@ -131,9 +144,20 @@ public class ScriptUtil {
             PlutusScript plutusScript = new PlutusScript(plutusScriptType, cclPlutusScript.getCborHex());
             return plutusScript;
         } catch (Exception e) {
-            log.error("Error deserializing script ref: {}", scriptRef);
+              log.error("Error deserializing script ref: {}", scriptRef);
             return null;
         }
+    }
+
+    public static PlutusScript toPlutusScript(com.bloxbean.cardano.client.spec.Script script) {
+        var plutusScriptType = switch (script.getScriptType()) {
+            case 1 -> PlutusScriptType.PlutusScriptV1;
+            case 2 -> PlutusScriptType.PlutusScriptV2;
+            case 3 -> PlutusScriptType.PlutusScriptV3;
+            default -> throw new IllegalArgumentException("Invalid plutus script type : " + script.getScriptType());
+        };
+
+        return new PlutusScript(plutusScriptType, ((com.bloxbean.cardano.client.plutus.spec.PlutusScript) script).getCborHex());
     }
 
     public static String getDatumHash(Datum datum) {
