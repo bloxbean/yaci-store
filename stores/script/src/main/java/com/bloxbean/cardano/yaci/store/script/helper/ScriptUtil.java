@@ -149,7 +149,7 @@ public class ScriptUtil {
         }
     }
 
-    public static PlutusScript toPlutusScript(com.bloxbean.cardano.client.spec.Script script) {
+    public static PlutusScript toPlutusScript(@NonNull com.bloxbean.cardano.client.spec.Script script) {
         var plutusScriptType = switch (script.getScriptType()) {
             case 1 -> PlutusScriptType.PlutusScriptV1;
             case 2 -> PlutusScriptType.PlutusScriptV2;
