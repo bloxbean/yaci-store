@@ -28,7 +28,7 @@ public class ScriptReferenceUtil {
      * @param serializedScriptRef
      * @return PlutusV1Script or PlutusV2Script or PlutusV3Script
      */
-    private static Script deserializeScriptRef(byte[] serializedScriptRef) {
+    public static Script deserializeScriptRef(byte[] serializedScriptRef) {
         Array scriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedScriptRef);
         List<DataItem> dataItemList = scriptArray.getDataItems();
         if (dataItemList == null || dataItemList.size() == 0) {
