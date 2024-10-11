@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import com.bloxbean.cardano.client.spec.Script;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
@@ -65,15 +66,18 @@ public class TxScriptFinder {
                     .forEach(addressUtxoOptional -> {
                         AddressUtxo addressUtxo = addressUtxoOptional.get();
                         if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
-                            var cclScript = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
-                            if (cclScript.getScriptType() != 0) {
-                                PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
-                                if (plutusScript != null)
-                                    scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
-                                else {
-                                    log.error("PlutusScript is null for tx: " + transaction.getTxHash());
-                                }
-                            }                         }
+                            Script cclScript = null;
+                            try {
+                                cclScript = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
+                            } catch (Exception e) {
+                                log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
+                            }
+
+                            if (cclScript != null && cclScript.getScriptType() != 0) {
+                                PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
+                                scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
+                            }
+                        }
                     });
         }
 
@@ -85,15 +89,18 @@ public class TxScriptFinder {
                 .forEach(addressUtxoOptional -> {
                     AddressUtxo addressUtxo = addressUtxoOptional.get();
                     if (addressUtxo.getScriptRef() != null && !addressUtxo.getScriptRef().isEmpty()) {
-                        var cclScript = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
-                        if (cclScript.getScriptType() != 0) {
-                            PlutusScript plutusScript = ScriptUtil.deserializeScriptRef(addressUtxo);
-                            if (plutusScript != null)
-                                scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
-                            else {
-                                log.error("PlutusScript is null for tx: " + transaction.getTxHash());
-                            }
-                        }                           }
+                        Script cclScript = null;
+                        try {
+                            cclScript = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(addressUtxo.getScriptRef()));
+                        } catch (Exception e) {
+                            log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
+                        }
+
+                        if (cclScript != null && cclScript.getScriptType() != 0) {
+                            PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
+                            scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
+                        }
+                    }
                 });
 
         return scriptsMap;
