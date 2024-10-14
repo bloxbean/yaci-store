@@ -35,6 +35,12 @@ public class TxnEntity extends BlockAwareEntity {
     @Column(name = "slot")
     private Long slot;
 
+    @Column(name = "tx_index")
+    private Integer txIndex;
+
+    @Column(name = "epoch")
+    private Integer epoch;
+
     @Type(JsonType.class)
     @Column(name = "inputs")
     private List<UtxoKey> inputs;

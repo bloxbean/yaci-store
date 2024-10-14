@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -29,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MIRProcessorTest {
     @Mock
     private MIRStorage mirStorage;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
 
     @InjectMocks
     private MIRProcessor mirProcessor;
@@ -85,12 +89,12 @@ class MIRProcessorTest {
             assertThat(moveInstataneousReward.getCertIndex()).isEqualTo(i);
         }
 
-        assertThat(moveInstataneousRewardList.get(0).getPot()).isEqualTo(MirPot.TREASURY);
+        assertThat(moveInstataneousRewardList.get(0).getPot()).isEqualTo(MirPot.treasury);
         assertThat(moveInstataneousRewardList.get(0).getAddress()).isEqualTo("stake17xtg6yppa0t30rslkrneva5c9qju40rhndjnuy356kxw83s53nkqp");
         assertThat(moveInstataneousRewardList.get(0).getCredential()).isEqualTo("968d1021ebd7178e1fb0e79676982825cabc779b653e1234d58ce3c6");
         assertThat(moveInstataneousRewardList.get(0).getAmount()).isEqualTo(500);
 
-        assertThat(moveInstataneousRewardList.get(1).getPot()).isEqualTo(MirPot.RESERVES);
+        assertThat(moveInstataneousRewardList.get(1).getPot()).isEqualTo(MirPot.reserves);
         assertThat(moveInstataneousRewardList.get(1).getAddress()).isNull();
         assertThat(moveInstataneousRewardList.get(1).getCredential()).isNull();
         assertThat(moveInstataneousRewardList.get(1).getAmount()).isEqualTo(1000);
