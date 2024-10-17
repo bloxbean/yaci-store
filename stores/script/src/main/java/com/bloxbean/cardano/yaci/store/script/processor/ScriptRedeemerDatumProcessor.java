@@ -177,22 +177,45 @@ public class ScriptRedeemerDatumProcessor {
 
         //Create TxScript entities to save
         List<Script> plutusScripts = scriptsMap.values().stream()
-                        .map(plutusScript -> Script.builder()
-                                .scriptHash(getPlutusScriptHash(plutusScript))
-                                .scriptType(ScriptUtil.toPlutusScriptType(plutusScript.getType()))
-                                .content(JsonUtil.getJson(plutusScript))
-                                .build()).collect(Collectors.toList());
+                        .map(plutusScript -> {
+                            String scriptHash;
+                            try {
+                                scriptHash = ScriptUtil.getPlutusScriptHash(plutusScript);
+                            } catch (Exception e) {
+                                log.error("Error getting native script hash. Block hash: " + metadata.getBlockHash(), e);
+                                return null;
+                            }
+                            return Script.builder()
+                                    .scriptHash(scriptHash)
+                                    .scriptType(ScriptUtil.toPlutusScriptType(plutusScript.getType()))
+                                    .content(JsonUtil.getJson(plutusScript))
+                                    .build();
+                            }
+                        )
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
         if (plutusScripts != null && plutusScripts.size() > 0)
             scriptStorage.saveScripts(plutusScripts);
 
         //Get all native scripts  and save
         if (transaction.getWitnesses().getNativeScripts() != null) {
             List<Script> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
-                    .map(nativeScript -> Script.builder()
-                            .scriptHash(ScriptUtil.getNativeScriptHash(nativeScript))
-                            .scriptType(ScriptType.NATIVE_SCRIPT)
-                            .content(JsonUtil.getJson(nativeScript))
-                            .build()).collect(Collectors.toList());
+                    .map(nativeScript -> {
+                        String scriptHash;
+                        try {
+                            scriptHash = ScriptUtil.getNativeScriptHash(nativeScript);
+                        } catch (Exception e) {
+                            log.error("Error getting native script hash. Block hash: " + metadata.getBlockHash(), e);
+                            return null;
+                        }
+                        return Script.builder()
+                                .scriptHash(scriptHash)
+                                .scriptType(ScriptType.NATIVE_SCRIPT)
+                                .content(JsonUtil.getJson(nativeScript))
+                                .build();
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
             if (nativeScripts != null && nativeScripts.size() > 0)
                 scriptStorage.saveScripts(nativeScripts);
         }
