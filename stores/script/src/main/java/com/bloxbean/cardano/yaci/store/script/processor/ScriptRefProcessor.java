@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
+import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,35 +39,42 @@ public class ScriptRefProcessor {
                     .map(transactionOutput -> transactionOutput.getScriptRef())
                     .filter(Objects::nonNull)
                     .map(scriptRef -> {
-                        com.bloxbean.cardano.client.spec.Script script = null;
+                        com.bloxbean.cardano.client.spec.Script script;
                         try {
                             script = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef));
                         } catch (Exception e) {
                             log.error("Script deserialization failed. Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
+                            return null;
                         }
-                        return script;
-                    })
-                    .filter(Objects::nonNull)
-                    .map(script -> {
+
                         ScriptType scriptType = toScriptType(script);
-                        String scriptHash = null;
+                        String scriptHash;
+                        String content;
 
-                        try {
-                            scriptHash = HexUtil.encodeHexString(script.getScriptHash());
-                        } catch (Exception e) {
-                            log.error("Unable to get reference script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
-                        }
-
-                        String content = null;
                         if (scriptType == ScriptType.NATIVE_SCRIPT) {
                             NativeScript nativeScript = NativeScript.builder()
                                     .type(script.getScriptType())
                                     .content(JsonUtil.getJson(script))
                                     .build();
+
                             content = JsonUtil.getJson(nativeScript);
+                            try {
+                                scriptHash = ScriptUtil.getNativeScriptHash(nativeScript);
+                            } catch (Exception e) {
+                                log.error("Error getting native script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
+                                return null;
+                            }
                         } else {
                             PlutusScript plutusScript = toPlutusScript(script);
+
                             content = JsonUtil.getJson(plutusScript);
+
+                            try {
+                                scriptHash = ScriptUtil.getPlutusScriptHash(plutusScript);
+                            } catch (Exception e) {
+                                log.error("Error getting native script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
+                                return null;
+                            }
                         }
 
                         return Script.builder()
@@ -74,8 +82,8 @@ public class ScriptRefProcessor {
                                 .scriptType(scriptType)
                                 .content(content)
                                 .build();
-
                     })
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
             //Save the scripts
