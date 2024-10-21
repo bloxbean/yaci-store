@@ -1,0 +1,28 @@
+name: Upload Docker Compose ZIP
+
+on:
+  push:
+    tags:
+      - 'dv*'
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Extract Version from Tag
+        id: extract_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/dv}
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+      - name: Create Docker Compose ZIP
+        run: |
+          mkdir -p yaci-store-docker-compose-${{ env.VERSION }}
+          cp -r docker/* yaci-store-docker-compose-${{ env.VERSION }}/
+          zip -r yaci-store-docker-compose-${{ env.VERSION }}.zip yaci-store-docker-compose-${{ env.VERSION }}
+      - name: Upload Docker Compose ZIP to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: yaci-store-docker-compose-${{ env.VERSION }}.zip
+          tag_name: v${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
