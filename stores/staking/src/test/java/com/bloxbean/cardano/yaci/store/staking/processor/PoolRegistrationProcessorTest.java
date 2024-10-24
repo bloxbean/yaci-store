@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.Relay;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRetirement;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -34,6 +35,9 @@ class PoolRegistrationProcessorTest {
 
     @Mock
     private ApplicationEventPublisher publisher;
+
+    @Mock
+    private StoreProperties storeProperties;
 
     @InjectMocks
     private PoolRegistrationProcessor poolRegistrationProcessor;

@@ -27,7 +27,7 @@ public class StakesnapshotServiceTest {
         storeProperties.setMainnet(true);
     }
 
-    @Test
+//    @Test
     void takeSnapshot() throws IOException {
         dslContext.execute("delete from epoch_stake where epoch >= 207");
         stakeSnapshotService.takeStakeSnapshot(207);

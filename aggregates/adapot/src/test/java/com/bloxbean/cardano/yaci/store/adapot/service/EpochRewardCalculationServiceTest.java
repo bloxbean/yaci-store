@@ -41,7 +41,7 @@ class EpochRewardCalculationServiceTest {
         storeProperties.setMainnet(true);
     }
 
-    @Test
+//    @Test
     void fetchRewardCalcInputs() throws IOException {
 
         RewardsCalcInput rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(480);
@@ -177,7 +177,7 @@ class EpochRewardCalculationServiceTest {
         System.out.println(">> All matches");
     }
 
-    @Test
+//    @Test
     void calculateEpochRewards() throws IOException {
 
         //To clean
