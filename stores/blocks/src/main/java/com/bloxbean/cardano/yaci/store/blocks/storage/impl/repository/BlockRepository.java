@@ -29,5 +29,7 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
 
     List<BlockEntity> getBlockEntitiesBySlotLeaderAndEpochNumber(String slotLeader, int epochNumber);
 
+    @Query("select count(b.number) from BlockEntity b where b.epochNumber = :epochNumber")
+    int totalBlocksInEpoch(int epochNumber);
 }
 

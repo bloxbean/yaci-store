@@ -32,6 +32,9 @@ public class PoolRegistrationEnity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private int certIndex;
 
+    @Column(name = "tx_index")
+    private int txIndex;
+
     @Column(name = "pool_id")
     private String poolId;
 

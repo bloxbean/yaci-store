@@ -5,11 +5,12 @@ import com.bloxbean.cardano.yaci.core.model.Relay;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRetirement;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -29,7 +31,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PoolRegistrationProcessorTest {
     @Mock
-    private PoolStorage poolStorage;
+    private PoolCertificateStorage poolStorage;
+
+    @Mock
+    private ApplicationEventPublisher publisher;
+
+    @Mock
+    private StoreProperties storeProperties;
 
     @InjectMocks
     private PoolRegistrationProcessor poolRegistrationProcessor;
@@ -91,7 +99,7 @@ class PoolRegistrationProcessorTest {
         assertThat(poolRegistrationSaved.getPledge()).isEqualTo(poolRegistrationCert.getPoolParams().getPledge());
         assertThat(poolRegistrationSaved.getCost()).isEqualTo(poolRegistrationCert.getPoolParams().getCost());
         assertThat(poolRegistrationSaved.getMargin()).isEqualTo(0.075);
-        assertThat(poolRegistrationSaved.getRewardAccount()).isEqualTo(poolRegistrationCert.getPoolParams().getRewardAccount());
+        assertThat(poolRegistrationSaved.getRewardAccount()).isEqualTo("stake_test1uq5teukd4ta7wdf2fuyuhjxpyaa8y373jd2hwtklfwyu4es7clcde");
         assertThat(poolRegistrationSaved.getPoolOwners()).isEqualTo(poolRegistrationCert.getPoolParams().getPoolOwners());
         assertThat(poolRegistrationSaved.getRelays()).isEqualTo(poolRegistrationCert.getPoolParams().getRelays());
         assertThat(poolRegistrationSaved.getMetadataUrl()).isEqualTo(poolRegistrationCert.getPoolParams().getPoolMetadataUrl());
