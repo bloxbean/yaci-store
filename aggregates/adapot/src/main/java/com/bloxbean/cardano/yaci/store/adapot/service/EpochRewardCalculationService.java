@@ -86,10 +86,14 @@ public class EpochRewardCalculationService {
                 .fees(adaPot.getFees())
                 .build();
 
-
-        //Get the protocol parameters for the epoch (when
-        ProtocolParams protocolParams = protocolParamService.getProtocolParam(epoch - 2)
-                .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
+        ProtocolParams protocolParams = null;
+        if (epoch == MAINNET_SHELLEY_START_EPOCH + 1) { //If epoch is next epoch after first shelley epoch.
+            protocolParams = protocolParamService.getProtocolParam(epoch - 1)
+                    .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 1)));
+        } else {
+            protocolParams = protocolParamService.getProtocolParam(epoch - 2)
+                    .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
+        }
 
         ProtocolParameters rewardProtocolParameters = ProtocolParameters.builder()
                 .decentralisation(protocolParams.getDecentralisationParam() != null?
