@@ -2,13 +2,19 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
+import com.bloxbean.cardano.yaci.store.adapot.reward.service.RewardCalcJobManager;
+import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
+import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -20,9 +26,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class RewardProcessor {
+    private final EraService eraService;
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
-
+    private final RewardCalcJobManager rewardCalcJobManager;
 
     @EventListener
     @Transactional
@@ -72,6 +79,21 @@ public class RewardProcessor {
 
         instantRewardSnapshotService.takeInstantRewardSnapshot(epochTransitionCommitEvent.getMetadata(), epochTransitionCommitEvent.getPreviousEpoch());
         log.info("Instant reward snapshot taken for epoch : {}", snapshotEpoch);
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRewardCalculation(EpochTransitionCommitEvent epochTransitionCommitEvent) {
+        long nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(0);
+
+        if (epochTransitionCommitEvent.getEpoch() < nonByronEpoch) {
+            log.info("Epoch : {} is Byron era. Skipping reward calculation", epochTransitionCommitEvent.getEpoch());
+            return;
+        }
+
+        //Calculate epoch rewards
+        Integer epoch = epochTransitionCommitEvent.getEpoch();
+        rewardCalcJobManager.triggerRewardCalcJob(epoch, epochTransitionCommitEvent.getMetadata().getSlot());
     }
 
     @EventListener

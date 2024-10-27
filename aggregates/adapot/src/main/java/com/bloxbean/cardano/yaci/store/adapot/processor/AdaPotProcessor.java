@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
-import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -10,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
@@ -22,7 +22,6 @@ public class AdaPotProcessor {
     private final DepositEventProcessor depositEventProcessor;
     private final FeePotProcessor feePotProcessor;
     private final UtxoPotProcessor utxoPotProcessor;
-    private final GenesisConfig genesisConfig;
     private final EraService eraService;
     private final TransactionStorageReader transactionStorageReader;
 
@@ -60,7 +59,7 @@ public class AdaPotProcessor {
 
 
     @EventListener
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processAdaPotDuringEpochTransition(PreEpochTransitionEvent epochTransitionCommitEvent) {
 
         //TODO -- Handle null previous epoch due to restart

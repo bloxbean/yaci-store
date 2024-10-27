@@ -86,10 +86,15 @@ public class EpochRewardCalculationService {
                 .fees(adaPot.getFees())
                 .build();
 
+        ProtocolParams protocolParams;
+        if (epoch == MAINNET_SHELLEY_START_EPOCH + 1) { // If this is first epoch after shelley start epoch
+            protocolParams = protocolParamService.getProtocolParam(epoch - 1)
+                    .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
 
-        //Get the protocol parameters for the epoch (when
-        ProtocolParams protocolParams = protocolParamService.getProtocolParam(epoch - 2)
-                .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
+        } else {
+            protocolParams = protocolParamService.getProtocolParam(epoch - 2)
+                    .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
+        }
 
         ProtocolParameters rewardProtocolParameters = ProtocolParameters.builder()
                 .decentralisation(protocolParams.getDecentralisationParam() != null?
@@ -346,17 +351,22 @@ public class EpochRewardCalculationService {
 
         var spendableEpochStartAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch, 0);
 
+        int earnedEpoch = epoch - 2;
+        //Delete any existing member or leader rewards for the epoch. Re-run scenario
+        rewardStorage.deleteLeaderMemberRewards(earnedEpoch);
+
         for(PoolRewardCalculationResult poolRewardCalculationResult: poolRewardCalculationResults) {
             String poolRewardAccount = poolRewardCalculationResult.getRewardAddress();
             BigInteger leaderRewardAmt = poolRewardCalculationResult.getOperatorReward();
 
             List<com.bloxbean.cardano.yaci.store.adapot.domain.Reward> poolRewards = new ArrayList<>();
             String poolHash = PoolUtil.getPoolHash(poolRewardCalculationResult.getPoolId());
+
             var leaderReward = com.bloxbean.cardano.yaci.store.adapot.domain.Reward.builder()
                     .address(poolRewardAccount)
                     .amount(leaderRewardAmt)
                     .poolId(poolHash)
-                    .earnedEpoch(epoch - 2)
+                    .earnedEpoch(earnedEpoch)
                     .spendableEpoch(epoch)
                     .type(RewardType.leader)
                     .slot(spendableEpochStartAbsoluteSlot)
@@ -373,7 +383,7 @@ public class EpochRewardCalculationService {
                            .address(reward.getStakeAddress())
                            .amount(reward.getAmount())
                            .poolId(poolHash)
-                           .earnedEpoch(epoch - 2)
+                           .earnedEpoch(earnedEpoch)
                            .spendableEpoch(epoch)
                            .type(RewardType.member)
                            .slot(spendableEpochStartAbsoluteSlot)

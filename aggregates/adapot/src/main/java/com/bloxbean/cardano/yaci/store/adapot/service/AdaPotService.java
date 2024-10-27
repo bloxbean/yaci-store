@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,7 @@ import java.util.Optional;
 @Slf4j
 public class AdaPotService {
     private final AdaPotStorage adaPotStorage;
-
+    
     public void updateAdaPotDeposit(EventMetadata metadata, AdaPot prevAdaPot, BigInteger totalDeposit, BigInteger totalFee, BigInteger netUtxo, boolean isEpochBoundary) {
         updateAdaPotDeposit(metadata, prevAdaPot, totalDeposit, totalFee, netUtxo, BigInteger.ZERO, isEpochBoundary);
     }
@@ -61,6 +62,7 @@ public class AdaPotService {
         return prevAdaPot;
     }
 
+    @Transactional
     public AdaPot updateReserveAndTreasury(int epoch, BigInteger treasury, BigInteger reserves) {
         adaPotStorage.findByEpochAtEpochBoundary(epoch)
                 .ifPresentOrElse(adaPot -> {

@@ -20,6 +20,9 @@ public class StakeSnapshotService {
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking stake snapshot for epoch : " + epoch);
 
+        // Delete existing snapshot data if any for the epoch using jdbc tempalte
+        jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
+
         var query = """
                     WITH RankedDelegations AS (
                         SELECT
