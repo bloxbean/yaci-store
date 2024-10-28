@@ -25,6 +25,8 @@ public class DRepRegistration extends BlockAwareDomain {
 
     private long certIndex;
 
+    private int txIndex;
+
     private CertificateType type;
 
     private Long slot;

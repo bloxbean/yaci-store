@@ -34,7 +34,8 @@ public class DRepRegistrationProcessor {
         List<DRepRegistration> dRepRegistrations = new ArrayList<>();
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
-            int index = 0;
+            int certIndex = 0;
+            int txIndex = txCertificates.getBlockIndex();
 
             for (var certificate : txCertificates.getCertificates()) {
                 DRepRegistration drepRegistration = switch (certificate.getType()) {
@@ -42,17 +43,17 @@ public class DRepRegistrationProcessor {
                         RegDrepCert regDrepCert = (RegDrepCert) certificate;
                         yield buildDRepRegistration(regDrepCert.getDrepCredential(), regDrepCert.getAnchor(),
                                 regDrepCert.getCoin(), certificate.getType(),
-                                txHash, index, eventMetadata);
+                                txHash, certIndex, txIndex, eventMetadata);
                     }
                     case UNREG_DREP_CERT -> {
                         UnregDrepCert unregDrepCert = (UnregDrepCert) certificate;
                         yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
-                                certificate.getType(), txHash, index, eventMetadata);
+                                certificate.getType(), txHash, certIndex, txIndex, eventMetadata);
                     }
                     case UPDATE_DREP_CERT -> {
                         UpdateDrepCert updateDrepCert = (UpdateDrepCert) certificate;
                         yield buildDRepRegistration(updateDrepCert.getDrepCredential(), updateDrepCert.getAnchor(), null,
-                                certificate.getType(), txHash, index, eventMetadata);
+                                certificate.getType(), txHash, certIndex, txIndex, eventMetadata);
                     }
                     default -> null;
                 };
@@ -60,7 +61,7 @@ public class DRepRegistrationProcessor {
                 if (drepRegistration != null) {
                     dRepRegistrations.add(drepRegistration);
                 }
-                index++;
+                certIndex++;
             }
         }
         if (!dRepRegistrations.isEmpty()) {
@@ -70,10 +71,11 @@ public class DRepRegistrationProcessor {
 
     private DRepRegistration buildDRepRegistration(Credential drepCredential, Anchor anchor, BigInteger deposit,
                                                    CertificateType certificateType, String txHash,
-                                                   int certIndex, EventMetadata eventMetadata) {
+                                                   int certIndex, int txIndex, EventMetadata eventMetadata) {
         DRepRegistration drepRegistration = DRepRegistration.builder()
                 .txHash(txHash)
                 .certIndex(certIndex)
+                .txIndex(txIndex)
                 .type(certificateType)
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
