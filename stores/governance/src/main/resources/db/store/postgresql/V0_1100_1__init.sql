@@ -106,6 +106,7 @@ create table delegation_vote
 (
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     address         varchar(255), -- bech32 stake address
     drep_hash       varchar(56),
     drep_id         varchar(255),
@@ -134,6 +135,7 @@ create table drep_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     type            varchar(50),
     deposit         bigint,
     drep_hash       varchar(56),
