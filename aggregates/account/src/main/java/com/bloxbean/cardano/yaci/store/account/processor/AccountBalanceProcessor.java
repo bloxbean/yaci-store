@@ -223,38 +223,35 @@ public class AccountBalanceProcessor {
                 log.debug("Total time to first process : " + (System.currentTimeMillis() - t0));
             }
 
-
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
-            /**
-            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
-                    .thenAcceptAsync(addressBalances -> {
-                        transactionTemplate.execute(status -> {
-                            //Save address balances (AddressBalance)
-                            long t2 = System.currentTimeMillis();
-                            accountBalanceStorage.saveAddressBalances(addressBalances);
-                            long t3 = System.currentTimeMillis();
-                            log.info("\tTotal Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
+            CompletableFuture<Void> addressBalFuture = null;
+            if (accountStoreProperties.isAddressBalanceEnabled()) {
+                addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
+                        .thenAcceptAsync(addressBalances -> {
+                            transactionTemplate.execute(status -> {
+                                //Save address balances (AddressBalance)
+                                long t2 = System.currentTimeMillis();
+                                accountBalanceStorage.saveAddressBalances(addressBalances);
+                                long t3 = System.currentTimeMillis();
+                                log.info("\tTotal Address Balance records {}, Time taken to save: {}", addressBalances.size(), (t3 - t2));
 
-                            //Cleanup history data
-                            long t4 = System.currentTimeMillis();
-                            if (addressBalances != null && addressBalances.size() > 0) {
-                                List<Pair<String, String>> addresseUnitList =
-                                        addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
-                                accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
-                            }
-                            long t5 = System.currentTimeMillis();
-                            log.info("\tTime taken to delete address balance history: {}", (t5 - t4));
+                                //Cleanup history data
+                                long t4 = System.currentTimeMillis();
+                                if (addressBalances != null && addressBalances.size() > 0) {
+                                    List<Pair<String, String>> addresseUnitList =
+                                            addressBalances.stream().map(addressBalance -> Pair.of(addressBalance.getAddress(), addressBalance.getUnit())).distinct().toList();
+                                    accountBalanceCleanupHelper.deleteAddressBalanceBeforeConfirmedSlot(addresseUnitList, firstBlockInBatchMetadata.getSlot());
+                                }
+                                long t5 = System.currentTimeMillis();
+                                log.info("\tTime taken to delete address balance history: {}", (t5 - t4));
 
-                            return null;
-                        });
-                    }, parallelExecutor.getVirtualThreadExecutor());
-             **/
-
-            CompletableFuture<Void> addressBalFuture = CompletableFuture.supplyAsync(() -> {
-//                System.out.println("Processing address balances");
-                return null;
-            });
+                                return null;
+                            });
+                        }, parallelExecutor.getVirtualThreadExecutor());
+            } else {
+                addressBalFuture = CompletableFuture.completedFuture(null);
+            }
 
             CompletableFuture<Void> stakeAddrBalFuture = null;
             if (accountStoreProperties.isStakeAddressBalanceEnabled()) {
@@ -280,16 +277,15 @@ public class AccountBalanceProcessor {
                                 return null;
                             });
                         }, parallelExecutor.getVirtualThreadExecutor());
-
-                CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
             } else {
-                addressBalFuture.join();
+                stakeAddrBalFuture = CompletableFuture.completedFuture(null);
             }
+
+            CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
 
             try {
                 addressBalFuture.get();
-                if (stakeAddrBalFuture != null)
-                    stakeAddrBalFuture.get();
+                stakeAddrBalFuture.get();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {

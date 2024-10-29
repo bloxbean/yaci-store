@@ -15,6 +15,10 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private int maxBalanceRecordsPerAddressPerBatch = 3;
+
+    @Builder.Default
+    private boolean addressBalanceEnabled = true;
+
     @Builder.Default
     private boolean stakeAddressBalanceEnabled = true;
 
