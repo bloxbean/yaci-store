@@ -10,4 +10,6 @@ public interface RewardCalcJobStorage {
     List<RewardCalcJob> getJobsByStatus(RewardCalcStatus status);
 
     void save(RewardCalcJob job);
+
+    int deleteBySlotGreaterThan(long slot);
 }

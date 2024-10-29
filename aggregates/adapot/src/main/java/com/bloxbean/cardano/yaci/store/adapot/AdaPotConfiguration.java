@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.AdaPotRepo
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.EpochStakeRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
+import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -44,13 +45,15 @@ public class AdaPotConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RewardStorage rewardStorage(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository, Mapper rewardMapper) {
-        return new RewardStorageImpl(instantRewardRepository, rewardRepository, rewardMapper);
+    public RewardStorage rewardStorage(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository,
+                                       Mapper rewardMapper, DSLContext dslContext) {
+        return new RewardStorageImpl(instantRewardRepository, rewardRepository, rewardMapper, dslContext);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public RewardStorageReader rewardStorageReader(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository, Mapper rewardMapper) {
+    public RewardStorageReader rewardStorageReader(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository,
+                                                   Mapper rewardMapper) {
         return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardMapper);
     }
 

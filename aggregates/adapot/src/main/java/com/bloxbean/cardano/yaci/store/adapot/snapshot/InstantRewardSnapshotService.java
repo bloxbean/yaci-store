@@ -1,9 +1,12 @@
 package com.bloxbean.cardano.yaci.store.adapot.snapshot;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -14,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class InstantRewardSnapshotService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final InstantRewardRepository instantRewardRepository;
 
     @Transactional
     public void takeInstantRewardSnapshot(EventMetadata metadata, int epoch) {
@@ -178,5 +182,12 @@ public class InstantRewardSnapshotService {
 
         log.info("Stake snapshot for epoch : {} is taken", epoch);
 
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRollback(RollbackEvent rollbackEvent) {
+        int count = instantRewardRepository.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} instant reward records", count);
     }
 }

@@ -60,3 +60,15 @@ create table reward
     primary key (address, earned_epoch, type, pool_id)
 );
 
+drop table if exists reward_calc_jobs;
+create table reward_calc_jobs
+(
+    epoch  integer primary key ,
+    slot   bigint,
+    status varchar(30)   not null,
+    total_time bigint,
+    reward_calc_time bigint,
+    update_reward_time bigint,
+    stake_snapshot_time bigint,
+    error_message text
+);

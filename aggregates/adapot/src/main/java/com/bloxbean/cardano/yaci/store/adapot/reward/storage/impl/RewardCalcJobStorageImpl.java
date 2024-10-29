@@ -25,4 +25,9 @@ public class RewardCalcJobStorageImpl implements RewardCalcJobStorage {
     public void save(RewardCalcJob job) {
         rewardCalcJobRepository.save(mapper.toEntity(job));
     }
+
+    @Override
+    public int deleteBySlotGreaterThan(long slot) {
+        return rewardCalcJobRepository.deleteBySlotGreaterThan(slot);
+    }
 }

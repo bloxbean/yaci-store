@@ -3,11 +3,9 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.reward.service.RewardCalcJobManager;
-import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
+import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
-import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
-import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
@@ -30,6 +28,7 @@ public class RewardProcessor {
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
     private final RewardCalcJobManager rewardCalcJobManager;
+    private final RewardCalcJobStorage rewardCalcJobStorage;
 
     @EventListener
     @Transactional
@@ -84,9 +83,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleRewardCalculation(EpochTransitionCommitEvent epochTransitionCommitEvent) {
-        long nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(0);
+        Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
 
-        if (epochTransitionCommitEvent.getEpoch() < nonByronEpoch) {
+        if (nonByronEpoch == null || epochTransitionCommitEvent.getEpoch() < nonByronEpoch) {
             log.info("Epoch : {} is Byron era. Skipping reward calculation", epochTransitionCommitEvent.getEpoch());
             return;
         }
@@ -101,6 +100,9 @@ public class RewardProcessor {
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         int count = rewardStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} rewards records", count);
+
+        count = rewardCalcJobStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} reward calculation jobs", count);
 
         //TODO -- What about rewards
     }

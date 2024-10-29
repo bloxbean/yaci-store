@@ -82,11 +82,4 @@ public class AdaPotProcessor {
         log.info("AdaPot updated for epoch transition : {}", epochTransitionCommitEvent.getMetadata().getEpochNumber());
 
     }
-
-    private Integer getFirstNonByronEpoch() {
-        if (nonByronEpoch == null) {
-            nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
-        }
-        return nonByronEpoch;
-    }
 }

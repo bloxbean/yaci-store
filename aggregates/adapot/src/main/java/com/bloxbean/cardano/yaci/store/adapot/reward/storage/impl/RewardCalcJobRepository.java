@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface RewardCalcJobRepository extends JpaRepository<RewardCalcJobEntity, Long> {
     List<RewardCalcJobEntity> findByStatusOrderByEpoch(RewardCalcStatus status);
+
+    int deleteBySlotGreaterThan(Long slot);
 }

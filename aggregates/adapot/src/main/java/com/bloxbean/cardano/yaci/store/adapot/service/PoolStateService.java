@@ -10,8 +10,6 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
 import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
-import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +32,6 @@ public class PoolStateService {
     private final StoreProperties storeProperties;
     private final PoolStorageReader poolStorageReader;
     private final EpochStakeStorage epochStakeStorage;
-    private final StartService startService;
-    private final EraService eraService;
 
     public List<PoolState> getHistoryOfAllPoolsInEpoch(Integer epoch, List<PoolBlock> poolBlocksInEpoch) { //TODO -- che
         List<PoolState> poolHistories = new ArrayList<>();
