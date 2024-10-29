@@ -18,6 +18,9 @@ public class RewardCalcJob {
     private Integer epoch;
     private Long slot;
     private RewardCalcStatus status;
-    private Long timeTaken;
+    private Long totalTime;
+    private Long rewardCalcTime;
+    private Long updateRewardTime;
+    private Long stakeSnapshotTime;
     private String errorMessage;
 }

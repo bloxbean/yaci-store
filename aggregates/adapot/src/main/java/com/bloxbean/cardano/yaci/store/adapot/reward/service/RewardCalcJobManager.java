@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -68,7 +69,7 @@ public class RewardCalcJobManager {
     }
 
     public void triggerRewardCalcJob(int epoch, long slot) {
-        RewardCalcJob job = new RewardCalcJob(epoch, slot, RewardCalcStatus.NOT_STARTED, 0L, null);
+        RewardCalcJob job = new RewardCalcJob(epoch, slot, RewardCalcStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
         rewardCalcJobStorage.save(job);
         jobQueue.add(job);
     }
@@ -89,26 +90,60 @@ public class RewardCalcJobManager {
                 }
 
                 if (job != null) {
-                    // Set job status to STARTED and update in the database
-                    job.setStatus(RewardCalcStatus.STARTED);
-                    rewardCalcJobStorage.save(job);
-
-                    long t1 = System.currentTimeMillis();
-                    boolean success = calculateRewards(job);
-                    long t2 = System.currentTimeMillis();
-                    job.setTimeTaken(t2 - t1);
-                    if (success) {
-                        job.setStatus(RewardCalcStatus.COMPLETED);
-                        rewardCalcJobStorage.save(job);
-                    } else {
-                        job.setErrorMessage("Reward calculation failed");
-                        rewardCalcJobStorage.save(job);
-                        //TODO -- Retry logic
-                        log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
+                    boolean status = processJob(job);
+                    if (!status) {
+                        log.error("Reward calculation failed for epoch : " + job.getEpoch());
+                        return;
                     }
                 }
             } catch (Exception e) {
                 log.error("Error processing reward calc job", e);
+            }
+        }
+    }
+
+    private boolean processJob(RewardCalcJob job) throws InterruptedException {
+        // Set job status to STARTED and update in the database
+        job.setStatus(RewardCalcStatus.STARTED);
+        rewardCalcJobStorage.save(job);
+
+        int retryCount = 0;
+
+        while (true) {
+
+            // Reset times
+            job.setTotalTime(0L);
+            job.setRewardCalcTime(0L);
+            job.setUpdateRewardTime(0L);
+
+            var start = Instant.now();
+
+            //calculate rewards
+            boolean success = calculateRewards(job);
+
+            var end = Instant.now();
+            job.setTotalTime(end.toEpochMilli() - start.toEpochMilli());
+
+            if (success) {
+                job.setStatus(RewardCalcStatus.COMPLETED);
+                job.setErrorMessage(null);
+                rewardCalcJobStorage.save(job);
+                return true;
+            } else {
+                job.setErrorMessage("Reward calculation failed");
+                rewardCalcJobStorage.save(job);
+                //TODO -- Retry logic
+                log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
+                retryCount++;
+
+                if(retryCount > 3) {
+                    log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
+                    job.setErrorMessage("Reward calculation failed. Retry count exceeded");
+                    rewardCalcJobStorage.save(job);
+                    return false;
+                }
+
+                Thread.sleep(5000);
             }
         }
     }
@@ -123,8 +158,11 @@ public class RewardCalcJobManager {
             }
 
             //Calculate epoch rewards
+            var start = Instant.now();
             int epoch = job.getEpoch();
             var epochCalculationResult = epochRewardCalculationService.calculateEpochRewards(epoch);
+            var end = Instant.now();
+            job.setRewardCalcTime(end.toEpochMilli() - start.toEpochMilli());
 
             if (storeProperties.isMainnet()) {
                 //TODO -- Verify treasury and rewards value
@@ -146,10 +184,16 @@ public class RewardCalcJobManager {
             }
 
             //update rewards
+            start = Instant.now();
             epochRewardCalculationService.updateEpochRewards(epoch, epochCalculationResult);
+            end = Instant.now();
+            job.setUpdateRewardTime(end.toEpochMilli() - start.toEpochMilli());
 
             //Now take snapshot
+            start = Instant.now();
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
+            end = Instant.now();
+            job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
 
             return true;
         } catch (Exception e) {

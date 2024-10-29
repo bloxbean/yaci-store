@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -39,6 +40,14 @@ public class EraStorageImpl implements EraStorage {
     public Optional<CardanoEra> findCurrentEra() {
         return eraRepository.findCurrentEra()
                 .map(eraEntity -> eraMapper.toEra(eraEntity));
+    }
+
+    @Override
+    public List<CardanoEra> findAllEras() {
+        return eraRepository.findAllEras()
+                .stream()
+                .map(eraEntity -> eraMapper.toEra(eraEntity))
+                .toList();
     }
 
 }

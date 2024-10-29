@@ -17,15 +17,22 @@ public class RewardCalcJobEntity {
     @Column(name = "status", nullable = false)
     private RewardCalcStatus status;
 
-    @Column(name = "time_taken")
-    private Long timeTaken;
+    @Column(name = "total_time")
+    private Long totalTime;
+
+    @Column(name = "reward_calc_time")
+    private Long rewardCalcTime;
+
+    @Column(name = "update_reward_time")
+    private Long updateRewardTime;
+
+    @Column(name = "stake_snapshot_time")
+    private Long stakeSnapshotTime;
 
     @Column(name = "error_message")
     private String errorMessage;
 
     public RewardCalcJobEntity() {}
-
-    // Getters and setters
 
     public long getEpoch() {
         return epoch;
@@ -51,12 +58,36 @@ public class RewardCalcJobEntity {
         this.status = status;
     }
 
-    public Long getTimeTaken() {
-        return timeTaken;
+    public Long getTotalTime() {
+        return totalTime;
     }
 
-    public void setTimeTaken(Long timeTaken) {
-        this.timeTaken = timeTaken;
+    public void setTotalTime(Long totalTime) {
+        this.totalTime = totalTime;
+    }
+
+    public Long getRewardCalcTime() {
+        return rewardCalcTime;
+    }
+
+    public void setRewardCalcTime(Long rewardCalcTime) {
+        this.rewardCalcTime = rewardCalcTime;
+    }
+
+    public Long getUpdateRewardTime() {
+        return updateRewardTime;
+    }
+
+    public void setUpdateRewardTime(Long updateRewardTime) {
+        this.updateRewardTime = updateRewardTime;
+    }
+
+    public Long getStakeSnapshotTime() {
+        return stakeSnapshotTime;
+    }
+
+    public void setStakeSnapshotTime(Long stakeSnapshotTime) {
+        this.stakeSnapshotTime = stakeSnapshotTime;
     }
 
     public String getErrorMessage() {
