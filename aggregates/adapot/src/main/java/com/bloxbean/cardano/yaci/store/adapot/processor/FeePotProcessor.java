@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
@@ -12,7 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-@Component
+//@Component
+//TODO : Remove this
 @RequiredArgsConstructor
 @Slf4j
 public class FeePotProcessor {

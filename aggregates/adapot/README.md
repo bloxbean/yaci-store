@@ -12,7 +12,7 @@
 
 ## Rollback Script For Testing
 
-To make sure stake address balance is calculated correctly, we need to rollback to last block of an epoch.
+To make sure stake address balance is calculated correctly, **we need to rollback to last block of an epoch.**
 
 ```sql
 truncate cursor_;
@@ -41,6 +41,7 @@ delete from transaction where slot > :slot;
 delete  from transaction_witness where slot > :slot;
 delete from tx_input where tx_input.spent_at_slot > :slot;
 delete from withdrawal where slot > :slot;
+delete from reward_calc_jobs where slot > :slot;
 
 
 ```

@@ -44,7 +44,7 @@ public class EpochInfoService {
 
         //TODO -- Fee .. Can we get it from adapot or sum transaction fees from transaction table.
       //  var adaPot = adaPotService.getAdaPot(epoch);
-        var adaPot = adaPotStorage.findByEpochAtEpochBoundary(epoch + 1)//To get fee collected in epoch e
+        var adaPot = adaPotStorage.findByEpoch(epoch + 1)//To get fee collected in epoch e
                 .orElse(null);
 
         log.error("AdaPot not found for epoch : {}", epoch);

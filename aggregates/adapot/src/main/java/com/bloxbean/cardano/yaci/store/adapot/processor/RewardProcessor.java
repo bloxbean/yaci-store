@@ -2,15 +2,12 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.reward.service.RewardCalcJobManager;
 import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +21,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class RewardProcessor {
-    private final EraService eraService;
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
-    private final RewardCalcJobManager rewardCalcJobManager;
     private final RewardCalcJobStorage rewardCalcJobStorage;
 
     @EventListener
@@ -78,21 +73,6 @@ public class RewardProcessor {
 
         instantRewardSnapshotService.takeInstantRewardSnapshot(epochTransitionCommitEvent.getMetadata(), epochTransitionCommitEvent.getPreviousEpoch());
         log.info("Instant reward snapshot taken for epoch : {}", snapshotEpoch);
-    }
-
-    @EventListener
-    @Transactional
-    public void handleRewardCalculation(EpochTransitionCommitEvent epochTransitionCommitEvent) {
-        Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
-
-        if (nonByronEpoch == null || epochTransitionCommitEvent.getEpoch() < nonByronEpoch) {
-            log.info("Epoch : {} is Byron era. Skipping reward calculation", epochTransitionCommitEvent.getEpoch());
-            return;
-        }
-
-        //Calculate epoch rewards
-        Integer epoch = epochTransitionCommitEvent.getEpoch();
-        rewardCalcJobManager.triggerRewardCalcJob(epoch, epochTransitionCommitEvent.getMetadata().getSlot());
     }
 
     @EventListener

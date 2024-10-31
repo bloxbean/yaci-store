@@ -3,9 +3,13 @@ package com.bloxbean.cardano.yaci.store.adapot.reward.service;
 import com.bloxbean.cardano.yaci.store.adapot.reward.domain.RewardCalcJob;
 import com.bloxbean.cardano.yaci.store.adapot.reward.domain.RewardCalcStatus;
 import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
+import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
+import com.bloxbean.cardano.yaci.store.adapot.snapshot.DepositSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
+import com.bloxbean.cardano.yaci.store.adapot.snapshot.UtxoSnapshotService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -34,17 +38,29 @@ public class RewardCalcJobManager {
     private EraService eraService;
     private EpochRewardCalculationService epochRewardCalculationService;
     private StakeSnapshotService stakeSnapshotService;
+    private DepositSnapshotService depositSnapshotService;
+    private UtxoSnapshotService utxoSnapshotService;
+    private AdaPotService adaPotService;
+    private ParallelExecutor parallelExecutor;
 
     public RewardCalcJobManager(StoreProperties storeProperties,
                                 RewardCalcJobStorage rewardCalcJobStorage,
                                 EraService eraService,
                                 EpochRewardCalculationService epochRewardCalculationService,
-                                StakeSnapshotService stakeSnapshotService) {
+                                StakeSnapshotService stakeSnapshotService,
+                                DepositSnapshotService depositSnapshotService,
+                                UtxoSnapshotService utxoSnapshotService,
+                                AdaPotService adaPotService,
+                                ParallelExecutor parallelExecutor) {
         this.storeProperties = storeProperties;
         this.rewardCalcJobStorage = rewardCalcJobStorage;
         this.eraService = eraService;
         this.epochRewardCalculationService = epochRewardCalculationService;
         this.stakeSnapshotService = stakeSnapshotService;
+        this.depositSnapshotService = depositSnapshotService;
+        this.utxoSnapshotService = utxoSnapshotService;
+        this.adaPotService = adaPotService;
+        this.parallelExecutor = parallelExecutor;
 
         // Reset jobs that were in 'STARTED' state to 'NOT_STARTED' and load pending jobs
         resetStartedJobs();
@@ -110,19 +126,35 @@ public class RewardCalcJobManager {
         int retryCount = 0;
 
         while (true) {
-
             // Reset times
             job.setTotalTime(0L);
             job.setRewardCalcTime(0L);
             job.setUpdateRewardTime(0L);
 
             var start = Instant.now();
-
-            //calculate rewards
-            boolean success = calculateRewards(job);
-
+            var deposits = depositSnapshotService.getNetStakeDepositInEpoch(job.getEpoch() - 1);
+            adaPotService.updateAdaPotDeposit(job.getEpoch(), deposits);
             var end = Instant.now();
+            log.info("Deposit snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+
+            start = Instant.now();
+            boolean success = calculateRewards(job);
+            end = Instant.now();
             job.setTotalTime(end.toEpochMilli() - start.toEpochMilli());
+            log.info("Reward calculation time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+
+            /**
+             //Take UTXO snapshot
+             var utxoSnapshotFuture = CompletableFuture.supplyAsync(() -> {
+             var start = Instant.now();
+             var utxo = utxoSnapshotService.getTotalUtxosInEpoch(job.getEpoch(), job.getSlot());
+             adaPotService.updateEpochUtxo(job.getEpoch(), utxo);
+             var end = Instant.now();
+             log.info("UTXO snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+             return true;
+             }, parallelExecutor.getVirtualThreadExecutor());
+             **/
+
 
             if (success) {
                 job.setStatus(RewardCalcStatus.COMPLETED);
@@ -136,7 +168,7 @@ public class RewardCalcJobManager {
                 log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
                 retryCount++;
 
-                if(retryCount > 3) {
+                if (retryCount > 3) {
                     log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
                     job.setErrorMessage("Reward calculation failed. Retry count exceeded");
                     rewardCalcJobStorage.save(job);

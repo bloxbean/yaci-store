@@ -25,10 +25,6 @@ public class AdaPotEntity extends BlockAwareEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Id
-    @Column(name = "epoch_boundary")
-    private Boolean epochBoundary;
-
     @Column(name = "deposits")
     private BigInteger deposits;
 

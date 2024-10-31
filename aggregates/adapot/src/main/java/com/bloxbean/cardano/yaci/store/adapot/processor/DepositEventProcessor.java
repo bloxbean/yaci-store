@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRetiredEvent;
-import com.bloxbean.cardano.yaci.store.staking.domain.event.StakingDepositEvent;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
@@ -34,13 +33,14 @@ public class DepositEventProcessor {
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
     private final ApplicationEventPublisher publisher;
 
-    private BigInteger batchDepositAmount = BigInteger.ZERO;
-    private BigInteger batchRefundAmount = BigInteger.ZERO;
-    private BigInteger poolRefundAmount = BigInteger.ZERO;
-    private BigInteger refundToTreasury = BigInteger.ZERO;
+//    private BigInteger batchDepositAmount = BigInteger.ZERO;
+//    private BigInteger batchRefundAmount = BigInteger.ZERO;
+//    private BigInteger poolRefundAmount = BigInteger.ZERO;
+//    private BigInteger refundToTreasury = BigInteger.ZERO;
 
-    @EventListener
-    @Transactional
+   // @EventListener
+   // @Transactional
+    /**
     public void handleStakingDepositEvent(StakingDepositEvent stakingDepositEvent) {
         var metadata = stakingDepositEvent.getMetadata();
         //Check if there is any existing value for this epoch
@@ -70,8 +70,10 @@ public class DepositEventProcessor {
 
         batchDepositAmount = totalDepositAmount;
     }
+    **/
 
     //Handles pool deposit refund for retire pool during epoch change
+    //PoolRetiredEvent is published during PreEpochTransitionEvent
     @EventListener
     @Transactional
     public void handlePoolRetiredEvent(PoolRetiredEvent poolRetiredEvent) {
@@ -115,7 +117,7 @@ public class DepositEventProcessor {
                     || regCert.getType() == CertificateType.UNREG_CERT) { //reward account not found or deregistered
 
                 //send the deposit to treasury
-                refundToTreasury = refundToTreasury.add(poolDeposit);
+                //refundToTreasury = refundToTreasury.add(poolDeposit);
                 log.info("Pool reward account is not registered. Sending the deposit to treasury {}", rewardAccount);
             } else {
                 //send the deposit to the pool owner
@@ -129,7 +131,7 @@ public class DepositEventProcessor {
             }
         }
 
-        poolRefundAmount = refundAmt;
+        //poolRefundAmount = refundAmt;
 
         //Publish reward event to process refund
         var rewardEvent = RewardEvent.builder()
@@ -141,28 +143,28 @@ public class DepositEventProcessor {
         publisher.publishEvent(rewardEvent);
     }
 
-    public BigInteger getBatchDepositAmount() {
-        return batchDepositAmount;
-    }
-
-    public BigInteger getBatchRefundAmount() {
-        return batchRefundAmount;
-    }
-
-    public BigInteger getPoolRefundAmount() {
-        return poolRefundAmount;
-    }
-
-    public BigInteger getRefundToTreasury() {
-        return refundToTreasury;
-    }
-
-    public void reset() {
-        batchDepositAmount = BigInteger.ZERO;
-        batchRefundAmount = BigInteger.ZERO;
-        poolRefundAmount = BigInteger.ZERO;
-        refundToTreasury = BigInteger.ZERO;
-    }
+//    public BigInteger getBatchDepositAmount() {
+//        return batchDepositAmount;
+//    }
+//
+//    public BigInteger getBatchRefundAmount() {
+//        return batchRefundAmount;
+//    }
+//
+//    public BigInteger getPoolRefundAmount() {
+//        return poolRefundAmount;
+//    }
+//
+//    public BigInteger getRefundToTreasury() {
+//        return refundToTreasury;
+//    }
+//
+//    public void reset() {
+//        batchDepositAmount = BigInteger.ZERO;
+//        batchRefundAmount = BigInteger.ZERO;
+//        poolRefundAmount = BigInteger.ZERO;
+//        refundToTreasury = BigInteger.ZERO;
+//    }
 
     @EventListener
     @Transactional

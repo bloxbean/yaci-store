@@ -21,18 +21,8 @@ public class AdaPotStorageImpl implements AdaPotStorage {
     }
 
     @Override
-    public Optional<AdaPot> findRecentByEpoch(long epoch) {
-        return adaPotRepository.findRecentByEpoch(epoch).map(adaPotMapper::toAdaPot);
-    }
-
-    @Override
     public Optional<AdaPot> findByEpoch(long epoch) {
         return adaPotRepository.findByEpoch(epoch).map(adaPotMapper::toAdaPot);
-    }
-
-    @Override
-    public Optional<AdaPot> findByEpochAtEpochBoundary(long epoch) {
-        return adaPotRepository.findByEpochAtEpochBoundary(epoch).map(adaPotMapper::toAdaPot);
     }
 
     @Override

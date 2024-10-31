@@ -339,7 +339,8 @@ public class EpochRewardCalculationService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateEpochRewards(int epoch, EpochCalculationResult epochCalculationResult) {
         if(epochCalculationResult != null) {
-            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves());
+            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves(),
+                    BigInteger.ZERO);
 
             //Update member rewards
             updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
@@ -350,7 +351,8 @@ public class EpochRewardCalculationService {
     public void calculateAndUpdateEpochRewards(int epoch) {
         var epochCalculationResult = calculateEpochRewards(epoch);
         if(epochCalculationResult != null) {
-            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves());
+            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(),
+                    epochCalculationResult.getReserves(), BigInteger.ZERO);
 
             //Update member rewards
             updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
