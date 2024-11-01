@@ -9,13 +9,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class AdaPotAutoConfigProperties {
 
-    private AdaPot adaPot;
+    private Adapot adaPot = new Adapot();
 
     @Getter
     @Setter
-    public static final class AdaPot {
+    public static final class Adapot {
         private boolean enabled = false;
         private boolean apiEnabled = true;
+
+        //Batch size for updating rewards in the db
+        private int updateRewardDbBatchSize = 200;
     }
 
 }

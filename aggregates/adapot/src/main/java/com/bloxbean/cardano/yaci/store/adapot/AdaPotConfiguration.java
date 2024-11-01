@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         prefix = "store.adapot",
         name = "enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.adapot"})
 @EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.adapot"})
