@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.reward.service.NetworkConfigService;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class EpochRewardCalculationService {
     private final StoreProperties storeProperties;
+    private final AdaPotProperties adaPotProperties;
     private final GenesisConfig genesisConfig;
     private final NetworkConfigService networkConfigService;
     private final AdaPotService adaPotService;
@@ -369,6 +371,9 @@ public class EpochRewardCalculationService {
         //Delete any existing member or leader rewards for the epoch. Re-run scenario
         rewardStorage.deleteLeaderMemberRewards(earnedEpoch);
 
+        List<com.bloxbean.cardano.yaci.store.adapot.domain.Reward> batchedRewards = new ArrayList<>();
+        int batchSize = adaPotProperties.getUpdateRewardDbBatchSize();
+
         for(PoolRewardCalculationResult poolRewardCalculationResult: poolRewardCalculationResults) {
             String poolRewardAccount = poolRewardCalculationResult.getRewardAddress();
             BigInteger leaderRewardAmt = poolRewardCalculationResult.getOperatorReward();
@@ -386,7 +391,7 @@ public class EpochRewardCalculationService {
                     .slot(spendableEpochStartAbsoluteSlot)
                     .build();
 
-            poolRewards.add(leaderReward);
+            batchedRewards.add(leaderReward);
 
             Set<Reward> memberRewards = poolRewardCalculationResult.getMemberRewards();
 
@@ -404,11 +409,23 @@ public class EpochRewardCalculationService {
                             .build();
                 }).toList();
 
-                poolRewards.addAll(memberRewardsList);
+                batchedRewards.addAll(memberRewardsList);
             }
 
-            rewardStorage.saveRewards(poolRewards);
+            // Check if the batch size limit is reached and save rewards if it is
+            if (batchedRewards.size() >= batchSize) {
+                rewardStorage.saveRewards(batchedRewards);
+                log.info("Batch of rewards saved >> " + batchedRewards.size());
+                batchedRewards.clear();  // Clear the list to start a new batch
+            }
+
             log.info("Rewards updated for pool : " + poolHash + " for epoch " + epoch + " with rewards : " + poolRewards.size());
+        }
+
+        // Save any remaining rewards after the loop
+        if (!batchedRewards.isEmpty()) {
+            rewardStorage.saveRewards(batchedRewards);
+            log.info("Final batch of rewards saved: " + batchedRewards.size());
         }
     }
 }

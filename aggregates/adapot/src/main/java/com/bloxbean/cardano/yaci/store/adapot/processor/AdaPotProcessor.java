@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.reward.service.RewardCalcJobManager;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
+@ReadOnly(false)
 @Slf4j
 public class AdaPotProcessor {
     private final EraService eraService;
