@@ -25,8 +25,8 @@ public class AdaPotEntity extends BlockAwareEntity {
     @Column(name = "slot")
     private Long slot;
 
-    @Column(name = "deposits")
-    private BigInteger deposits;
+    @Column(name = "deposits_stake")
+    private BigInteger depositsStake;
 
     @Column(name = "fees")
     private BigInteger fees;
@@ -42,5 +42,11 @@ public class AdaPotEntity extends BlockAwareEntity {
 
     @Column(name = "rewards")
     private BigInteger rewards;
+
+    @Column(name = "deposits_drep")
+    private BigInteger depositsDrep;
+
+    @Column(name = "deposits_proposal")
+    private BigInteger depositsProposal;
 
 }

@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
-import com.bloxbean.cardano.yaci.store.adapot.reward.service.NetworkConfigService;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
@@ -24,7 +23,6 @@ import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.EpochCalculation;
-import org.cardanofoundation.rewards.calculation.config.NetworkConfig;
 import org.cardanofoundation.rewards.calculation.domain.*;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -95,7 +93,7 @@ public class EpochRewardCalculationService {
                 .treasury(adaPot.getTreasury())
                 .reserves(adaPot.getReserves())
                 .rewards(adaPot.getRewards())
-                .deposits(adaPot.getDeposits())
+                .deposits(adaPot.getDepositsStake())
                 .adaInCirculation(adaPot.getUtxo())
                 .fees(adaPot.getFees())
                 .build();

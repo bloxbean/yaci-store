@@ -41,7 +41,7 @@ delete from transaction where slot > :slot;
 delete  from transaction_witness where slot > :slot;
 delete from tx_input where tx_input.spent_at_slot > :slot;
 delete from withdrawal where slot > :slot;
-delete from reward_calc_jobs where slot > :slot;
+delete from adapot_jobs where slot > :slot;
 
 
 ```

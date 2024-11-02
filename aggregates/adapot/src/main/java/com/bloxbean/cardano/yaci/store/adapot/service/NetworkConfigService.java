@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.adapot.reward.service;
+package com.bloxbean.cardano.yaci.store.adapot.service;
 
 import org.cardanofoundation.rewards.calculation.config.NetworkConfig;
 import org.springframework.stereotype.Component;

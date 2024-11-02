@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.adapot.reward.domain;
+package com.bloxbean.cardano.yaci.store.adapot.job.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -14,10 +14,11 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class RewardCalcJob {
+public class AdaPotJob {
     private Integer epoch;
     private Long slot;
-    private RewardCalcStatus status;
+    private AdaPotJobType type;
+    private AdaPotJobStatus status;
     private Long totalTime;
     private Long rewardCalcTime;
     private Long updateRewardTime;

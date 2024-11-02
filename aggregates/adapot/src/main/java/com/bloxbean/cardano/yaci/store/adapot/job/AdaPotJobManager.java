@@ -1,8 +1,9 @@
-package com.bloxbean.cardano.yaci.store.adapot.reward.service;
+package com.bloxbean.cardano.yaci.store.adapot.job;
 
-import com.bloxbean.cardano.yaci.store.adapot.reward.domain.RewardCalcJob;
-import com.bloxbean.cardano.yaci.store.adapot.reward.domain.RewardCalcStatus;
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.DepositSnapshotService;
@@ -33,10 +34,10 @@ import java.util.stream.Collectors;
 @Component
 @ReadOnly(false)
 @Slf4j
-public class RewardCalcJobManager {
-    private final BlockingQueue<RewardCalcJob> jobQueue = new LinkedBlockingQueue<>();
+public class AdaPotJobManager {
+    private final BlockingQueue<AdaPotJob> jobQueue = new LinkedBlockingQueue<>();
     private StoreProperties storeProperties;
-    private RewardCalcJobStorage rewardCalcJobStorage;
+    private AdaPotJobStorage adaPotJobStorage;
     private EraService eraService;
     private EpochRewardCalculationService epochRewardCalculationService;
     private StakeSnapshotService stakeSnapshotService;
@@ -45,17 +46,17 @@ public class RewardCalcJobManager {
     private AdaPotService adaPotService;
     private ParallelExecutor parallelExecutor;
 
-    public RewardCalcJobManager(StoreProperties storeProperties,
-                                RewardCalcJobStorage rewardCalcJobStorage,
-                                EraService eraService,
-                                EpochRewardCalculationService epochRewardCalculationService,
-                                StakeSnapshotService stakeSnapshotService,
-                                DepositSnapshotService depositSnapshotService,
-                                UtxoSnapshotService utxoSnapshotService,
-                                AdaPotService adaPotService,
-                                ParallelExecutor parallelExecutor) {
+    public AdaPotJobManager(StoreProperties storeProperties,
+                            AdaPotJobStorage adaPotJobStorage,
+                            EraService eraService,
+                            EpochRewardCalculationService epochRewardCalculationService,
+                            StakeSnapshotService stakeSnapshotService,
+                            DepositSnapshotService depositSnapshotService,
+                            UtxoSnapshotService utxoSnapshotService,
+                            AdaPotService adaPotService,
+                            ParallelExecutor parallelExecutor) {
         this.storeProperties = storeProperties;
-        this.rewardCalcJobStorage = rewardCalcJobStorage;
+        this.adaPotJobStorage = adaPotJobStorage;
         this.eraService = eraService;
         this.epochRewardCalculationService = epochRewardCalculationService;
         this.stakeSnapshotService = stakeSnapshotService;
@@ -74,28 +75,28 @@ public class RewardCalcJobManager {
 
     // Reset jobs from STARTED to NOT_STARTED on restart
     private void resetStartedJobs() {
-        List<RewardCalcJob> startedJobs = rewardCalcJobStorage.getJobsByStatus(RewardCalcStatus.STARTED);
+        List<AdaPotJob> startedJobs = adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.STARTED);
         startedJobs.forEach(job -> {
-            job.setStatus(RewardCalcStatus.NOT_STARTED);
-            rewardCalcJobStorage.save(job);
+            job.setStatus(AdaPotJobStatus.NOT_STARTED);
+            adaPotJobStorage.save(job);
         });
     }
 
     private void loadPendingJobs() {
-        List<RewardCalcJob> pendingJobs = rewardCalcJobStorage.getJobsByStatus(RewardCalcStatus.NOT_STARTED);
+        List<AdaPotJob> pendingJobs = adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED);
         jobQueue.addAll(pendingJobs);
     }
 
     public void triggerRewardCalcJob(int epoch, long slot) {
-        RewardCalcJob job = new RewardCalcJob(epoch, slot, RewardCalcStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
-        rewardCalcJobStorage.save(job);
+        AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
+        adaPotJobStorage.save(job);
         jobQueue.add(job);
     }
 
     private void processJobs() {
         while (true) {
             try {
-                RewardCalcJob job = jobQueue.take();
+                AdaPotJob job = jobQueue.take();
                 log.info("Found reward calc job in queue : {}", job);
 
                 if (job == null)
@@ -120,10 +121,10 @@ public class RewardCalcJobManager {
         }
     }
 
-    private boolean processJob(RewardCalcJob job) throws InterruptedException {
+    private boolean processJob(AdaPotJob job) throws InterruptedException {
         // Set job status to STARTED and update in the database
-        job.setStatus(RewardCalcStatus.STARTED);
-        rewardCalcJobStorage.save(job);
+        job.setStatus(AdaPotJobStatus.STARTED);
+        adaPotJobStorage.save(job);
 
         int retryCount = 0;
 
@@ -159,13 +160,13 @@ public class RewardCalcJobManager {
 
 
             if (success) {
-                job.setStatus(RewardCalcStatus.COMPLETED);
+                job.setStatus(AdaPotJobStatus.COMPLETED);
                 job.setErrorMessage(null);
-                rewardCalcJobStorage.save(job);
+                adaPotJobStorage.save(job);
                 return true;
             } else {
                 job.setErrorMessage("Reward calculation failed");
-                rewardCalcJobStorage.save(job);
+                adaPotJobStorage.save(job);
                 //TODO -- Retry logic
                 log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
                 retryCount++;
@@ -173,7 +174,7 @@ public class RewardCalcJobManager {
                 if (retryCount > 3) {
                     log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
                     job.setErrorMessage("Reward calculation failed. Retry count exceeded");
-                    rewardCalcJobStorage.save(job);
+                    adaPotJobStorage.save(job);
                     return false;
                 }
 
@@ -182,7 +183,7 @@ public class RewardCalcJobManager {
         }
     }
 
-    private boolean calculateRewards(RewardCalcJob job) {
+    private boolean calculateRewards(AdaPotJob job) {
         try {
             long nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(0);
 
@@ -236,12 +237,12 @@ public class RewardCalcJobManager {
         }
     }
 
-    public List<RewardCalcJob> getPendingJobs() {
-        return rewardCalcJobStorage.getJobsByStatus(RewardCalcStatus.NOT_STARTED);
+    public List<AdaPotJob> getPendingJobs() {
+        return adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED);
     }
 
-    public List<RewardCalcJob> getCompletedJobs() {
-        return rewardCalcJobStorage.getJobsByStatus(RewardCalcStatus.COMPLETED);
+    public List<AdaPotJob> getCompletedJobs() {
+        return adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED);
     }
 
     private Map<Integer, ExpectedAdaPot> loadExpectedAdaPotValues() throws IOException {

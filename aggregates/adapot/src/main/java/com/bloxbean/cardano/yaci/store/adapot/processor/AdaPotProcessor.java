@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.store.adapot.reward.service.RewardCalcJobManager;
+import com.bloxbean.cardano.yaci.store.adapot.job.AdaPotJobManager;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
@@ -21,7 +21,7 @@ public class AdaPotProcessor {
     private final EraService eraService;
     private final AdaPotService adaPotService;
     private final TransactionStorageReader transactionStorageReader;
-    private final RewardCalcJobManager rewardCalcJobManager;
+    private final AdaPotJobManager adaPotJobManager;
 
     @EventListener
     @Transactional
@@ -58,6 +58,6 @@ public class AdaPotProcessor {
 
         //Calculate epoch rewards
         Integer epoch = epochTransitionCommitEvent.getEpoch();
-        rewardCalcJobManager.triggerRewardCalcJob(epoch, epochTransitionCommitEvent.getMetadata().getSlot());
+        adaPotJobManager.triggerRewardCalcJob(epoch, epochTransitionCommitEvent.getMetadata().getSlot());
     }
 }

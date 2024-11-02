@@ -1,18 +1,19 @@
 drop table if exists adapot;
 create table adapot
 (
-    epoch           int,
-    slot            bigint,
-    deposits        numeric(38),
-    fees            numeric(38),
-    utxo            numeric(38),
-    treasury        numeric(38),
-    reserves        numeric(38),
-    rewards         numeric(38),
-    block           bigint,
-    block_time      bigint,
-    update_datetime timestamp,
-    primary key (epoch, slot)
+    epoch               int primary key,
+    slot                bigint,
+    deposits_stake      numeric(38),
+    fees                numeric(38),
+    utxo                numeric(38),
+    treasury            numeric(38),
+    reserves            numeric(38),
+    rewards             numeric(38),
+    deposits_drep       numeric(38),
+    deposits_proposal   numeric(38),
+    block               bigint,
+    block_time          bigint,
+    update_datetime     timestamp
 );
 
 drop table if exists epoch_stake;
@@ -58,11 +59,12 @@ create table reward
     primary key (address, earned_epoch, type, pool_id)
 );
 
-drop table if exists reward_calc_jobs;
-create table reward_calc_jobs
+drop table if exists adapot_jobs;
+create table adapot_jobs
 (
     epoch  integer primary key ,
     slot   bigint,
+    type   varchar(30) not null,
     status varchar(30)   not null,
     total_time bigint,
     reward_calc_time bigint,

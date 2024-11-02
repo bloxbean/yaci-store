@@ -1,11 +1,12 @@
-package com.bloxbean.cardano.yaci.store.adapot.reward.storage.impl;
+package com.bloxbean.cardano.yaci.store.adapot.job.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.adapot.reward.domain.RewardCalcStatus;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "reward_calc_jobs")
-public class RewardCalcJobEntity {
+@Table(name = "adapot_jobs")
+public class AdaPotJobEntity {
     @Id
     @Column(name = "epoch")
     private Integer epoch;
@@ -14,8 +15,12 @@ public class RewardCalcJobEntity {
     private Long slot;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private AdaPotJobType type;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private RewardCalcStatus status;
+    private AdaPotJobStatus status;
 
     @Column(name = "total_time")
     private Long totalTime;
@@ -32,7 +37,7 @@ public class RewardCalcJobEntity {
     @Column(name = "error_message")
     private String errorMessage;
 
-    public RewardCalcJobEntity() {}
+    public AdaPotJobEntity() {}
 
     public long getEpoch() {
         return epoch;
@@ -50,11 +55,19 @@ public class RewardCalcJobEntity {
         this.slot = slot;
     }
 
-    public RewardCalcStatus getStatus() {
+    public AdaPotJobType getType() {
+        return type;
+    }
+
+    public void setType(AdaPotJobType type) {
+        this.type = type;
+    }
+
+    public AdaPotJobStatus getStatus() {
         return status;
     }
 
-    public void setStatus(RewardCalcStatus status) {
+    public void setStatus(AdaPotJobStatus status) {
         this.status = status;
     }
 

@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.adapot;
 
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.impl.RewardCalcJobMapper;
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.impl.RewardCalcJobRepository;
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.impl.RewardCalcJobStorageImpl;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobMapper;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobRepository;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobStorageImpl;
 import com.bloxbean.cardano.yaci.store.adapot.storage.*;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.AdaPotMapper;
@@ -65,8 +65,8 @@ public class AdaPotConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RewardCalcJobStorage rewardCalcJobStorage(RewardCalcJobRepository rewardCalcJobRepository, RewardCalcJobMapper rewardCalcJobMapper) {
-        return new RewardCalcJobStorageImpl(rewardCalcJobRepository, rewardCalcJobMapper);
+    public AdaPotJobStorage adaPotJobStorage(AdaPotJobRepository rewardCalcJobRepository, AdaPotJobMapper rewardCalcJobMapper) {
+        return new AdaPotJobStorageImpl(rewardCalcJobRepository, rewardCalcJobMapper);
     }
 
 }

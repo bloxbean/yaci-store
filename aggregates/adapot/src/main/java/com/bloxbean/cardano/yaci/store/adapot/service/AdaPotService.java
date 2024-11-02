@@ -24,7 +24,7 @@ public class AdaPotService {
     public void createAdaPot(EventMetadata metadata) {
         var adaPot = AdaPot.builder()
                 .epoch(metadata.getEpochNumber())
-                .deposits(BigInteger.ZERO)
+                .depositsStake(BigInteger.ZERO)
                 .fees(BigInteger.ZERO)
                 .utxo(BigInteger.ZERO)
                 .treasury(BigInteger.ZERO)
@@ -68,11 +68,11 @@ public class AdaPotService {
     public void updateAdaPotDeposit(int epoch, BigInteger totalDeposit) {
         var prevAdaPot = adaPotStorage.findByEpoch(epoch - 1).orElse(null);
 
-        var updatedDeposit = prevAdaPot != null && prevAdaPot.getDeposits() != null ? prevAdaPot.getDeposits().add(totalDeposit) : BigInteger.ZERO.add(totalDeposit);
+        var updatedDeposit = prevAdaPot != null && prevAdaPot.getDepositsStake() != null ? prevAdaPot.getDepositsStake().add(totalDeposit) : BigInteger.ZERO.add(totalDeposit);
 
         adaPotStorage.findByEpoch(epoch)
                 .ifPresentOrElse(adaPot -> {
-                    adaPot.setDeposits(updatedDeposit);
+                    adaPot.setDepositsStake(updatedDeposit);
                     adaPotStorage.save(adaPot);
                 }, () -> {
                     log.error("Updated deposit for epoch : {}", epoch);
@@ -87,7 +87,7 @@ public class AdaPotService {
 
         var prevAdaPot = prevAdaPotOptional.orElse(
                 AdaPot.builder()
-                        .deposits(BigInteger.ZERO)
+                        .depositsStake(BigInteger.ZERO)
                         .fees(BigInteger.ZERO)
                         .utxo(BigInteger.ZERO)
                         .epoch(epoch)

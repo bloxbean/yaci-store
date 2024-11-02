@@ -20,10 +20,12 @@ import java.math.BigInteger;
 public class AdaPot extends BlockAwareDomain {
     private Integer epoch;
     private Long slot;
-    private BigInteger deposits;
+    private BigInteger depositsStake;
     private BigInteger fees;
     private BigInteger utxo;
     private BigInteger treasury;
     private BigInteger reserves;
     private BigInteger rewards;
+    private BigInteger depositsDrep;
+    private BigInteger depositsProposal;
 }

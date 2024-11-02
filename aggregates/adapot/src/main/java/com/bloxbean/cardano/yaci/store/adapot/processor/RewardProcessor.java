@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.reward.storage.RewardCalcJobStorage;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -23,7 +23,7 @@ import java.util.List;
 public class RewardProcessor {
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
-    private final RewardCalcJobStorage rewardCalcJobStorage;
+    private final AdaPotJobStorage rewardCalcJobStorage;
 
     @EventListener
     @Transactional
