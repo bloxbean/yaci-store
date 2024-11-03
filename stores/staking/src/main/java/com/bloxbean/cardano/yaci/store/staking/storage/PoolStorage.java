@@ -48,12 +48,6 @@ public interface PoolStorage {
     List<Pool> findRetiringPools(Integer epoch);
 
     /**
-     * Get max epoch
-     * @return
-     */
-    Integer getMaxEpoch();
-
-    /**
      * Delete all records with slot greater than the given slot
      * @param slot
      * @return

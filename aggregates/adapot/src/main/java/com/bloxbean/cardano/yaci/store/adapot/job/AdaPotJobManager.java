@@ -31,6 +31,11 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
+/**
+ * Manages and processes AdaPot jobs, specifically related to reward calculations.
+ * Initializes necessary services and properties upon instantiation, and starts job processing in a virtual thread.
+ * It resets any jobs that were in the 'STARTED' state to 'NOT_STARTED' on a restart and loads any pending jobs.
+ */
 @Component
 @ReadOnly(false)
 @Slf4j
@@ -42,9 +47,7 @@ public class AdaPotJobManager {
     private EpochRewardCalculationService epochRewardCalculationService;
     private StakeSnapshotService stakeSnapshotService;
     private DepositSnapshotService depositSnapshotService;
-    private UtxoSnapshotService utxoSnapshotService;
     private AdaPotService adaPotService;
-    private ParallelExecutor parallelExecutor;
 
     public AdaPotJobManager(StoreProperties storeProperties,
                             AdaPotJobStorage adaPotJobStorage,
@@ -61,9 +64,7 @@ public class AdaPotJobManager {
         this.epochRewardCalculationService = epochRewardCalculationService;
         this.stakeSnapshotService = stakeSnapshotService;
         this.depositSnapshotService = depositSnapshotService;
-        this.utxoSnapshotService = utxoSnapshotService;
         this.adaPotService = adaPotService;
-        this.parallelExecutor = parallelExecutor;
 
         // Reset jobs that were in 'STARTED' state to 'NOT_STARTED' and load pending jobs
         resetStartedJobs();
@@ -87,6 +88,13 @@ public class AdaPotJobManager {
         jobQueue.addAll(pendingJobs);
     }
 
+    /**
+     * Schedules a reward calculation job by creating a new AdaPotJob instance
+     * and adding it to the job queue.
+     *
+     * @param epoch the epoch number for which the reward calculation job is to be triggered
+     * @param slot slot number
+     */
     public void triggerRewardCalcJob(int epoch, long slot) {
         AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
         adaPotJobStorage.save(job);

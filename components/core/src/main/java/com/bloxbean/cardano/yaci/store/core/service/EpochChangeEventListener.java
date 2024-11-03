@@ -10,6 +10,16 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Listener for handling epoch change events and publish two separate events
+ * <p>
+ * 1. PreEpochTransitionEvent
+ * </p>
+ * <p>
+ * 2. EpochTransitionCommitEvent
+ * </p>
+ *
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j

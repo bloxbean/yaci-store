@@ -57,11 +57,6 @@ public class PoolStorageImpl implements PoolStorage {
     }
 
     @Override
-    public Integer getMaxEpoch() {
-        return poolStatusRepository.getMaxEpoch();
-    }
-
-    @Override
     public int deleteBySlotGreaterThan(long slot) {
         return poolStatusRepository.deleteBySlotGreaterThan(slot);
     }

@@ -1,34 +1,36 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
-import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.domain.Epoch;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Optional;
 
-//Get epoch info during reward calculation
+/**
+ * EpochInfoService is a component that provides information about epochs
+ * in the blockchain, including block counts, fees, and active stake.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class EpochInfoService {
     private final EraService eraService;
-    private final BlockStorage blockStorage;
     private final BlockStorageReader blockStorageReader;
-    private final AdaPotService adaPotService;
     private final AdaPotStorage adaPotStorage;
     private final BlockInfoService blockInfoService;
-    private final EpochStakeStorage epochStakeStorage;
+    private final EpochStakeStorageReader epochStakeStorage;
+    private final ProtocolParamService protocolParamService;
 
     public Optional<Epoch> getEpochInfo(int epoch) {
-        //Return null if epoch is before the start of the Shelley era
-
+        //Return empty if epoch is before the start of the Shelley era
         int shelleyEpoch = eraService.getFirstNonByronEpoch().orElse(0);
         log.info("Shelley epoch : {}", shelleyEpoch);
         if (epoch < shelleyEpoch) {
@@ -36,18 +38,15 @@ public class EpochInfoService {
             return Optional.empty();
         }
 
-
-        //TODO -- optimize this
-//        var blocks = blockStorage.findBlocksByEpoch(epoch);
         var blocksCount = blockStorageReader.totalBlocksInEpoch(epoch);
         log.info("Blocks count for epoch {} : {}", epoch, blocksCount);
 
-        //TODO -- Fee .. Can we get it from adapot or sum transaction fees from transaction table.
-      //  var adaPot = adaPotService.getAdaPot(epoch);
         var adaPot = adaPotStorage.findByEpoch(epoch + 1)//To get fee collected in epoch e
                 .orElse(null);
 
-        log.error("AdaPot not found for epoch : {}", epoch);
+        if (adaPot == null)
+            log.error("AdaPot not found for epoch : {}", epoch);
+
         BigInteger fees = adaPot != null? adaPot.getFees(): BigInteger.ZERO;
 
         Epoch epochInfo = Epoch.builder()
@@ -56,19 +55,21 @@ public class EpochInfoService {
                 .blockCount(blocksCount)
                 .build();
 
-        //TODO -- Replace the harcoded values with network independent values using protocol params values
-        if (epoch < 211) {
-            epochInfo.setNonOBFTBlockCount(0);
-        } else if (epoch > 256) {
-            epochInfo.setNonOBFTBlockCount(epochInfo.getBlockCount());
+        var protocolParam = protocolParamService.getProtocolParam(epoch).orElse(null);
+        if (protocolParam != null) {
+            if (protocolParam.getDecentralisationParam() == null
+                    || protocolParam.getDecentralisationParam() == BigDecimal.ZERO) { // When decentralisation is 0. No OBFT blocks
+                epochInfo.setNonOBFTBlockCount(epochInfo.getBlockCount());
+            } else if (protocolParam.getDecentralisationParam() == BigDecimal.ONE) { // When decentralisation is 1. All blocks are OBFT
+                epochInfo.setNonOBFTBlockCount(0);
+            } else { //When decentralisation is between 0 and 1, get the non-OBFT blocks
+                Integer nonObftBlocks = blockInfoService.getNonOBFTBlocksInEpoch(epoch);
+                epochInfo.setNonOBFTBlockCount(nonObftBlocks);
+            }
         } else {
-            Integer nonObftBlocks = blockInfoService.getNonOBFTBlocksInEpoch(epoch);
-            epochInfo.setNonOBFTBlockCount(nonObftBlocks);
+            log.error("Protocol parameters not found for epoch : {}", epoch);
+            //TODO: Should we throw exception here ?
         }
-
-//        BigInteger epochStake = dbSyncEpochStakeRepository.getEpochStakeByEpoch(epoch);
-//        epochInfo.setFees(fees);
-//        epochInfo.setActiveStake(epochStake);
 
         epochStakeStorage.getTotalActiveStakeByEpoch(epoch).ifPresent(stake -> {
             epochInfo.setActiveStake(stake);

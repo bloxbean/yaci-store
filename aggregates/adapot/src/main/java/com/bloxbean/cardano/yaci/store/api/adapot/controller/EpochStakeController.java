@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.adapot.controller;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
-import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.List;
 @Slf4j
 @Tag(name = "EpochStake API", description = "APIs for epoch stake related data.")
 public class EpochStakeController {
-    private final EpochStakeStorage epochStakeStorage;
+    private final EpochStakeStorageReader epochStakeStorage;
     private final EpochRewardCalculationService epochRewardCalculationService;
 
     @GetMapping("/epochs/{epoch}/total-stake")

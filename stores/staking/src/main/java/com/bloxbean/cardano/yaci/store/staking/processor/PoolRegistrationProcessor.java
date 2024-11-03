@@ -41,7 +41,7 @@ public class PoolRegistrationProcessor {
 
         for (TxCertificates txCertificates: certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
-            int txIndex = txCertificates.getBlockIndex();
+            int txIndex = txCertificates.getTxIndex();
             List<Certificate> certificates = txCertificates.getCertificates();
 
             List<PoolRegistration> poolRegistrations = new ArrayList<>();

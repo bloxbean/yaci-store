@@ -85,13 +85,6 @@ public class StakeRegistrationService {
          AND s.address in ('stake1uy5e66lc4u5qzhqed04v6kxq933canz2ugs7je7u6pptqgs56sfaa', 'stake1dxte0wr3zk4x37xknqvp4umkq5pxf69wrg64vz9w32j7gcshuekuf')
          */
 
-
-//        String result = stakeAddresses.stream()
-//                .map(address -> "\"" + address + "\"")
-//                .collect(Collectors.joining(","));
-//
-//        System.out.println(result);
-
         // JOOQ query to select registered accounts until the last epoch
         return dsl.selectDistinct(STAKE_REGISTRATION.ADDRESS)
                 .from(STAKE_REGISTRATION)

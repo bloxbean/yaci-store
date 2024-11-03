@@ -23,18 +23,9 @@ dependencies {
     testImplementation project(':starters:utxo-spring-boot-starter')
     testImplementation project(':starters:account-spring-boot-starter')
     testImplementation project(':starters:adapot-spring-boot-starter')
-    testImplementation project(':starters:admin-spring-boot-starter')
-
-    testImplementation project(':extensions:utxo-rocksdb')
-    testImplementation project(':extensions:account-rocksdb')
 
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
-    testImplementation 'org.springframework.boot:spring-boot-starter-batch'
-    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
 
-    testImplementation libs.spring.boot.admin.client
-
-    testRuntimeOnly 'com.mysql:mysql-connector-j:8.3.0'
     testRuntimeOnly 'org.postgresql:postgresql:42.7.1'
 }
 

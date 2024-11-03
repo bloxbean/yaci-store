@@ -12,8 +12,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class BlockInfoService {
-    private final JdbcTemplate jdbcTemplate;
-    //private final DSLContext dsl; //TODO -- Use DSLContext
+    private final JdbcTemplate jdbcTemplate; //TODO: Use JOOQ ?
 
     public int getNonOBFTBlocksInEpoch(int epoch) {
         String query = """

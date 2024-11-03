@@ -84,7 +84,7 @@ public class RewardProcessor {
         count = rewardCalcJobStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} reward calculation jobs", count);
 
-        //TODO -- What about rewards
+        //TODO -- Any missing rollbacks
     }
 
 }

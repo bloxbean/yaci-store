@@ -59,8 +59,8 @@ public class AdaPotConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public EpochStakeStorage epochStakeStorage(EpochStakeRepository epochStakeRepository, Mapper epochStakeMapper) {
-        return new EpochStakeStorageImpl(epochStakeRepository, epochStakeMapper);
+    public EpochStakeStorageReader epochStakeStorage(EpochStakeRepository epochStakeRepository, Mapper epochStakeMapper) {
+        return new EpochStakeStorageReaderImpl(epochStakeRepository, epochStakeMapper);
     }
 
     @Bean

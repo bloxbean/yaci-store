@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
-import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.EpochStakeRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
-public class EpochStakeStorageImpl implements EpochStakeStorage {
+public class EpochStakeStorageReaderImpl implements EpochStakeStorageReader {
     private final EpochStakeRepository stakeSnapshotRepository;
     private final Mapper mapper;
 

@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.adapot.snapshot;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.DSLContext;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -13,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class StakeSnapshotService {
-    private final DSLContext dsl;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -148,8 +146,6 @@ public class StakeSnapshotService {
                 jdbcTemplate.update(query, params);
 
         log.info("Stake snapshot for epoch : {} is taken", epoch);
-
-        //print log with ascii art of the epoch
         log.info(">>>>>>>>>>>>>>>>>>>> Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
     }
 }

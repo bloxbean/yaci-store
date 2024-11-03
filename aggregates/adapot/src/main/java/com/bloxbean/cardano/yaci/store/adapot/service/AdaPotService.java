@@ -12,7 +12,7 @@ import java.math.BigInteger;
 import java.util.Optional;
 
 /**
- * Handles update to AdaPot
+ * A service that handles operations related to AdaPot.
  */
 @Component
 @RequiredArgsConstructor

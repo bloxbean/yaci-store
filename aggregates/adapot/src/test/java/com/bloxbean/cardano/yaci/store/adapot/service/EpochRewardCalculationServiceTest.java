@@ -7,16 +7,13 @@ import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.cardanofoundation.rewards.calculation.domain.PoolState;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.ComponentScan;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;

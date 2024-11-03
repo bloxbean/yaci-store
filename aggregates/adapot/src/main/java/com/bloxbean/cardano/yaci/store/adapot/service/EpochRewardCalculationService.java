@@ -65,15 +65,12 @@ public class EpochRewardCalculationService {
         //Block producing epoch is epoch - 1 (Fee + MIR + DeRegistration)
         //Stake snapshot epoch is epoch - 2 (Stake, Protocol Parameters)
 
-        Era epochEra = eraService.getEraForEpoch(epoch);
         Era epochMinusTwoEra = eraService.getEraForEpoch(epoch - 2);
-        Era epochMinusOneEra = eraService.getEraForEpoch(epoch - 1);
 
         var nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
         if (nonByronEpoch == null)
             return null;
 
-//        if (epoch <= MAINNET_SHELLEY_START_EPOCH) {
         if (epoch <= nonByronEpoch) { //shelley epoch
             return null;
         }
@@ -99,7 +96,6 @@ public class EpochRewardCalculationService {
                 .build();
 
         ProtocolParams protocolParams;
-//        if (epoch == MAINNET_SHELLEY_START_EPOCH + 1) { // If this is first epoch after shelley start epoch
         if (epoch == nonByronEpoch + 1) { // If this is first epoch after shelley start epoch
             protocolParams = protocolParamService.getProtocolParam(epoch - 1)
                     .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
@@ -121,7 +117,7 @@ public class EpochRewardCalculationService {
         //Get epoch info
         var epochInfo = epochInfoService.getEpochInfo(epoch - 2) //should we do epoch - 2 as it's already checking active epoch
                 .orElse(null);
-        //   .orElseThrow(() -> new RuntimeException("Epoch info not found for epoch " + epoch)); //TODO: Handle this
+        //TODO: Should we throw exception here ?
 
         //Get reward addressed of retired pools
         List<Pool> retiringPools = poolStorage.findRetiringPools(epoch);
@@ -175,8 +171,6 @@ public class EpochRewardCalculationService {
         HashSet<String> deregisteredAccountsOnEpochBoundary;
         HashSet<String> lateDeregisteredAccounts = new HashSet<>();
 
-
-//        if (epoch-2 < MAINNET_VASIL_HARDFORK_EPOCH) { //epoch - 2 ??  //Reward calculation epoch
         if (epochMinusTwoEra.value < Era.Babbage.value) {
             //convert to absolute slot
             //add epoch slot to stake_registration
@@ -197,11 +191,9 @@ public class EpochRewardCalculationService {
         }
 
         HashSet<String> sharedPoolRewardAddressesWithoutReward = new HashSet<>();
-//        if (epoch - 2 < MAINNET_ALLEGRA_HARDFORK_EPOCH) {
         if (epochMinusTwoEra.value < Era.Allegra.value) {
             sharedPoolRewardAddressesWithoutReward = new HashSet<>(sharedPoolRewardAddresses.getSharedPoolRewardAddressesWithoutReward(epoch));
             //TODO -- Hardcode for now
-            // sharedPoolRewardAddressesWithoutReward = dataProvider.findSharedPoolRewardAddressWithoutReward(epoch - 2);
         }
         HashSet<String> poolRewardAddresses = poolStates.stream().map(PoolState::getRewardAddress).collect(Collectors.toCollection(HashSet::new));
         poolRewardAddresses.addAll(rewardAddressesOfRetiredPoolsInEpoch);
@@ -213,7 +205,6 @@ public class EpochRewardCalculationService {
         // Since the Vasil hard fork, the unregistered accounts will not filter out before the
         // rewards calculation starts (at the stability window). They will be filtered out on the
         // epoch boundary when the reward update will be applied.
-//        if (epoch - 2 >= MAINNET_VASIL_HARDFORK_EPOCH) {
         if (epochMinusTwoEra.value >= Era.Babbage.value) {
             stabilityWindow = genesisConfig.getEpochLength();
         }
@@ -250,19 +241,6 @@ public class EpochRewardCalculationService {
                 .mirCertificates(mirCertificates)
                 .build();
 
-//        start = System.currentTimeMillis();
-//        var epochCalculationResult = EpochCalculation.calculateEpochRewardPots(
-//                epoch, adaPotsForPreviousEpoch.getReserves(), adaPotsForPreviousEpoch.getTreasury(), rewardProtocolParameters, epochInfo, rewardAddressesOfRetiredPoolsInEpoch, deregisteredAccounts,
-//                mirCertificates, poolIds, poolStates, lateDeregisteredAccounts,
-//                registeredAccountsSinceLastEpoch, registeredAccountsUntilNow, sharedPoolRewardAddressesWithoutReward,
-//                deregisteredAccountsOnEpochBoundary);
-//        long end = System.currentTimeMillis();
-//        log.debug("Epoch calculation took " + Math.round((end - start) / 1000.0) + "s");
-//
-//        //update adapot treasury and reserves for epoch + 1
-//
-//        adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(), epochCalculationResult.getReserves());
-
         return rewardsCalcInput;
     }
 
@@ -272,7 +250,6 @@ public class EpochRewardCalculationService {
             return null;
 
         var networkConfig = networkConfigService.getNetworkConfig((int) storeProperties.getProtocolMagic());
-//        if (epoch < MAINNET_SHELLEY_START_EPOCH) {
         if (epoch < nonByronEpoch) {
             log.warn("Epoch " + epoch + " is before the start of the Shelley era. No rewards were calculated in this epoch.");
             return EpochCalculationResult.builder()
@@ -288,7 +265,6 @@ public class EpochRewardCalculationService {
                     .totalDistributedRewards(BigInteger.ZERO)
                     .epoch(epoch)
                     .build();
-//        } else if (epoch == MAINNET_SHELLEY_START_EPOCH) {
         } else if (epoch == nonByronEpoch) {
             return EpochCalculationResult.builder()
                     .totalRewardsPot(BigInteger.ZERO)
@@ -346,17 +322,6 @@ public class EpochRewardCalculationService {
             updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
         } else
             log.error("Epoch calculation result is null for epoch " + epoch);
-    }
-
-    public void calculateAndUpdateEpochRewards(int epoch) {
-        var epochCalculationResult = calculateEpochRewards(epoch);
-        if(epochCalculationResult != null) {
-            adaPotService.updateReserveAndTreasury(epoch, epochCalculationResult.getTreasury(),
-                    epochCalculationResult.getReserves(), BigInteger.ZERO);
-
-            //Update member rewards
-            updateRewards(epoch, epochCalculationResult.getPoolRewardCalculationResults());
-        }
     }
 
     private void updateRewards(int epoch, List<PoolRewardCalculationResult> poolRewardCalculationResults) {

@@ -6,7 +6,7 @@ import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
-import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
@@ -25,15 +25,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Service responsible for retrieving historical pool state information within a given epoch.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class PoolStateService {
     private final StoreProperties storeProperties;
     private final PoolStorageReader poolStorageReader;
-    private final EpochStakeStorage epochStakeStorage;
+    private final EpochStakeStorageReader epochStakeStorage;
 
-    public List<PoolState> getHistoryOfAllPoolsInEpoch(Integer epoch, List<PoolBlock> poolBlocksInEpoch) { //TODO -- che
+    public List<PoolState> getHistoryOfAllPoolsInEpoch(Integer epoch, List<PoolBlock> poolBlocksInEpoch) {
         List<PoolState> poolHistories = new ArrayList<>();
 
         if (poolBlocksInEpoch.isEmpty())

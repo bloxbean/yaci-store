@@ -6,7 +6,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
-public interface EpochStakeStorage {
+public interface EpochStakeStorageReader {
 
     Optional<BigInteger> getTotalActiveStakeByEpoch(Integer activeEpoch);
 
