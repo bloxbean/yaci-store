@@ -11,6 +11,7 @@ dependencies {
     api(libs.cf.rewards) {
         exclude group: "org.projectlombok", module: "lombok"
         exclude group: "org.slf4j", module: "slf4j-api"
+        exclude group: 'com.google.guava', module: 'guava'
     }
 
     //Test dependencies
