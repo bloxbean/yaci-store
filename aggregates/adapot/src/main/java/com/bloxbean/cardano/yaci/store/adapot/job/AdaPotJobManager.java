@@ -113,7 +113,7 @@ public class AdaPotJobManager {
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    log.error("Error in thread.sleep", e);
                 }
 
                 if (job != null) {
