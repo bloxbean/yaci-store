@@ -1,16 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.CommitteeVoteStorageImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.CommitteeVoteStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.LatestVotingProcedureStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.*;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.CommitteeVoteMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.CommitteeVoteRepository;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.LatestVotingProcedureRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -65,5 +61,11 @@ public class GovernanceAggrConfiguration {
     public CommitteeVoteStorage committeeVotesStorage(CommitteeVoteRepository committeeVoteRepository,
                                                       CommitteeVoteMapper committeeVoteMapper) {
         return new CommitteeVoteStorageImpl(committeeVoteRepository, committeeVoteMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepStorage dRepStorage(DRepRepository dRepRepository, DRepMapper dRepMapper, DSLContext dslContext) {
+        return new DRepStorageImpl(dRepRepository, dRepMapper, dslContext);
     }
 }
