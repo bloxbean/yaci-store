@@ -20,6 +20,7 @@ public class AccountStoreAutoConfigProperties {
         private boolean historyCleanupEnabled = false;
 
         private int maxBalanceRecordsPerAddressPerBatch = 3;
+        private boolean addressBalanceEnabled = true;
         private boolean stakeAddressBalanceEnabled = true;
 
         private int balanceHistoryCleanupInterval = 300;
