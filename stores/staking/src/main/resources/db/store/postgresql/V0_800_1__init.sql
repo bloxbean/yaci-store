@@ -3,6 +3,7 @@ create table stake_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int          not null,
+    tx_index        int         not null,
     credential      varchar(56) not null,
     type            varchar(50),
     address         varchar(255), -- bech32 stake address

@@ -20,6 +20,7 @@ public class StakeRegistrationDetail extends BlockAwareDomain {
     private String credential;
     private String address;
     private String txHash;
+    private int txIndex;
     private int certIndex;
     private CertificateType type;
     private int epoch;
