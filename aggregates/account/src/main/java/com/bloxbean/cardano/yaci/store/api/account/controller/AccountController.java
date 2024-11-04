@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.account.controller;
 
+import com.bloxbean.cardano.client.api.util.AssetUtil;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountInfo;
@@ -13,6 +15,8 @@ import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.api.account.service.UtxoAccountService;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.util.Bech32Prefixes;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.utxo.domain.Amount;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,9 +28,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 
 @RestController("AccountController")
 @RequestMapping("${apiPrefix}")
@@ -153,10 +160,15 @@ public class AccountController {
             return Optional.empty();
 
         var amts = addresssBalances.stream()
-                .map(addressBalance -> Amt.builder()
-                        .unit(addressBalance.getUnit())
-                        .quantity(addressBalance.getQuantity())
-                        .build()).toList();
+                .map(addressBalance -> {
+                    var policyIdAssetNameTuple = getPolicyIdAndAssetName(addressBalance.getUnit());
+                    return Amt.builder()
+                            .unit(addressBalance.getUnit())
+                            .policyId(policyIdAssetNameTuple._1)
+                            .assetName(policyIdAssetNameTuple._2)
+                            .quantity(addressBalance.getQuantity())
+                            .build();
+                }).toList();
 
         Long lastTxBlock = 0L;
         Long lastTxSlot = 0L;
@@ -188,8 +200,12 @@ public class AccountController {
         if (addressBalance == null)
             return Optional.empty();
 
+        var policyIdAssetName = getPolicyIdAndAssetName(addressBalance.getUnit());
+
         var amts =  Amt.builder()
                         .unit(addressBalance.getUnit())
+                        .policyId(policyIdAssetName._1)
+                        .assetName(policyIdAssetName._2)
                         .quantity(addressBalance.getQuantity())
                         .build();
 
@@ -207,5 +223,25 @@ public class AccountController {
 
         return Optional.of(addressBalanceDto);
     }
+
+    private Tuple<String, String> getPolicyIdAndAssetName(String unit) {
+        if (unit == null || unit.equals(LOVELACE))
+            return new Tuple<>(null, null);
+
+        try {
+            var policyAndAssetName = AssetUtil.getPolicyIdAndAssetName(unit);
+            if (policyAndAssetName == null)
+                return new Tuple<>(null, null);
+
+            var assetNameBytes = HexUtil.decodeHexString(policyAndAssetName._2);
+            var assetName = StringUtil.isValidUTF8(assetNameBytes)? new String(assetNameBytes, StandardCharsets.UTF_8): policyAndAssetName._2;
+
+            return new Tuple<>(policyAndAssetName._1, assetName);
+        } catch (Exception e) {
+            return new Tuple<>(null, null);
+        }
+    }
+
+
 
 }

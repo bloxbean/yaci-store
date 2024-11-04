@@ -5,12 +5,9 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
-import com.bloxbean.cardano.client.exception.CborDeserializationException;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
-import com.bloxbean.cardano.client.plutus.spec.PlutusData;
-import com.bloxbean.cardano.client.plutus.spec.PlutusV1Script;
-import com.bloxbean.cardano.client.plutus.spec.PlutusV2Script;
-import com.bloxbean.cardano.client.plutus.spec.Redeemer;
+import com.bloxbean.cardano.client.plutus.spec.*;
+import com.bloxbean.cardano.client.util.JsonUtil;
 import com.bloxbean.cardano.yaci.core.model.Datum;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
@@ -18,8 +15,6 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
-import com.bloxbean.cardano.yaci.store.common.util.PlutusV3Script;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,7 +24,6 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 public class ScriptUtil {
@@ -78,6 +72,19 @@ public class ScriptUtil {
             return ScriptType.PLUTUS_V3;
         else
             throw new IllegalArgumentException("Invalid plutus script type : " + strType);
+    }
+
+    public static ScriptType toScriptType(com.bloxbean.cardano.client.spec.Script cclScript) {
+        if (cclScript.getScriptType() == 0) {
+            return ScriptType.NATIVE_SCRIPT;
+        } else if (cclScript.getScriptType() == 1) {
+            return ScriptType.PLUTUS_V1;
+        } else if (cclScript.getScriptType() == 2) {
+            return ScriptType.PLUTUS_V2;
+        } else if (cclScript.getScriptType() == 3) {
+            return ScriptType.PLUTUS_V3;
+        } else
+            throw new IllegalArgumentException("Invalid script type: " + cclScript.getScriptType());
     }
 
     /**
@@ -137,9 +144,20 @@ public class ScriptUtil {
             PlutusScript plutusScript = new PlutusScript(plutusScriptType, cclPlutusScript.getCborHex());
             return plutusScript;
         } catch (Exception e) {
-            log.error("Error deserializing script ref: {}", scriptRef);
+              log.error("Error deserializing script ref: {}", scriptRef);
             return null;
         }
+    }
+
+    public static PlutusScript toPlutusScript(@NonNull com.bloxbean.cardano.client.spec.Script script) {
+        var plutusScriptType = switch (script.getScriptType()) {
+            case 1 -> PlutusScriptType.PlutusScriptV1;
+            case 2 -> PlutusScriptType.PlutusScriptV2;
+            case 3 -> PlutusScriptType.PlutusScriptV3;
+            default -> throw new IllegalArgumentException("Invalid plutus script type : " + script.getScriptType());
+        };
+
+        return new PlutusScript(plutusScriptType, ((com.bloxbean.cardano.client.plutus.spec.PlutusScript) script).getCborHex());
     }
 
     public static String getDatumHash(Datum datum) {
@@ -159,26 +177,6 @@ public class ScriptUtil {
             log.error("Unable to deserialize and calculate datumhash for : " + datumCbor, e);
             return null;
         }
-    }
-
-    public static Optional<Redeemer> deserializeRedeemer(String redeemerCbor) {
-        if (redeemerCbor == null)
-            return Optional.empty();
-
-        try {
-            Redeemer redeemer = Redeemer.deserialize((Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(redeemerCbor)));
-            return Optional.of(redeemer);
-        } catch (CborDeserializationException e) {
-            log.error("Error deserializing redeemerCbor");
-            return Optional.empty();
-        }
-    }
-
-    public static String serializePlutusData(PlutusData plutusData) {
-        if (plutusData == null)
-            return null;
-
-        return plutusData.serializeToHex();
     }
 
     public static byte[] removeDoubleEncoding(Script script) throws JsonProcessingException, CborException {

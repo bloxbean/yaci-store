@@ -3,8 +3,10 @@ package com.bloxbean.cardano.yaci.store.core.service;
 import com.bloxbean.cardano.yaci.store.common.cache.MVStoreFactory;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -19,6 +21,7 @@ import java.io.File;
         havingValue = "true",
         matchIfMissing = true
 )
+@ReadOnly(false)
 @Slf4j
 public class AppcationEventListener {
     private final StartService startService;

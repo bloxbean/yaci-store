@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -14,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregatio
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 
 @Component
+@ReadOnly(false)
 @Slf4j
 public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private final ApplicationEventPublisher publisher;

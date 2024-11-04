@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance;
 
-import com.bloxbean.cardano.yaci.store.governance.storage.*;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
+import com.bloxbean.cardano.yaci.store.governance.storage.local.impl.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -61,4 +61,40 @@ public class LocalGovernanceStoreConfiguration {
                                                                          LocalHardForkInitiationMapper localHardForkInitiationMapper) {
         return new LocalHardForkInitiationStorageImpl(localHardForkInitiationRepository, localHardForkInitiationMapper);
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalDRepDistrStorage localDRepDistrStorage(LocalDRepDistrRepository localDRepDistrRepository,
+                                                       LocalDRepDistrMapper localDRepDistrMapper) {
+        return new LocalDRepDistrStorageImpl(localDRepDistrRepository, localDRepDistrMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalConstitutionStorageReader localConstitutionStorageReader(LocalConstitutionRepository localConstitutionRepository,
+                                                                         LocalConstitutionMapper localConstitutionMapper) {
+        return new LocalConstitutionStorageReaderImpl(localConstitutionRepository, localConstitutionMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeStorageReader localCommitteeStorageReader(LocalCommitteeRepository localCommitteeRepository,
+                                                                   LocalCommitteeMapper localCommitteeMapper) {
+        return new LocalCommitteeStorageReaderImpl(localCommitteeRepository, localCommitteeMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalCommitteeMemberStorageReader localCommitteeMemberStorageReader(LocalCommitteeMemberRepository localCommitteeMemberRepository,
+                                                                               LocalCommitteeMemberMapper localCommitteeMemberMapper) {
+        return new LocalCommitteeMemberStorageReaderImpl(localCommitteeMemberRepository, localCommitteeMemberMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public LocalDRepDistrStorageReader localDRepDistrStorageReader(LocalDRepDistrRepository localDRepDistrRepository,
+                                                       LocalDRepDistrMapper localDRepDistrMapper) {
+        return new LocalDRepDistrStorageReaderImpl(localDRepDistrRepository, localDRepDistrMapper);
+    }
+
 }

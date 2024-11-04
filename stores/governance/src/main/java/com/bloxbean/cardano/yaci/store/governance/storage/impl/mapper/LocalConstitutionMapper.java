@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper;
 
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalConstitution;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalConstitution;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.LocalConstitutionEntity;
 import org.mapstruct.Mapper;
 

@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper;
 
-import com.bloxbean.cardano.yaci.store.governance.domain.LocalGovActionProposalStatus;
+import com.bloxbean.cardano.yaci.store.governance.domain.local.LocalGovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.LocalGovActionProposalStatusEntity;
 import org.mapstruct.Mapper;
 

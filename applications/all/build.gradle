@@ -1,5 +1,3 @@
-import org.gradle.internal.os.OperatingSystem
-
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
     id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"

@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.starter.core;
 
-import com.bloxbean.cardano.yaci.core.common.Constants;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,6 +14,7 @@ public class YaciStoreProperties {
     private Db db = new Db();
     private long eventPublisherId = 1;
     private boolean syncAutoStart = true;
+    private boolean readOnlyMode = false;
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
@@ -22,9 +22,9 @@ public class YaciStoreProperties {
     @Getter
     @Setter
     public static final class Cardano {
-        private String host = Constants.MAINNET_IOHK_RELAY_ADDR;
-        private int port = Constants.MAINNET_IOHK_RELAY_PORT;
-        private long protocolMagic = Constants.MAINNET_PROTOCOL_MAGIC;
+        private String host;
+        private int port;
+        private long protocolMagic;
         private String n2cNodeSocketPath;
         private String n2cHost;
         private int n2cPort;
