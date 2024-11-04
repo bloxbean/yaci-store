@@ -48,6 +48,7 @@ include 'stores-api:governance-api'
 
 include 'aggregates:account'
 include 'aggregates:epoch-aggr'
+include 'aggregates:adapot'
 
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
@@ -66,6 +67,7 @@ include ':starters:account-spring-boot-starter'
 include ':starters:governance-spring-boot-starter'
 include ':starters:epoch-aggr-spring-boot-starter'
 include ':starters:admin-spring-boot-starter'
+include ':starters:adapot-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
 include ':extensions:account-rocksdb'

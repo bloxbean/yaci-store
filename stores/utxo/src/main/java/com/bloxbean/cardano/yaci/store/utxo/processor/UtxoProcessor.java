@@ -6,14 +6,17 @@ import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -29,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -44,7 +48,11 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
     private final ApplicationEventPublisher publisher;
+    private final StakingClient stakingClient;
     private final MeterRegistry meterRegistry;
+
+    //List of utxos with pointer address. We need to fetch stake address for these in CommitEvent
+    private List<Utxo> utxosWithPointerAddress = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
     @Order(2)
@@ -186,6 +194,8 @@ public class UtxoProcessor {
             Address addr = new Address(utxo.getAddress());
             if (addr.getAddressType() == AddressType.Base)
                 stakeAddress = AddressProvider.getStakeAddress(addr).getAddress();
+            else if (addr.getAddressType() == AddressType.Ptr)
+                addToPointerAddressPendingList(utxo);
 
             paymentKeyHash = getPaymentKeyHash(addr).orElse(null);
             stakeKeyHash = getStakeKeyHash(addr).orElse(null);
@@ -233,4 +243,47 @@ public class UtxoProcessor {
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }
+
+    private void addToPointerAddressPendingList(Utxo utxo) {
+        utxosWithPointerAddress.add(utxo);
+    }
+
+    /**
+     * Resolve pointer address and update AddressUtxo with stake address and stake key hash
+     * @param commitEvent
+     */
+    @EventListener
+    public void handleCommit(CommitEvent commitEvent) {
+        if (utxosWithPointerAddress == null || utxosWithPointerAddress.isEmpty()) {
+            return;
+        }
+
+        try {
+            for (var utxo : utxosWithPointerAddress) {
+                try {
+                    var address = new PointerAddress(utxo.getAddress());
+                    var pointer = address.getPointer();
+
+                    var stakeAddressOptional = stakingClient.getStakeAddressFromPointer(pointer.getSlot(), pointer.getTxIndex(), pointer.getCertIndex());
+                    if (stakeAddressOptional.isPresent()) {
+                        var stakeAddress = stakeAddressOptional.get();
+                        var addressUtxoOptional = utxoStorage.findById(utxo.getTxHash(), utxo.getIndex());
+
+                        addressUtxoOptional.ifPresent(addressUtxo -> {
+                            addressUtxo.setOwnerStakeAddr(stakeAddress);
+                            addressUtxo.setOwnerStakeCredential(getStakeKeyHash(new Address(stakeAddress)).orElse(null));
+                            utxoStorage.saveUnspent(List.of(addressUtxo));
+                        });
+                    } else {
+                        log.warn("Stake address not found for pointer address: " + utxo.getAddress() + ", Pointer: " + pointer);
+                    }
+                } catch (Exception e) {
+                    log.error("Error getting stake address from pointer address: " + utxo.getAddress(), e);
+                }
+            }
+        } finally {
+            utxosWithPointerAddress.clear();
+        }
+    }
+
 }

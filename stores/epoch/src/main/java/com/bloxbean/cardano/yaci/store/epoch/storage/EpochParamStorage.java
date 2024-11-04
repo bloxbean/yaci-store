@@ -8,6 +8,7 @@ public interface EpochParamStorage {
     void save(EpochParam epochParam);
     Optional<EpochParam> getProtocolParams(int epoch);
 
+    Optional<EpochParam> getLatestEpochParam();
     Integer getMaxEpoch();
     int deleteBySlotGreaterThan(long slot);
 }

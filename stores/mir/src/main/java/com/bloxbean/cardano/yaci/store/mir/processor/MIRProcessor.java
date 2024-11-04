@@ -2,30 +2,40 @@ package com.bloxbean.cardano.yaci.store.mir.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
-import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
-import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.certs.MoveInstataneous;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+
+import static com.bloxbean.cardano.yaci.store.common.util.CCLUtil.toCCLCredential;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class MIRProcessor {
     private final MIRStorage mirStorage;
+
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -53,6 +63,45 @@ public class MIRProcessor {
 
         if (!moveInstataneousRewards.isEmpty())
             mirStorage.save(moveInstataneousRewards);
+
+        //Publish reward event
+        getRewardEvent(certificateEvent, moveInstataneousRewards)
+                .ifPresent(publisher::publishEvent);
+
+    }
+
+    private Optional<InstantRewardEvent> getRewardEvent(CertificateEvent certificateEvent, List<MoveInstataneousReward> moveInstataneousRewards) {
+        var rewardAmts = moveInstataneousRewards.stream()
+                .map(moveInstataneousReward -> {
+                    InstantRewardType rewardType;
+                    switch (moveInstataneousReward.getPot()) {
+                        case treasury:
+                            rewardType = InstantRewardType.treasury;
+                            break;
+                        case reserves:
+                            rewardType = InstantRewardType.reserves;
+                            break;
+                        default:
+                            rewardType = null;
+                    }
+
+                    return InstantRewardAmt.builder()
+                            .rewardType(rewardType)
+                            .txHash(moveInstataneousReward.getTxHash())
+                            .amount(moveInstataneousReward.getAmount())
+                            .address(moveInstataneousReward.getAddress())
+                            .build();
+                }).toList();
+
+        if (rewardAmts.isEmpty())
+            return Optional.empty();
+        else {
+            var rewardEvent = InstantRewardEvent.builder()
+                    .metadata(certificateEvent.getMetadata())
+                    .rewards(rewardAmts)
+                    .build();
+            return Optional.of(rewardEvent);
+        }
     }
 
     private List<MoveInstataneousReward> handleTxMIRCertificate(EventMetadata eventMetadata, String txHash, MoveInstataneous mirCert, int certIndex) {
@@ -81,9 +130,9 @@ public class MIRProcessor {
     private static MoveInstataneousReward getMoveInstataneousRewardsDetails(EventMetadata eventMetadata, String txHash, MoveInstataneous mirCert, int certIndex) {
         var moveInstataneousReward = new MoveInstataneousReward();
         if (mirCert.isTreasury()) {
-            moveInstataneousReward.setPot(MirPot.TREASURY);
+            moveInstataneousReward.setPot(MirPot.treasury);
         } else if (mirCert.isReserves()) {
-            moveInstataneousReward.setPot(MirPot.RESERVES);
+            moveInstataneousReward.setPot(MirPot.reserves);
         } else {
             log.error("Invalid MIR certificate. Neither treasury nor reserves");
             return null;
@@ -98,16 +147,6 @@ public class MIRProcessor {
         moveInstataneousReward.setBlockTime(eventMetadata.getBlockTime());
 
         return moveInstataneousReward;
-    }
-
-    private Credential toCCLCredential(StakeCredential credential) {
-        if (credential.getType() == StakeCredType.ADDR_KEYHASH) {
-            return Credential.fromKey(credential.getHash());
-        } else if (credential.getType() == StakeCredType.SCRIPTHASH) {
-            return Credential.fromScript(credential.getHash());
-        } else {
-            throw new IllegalArgumentException("Invalid credential type");
-        }
     }
 
     @EventListener

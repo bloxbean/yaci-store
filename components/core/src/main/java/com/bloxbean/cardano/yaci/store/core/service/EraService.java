@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.*;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -88,6 +89,15 @@ public class EraService {
         return epochConfig.shelleyEpochSlot(shelleyStartSlot, shelleyAbsoluteSlot);
     }
 
+    public long getShelleyAbsoluteSlot(int epoch, int epochSlot) {
+        if (shelleyStartSlot == -1) {
+            shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
+                    .orElseThrow(() -> new IllegalStateException("Shelley start slot not found"));
+        }
+
+        return epochConfig.epochSlotToAbsoluteSlot(shelleyStartSlot, epoch, epochSlot);
+    }
+
     public long shelleyEraStartTime() {
         if (_shelleyStartTime != 0)
             return _shelleyStartTime;
@@ -101,6 +111,17 @@ public class EraService {
 
     public long slotsPerEpoch(Era era) {
         return genesisConfig.slotsPerEpoch(era);
+    }
+
+    public long getFirstNonByronSlot() {
+        return firstShelleySlot();
+    }
+
+    public Optional<Integer> getFirstNonByronEpoch() {
+        var nonByronEra = eraStorage.findFirstNonByronEra();
+        var epoch = nonByronEra.map(cardanoEra -> getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot()));
+
+        return epoch;
     }
 
     private long firstShelleySlot() {
@@ -145,6 +166,50 @@ public class EraService {
         } else {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Find all the eras stored in the database.
+     *
+     * @return
+     */
+    public List<CardanoEra> getEras() {
+        return eraStorage.findAllEras();
+    }
+
+    /**
+     * Get the era for a given epoch.
+     *
+     * @param epoch The epoch number for which to find the corresponding era.
+     * @return Era corresponding to the given epoch.
+     */
+    public Era getEraForEpoch(int epoch) {
+        var cardanoEras = eraStorage.findAllEras();
+        int lastEraIndex = cardanoEras.size() - 1;
+
+        // Check if the epoch is before the first era's start epoch
+        CardanoEra firstEra = cardanoEras.get(0);
+        int firstEraEpoch = getEpochNo(firstEra.getEra(), firstEra.getStartSlot());
+        if (epoch < firstEraEpoch) {
+            return Era.Byron;
+        }
+
+        for (int i = 0; i <= lastEraIndex; i++) {
+            CardanoEra cardanoEra = cardanoEras.get(i);
+            long startSlot = cardanoEra.getStartSlot();
+            int eraEpoch = getEpochNo(cardanoEra.getEra(), startSlot);
+
+            // If the given epoch is greater than or equal to the start epoch of the era
+            if (epoch >= eraEpoch) {
+                // Check if it's the last era in the list or if the next era's start epoch is greater
+                if (i == lastEraIndex || epoch < getEpochNo(cardanoEras.get(i + 1).getEra(), cardanoEras.get(i + 1).getStartSlot())) {
+                    return cardanoEra.getEra();
+                }
+            }
+        }
+
+        // If the epoch is greater than the start epoch of the last era, return the last era
+        return cardanoEras.get(lastEraIndex).getEra();
     }
 
     /**

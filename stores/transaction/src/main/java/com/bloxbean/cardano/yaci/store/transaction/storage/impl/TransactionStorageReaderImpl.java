@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -66,6 +67,11 @@ public class TransactionStorageReaderImpl implements TransactionStorageReader {
         return txnEntityRepository.findAllByBlockNumber(blockNumber)
                 .stream()
                 .map(mapper::toTxn).collect(Collectors.toList());
+    }
+
+    @Override
+    public BigInteger getTotalFee(int epoch) {
+        return txnEntityRepository.getTotalFee(epoch);
     }
 
 }

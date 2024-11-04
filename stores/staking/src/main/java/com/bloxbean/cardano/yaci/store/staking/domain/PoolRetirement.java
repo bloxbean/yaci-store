@@ -20,6 +20,7 @@ import lombok.experimental.SuperBuilder;
 public class PoolRetirement extends BlockAwareDomain {
     private String txHash;
     private int certIndex;
+    private int txIndex;
     private String poolId;
     private int retirementEpoch;
 
