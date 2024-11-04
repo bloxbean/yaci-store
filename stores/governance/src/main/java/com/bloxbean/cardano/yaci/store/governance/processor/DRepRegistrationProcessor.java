@@ -9,9 +9,11 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
+import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepRegistrationEvent;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ import java.util.List;
 @Slf4j
 public class DRepRegistrationProcessor {
     private final DRepRegistrationStorage drepRegistrationStorage;
+    private final ApplicationEventPublisher publisher;
 
     @Transactional
     @EventListener
@@ -66,6 +69,8 @@ public class DRepRegistrationProcessor {
         }
         if (!dRepRegistrations.isEmpty()) {
             drepRegistrationStorage.saveAll(dRepRegistrations);
+
+            publisher.publishEvent(new DRepRegistrationEvent(eventMetadata, dRepRegistrations));
         }
     }
 

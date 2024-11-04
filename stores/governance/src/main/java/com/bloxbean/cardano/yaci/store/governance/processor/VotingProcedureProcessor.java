@@ -2,13 +2,16 @@ package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.Voter;
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepVotingEvent;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +27,7 @@ import java.util.UUID;
 public class VotingProcedureProcessor {
 
     private final VotingProcedureStorage votingProcedureStorage;
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -76,6 +80,13 @@ public class VotingProcedureProcessor {
 
         if (!votingProcedures.isEmpty()) {
             votingProcedureStorage.saveAll(votingProcedures);
+
+            publisher.publishEvent(
+                    new DRepVotingEvent(eventMetadata, votingProcedures.stream().filter(votingProcedure ->
+                            votingProcedure.getVoterType() == VoterType.DREP_KEY_HASH
+                                    || votingProcedure.getVoterType() == VoterType.DREP_SCRIPT_HASH).toList()));
+
         }
+
     }
 }
