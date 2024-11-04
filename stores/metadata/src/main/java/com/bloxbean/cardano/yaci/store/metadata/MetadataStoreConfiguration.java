@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         havingValue = "true",
         matchIfMissing = true
 )
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.metadata"})
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.metadata", "com.bloxbean.cardano.yaci.store.vertx", "com.bloxbean.cardano.yaci.store.filter"})
 @EnableJpaRepositories( basePackages = {"com.bloxbean.cardano.yaci.store.metadata"})
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.metadata"})
 @EnableTransactionManagement

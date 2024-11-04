@@ -1,2 +1,2 @@
-# Yaci DevKit Documentation
+# Yaci Store Documentation
 

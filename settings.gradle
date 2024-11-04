@@ -22,6 +22,8 @@ include 'components:remote'
 include 'components:rocksdb'
 include 'components:job'
 include 'components:admin'
+include 'components:vertx-int'
+include 'components:filter'
 
 include 'stores:blocks'
 include 'stores:utxo'

@@ -1,0 +1,18 @@
+dependencies {
+    api project(":components:common")
+
+    api libs.vertx.core
+//    implementation libs.vertx.lang.js
+    implementation libs.vertx.lang.groovy
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Vertx Integration'
+                description = 'Yaci Store - Vertx Integration'
+            }
+        }
+    }
+}

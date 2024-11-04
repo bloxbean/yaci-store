@@ -24,3 +24,12 @@ messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 
 parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
 apache-commons-pool="org.apache.commons:commons-pool2:2.12.0"
+
+vertx-core="io.vertx:vertx-core:4.5.10"
+#vertx-lang-js="io.vertx:vertx-lang-js:3.9.16"
+vertx-lang-groovy="io.vertx:vertx-lang-groovy:4.5.10"
+
+graalvm-sdk="org.graalvm.sdk:graal-sdk:24.1.1"
+graalvm-js="org.graalvm.js:js:24.1.1"
+graalvm-python="org.graalvm.python:python:24.1.1"
+

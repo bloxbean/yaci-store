@@ -7,12 +7,15 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.filter.EnhancedGraalvmPlugin;
+import com.bloxbean.cardano.yaci.store.filter.EnhancedPluginManager;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataEvent;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,7 +34,19 @@ public class MetadataProcessor {
     private final TxMetadataStorage metadataStorage;
     private final ApplicationEventPublisher publisher;
 
+//    private final PluginManager pluginManager;
+//    private final VertxJsPlugin vertxJsPlugin;
+
+    private final EnhancedPluginManager ehancedPluginManager;
+    private final EnhancedGraalvmPlugin enhancedGraalvmPlugin;
+
     private ObjectMapper objectMapper = new ObjectMapper();
+
+    @PostConstruct
+    public void init() {
+        //pluginManager.registerPlugin(vertxJsPlugin);
+        ehancedPluginManager.registerPlugin(enhancedGraalvmPlugin);
+    }
 
     @EventListener
     @Transactional
@@ -77,9 +92,12 @@ public class MetadataProcessor {
                 .collect(Collectors.toList());
 
         if (txMetadataLabelList.size() > 0) {
+
             if (log.isDebugEnabled())
                 log.debug("Saving metadata >> Length : " + txMetadataLabelList.size());
-            metadataStorage.saveAll(txMetadataLabelList);
+            //pluginManager.executePlugin("filterPlugin", txMetadataLabelList);
+            var filteredMetadataList = (List<TxMetadataLabel>)ehancedPluginManager.executePlugin("filterPlugin", txMetadataLabelList);
+            metadataStorage.saveAll(filteredMetadataList);
 
             //biz event
             publisher.publishEvent(new TxMetadataEvent(eventMetadata, txMetadataLabelList));
