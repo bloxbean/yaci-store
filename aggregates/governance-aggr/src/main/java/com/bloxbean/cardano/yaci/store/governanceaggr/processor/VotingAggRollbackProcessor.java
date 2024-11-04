@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.governanceaggr.service.CommitteeVoteService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.LatestVotingProcedureService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
@@ -18,7 +17,6 @@ public class VotingAggRollbackProcessor {
     private final LatestVotingProcedureStorage latestVotingProcedureStorage;
     private final LatestVotingProcedureService latestVotingProcedureService;
     private final CommitteeVoteStorage committeeVoteStorage;
-    private final CommitteeVoteService committeeVoteService;
 
     @EventListener
     @Transactional

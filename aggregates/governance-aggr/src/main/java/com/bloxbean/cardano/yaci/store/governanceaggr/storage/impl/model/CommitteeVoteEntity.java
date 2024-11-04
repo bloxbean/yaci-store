@@ -29,7 +29,7 @@ public class CommitteeVoteEntity {
 
     @Id
     @Column(name = "slot")
-    private long slot;
+    private Long slot;
 
     @Column(name = "yes_cnt")
     private int yesCnt;

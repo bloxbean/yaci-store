@@ -9,11 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.CommitteeVote;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.CommitteeVoteId;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionId;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.VoteCount;
-import com.bloxbean.cardano.yaci.store.governanceaggr.event.VotingEvent;
-import com.bloxbean.cardano.yaci.store.governanceaggr.service.CommitteeVoteService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
 import lombok.*;
@@ -33,9 +29,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CommitteeVoteProcessor {
     private final Map<Pair<Long, GovActionId>, VoteInfo> voteInfoMap = new ConcurrentHashMap<>();
-    private final Map<CommitteeVoteId, VoteCount> voteCountMap = new ConcurrentHashMap<>();
-    private final Map<Long, VotingEvent> votingEventsMap = new ConcurrentHashMap<>();
-    private final CommitteeVoteService committeeVoteService;
     private final CommitteeVoteStorageReader committeeVoteStorageReader;
     private final CommitteeVoteStorage committeeVotesStorage;
     private final CommitteeVoteStorageReader committeeVotesStorageReader;
@@ -79,12 +72,6 @@ public class CommitteeVoteProcessor {
             }
         }
     }
-
-//    @EventListener
-//    @Transactional
-//    public void handleCommitteeVotingProcedure(VotingEvent votingEvent) {
-//        votingEventsMap.put(votingEvent.getMetadata().getSlot(), votingEvent);
-//    }
 
     @EventListener
     @Transactional

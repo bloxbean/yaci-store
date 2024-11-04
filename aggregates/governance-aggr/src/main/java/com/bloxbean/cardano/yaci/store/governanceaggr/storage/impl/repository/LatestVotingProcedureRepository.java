@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository;
 
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureEntity;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureId;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.projection.LatestEpochVotingProcedureProjection;
@@ -37,4 +38,6 @@ public interface LatestVotingProcedureRepository extends JpaRepository<LatestVot
                             + " group by lvp.voterHash")
     List<LatestEpochVotingProcedureProjection> findAllByVoterHashAndEpochNo(
             @Param("fromEpoch") Long fromEpoch, @Param("dRepHashes") Set<String> dRepHashes);
+
+    List<LatestVotingProcedureEntity> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch);
 }
