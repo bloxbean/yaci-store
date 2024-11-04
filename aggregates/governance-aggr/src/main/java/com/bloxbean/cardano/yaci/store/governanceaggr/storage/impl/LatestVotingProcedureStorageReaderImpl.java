@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
@@ -30,6 +31,14 @@ public class LatestVotingProcedureStorageReaderImpl implements LatestVotingProce
     @Override
     public List<LatestVotingProcedure> findBySlotGreaterThan(Long slot) {
         return latestVotingProcedureRepository.findBySlotGreaterThan(slot)
+                .stream()
+                .map(latestVotingProcedureMapper::toLatestVotingProcedure)
+                .toList();
+    }
+
+    @Override
+    public List<LatestVotingProcedure> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch) {
+        return latestVotingProcedureRepository.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, epoch)
                 .stream()
                 .map(latestVotingProcedureMapper::toLatestVotingProcedure)
                 .toList();
