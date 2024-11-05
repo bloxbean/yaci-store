@@ -65,7 +65,7 @@ public class InstantRewardSnapshotService {
                                           block,
                                           block_time,
                                           ROW_NUMBER() OVER (PARTITION BY address ORDER BY slot DESC) AS rn
-                                   FROM mainnet.mir
+                                   FROM mir
                                    WHERE epoch = :epoch)
                 insert into instant_reward
                 select address          as address,
