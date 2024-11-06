@@ -10,10 +10,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -58,5 +55,16 @@ public class StakeController {
         if (p > 0)
             p = p - 1;
         return stakeService.getStakeDelegations(p, count);
+    }
+
+    @GetMapping("/addresses/{epoch}")
+    @Operation(description = "Get registered stake addresses by epoch")
+    public List<String> getRegisteredStakeAddresses(@PathVariable Integer epoch, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                                    @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return stakeService.getRegisteredStakeAddresses(epoch,p, count);
     }
 }

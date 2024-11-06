@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingStorageReader;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.StakingMapper;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.DelegationRepository;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.StakeRegistrationRepository;
@@ -12,10 +12,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public class StakeStorageReaderImpl implements StakingStorageReader {
+public class StakeCertificateStorageReaderImpl implements StakingCertificateStorageReader {
     private final StakeRegistrationRepository registrationRepository;
     private final DelegationRepository delegationRepository;
     private final StakingMapper mapper;
@@ -51,6 +52,28 @@ public class StakeStorageReaderImpl implements StakingStorageReader {
                 .stream()
                 .map(delegationEntity -> mapper.toDelegation(delegationEntity))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<String> getRegisteredStakeAddresses(Integer epoch, int page, int count) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count);
+
+        return registrationRepository.findRegisteredStakeAddresses(epoch, sortedBySlot)
+                .stream()
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot) {
+        return registrationRepository.findRegistrationsByStakeAddress(stakeAddress, slot)
+                .map(stakeRegistrationEntity -> mapper.toStakeRegistrationDetail(stakeRegistrationEntity));
+    }
+
+    @Override
+    public Optional<StakeRegistrationDetail> getRegistrationByPointer(long slot, int txIndex, int certIndex) {
+        return registrationRepository.findRegistrationByPointer(slot, txIndex, certIndex)
+                .map(stakeRegistrationEntity -> mapper.toStakeRegistrationDetail(stakeRegistrationEntity));
     }
 
 }

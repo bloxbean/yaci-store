@@ -1,10 +1,11 @@
 package com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.model.EpochParamEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
 
 @Repository
 public interface EpochParamRepository extends JpaRepository<EpochParamEntity, Integer> {
@@ -12,10 +13,8 @@ public interface EpochParamRepository extends JpaRepository<EpochParamEntity, In
     @Query("select max(ep.epoch) from EpochParamEntity ep")
     Integer findMaxEpoch();
 
-    @Query(
-            value =
-                    "SELECT ep FROM EpochParamEntity ep WHERE ep.epoch = (SELECT MAX(ep2.epoch) FROM EpochParamEntity ep2)")
-    EpochParam findCurrentEpochParam();
+    @Query("select ep from EpochParamEntity ep where ep.epoch = (select max(ep.epoch) from EpochParamEntity ep)")
+    Optional<EpochParamEntity> findLatestEpochParam();
 
     int deleteBySlotGreaterThan(Long slot);
 }

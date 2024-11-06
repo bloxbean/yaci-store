@@ -68,6 +68,12 @@ public class EpochParamStorageImpl implements EpochParamStorage {
     }
 
     @Override
+    public Optional<EpochParam> getLatestEpochParam() {
+        return epochParamRepository.findLatestEpochParam()
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Integer getMaxEpoch() {
         return epochParamRepository.findMaxEpoch();
     }

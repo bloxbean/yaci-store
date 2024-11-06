@@ -14,6 +14,6 @@ import java.util.List;
 @Builder
 public class TxCertificates {
     private String txHash;
-    private int blockIndex;
+    private int txIndex;
     private List<Certificate> certificates;
 }
