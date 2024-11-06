@@ -1,0 +1,29 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    api project(":aggregates:adapot")
+
+    implementation project(':starters:transaction-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
+    implementation project(':starters:staking-spring-boot-starter')
+    implementation project(':starters:utxo-spring-boot-starter')
+    implementation project(':starters:blocks-spring-boot-starter')
+    implementation project(':starters:mir-spring-boot-starter')
+    implementation project(':starters:account-spring-boot-starter')
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Ada Pot Spring Boot Starter'
+                description = 'Yaci Store Ada Pot Spring Boot Starter'
+            }
+        }
+    }
+}

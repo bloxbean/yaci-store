@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 
 import java.util.List;
 
-public interface StakingStorage {
+public interface StakingCertificateStorage {
     void saveRegistrations(List<StakeRegistrationDetail> stakeRegistrations);
     void saveDelegations(List<Delegation> delegations);
 

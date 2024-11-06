@@ -1,6 +1,6 @@
 services:
   yaci-store-aggregation:
-    image: bloxbean/yaci-store-aggregation-app:0.1.0-rc4
+    image: bloxbean/yaci-store-aggregation-app:0.1.0
     container_name: yaci-store-aggregation
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=aggregation}

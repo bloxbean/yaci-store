@@ -15,7 +15,6 @@ import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,21 +108,9 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
+
         publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
         publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
-
-//        var postProcessingFuture = CompletableFuture.supplyAsync(() -> {
-//            publisher.publishEvent(new ReadyForBalanceAggregationEvent(lastBatchBlock.getMetadata()));
-//            return true;
-//        }, eventExecutor);
-//
-//        var commitFuture = CompletableFuture.supplyAsync(() -> {
-//            publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
-//            return true;
-//        }, eventExecutor);
-//        CompletableFuture.allOf(postProcessingFuture, commitFuture)
-//                .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
-//                .join();
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
@@ -167,7 +154,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                                         var transaction = transactions.get(i);
                                         return TxCertificates.builder()
                                                 .txHash(transaction.getTxHash())
-                                                .blockIndex(i)
+                                                .txIndex(i)
                                                 .certificates(transaction.getBody().getCertificates())
                                                 .build();
                                     }
@@ -210,7 +197,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         }, eventExecutor);
 
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
-                        txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent)
+                txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent)
                 .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
                 .join();
     }
@@ -244,7 +231,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                             var transaction = transactions.get(i);
                             return TxCertificates.builder()
                                     .txHash(transaction.getTxHash())
-                                    .blockIndex(i)
+                                    .txIndex(i)
                                     .certificates(transaction.getBody().getCertificates())
                                     .build();
                         }

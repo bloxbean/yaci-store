@@ -14,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,10 +28,12 @@ class EraServiceTest {
     private EraStorage eraStorage;
     @Mock
     private CursorStorage cursorStorage;
-    @Mock
+
     private EpochConfig epochConfig;
+
     @Mock
     private GenesisConfig genesisConfig;
+
     @Mock
     private StoreProperties storeProperties;
 
@@ -42,6 +45,7 @@ class EraServiceTest {
 
     @BeforeEach
     void setup() {
+        this.epochConfig = new EpochConfig(genesisConfig);
         eraService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties, tipFinderService);
     }
 
@@ -113,4 +117,324 @@ class EraServiceTest {
         long blockTime = eraService.blockTime(Era.Babbage, 264811);
         assertEquals(1666920811, blockTime);
     }
+
+    @Test
+    void getEraForEpoch_ByronEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(206);
+        assertEquals(Era.Byron, era);
+    }
+
+    @Test
+    void getEraForEpoch_ByronEpoch_onlyShelleyEraInList() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(207);
+        assertEquals(Era.Byron, era);
+    }
+
+    @Test
+    void getEraForEpoch_shelleyStartEpoch_onlyShelleyEraInList() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(208);
+        assertEquals(Era.Shelley, era);
+    }
+
+    @Test
+    void getEraForEpoch_shelleyEpoch_onlyShelleyEraInList() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(300);
+        assertEquals(Era.Shelley, era);
+    }
+
+    @Test
+    void getEraForEpoch_shelleyEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(235);
+        assertEquals(Era.Shelley, era);
+    }
+
+    @Test
+    void getEraForEpoch_allegraStartEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(236);
+        assertEquals(Era.Allegra, era);
+    }
+
+    @Test
+    void getEraForEpoch_allegraEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(250);
+        assertEquals(Era.Allegra, era);
+    }
+
+    @Test
+    void getEraForEpoch_maryEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(289);
+        assertEquals(Era.Mary, era);
+    }
+
+    @Test
+    void getEraForEpoch_alonzoStartEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(290);
+        assertEquals(Era.Alonzo, era);
+    }
+
+    @Test
+    void getEraForEpoch_alonzoEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(364);
+        assertEquals(Era.Alonzo, era);
+    }
+
+    @Test
+    void getEraForEpoch_babbageStartEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(365);
+        assertEquals(Era.Babbage, era);
+    }
+
+    @Test
+    void getEraForEpoch_babbageEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(400);
+        assertEquals(Era.Babbage, era);
+    }
+
+    @Test
+    void getEraForEpoch_conwayStartEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build(),
+                CardanoEra.builder().era(Era.Conway).startSlot(133660855).block(10781331).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(507);
+        assertEquals(Era.Conway, era);
+    }
+
+    @Test
+    void getEraForEpoch_conwayEpoch() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Shelley).startSlot(4492800).block(4490511).build(),
+                CardanoEra.builder().era(Era.Allegra).startSlot(16588800).block(5086524).build(),
+                CardanoEra.builder().era(Era.Mary).startSlot(23068800).block(5406747).build(),
+                CardanoEra.builder().era(Era.Alonzo).startSlot(39916975).block(6236060).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build(),
+                CardanoEra.builder().era(Era.Conway).startSlot(133660855).block(10781331).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Shelley).startSlot(4492800).block(4490511).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(518);
+        assertEquals(Era.Conway, era);
+    }
+
+    @Test
+    void getEraForEpoch_alonzoEra_nonShelleyStartEra() {
+
+        List<CardanoEra> eras = List.of(
+                CardanoEra.builder().era(Era.Alonzo).startSlot(0).block(1).build(),
+                CardanoEra.builder().era(Era.Babbage).startSlot(72316896).block(7791699).build(),
+                CardanoEra.builder().era(Era.Conway).startSlot(133660855).block(10781331).build()
+        );
+
+        when(eraStorage.findAllEras()).thenReturn(eras);
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(CardanoEra.builder()
+                .era(Era.Alonzo).startSlot(0).block(1).build()));
+
+        when(genesisConfig.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        when(genesisConfig.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+
+        Era era = eraService.getEraForEpoch(4);
+        assertEquals(Era.Alonzo, era);
+    }
+
+
 }

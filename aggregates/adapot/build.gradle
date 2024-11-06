@@ -1,0 +1,43 @@
+dependencies {
+    api project(":components:core")
+    api project(":stores:epoch")
+    api project(":stores:transaction")
+    api project(":stores:staking")
+    api project(":stores:utxo")
+    api project(":stores:blocks")
+    api project(":stores:mir")
+    api project(":aggregates:account")
+
+    api(libs.cf.rewards) {
+        exclude group: "org.projectlombok", module: "lombok"
+        exclude group: "org.slf4j", module: "slf4j-api"
+        exclude group: "org.apache.maven.plugins", module: "maven-javadoc-plugin"
+        exclude group: "org.apache.maven.plugins", module: "maven-gpg-plugin"
+    }
+
+    //Test dependencies
+    testCompileOnly 'org.projectlombok:lombok'
+    testImplementation(libs.mapstruct)
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testAnnotationProcessor(libs.mapstruct.processor)
+
+    testImplementation project(':starters:spring-boot-starter')
+    testImplementation project(':starters:utxo-spring-boot-starter')
+    testImplementation project(':starters:account-spring-boot-starter')
+    testImplementation project(':starters:adapot-spring-boot-starter')
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+
+    testRuntimeOnly 'org.postgresql:postgresql:42.7.1'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Ada Pot Module'
+                description = 'Yaci Store Ada Pot Module'
+            }
+        }
+    }
+}

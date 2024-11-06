@@ -83,4 +83,9 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
                         .build()).collect(Collectors.toList());
     }
 
+    @Override
+    public int totalBlocksInEpoch(int epochNumber) {
+        return blockRepository.totalBlocksInEpoch(epochNumber);
+    }
+
 }

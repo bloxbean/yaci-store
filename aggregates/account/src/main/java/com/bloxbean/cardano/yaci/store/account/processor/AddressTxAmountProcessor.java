@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.ReadyForBalanceAggregationEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import lombok.SneakyThrows;
@@ -187,7 +187,7 @@ public class AddressTxAmountProcessor {
 
     @EventListener
     @Transactional //We can also listen to CommitEvent here
-    public void handleRemainingTxInputOuputs(ReadyForBalanceAggregationEvent readyForBalanceAggregationEvent) {
+    public void handleRemainingTxInputOuputs(PreCommitEvent preCommitEvent) {
         if (!accountStoreProperties.isSaveAddressTxAmount())
             return;
 

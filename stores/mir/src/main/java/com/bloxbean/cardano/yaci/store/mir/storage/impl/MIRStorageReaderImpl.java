@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.mir.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousRewardSummary;
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorageReader;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -33,6 +35,11 @@ public class MIRStorageReaderImpl implements MIRStorageReader {
                 .stream()
                 .map(mapper::toMoveInstataneousReward)
                 .toList();
+    }
+
+    @Override
+    public BigInteger findMirPotAmountByEpoch(int epoch, MirPot mirPot) {
+        return repository.findMirPotAmountByEpoch(epoch, mirPot);
     }
 
 
