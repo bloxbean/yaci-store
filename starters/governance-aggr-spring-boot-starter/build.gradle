@@ -2,6 +2,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":aggregates:governance-aggr")
 
+    implementation project(':starters:epoch-spring-boot-starter')
+    implementation project(':starters:governance-spring-boot-starter')
+    implementation project(':starters:account-spring-boot-starter')
+
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
 
