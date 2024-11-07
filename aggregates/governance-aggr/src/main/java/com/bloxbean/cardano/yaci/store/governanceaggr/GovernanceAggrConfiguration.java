@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
@@ -24,13 +25,14 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         prefix = "store.governance-aggr",
         name = "enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EnableTransactionManagement
 @EnableScheduling
+@EnableAsync
 public class GovernanceAggrConfiguration {
 
     @Bean

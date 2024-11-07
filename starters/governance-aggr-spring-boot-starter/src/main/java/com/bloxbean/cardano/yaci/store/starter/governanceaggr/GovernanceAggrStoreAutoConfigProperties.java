@@ -13,7 +13,7 @@ public class GovernanceAggrStoreAutoConfigProperties {
     @Getter
     @Setter
     public static final class GovernanceAggr {
-        private boolean enabled = true;
+        private boolean enabled = false;
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
     }

@@ -38,7 +38,7 @@ public class DRepRegistrationProcessor {
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
             int certIndex = 0;
-            int txIndex = txCertificates.getBlockIndex();
+            int txIndex = txCertificates.getTxIndex();
 
             for (var certificate : txCertificates.getCertificates()) {
                 DRepRegistration drepRegistration = switch (certificate.getType()) {
