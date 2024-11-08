@@ -10,14 +10,15 @@ import com.bloxbean.cardano.yaci.store.adapot.snapshot.DepositSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.UtxoSnapshotService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import io.vavr.control.Either;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -48,6 +49,7 @@ public class AdaPotJobManager {
     private StakeSnapshotService stakeSnapshotService;
     private DepositSnapshotService depositSnapshotService;
     private AdaPotService adaPotService;
+    private TransactionStorageReader transactionStorageReader;
 
     public AdaPotJobManager(StoreProperties storeProperties,
                             AdaPotJobStorage adaPotJobStorage,
@@ -57,7 +59,7 @@ public class AdaPotJobManager {
                             DepositSnapshotService depositSnapshotService,
                             UtxoSnapshotService utxoSnapshotService,
                             AdaPotService adaPotService,
-                            ParallelExecutor parallelExecutor) {
+                            TransactionStorageReader transactionStorageReader) {
         this.storeProperties = storeProperties;
         this.adaPotJobStorage = adaPotJobStorage;
         this.eraService = eraService;
@@ -65,7 +67,9 @@ public class AdaPotJobManager {
         this.stakeSnapshotService = stakeSnapshotService;
         this.depositSnapshotService = depositSnapshotService;
         this.adaPotService = adaPotService;
+        this.transactionStorageReader = transactionStorageReader;
 
+        //TODO -- Add some delay and then start loading jobs to handle rollback during restart of the application
         // Reset jobs that were in 'STARTED' state to 'NOT_STARTED' and load pending jobs
         resetStartedJobs();
         loadPendingJobs();
@@ -136,68 +140,90 @@ public class AdaPotJobManager {
 
         int retryCount = 0;
 
-        while (true) {
-            // Reset times
-            job.setTotalTime(0L);
-            job.setRewardCalcTime(0L);
-            job.setUpdateRewardTime(0L);
+        try {
+            while (true) {
+                // Reset times
+                job.setTotalTime(0L);
+                job.setRewardCalcTime(0L);
+                job.setUpdateRewardTime(0L);
 
-            var start = Instant.now();
-            var deposits = depositSnapshotService.getNetStakeDepositInEpoch(job.getEpoch() - 1);
-            adaPotService.updateAdaPotDeposit(job.getEpoch(), deposits);
-            var end = Instant.now();
-            log.info("Deposit snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+                var start = Instant.now();
+                //create AdaPot entry for the epoch
+                adaPotService.createAdaPot(job.getEpoch(), job.getSlot());
 
-            start = Instant.now();
-            boolean success = calculateRewards(job);
-            end = Instant.now();
-            job.setTotalTime(end.toEpochMilli() - start.toEpochMilli());
-            log.info("Reward calculation time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+                //Update Fee pot
+                var totalFeeInEpoch = transactionStorageReader.getTotalFee(job.getEpoch() - 1); //Prev epoch
+                if (totalFeeInEpoch == null) totalFeeInEpoch = BigInteger.ZERO;
+                log.info("Total fee in epoch {} : {}", job.getEpoch() - 1, totalFeeInEpoch);
+                //Update total fee in the epoch
+                adaPotService.updateEpochFee(job.getEpoch(), totalFeeInEpoch);
+                var end = Instant.now();
+                log.info("Fee snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
 
-            /**
-             //Take UTXO snapshot
-             var utxoSnapshotFuture = CompletableFuture.supplyAsync(() -> {
-             var start = Instant.now();
-             var utxo = utxoSnapshotService.getTotalUtxosInEpoch(job.getEpoch(), job.getSlot());
-             adaPotService.updateEpochUtxo(job.getEpoch(), utxo);
-             var end = Instant.now();
-             log.info("UTXO snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
-             return true;
-             }, parallelExecutor.getVirtualThreadExecutor());
-             **/
+                //Update deposit stake pot
+                start = Instant.now();
+                var deposits = depositSnapshotService.getNetStakeDepositInEpoch(job.getEpoch() - 1);
+                adaPotService.updateAdaPotDeposit(job.getEpoch(), deposits);
+                end = Instant.now();
+                log.info("Deposit snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+
+                //Calculate rewards
+                start = Instant.now();
+                Either<String, Boolean> result = calculateRewards(job);
+                end = Instant.now();
+                job.setTotalTime(end.toEpochMilli() - start.toEpochMilli());
+                log.info("Reward calculation time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+
+                /**
+                 //Take UTXO snapshot
+                 var utxoSnapshotFuture = CompletableFuture.supplyAsync(() -> {
+                 var start = Instant.now();
+                 var utxo = utxoSnapshotService.getTotalUtxosInEpoch(job.getEpoch(), job.getSlot());
+                 adaPotService.updateEpochUtxo(job.getEpoch(), utxo);
+                 var end = Instant.now();
+                 log.info("UTXO snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
+                 return true;
+                 }, parallelExecutor.getVirtualThreadExecutor());
+                 **/
 
 
-            if (success) {
-                job.setStatus(AdaPotJobStatus.COMPLETED);
-                job.setErrorMessage(null);
-                adaPotJobStorage.save(job);
-                return true;
-            } else {
-                job.setErrorMessage("Reward calculation failed");
-                adaPotJobStorage.save(job);
-                //TODO -- Retry logic
-                log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
-                retryCount++;
-
-                if (retryCount > 3) {
-                    log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
-                    job.setErrorMessage("Reward calculation failed. Retry count exceeded");
+                if (result.isRight()) {
+                    job.setStatus(AdaPotJobStatus.COMPLETED);
+                    job.setErrorMessage(null);
                     adaPotJobStorage.save(job);
-                    return false;
-                }
+                    return true;
+                } else {
+                    job.setErrorMessage("Reward calculation failed : " + result.getLeft());
+                    adaPotJobStorage.save(job);
+                    //TODO -- Retry logic
+                    log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retrying...");
+                    retryCount++;
 
-                Thread.sleep(5000);
+                    if (retryCount > 3) {
+                        log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
+                        job.setErrorMessage("Reward calculation failed. Retry count exceeded : " + result.getLeft());
+                        adaPotJobStorage.save(job);
+                        return false;
+                    }
+
+                    Thread.sleep(5000);
+                }
             }
+        } catch (Exception e){
+          log.error("Adapot job processing failed", e);
+          job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
+          adaPotJobStorage.save(job);
+          return false;
         }
     }
 
-    private boolean calculateRewards(AdaPotJob job) {
+    private Either<String, Boolean> calculateRewards(AdaPotJob job) {
         try {
             long nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(0);
 
             if (job.getEpoch() < nonByronEpoch) {
                 log.info("Epoch : {} is Byron era. Skipping reward calculation", job.getEpoch());
-                return true;
+                return Either.right(true);
             }
 
             //Calculate epoch rewards
@@ -207,10 +233,13 @@ public class AdaPotJobManager {
             var end = Instant.now();
             job.setRewardCalcTime(end.toEpochMilli() - start.toEpochMilli());
 
-            if (storeProperties.isMainnet()) {
+            if (storeProperties.isMainnet()
+                    || storeProperties.getProtocolMagic() == 1
+                    || storeProperties.getProtocolMagic() == 2
+            ) { //mainnet or preprod or preview
                 //TODO -- Verify treasury and rewards value
                 try {
-                    var expectedPots = loadExpectedAdaPotValues();
+                    var expectedPots = loadExpectedAdaPotValues(storeProperties.getProtocolMagic());
                     var expectedPot = expectedPots.get(epoch);
 
                     if (expectedPot != null) {
@@ -238,10 +267,10 @@ public class AdaPotJobManager {
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
 
-            return true;
+            return Either.right(true);
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);
-            return false;
+            return Either.left(e.getMessage());
         }
     }
 
@@ -253,8 +282,14 @@ public class AdaPotJobManager {
         return adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED);
     }
 
-    private Map<Integer, ExpectedAdaPot> loadExpectedAdaPotValues() throws IOException {
+    private Map<Integer, ExpectedAdaPot> loadExpectedAdaPotValues(long protocolMagic) throws IOException {
         String file = "dbsync_ada_pots.json";
+        if (protocolMagic == 1) { //preprod
+            file = "dbsync_ada_pots_preprod.json";
+        } else if (protocolMagic == 2) { //preview
+            file = "dbsync_ada_pots_preview.json";
+        }
+
         ObjectMapper objectMapper = new ObjectMapper();
         List<ExpectedAdaPot> pots = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream(file), new TypeReference<List<ExpectedAdaPot>>() {
         });
