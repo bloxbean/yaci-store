@@ -106,7 +106,15 @@ public class PoolStateService {
                         if (stakeCred != null) {
                             rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.mainnet()).toBech32();
                         }
+                    } else if (!storeProperties.isMainnet() && !rewardAccount.startsWith("stake_test")) { //mainnet address in testnet
+                        //convert it to testnet address
+                        var stakeAddr = new Address(rewardAccount);
+                        var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
+                        if (stakeCred != null) {
+                            rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.testnet()).toBech32();
+                        }
                     }
+
                     poolState.setRewardAddress(rewardAccount);
 
                     poolState.setFixedCost(latestUpdate.getCost());
