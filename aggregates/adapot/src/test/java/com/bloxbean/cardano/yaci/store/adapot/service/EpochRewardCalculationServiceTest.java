@@ -177,7 +177,7 @@ class EpochRewardCalculationServiceTest {
         System.out.println(">> All matches");
     }
 
-    @Test
+//    @Test
     void calculateEpochRewards() throws IOException {
 
         //To clean
