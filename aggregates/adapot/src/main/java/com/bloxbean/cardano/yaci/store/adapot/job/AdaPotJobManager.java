@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.job;
 
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
 public class AdaPotJobManager {
     private final BlockingQueue<AdaPotJob> jobQueue = new LinkedBlockingQueue<>();
     private StoreProperties storeProperties;
+    private AdaPotProperties adaPotProperties;
     private AdaPotJobStorage adaPotJobStorage;
     private EraService eraService;
     private EpochRewardCalculationService epochRewardCalculationService;
@@ -52,6 +54,7 @@ public class AdaPotJobManager {
     private TransactionStorageReader transactionStorageReader;
 
     public AdaPotJobManager(StoreProperties storeProperties,
+                            AdaPotProperties adaPotProperties,
                             AdaPotJobStorage adaPotJobStorage,
                             EraService eraService,
                             EpochRewardCalculationService epochRewardCalculationService,
@@ -61,6 +64,7 @@ public class AdaPotJobManager {
                             AdaPotService adaPotService,
                             TransactionStorageReader transactionStorageReader) {
         this.storeProperties = storeProperties;
+        this.adaPotProperties = adaPotProperties;
         this.adaPotJobStorage = adaPotJobStorage;
         this.eraService = eraService;
         this.epochRewardCalculationService = epochRewardCalculationService;
@@ -97,7 +101,7 @@ public class AdaPotJobManager {
      * and adding it to the job queue.
      *
      * @param epoch the epoch number for which the reward calculation job is to be triggered
-     * @param slot slot number
+     * @param slot  slot number
      */
     public void triggerRewardCalcJob(int epoch, long slot) {
         AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
@@ -209,11 +213,11 @@ public class AdaPotJobManager {
                     Thread.sleep(5000);
                 }
             }
-        } catch (Exception e){
-          log.error("Adapot job processing failed", e);
-          job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
-          adaPotJobStorage.save(job);
-          return false;
+        } catch (Exception e) {
+            log.error("Adapot job processing failed", e);
+            job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
+            adaPotJobStorage.save(job);
+            return false;
         }
     }
 
@@ -233,9 +237,10 @@ public class AdaPotJobManager {
             var end = Instant.now();
             job.setRewardCalcTime(end.toEpochMilli() - start.toEpochMilli());
 
-            if (storeProperties.isMainnet()
-                    || storeProperties.getProtocolMagic() == 1
-                    || storeProperties.getProtocolMagic() == 2
+            if (adaPotProperties.isVerifyAdapotCalcValues() &&
+                    (storeProperties.isMainnet()
+                            || storeProperties.getProtocolMagic() == 1
+                            || storeProperties.getProtocolMagic() == 2)
             ) { //mainnet or preprod or preview
                 //TODO -- Verify treasury and rewards value
                 try {
