@@ -23,6 +23,7 @@ public class AdaPotAutoConfiguration {
     public AdaPotProperties adaPotProperties() {
         AdaPotProperties adaPotProperties = new AdaPotProperties();
         adaPotProperties.setUpdateRewardDbBatchSize(properties.getAdaPot().getUpdateRewardDbBatchSize());
+        adaPotProperties.setVerifyAdapotCalcValues(properties.getAdaPot().isVerifyAdapotCalcValues());
 
         return adaPotProperties;
     }
