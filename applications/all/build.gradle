@@ -37,7 +37,7 @@ dependencies {
 graalvmNative {
     binaries {
         main {
-            imageName = 'yaci-store-all'
+            imageName = 'yaci-store'
             buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.YaciStoreApplication']
             sharedLibrary = false
 
@@ -74,3 +74,40 @@ java {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
+
+tasks.withType(org.springframework.boot.gradle.tasks.aot.ProcessAot) {
+    args = ["--spring.profiles.active=" + (project.properties["profile"] ?: "")]
+}
+
+task cliZip(type: Zip) {
+    def profile = project.properties["profile"] ?: ""
+
+    def zipDirName = profile == ""? "yaci-store-${project.version}" : "yaci-store-${project.version}-${profile}"
+    def configDir = "config"
+
+    from('build/native/nativeCompile') {
+        include 'yaci-store*'
+        into(zipDirName)
+    }
+
+    from('../../') {
+        into(zipDirName)
+        include 'LICENSE'
+    }
+
+    from('../../config') {
+        include '*.properties'
+        into zipDirName + '/' + configDir
+    }
+
+    archiveFileName = "yaci-store-${project.version}.zip"
+
+    //If profile is n2c, then add n2c to the archive file name
+    if (profile == "n2c") {
+        archiveFileName = "yaci-store-${project.version}-${profile}.zip"
+    }
+
+    destinationDirectory = file("build/output")
+}
+
+cliZip.dependsOn nativeCompile
