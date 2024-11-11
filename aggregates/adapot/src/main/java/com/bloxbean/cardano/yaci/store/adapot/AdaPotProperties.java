@@ -13,4 +13,7 @@ public class AdaPotProperties {
 
     @Builder.Default
     private int updateRewardDbBatchSize = 200;
+
+    @Builder.Default
+    private boolean verifyAdapotCalcValues = true;
 }

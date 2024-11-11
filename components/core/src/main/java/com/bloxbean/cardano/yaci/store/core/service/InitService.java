@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,8 +19,12 @@ public class InitService {
     private final StoreProperties storeProperties;
     private final EraStorage eraStorage;
 
-    public void init() {
+    @PostConstruct
+    public void postConstruct() {
         findNetworkType();
+    }
+
+    public void init() {
         checkIfCustomStartPoint();
     }
 
