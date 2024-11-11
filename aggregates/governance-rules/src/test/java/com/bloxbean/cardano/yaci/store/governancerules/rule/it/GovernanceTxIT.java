@@ -141,7 +141,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("cafef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(govAction, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(govAction, sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -167,7 +167,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 .build());
 
         Tx tx = new Tx()
-                .createProposal(govAction, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(govAction, sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -190,7 +190,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("cafef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(noConfidence, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(noConfidence, sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -208,7 +208,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
         QuickTxBuilder quickTxBuilder = new QuickTxBuilder(backendService);
 
         var parameterChange = new ParameterChangeAction();
-        parameterChange.setPrevGovActionId(new GovActionId("529736be1fac33431667f2b66231b7b66d4c7a3975319ddac7cfb17dcb5c4145", 0));
+//        parameterChange.setPrevGovActionId(new GovActionId("529736be1fac33431667f2b66231b7b66d4c7a3975319ddac7cfb17dcb5c4145", 0));
         parameterChange.setProtocolParamUpdate(ProtocolParamUpdate.builder()
                 .minPoolCost(adaToLovelace(100))
                 .build()
@@ -217,7 +217,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("cafef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(parameterChange, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(parameterChange, sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -240,7 +240,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("daeef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(treasuryWithdrawalsAction, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(treasuryWithdrawalsAction,sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -265,7 +265,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("daeef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(updateCommittee, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(updateCommittee, sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
@@ -290,7 +290,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
                 HexUtil.decodeHexString("daeef700c0039a2efb056a665b3a8bcd94f8670b88d659f7f3db68340f6f0937"));
 
         Tx tx = new Tx()
-                .createProposal(hardforkInitiation, adaToLovelace(1000), sender1.stakeAddress(), anchor)
+                .createProposal(hardforkInitiation,sender1.stakeAddress(), anchor)
                 .from(sender1Addr);
 
         Result<String> result = quickTxBuilder.compose(tx)
