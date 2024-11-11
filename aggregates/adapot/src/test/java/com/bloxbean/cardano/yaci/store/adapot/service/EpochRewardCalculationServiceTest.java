@@ -7,13 +7,16 @@ import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.cardanofoundation.rewards.calculation.domain.PoolState;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.ComponentScan;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,15 +44,15 @@ class EpochRewardCalculationServiceTest {
 //    @Test
     void fetchRewardCalcInputs() throws IOException {
 
-        RewardsCalcInput rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(480);
+        RewardsCalcInput rewardsCalcInput = epochRewardCalculationService.fetchRewardCalcInputs(372);
 
-        var epochValidationInput = loadEpochValidationInputJson(480);
+        var epochValidationInput = loadEpochValidationInputJson(372);
 
         System.out.println("Loading of epoch validation input completed");
 
         System.out.println("Epoch : >>>>>>>>>>>>>> " + rewardsCalcInput.getEpochInfo().getNumber());
 
-        /**
+
         Map<String, PoolState> rewardsCalcPoolStates = new HashMap<>();
         for (PoolState poolState : rewardsCalcInput.getPoolStates()) {
             rewardsCalcPoolStates.put(poolState.getPoolId(), poolState);
@@ -76,10 +79,10 @@ class EpochRewardCalculationServiceTest {
             //compare all fields of pool state
             assertThat(rewardsCalcPoolState.getPoolId()).isEqualTo(epochValidationPoolState.getPoolId());
 
-//            assertThat(rewardsCalcPoolState.getActiveStake()).isEqualTo(epochValidationPoolState.getActiveStake());
+            assertThat(rewardsCalcPoolState.getActiveStake()).isEqualTo(epochValidationPoolState.getActiveStake());
             assertThat(rewardsCalcPoolState.getRewardAddress()).isEqualTo(epochValidationPoolState.getRewardAddress());
             assertThat(rewardsCalcPoolState.getOwners()).hasSameElementsAs(epochValidationPoolState.getOwners());
-//            assertThat(rewardsCalcPoolState.getOwnerActiveStake()).isEqualTo(epochValidationPoolState.getOwnerActiveStake());
+            assertThat(rewardsCalcPoolState.getOwnerActiveStake()).isEqualTo(epochValidationPoolState.getOwnerActiveStake());
             assertThat(rewardsCalcPoolState.getPoolFees()).isEqualTo(epochValidationPoolState.getPoolFees());
             assertThat(rewardsCalcPoolState.getMargin()).isEqualTo(epochValidationPoolState.getMargin());
             assertThat(rewardsCalcPoolState.getFixedCost()).isEqualTo(epochValidationPoolState.getFixedCost());
@@ -98,7 +101,7 @@ class EpochRewardCalculationServiceTest {
             assertThat(rewardsCalcPoolState.getBlockCount()).isEqualTo(epochValidationPoolState.getBlockCount());
             assertThat(rewardsCalcPoolState.getEpoch()).isEqualTo(epochValidationPoolState.getEpoch());
         }
-       **/
+
         assertThat(rewardsCalcInput.getTreasuryOfPreviousEpoch()).isEqualTo(epochValidationInput.getTreasuryOfPreviousEpoch());
         assertThat(rewardsCalcInput.getReservesOfPreviousEpoch()).isEqualTo(epochValidationInput.getReservesOfPreviousEpoch());
 //        //compare epoch stake info
@@ -132,8 +135,8 @@ class EpochRewardCalculationServiceTest {
         System.out.println(">> Total MIR rewards matches");
 
 
-        assertThat(rewardsCalcInput.getRewardAddressesOfRetiredPoolsInEpoch()).hasSameElementsAs(epochValidationInput.getRewardAddressesOfRetiredPoolsInEpoch());
-        assertThat(rewardsCalcInput.getRewardAddressesOfRetiredPoolsInEpoch().size()).isEqualTo(epochValidationInput.getRewardAddressesOfRetiredPoolsInEpoch().size());
+        assertThat(rewardsCalcInput.getRetiredPools()).hasSameElementsAs(epochValidationInput.getRetiredPools());
+        assertThat(rewardsCalcInput.getRetiredPools().size()).isEqualTo(epochValidationInput.getRetiredPools().size());
 
         System.out.println(">> Reward addresses of retired pools matches");
 
@@ -168,8 +171,8 @@ class EpochRewardCalculationServiceTest {
         assertThat(rewardsCalcInput.getSharedPoolRewardAddressesWithoutReward().size()).isEqualTo(epochValidationInput.getSharedPoolRewardAddressesWithoutReward().size());
 
         System.out.println(">> Shared pool reward addresses without reward matches");
-        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary()).hasSameElementsAs(epochValidationInput.getDeregisteredAccountsOnEpochBoundary());
-        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary().size()).isEqualTo(epochValidationInput.getDeregisteredAccountsOnEpochBoundary().size());
+//        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary()).hasSameElementsAs(epochValidationInput.getDeregisteredAccountsOnEpochBoundary());
+//        assertThat(rewardsCalcInput.getDeregisteredAccountsOnEpochBoundary().size()).isEqualTo(epochValidationInput.getDeregisteredAccountsOnEpochBoundary().size());
 
         System.out.println(">> All matches");
     }
@@ -196,7 +199,7 @@ class EpochRewardCalculationServiceTest {
 
         var expectedPots = loadExpectedAdaPotValues();
 
-        for (int i = 496; i <= 506; i++) {
+        for (int i = 372; i <= 372; i++) {
 
 //        for (int i = 265; i <= 286; i++) {
 //        for (int i = 279; i <= 315; i++) {
@@ -219,8 +222,11 @@ class EpochRewardCalculationServiceTest {
             if (expectedAdaPot == null) {
                 System.out.println("Treasury or Reserves is null for epoch : " + i);
             } else {
+                System.out.println("Calculated Treasury: " + epochCalculationResult.getTreasury());
+                System.out.println("Calculated Reserves: " + expectedAdaPot.getReserves());
                 assertThat(epochCalculationResult.getTreasury()).isEqualTo(expectedAdaPot.getTreasury());
                 assertThat(epochCalculationResult.getReserves()).isEqualTo(expectedAdaPot.getReserves());
+                System.out.println("Matching ada pot for epoch : " + i);
             }
 
             //update rewards

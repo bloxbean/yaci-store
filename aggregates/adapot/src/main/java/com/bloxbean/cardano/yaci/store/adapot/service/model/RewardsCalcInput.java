@@ -2,14 +2,12 @@ package com.bloxbean.cardano.yaci.store.adapot.service.model;
 
 import lombok.Builder;
 import lombok.Data;
-import org.cardanofoundation.rewards.calculation.domain.Epoch;
-import org.cardanofoundation.rewards.calculation.domain.MirCertificate;
-import org.cardanofoundation.rewards.calculation.domain.PoolState;
-import org.cardanofoundation.rewards.calculation.domain.ProtocolParameters;
+import org.cardanofoundation.rewards.calculation.domain.*;
 
 import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @Builder
@@ -23,7 +21,7 @@ public class RewardsCalcInput {
 
     private Epoch epochInfo;
 
-    private HashSet<String> rewardAddressesOfRetiredPoolsInEpoch;
+    private Set<RetiredPool> retiredPools;
     private HashSet<String> deregisteredAccounts;
     private HashSet<String> lateDeregisteredAccounts;
     private HashSet<String> registeredAccountsSinceLastEpoch;

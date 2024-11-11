@@ -120,16 +120,18 @@ public class EpochRewardCalculationService {
         //TODO: Should we throw exception here ?
 
         //Get reward addressed of retired pools
-        List<Pool> retiringPools = poolStorage.findRetiringPools(epoch);
+        List<Pool> retiringPools = poolStorage.findRetiredPools(epoch);
         HashSet<String> rewardAddressesOfRetiredPoolsInEpoch = new HashSet<>();
+        Set<RetiredPool> retiredPools = new HashSet<>();
         for (Pool pool : retiringPools) {
-            List<PoolDetails> poolDetails = poolStorageReader.getLatestPoolUpdateDetails(List.of(pool.getPoolId()), epoch - 1); //-1 or not //TODO ??
-            if(poolDetails == null || poolDetails.isEmpty()) {
+            List<PoolDetails> poolDetailsList = poolStorageReader.getLatestPoolUpdateDetails(List.of(pool.getPoolId()), epoch - 1); //-1 or not //TODO ??
+            if(poolDetailsList == null || poolDetailsList.isEmpty()) {
                 log.info("Pool details not found for pool : " + pool.getPoolId() + " in epoch " + epoch);
                 continue;
             }
-
-            rewardAddressesOfRetiredPoolsInEpoch.add(poolDetails.get(0).getRewardAccount());
+            var poolDetails = poolDetailsList.get(0);
+            retiredPools.add(new RetiredPool(PoolUtil.getBech32PoolId(poolDetails.getPoolId()), poolDetails.getRewardAccount(), pool.getAmount()));
+            rewardAddressesOfRetiredPoolsInEpoch.add(poolDetails.getRewardAccount());
         }
 
         //Get MIR certificates totals by pot ..stability window ??
@@ -222,14 +224,13 @@ public class EpochRewardCalculationService {
         long currentEpochStabilityWindowAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch, (int)stabilityWindow);
         var registeredAccountsUntilNowList = stakeRegistrationService.getRegisteredAccountsUntilEpoch(epoch, poolRewardAddresses, currentEpochStabilityWindowAbsoluteSlot);
         HashSet<String> registeredAccountsUntilNow = new HashSet<>(registeredAccountsUntilNowList);
-
         RewardsCalcInput rewardsCalcInput = RewardsCalcInput.builder()
                 .epoch(epoch)
                 .treasuryOfPreviousEpoch(adaPotsForPreviousEpoch.getTreasury())
                 .reservesOfPreviousEpoch(adaPotsForPreviousEpoch.getReserves())
                 .protocolParameters(rewardProtocolParameters)
                 .epochInfo(epochInfo)
-                .rewardAddressesOfRetiredPoolsInEpoch(rewardAddressesOfRetiredPoolsInEpoch)
+                .retiredPools(retiredPools)
                 .deregisteredAccounts(deregisteredAccounts)
                 .lateDeregisteredAccounts(lateDeregisteredAccounts)
                 .registeredAccountsSinceLastEpoch(registeredAccountsSinceLastEpoch)
@@ -249,7 +250,7 @@ public class EpochRewardCalculationService {
         if (nonByronEpoch == null)
             return null;
 
-        var networkConfig = networkConfigService.getNetworkConfig((int) storeProperties.getProtocolMagic());
+        var networkConfig = networkConfigService.getNetworkConfig((int) storeProperties.getProtocolMagic(), epoch);
         if (epoch < nonByronEpoch) {
             log.warn("Epoch " + epoch + " is before the start of the Shelley era. No rewards were calculated in this epoch.");
             return EpochCalculationResult.builder()
@@ -295,7 +296,7 @@ public class EpochRewardCalculationService {
                 rewardCalcInputs.getTreasuryOfPreviousEpoch(),
                 rewardCalcInputs.getProtocolParameters(),
                 rewardCalcInputs.getEpochInfo(),
-                rewardCalcInputs.getRewardAddressesOfRetiredPoolsInEpoch(),
+                rewardCalcInputs.getRetiredPools(),
                 rewardCalcInputs.getDeregisteredAccounts(),
                 rewardCalcInputs.getMirCertificates(),
                 rewardCalcInputs.getPoolIds(),
