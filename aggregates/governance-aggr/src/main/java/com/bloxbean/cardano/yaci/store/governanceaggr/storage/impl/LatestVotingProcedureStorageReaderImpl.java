@@ -29,14 +29,6 @@ public class LatestVotingProcedureStorageReaderImpl implements LatestVotingProce
     }
 
     @Override
-    public List<LatestVotingProcedure> findBySlotGreaterThan(Long slot) {
-        return latestVotingProcedureRepository.findBySlotGreaterThan(slot)
-                .stream()
-                .map(latestVotingProcedureMapper::toLatestVotingProcedure)
-                .toList();
-    }
-
-    @Override
     public List<LatestVotingProcedure> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch) {
         return latestVotingProcedureRepository.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, epoch)
                 .stream()

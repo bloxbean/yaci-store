@@ -11,6 +11,5 @@ public interface LatestVotingProcedureStorageReader {
     Optional<Long> findLatestSlotOfVotingProcedure();
 
     List<LatestVotingProcedure> getAllByIdIn(List<LatestVotingProcedureId> votingProcedureIds);
-    List<LatestVotingProcedure> findBySlotGreaterThan(Long slot);
     List<LatestVotingProcedure> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch);
 }

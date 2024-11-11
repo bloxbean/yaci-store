@@ -19,9 +19,9 @@ public class CommitteeVote {
 
     private String govActionTxHash;
 
-    private int govActionIndex;
+    private Integer govActionIndex;
 
-    private long slot;
+    private Long slot;
 
     private int yesCnt;
 
