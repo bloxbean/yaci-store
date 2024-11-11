@@ -7,7 +7,8 @@ jobs:
   buildAndUpload:
     strategy:
       matrix:
-        os: ["ubuntu-20.04", "macos-14"]
+#        os: ["ubuntu-20.04", "macos-14"]
+        os: ["ubuntu-20.04", "macOS"]
         profile: ["n2c", ""]
     runs-on: ${{ matrix.os }}
     env:
