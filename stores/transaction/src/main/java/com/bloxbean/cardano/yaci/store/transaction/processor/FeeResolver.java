@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+
 /**
  * Helps to resolve fee. This is useful to resolve fee from collateral for invalid transactions
  */
@@ -27,8 +29,11 @@ public class FeeResolver {
         if (transaction.getBody().getTotalCollateral() != null && transaction.getBody().getTotalCollateral().compareTo(BigInteger.ZERO) > 0)
             return transaction.getBody().getTotalCollateral();
         else {
-            //For Alonzo, get it from collateral inputs
+            //For Alonzo or when totalCollateral is null, get it from collateral inputs and output if exists
             var collateralInputs = transaction.getBody().getCollateralInputs();
+            var collateralReturn = transaction.getBody().getCollateralReturn();
+
+            var totalCollateralInput = BigInteger.ZERO;
             if (collateralInputs != null && collateralInputs.size() > 0) {
                 //Get collateral utxos and set the fee
                 var collateralUtxoKeys = collateralInputs.stream()
@@ -41,13 +46,23 @@ public class FeeResolver {
                     return null;
                 }
 
-                return collateralUtxos.stream()
+                totalCollateralInput = collateralUtxos.stream()
                         .map(utxo -> utxo.getLovelaceAmount())
                         .reduce(BigInteger.ZERO, BigInteger::add);
             }
-        }
 
-        return null;
+            var totalCollateralOutput = BigInteger.ZERO;
+            if (collateralReturn != null && collateralReturn.getAmounts() != null) {
+                totalCollateralOutput = collateralReturn.getAmounts().stream()
+                        .filter(amount -> amount.getUnit().equals(LOVELACE))
+                        .findFirst()
+                        .map(amount -> amount.getQuantity())
+                        .orElse(BigInteger.ZERO);
+            }
+
+            return totalCollateralInput.subtract(totalCollateralOutput);
+
+        }
     }
 
 }

@@ -65,8 +65,8 @@ public class AdaPotConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AdaPotJobStorage adaPotJobStorage(AdaPotJobRepository rewardCalcJobRepository, AdaPotJobMapper rewardCalcJobMapper) {
-        return new AdaPotJobStorageImpl(rewardCalcJobRepository, rewardCalcJobMapper);
+    public AdaPotJobStorage adaPotJobStorage(AdaPotJobRepository adaPotJobRepository, AdaPotJobMapper rewardCalcJobMapper) {
+        return new AdaPotJobStorageImpl(adaPotJobRepository, rewardCalcJobMapper);
     }
 
 }

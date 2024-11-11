@@ -34,6 +34,9 @@ public interface PoolStatusRepository extends JpaRepository<PoolEntity, PoolId> 
             ")")
     Optional<PoolEntity> findRecentPoolRetirement(String poolId, Integer retireEpoch);
 
+    @Query("SELECT d FROM PoolEntity d WHERE d.retireEpoch = :retireEpoch and d.status = 'RETIRED'")
+    List<PoolEntity> findRetiredPoolsByRetireEpoch(Integer retireEpoch);
+
     @Query("SELECT MAX(d.epoch) FROM PoolEntity d")
     Integer getMaxEpoch();
 

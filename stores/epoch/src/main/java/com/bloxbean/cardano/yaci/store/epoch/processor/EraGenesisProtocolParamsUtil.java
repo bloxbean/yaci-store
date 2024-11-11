@@ -33,7 +33,17 @@ public class EraGenesisProtocolParamsUtil {
             } else if (newEra == Era.Shelley) {
                 genesisProtocolParams = getShelleyGenesisProtocolParams(protocolMagic);
             } else if (newEra == Era.Alonzo) {
-                genesisProtocolParams = getAlonzoGenesisProtocolParams(protocolMagic);
+                //Starting with Alonzo era at slot = 0, so merge shelley and alonzo params
+                if (prevEra == null) {
+                    ProtocolParams shelleyPP = getShelleyGenesisProtocolParams(protocolMagic);
+                    ProtocolParams alonzoPP = getAlonzoGenesisProtocolParams(protocolMagic);
+
+                    genesisProtocolParams = new ProtocolParams();
+                    genesisProtocolParams.merge(shelleyPP);
+                    genesisProtocolParams.merge(alonzoPP);
+                } else {
+                    genesisProtocolParams = getAlonzoGenesisProtocolParams(protocolMagic);
+                }
             } else if (newEra == Era.Babbage) {
                 //Starting with Babbage era at slot = 0, so merge alonzo and shelley params and apply required rules
                 if (prevEra == null) { //Looks like it's a custom network. Let's populate with default params
@@ -45,7 +55,7 @@ public class EraGenesisProtocolParamsUtil {
                     genesisProtocolParams.merge(alonzoPP);
                 }
             } else if (newEra == Era.Conway) {
-                //Starting with Babbage era at slot = 0, so merge alonzo and shelley params and apply required rules
+                //Starting with Conway era at slot = 0, so merge alonzo and shelley params and apply required rules
                 if (prevEra == null) { //Looks like it's a custom network. Let's populate with default params
                     ProtocolParams shelleyPP = getShelleyGenesisProtocolParams(protocolMagic);
                     ProtocolParams alonzoPP = getAlonzoGenesisProtocolParams(protocolMagic);
