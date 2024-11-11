@@ -1,5 +1,3 @@
-import org.gradle.internal.os.OperatingSystem
-
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
     id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
@@ -41,7 +39,6 @@ graalvmNative {
             buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.YaciStoreApplication']
             sharedLibrary = false
 
-            def os = OperatingSystem.current()
             def vendor = System.getProperty('java.vendor')
             def version = System.getProperty('java.version')
             def vmName = System.getProperty('java.vm.name')
@@ -99,6 +96,7 @@ task cliZip(type: Zip) {
         include '*.properties'
         into zipDirName + '/' + configDir
     }
+
 
     archiveFileName = "yaci-store-${project.version}.zip"
 
