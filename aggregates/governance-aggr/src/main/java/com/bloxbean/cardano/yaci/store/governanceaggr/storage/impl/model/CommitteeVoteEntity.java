@@ -25,7 +25,7 @@ public class CommitteeVoteEntity {
 
     @Id
     @Column(name = "gov_action_index")
-    private int govActionIndex;
+    private Integer govActionIndex;
 
     @Id
     @Column(name = "slot")
