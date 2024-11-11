@@ -1,9 +1,7 @@
 name: Build and Release Yaci CLI Zip
 
 on:
-  push:
-    tags:
-      - 'rel-dev-*'
+  workflow_dispatch:
 
 jobs:
   buildAndPush:
