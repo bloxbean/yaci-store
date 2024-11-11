@@ -1,10 +1,10 @@
-name: Build and Release Yaci CLI Zip
+name: Build and Upload Yaci Store Zip
 
 on:
   workflow_dispatch:
 
 jobs:
-  buildAndPush:
+  buildAndUpload:
     strategy:
       matrix:
         os: ["ubuntu-20.04", "macos-14"]
@@ -22,9 +22,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: '21.0.4'
           native-image-job-reports: 'true'
-      - name: Get Tag from version file
+      - name: Get Version from gradle.properties
         run: |
-          VERSION=$(grep "tag=" config/gradle.properties | cut -d'=' -f2)
+          VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -36,11 +36,13 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           echo "os_prefix=macos" >> $GITHUB_ENV
+      - name: Set lowercase architecture
+        run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i clean cliZip
       - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-${{ env.VERSION }}.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ runner.arch }}.zip
+        run: mv applications/all/build/output/yaci-store-${{ env.VERSION }}.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ runner.arch }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ runner.arch }}.zip
+          name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}
+          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}.zip
