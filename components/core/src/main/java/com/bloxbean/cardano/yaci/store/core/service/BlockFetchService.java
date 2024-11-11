@@ -458,9 +458,12 @@ public class BlockFetchService implements BlockChainDataListener {
 
     //For shelley and later eras, this method is used to detect new epoch
     private boolean detectIfNewEpoch(Integer epoch, long slot) {
+        // If the previous epoch is null, check the cursor table for the previous epoch.
+        // However, if the previous epoch is null and it's the first block and the network is starting from a non-Byron era,
+        // then prevCursor will be returned for slot(-1) or the genesis entry. In this case, we will consider it as a new epoch.
         if (previousEpoch == null) {
             var prevCursor = cursorService.getPreviousCursor(slot);
-            if (prevCursor.isPresent()) {
+            if (prevCursor.isPresent() && prevCursor.get().getSlot() != -1) { //Previous cursor is not genesis entry
                 previousEpoch = eraService.getEpochNo(prevCursor.get().getEra(), prevCursor.get().getSlot());
             }
         }

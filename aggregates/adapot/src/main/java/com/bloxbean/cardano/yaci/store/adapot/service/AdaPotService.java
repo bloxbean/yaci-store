@@ -20,8 +20,33 @@ import java.util.Optional;
 public class AdaPotService {
     private final AdaPotStorage adaPotStorage;
 
+    /**
+     * Create AdaPot for the given epoch
+     * @param epoch
+     * @return
+     */
+    public AdaPot createAdaPot(Integer epoch, Long slot) {
+        var adaPot = AdaPot.builder()
+                .epoch(epoch)
+                .slot(slot)
+                .depositsStake(BigInteger.ZERO)
+                .fees(BigInteger.ZERO)
+                .utxo(BigInteger.ZERO)
+                .treasury(BigInteger.ZERO)
+                .reserves(BigInteger.ZERO)
+                .build();
+
+        //Save adaPot
+        adaPotStorage.save(adaPot);
+        return adaPot;
+    }
+
+    public Optional<AdaPot> getAdaPot(Integer epoch) {
+        return adaPotStorage.findByEpoch(epoch);
+    }
+
     @Transactional
-    public void createAdaPot(EventMetadata metadata) {
+    public AdaPot createAdaPot(EventMetadata metadata) {
         var adaPot = AdaPot.builder()
                 .epoch(metadata.getEpochNumber())
                 .depositsStake(BigInteger.ZERO)
@@ -36,78 +61,70 @@ public class AdaPotService {
 
         //Save adaPot
         adaPotStorage.save(adaPot);
+        return adaPot;
     }
 
     @Transactional
-    public void updateEpochFee(int epoch, BigInteger fee) {
-        adaPotStorage.findByEpoch(epoch)
-                .ifPresentOrElse(adaPot -> {
-                    adaPot.setFees(fee);
-                    adaPotStorage.save(adaPot);
-                }, () -> {
-                    log.error("Epoch fee can't be updated in adapot. Recent not found for epoch : {}", epoch);
-                });
-
-        return;
-    }
-
-    @Transactional
-    public void updateEpochUtxo(int epoch, BigInteger utxo) {
-        adaPotStorage.findByEpoch(epoch)
-                .ifPresentOrElse(adaPot -> {
-                    adaPot.setUtxo(utxo);
-                    adaPotStorage.save(adaPot);
-                }, () -> {
-                    log.error("Epoch utxo can't be updated in adapot. Recent not found for epoch : {}", epoch);
-                });
-
-        return;
-    }
-
-    @Transactional
-    public void updateAdaPotDeposit(int epoch, BigInteger totalDeposit) {
-        var prevAdaPot = adaPotStorage.findByEpoch(epoch - 1).orElse(null);
-
-        var updatedDeposit = prevAdaPot != null && prevAdaPot.getDepositsStake() != null ? prevAdaPot.getDepositsStake().add(totalDeposit) : BigInteger.ZERO.add(totalDeposit);
-
-        adaPotStorage.findByEpoch(epoch)
-                .ifPresentOrElse(adaPot -> {
-                    adaPot.setDepositsStake(updatedDeposit);
-                    adaPotStorage.save(adaPot);
-                }, () -> {
-                    log.error("Updated deposit for epoch : {}", epoch);
-                });
-    }
-
-    public AdaPot getAdaPot(Integer epoch) {
-        Optional<AdaPot> prevAdaPotOptional = adaPotStorage.findByEpoch(epoch);
-        if (prevAdaPotOptional.isEmpty()) {
-            prevAdaPotOptional = adaPotStorage.findByEpoch(epoch - 1);
+    public boolean updateEpochFee(int epoch, BigInteger fee) {
+        var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
+        if(adaPot == null) {
+            log.error("AdaPot not found for epoch to update fee: {}", epoch);
+            return false;
         }
 
-        var prevAdaPot = prevAdaPotOptional.orElse(
-                AdaPot.builder()
-                        .depositsStake(BigInteger.ZERO)
-                        .fees(BigInteger.ZERO)
-                        .utxo(BigInteger.ZERO)
-                        .epoch(epoch)
-                        .build());
-        return prevAdaPot;
+        adaPot.setFees(fee);
+        adaPotStorage.save(adaPot);
+        return true;
     }
 
     @Transactional
-    public AdaPot updateReserveAndTreasury(int epoch, BigInteger treasury, BigInteger reserves, BigInteger rewards) {
-        adaPotStorage.findByEpoch(epoch)
-                .ifPresentOrElse(adaPot -> {
-                    adaPot.setTreasury(treasury);
-                    adaPot.setReserves(reserves);
-                    adaPot.setRewards(rewards);
-                    adaPotStorage.save(adaPot);
-                }, () -> {
-                    log.error("Reserves and treasury can't be updated. Recent not found for epoch : {}", epoch);
-                });
+    public boolean updateEpochUtxo(int epoch, BigInteger utxo) {
+        var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
+        if(adaPot == null) {
+            log.error("AdaPot not found for epoch to update utxo: {}", epoch);
+            return false;
+        }
 
-        return adaPotStorage.findByEpoch(epoch).orElse(null);
+        adaPot.setUtxo(utxo);
+        adaPotStorage.save(adaPot);
+        return true;
+    }
+
+    @Transactional
+    public boolean updateAdaPotDeposit(int epoch, BigInteger totalDeposit) {
+        var prevAdaPot = adaPotStorage.findByEpoch(epoch - 1).orElse(null);
+
+        var updatedDeposit = prevAdaPot != null && prevAdaPot.getDepositsStake() != null ?
+                prevAdaPot.getDepositsStake().add(totalDeposit) :
+                BigInteger.ZERO.add(totalDeposit);
+
+        var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
+
+        if(adaPot == null) {
+            log.error("AdaPot not found for epoch to update deposit: {}", epoch);
+            return false;
+        }
+
+        adaPot.setDepositsStake(updatedDeposit);
+        adaPotStorage.save(adaPot);
+
+        return true;
+    }
+
+    @Transactional
+    public boolean updateReserveAndTreasury(int epoch, BigInteger treasury, BigInteger reserves, BigInteger rewards) {
+        var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
+        if(adaPot == null) {
+            log.error("AdaPot not found for epoch to update reserve and treasury: {}", epoch);
+            return false;
+        }
+
+        adaPot.setTreasury(treasury);
+        adaPot.setReserves(reserves);
+        adaPot.setRewards(rewards);
+        adaPotStorage.save(adaPot);
+
+        return true;
     }
 
     public int rollbackAdaPot(long rollbackSlot) {
