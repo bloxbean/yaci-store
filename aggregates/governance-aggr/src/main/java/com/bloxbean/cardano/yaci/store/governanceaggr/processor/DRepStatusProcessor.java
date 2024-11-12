@@ -15,7 +15,7 @@ import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepVotingEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.DRepStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ import java.util.stream.Stream;
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;
     private final EpochParamStorage epochParamStorage;
-    private final LatestVotingProcedureStorageReader latestVotingProcedureStorageReader;
+    private final LatestVotingProcedureStorage latestVotingProcedureStorage;
 
     private final List<DRepRegistrationEvent> dRepRegistrationsCache = Collections.synchronizedList(new ArrayList<>());
     private final List<DRepVotingEvent> dRepVotingCache = Collections.synchronizedList(new ArrayList<>());
@@ -176,7 +176,7 @@ public class DRepStatusProcessor {
 
         List<LatestVotingProcedure> votesByDRepInDRepActivityEpoch =
                 Stream.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH)
-                        .flatMap(voterType -> latestVotingProcedureStorageReader.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, prevEpoch - dRepActivity + 1).stream())
+                        .flatMap(voterType -> latestVotingProcedureStorage.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, prevEpoch - dRepActivity + 1).stream())
                         .toList();
 
         List<String> dRepHashListInVotes = votesByDRepInDRepActivityEpoch.stream()

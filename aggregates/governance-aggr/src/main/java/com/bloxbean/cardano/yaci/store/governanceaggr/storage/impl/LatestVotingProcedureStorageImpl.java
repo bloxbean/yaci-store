@@ -1,14 +1,17 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureId;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.LatestVotingProcedureRepository;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.LATEST_VOTING_PROCEDURE;
@@ -61,6 +64,26 @@ public class LatestVotingProcedureStorageImpl implements LatestVotingProcedureSt
                 .collect(Collectors.toList());
 
         dsl.batch(inserts).execute();
+    }
+
+    @Override
+    public Optional<Long> findLatestSlotOfVotingProcedure() {
+        return latestVotingProcedureRepository.findLatestSlotOfVotingProcedure();
+    }
+
+    @Override
+    public List<LatestVotingProcedure> getAllByIdIn(List<LatestVotingProcedureId> votingProcedureIds) {
+        return latestVotingProcedureRepository.getAllByIdIn(votingProcedureIds).stream()
+                .map(latestVotingProcedureMapper::toLatestVotingProcedure)
+                .toList();
+    }
+
+    @Override
+    public List<LatestVotingProcedure> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch) {
+        return latestVotingProcedureRepository.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, epoch)
+                .stream()
+                .map(latestVotingProcedureMapper::toLatestVotingProcedure)
+                .toList();
     }
 
     @Override

@@ -11,7 +11,6 @@ import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.CommitteeVote;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionId;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.CommitteeVoteStorageReader;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -29,9 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CommitteeVoteProcessor {
     private final Map<Pair<Long, GovActionId>, VoteInfo> voteInfoMap = new ConcurrentHashMap<>();
-    private final CommitteeVoteStorageReader committeeVoteStorageReader;
-    private final CommitteeVoteStorage committeeVotesStorage;
-    private final CommitteeVoteStorageReader committeeVotesStorageReader;
+    private final CommitteeVoteStorage committeeVoteStorage;
 
     @EventListener
     @Transactional
@@ -92,7 +89,7 @@ public class CommitteeVoteProcessor {
                     .collect(Collectors.toSet());
 
             Map<GovActionId, CommitteeVote> lastCommitteeVoteOfGovActionMap =
-                    committeeVoteStorageReader.findByGovActionIdsWithMaxSlot(govActionIdSet)
+                    committeeVoteStorage.findByGovActionIdsWithMaxSlot(govActionIdSet)
                             .stream()
                             .collect(Collectors.toMap(committeeVote ->
                                             GovActionId.builder()
@@ -102,7 +99,7 @@ public class CommitteeVoteProcessor {
                                     Function.identity()));
 
             Map<Pair<GovActionId, String>, CommitteeVote> prevCommitteeVoteOfVoterMap =
-                    committeeVotesStorageReader.findByGovActionIdAndVoterHashWithMaxSlot(govActionIdVoterHashSet)
+                    committeeVoteStorage.findByGovActionIdAndVoterHashWithMaxSlot(govActionIdVoterHashSet)
                             .stream()
                             .collect(Collectors.toMap(committeeVote ->
                                             Pair.of(GovActionId.builder()
@@ -171,7 +168,7 @@ public class CommitteeVoteProcessor {
             });
 
             if (!committeeVotesToSave.isEmpty()) {
-                committeeVotesStorage.saveAll(committeeVotesToSave);
+                committeeVoteStorage.saveAll(committeeVotesToSave);
             }
         } finally {
             voteInfoMap.clear();
