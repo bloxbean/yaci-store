@@ -43,26 +43,13 @@ public class GovernanceAggrConfiguration {
         return new LatestVotingProcedureStorageImpl(latestVotingProcedureRepository, latestVotingProcedureMapper, dsl);
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    public LatestVotingProcedureStorageReader latestVotingProposalStorageReader(LatestVotingProcedureRepository latestVotingProcedureRepository,
-                                                                                LatestVotingProcedureMapper latestVotingProcedureMapper) {
-        return new LatestVotingProcedureStorageReaderImpl(latestVotingProcedureRepository, latestVotingProcedureMapper);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public CommitteeVoteStorageReader committeeVotesStorageReader(CommitteeVoteRepository committeeVoteRepository,
-                                                                  CommitteeVoteMapper committeeVoteMapper,
-                                                                  DSLContext dsl) {
-        return new CommitteeVoteStorageReaderImpl(committeeVoteRepository, committeeVoteMapper, dsl);
-    }
 
     @Bean
     @ConditionalOnMissingBean
     public CommitteeVoteStorage committeeVotesStorage(CommitteeVoteRepository committeeVoteRepository,
-                                                      CommitteeVoteMapper committeeVoteMapper) {
-        return new CommitteeVoteStorageImpl(committeeVoteRepository, committeeVoteMapper);
+                                                      CommitteeVoteMapper committeeVoteMapper,
+                                                      DSLContext dsl) {
+        return new CommitteeVoteStorageImpl(committeeVoteRepository, committeeVoteMapper, dsl);
     }
 
     @Bean

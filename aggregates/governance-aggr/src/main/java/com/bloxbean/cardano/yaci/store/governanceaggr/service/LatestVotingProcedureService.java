@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.LatestVotingProcedureId;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +26,6 @@ public class LatestVotingProcedureService {
 
     private static final int DEFAULT_PAGE_SIZE = 1000;
     private final VotingProcedureStorageReader votingProcedureStorageReader;
-    private final LatestVotingProcedureStorageReader latestVotingProcedureStorageReader;
     private final LatestVotingProcedureStorage latestVotingProcedureStorage;
     private final LatestVotingProcedureMapper latestVotingProcedureMapper;
 
@@ -35,7 +33,7 @@ public class LatestVotingProcedureService {
         long startTime = System.currentTimeMillis();
         log.info("Sync up Latest Voting Procedure: -------Start------");
 
-        Long latestSlot = latestVotingProcedureStorageReader.findLatestSlotOfVotingProcedure().orElse(0L);
+        Long latestSlot = latestVotingProcedureStorage.findLatestSlotOfVotingProcedure().orElse(0L);
         Pageable pageable =
                 PageRequest.of(
                         0, DEFAULT_PAGE_SIZE, Sort.by(Sort.Direction.ASC, "slot"));
@@ -66,7 +64,7 @@ public class LatestVotingProcedureService {
                         .collect(Collectors.toList());
 
         Map<LatestVotingProcedureId, LatestVotingProcedure> latestVotingProcedureMap =
-                latestVotingProcedureStorageReader.getAllByIdIn(votingProcedureIds).stream()
+                latestVotingProcedureStorage.getAllByIdIn(votingProcedureIds).stream()
                         .collect(
                                 Collectors.toMap(latestVotingProcedure -> buildVotingProcedureId(
                                         latestVotingProcedure.getGovActionTxHash(), latestVotingProcedure.getGovActionIndex(),
