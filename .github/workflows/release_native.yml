@@ -1,4 +1,4 @@
-name: Build and Upload Yaci Store Zip
+name: Build and Release Yaci Store Native Zip
 
 on:
   push:
