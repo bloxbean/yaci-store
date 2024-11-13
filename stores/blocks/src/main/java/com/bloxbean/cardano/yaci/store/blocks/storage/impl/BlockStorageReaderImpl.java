@@ -9,10 +9,7 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 
 import java.util.List;
 import java.util.Optional;
@@ -36,17 +33,32 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
                 PageRequest.of(page, count, Sort.by("number").descending());
 
         //TODO -- Fix once the count query is fixed
-        Slice<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
-//      long total = blocksEntityPage.getTotalElements();
-//      int totalPage = blocksEntityPage.getTotalPages();
-
+        Page<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
+      long total = blocksEntityPage.getTotalElements();
+      int totalPage = blocksEntityPage.getTotalPages();
         List<BlockSummary> blockSummaryList = blocksEntityPage.stream()
                 .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
                 .collect(Collectors.toList());
 
         return BlocksPage.builder()
-//                .total(total)
-//                .totalPages(totalPage)
+                .total(total)
+                .totalPages(totalPage)
+                .blocks(blockSummaryList)
+                .build();
+    }
+
+    @Override
+    public BlocksPage findBlocksByEpoch(int epochNumber, int page, int count) {
+        Pageable sortedByBlock =
+                PageRequest.of(page, count, Sort.by("number").descending());
+
+        Page<BlockEntity> blockEntityPage = blockRepository.findByEpochNumber(epochNumber, sortedByBlock);
+        List<BlockSummary> blockSummaryList = blockEntityPage.stream()
+                .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
+                .collect(Collectors.toList());
+        return BlocksPage.builder()
+                .total(blockEntityPage.getTotalElements())
+                .totalPages(blockEntityPage.getTotalPages())
                 .blocks(blockSummaryList)
                 .build();
     }
