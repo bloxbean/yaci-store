@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepRegistrationEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepVotingEvent;
@@ -153,16 +154,16 @@ public class DRepStatusProcessor {
 
     @EventListener
     @Transactional
-    public void handleEpochChangeEventToProcessDRepStatus(EpochChangeEvent epochChangeEvent) {
+    public void handleEpochChangeEventToProcessDRepStatus(PreEpochTransitionEvent preEpochTransitionEvent) {
         // get current epoch param -> get drepActivity value
         // check dRep (active, do not vote in {drepActivity} epoch)
         // if not vote -> set inactive
-        Integer prevEpoch = epochChangeEvent.getPreviousEpoch();
+        Integer prevEpoch = preEpochTransitionEvent.getPreviousEpoch();
 
         if (prevEpoch == null) {
             return;
         }
-        var eventMetadata = epochChangeEvent.getEventMetadata();
+        var eventMetadata = preEpochTransitionEvent.getMetadata();
 
         var epochParamOpt = epochParamStorage.getProtocolParams(prevEpoch);
         if (epochParamOpt.isEmpty()) {
@@ -208,8 +209,8 @@ public class DRepStatusProcessor {
                         .drepId(tuple._1)
                         .drepHash(tuple._2)
                         .status(DRepStatus.INACTIVE)
-                        .inactiveEpoch(epochChangeEvent.getEpoch())
-                        .epoch(epochChangeEvent.getEpoch())
+                        .inactiveEpoch(preEpochTransitionEvent.getEpoch())
+                        .epoch(preEpochTransitionEvent.getEpoch())
                         .slot(eventMetadata.getSlot())
                         .blockNumber(eventMetadata.getBlock())
                         .blockHash(eventMetadata.getBlockHash())
