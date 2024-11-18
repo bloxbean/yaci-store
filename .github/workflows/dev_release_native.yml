@@ -35,7 +35,7 @@ jobs:
           } else {
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
           }
-          echo ${{ env.PROFILE_SUFFIX }}
+          echo ${{  matrix.profile }}
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Windows specific env
