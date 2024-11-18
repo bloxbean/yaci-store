@@ -33,7 +33,7 @@ jobs:
         run: |
           $VERSION = (Get-Content gradle.properties | Select-String "version=" | ForEach-Object { $_.ToString().Split('=')[1].Trim() })
           echo "VERSION=$VERSION"
-          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+          echo "VERSION=0.1.1-graalvm-preview1" >> $env:GITHUB_ENV
       - name: Get Version from gradle.properties (Linux/Mac)
         if: runner.os != 'Windows'
         run: |
@@ -57,12 +57,17 @@ jobs:
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
+        if: runner.os != 'Windows'
         run: |
           if [ -n "${{ matrix.profile }}" ]; then
             echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
           else
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
           fi
+      - name: Set Profile Suffix (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
