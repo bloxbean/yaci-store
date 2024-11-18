@@ -4,15 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  buildAndUpload:
+  windowBuild:
     strategy:
       matrix:
-#        os: ["ubuntu-20.04", "macos-14"]
-#        os: ["ubuntu-20.04", "macOS", "macos-13", "windows-latest"]
-        os: ["windows-latest"]
-       # profile: ["n2c", ""]
-        profile: [""]
-    runs-on: ${{ matrix.os }}
+        profile: ["n2c", ""]
+    runs-on: windows-latest
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -25,30 +21,14 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: '21.0.4'
-          native-image-musl: true
           native-image-job-reports: 'true'
       - name: Extract version (Windows)
-        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $VERSION = (Get-Content gradle.properties | Select-String "version=" | ForEach-Object { $_.ToString().Split('=')[1].Trim() })
-          echo "VERSION=1.0" >> $env:GITHUB_ENV
-      - name: Get Version from gradle.properties (Linux/Mac)
-        if: runner.os != 'Windows'
-        run: |
-          VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2 | xargs)
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Copy CI specific native-image properties and env setup
-        if: runner.os == 'Linux'
-        run: |
-          echo "os_prefix=linux" >> $GITHUB_ENV
-          cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.ci applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
-      - name: MacOS specific env
-        if: runner.os == 'macOS'
-        run: |
-          echo "os_prefix=macos" >> $GITHUB_ENV
       - name: Windows specific env
         if: runner.os == 'Windows'
         run: |
@@ -57,17 +37,14 @@ jobs:
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
-        if: runner.os != 'Windows'
-        run: |
-          if [ -n "${{ matrix.profile }}" ]; then
-            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
-          else
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
-          fi
-      - name: Set Profile Suffix (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+          if ($env:matrix_profile) {
+            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $env:GITHUB_ENV
+          } else {
+            echo "PROFILE_SUFFIX=" >> $env:GITHUB_ENV
+          }
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
