@@ -27,6 +27,15 @@ jobs:
         run: |
           $VERSION = (Get-Content gradle.properties | Where-Object { $_ -match "^version=" } | ForEach-Object { $_.Split('=')[1].Trim() })
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+      - name: Set Profile Suffix
+        shell: pwsh
+        run: |
+          if ( "" -ne "${{ matrix.profile }}" ) {
+            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
+          } else {
+            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+          }
+          echo ${{ env.PROFILE_SUFFIX }}
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Windows specific env
@@ -35,14 +44,6 @@ jobs:
           copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-      - name: Set Profile Suffix
-        shell: pwsh
-        run: |
-          if ($env:matrix_profile) {
-            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $env:GITHUB_ENV
-          } else {
-            echo "PROFILE_SUFFIX=" >> $env:GITHUB_ENV
-          }
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
