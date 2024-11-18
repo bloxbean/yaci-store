@@ -53,6 +53,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           echo "os_prefix=win" >> $GITHUB_ENV
+          copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
