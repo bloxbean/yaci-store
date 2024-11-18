@@ -30,7 +30,7 @@ jobs:
       - name: Set Profile Suffix
         shell: pwsh
         run: |
-          if ( ${{ matrix.profile }} ) {
+          if ( "${{ matrix.profile }}" -ne "") {
             echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
           } else {
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
