@@ -8,8 +8,10 @@ jobs:
     strategy:
       matrix:
 #        os: ["ubuntu-20.04", "macos-14"]
-        os: ["ubuntu-20.04", "macOS", "macos-13"]
-        profile: ["n2c", ""]
+#        os: ["ubuntu-20.04", "macOS", "macos-13", "windows-latest"]
+        os: ["windows-latest"]
+       # profile: ["n2c", ""]
+        profile: [""]
     runs-on: ${{ matrix.os }}
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -40,6 +42,10 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           echo "os_prefix=macos" >> $GITHUB_ENV
+      - name: Windows specific env
+        if: runner.os == 'Windows'
+        run: |
+          echo "os_prefix=win" >> $GITHUB_ENV
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
