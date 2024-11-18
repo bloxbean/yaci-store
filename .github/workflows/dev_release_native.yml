@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = (Get-Content gradle.properties | Select-String "version=" | ForEach-Object { $_.ToString().Split('=')[1].Trim() })
-#          echo "VERSION=$VERSION"
+          echo "VERSION=$VERSION"
           echo "VERSION=0.1.1-graalvm-preview1" >> $env:GITHUB_ENV
       - name: Get Version from gradle.properties (Linux/Mac)
         if: runner.os != 'Windows'
