@@ -27,7 +27,15 @@ jobs:
           version: '21.0.4'
           native-image-musl: true
           native-image-job-reports: 'true'
-      - name: Get Version from gradle.properties
+      - name: Extract version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = (Get-Content gradle.properties | Select-String "version=" | ForEach-Object { $_.ToString().Split('=')[1].Trim() })
+          echo "VERSION=$VERSION"
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+      - name: Get Version from gradle.properties (Linux/Mac)
+        if: runner.os != 'Windows'
         run: |
           VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2 | xargs)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
