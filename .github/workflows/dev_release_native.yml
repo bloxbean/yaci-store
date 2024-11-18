@@ -23,6 +23,7 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: '21.0.4'
+          native-image-musl: true
           native-image-job-reports: 'true'
       - name: Get Version from gradle.properties
         run: |
