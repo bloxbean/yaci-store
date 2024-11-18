@@ -25,19 +25,17 @@ jobs:
       - name: Extract version (Windows)
         shell: pwsh
         run: |
-          $VERSION = (Get-Content gradle.properties | Select-String "version=" | ForEach-Object { $_.ToString().Split('=')[1].Trim() })
+          $VERSION = (Get-Content gradle.properties | Where-Object { $_ -match "^version=" } | ForEach-Object { $_.Split('=')[1].Trim() })
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Windows specific env
-        if: runner.os == 'Windows'
         run: |
           echo "os_prefix=win" >> $GITHUB_ENV
           copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
       - name: Set lowercase architecture
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
-        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           if ($env:matrix_profile) {
