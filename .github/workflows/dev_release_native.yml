@@ -68,7 +68,7 @@ jobs:
         run: |
           echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
       - name: Build with Gradle
-        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean cliZip
+        run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
