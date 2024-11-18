@@ -30,12 +30,11 @@ jobs:
       - name: Set Profile Suffix
         shell: pwsh
         run: |
-          if ( "${{ matrix.profile }}" -ne "") {
-            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
+          if ("${{ matrix.profile }}" -ne "") {
+              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX=-${{ matrix.profile }}"
           } else {
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
           }
-          echo "${{  matrix.profile }}"
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Windows specific env
@@ -43,7 +42,10 @@ jobs:
           echo "os_prefix=win" >> $GITHUB_ENV
           copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
       - name: Set lowercase architecture
-        run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        shell: pwsh
+        run: |
+          $arch = "${{ runner.arch }}".ToLower()
+          Add-Content -Path $env:GITHUB_ENV -Value "arch=$arch"
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
