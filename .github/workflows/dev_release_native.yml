@@ -31,10 +31,11 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Copy CI specific native-image properties
+      - name: Copy CI specific native-image properties and env setup
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
+          cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.ci applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
       - name: MacOS specific env
         if: runner.os == 'macOS'
         run: |
