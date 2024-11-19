@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.governance.controller;
 
 import com.bloxbean.cardano.yaci.store.api.governance.service.DRepRegistrationService;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepPage;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +26,18 @@ import java.util.List;
 @ConditionalOnExpression("${store.governance.endpoints.drep.enabled:true}")
 public class DRepController {
     private final DRepRegistrationService dRepRegistrationService;
+
+    @GetMapping
+    @Operation(description = "Get dReps by page number and count")
+    public DRepPage getDreps(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                             @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+                             @RequestParam(name = "order", defaultValue = "desc") Order order) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return dRepRegistrationService.getDreps(p, count, order);
+    }
 
     @GetMapping("/registrations")
     @Operation(description = "Get dRep registrations by page number and count")

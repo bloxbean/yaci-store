@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governance.service;
 
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepPage;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -23,5 +24,9 @@ public class DRepRegistrationService {
 
     public List<DRepRegistration> getUpdates(int page, int count, Order order) {
         return dRepRegistrationStorageReader.findUpdates(page, count, order);
+    }
+
+    public DRepPage getDreps(int p, int count, Order order) {
+        return dRepRegistrationStorageReader.findDReps(p, count, order);
     }
 }

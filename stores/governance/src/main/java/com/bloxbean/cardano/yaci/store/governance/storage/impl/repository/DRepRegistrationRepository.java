@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.governance.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepRegistrationEntity;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepRegistrationId;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,4 +22,7 @@ public interface DRepRegistrationRepository extends JpaRepository<DRepRegistrati
     Slice<DRepRegistrationEntity> findUpdates(Pageable pageable);
 
     int deleteBySlotGreaterThan(long slot);
+
+    @Query("select dr from DRepRegistrationEntity  dr where dr.slot =(select max(slot) from DRepRegistrationEntity where drepHash = dr.drepHash)")
+    Page<DRepRegistrationEntity> findAllDreps(Pageable pageable);
 }
