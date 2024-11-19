@@ -43,6 +43,16 @@ public class BlockController {
         }
     }
 
+    @GetMapping("epoch/{epoch}")
+    @Operation(summary = "Block List by Epoch", description = "Get blocks by epoch number.")
+    public ResponseEntity<BlocksPage> getBlocksByEpoch(@PathVariable int epoch, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                                           @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count){
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+        return ResponseEntity.ok(blockService.getBlocksByEpoch(epoch, p, count));
+    }
+
     @GetMapping
     @Operation(summary = "Block List", description = "Get blocks by page number and count.")
     public ResponseEntity<BlocksPage> getBlocks(@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,

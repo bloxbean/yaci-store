@@ -34,4 +34,8 @@ public class BlockService {
     public Optional<Block> getLatestBlock() {
         return blockReader.findRecentBlock();
     }
+
+    public BlocksPage getBlocksByEpoch(int epoch, int page, int count) {
+        return blockReader.findBlocksByEpoch(epoch, page, count);
+    }
 }
