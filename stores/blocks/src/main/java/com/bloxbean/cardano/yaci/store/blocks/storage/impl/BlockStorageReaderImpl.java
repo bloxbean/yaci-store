@@ -52,13 +52,13 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Slice<BlockEntity> blockEntityPage = blockRepository.findByEpochNumber(epochNumber, sortedByBlock);
+        Page<BlockEntity> blockEntityPage = blockRepository.findByEpochNumber(epochNumber, sortedByBlock);
         List<BlockSummary> blockSummaryList = blockEntityPage.stream()
                 .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
                 .collect(Collectors.toList());
         return BlocksPage.builder()
-//                .total(blockEntityPage.getTotalElements())
-//                .totalPages(blockEntityPage.getTotalPages())
+                .total(blockEntityPage.getTotalElements())
+                .totalPages(blockEntityPage.getTotalPages())
                 .blocks(blockSummaryList)
                 .build();
     }

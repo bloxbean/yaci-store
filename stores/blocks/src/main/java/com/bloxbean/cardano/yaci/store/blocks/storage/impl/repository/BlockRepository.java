@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,6 +34,6 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
     int totalBlocksInEpoch(int epochNumber);
 
 
-    Slice<BlockEntity> findByEpochNumber(int epochNumber, Pageable pageable);
+    Page<BlockEntity> findByEpochNumber(int epochNumber, Pageable pageable);
 }
 
