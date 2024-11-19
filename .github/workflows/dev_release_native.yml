@@ -22,7 +22,7 @@ jobs:
           java-version: '21'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '23.0.1'
+          version: '21.0.5'
           native-image-job-reports: 'true'
       - name: Get Version from gradle.properties
         run: |
@@ -74,7 +74,7 @@ jobs:
           java-version: '21'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '23.0.1'
+          version: '21.0.5'
           native-image-musl: true
           native-image-job-reports: 'true'
       - name: Get Version from gradle.properties
@@ -126,7 +126,7 @@ jobs:
           java-version: '21'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '23.0.1'
+          version: '21.0.5'
           native-image-job-reports: 'true'
       - name: Extract version (Windows)
         shell: pwsh
