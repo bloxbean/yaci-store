@@ -33,16 +33,16 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
                 PageRequest.of(page, count, Sort.by("number").descending());
 
         //TODO -- Fix once the count query is fixed
-        Page<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
-      long total = blocksEntityPage.getTotalElements();
-      int totalPage = blocksEntityPage.getTotalPages();
+        Slice<BlockEntity> blocksEntityPage = blockRepository.findAllBlocks(sortedByBlock);
+//      long total = blocksEntityPage.getTotalElements();
+//      int totalPage = blocksEntityPage.getTotalPages();
         List<BlockSummary> blockSummaryList = blocksEntityPage.stream()
                 .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
                 .collect(Collectors.toList());
 
         return BlocksPage.builder()
-                .total(total)
-                .totalPages(totalPage)
+//                .total(total)
+//                .totalPages(totalPage)
                 .blocks(blockSummaryList)
                 .build();
     }
@@ -52,13 +52,13 @@ public class BlockStorageReaderImpl implements BlockStorageReader {
         Pageable sortedByBlock =
                 PageRequest.of(page, count, Sort.by("number").descending());
 
-        Page<BlockEntity> blockEntityPage = blockRepository.findByEpochNumber(epochNumber, sortedByBlock);
+        Slice<BlockEntity> blockEntityPage = blockRepository.findByEpochNumber(epochNumber, sortedByBlock);
         List<BlockSummary> blockSummaryList = blockEntityPage.stream()
                 .map(blockEntity -> blockDetailsMapper.toBlockSummary(blockEntity))
                 .collect(Collectors.toList());
         return BlocksPage.builder()
-                .total(blockEntityPage.getTotalElements())
-                .totalPages(blockEntityPage.getTotalPages())
+//                .total(blockEntityPage.getTotalElements())
+//                .totalPages(blockEntityPage.getTotalPages())
                 .blocks(blockSummaryList)
                 .build();
     }

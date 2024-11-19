@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -25,7 +25,7 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
     List<BlockEntity> findByEpochNumber(int epochNumber);
 
     @Query("select b from BlockEntity b")
-    Page<BlockEntity> findAllBlocks(Pageable pageable);
+    Slice<BlockEntity> findAllBlocks(Pageable pageable);
 
     List<BlockEntity> getBlockEntitiesBySlotLeaderAndEpochNumber(String slotLeader, int epochNumber);
 
@@ -33,6 +33,6 @@ public interface BlockRepository extends JpaRepository<BlockEntity, String> {
     int totalBlocksInEpoch(int epochNumber);
 
 
-    Page<BlockEntity> findByEpochNumber(int epochNumber, Pageable pageable);
+    Slice<BlockEntity> findByEpochNumber(int epochNumber, Pageable pageable);
 }
 
