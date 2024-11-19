@@ -155,8 +155,8 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
       - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-win-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: yaci-store-${{ env.VERSION }}-win-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-win-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          name: yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
+          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
