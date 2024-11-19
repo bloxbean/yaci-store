@@ -1,4 +1,4 @@
-name: Build and Upload Yaci Store Zip
+name: Dev Build and Upload Yaci Store Zip
 
 on:
   workflow_dispatch:
