@@ -11,4 +11,5 @@ public interface GovActionProposalStorage {
     int deleteBySlotGreaterThan(long slot);
 
     List<GovActionProposal> findByGovActionIds(List<GovActionId> govActionIds);
+    List<GovActionProposal> findByEpoch(int epoch);
 }

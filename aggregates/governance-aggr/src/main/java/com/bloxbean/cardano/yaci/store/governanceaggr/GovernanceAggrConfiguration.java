@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.*;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.*;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.CommitteeVoteMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepStorageImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.GovActionProposalStatusStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepMapper;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.LatestVotingProcedureMapper;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.CommitteeVoteRepository;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovActionProposalStatusMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepRepository;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.LatestVotingProcedureRepository;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
@@ -32,29 +31,18 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.governanceaggr"})
 @EnableTransactionManagement
 @EnableScheduling
-@EnableAsync
 public class GovernanceAggrConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean
-    public LatestVotingProcedureStorage latestVotingProposalStorage(LatestVotingProcedureRepository latestVotingProcedureRepository,
-                                                                    LatestVotingProcedureMapper latestVotingProcedureMapper,
-                                                                    DSLContext dsl) {
-        return new LatestVotingProcedureStorageImpl(latestVotingProcedureRepository, latestVotingProcedureMapper, dsl);
-    }
-
-
-    @Bean
-    @ConditionalOnMissingBean
-    public CommitteeVoteStorage committeeVotesStorage(CommitteeVoteRepository committeeVoteRepository,
-                                                      CommitteeVoteMapper committeeVoteMapper,
-                                                      DSLContext dsl) {
-        return new CommitteeVoteStorageImpl(committeeVoteRepository, committeeVoteMapper, dsl);
-    }
 
     @Bean
     @ConditionalOnMissingBean
     public DRepStorage dRepStorage(DRepRepository dRepRepository, DRepMapper dRepMapper, DSLContext dslContext) {
         return new DRepStorageImpl(dRepRepository, dRepMapper, dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public GovActionProposalStatusStorage govActionProposalStatusStorage(GovActionProposalStatusRepository govActionProposalStatusRepository,
+                                                                         GovActionProposalStatusMapper govActionProposalStatusMapper) {
+        return new GovActionProposalStatusStorageImpl(govActionProposalStatusRepository, govActionProposalStatusMapper);
     }
 }

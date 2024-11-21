@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.adapot.snapshot.UtxoSnapshotService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -22,6 +23,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import io.vavr.control.Either;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -52,6 +54,7 @@ public class AdaPotJobManager {
     private DepositSnapshotService depositSnapshotService;
     private AdaPotService adaPotService;
     private TransactionStorageReader transactionStorageReader;
+    private ApplicationEventPublisher publisher;
 
     public AdaPotJobManager(StoreProperties storeProperties,
                             AdaPotProperties adaPotProperties,
@@ -62,7 +65,8 @@ public class AdaPotJobManager {
                             DepositSnapshotService depositSnapshotService,
                             UtxoSnapshotService utxoSnapshotService,
                             AdaPotService adaPotService,
-                            TransactionStorageReader transactionStorageReader) {
+                            TransactionStorageReader transactionStorageReader,
+                            ApplicationEventPublisher publisher, ApplicationEventPublisher applicationEventPublisher) {
         this.storeProperties = storeProperties;
         this.adaPotProperties = adaPotProperties;
         this.adaPotJobStorage = adaPotJobStorage;
@@ -72,6 +76,7 @@ public class AdaPotJobManager {
         this.depositSnapshotService = depositSnapshotService;
         this.adaPotService = adaPotService;
         this.transactionStorageReader = transactionStorageReader;
+        this.publisher = publisher;
 
         //TODO -- Add some delay and then start loading jobs to handle rollback during restart of the application
         // Reset jobs that were in 'STARTED' state to 'NOT_STARTED' and load pending jobs
@@ -271,7 +276,7 @@ public class AdaPotJobManager {
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
-
+            publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1));
             return Either.right(true);
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);

@@ -5,18 +5,17 @@ import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
+import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepRegistrationEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepVotingEvent;
+import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.LatestVotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.LatestVotingProcedureStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.DRepStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +23,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;
     private final EpochParamStorage epochParamStorage;
-    private final LatestVotingProcedureStorage latestVotingProcedureStorage;
+    private final VotingProcedureStorage votingProcedureStorage;
 
     private final List<DRepRegistrationEvent> dRepRegistrationsCache = Collections.synchronizedList(new ArrayList<>());
     private final List<DRepVotingEvent> dRepVotingCache = Collections.synchronizedList(new ArrayList<>());
@@ -66,6 +66,7 @@ public class DRepStatusProcessor {
                         .certIndex((int) drepRegistration.getCertIndex())
                         .txIndex(drepRegistration.getTxIndex())
                         .certType(drepRegistration.getType())
+                        .deposit(drepRegistration.getDeposit())
                         .epoch(drepRegistration.getEpoch())
                         .activeEpoch(metadata.getEpochNumber())
                         .slot(metadata.getSlot())
@@ -84,8 +85,10 @@ public class DRepStatusProcessor {
                             throw new IllegalStateException("Cannot find recent dRep registration");
                         }
                         dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
+                        dRepBuilder.deposit(regisDRep.get().getDeposit());
                     } else {
                         dRepBuilder.registrationSlot(recentDRepOpt.get().getRegistrationSlot());
+                        dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
                     }
 
                     if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
@@ -110,7 +113,7 @@ public class DRepStatusProcessor {
 
         if (!inactiveDRepCache.isEmpty()) {
             // TODO: optimize
-            var inactiveDRep = dRepStorage.findDRepsByStatus(DRepStatus.ACTIVE, 1, Integer.MAX_VALUE, Order.desc);
+            var inactiveDRep = dRepStorage.findDRepsByStatus(DRepStatus.INACTIVE, 1, Integer.MAX_VALUE, Order.desc);
 
             if (inactiveDRep.isEmpty()) {
                 return;
@@ -127,11 +130,17 @@ public class DRepStatusProcessor {
             for (var voting : votingProcedures) {
                 if (inactiveDRepCache.containsKey(voting.getVoterHash())) {
                     var dRepId = inactiveDRepCache.get(voting.getVoterHash());
+                    var recentDRepOpt = dRepStorage.findRecentDRepRegistration(dRepId, metadata.getEpochNumber());
+
+                    if (recentDRepOpt.isEmpty()) {
+                        throw new IllegalStateException("Cannot find recent dRep registration");
+                    }
                     activeDReps.add(
                             DRep.builder()
                                     .drepId(dRepId)
                                     .drepHash(voting.getVoterHash())
                                     .status(DRepStatus.ACTIVE)
+                                    .deposit(recentDRepOpt.get().getDeposit())
                                     .activeEpoch(metadata.getEpochNumber())
                                     .epoch(metadata.getEpochNumber())
                                     .slot(metadata.getSlot())
@@ -175,20 +184,20 @@ public class DRepStatusProcessor {
             return;
         }
 
-        List<LatestVotingProcedure> votesByDRepInDRepActivityEpoch =
+        // TODO: refactor and optimize
+        List<VotingProcedure> votesByDRepInDRepActivityEpoch =
                 Stream.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH)
-                        .flatMap(voterType -> latestVotingProcedureStorage.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, prevEpoch - dRepActivity + 1).stream())
+                        .flatMap(voterType -> votingProcedureStorage.findByVoterTypeAndEpochIsGreaterThanEqual(voterType, prevEpoch - dRepActivity + 1).stream())
                         .toList();
 
         List<String> dRepHashListInVotes = votesByDRepInDRepActivityEpoch.stream()
-                .map(LatestVotingProcedure::getVoterHash)
+                .map(VotingProcedure::getVoterHash)
                 .distinct()
                 .toList();
 
         // find all dReps which do not vote in {drepActivity} epoch
-        List<Tuple<String, String>> dRepsNotVote = new ArrayList<>();
+        Map<Tuple<String, String>, BigInteger> dRepsNotVoteMap = new HashMap<>();
 
-        // TODO: refactor and optimize
         int page = 1;
         int count = 100;
 
@@ -200,15 +209,16 @@ public class DRepStatusProcessor {
             dReps.stream()
                     .filter(dRep -> !dRepHashListInVotes.contains(dRep.getDrepHash())
                             && dRep.getEpoch() + dRepActivity < eventMetadata.getEpochNumber())
-                    .forEach(dRep -> dRepsNotVote.add(new Tuple<>(dRep.getDrepId(), dRep.getDrepHash())));
+                    .forEach(dRep -> dRepsNotVoteMap.put(new Tuple<>(dRep.getDrepId(), dRep.getDrepHash()), dRep.getDeposit()));
             page++;
         }
 
-        List<DRep> inactiveDReps = dRepsNotVote.stream().map(
+        List<DRep> inactiveDReps = dRepsNotVoteMap.keySet().stream().map(
                 tuple -> DRep.builder()
                         .drepId(tuple._1)
                         .drepHash(tuple._2)
                         .status(DRepStatus.INACTIVE)
+                        .deposit(dRepsNotVoteMap.get(tuple))
                         .inactiveEpoch(preEpochTransitionEvent.getEpoch())
                         .epoch(preEpochTransitionEvent.getEpoch())
                         .slot(eventMetadata.getSlot())
@@ -224,7 +234,7 @@ public class DRepStatusProcessor {
             dRepStorage.saveAll(inactiveDReps);
         }
 
-        dRepsNotVote.forEach(tuple -> inactiveDRepCache.put(tuple._2, tuple._1));
+        dRepsNotVoteMap.forEach((key, value) -> inactiveDRepCache.put(key._2, key._1));
     }
 
     // handle active again case

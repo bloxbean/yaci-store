@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface DRepRepository extends JpaRepository<DRepEntity, String> {
     @Query("SELECT d FROM DRepEntity d WHERE d.drepId =:dRepId AND d.epoch <= :epoch ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
-    Optional<DRepEntity> findRecentByDRepIdAndStatus(String dRepId,  Integer epoch);
+    Optional<DRepEntity> findRecentByDRepIdAndEpoch(String dRepId, Integer epoch);
 
     int deleteBySlotGreaterThan(long slot);
 }

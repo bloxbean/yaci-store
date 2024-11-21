@@ -24,4 +24,6 @@ public interface GovActionProposalRepository extends JpaRepository<GovActionProp
 
     @Query("select ga from GovActionProposalEntity ga where ga.type = :type order by ga.slot desc limit 1")
     Optional<GovActionProposalEntity> findMostRecentGovActionByType(GovActionType type);
+
+    List<GovActionProposalEntity> findByEpoch(Integer epoch);
 }
