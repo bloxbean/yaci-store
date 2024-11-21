@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -45,6 +47,9 @@ public class DRepEntity extends BlockAwareEntity {
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private DRepStatus status;
+
+    @Column(name = "deposit")
+    private BigInteger deposit;
 
     @Column(name = "epoch")
     private Integer epoch;

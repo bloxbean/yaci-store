@@ -1,37 +1,28 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.domain;
 
-import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class CommitteeVote {
-
+public class GovActionProposalStatus {
     private String govActionTxHash;
 
-    private Integer govActionIndex;
+    private int govActionIndex;
+
+    private GovActionStatus status;
+
+    private Integer epoch;
 
     private Long slot;
-
-    private int yesCnt;
-
-    private int noCnt;
-
-    private int abstainCnt;
-
-    private String voterHash;
-
-    private Vote vote;
-
-    private String status;
 }

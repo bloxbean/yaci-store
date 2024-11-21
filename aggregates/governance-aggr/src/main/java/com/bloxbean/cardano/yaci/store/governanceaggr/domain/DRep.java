@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,6 +27,7 @@ public class DRep extends BlockAwareDomain {
     private Integer txIndex;
     private CertificateType certType;
     private DRepStatus status;
+    private BigInteger deposit;
     private Integer epoch;
     private Integer activeEpoch;
     private Integer inactiveEpoch;

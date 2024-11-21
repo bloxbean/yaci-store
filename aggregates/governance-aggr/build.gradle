@@ -1,7 +1,7 @@
 dependencies {
     api project(":stores:governance")
     api project(":aggregates:governance-rules")
-    api project(":aggregates:account")
+    api project(":aggregates:adapot")
     api project(":stores:epoch")
 }
 
