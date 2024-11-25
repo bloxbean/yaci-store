@@ -44,19 +44,19 @@ public class DelegationVoteProcessor {
                 DelegationVote delegationVote = switch (certificate.getType()) {
                     case VOTE_DELEG_CERT -> {
                         VoteDelegCert voteDelegCert = (VoteDelegCert) certificate;
-                        yield buildDelegationVote(voteDelegCert.getDrep(), voteDelegCert.getStakeCredential(), txHash, certIndex, txIndex, eventMetadata);
+                        yield buildDelegationVote(voteDelegCert.getDrep(), voteDelegCert.getStakeCredential(), txHash, txIndex, certIndex , eventMetadata);
                     }
                     case VOTE_REG_DELEG_CERT -> {
                         VoteRegDelegCert voteRegDelegCert = (VoteRegDelegCert) certificate;
-                        yield buildDelegationVote(voteRegDelegCert.getDrep(), voteRegDelegCert.getStakeCredential(), txHash, certIndex, txIndex, eventMetadata);
+                        yield buildDelegationVote(voteRegDelegCert.getDrep(), voteRegDelegCert.getStakeCredential(), txHash, txIndex, certIndex, eventMetadata);
                     }
                     case STAKE_VOTE_DELEG_CERT -> {
                         StakeVoteDelegCert stakeVoteDelegCert = (StakeVoteDelegCert) certificate;
-                        yield buildDelegationVote(stakeVoteDelegCert.getDrep(), stakeVoteDelegCert.getStakeCredential(), txHash, certIndex, txIndex, eventMetadata);
+                        yield buildDelegationVote(stakeVoteDelegCert.getDrep(), stakeVoteDelegCert.getStakeCredential(), txHash, txIndex, certIndex,eventMetadata);
                     }
                     case STAKE_VOTE_REG_DELEG_CERT -> {
                         StakeVoteRegDelegCert stakeVoteRegDelegCert = (StakeVoteRegDelegCert) certificate;
-                        yield buildDelegationVote(stakeVoteRegDelegCert.getDrep(), stakeVoteRegDelegCert.getStakeCredential(), txHash, certIndex, txIndex, eventMetadata);
+                        yield buildDelegationVote(stakeVoteRegDelegCert.getDrep(), stakeVoteRegDelegCert.getStakeCredential(), txHash,  txIndex, certIndex, eventMetadata);
                     }
                     default -> null;
                 };
@@ -74,7 +74,7 @@ public class DelegationVoteProcessor {
     }
 
     private DelegationVote buildDelegationVote(Drep drep, StakeCredential stakeCredential, String txHash,
-                                               int certIndex, int txIndex, EventMetadata eventMetadata) {
+                                               int txIndex, int certIndex, EventMetadata eventMetadata) {
         DelegationVote delegationVote = DelegationVote.builder()
                 .drepHash(drep.getHash())
                 .txHash(txHash)

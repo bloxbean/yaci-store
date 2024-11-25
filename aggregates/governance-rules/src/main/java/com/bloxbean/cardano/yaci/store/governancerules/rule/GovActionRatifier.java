@@ -7,11 +7,11 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommit
 import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
-import com.bloxbean.cardano.yaci.store.governancerules.exception.GovernanceRuleException;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
@@ -43,7 +43,7 @@ public class GovActionRatifier {
      * @param currentEpochParam      The current epoch parameters.
      * @return The ratification result.
      */
-    public static RatificationResult getRatificationResult(GovAction govAction, Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
+    public static RatificationResult getRatificationResult(GovAction govAction, Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                            BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                            BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                            ConstitutionCommitteeState ccState, GovActionId lastEnactedGovActionId,
@@ -51,7 +51,7 @@ public class GovActionRatifier {
         final GovActionType govActionType = govAction.getType();
         if (govActionType == GovActionType.INFO_ACTION) {
             log.error("Info actions cannot be ratified or enacted, since they do not have any effect on the protocol.");
-            throw new GovernanceRuleException("Info actions cannot be ratified or enacted");
+            return RatificationResult.REJECT;
         }
 
         final int currentEpoch = currentEpochParam.getEpoch();
@@ -220,7 +220,7 @@ public class GovActionRatifier {
      * @return The ratification result for the Hard Fork Initiation action.
      */
     public static RatificationResult getRatificationResultForHardForkInitiationAction(HardForkInitiationAction hardForkInitiationAction,
-                                                                                      Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
+                                                                                      Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                       BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                       BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                                                       GovActionId lastEnactedGovActionId,
@@ -250,7 +250,7 @@ public class GovActionRatifier {
      * @return The ratification result for the New Constitution action.
      */
     public static RatificationResult getRatificationResultForNewConstitutionAction(NewConstitution newConstitution,
-                                                                                   Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
+                                                                                   Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                                                    GovActionId lastEnactedGovActionId,
                                                                                    EpochParam currentEpochParam) {
@@ -277,7 +277,7 @@ public class GovActionRatifier {
      * @return The ratification result for the Treasury Withdrawals action.
      */
     public static RatificationResult getRatificationResultForTreasuryWithdrawalsAction(TreasuryWithdrawalsAction treasuryWithdrawalsAction,
-                                                                                       Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
+                                                                                       Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                        BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                        GovActionId lastEnactedGovActionId,
                                                                                        EpochParam currentEpochParam) {
@@ -311,7 +311,7 @@ public class GovActionRatifier {
      * @return The ratification result for the Parameter Change action.
      */
     public static RatificationResult getRatificationResultForParameterChangeAction(ParameterChangeAction parameterChangeAction,
-                                                                                   Integer ccYesVote, Integer ccNoVote, Double ccThreshold,
+                                                                                   Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                    BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                                                    GovActionId lastEnactedGovActionId,
@@ -348,7 +348,7 @@ public class GovActionRatifier {
 
     private static CommitteeVotingState buildCommitteeVotingState(GovAction govAction,
                                                                   Integer ccYesVote, Integer ccNoVote,
-                                                                  Double threshold) {
+                                                                  BigDecimal threshold) {
         return CommitteeVotingState.builder()
                 .govAction(govAction)
                 .yesVote(ccYesVote)

@@ -38,7 +38,7 @@ public class DRepStorageImpl implements DRepStorage {
 
     @Override
     public List<DRep> findDRepsByStatus(DRepStatus status, int page, int count, Order sort) {
-        int offset = (page - 1) * count;
+        int offset = page * count;
 
         return dslContext.selectFrom(
                         dslContext.select(

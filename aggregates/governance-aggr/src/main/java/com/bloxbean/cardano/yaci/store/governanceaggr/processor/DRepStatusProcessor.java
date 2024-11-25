@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+// Todo: handle by query during epoch transition
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;
     private final EpochParamStorage epochParamStorage;
@@ -49,115 +50,119 @@ public class DRepStatusProcessor {
     @EventListener
     @Transactional
     public void handleCommitEventToProcessDRepStatus(PreCommitEvent preCommitEvent) {
-        dRepRegistrationsCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
-        List<DRep> dReps = new ArrayList<>();
+        try {
+            dRepRegistrationsCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
+            List<DRep> dReps = new ArrayList<>();
 
-        for (var drepRegistrationEvent : dRepRegistrationsCache) {
-            List<DRepRegistration> dRepRegistrations = drepRegistrationEvent.getDRepRegistrations();
-            EventMetadata metadata = drepRegistrationEvent.getMetadata();
-            dRepRegistrations.sort(Comparator.comparingLong(DRepRegistration::getTxIndex)
-                    .thenComparingLong(DRepRegistration::getCertIndex));
+            for (var drepRegistrationEvent : dRepRegistrationsCache) {
+                List<DRepRegistration> dRepRegistrations = drepRegistrationEvent.getDRepRegistrations();
+                EventMetadata metadata = drepRegistrationEvent.getMetadata();
+                dRepRegistrations.sort(Comparator.comparingLong(DRepRegistration::getTxIndex)
+                        .thenComparingLong(DRepRegistration::getCertIndex));
 
-            for (var drepRegistration : dRepRegistrations) {
-                var dRepBuilder = DRep.builder()
-                        .drepId(drepRegistration.getDrepId())
-                        .drepHash(drepRegistration.getDrepHash())
-                        .txHash(drepRegistration.getTxHash())
-                        .certIndex((int) drepRegistration.getCertIndex())
-                        .txIndex(drepRegistration.getTxIndex())
-                        .certType(drepRegistration.getType())
-                        .deposit(drepRegistration.getDeposit())
-                        .epoch(drepRegistration.getEpoch())
-                        .activeEpoch(metadata.getEpochNumber())
-                        .slot(metadata.getSlot())
-                        .blockHash(metadata.getBlockHash());
+                for (var drepRegistration : dRepRegistrations) {
+                    var dRepBuilder = DRep.builder()
+                            .drepId(drepRegistration.getDrepId())
+                            .drepHash(drepRegistration.getDrepHash())
+                            .txHash(drepRegistration.getTxHash())
+                            .certIndex((int) drepRegistration.getCertIndex())
+                            .txIndex(drepRegistration.getTxIndex())
+                            .certType(drepRegistration.getType())
+                            .deposit(drepRegistration.getDeposit())
+                            .epoch(drepRegistration.getEpoch())
+                            .activeEpoch(metadata.getEpochNumber())
+                            .slot(metadata.getSlot())
+                            .blockHash(metadata.getBlockHash());
 
-                if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
-                    dRepBuilder.status(DRepStatus.ACTIVE)
-                            .registrationSlot(drepRegistration.getSlot());
-                } else {
-                    var recentDRepOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
-
-                    if (recentDRepOpt.isEmpty()) {
-                        var regisDRep = dReps.stream().filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId())).findFirst();
-
-                        if (regisDRep.isEmpty()) {
-                            throw new IllegalStateException("Cannot find recent dRep registration");
-                        }
-                        dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
-                        dRepBuilder.deposit(regisDRep.get().getDeposit());
+                    if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
+                        dRepBuilder.status(DRepStatus.ACTIVE)
+                                .registrationSlot(drepRegistration.getSlot());
                     } else {
-                        dRepBuilder.registrationSlot(recentDRepOpt.get().getRegistrationSlot());
-                        dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
+                        var recentDRepOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
+
+                        if (recentDRepOpt.isEmpty()) {
+                            var regisDRep = dReps.stream().filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId())).findFirst();
+
+                            if (regisDRep.isEmpty()) {
+                                log.error("Cannot find recent dRep registration");
+                            } else {
+                                dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
+                                dRepBuilder.deposit(regisDRep.get().getDeposit());
+                            }
+                        } else {
+                            dRepBuilder.registrationSlot(recentDRepOpt.get().getRegistrationSlot());
+                            dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
+                        }
+
+                        if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
+                            dRepBuilder.status(DRepStatus.ACTIVE);
+                        } else if (drepRegistration.getType() == CertificateType.UNREG_DREP_CERT) {
+                            dRepBuilder.status(DRepStatus.RETIRED)
+                                    .retireEpoch(metadata.getEpochNumber());
+                        }
                     }
-
-                    if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
-                        dRepBuilder.status(DRepStatus.ACTIVE);
-                    } else if (drepRegistration.getType() == CertificateType.UNREG_DREP_CERT) {
-                        dRepBuilder.status(DRepStatus.RETIRED)
-                                .retireEpoch(metadata.getEpochNumber());
-                    }
-                }
-                dReps.add(dRepBuilder.build());
-            }
-        }
-
-        if (!dReps.isEmpty()) {
-            dRepStorage.saveAll(dReps);
-        }
-
-        dRepRegistrationsCache.clear();
-
-        // handle active again case by voting
-        dRepVotingCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
-
-        if (!inactiveDRepCache.isEmpty()) {
-            // TODO: optimize
-            var inactiveDRep = dRepStorage.findDRepsByStatus(DRepStatus.INACTIVE, 1, Integer.MAX_VALUE, Order.desc);
-
-            if (inactiveDRep.isEmpty()) {
-                return;
-            }
-            inactiveDRep.forEach(dRep -> inactiveDRepCache.put(dRep.getDrepHash(), dRep.getDrepId()));
-        }
-
-        List<DRep> activeDReps = new ArrayList<>();
-
-        for (var dRepVotingEvent : dRepVotingCache) {
-            var votingProcedures = dRepVotingEvent.getVotingProcedures();
-            EventMetadata metadata = dRepVotingEvent.getMetadata();
-
-            for (var voting : votingProcedures) {
-                if (inactiveDRepCache.containsKey(voting.getVoterHash())) {
-                    var dRepId = inactiveDRepCache.get(voting.getVoterHash());
-                    var recentDRepOpt = dRepStorage.findRecentDRepRegistration(dRepId, metadata.getEpochNumber());
-
-                    if (recentDRepOpt.isEmpty()) {
-                        throw new IllegalStateException("Cannot find recent dRep registration");
-                    }
-                    activeDReps.add(
-                            DRep.builder()
-                                    .drepId(dRepId)
-                                    .drepHash(voting.getVoterHash())
-                                    .status(DRepStatus.ACTIVE)
-                                    .deposit(recentDRepOpt.get().getDeposit())
-                                    .activeEpoch(metadata.getEpochNumber())
-                                    .epoch(metadata.getEpochNumber())
-                                    .slot(metadata.getSlot())
-                                    .blockNumber(metadata.getBlock())
-                                    .blockHash(metadata.getBlockHash())
-                                    .certIndex(-1)
-                                    .txHash("")
-                                    .txIndex(-1)
-                                    .build()
-                    );
-                    inactiveDRepCache.remove(voting.getVoterHash());
+                    dReps.add(dRepBuilder.build());
                 }
             }
-        }
 
-        if (!activeDReps.isEmpty()) {
-            dRepStorage.saveAll(activeDReps);
+            if (!dReps.isEmpty()) {
+                dRepStorage.saveAll(dReps);
+            }
+
+            // handle active again case by voting
+            dRepVotingCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
+
+            if (!inactiveDRepCache.isEmpty()) {
+                // TODO: optimize
+                var inactiveDRep = dRepStorage.findDRepsByStatus(DRepStatus.INACTIVE, 0, Integer.MAX_VALUE, Order.desc);
+
+                if (inactiveDRep.isEmpty()) {
+                    return;
+                }
+                inactiveDRep.forEach(dRep -> inactiveDRepCache.put(dRep.getDrepHash(), dRep.getDrepId()));
+            }
+
+            List<DRep> activeDReps = new ArrayList<>();
+
+            for (var dRepVotingEvent : dRepVotingCache) {
+                var votingProcedures = dRepVotingEvent.getVotingProcedures();
+                EventMetadata metadata = dRepVotingEvent.getMetadata();
+
+                for (var voting : votingProcedures) {
+                    if (inactiveDRepCache.containsKey(voting.getVoterHash())) {
+                        var dRepId = inactiveDRepCache.get(voting.getVoterHash());
+                        var recentDRepOpt = dRepStorage.findRecentDRepRegistration(dRepId, metadata.getEpochNumber());
+
+                        if (recentDRepOpt.isEmpty()) {
+                            log.error("Cannot find recent dRep registration");
+                        } else {
+                            activeDReps.add(
+                                    DRep.builder()
+                                            .drepId(dRepId)
+                                            .drepHash(voting.getVoterHash())
+                                            .status(DRepStatus.ACTIVE)
+                                            .deposit(recentDRepOpt.get().getDeposit())
+                                            .activeEpoch(metadata.getEpochNumber())
+                                            .epoch(metadata.getEpochNumber())
+                                            .slot(metadata.getSlot())
+                                            .blockNumber(metadata.getBlock())
+                                            .blockHash(metadata.getBlockHash())
+                                            .certIndex(-1)
+                                            .txHash("")
+                                            .txIndex(-1)
+                                            .build()
+                            );
+                            inactiveDRepCache.remove(voting.getVoterHash());
+                        }
+                    }
+                }
+            }
+
+            if (!activeDReps.isEmpty()) {
+                dRepStorage.saveAll(activeDReps);
+            }
+        } finally {
+            dRepRegistrationsCache.clear();
         }
     }
 
@@ -198,7 +203,7 @@ public class DRepStatusProcessor {
         // find all dReps which do not vote in {drepActivity} epoch
         Map<Tuple<String, String>, BigInteger> dRepsNotVoteMap = new HashMap<>();
 
-        int page = 1;
+        int page = 0;
         int count = 100;
 
         while (true) {

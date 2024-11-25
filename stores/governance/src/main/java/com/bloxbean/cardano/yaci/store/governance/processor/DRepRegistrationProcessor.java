@@ -46,17 +46,17 @@ public class DRepRegistrationProcessor {
                         RegDrepCert regDrepCert = (RegDrepCert) certificate;
                         yield buildDRepRegistration(regDrepCert.getDrepCredential(), regDrepCert.getAnchor(),
                                 regDrepCert.getCoin(), certificate.getType(),
-                                txHash, certIndex, txIndex, eventMetadata);
+                                txHash, txIndex, certIndex, eventMetadata);
                     }
                     case UNREG_DREP_CERT -> {
                         UnregDrepCert unregDrepCert = (UnregDrepCert) certificate;
                         yield buildDRepRegistration(unregDrepCert.getDrepCredential(), null, unregDrepCert.getCoin(),
-                                certificate.getType(), txHash, certIndex, txIndex, eventMetadata);
+                                certificate.getType(), txHash, txIndex, certIndex, eventMetadata);
                     }
                     case UPDATE_DREP_CERT -> {
                         UpdateDrepCert updateDrepCert = (UpdateDrepCert) certificate;
                         yield buildDRepRegistration(updateDrepCert.getDrepCredential(), updateDrepCert.getAnchor(), null,
-                                certificate.getType(), txHash, certIndex, txIndex, eventMetadata);
+                                certificate.getType(), txHash, txIndex, certIndex, eventMetadata);
                     }
                     default -> null;
                 };
@@ -76,7 +76,7 @@ public class DRepRegistrationProcessor {
 
     private DRepRegistration buildDRepRegistration(Credential drepCredential, Anchor anchor, BigInteger deposit,
                                                    CertificateType certificateType, String txHash,
-                                                   int certIndex, int txIndex, EventMetadata eventMetadata) {
+                                                   int txIndex, int certIndex, EventMetadata eventMetadata) {
         DRepRegistration drepRegistration = DRepRegistration.builder()
                 .txHash(txHash)
                 .certIndex(certIndex)
