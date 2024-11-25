@@ -1,6 +1,6 @@
 dependencies {
     api project(':components:common')
-    testImplementation 'com.bloxbean.cardano:cardano-client-backend-blockfrost:0.5.1'
+    testImplementation 'com.bloxbean.cardano:cardano-client-backend-blockfrost:0.6.2'
 }
 
 publishing {

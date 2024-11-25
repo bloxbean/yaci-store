@@ -23,9 +23,9 @@ public class ProtocolParamUtil {
                 params.getMaxBlockExMem(), params.getMaxBlockExSteps(), params.getMaxCollateralInputs())) {
             groups.add(ProtocolParamGroup.NETWORK);
         }
-        // todo: Technical: check pool retirement maximum epoch (eMax),
+
         if (isNonNull(params.getNOpt(), params.getPoolPledgeInfluence(), params.getCostModels(),
-                params.getCollateralPercent())) {
+                params.getCollateralPercent(), params.getMaxEpoch())) {
             groups.add(ProtocolParamGroup.TECHNICAL);
         }
 

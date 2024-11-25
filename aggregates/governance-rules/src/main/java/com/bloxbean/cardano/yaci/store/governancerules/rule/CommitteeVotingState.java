@@ -5,18 +5,28 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
 public class CommitteeVotingState extends VotingState {
-    private Double threshold;
+    private BigDecimal threshold;
     private Integer yesVote;
     private Integer noVote;
 
     @Override
     public boolean isAccepted() {
-        return ((double) yesVote / (yesVote + noVote)) >= threshold;
+        int totalVotes = yesVote + noVote;
+        if (totalVotes == 0) {
+            return false;
+        }
+
+        BigDecimal yesVoteRatio = BigDecimal.valueOf(yesVote)
+                .divide(BigDecimal.valueOf(totalVotes));
+
+        return yesVoteRatio.compareTo(threshold) >= 0;
     }
 
 }

@@ -30,7 +30,7 @@ public class DRepVotingState extends VotingState {
     public boolean isAccepted() {
         final double acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(yesVoteStake.add(noVoteStake));
         final GovActionType govActionType = govAction.getType();
-        boolean result;
+        boolean result = false;
 
         switch (govActionType) {
             case PARAMETER_CHANGE_ACTION:
@@ -59,8 +59,6 @@ public class DRepVotingState extends VotingState {
                 }
 
                 break;
-            default:
-                throw new RuntimeException("SPOs do not vote this action");
         }
 
         return result;

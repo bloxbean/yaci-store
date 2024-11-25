@@ -94,7 +94,14 @@ public class InitService {
                     .blockHash("268ae601af8f9214804735910a3301881fbe0eec9936db7d1fb9fc39e93d1e37")
                     .block(0)
                     .build();
-        } else
+        } else if (NetworkType.SANCHONET.getProtocolMagic() == storeProperties.getProtocolMagic()) {
+            return CardanoEra.builder()
+                    .era(Era.Alonzo)
+                    .startSlot(0)
+                    .blockHash("6a7d97aae2a65ca790fd14802808b7fce00a3362bd7b21c4ed4ccb4296783b98")
+                    .block(0)
+                    .build();
+        }
             return null;
     }
 

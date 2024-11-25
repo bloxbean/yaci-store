@@ -29,7 +29,8 @@ public class GovernanceActionUtil {
     public static boolean verifyPrevGovAction(GovActionType govActionType,
                                               GovActionId prevGovActionID,
                                               GovActionId enactedGovActionID) {
-        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION) {
+        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION
+                || enactedGovActionID == null) {
             return true;
         }
 
@@ -71,6 +72,6 @@ public class GovernanceActionUtil {
 
     public static boolean isDelayingAction(GovActionType govActionType) {
         return govActionType == GovActionType.NO_CONFIDENCE || govActionType == GovActionType.NEW_CONSTITUTION
-            || govActionType == GovActionType.UPDATE_COMMITTEE || govActionType == GovActionType.HARD_FORK_INITIATION_ACTION;
+                || govActionType == GovActionType.UPDATE_COMMITTEE || govActionType == GovActionType.HARD_FORK_INITIATION_ACTION;
     }
 }
