@@ -32,15 +32,31 @@ public class BlockController {
     @GetMapping("{numberOrHash}")
     @Operation(summary = "Block Information by Number or Hash", description = "Get block information by number or hash.")
     public ResponseEntity<BlockDto> getBlockByNumber(@PathVariable String numberOrHash) {
+        BlockDto blockDto;
         if (NumberUtils.isParsable(numberOrHash)) {
-            return blockService.getBlockByNumber(Long.parseLong(numberOrHash))
-                    .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
-                    .orElse(ResponseEntity.notFound().build());
+            blockDto = blockService.getBlockByNumber(Long.parseLong(numberOrHash))
+                    .map(block -> dtoMapper.toBlockDto(block)).orElse(null);
         } else {
-            return blockService.getBlockByHash(numberOrHash)
-                    .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
-                    .orElse(ResponseEntity.notFound().build());
+            blockDto = blockService.getBlockByHash(numberOrHash)
+                    .map(block -> dtoMapper.toBlockDto(block)).orElse(null);
         }
+
+        if (blockDto == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var confirmation = blockService.getLatestBlock()
+                .map(latestBlock -> latestBlock.getNumber() - blockDto.getNumber())
+                .orElse(0L);
+
+        var nextBlockHash = blockService.getBlockByNumber(blockDto.getNumber() + 1)
+                .map(block -> block.getHash())
+                .orElse(null);
+
+        blockDto.setNextBlock(nextBlockHash);
+        blockDto.setConfirmations(confirmation);
+
+        return ResponseEntity.ok(blockDto);
     }
 
     @GetMapping
