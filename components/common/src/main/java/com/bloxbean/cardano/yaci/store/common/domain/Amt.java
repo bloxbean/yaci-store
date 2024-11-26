@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.common.domain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,5 +23,6 @@ public class Amt implements Serializable {
     private String unit;
     private String policyId;
     private String assetName;
+    @JsonSerialize(using = ToStringSerializer.class)
     private BigInteger quantity;
 }
