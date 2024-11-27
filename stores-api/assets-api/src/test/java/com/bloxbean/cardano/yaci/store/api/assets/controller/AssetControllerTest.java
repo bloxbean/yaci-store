@@ -63,7 +63,7 @@ class AssetControllerTest {
         when(assetService.getAssetTxsByFingerprint("asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs", 0, 10))
                 .thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/fingerprint/{fingerprint}",
+        mockMvc.perform(get(apiPrefix + "/assets/fingerprint/{fingerprint}/history",
                         "asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs")
                         .param("page", "0")
                         .param("count", "10"))
@@ -77,7 +77,7 @@ class AssetControllerTest {
         when(assetService.getAssetTxsByPolicyId("34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518", 0, 10))
                 .thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/policy/{policyId}",
+        mockMvc.perform(get(apiPrefix + "/assets/policy/{policyId}/history",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518")
                         .param("page", "0")
                         .param("count", "10"))
@@ -90,7 +90,7 @@ class AssetControllerTest {
     void testGetAssetTxsByUnit_shouldReturn200() throws Exception {
         when(assetService.getAssetTxsByUnit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e", 0, 10)).thenReturn(List.of(txAsset()));
 
-        mockMvc.perform(get(apiPrefix + "/assets/unit/{unit}",
+        mockMvc.perform(get(apiPrefix + "/assets/{unit}/history",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e")
                         .param("page", "0")
                         .param("count", "10"))
@@ -103,7 +103,7 @@ class AssetControllerTest {
     void testGetSupplyByFingerprint_WhenAssetFound_ShouldReturn200() throws Exception {
         when(assetService.getSupplyByFingerprint("asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs")).thenReturn(Optional.of(BigInteger.valueOf(1000L)));
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/fingerprint/{fingerprint}",
+        mockMvc.perform(get(apiPrefix + "/assets/fingerprint/{fingerprint}/supply",
                         "asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
@@ -115,7 +115,7 @@ class AssetControllerTest {
     void testGetSupplyByFingerprint_WhenAssetNotFound_ShouldReturnNotFound() throws Exception {
         when(assetService.getSupplyByFingerprint("asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs")).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/fingerprint/{fingerprint}",
+        mockMvc.perform(get(apiPrefix + "/assets/fingerprint/{fingerprint}/supply",
                         "asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs"))
                 .andExpect(status().isNotFound());
     }
@@ -125,7 +125,7 @@ class AssetControllerTest {
         when(assetService.getSupplyByUnit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e"))
                 .thenReturn(Optional.of(BigInteger.valueOf(1000L)));
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/unit/{unit}",
+        mockMvc.perform(get(apiPrefix + "/assets/{unit}/supply",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
@@ -138,7 +138,7 @@ class AssetControllerTest {
         when(assetService.getSupplyByUnit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e"))
                 .thenReturn(Optional.empty());
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/unit/{unit}",
+        mockMvc.perform(get(apiPrefix + "/assets/{unit}/supply",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e"))
                 .andExpect(status().isNotFound());
     }
@@ -148,7 +148,7 @@ class AssetControllerTest {
         when(assetService.getSupplyByPolicy("34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518"))
                 .thenReturn(Optional.of(BigInteger.valueOf(1000L)));
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/policy/{policy}",
+        mockMvc.perform(get(apiPrefix + "/assets/policy/{policy}/supply",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
@@ -161,7 +161,7 @@ class AssetControllerTest {
         when(assetService.getSupplyByPolicy("34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518"))
                 .thenReturn(Optional.empty());
 
-        mockMvc.perform(get(apiPrefix + "/assets/supply/policy/{policy}",
+        mockMvc.perform(get(apiPrefix + "/assets/policy/{policy}/supply",
                         "34250edd1e9836f5378702fbf9416b709bc140e04f668cc355208518"))
                 .andExpect(status().isNotFound());
     }
