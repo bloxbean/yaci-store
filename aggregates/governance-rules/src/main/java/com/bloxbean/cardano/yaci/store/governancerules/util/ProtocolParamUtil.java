@@ -12,9 +12,10 @@ public class ProtocolParamUtil {
 
     public static List<ProtocolParamGroup> getGroupsWithNonNullField(ProtocolParamUpdate params) {
         List<ProtocolParamGroup> groups = new ArrayList<>();
-        // todo: Economic: check monetary expansion (rho), treasury expansion (tau)
+        // todo: Economic: refScriptCostStride, refScriptCostMultiplier
         if (isNonNull(params.getMinFeeA(), params.getMinFeeB(), params.getKeyDeposit(), params.getPoolDeposit(),
-                params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep(), params.getAdaPerUtxoByte())) {
+                params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep(), params.getAdaPerUtxoByte(),
+                params.getExpansionRate(), params.getTreasuryGrowthRate())) {
             groups.add(ProtocolParamGroup.ECONOMIC);
         }
 

@@ -26,9 +26,9 @@ public class GovernanceActionUtil {
      * @param enactedGovActionID
      * @return
      */
-    public static boolean verifyPrevGovAction(GovActionType govActionType,
-                                              GovActionId prevGovActionID,
-                                              GovActionId enactedGovActionID) {
+    public static boolean isPrevActionAsExpected(GovActionType govActionType,
+                                                 GovActionId prevGovActionID,
+                                                 GovActionId enactedGovActionID) {
         if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION
                 || enactedGovActionID == null) {
             return true;
@@ -38,7 +38,14 @@ public class GovernanceActionUtil {
                 && Objects.equals(enactedGovActionID.getTransactionId(), prevGovActionID.getTransactionId());
     }
 
-
+    /**
+     * Checks if the committee term specified in a governance action is valid.
+     *
+     * @param updateCommittee The update committee action
+     * @param committeeMaxTermLength The maximum term length allowed for a committee member
+     * @return {@code true} if the term length of all new committee members is less than or equal to the maximum term length,
+     *         {@code false} otherwise.
+     */
     public static boolean isValidCommitteeTerm(UpdateCommittee updateCommittee, Integer committeeMaxTermLength) {
         if (committeeMaxTermLength == null) {
             return true;
@@ -52,6 +59,14 @@ public class GovernanceActionUtil {
         return false;
     }
 
+    /**
+     * Checks if the withdrawal can be processed based on the given governance action and treasury amount.
+     *
+     * @param treasuryWithdrawalsAction The treasury withdrawals action
+     * @param treasury The current treasury balance
+     * @return {@code true} if the sum of all withdrawals does not exceed the treasury amount,
+     *         {@code false} otherwise.
+     */
     public static boolean withdrawalCanWithdraw(TreasuryWithdrawalsAction treasuryWithdrawalsAction, BigInteger treasury) {
         final Map<String, BigInteger> withdrawals = treasuryWithdrawalsAction.getWithdrawals();
         if (withdrawals == null) {
@@ -68,10 +83,5 @@ public class GovernanceActionUtil {
 
     public static boolean isExpired(int expiredEpoch, int currentEpoch) {
         return expiredEpoch < currentEpoch;
-    }
-
-    public static boolean isDelayingAction(GovActionType govActionType) {
-        return govActionType == GovActionType.NO_CONFIDENCE || govActionType == GovActionType.NEW_CONSTITUTION
-                || govActionType == GovActionType.UPDATE_COMMITTEE || govActionType == GovActionType.HARD_FORK_INITIATION_ACTION;
     }
 }
