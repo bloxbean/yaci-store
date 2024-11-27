@@ -28,7 +28,14 @@ public class DRepVotingState extends VotingState {
 
     @Override
     public boolean isAccepted() {
-        final double acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(yesVoteStake.add(noVoteStake));
+        BigInteger totalExcludingAbstainStake = yesVoteStake.add(noVoteStake);
+        double acceptedStakeRatio;
+        if (totalExcludingAbstainStake.equals(BigInteger.ZERO)) {
+            acceptedStakeRatio = 0;
+        } else {
+            acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(totalExcludingAbstainStake);
+        }
+
         final GovActionType govActionType = govAction.getType();
         boolean result = false;
 
@@ -47,9 +54,6 @@ public class DRepVotingState extends VotingState {
                 break;
             case NEW_CONSTITUTION:
                 result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtUpdateToConstitution());
-                break;
-            case INFO_ACTION:
-                result = acceptedStakeRatio == 1;
                 break;
             case UPDATE_COMMITTEE:
                 if (ccState == ConstitutionCommitteeState.NORMAL) {
