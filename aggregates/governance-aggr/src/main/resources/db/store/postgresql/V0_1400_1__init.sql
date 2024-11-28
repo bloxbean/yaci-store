@@ -27,10 +27,6 @@ create table drep
     status            varchar(50),
     deposit           bigint,
     epoch             int,
-    active_epoch      int,
-    inactive_epoch    int,
-    retire_epoch      int,
-    registration_slot bigint,
     slot              bigint,
     block_hash        varchar(64),
     block             bigint,
@@ -47,9 +43,6 @@ CREATE INDEX idx_drep_drep_id
 
 CREATE INDEX idx_drep_epoch
     ON drep (epoch);
-
-CREATE INDEX idx_drep_retire_epoch
-    ON drep (retire_epoch);
 
 drop table if exists gov_action_proposal_status;
 create table gov_action_proposal_status

@@ -29,10 +29,6 @@ public class DRep extends BlockAwareDomain {
     private DRepStatus status;
     private BigInteger deposit;
     private Integer epoch;
-    private Integer activeEpoch;
-    private Integer inactiveEpoch;
-    private Integer retireEpoch;
-    private Long registrationSlot;
     private Long slot;
     private String blockHash;
 }

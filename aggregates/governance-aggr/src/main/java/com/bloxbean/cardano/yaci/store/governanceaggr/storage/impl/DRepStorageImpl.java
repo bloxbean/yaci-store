@@ -50,10 +50,6 @@ public class DRepStorageImpl implements DRepStorage {
                                         DREP.CERT_TYPE,
                                         DREP.STATUS,
                                         DREP.EPOCH,
-                                        DREP.ACTIVE_EPOCH,
-                                        DREP.INACTIVE_EPOCH,
-                                        DREP.RETIRE_EPOCH,
-                                        DREP.REGISTRATION_SLOT,
                                         DREP.SLOT,
                                         DREP.BLOCK_HASH,
                                         DREP.BLOCK,
@@ -81,10 +77,6 @@ public class DRepStorageImpl implements DRepStorage {
                         .certType(record.get(DREP.CERT_TYPE) != null ? CertificateType.valueOf(record.get(DREP.CERT_TYPE)) : null)
                         .status(DRepStatus.valueOf(record.get(DREP.STATUS)))
                         .epoch(record.get(DREP.EPOCH))
-                        .activeEpoch(record.get(DREP.ACTIVE_EPOCH))
-                        .inactiveEpoch(record.get(DREP.INACTIVE_EPOCH))
-                        .retireEpoch(record.get(DREP.RETIRE_EPOCH))
-                        .registrationSlot(record.get(DREP.REGISTRATION_SLOT))
                         .slot(record.get(DREP.SLOT))
                         .blockHash(record.get(DREP.BLOCK_HASH))
                         .blockNumber(record.get(DREP.BLOCK))
