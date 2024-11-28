@@ -102,10 +102,18 @@ public class DBIndexService {
             log.info("Re-applying optional indexes after sync process ..... " + scriptPath);
             indexApplied.set(true);
 
-            ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-            populator.addScripts(
-                    new ClassPathResource(scriptPath));
-            populator.execute(this.dataSource);
+            executeSqlScript(scriptPath);
+
+            //If h2 db, then try any additional indexes in h2 file
+            if (isH2()) {
+                log.info("Running additional indexes for H2 ...");
+                String h2Script = "sql/extra-index-h2.sql";
+                executeSqlScript(h2Script);
+            } else if(isPostgres()) {
+                log.info("Running additional indexes for Postgresql ...");
+                String postgresScript = "sql/extra-index-postgresql.sql";
+                executeSqlScript(postgresScript);
+            }
 
             log.info("Optional indexes have been re-applied successfully.");
         } catch (Exception e) {
@@ -113,9 +121,32 @@ public class DBIndexService {
         }
     }
 
+    private void executeSqlScript(String scriptPath) {
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        populator.addScripts(
+                new ClassPathResource(scriptPath));
+        populator.execute(this.dataSource);
+    }
+
     private boolean isMysql() throws SQLException {
         var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
         if (vendor != null && vendor.toLowerCase().contains("mysql"))
+            return true;
+        else
+            return false;
+    }
+
+    private boolean isH2() throws SQLException {
+        var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
+        if (vendor != null && vendor.toLowerCase().contains("h2"))
+            return true;
+        else
+            return false;
+    }
+
+    private boolean isPostgres() throws SQLException {
+        var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
+        if (vendor != null && vendor.toLowerCase().contains("postgres"))
             return true;
         else
             return false;

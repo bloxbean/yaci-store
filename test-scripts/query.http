@@ -133,7 +133,7 @@ http://localhost:8080/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428gh
 http://localhost:8080/api/v1/addresses/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs/utxos?page=0&count=100
 
 ### By address verification key
-http://localhost:8080/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos?page=0&count=1000
+http://localhost:8080/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos?page=0&count=10
 
 
 ### By address and asset

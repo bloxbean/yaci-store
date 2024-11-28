@@ -31,3 +31,57 @@ GET {{base_url}}/api/v1/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge
     });
 %}
 
+###
+### Get utxos by address
+GET {{base_url}}/api/v1/addresses/addr_test1qqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5v9frnmht7uwrl073q4jvq20z82kh4rksyns540azhndqexqpvhgqr/utxos
+
+> {%
+    client.test("Get utxos by address", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is not greater than 0: " + response.body.length)
+    });
+%}
+
+
+### By ent address
+GET {{base_url}}/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/utxos?page=0&count=100
+
+> {%
+    client.test("Get utxos by ent address", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is not greater than 0: " + response.body.length)
+    });
+%}
+
+###
+### By stake address
+GET {{base_url}}/api/v1/addresses/stake_test1uz53eam4lw8plhlgs2exq983r4tt63mgzfc22h73teksvnq5hwnfs/utxos?page=0&count=100
+
+> {%
+    client.test("Get utxos by stake address", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is not greater than 0: " + response.body.length)
+    });
+%}
+
+###
+### By address verification key
+GET {{base_url}}/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos?page=0&count=10
+
+> {%
+    client.test("Get utxos by verification key", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is not greater than 0: " + response.body.length)
+    });
+%}
+
+###
+### By address verification key and asset
+GET {{base_url}}/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos/0401c735871cb02f76f7e8150f96527efb779c06effa45284dcf9885546573744e4654?page=0&count=10
+
+> {%
+    client.test("Get utxos by verification key", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is not greater than 0: " + response.body.length)
+    });
+%}
