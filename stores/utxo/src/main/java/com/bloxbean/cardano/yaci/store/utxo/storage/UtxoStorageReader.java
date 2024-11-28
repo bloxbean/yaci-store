@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetTransaction;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,4 +22,5 @@ public interface UtxoStorageReader {
     List<AddressUtxo> findAllByIds(List<UtxoKey> utxoKeys);
 
     List<AddressTransaction> findTransactionsByAddress(String address, int page, int count, Order order);
+    List<AssetTransaction> findTransactionsByAsset(String unit, int page, int count, Order order);
 }

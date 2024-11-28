@@ -36,7 +36,7 @@ public class AssetController {
         return assetService.getAssetsByTx(txHash);
     }
 
-    @GetMapping("/fingerprint/{fingerprint}")
+    @GetMapping("/fingerprint/{fingerprint}/history")
     @Operation(summary = "Asset History by Fingerprint", description = "Returns the Mint / Burn History of an asset by fingerprint.")
     public List<TxAsset> getAssetTxsByFingerprint(@PathVariable String fingerprint, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                                 @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
@@ -47,7 +47,18 @@ public class AssetController {
         return assetService.getAssetTxsByFingerprint(fingerprint, p, count);
     }
 
+    /**
+     * @deprecated Use /assets/{unit}/history instead
+     */
+    @Deprecated
     @GetMapping("/unit/{unit}")
+    @Operation(summary = "Asset History by Unit", description = "Returns the Mint / Burn History of an asset by unit. Deprecated: Use /assets/{unit}/history instead")
+    public List<TxAsset> getAssetTxsByUnitDeprecated(@PathVariable String unit, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                                           @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
+        return getAssetTxsByUnit(unit, page, count);
+    }
+
+    @GetMapping("/{unit}/history")
     @Operation(summary = "Asset History by Unit", description = "Returns the Mint / Burn History of an asset by unit.")
     public List<TxAsset> getAssetTxsByUnit(@PathVariable String unit, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
@@ -58,18 +69,28 @@ public class AssetController {
         return assetService.getAssetTxsByUnit(unit, p, count);
     }
 
-    @GetMapping("/policy/{policyId}")
+    @GetMapping("/policy/{policy}/history")
     @Operation(summary = "Asset History by Policy", description = "Returns the Mint / Burn History for all assets included in a policy.")
-    public List<TxAsset> getAssetTxsByPolicyId(@PathVariable String policyId, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+    public List<TxAsset> getAssetTxsByPolicyId(@PathVariable String policy, @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
                                              @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count) {
         //TODO -- Fix pagination index
         int p = page;
         if (p > 0)
             p = p - 1;
-        return assetService.getAssetTxsByPolicyId(policyId, p, count);
+        return assetService.getAssetTxsByPolicyId(policy, p, count);
     }
 
+    /**
+     * @deprecated Use /assets/fingerprint/{fingerprint}/supply instead
+     */
+    @Deprecated
     @GetMapping("/supply/fingerprint/{fingerprint}")
+    @Operation(summary = "Assets Supply by Fingerprint", description = "Returns the entire supply of a specific asset by fingerprint. Deprecated: /assets/fingerprint/{fingerprint}/supply")
+    public FingerprintSupply getSupplyByFingerprintDeprecated(@PathVariable String fingerprint) {
+        return getSupplyByFingerprint(fingerprint);
+    }
+
+    @GetMapping("/fingerprint/{fingerprint}/supply")
     @Operation(summary = "Assets Supply by Fingerprint", description = "Returns the entire supply of a specific asset by fingerprint.")
     public FingerprintSupply getSupplyByFingerprint(@PathVariable String fingerprint) {
         return assetService.getSupplyByFingerprint(fingerprint)
@@ -77,7 +98,18 @@ public class AssetController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
     }
 
+
+    /**
+     * @deprecated Use /assets/{unit}/supply instead
+     */
+    @Deprecated
     @GetMapping("/supply/unit/{unit}")
+    @Operation(summary = "Assets Supply by Unit", description = "Returns the entire supply of a specific asset by unit. Deprecated: Use /assets/{unit}/supply")
+    public UnitSupply getSupplyByUnitDeprecated(@PathVariable String unit) {
+        return getSupplyByUnit(unit);
+    }
+
+    @GetMapping("/{unit}/supply")
     @Operation(summary = "Assets Supply by Unit", description = "Returns the entire supply of a specific asset by unit.")
     public UnitSupply getSupplyByUnit(@PathVariable String unit) {
         return assetService.getSupplyByUnit(unit)
@@ -85,7 +117,17 @@ public class AssetController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
     }
 
+    /**
+     * @deprecated Use /assets/policy/{policy}/supply instead
+     */
+    @Deprecated
     @GetMapping("/supply/policy/{policy}")
+    @Operation(summary = "Assets Supply by Policy", description = "Returns the entire assets supply of a specific policy. Deprecated: /assets/policy/{policy}/supply")
+    public PolicySupply getSupplyByPolicyDeprecated(@PathVariable String policy) {
+        return getSupplyByPolicy(policy);
+    }
+
+    @GetMapping("/policy/{policy}/supply")
     @Operation(summary = "Assets Supply by Policy", description = "Returns the entire assets supply of a specific policy.")
     public PolicySupply getSupplyByPolicy(@PathVariable String policy) {
         return assetService.getSupplyByPolicy(policy)
