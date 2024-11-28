@@ -12,6 +12,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +24,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class VotingProcedureProcessorTest {
-
+    @Mock
+    private ApplicationEventPublisher publisher;
     @Mock
     private VotingProcedureStorage votingProcedureStorage;
     @Captor
