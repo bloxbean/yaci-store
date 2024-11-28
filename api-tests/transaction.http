@@ -1,0 +1,12 @@
+###
+### Get utxos by tx hash
+GET {{base_url}}/api/v1/txs/d9301af967fc9fe8995c297be05561859401b89c0c8237264e4016081dd92011/utxos
+
+> {%
+    client.test("Get utxos by tx hash", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.outputs.length === 3, "No of returned utxos is not 3: " + response.body.outputs.length)
+        client.assert(response.body.outputs[0].amount[0].quantity === "2000000", "Quantity mismatch : " + response.body.outputs[0].amount[0].quantity)
+        client.assert(response.body.outputs[1].amount[0].quantity === "5000000", "Quantity mismatch : " + response.body.outputs[1].amount[0].quantity)
+    });
+%}

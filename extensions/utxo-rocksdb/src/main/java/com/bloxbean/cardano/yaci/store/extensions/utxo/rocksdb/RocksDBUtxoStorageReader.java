@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.rocks.types.collection.RocksMap;
 import com.bloxbean.rocks.types.collection.RocksMultiZSet;
@@ -65,6 +66,11 @@ public class RocksDBUtxoStorageReader implements UtxoStorageReader {
 
     @Override
     public List<AddressTransaction> findTransactionsByAddress(String address, int page, int count, Order order) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public List<AssetTransaction> findTransactionsByAsset(String asset, int page, int count, Order order) {
         throw new UnsupportedOperationException("Not implemented");
     }
 

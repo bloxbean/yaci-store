@@ -14,9 +14,10 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder(toBuilder = true)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class AddressTransaction {
+public class AssetTransaction {
     private String txHash;
-    private Long blockHeight; //For BF Compatibility
+    //private long txIndex; //TODO -- currently always 0
+    private Long blockHeight; //For Blockfrost
     private Long blockNumber;
     private Long blockTime;
 }
