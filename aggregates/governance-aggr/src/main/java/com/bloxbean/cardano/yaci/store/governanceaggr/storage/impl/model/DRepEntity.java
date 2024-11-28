@@ -54,18 +54,6 @@ public class DRepEntity extends BlockAwareEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
-    @Column(name = "active_epoch")
-    private Integer activeEpoch;
-
-    @Column(name = "inactive_epoch")
-    private Integer inactiveEpoch;
-
-    @Column(name = "retire_epoch")
-    private Integer retireEpoch;
-
-    @Column(name = "registration_slot")
-    private Long registrationSlot;
-
     @Column(name = "block_hash")
     private String blockHash;
 }

@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-// Todo: handle by query during epoch transition
+// todo: fix 'inactive', 'active again' case
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;
     private final EpochParamStorage epochParamStorage;
@@ -70,13 +70,11 @@ public class DRepStatusProcessor {
                             .certType(drepRegistration.getType())
                             .deposit(drepRegistration.getDeposit())
                             .epoch(drepRegistration.getEpoch())
-                            .activeEpoch(metadata.getEpochNumber())
                             .slot(metadata.getSlot())
                             .blockHash(metadata.getBlockHash());
 
                     if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
-                        dRepBuilder.status(DRepStatus.ACTIVE)
-                                .registrationSlot(drepRegistration.getSlot());
+                        dRepBuilder.status(DRepStatus.ACTIVE);
                     } else {
                         var recentDRepOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
 
@@ -86,19 +84,16 @@ public class DRepStatusProcessor {
                             if (regisDRep.isEmpty()) {
                                 log.error("Cannot find recent dRep registration");
                             } else {
-                                dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
                                 dRepBuilder.deposit(regisDRep.get().getDeposit());
                             }
                         } else {
-                            dRepBuilder.registrationSlot(recentDRepOpt.get().getRegistrationSlot());
                             dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
                         }
 
                         if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
                             dRepBuilder.status(DRepStatus.ACTIVE);
                         } else if (drepRegistration.getType() == CertificateType.UNREG_DREP_CERT) {
-                            dRepBuilder.status(DRepStatus.RETIRED)
-                                    .retireEpoch(metadata.getEpochNumber());
+                            dRepBuilder.status(DRepStatus.RETIRED);
                         }
                     }
                     dReps.add(dRepBuilder.build());
@@ -142,7 +137,6 @@ public class DRepStatusProcessor {
                                             .drepHash(voting.getVoterHash())
                                             .status(DRepStatus.ACTIVE)
                                             .deposit(recentDRepOpt.get().getDeposit())
-                                            .activeEpoch(metadata.getEpochNumber())
                                             .epoch(metadata.getEpochNumber())
                                             .slot(metadata.getSlot())
                                             .blockNumber(metadata.getBlock())
@@ -224,7 +218,6 @@ public class DRepStatusProcessor {
                         .drepHash(tuple._2)
                         .status(DRepStatus.INACTIVE)
                         .deposit(dRepsNotVoteMap.get(tuple))
-                        .inactiveEpoch(preEpochTransitionEvent.getEpoch())
                         .epoch(preEpochTransitionEvent.getEpoch())
                         .slot(eventMetadata.getSlot())
                         .blockNumber(eventMetadata.getBlock())
