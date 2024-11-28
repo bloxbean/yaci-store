@@ -20,6 +20,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -30,7 +31,8 @@ import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class DRepRegistrationProcessorTest {
-
+    @Mock
+    private ApplicationEventPublisher publisher;
     @Mock
     private DRepRegistrationStorage dRepRegistrationStorage;
     @InjectMocks

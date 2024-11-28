@@ -40,4 +40,11 @@ public class GovActionProposalStorageImpl implements GovActionProposalStorage {
         }).toList()).stream().map(govActionProposalMapper::toGovActionProposal).toList();
     }
 
+    @Override
+    public List<GovActionProposal> findByEpoch(int epoch) {
+        return govActionProposalRepository.findByEpoch(epoch).stream()
+                .map(govActionProposalMapper::toGovActionProposal)
+                .collect(Collectors.toList());
+    }
+
 }

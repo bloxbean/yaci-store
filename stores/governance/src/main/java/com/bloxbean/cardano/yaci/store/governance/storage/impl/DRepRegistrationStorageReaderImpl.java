@@ -50,4 +50,15 @@ public class DRepRegistrationStorageReaderImpl implements DRepRegistrationStorag
                 .map(drepRegistrationMapper::toDRepRegistration)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<DRepRegistration> findAll(int page, int count, Order order) {
+        Pageable sortedBySlot =
+                PageRequest.of(page, count, order == Order.asc ? Sort.by("slot").ascending() : Sort.by("slot").descending());
+
+        return drepRegistrationRepository.findAll(sortedBySlot)
+                .stream()
+                .map(drepRegistrationMapper::toDRepRegistration)
+                .collect(Collectors.toList());
+    }
 }
