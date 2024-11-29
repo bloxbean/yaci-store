@@ -6,7 +6,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -21,21 +21,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "store.auto-index-management", havingValue = "true", matchIfMissing = false)
 public class DBIndexService {
     private final DataSource dataSource;
 
     private AtomicBoolean indexRemoved = new AtomicBoolean(false);
     private AtomicBoolean indexApplied = new AtomicBoolean(false);
 
+    @Value("${store.auto-index-management:true}")
+    private boolean autoIndexManagement;
+
     @PostConstruct
     public void init() {
-        log.info("<< Enable DBIndexService >>");
+        log.info("<< Enable DBIndexService >> AutoIndexManagement: " + autoIndexManagement);
     }
 
     @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleFirstBlockEvent(BlockHeaderEvent blockHeaderEvent) {
+        if (!autoIndexManagement)
+            return;
+
         if (indexRemoved.get() || blockHeaderEvent.getMetadata().getBlock() > 1
                 || blockHeaderEvent.getMetadata().isSyncMode())
             return;
@@ -46,9 +51,12 @@ public class DBIndexService {
     @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleFirstBlockEventToCreateIndex(BlockHeaderEvent blockHeaderEvent) {
+        if (!autoIndexManagement)
+            return;
+
         if (blockHeaderEvent.getMetadata().isSyncMode() && !indexApplied.get()) {
             if (blockHeaderEvent.getMetadata().getBlock() < 50000) {
-                 reApplyIndexes();
+                reApplyIndexes();
             } else {
                 log.info("<< I can't manage the creation of automatic indexes because the number of actual blocks in database exceeds the # of blocks threshold for automatic index application >>");
                 log.info("Please manually reapply the required indexes if not done yet. For more details, refer to the 'create-index.sql' file !!!");
@@ -61,6 +69,9 @@ public class DBIndexService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @SneakyThrows
     public void handleFirstBlockEvent(ByronMainBlockEvent byronMainBlockEvent) {
+        if (!autoIndexManagement)
+            return;
+
         if (indexRemoved.get() || byronMainBlockEvent.getMetadata().getBlock() > 1
                 || byronMainBlockEvent.getMetadata().isSyncMode())
             return;
@@ -79,10 +90,7 @@ public class DBIndexService {
 
             log.info("Deleting optional indexes to speed-up the sync process ..... " + scriptPath);
             indexRemoved.set(true);
-            ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-            populator.addScripts(
-                    new ClassPathResource(scriptPath));
-            populator.execute(this.dataSource);
+            executeSqlScript(scriptPath);
 
             log.info("Optional indexes have been removed successfully.");
         } catch (Exception e) {

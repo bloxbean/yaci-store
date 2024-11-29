@@ -3,52 +3,16 @@
   "includes":[
     {"pattern": "store/networks/.*/*.json$"},
     {"pattern":  "db/store/.*/*.sql$"},
+    {"pattern":  "sql/.*/*.sql$"},
+    {"pattern":  "sql/*.sql$"},
     {
-      "pattern":"\\Qdb/store/h2/V0_000_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_001_1__batch.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_1000_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_100_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_1100_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_1200_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_200_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_300_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_300_2__indexes.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_400_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_400_2__indexes.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_500_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_500_2__indexes.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_600_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_600_2__indexes.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_700_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_700_2__indexes.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_800_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_900_1__init.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_900_2__config.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_900_3__views.sql\\E"
-    }, {
-      "pattern":"\\Qdb/store/h2/V0_900_4__updates.sql\\E"
-    }, {
       "pattern":"\\Qdb/store/h2\\E"
+    },
+    {
+      "pattern":"\\Qdb/store/mysql\\E"
+    },
+    {
+      "pattern":"\\Qdb/store/postgresql\\E"
     },
     {
     "pattern":"\\QMETA-INF/build-info.properties\\E"
@@ -1398,52 +1362,6 @@
     "pattern":"\\Qdata.sql\\E"
   }, {
     "pattern":"\\Qdb/callback\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_000_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_001_1__batch.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_1000_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_100_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_1100_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_1200_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_200_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_300_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_300_2__indexes.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_400_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_400_2__indexes.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_500_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_500_2__indexes.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_600_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_600_2__indexes.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_700_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_700_2__indexes.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_800_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_900_1__init.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_900_2__config.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_900_3__views.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql/V0_900_4__updates.sql\\E"
-  }, {
-    "pattern":"\\Qdb/store/postgresql\\E"
   }, {
     "pattern":"\\Qde/codecentric/boot/admin/client/config/SpringBootAdminClientAutoConfiguration.class\\E"
   }, {

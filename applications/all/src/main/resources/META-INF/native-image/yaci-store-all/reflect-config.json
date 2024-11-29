@@ -1189,18 +1189,6 @@
   "methods":[{"name":"<init>","parameterTypes":["com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader"] }]
 },
 {
-  "name":"com.bloxbean.cardano.yaci.store.app.DBIndexService",
-  "allDeclaredFields":true,
-  "queryAllDeclaredMethods":true,
-  "queryAllDeclaredConstructors":true,
-  "methods":[{"name":"<init>","parameterTypes":["javax.sql.DataSource"] }, {"name":"handleFirstBlockEvent","parameterTypes":["com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent"] }, {"name":"handleFirstBlockEventToCreateIndex","parameterTypes":["com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent"] }, {"name":"init","parameterTypes":[] }]
-},
-{
-  "name":"com.bloxbean.cardano.yaci.store.app.DBIndexService$$SpringCGLIB$$0",
-  "fields":[{"name":"CGLIB$CALLBACK_FILTER"}, {"name":"CGLIB$FACTORY_DATA"}],
-  "methods":[{"name":"CGLIB$SET_THREAD_CALLBACKS","parameterTypes":["org.springframework.cglib.proxy.Callback[]"] }]
-},
-{
   "name":"com.bloxbean.cardano.yaci.store.app.MetricsConfig",
   "allDeclaredFields":true,
   "queryAllDeclaredMethods":true,
