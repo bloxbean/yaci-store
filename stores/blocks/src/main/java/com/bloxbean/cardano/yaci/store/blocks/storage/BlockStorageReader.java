@@ -19,4 +19,8 @@ public interface BlockStorageReader {
     Optional<Block> findByBlock(long block);
 
     List<PoolBlock> findBlocksBySlotLeaderAndEpoch(String slotLeader, int epoch);
+
+    int totalBlocksInEpoch(int epochNumber);
+
+    BlocksPage findBlocksByEpoch(int epoch, int page, int count);
 }

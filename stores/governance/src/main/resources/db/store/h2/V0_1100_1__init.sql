@@ -134,6 +134,7 @@ create table drep_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     type            varchar(50),
     deposit         bigint,
     drep_hash       varchar(56),

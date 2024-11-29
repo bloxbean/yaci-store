@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.repository;
 
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.VotingProcedureEntity;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.VotingProcedureId;
 import org.springframework.data.domain.Pageable;
@@ -22,4 +23,8 @@ public interface VotingProcedureRepository extends JpaRepository<VotingProcedure
     Slice<VotingProcedureEntity> findByGovActionTxHash(String txHash, Pageable pageable);
 
     Slice<VotingProcedureEntity> findByGovActionTxHashAndIndex(String govActionTxHash, long govActionIndex, Pageable pageable);
+
+    Slice<VotingProcedureEntity> findBySlotGreaterThan(Long slot, Pageable pageable);
+
+    List<VotingProcedureEntity> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch);
 }

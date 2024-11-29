@@ -12,14 +12,16 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
+import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +41,9 @@ public class ByronTransactionProcessor {
     private final TransactionStorage transactionStorage;
     private final TransactionWitnessStorage transactionWitnessStorage;
     private final UtxoClient utxoClient;
+    private final ApplicationEventPublisher publisher;
 
-    //To keep unresolved transactions in a batch if any to resolve fee
+    //To keep invalid transactions in a batch if any to resolve fee
     private List<Tuple<Txn, ByronTx>> unresolvedFeeTxns = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
@@ -52,6 +55,7 @@ public class ByronTransactionProcessor {
                 .collect(Collectors.toList());
 
         List<Txn> txList = new ArrayList<>();
+        int txIndex = 0;
         for (ByronTx byronTx : byronTxList) {
 
             //find inputs
@@ -76,6 +80,8 @@ public class ByronTransactionProcessor {
                     .blockNumber(event.getMetadata().getBlock())
                     .blockTime(event.getMetadata().getBlockTime())
                     .slot(event.getMetadata().getSlot())
+                    .txIndex(txIndex++)
+                    .epoch(event.getMetadata().getEpochNumber())
                     .inputs(inputs)
                     .outputs(outputs)
                     .fee(fee)
@@ -90,6 +96,9 @@ public class ByronTransactionProcessor {
 
         if (txList.size() > 0) {
             transactionStorage.saveAll(txList);
+
+            //Publish txn event for valid transactions
+            publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
     }
 
@@ -121,7 +130,7 @@ public class ByronTransactionProcessor {
     //Resolve fee for unresolved fee transactions
     @EventListener
     @Transactional
-    public void handleUnresolvedFee(CommitEvent preCommitEvent) {
+    public void handleUnresolvedFee(PreCommitEvent preCommitEvent) {
         if (unresolvedFeeTxns.isEmpty())
             return;
 
@@ -141,6 +150,10 @@ public class ByronTransactionProcessor {
                 txnList.add(unresolvedTxs._1);
             }
 
+            if (txnList.size() > 0) {
+                publisher.publishEvent(new TxnEvent(preCommitEvent.getMetadata(),
+                        txnList));
+            }
         } finally {
             unresolvedFeeTxns.clear();
         }
@@ -196,7 +209,7 @@ public class ByronTransactionProcessor {
                         txnWitness.setType(TxWitnessType.BYRON_SCRIPT_WITNESS);
                     }
                     case ByronUnknownWitness unknownWitness -> {
-                        log.warn("ByronUnknownWitness found --> Not sure how to handle this >>>>>>>>>>>>>>>");
+                        log.warn("ByronUnkownWitness found --> Not sure how to handle this >>>>>>>>>>>>>>>");
                         txnWitness.setType(TxWitnessType.BYRON_UNKNOWN_WITNESS);
                     }
                     default -> log.error("Invalid witness type : " + witness);

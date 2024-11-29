@@ -4,6 +4,8 @@ cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.6.2"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.6.2"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.6.2"
 
+cf-rewards="org.cardanofoundation:cf-rewards-calculation:0.14.0"
+
 rocks-types="com.bloxbean:rocks-types:0.0.1-preview6"
 
 cbor = "co.nstant.in:cbor:0.9"
@@ -24,3 +26,5 @@ messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 
 parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
 apache-commons-pool="org.apache.commons:commons-pool2:2.12.0"
+
+vavr="io.vavr:vavr:0.10.5"

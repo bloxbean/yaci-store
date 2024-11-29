@@ -1,0 +1,24 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    api project(":aggregates:governance-aggr")
+
+    implementation project(':starters:epoch-spring-boot-starter')
+    implementation project(':starters:governance-spring-boot-starter')
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Governance Aggregator Spring Boot Starter'
+                description = 'Yaci Store Governance Aggregator Spring Boot Starter'
+            }
+        }
+    }
+}
