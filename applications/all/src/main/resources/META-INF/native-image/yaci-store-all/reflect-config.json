@@ -17371,5 +17371,35 @@
     "allDeclaredConstructors": true,
     "allDeclaredFields": true,
     "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.staking.jooq.tables.pojos.Pool",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.staking.jooq.tables.pojos.Delegation",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.staking.jooq.tables.pojos.PoolRegistration",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.staking.jooq.tables.pojos.PoolRetirement",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.staking.jooq.tables.pojos.StakeRegistration",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
   }
 ]
