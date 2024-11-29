@@ -7,13 +7,10 @@ import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.ScriptRepository;
-import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
-import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,7 +23,6 @@ import java.util.concurrent.Future;
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.SCRIPT;
 
-@RequiredArgsConstructor
 @Slf4j
 public class ScriptStorageImpl implements ScriptStorage {
     private final ScriptRepository scriptRepository;
@@ -41,7 +37,18 @@ public class ScriptStorageImpl implements ScriptStorage {
 
     private Set<Script> scriptCache = Collections.synchronizedSet(new HashSet<>());
 
-    @PostConstruct
+    public ScriptStorageImpl(ScriptRepository scriptRepository, ScriptMapper scriptMapper, DSLContext dsl, ParallelExecutor executorHelper,
+                             StoreProperties storeProperties, PlatformTransactionManager transactionManager) {
+        this.scriptRepository = scriptRepository;
+        this.scriptMapper = scriptMapper;
+        this.dsl = dsl;
+        this.executorHelper = executorHelper;
+        this.storeProperties = storeProperties;
+        this.transactionManager = transactionManager;
+
+        init();
+    }
+
     public void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -55,7 +62,6 @@ public class ScriptStorageImpl implements ScriptStorage {
         return scripts;
     }
 
-    @EventListener
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
         try {

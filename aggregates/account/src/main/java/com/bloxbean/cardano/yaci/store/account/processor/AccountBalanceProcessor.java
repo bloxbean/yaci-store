@@ -26,7 +26,6 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
-import jakarta.annotation.PostConstruct;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -94,9 +93,10 @@ public class AccountBalanceProcessor {
         this.parallelExecutor = parallelExecutor;
         this.transactionManager = transactionManager;
         this.metricCollectorService = metricCollectorService;
+
+        init();
     }
 
-    @PostConstruct
     void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

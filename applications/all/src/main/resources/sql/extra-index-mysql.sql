@@ -1,0 +1,2 @@
+-- Additional mysql specific indexes
+

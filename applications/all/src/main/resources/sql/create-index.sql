@@ -93,26 +93,26 @@ CREATE INDEX if not exists idx_txn_scripts_tx_hash
     ON transaction_scripts (tx_hash);
 
 -- governance
-CREATE INDEX idx_gov_action_proposal_txhash
+CREATE INDEX if not exists idx_gov_action_proposal_txhash
     ON gov_action_proposal (tx_hash);
 
-CREATE INDEX idx_gov_action_proposal_return_address
+CREATE INDEX if not exists idx_gov_action_proposal_return_address
     ON gov_action_proposal (return_address);
 
-CREATE INDEX idx_gov_action_proposal_type
+CREATE INDEX if not exists idx_gov_action_proposal_type
     ON gov_action_proposal (type);
 
-CREATE INDEX idx_voting_procedure_txhash
+CREATE INDEX if not exists idx_voting_procedure_txhash
     ON voting_procedure (tx_hash);
 
-CREATE INDEX idx_voting_procedure_gov_action_tx_hash
+CREATE INDEX if not exists idx_voting_procedure_gov_action_tx_hash
     ON voting_procedure (gov_action_tx_hash);
 
-CREATE INDEX idx_voting_procedure_gov_action_tx_hash_gov_action_index
+CREATE INDEX if not exists idx_voting_procedure_gov_action_tx_hash_gov_action_index
     ON voting_procedure (gov_action_tx_hash, gov_action_index);
 
-CREATE INDEX idx_delegation_vote_address
+CREATE INDEX if not exists idx_delegation_vote_address
     ON delegation_vote (address);
 
-CREATE INDEX idx_delegation_vote_drep_id
+CREATE INDEX if not exists idx_delegation_vote_drep_id
     ON delegation_vote (drep_id);

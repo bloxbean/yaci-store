@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
@@ -93,5 +94,10 @@ public class ScriptRefProcessor {
         } catch (Exception e) {
             log.error("Error saving script ref in utxo. Block: {} ", transactionEvent.getMetadata().getBlock(), e);
         }
+    }
+
+    @EventListener
+    public void handleCommit(CommitEvent commitEvent) {
+        scriptStorage.handleCommit(commitEvent);
     }
 }

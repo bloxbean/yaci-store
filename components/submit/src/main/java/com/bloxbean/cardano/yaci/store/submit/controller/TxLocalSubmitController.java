@@ -6,8 +6,6 @@ import com.bloxbean.cardano.yaci.helper.model.TxResult;
 import com.bloxbean.cardano.yaci.store.submit.service.OgmiosService;
 import com.bloxbean.cardano.yaci.store.submit.service.TxSubmissionService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -22,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Tag(name = "Local Tx Submission Service")
 @RequestMapping("${apiPrefix}/tx")
-@RequiredArgsConstructor
 @ConditionalOnBean(TxSubmissionService.class)
 @ConditionalOnExpression("'${store.cardano.submit-api-url:}' == ''")
 @ConditionalOnMissingBean(OgmiosService.class)
@@ -30,14 +27,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class TxLocalSubmitController {
     private final TxSubmissionService txSubmissionService;
 
-    @PostConstruct
-    public void postConstruct() {
-        log.info("Tx Local Submit Controller initialized");
+    public TxLocalSubmitController(TxSubmissionService txSubmissionService) {
+        this.txSubmissionService = txSubmissionService;
+        log.info("<< Tx Local Submit Controller initialized >>");
     }
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody byte[] txBytes) {
-        TxResult txResult = txSubmissionService.submitTx(TxBodyType.BABBAGE, txBytes);
+        TxResult txResult = txSubmissionService.submitTx(TxBodyType.CONWAY, txBytes);
         if (log.isDebugEnabled())
             log.debug(String.valueOf(txResult));
 
@@ -53,7 +50,7 @@ public class TxLocalSubmitController {
     @PostMapping(value = "submit", consumes = {MediaType.TEXT_PLAIN_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody String txBytesHex) {
         byte[] txBytes = HexUtil.decodeHexString(txBytesHex);
-        TxResult txResult = txSubmissionService.submitTx(TxBodyType.BABBAGE, txBytes);
+        TxResult txResult = txSubmissionService.submitTx(TxBodyType.CONWAY, txBytes);
         if (log.isDebugEnabled())
             log.debug(String.valueOf(txResult));
 

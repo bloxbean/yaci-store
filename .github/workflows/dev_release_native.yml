@@ -1,15 +1,15 @@
-name: Build and Upload Yaci Store Zip
+name: Dev Build and Upload Yaci Store Zip
 
 on:
   workflow_dispatch:
 
 jobs:
-  buildAndUpload:
+  buildAndUpload-mostly-static:
     strategy:
       matrix:
-#        os: ["ubuntu-20.04", "macos-14"]
-        os: ["ubuntu-20.04", "macOS", "macos-13"]
-        profile: ["n2c", ""]
+        #        os: ["ubuntu-20.04", "macos-14"]
+        os: [ "ubuntu-20.04", "macOS", "macos-13" ]
+        profile: [ "n2c", "" ]
     runs-on: ${{ matrix.os }}
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -22,7 +22,7 @@ jobs:
           java-version: '21'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '21.0.4'
+          version: '21.0.5'
           native-image-job-reports: 'true'
       - name: Get Version from gradle.properties
         run: |
@@ -30,7 +30,7 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Copy CI specific native-image properties
+      - name: Copy CI specific native-image properties and env setup
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
@@ -55,3 +55,108 @@ jobs:
         with:
           name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
           path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+
+  buildAndUpload-musl:
+    strategy:
+      matrix:
+        #        os: ["ubuntu-20.04", "macos-14"]
+        os: ["ubuntu-20.04"]
+        profile: ["n2c", ""]
+    runs-on: ${{ matrix.os }}
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      FORCE_COLOR: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version: '21.0.5'
+          native-image-musl: true
+          native-image-job-reports: 'true'
+      - name: Get Version from gradle.properties
+        run: |
+          VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2 | xargs)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Copy CI specific native-image properties and env setup
+        if: runner.os == 'Linux'
+        run: |
+          echo "os_prefix=linux" >> $GITHUB_ENV
+          cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.musl applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
+      - name: MacOS specific env
+        if: runner.os == 'macOS'
+        run: |
+          echo "os_prefix=macos" >> $GITHUB_ENV
+      - name: Set lowercase architecture
+        run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+      - name: Set Profile Suffix
+        run: |
+          if [ -n "${{ matrix.profile }}" ]; then
+            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
+          else
+            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+          fi
+      - name: Build with Gradle
+        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean cliZip
+      - name: Copy artifacts
+        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
+          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+
+  windowBuild:
+    strategy:
+      matrix:
+        profile: ["n2c", ""]
+    runs-on: windows-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      FORCE_COLOR: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version: '21.0.5'
+          native-image-job-reports: 'true'
+      - name: Extract version (Windows)
+        shell: pwsh
+        run: |
+          $VERSION = (Get-Content gradle.properties | Where-Object { $_ -match "^version=" } | ForEach-Object { $_.Split('=')[1].Trim() })
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+      - name: Set Profile Suffix
+        shell: pwsh
+        run: |
+          if ("${{ matrix.profile }}" -ne "") {
+              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX=-${{ matrix.profile }}"
+          } else {
+              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
+          }
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Windows specific env
+        run: |
+          echo "os_prefix=win" >> $GITHUB_ENV
+          copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
+      - name: Set lowercase architecture
+        shell: pwsh
+        run: |
+          $arch = "${{ runner.arch }}".ToLower()
+          Add-Content -Path $env:GITHUB_ENV -Value "arch=$arch"
+      - name: Build with Gradle
+        run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
+      - name: Copy artifacts
+        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
+          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip

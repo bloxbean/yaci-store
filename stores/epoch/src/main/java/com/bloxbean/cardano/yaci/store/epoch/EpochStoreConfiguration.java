@@ -63,4 +63,5 @@ public class EpochStoreConfiguration {
     public LocalEpochParamsStorage localEpochParamsStorage(LocalEpochParamsRepository localProtocolParamsRepository) {
         return new LocalEpochParamsStorageImpl(localProtocolParamsRepository);
     }
+
 }

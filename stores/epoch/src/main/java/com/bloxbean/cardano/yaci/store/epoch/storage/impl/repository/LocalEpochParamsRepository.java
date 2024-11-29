@@ -13,6 +13,6 @@ public interface LocalEpochParamsRepository extends JpaRepository<LocalEpochPara
     @Query("SELECT e FROM LocalEpochParamsEntity e ORDER BY e.epoch DESC limit 1")
     Optional<LocalEpochParamsEntity> findLatest();
 
-    @Query("select max(ep.epoch) from EpochParamEntity ep")
+    @Query("select max(ep.epoch) from LocalEpochParamsEntity ep")
     Optional<Integer> findMaxEpoch();
 }
