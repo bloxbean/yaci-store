@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
 import com.bloxbean.cardano.yaci.store.script.domain.DatumEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.OutputDatumContext;
@@ -131,5 +132,10 @@ public class OutputDatumProcessor {
                 });
 
         return datumHashMap;
+    }
+
+    @EventListener
+    public void handleEvent(CommitEvent commitEvent) {
+        datumStorage.handleCommit(commitEvent);
     }
 }

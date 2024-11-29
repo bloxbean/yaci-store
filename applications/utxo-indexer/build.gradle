@@ -1,5 +1,6 @@
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
+//    id 'org.graalvm.buildtools.native' version ${graalvmBuildToolVersion}
 }
 
 dependencies {
@@ -21,3 +22,21 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql:42.7.1'
 }
 
+
+//graalvmNative {
+//    binaries {
+//        main {
+//            imageName = 'yaci-store-all'
+//            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
+////            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
+//            sharedLibrary = false
+//        }
+//    }
+//
+//}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}

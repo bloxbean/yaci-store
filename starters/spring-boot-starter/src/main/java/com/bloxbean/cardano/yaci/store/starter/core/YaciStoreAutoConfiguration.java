@@ -22,13 +22,12 @@ import org.jooq.impl.DefaultConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
+import org.springframework.core.env.Environment;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -95,56 +94,30 @@ public class YaciStoreAutoConfiguration {
         return blockFinder;
     }
 
-    @Bean(name = "localClientProvider")
-    @ConditionalOnProperty(prefix = "store.cardano", name = "n2c-node-socket-path")
-    @Primary
-    public LocalClientProvider localClientProviderNodeSocketPath() {
-        log.info("LocalStateQueryClient ---> Configured --> " + properties.getCardano().getN2cNodeSocketPath());
-        return new LocalClientProvider(properties.getCardano().getN2cNodeSocketPath(), properties.getCardano().getProtocolMagic());
-    }
-
-    @Bean(name = "localClientProvider")
-    @ConditionalOnProperty(prefix = "store.cardano", name = "n2c-host")
-    public LocalClientProvider localClientProviderNodeSocketPort() {
-        if (properties.getCardano().getN2cPort() == 0)
-            throw new IllegalArgumentException("Invalid cardano.n2c.port " + properties.getCardano().getN2cPort() );
-        log.info("LocalStateQueryClient ---> Configured (n2c host/port)--> " + properties.getCardano().getN2cHost() + ", " + properties.getCardano().getN2cPort());
-        return new LocalClientProvider(properties.getCardano().getN2cHost(), properties.getCardano().getN2cPort(), properties.getCardano().getProtocolMagic());
-
-    }
-
     @Bean(name = "localClientProviderPool")
-    @ConditionalOnExpression("'${store.cardano.n2c-node-socket-path}' != '' and '${store.cardano.n2c-pool-enabled:false}' == 'true'")
-    @Primary
-    public GenericObjectPool<LocalClientProvider> localClientProviderPoolSocketPath() {
-        LocalClientProviderPoolObjectFactory factory = new LocalClientProviderPoolObjectFactory(
-                properties.getCardano().getN2cNodeSocketPath(),
-                properties.getCardano().getProtocolMagic());
+    public GenericObjectPool<LocalClientProvider> localClientProviderPoolSocketPath(Environment env) {
+        String n2cSocketPath = env.getProperty("store.cardano.n2c-node-socket-path");
+        String n2cHost = env.getProperty("store.cardano.n2c-host");
+        LocalClientProviderPoolObjectFactory factory = null;
 
         GenericObjectPoolConfig<LocalClientProvider> config = new GenericObjectPoolConfig<>();
         config.setMaxTotal(properties.getCardano().getN2cPoolMaxTotal());
         config.setMinIdle(properties.getCardano().getN2cPoolMinIdle());
         config.setMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
         config.setMaxWait(Duration.ofMillis(properties.getCardano().getN2cPoolMaxWaitInMillis()));
+        config.setJmxEnabled(false);
 
-        return new GenericObjectPool<>(factory, config);
-    }
-
-    @Bean(name = "localClientProviderPool")
-    @ConditionalOnExpression("'${store.cardano.n2c-host}' != '' and '${store.cardano.n2c-pool-enabled:false}' == 'true'")
-    public GenericObjectPool<LocalClientProvider> localClientProviderPoolHost() {
-        LocalClientProviderPoolObjectFactory factory = new LocalClientProviderPoolObjectFactory(
-                properties.getCardano().getN2cHost(),
-                properties.getCardano().getN2cPort(),
-                properties.getCardano().getProtocolMagic());
-
-        GenericObjectPoolConfig<LocalClientProvider> config = new GenericObjectPoolConfig<>();
-        config.setMaxTotal(properties.getCardano().getN2cPoolMaxTotal());
-        config.setMinIdle(properties.getCardano().getN2cPoolMinIdle());
-        config.setMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
-        config.setMaxWait(Duration.ofMillis(properties.getCardano().getN2cPoolMaxWaitInMillis()));
-
-        return new GenericObjectPool<>(factory, config);
+        if (n2cSocketPath != null && !n2cSocketPath.isEmpty()) {
+            factory = new LocalClientProviderPoolObjectFactory(
+                    properties.getCardano().getN2cNodeSocketPath(),
+                    properties.getCardano().getProtocolMagic());
+        } else if (n2cHost != null && !n2cHost.isEmpty()) {
+            factory = new LocalClientProviderPoolObjectFactory(
+                    properties.getCardano().getN2cHost(),
+                    properties.getCardano().getN2cPort(),
+                    properties.getCardano().getProtocolMagic());
+        }
+        return factory != null ? new GenericObjectPool<>(factory, config) : null;
     }
 
     @Bean

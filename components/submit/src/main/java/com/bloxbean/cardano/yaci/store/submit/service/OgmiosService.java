@@ -4,21 +4,24 @@ import com.bloxbean.cardano.client.api.exception.ApiException;
 import com.bloxbean.cardano.client.api.model.EvaluationResult;
 import com.bloxbean.cardano.client.api.model.Result;
 import com.bloxbean.cardano.client.backend.ogmios.http.OgmiosBackendService;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 @ConditionalOnProperty(name = "store.cardano.ogmios-url")
+@Slf4j
 public class OgmiosService {
     private String ogmiosUrl;
     private OgmiosBackendService ogmiosBackendService;
 
-    public OgmiosService(@Value("${store.cardano.ogmios-url:#{null}}") String ogmiosUrl) {
-        this.ogmiosUrl = ogmiosUrl;
-        ogmiosBackendService = new OgmiosBackendService(ogmiosUrl);
+    public OgmiosService(Environment env) {
+        this.ogmiosUrl = env.getProperty("store.cardano.ogmios-url");
+        this.ogmiosBackendService = new OgmiosBackendService(ogmiosUrl);
+        log.info("<< Ogmios Service initialized >> " + ogmiosUrl);
     }
 
     public Result<String> submitTx(byte[] cborTx) throws ApiException {
@@ -27,8 +30,19 @@ public class OgmiosService {
     }
 
     public Result<List<EvaluationResult>> evaluateTx(byte[] cborTx) throws ApiException {
-        Result<List<EvaluationResult>> result = ogmiosBackendService.getTransactionService().evaluateTx(cborTx);
-        return result;
+        if (log.isDebugEnabled())
+            log.debug("Evaluating tx ..." + ogmiosUrl);
+
+        try {
+            Result<List<EvaluationResult>> result = ogmiosBackendService.getTransactionService().evaluateTx(cborTx);
+
+            if (log.isDebugEnabled())
+                log.debug("Evaluation Result: " + result);
+            return result;
+        } catch (Exception e) {
+            log.error("Error evaluating tx: ", e);
+            throw new ApiException("Error evaluating tx: " + e.getMessage());
+        }
     }
 
     public String getOgmiosUrl() {
