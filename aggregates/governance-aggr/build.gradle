@@ -1,0 +1,17 @@
+dependencies {
+    api project(":stores:governance")
+    api project(":aggregates:governance-rules")
+    api project(":aggregates:adapot")
+    api project(":stores:epoch")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Governance Aggregator Module'
+                description = 'Yaci Store Governance Aggregator Module'
+            }
+        }
+    }
+}

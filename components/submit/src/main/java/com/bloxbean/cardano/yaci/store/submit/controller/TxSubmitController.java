@@ -2,11 +2,9 @@ package com.bloxbean.cardano.yaci.store.submit.controller;
 
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.core.env.Environment;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,18 +15,16 @@ import org.springframework.web.client.RestTemplate;
 @RestController
 @Tag(name = "Tx Submission Service")
 @RequestMapping("${apiPrefix}/tx")
-@RequiredArgsConstructor
 @ConditionalOnExpression("'${store.cardano.submit-api-url:}' != ''")
 @Slf4j
 public class TxSubmitController {
     private RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${store.cardano.submit-api-url:#{null}}")
     private String submitApiUrl;
 
-    @PostConstruct
-    public void postConstruct() {
-        log.info("Tx Submit Controller (Submit Api) initialized");
+    public TxSubmitController(Environment env) {
+        this.submitApiUrl = env.getProperty("store.cardano.submit-api-url");
+        log.info("<< Tx Submit Controller (Submit Api) initialized >> " + submitApiUrl);
     }
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
@@ -49,6 +45,8 @@ public class TxSubmitController {
 
         HttpEntity<byte[]> entity = new HttpEntity<>(cborTx, headers);
         try {
+            if (log.isDebugEnabled())
+                log.debug("Submitting tx to : " + submitApiUrl);
             ResponseEntity<String> responseEntity = restTemplate
                     .exchange(submitApiUrl, HttpMethod.POST, entity, String.class);
 

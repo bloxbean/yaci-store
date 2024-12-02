@@ -1,4 +1,38 @@
 ###
+### Get block by block number
+GET {{base_url}}/api/v1/blocks/2925862
+
+> {%
+    client.test("Get block by block number", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.height === 2925862, "Block number is wrong" + response.body.height)
+        client.assert(response.body.hash === "1b57a2298737589695f7ec88da9e5b1af8f9f4479e7bd03367c10e165d5cc4bc", "Block hash is wrong" + response.body.hash)
+        client.assert(response.body.op_cert_counter === "6", "Expected 6 as string")
+        client.assert(response.body.next_block === "7d50f0dbc258ffeee329fbd61e10ccdc83d65068cb9d99e2a663c07b3a7f15fd", "Mismatch next block")
+        client.assert(response.body.confirmations > 1, "Confirmations should be greater than 1")
+        client.assert(response.body.output === "19511865", "Output mismatch")
+        client.assert(response.body.fees === "488135", "Fees mismatch")
+    });
+%}
+
+
+### Get block by block hash
+GET {{base_url}}/api/v1/blocks/1b57a2298737589695f7ec88da9e5b1af8f9f4479e7bd03367c10e165d5cc4bc
+
+> {%
+    client.test("Get block by block number", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.height === 2925862, "Block number is wrong" + response.body.height)
+        client.assert(response.body.hash === "1b57a2298737589695f7ec88da9e5b1af8f9f4479e7bd03367c10e165d5cc4bc", "Block hash is wrong" + response.body.hash)
+        client.assert(response.body.op_cert_counter === "6", "Expected 6 as string")
+        client.assert(response.body.next_block === "7d50f0dbc258ffeee329fbd61e10ccdc83d65068cb9d99e2a663c07b3a7f15fd", "Mismatch next block")
+        client.assert(response.body.confirmations > 1, "Confirmations should be greater than 1")
+        client.assert(response.body.output === "19511865", "Output mismatch")
+        client.assert(response.body.fees === "488135", "Fees mismatch")
+    });
+%}
+
+###
 ### Get a block
 GET {{base_url}}/api/v1/blocks?page=1&count=1
 

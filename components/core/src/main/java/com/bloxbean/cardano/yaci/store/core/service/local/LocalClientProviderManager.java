@@ -6,8 +6,6 @@ import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
@@ -21,9 +19,7 @@ import java.util.Optional;
  * To enable pool, set store.cardano.n2c-pool-enabled=true in application.properties
  * </p>
  */
-@Service
 @Slf4j
-@ConditionalOnExpression("'${store.cardano.n2c-node-socket-path:}' != '' || '${store.cardano.n2c-host:}' != ''")
 public class LocalClientProviderManager {
     private final GenericObjectPool<LocalClientProvider> localClientProviderPool;
 

@@ -1,0 +1,110 @@
+###
+### Get utxos by asset
+GET {{base_url}}/api/v1/assets/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b5041594d454e54544f4b454e/utxos?
+    count=10&page=0&order=desc
+
+> {%
+    client.test("Get utxos by assets", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned utxos is more than 0 " + response.body.length)
+        //assert if unit is there in amounts field
+    });
+%}
+
+### Get transactions by asset
+GET {{base_url}}/api/v1/assets/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b5041594d454e54544f4b454e/transactions?
+    count=10&page=0&order=desc
+
+> {%
+    client.test("Get utxos by assets", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length >= 1, "No of returned transaction is more than 0 " + response.body.length)
+        //assert if unit is there in amounts field
+    });
+%}
+
+###
+### -- Asset store
+### supply by unit
+GET {{base_url}}/api/v1/assets/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b5041594d454e54544f4b454e/supply
+
+> {%
+    client.test("Get supply by unit", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.unit === "436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b5041594d454e54544f4b454e", "Unit mismatch " + response.body.unit)
+        client.assert(response.body.supply >= 1, "Supply is not greater than 1 " + response.body.supply)
+        //assert if unit is there in amounts field
+    });
+%}
+
+###
+### history by unit
+GET {{base_url}}/api/v1/assets/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b5041594d454e54544f4b454e/history
+
+> {%
+    client.test("Get history by unit", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length > 0 , "More than 0 transactions should be returned: " + response.body.length);
+    });
+%}
+
+
+###
+### assets in a tx
+GET {{base_url}}/api/v1/assets/txs/05212c1b8df78e9c313a038f6417bc0351a5a959b96cad1cd8d21884a4868f6c
+
+> {%
+    client.test("Get assets in a tx", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body[0].tx_hash === "05212c1b8df78e9c313a038f6417bc0351a5a959b96cad1cd8d21884a4868f6c" , "Tx hash mismatch");
+        client.assert(response.body[0].quantity === 100000000 , "Quantity doesn't match");
+        client.assert(response.body[0].mint_type === "MINT" , "mint_type doesn't match");
+    });
+%}
+
+
+###
+### supply by policy
+GET {{base_url}}/api/v1/assets/policy/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b/supply
+
+> {%
+    client.test("Get supply by policy", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.policy === "436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b" , "Policy mismatch");
+        client.assert(response.body.supply >= 1 , "Total supply should be more than one");
+    });
+%}
+
+###
+### history by policy
+GET {{base_url}}/api/v1/assets/policy/436941ead56c61dbf9b92b5f566f7d5b9cac08f8c957f28f0bd60d4b/history
+
+> {%
+    client.test("Get history by policy", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length > 0 , "More than 0 transactions should be returned: " + response.body.length);
+    });
+%}
+
+###
+### supply by policy
+GET {{base_url}}/api/v1/assets/fingerprint/asset1hdfatxyf7mn8x5rutgy5ehgxpsqxx3un9alm88/supply
+
+> {%
+    client.test("Get supply by fingerprint", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.fingerprint === "asset1hdfatxyf7mn8x5rutgy5ehgxpsqxx3un9alm88" , "Fingerprint mismatch");
+        client.assert(response.body.supply >= 1 , "Total supply should be more than one");
+    });
+%}
+
+###
+### history by policy
+GET {{base_url}}/api/v1/assets/fingerprint/asset1hdfatxyf7mn8x5rutgy5ehgxpsqxx3un9alm88/history
+
+> {%
+    client.test("Get history by policy", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.length > 0 , "More than 0 transactions should be returned: " + response.body.length);
+    });
+%}

@@ -255,6 +255,7 @@ public class UtxoProcessor {
     @EventListener
     public void handleCommit(CommitEvent commitEvent) {
         if (utxosWithPointerAddress == null || utxosWithPointerAddress.isEmpty()) {
+            utxoStorage.handleCommit(commitEvent);
             return;
         }
 
@@ -283,7 +284,7 @@ public class UtxoProcessor {
             }
         } finally {
             utxosWithPointerAddress.clear();
+            utxoStorage.handleCommit(commitEvent);
         }
     }
-
 }

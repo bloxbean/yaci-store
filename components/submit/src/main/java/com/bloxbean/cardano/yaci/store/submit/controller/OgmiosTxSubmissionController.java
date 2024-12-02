@@ -4,8 +4,6 @@ import com.bloxbean.cardano.client.api.model.Result;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.submit.service.OgmiosService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -19,16 +17,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Tag(name = "Ogmios Tx Submission Service")
 @RequestMapping("${apiPrefix}/tx")
-@RequiredArgsConstructor
 @ConditionalOnBean(OgmiosService.class)
 @ConditionalOnMissingBean(TxSubmitController.class)
 @Slf4j
 public class OgmiosTxSubmissionController {
     private final OgmiosService ogmiosService;
 
-    @PostConstruct
-    public void postConstruct() {
-        log.info("Ogmios Tx Submission Controller initialized");
+    public OgmiosTxSubmissionController(OgmiosService ogmiosService) {
+        this.ogmiosService = ogmiosService;
+        log.info("<< Ogmios Tx Submission Controller initialized >>");
     }
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.script.dto;
 
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.databind.JsonNode;

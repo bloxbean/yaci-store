@@ -32,7 +32,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
 
         var utxos = getUtxos();
         utxoStorage.saveUnspent(getUtxos());
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         var addrUtxos1 = utxoStorageReader.findUtxoByAddress(address1, 0, 100, Order.asc);
         var addrUtxos2 = utxoStorageReader.findUtxoByAddress(address2, 0, 100, Order.asc);
@@ -52,7 +52,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
 
         var utxos = getUtxos();
         utxoStorage.saveUnspent(getUtxos());
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         var spentUtxo1 = TxInput.builder()
                 .txHash(utxos.get(0).getTxHash())
@@ -73,7 +73,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
                 .build();
 
         utxoStorage.saveSpent(List.of(spentUtxo1, spentUtxo2));
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         var addrUtxos1 = utxoStorageReader.findUtxoByAddress(address1, 0, 100, Order.asc);
         var addrUtxos2 = utxoStorageReader.findUtxoByAddress(address2, 0, 100, Order.asc);
@@ -97,7 +97,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
 
         var utxos = getUtxos();
         utxoStorage.saveUnspent(getUtxos());
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         utxoStorage.deleteUnspentBySlotGreaterThan(2000L);
 
@@ -190,7 +190,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
         }
 
         utxoStorage.saveUnspent(adderssUtxoList);
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         var list1 = utxoStorageReader.findUtxoByAddress(address1, 0, 100, Order.asc);
         var list2 = utxoStorageReader.findUtxoByAddress(address1, 5, 200, Order.asc);
@@ -229,7 +229,7 @@ class RocksDBUtxoStorageTest extends RocksDBBaseTest {
         }
 
         utxoStorage.saveUnspent(adderssUtxoList);
-        utxoStorage.handleCommitEvent(new CommitEvent(null, null));
+        utxoStorage.handleCommit(new CommitEvent(null, null));
 
         var list1 = utxoStorageReader.findUtxoByPaymentCredential(paymentCred1, 0, 100, Order.asc);
         var list2 = utxoStorageReader.findUtxoByPaymentCredential(paymentCred1, 5, 200, Order.asc);

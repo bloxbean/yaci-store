@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.utxo.service;
 
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AssetTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -22,5 +23,9 @@ public class AssetService {
         return utxoStorage.findUtxosByAsset(unit, page, count, order).stream()
                 .map(UtxoUtil::addressUtxoToUtxo)
                 .collect(Collectors.toList());
+    }
+
+    public List<AssetTransaction> getAssetTransactionsByAsset(String unit, int page, int count, Order order) {
+        return utxoStorage.findTransactionsByAsset(unit, page, count, order);
     }
 }
