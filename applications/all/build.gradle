@@ -95,7 +95,7 @@ task cliZip(type: Zip) {
     }
 
     from('../../config') {
-        include '*.properties'
+        include 'application.properties'
         into zipDirName + '/' + configDir
     }
 
