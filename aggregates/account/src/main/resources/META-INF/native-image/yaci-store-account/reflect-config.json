@@ -1,0 +1,66 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressTxAmount",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressTxAmount;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalance",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalance;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalance",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalance;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AccountConfig",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AccountConfig;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AccountMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AggrMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AccountMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.storage.impl.mapper.AggrMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]
