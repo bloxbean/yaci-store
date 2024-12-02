@@ -1,0 +1,130 @@
+###
+### Get a block
+GET {{base_url}}/api/v1/blocks?page=1&count=1
+
+> {%
+  client.test("Get block information", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const blocks = response.body.blocks;
+    client.assert(Array.isArray(blocks) && blocks.length > 0, "No block data found in response");
+
+    blocks.forEach(function(block) {
+      client.assert(block.time !== null, "time is null");
+      client.assert(block.number !== null, "number is null");
+      client.assert(block.slot !== null, "slot is null");
+      client.assert(block.epoch !== null, "epoch is null");
+      client.assert(block.era !== null, "era is null");
+      client.assert(block.output !== null, "output is null");
+      client.assert(block.fees !== null, "fees is null");
+      client.assert(block.slot_leader !== null, "slot_leader is null");
+      client.assert(block.size !== null, "size is null");
+      client.assert(block.tx_count !== null, "tx_count is null");
+      client.assert(block.issuer_vkey !== null, "issuer_vkey is null");
+    });
+
+    const blockNumber = blocks[0].number;
+    client.global.set("number", blockNumber);
+
+    client.log("Successfully saved block number: " + blockNumber);
+  });
+%}
+
+
+###
+### Get block information by number
+GET {{base_url}}/api/v1/blocks/{{number}}
+
+> {%
+  client.test("Get block information by number", function() {
+
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const block = response.body;
+    client.assert(block !== null, "Block data is null");
+
+    client.assert(block.time !== null, "time is null");
+    client.assert(block.height !== null, "height is null");
+    client.assert(block.number !== null, "number is null");
+    client.assert(block.hash !== null, "hash is null");
+    client.assert(block.slot !== null, "slot is null");
+    client.assert(block.epoch !== null, "epoch is null");
+    client.assert(block.era !== null, "era is null");
+    client.assert(block.epoch_slot !== null, "epoch_slot is null");
+    client.assert(block.slot_leader !== null, "slot_leader is null");
+    client.assert(block.size !== null, "size is null");
+    client.assert(block.tx_count !== null, "tx_count is null");
+    client.assert(block.output !== null, "output is null");
+    client.assert(block.fees !== null, "fees is null");
+    client.assert(block.block_vrf !== null, "block_vrf is null");
+    client.assert(block.op_cert !== null, "op_cert is null");
+    client.assert(block.op_cert_counter !== null, "op_cert_counter is null");
+    client.assert(block.op_cert_kes_period !== null, "op_cert_kes_period is null");
+    client.assert(block.op_cert_sigma !== null, "op_cert_sigma is null");
+    client.assert(block.previous_block !== null, "previous_block is null");
+    client.assert(block.issuer_vkey !== null, "issuer_vkey is null");
+
+    client.assert(block.vrf_result !== null, "vrf_result is null");
+    if (block.vrf_result) {
+      client.assert(block.vrf_result.output !== null, "vrf_result.output is null");
+      client.assert(block.vrf_result.proof !== null, "vrf_result.proof is null");
+    }
+
+    client.assert(block.nonce_vrf === null || block.nonce_vrf !== undefined, "nonce_vrf is invalid");
+    client.assert(block.leader_vrf === null || block.leader_vrf !== undefined, "leader_vrf is invalid");
+
+    client.assert(block.block_body_hash !== null, "block_body_hash is null");
+    client.assert(block.protocol_version !== null, "protocol_version is null");
+
+    client.log("Successfully validated block data for number: " + block.number);
+  });
+%}
+
+###
+### Get latest block information
+GET {{base_url}}/api/v1/blocks/latest
+
+> {%
+  client.test("Get latest block information", function() {
+
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const block = response.body;
+    client.assert(block !== null, "Block data is null");
+
+    client.assert(block.time !== null, "time is null");
+    client.assert(block.height !== null, "height is null");
+    client.assert(block.number !== null, "number is null");
+    client.assert(block.hash !== null, "hash is null");
+    client.assert(block.slot !== null, "slot is null");
+    client.assert(block.epoch !== null, "epoch is null");
+    client.assert(block.era !== null, "era is null");
+    client.assert(block.epoch_slot !== null, "epoch_slot is null");
+    client.assert(block.slot_leader !== null, "slot_leader is null");
+    client.assert(block.size !== null, "size is null");
+    client.assert(block.tx_count !== null, "tx_count is null");
+    client.assert(block.output !== null, "output is null");
+    client.assert(block.fees !== null, "fees is null");
+    client.assert(block.block_vrf !== null, "block_vrf is null");
+    client.assert(block.op_cert !== null, "op_cert is null");
+    client.assert(block.op_cert_counter !== null, "op_cert_counter is null");
+    client.assert(block.op_cert_kes_period !== null, "op_cert_kes_period is null");
+    client.assert(block.op_cert_sigma !== null, "op_cert_sigma is null");
+    client.assert(block.previous_block !== null, "previous_block is null");
+    client.assert(block.issuer_vkey !== null, "issuer_vkey is null");
+
+    client.assert(block.vrf_result !== null, "vrf_result is null");
+    if (block.vrf_result) {
+      client.assert(block.vrf_result.output !== null, "vrf_result.output is null");
+      client.assert(block.vrf_result.proof !== null, "vrf_result.proof is null");
+    }
+
+    client.assert(block.nonce_vrf === null || block.nonce_vrf !== undefined, "nonce_vrf is invalid");
+    client.assert(block.leader_vrf === null || block.leader_vrf !== undefined, "leader_vrf is invalid");
+
+    client.assert(block.block_body_hash !== null, "block_body_hash is null");
+    client.assert(block.protocol_version !== null, "protocol_version is null");
+
+    client.log("Successfully validated latest block data for block number: " + block.number);
+  });
+%}
