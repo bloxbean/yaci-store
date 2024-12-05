@@ -57,7 +57,7 @@ public class NetworkConfigService {
             }
 
             var networkConfig = NetworkConfig.builder()
-                    .networkMagic(1)
+                    .networkMagic(protocolMagic)
                     .totalLovelace(genesisConfig.getMaxLovelaceSupply())
                     .poolDepositInLovelace(BigInteger.valueOf(500000000)) //TOD0 -- get from protocol params or remove from here
                     .expectedSlotsPerEpoch(genesisConfig.getEpochLength())

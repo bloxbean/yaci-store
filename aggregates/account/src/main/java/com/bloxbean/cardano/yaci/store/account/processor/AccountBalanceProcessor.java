@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressBalance;
@@ -135,30 +136,34 @@ public class AccountBalanceProcessor {
                     .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
                     .collect(toList());
 
-            //Resolve pointer addresses
-            var addressUtxosToCheckForPointerAddrs = sortedAddressEventUtxo.stream()
-                    .flatMap(addressUtxoEvent -> addressUtxoEvent.getTxInputOutputs().stream())
-                    .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
-                    .filter(addressUtxo -> addressUtxo.getOwnerStakeAddr() == null && addressUtxo.getOwnerStakeCredential() != null)
-                    .toList();
+            //Try to resolve pointer address if era < Conway
+            //Pointer addresses are removed in Conway era. (Conway Ledger spec 8.1)
+            if (event.getMetadata().getEra().getValue() < Era.Conway.getValue()) {
+                //Resolve pointer addresses
+                var addressUtxosToCheckForPointerAddrs = sortedAddressEventUtxo.stream()
+                        .flatMap(addressUtxoEvent -> addressUtxoEvent.getTxInputOutputs().stream())
+                        .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
+                        .filter(addressUtxo -> addressUtxo.getOwnerStakeAddr() == null && addressUtxo.getOwnerStakeCredential() != null)
+                        .toList();
 
-            for (AddressUtxo addressUtxo : addressUtxosToCheckForPointerAddrs) {
-                try {
-                    PointerAddress pointerAddress = new PointerAddress(addressUtxo.getOwnerAddr());
-                    var pointer = pointerAddress.getPointer();
-                    if (pointer != null) {
-                        if (log.isDebugEnabled())
-                            log.debug("Pointer address: {}", pointer);
-                        stakingClient.getStakeAddressFromPointer(pointer.getSlot(), pointer.getTxIndex(), pointer.getCertIndex())
-                                .ifPresent(stakeAddress -> {
-                                    if (log.isDebugEnabled())
-                                        log.debug("Stake address found for pointer: {}", stakeAddress);
-                                    addressUtxo.setOwnerStakeAddr(stakeAddress);
-                                    addressUtxo.setOwnerStakeCredential(HexUtil.encodeHexString(AddressProvider.getDelegationCredentialHash(new Address(stakeAddress)).get()));
-                                });
+                for (AddressUtxo addressUtxo : addressUtxosToCheckForPointerAddrs) {
+                    try {
+                        PointerAddress pointerAddress = new PointerAddress(addressUtxo.getOwnerAddr());
+                        var pointer = pointerAddress.getPointer();
+                        if (pointer != null) {
+                            if (log.isDebugEnabled())
+                                log.debug("Pointer address: {}", pointer);
+                            stakingClient.getStakeAddressFromPointer(pointer.getSlot(), pointer.getTxIndex(), pointer.getCertIndex())
+                                    .ifPresent(stakeAddress -> {
+                                        if (log.isDebugEnabled())
+                                            log.debug("Stake address found for pointer: {}", stakeAddress);
+                                        addressUtxo.setOwnerStakeAddr(stakeAddress);
+                                        addressUtxo.setOwnerStakeCredential(HexUtil.encodeHexString(AddressProvider.getDelegationCredentialHash(new Address(stakeAddress)).get()));
+                                    });
+                        }
+                    } catch (Exception e) {
+                        log.error("Error getting stake address from pointer address: " + addressUtxo.getOwnerAddr(), e);
                     }
-                } catch (Exception e) {
-                    log.error("Error getting stake address from pointer address: " + addressUtxo.getOwnerAddr(), e);
                 }
             }
 

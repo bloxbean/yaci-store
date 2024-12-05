@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
@@ -254,12 +255,16 @@ public class UtxoProcessor {
      */
     @EventListener
     public void handleCommit(CommitEvent commitEvent) {
-        if (utxosWithPointerAddress == null || utxosWithPointerAddress.isEmpty()) {
-            utxoStorage.handleCommit(commitEvent);
-            return;
-        }
 
         try {
+            //Pointer addresses are removed in Conway era (Conway era ledger spec: 8.1)
+            if (commitEvent.getMetadata().getEra().getValue() >= Era.Conway.getValue())
+                return;
+
+            if (utxosWithPointerAddress == null || utxosWithPointerAddress.isEmpty()) {
+                return;
+            }
+
             for (var utxo : utxosWithPointerAddress) {
                 try {
                     var address = new PointerAddress(utxo.getAddress());
@@ -282,8 +287,12 @@ public class UtxoProcessor {
                     log.error("Error getting stake address from pointer address: " + utxo.getAddress(), e);
                 }
             }
+
         } finally {
-            utxosWithPointerAddress.clear();
+            if (utxosWithPointerAddress != null && !utxosWithPointerAddress.isEmpty()) {
+                utxosWithPointerAddress.clear();
+            }
+
             utxoStorage.handleCommit(commitEvent);
         }
     }
