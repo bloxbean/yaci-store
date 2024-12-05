@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface ProposalStateClient {
     List<GovActionProposal> getActiveProposals(int epoch);
+    List<GovActionProposal> getRatifiedProposals(int epoch);
+    List<GovActionProposal> getEnactedProposals(int epoch);
 }

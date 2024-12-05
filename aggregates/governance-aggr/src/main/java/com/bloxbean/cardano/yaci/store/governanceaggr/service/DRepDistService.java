@@ -201,8 +201,8 @@ public class DRepDistService {
                     rd.drep_id
                   union all
                   select
-                    null,
                     drep_type_info.drep_type,
+                    null,
                     sum (
                       COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
                         pr.pool_refund_withdrawable_reward,

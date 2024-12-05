@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 
 import jakarta.persistence.*;
@@ -26,6 +27,10 @@ public class GovActionProposalStatusEntity {
     @Id
     @Column(name = "gov_action_index")
     private int govActionIndex;
+
+    @Column(name = "type")
+    @Enumerated(EnumType.STRING)
+    private GovActionType type;
 
     @Column(name = "status")
     @Enumerated(EnumType.STRING)

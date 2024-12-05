@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -14,9 +16,7 @@ public class DRepDist {
 
     private String drepId;
 
-    private Long amount;
+    private BigInteger amount;
 
     private Integer epoch;
-
-    private Long slot;
 }

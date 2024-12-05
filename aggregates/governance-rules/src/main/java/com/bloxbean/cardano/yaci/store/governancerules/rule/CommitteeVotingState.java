@@ -23,8 +23,7 @@ public class CommitteeVotingState extends VotingState {
             return false;
         }
 
-        BigDecimal yesVoteRatio = BigDecimal.valueOf(yesVote)
-                .divide(BigDecimal.valueOf(totalVotes));
+        BigDecimal yesVoteRatio = BigDecimal.valueOf(yesVote).divide(BigDecimal.valueOf(totalVotes), 2, BigDecimal.ROUND_HALF_UP);
 
         return yesVoteRatio.compareTo(threshold) >= 0;
     }

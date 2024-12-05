@@ -20,7 +20,55 @@ public class ProposalStateClientImpl implements ProposalStateClient {
 
     @Override
     public List<GovActionProposal> getActiveProposals(int epoch) {
-        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpochLessThanEqual(GovActionStatus.ACTIVE, epoch);
+        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
+
+        return govActionProposalStorage.findByGovActionIds(proposalStatusList.stream()
+                        .map(proposalStatus -> new GovActionId(proposalStatus.getGovActionTxHash(), proposalStatus.getGovActionIndex()))
+                        .toList())
+                .stream()
+                .map(govActionProposal ->
+                        GovActionProposal.builder()
+                                .txHash(govActionProposal.getTxHash())
+                                .index((int) govActionProposal.getIndex())
+                                .anchorUrl(govActionProposal.getAnchorUrl())
+                                .anchorHash(govActionProposal.getAnchorHash())
+                                .deposit(govActionProposal.getDeposit())
+                                .returnAddress(govActionProposal.getReturnAddress())
+                                .type(govActionProposal.getType())
+                                .blockNumber(govActionProposal.getBlockNumber())
+                                .slot(govActionProposal.getSlot())
+                                .epoch(govActionProposal.getEpoch())
+                                .details(govActionProposal.getDetails())
+                                .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GovActionProposal> getRatifiedProposals(int epoch) {
+        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
+
+        return govActionProposalStorage.findByGovActionIds(proposalStatusList.stream()
+                        .map(proposalStatus -> new GovActionId(proposalStatus.getGovActionTxHash(), proposalStatus.getGovActionIndex()))
+                        .toList())
+                .stream()
+                .map(govActionProposal ->
+                        GovActionProposal.builder()
+                                .txHash(govActionProposal.getTxHash())
+                                .index((int) govActionProposal.getIndex())
+                                .anchorUrl(govActionProposal.getAnchorUrl())
+                                .anchorHash(govActionProposal.getAnchorHash())
+                                .deposit(govActionProposal.getDeposit())
+                                .returnAddress(govActionProposal.getReturnAddress())
+                                .blockNumber(govActionProposal.getBlockNumber())
+                                .slot(govActionProposal.getSlot())
+                                .details(govActionProposal.getDetails())
+                                .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GovActionProposal> getEnactedProposals(int epoch) {
+        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.ENACTED, epoch);
 
         return govActionProposalStorage.findByGovActionIds(proposalStatusList.stream()
                         .map(proposalStatus -> new GovActionId(proposalStatus.getGovActionTxHash(), proposalStatus.getGovActionIndex()))
