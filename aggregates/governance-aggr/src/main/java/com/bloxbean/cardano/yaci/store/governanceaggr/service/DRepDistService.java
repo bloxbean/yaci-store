@@ -17,6 +17,8 @@ public class DRepDistService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
+        // Delete existing snapshot data if any for the epoch using jdbc template
+        jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
         String query = """ 
                   with ranked_delegations as (
@@ -81,6 +83,7 @@ public class DRepDistService {
                     where
                       s.status = 'ACTIVE'
                       and g.epoch <= :epoch
+                      and s.epoch = :epoch
                     group by
                       g.return_address
                   ),
@@ -148,7 +151,8 @@ public class DRepDistService {
                       and r.spendable_epoch <= :snapshot_epoch
                     group by
                       r.address
-                  ) INSERT INTO drep_dist
+                  ) 
+                  INSERT INTO drep_dist
                   select
                     rd.drep_hash,
                     rd.drep_id,
@@ -260,8 +264,8 @@ public class DRepDistService {
 
         jdbcTemplate.update(query, params);
 
-        log.info("Stake snapshot for epoch : {} is taken", epoch);
-        log.info(">>>>>>>>>>>>>>>>>>>> Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
+        log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
+        log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
 
     }
 }

@@ -9,14 +9,4 @@ public class DummyProposalStateClientImpl implements ProposalStateClient {
     public List<GovActionProposal> getActiveProposals(int epoch) {
         return List.of();
     }
-
-    @Override
-    public List<GovActionProposal> getRatifiedProposals(int epoch) {
-        return List.of();
-    }
-
-    @Override
-    public List<GovActionProposal> getEnactedProposals(int epoch) {
-        return List.of();
-    }
 }

@@ -2,5 +2,6 @@ package com.bloxbean.cardano.yaci.store.events.domain;
 
 public enum InstantRewardType {
     treasury,
-    reserves
+    reserves,
+    proposal_refund
 }
