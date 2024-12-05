@@ -11,5 +11,4 @@ public interface GovActionProposalStatusStorage {
     void saveAll(List<GovActionProposalStatus> govActionProposalStatusList);
     List<GovActionProposalStatus> findByStatusAndEpoch(GovActionStatus status, int epoch);
     Optional<GovActionProposalStatus> findLastEnactedProposal(GovActionType govActionType);
-    int deleteBySlotGreaterThan(long slot);
 }

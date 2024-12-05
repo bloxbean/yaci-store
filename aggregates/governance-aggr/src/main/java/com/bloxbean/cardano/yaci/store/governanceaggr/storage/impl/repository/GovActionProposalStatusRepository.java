@@ -16,7 +16,6 @@ public interface GovActionProposalStatusRepository extends JpaRepository<GovActi
         GovActionProposalStatusId> {
     List<GovActionProposalStatusEntity> findByStatusAndEpoch(GovActionStatus status, int epoch);
 
-    @Query("select g from GovActionProposalStatusEntity g where g.type = :govActionType and g.status = 'ENACTED' order by g.slot desc limit 1")
+    @Query("select g from GovActionProposalStatusEntity g where g.type = :govActionType and g.status = 'RATIFIED' order by g.epoch desc limit 1")
     Optional<GovActionProposalStatusEntity> findLastEnactedProposal(GovActionType govActionType);
-    int deleteBySlotGreaterThan(long slot);
 }

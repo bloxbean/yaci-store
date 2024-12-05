@@ -33,9 +33,4 @@ public class GovActionProposalStatusStorageImpl implements GovActionProposalStat
         return govActionProposalStatusRepository.findLastEnactedProposal(govActionType)
                 .map(mapper::toGovActionProposalStatus);
     }
-
-    @Override
-    public int deleteBySlotGreaterThan(long slot) {
-        return govActionProposalStatusRepository.deleteBySlotGreaterThan(slot);
-    }
 }
