@@ -42,6 +42,33 @@ delete  from transaction_witness where slot > :slot;
 delete from tx_input where tx_input.spent_at_slot > :slot;
 delete from withdrawal where slot > :slot;
 delete from adapot_jobs where slot > :slot;
+delete from drep_dist where drep_dist.epoch >= :epoch;
+delete from drep where slot > :slot;
+delete from delegation_vote where slot > :slot;
+delete from drep_registration where slot > :slot;
+delete from gov_action_proposal where slot > :slot;
+delete from gov_action_proposal_status where slot > :slot;
+delete from committee where slot > :slot;
+delete from committee_deregistration where slot > :slot;
+delete from committee_member where slot > :slot;
+delete from committee_registration where slot > :slot;
+delete from constitution where slot > :slot;
 
 
+
+```
+
+## Useful Query
+
+Utxo balance of a stake_address from address_utxo before epoch x (example: x=184)
+
+```
+SELECT sum(lovelace_amount)
+FROM address_utxo a
+         LEFT JOIN tx_input t
+                   ON a.tx_hash = t.tx_hash
+                       AND a.output_index = t.output_index
+                       AND t.spent_epoch < 184
+WHERE a.owner_stake_addr = 'stake_test1uzc68v00j3sdc7l03l7lf88yuqd3esjst3s5ae3txg3lgkqsey2uy' and a.epoch < 184
+  AND (t.tx_hash IS NULL OR t.spent_epoch >= 184);
 ```
