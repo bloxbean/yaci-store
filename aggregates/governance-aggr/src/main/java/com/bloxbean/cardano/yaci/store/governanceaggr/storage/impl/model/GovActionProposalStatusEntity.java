@@ -40,9 +40,6 @@ public class GovActionProposalStatusEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
-    @Column(name = "slot")
-    private Long slot;
-
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDateTime;

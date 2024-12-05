@@ -26,6 +26,4 @@ public class GovActionProposalStatus {
     private GovActionStatus status;
 
     private Integer epoch;
-
-    private Long slot;
 }
