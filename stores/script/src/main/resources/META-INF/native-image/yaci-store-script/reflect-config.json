@@ -1,0 +1,38 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.script.domain.Script",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.Datum",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.Script",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.script.jooq.tables.pojos.TransactionScripts",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.api.script.dto.ScriptDtoMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]

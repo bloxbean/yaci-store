@@ -1,0 +1,38 @@
+{
+  "resources":{
+  "includes":[
+    {"pattern": "store/networks/.*/*.json$"},
+    {"pattern":  "db/store/.*/*.sql$"},
+    {"pattern":  "sql/.*/*.sql$"},
+    {"pattern":  "sql/*.sql$"},
+    {
+      "pattern":"\\Qdb/store/h2\\E"
+    },
+    {
+      "pattern":"\\Qdb/store/mysql\\E"
+    },
+    {
+      "pattern":"\\Qdb/store/postgresql\\E"
+    },
+    {
+    "pattern":"\\QMETA-INF/build-info.properties\\E"
+  }, {
+    "pattern":"\\QMETA-INF/jpa-named-queries.properties\\E"
+  }, {
+    "pattern":"\\QMETA-INF/native/libnetty_transport_native_kqueue_aarch_64.dylib\\E"
+  }, {
+    "pattern":"\\QMETA-INF/native/libnetty_transport_native_kqueue_aarch_64.jnilib\\E"
+  }, {
+    "pattern":"\\QMETA-INF/orm.xml\\E"
+  }, {
+    "pattern":"\\QMETA-INF/persistence.xml\\E"
+  },
+    {
+    "pattern":"META-INF/resources/webjars/swagger-ui/.*/.*$"
+  },
+    {
+      "pattern":"META-INF/resources/webjars/swagger-ui/.*$"
+    }
+    ]},
+  "bundles":[]
+}
