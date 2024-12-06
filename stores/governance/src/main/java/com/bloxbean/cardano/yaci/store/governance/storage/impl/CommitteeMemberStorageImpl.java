@@ -22,6 +22,14 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
     }
 
     @Override
+    public List<CommitteeMember> getCommitteeMembersByEpoch(int epoch) {
+        return committeeMemberRepository.findCommitteeMembersByEpoch(epoch)
+                .stream()
+                .map(committeeMemberMapper::toCommitteeMember)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public int deleteBySlotGreaterThan(long slot) {
         return committeeMemberRepository.deleteBySlotGreaterThan(slot);
     }

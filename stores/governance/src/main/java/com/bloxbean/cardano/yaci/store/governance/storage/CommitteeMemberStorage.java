@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface CommitteeMemberStorage {
     void saveAll(List<CommitteeMember> committeeMembers);
+    List<CommitteeMember> getCommitteeMembersByEpoch(int epoch);
     int deleteBySlotGreaterThan(long slot);
 }

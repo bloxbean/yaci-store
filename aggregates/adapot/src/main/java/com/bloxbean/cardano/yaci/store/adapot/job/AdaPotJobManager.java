@@ -276,7 +276,7 @@ public class AdaPotJobManager {
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
-            publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1));
+            publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1, job.getSlot()));
             return Either.right(true);
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);

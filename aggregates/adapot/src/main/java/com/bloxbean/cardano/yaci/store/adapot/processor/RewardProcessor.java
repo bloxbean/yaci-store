@@ -2,12 +2,15 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
+import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +76,30 @@ public class RewardProcessor {
 
         instantRewardSnapshotService.takeInstantRewardSnapshot(epochTransitionCommitEvent.getMetadata(), epochTransitionCommitEvent.getPreviousEpoch());
         log.info("Instant reward snapshot taken for epoch : {}", snapshotEpoch);
+    }
+
+    @EventListener
+    @Transactional
+    public void handleRewardRestEvent(RewardRestEvent rewardRestEvent) {
+        List<RewardRestAmt> rewardRestAmts = rewardRestEvent.getRewards();
+
+        if (rewardRestAmts == null || rewardRestAmts.isEmpty())
+            return;
+
+        var rewards = rewardRestAmts.stream()
+                .map(rewardRestAmt -> {
+                    var reward = new RewardRest();
+                    reward.setAddress(rewardRestAmt.getAddress());
+                    reward.setAmount(rewardRestAmt.getAmount());
+                    reward.setType(rewardRestAmt.getType());
+                    reward.setEarnedEpoch(rewardRestEvent.getEarnedEpoch());
+                    reward.setSpendableEpoch(rewardRestEvent.getSpendableEpoch());
+                    reward.setSlot(rewardRestEvent.getSlot());
+
+                    return reward;
+                }).toList();
+
+        rewardStorage.saveRewardRest(rewards);
     }
 
     @EventListener

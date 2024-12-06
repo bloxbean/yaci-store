@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.domain;
 
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -20,9 +21,9 @@ public class GovActionProposalStatus {
 
     private int govActionIndex;
 
+    private GovActionType type;
+
     private GovActionStatus status;
 
     private Integer epoch;
-
-    private Long slot;
 }

@@ -17,6 +17,8 @@ public class DRepDistService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
+        // Delete existing snapshot data if any for the epoch using jdbc template
+        jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
         String query = """ 
                   with ranked_delegations as (
@@ -81,6 +83,7 @@ public class DRepDistService {
                     where
                       s.status = 'ACTIVE'
                       and g.epoch <= :epoch
+                      and s.epoch = :epoch
                     group by
                       g.return_address
                   ),
@@ -148,7 +151,25 @@ public class DRepDistService {
                       and r.spendable_epoch <= :snapshot_epoch
                     group by
                       r.address
-                  ) INSERT INTO drep_dist
+                  ),
+                  spendable_reward_rest as (
+                    select
+                       r.address,
+                       SUM(r.amount) as withdrawable_reward_rest
+                    from
+                    reward_rest r
+                    left join last_withdrawal lw on
+                       r.address = lw.address
+                    where
+                       (
+                          lw.max_slot is null
+                          or r.slot > lw.max_slot
+                        )
+                        and r.spendable_epoch <= :snapshot_epoch
+                    group by
+                      r.address
+                  )
+                  INSERT INTO drep_dist
                   select
                     rd.drep_hash,
                     rd.drep_id,
@@ -157,6 +178,7 @@ public class DRepDistService {
                         pr.pool_refund_withdrawable_reward,
                         0
                       ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
+                        + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :epoch,
                     NOW()
@@ -170,6 +192,7 @@ public class DRepDistService {
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address
+                    left join spendable_reward_rest rr ON rd.address = rr.address
                     and msb.max_slot = sab.slot
                   where
                     ds.status = 'ACTIVE'
@@ -201,8 +224,8 @@ public class DRepDistService {
                     rd.drep_id
                   union all
                   select
-                    null,
                     drep_type_info.drep_type,
+                    null,
                     sum (
                       COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
                         pr.pool_refund_withdrawable_reward,
@@ -225,6 +248,7 @@ public class DRepDistService {
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address
+                    left join spendable_reward_rest rr ON rd.address = rr.address
                     and msb.max_slot = sab.slot
                   where
                     not exists (
@@ -260,8 +284,8 @@ public class DRepDistService {
 
         jdbcTemplate.update(query, params);
 
-        log.info("Stake snapshot for epoch : {} is taken", epoch);
-        log.info(">>>>>>>>>>>>>>>>>>>> Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
+        log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
+        log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
 
     }
 }
