@@ -7,13 +7,14 @@ import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
-import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
-import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMember;
@@ -43,10 +44,10 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.ObjectUtils;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -57,6 +58,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+// TODO: Remove code related to db-sync data.
 public class ProposalStatusProcessor {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final GovActionProposalStorage govActionProposalStorage;
@@ -69,7 +71,9 @@ public class ProposalStatusProcessor {
     private final DRepDistStorageReader dRepDistStorage;
     private final AdaPotStorage adaPotStorage;
     private final CommitteeMemberStorage committeeMemberStorage;
-    private final RewardStorage rewardStorage;
+    private final StoreProperties storeProperties;
+    private final ApplicationEventPublisher publisher;
+
     private boolean isBootstrapPhase = true;
 
     @Value("${store.governance-aggr.handle-proposal-status-with-rule:false}")
@@ -80,37 +84,6 @@ public class ProposalStatusProcessor {
     public void handleDuringEpochTransition(PreEpochTransitionEvent event) {
         int epoch = event.getEpoch();
         int prevEpoch = epoch - 1;
-        long protocolMagic = event.getMetadata().getProtocolMagic();
-
-        if (!handleProposalStatusByRule) {
-            // if we don't handle proposal status by rule, load DBSync proposal info, handle and save proposal refund into instant reward table
-            try {
-                List<DBSyncProposalInfo> dbSyncProposalsInfo = loadDBSyncProposalInfo(protocolMagic);
-
-                List<InstantReward> instantRewards = new ArrayList<>();
-                for (var proposal : dbSyncProposalsInfo) {
-                    if ((proposal.getExpiredEpoch() != null && proposal.getExpiredEpoch() == epoch)
-                            || (proposal.getRatifiedEpoch() != null && proposal.getRatifiedEpoch() == epoch)) {
-                        instantRewards.add(InstantReward.builder()
-                                .address(proposal.getReturnAddress())
-                                .amount(proposal.getDeposit())
-                                .earnedEpoch(epoch)
-                                .spendableEpoch(epoch + 1)
-                                .slot(event.getMetadata().getSlot())
-                                .type(InstantRewardType.proposal_refund)
-                                .build());
-                    }
-                }
-
-                if (!instantRewards.isEmpty()) {
-                    rewardStorage.saveInstantRewards(instantRewards);
-                }
-            } catch (IOException e) {
-                log.error("Error loading DBSync proposal info", e);
-            }
-        } else {
-            // TODO: get expired and ratified proposals in prev epoch, and handle to save proposal refund
-        }
 
         // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
         var newProposals = govActionProposalStorage.findByEpoch(prevEpoch);
@@ -151,14 +124,15 @@ public class ProposalStatusProcessor {
 
         if (!handleProposalStatusByRule) {
             dRepDistService.takeStakeSnapshot(epoch);
+            handleProposalRefund(epoch + 1, stakeSnapshotTakenEvent.getSlot());
             return;
         }
 
         try {
             if (isBootstrapPhase) {
-                // check if there is any hard fork initiation action in the previous epoch, if so, bootstrap phase is over
-                var enactedProposalsInPrevEpoch = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
-                if (enactedProposalsInPrevEpoch.stream().anyMatch(govActionProposalStatus
+                // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
+                var enactedProposal = govActionProposalStatusStorage.findLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION);
+                if (enactedProposal.stream().anyMatch(govActionProposalStatus
                         -> govActionProposalStatus.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
                     isBootstrapPhase = false;
                 }
@@ -422,9 +396,12 @@ public class ProposalStatusProcessor {
             if (!govActionProposalStatusListNeedToSave.isEmpty()) {
                 govActionProposalStatusStorage.saveAll(govActionProposalStatusListNeedToSave);
             }
+
         } catch (Exception e) {
             log.info("Error processing proposal status: {}", epoch + 1, e);
         }
+
+        handleProposalRefund(epoch + 1, stakeSnapshotTakenEvent.getSlot());
     }
 
     private GovAction convertToGovAction(GovActionProposal govActionProposal) throws JsonProcessingException {
@@ -459,6 +436,40 @@ public class ProposalStatusProcessor {
         return DBSyncProposalInfoList;
     }
 
+    private void handleProposalRefund(int epoch, long slot) {
+        if (!handleProposalStatusByRule) {
+            // if we don't handle proposal status by rule, load DBSync proposal info
+            try {
+                long protocolMagic = storeProperties.getProtocolMagic();
+                List<DBSyncProposalInfo> dbSyncProposalsInfo = loadDBSyncProposalInfo(protocolMagic);
+
+                List<RewardRestAmt> rewardRestAmts = new ArrayList<>();
+                for (var proposal : dbSyncProposalsInfo) {
+                    if ((proposal.getExpiredEpoch() != null && proposal.getExpiredEpoch() == epoch)
+                            || (proposal.getRatifiedEpoch() != null && proposal.getRatifiedEpoch() == epoch)) {
+                        rewardRestAmts.add(RewardRestAmt.builder()
+                                .address(proposal.getReturnAddress())
+                                .type(RewardRestType.proposal_refund)
+                                .amount(proposal.getDeposit())
+                                .build());
+                    }
+                }
+                if (!rewardRestAmts.isEmpty()) {
+                    var rewardRestEvent = RewardRestEvent.builder()
+                            .earnedEpoch(epoch)
+                            .spendableEpoch(epoch + 1)
+                            .slot(slot)
+                            .rewards(rewardRestAmts)
+                            .build();
+                    publisher.publishEvent(rewardRestEvent);
+                }
+            } catch (IOException e) {
+                log.error("Error loading DBSync proposal info", e);
+            }
+        } else {
+            // TODO: get expired and ratified proposals in prev epoch, and handle to save proposal refund
+        }
+    }
 }
 
 @Getter

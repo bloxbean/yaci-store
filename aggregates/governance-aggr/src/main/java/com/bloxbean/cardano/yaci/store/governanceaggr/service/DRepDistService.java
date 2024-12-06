@@ -151,7 +151,24 @@ public class DRepDistService {
                       and r.spendable_epoch <= :snapshot_epoch
                     group by
                       r.address
-                  ) 
+                  ),
+                  spendable_reward_rest as (
+                    select
+                       r.address,
+                       SUM(r.amount) as withdrawable_reward_rest
+                    from
+                    reward_rest r
+                    left join last_withdrawal lw on
+                       r.address = lw.address
+                    where
+                       (
+                          lw.max_slot is null
+                          or r.slot > lw.max_slot
+                        )
+                        and r.spendable_epoch <= :snapshot_epoch
+                    group by
+                      r.address
+                  )
                   INSERT INTO drep_dist
                   select
                     rd.drep_hash,
@@ -161,6 +178,7 @@ public class DRepDistService {
                         pr.pool_refund_withdrawable_reward,
                         0
                       ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
+                        + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :epoch,
                     NOW()
@@ -174,6 +192,7 @@ public class DRepDistService {
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address
+                    left join spendable_reward_rest rr ON rd.address = rr.address
                     and msb.max_slot = sab.slot
                   where
                     ds.status = 'ACTIVE'
@@ -229,6 +248,7 @@ public class DRepDistService {
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address
+                    left join spendable_reward_rest rr ON rd.address = rr.address
                     and msb.max_slot = sab.slot
                   where
                     not exists (
