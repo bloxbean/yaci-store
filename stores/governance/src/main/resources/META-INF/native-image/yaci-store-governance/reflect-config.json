@@ -1,0 +1,56 @@
+[
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeDeRegistrationMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeDeRegistrationMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeMemberMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeRegistrationMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DRepRegistrationMapper",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DRepRegistrationMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DelegationVoteMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.VotingProcedureMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]

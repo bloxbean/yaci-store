@@ -1,0 +1,19 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.common.domain.TxOuput",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+  "name": "com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams",
+  "allDeclaredConstructors": true,
+  "allDeclaredFields": true,
+  "allDeclaredMethods": true
+  },
+  {
+  "name":"com.bloxbean.cardano.yaci.store.common.config.StoreProperties",
+  "allDeclaredConstructors": true,
+  "allDeclaredMethods": true,
+  "allDeclaredFields": true
+  }
+]

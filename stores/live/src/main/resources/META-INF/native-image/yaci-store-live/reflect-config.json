@@ -1,0 +1,38 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.BlockData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.OnJoinData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.AggregateData",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.RecentTxs",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.RecentTx",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  }
+]
