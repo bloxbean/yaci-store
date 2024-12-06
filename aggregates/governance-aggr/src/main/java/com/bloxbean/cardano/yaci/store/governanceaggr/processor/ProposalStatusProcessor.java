@@ -46,6 +46,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.ObjectUtils;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -82,13 +83,13 @@ public class ProposalStatusProcessor {
         long protocolMagic = event.getMetadata().getProtocolMagic();
 
         if (!handleProposalStatusByRule) {
-            // if we don't handle proposal status by rule, load DBSync proposal info and save them into instant reward table
+            // if we don't handle proposal status by rule, load DBSync proposal info, handle and save proposal refund into instant reward table
             try {
                 List<DBSyncProposalInfo> dbSyncProposalsInfo = loadDBSyncProposalInfo(protocolMagic);
 
                 List<InstantReward> instantRewards = new ArrayList<>();
                 for (var proposal : dbSyncProposalsInfo) {
-                    if (proposal.getExpiredEpoch() != null && proposal.getExpiredEpoch() == epoch
+                    if ((proposal.getExpiredEpoch() != null && proposal.getExpiredEpoch() == epoch)
                             || (proposal.getRatifiedEpoch() != null && proposal.getRatifiedEpoch() == epoch)) {
                         instantRewards.add(InstantReward.builder()
                                 .address(proposal.getReturnAddress())
@@ -123,12 +124,6 @@ public class ProposalStatusProcessor {
                         .status(GovActionStatus.ACTIVE)
                         .build()
         ).toList());
-    }
-
-    @EventListener
-    @Transactional
-    public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
-        int epoch = stakeSnapshotTakenEvent.getEpoch();
 
         if (!handleProposalStatusByRule) {
             /*
@@ -146,7 +141,15 @@ public class ProposalStatusProcessor {
                             .status(GovActionStatus.ACTIVE)
                             .build()
             ).toList());
+        }
+    }
 
+    @EventListener
+    @Transactional
+    public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
+        int epoch = stakeSnapshotTakenEvent.getEpoch();
+
+        if (!handleProposalStatusByRule) {
             dRepDistService.takeStakeSnapshot(epoch);
             return;
         }
