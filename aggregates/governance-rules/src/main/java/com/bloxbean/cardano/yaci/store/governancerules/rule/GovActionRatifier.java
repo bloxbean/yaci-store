@@ -54,7 +54,7 @@ public class GovActionRatifier {
      * @param currentEpochParam      The current epoch parameters.
      * @return The ratification result.
      */
-    public static RatificationResult getRatificationResult(GovAction govAction, Integer expiredEpoch, Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
+    public static RatificationResult getRatificationResult(GovAction govAction, boolean isBootstrapPhase, Integer expiredEpoch, Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                            BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                            BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                            ConstitutionCommitteeState ccState, GovActionId lastEnactedGovActionId,
@@ -100,10 +100,15 @@ public class GovActionRatifier {
                 break;
             case HARD_FORK_INITIATION_ACTION:
                 HardForkInitiationAction hardForkInitiationAction = (HardForkInitiationAction) govAction;
-                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
-                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
+
+                if (isBootstrapPhase) {
+                    isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted();
+                } else
+                    isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
+
                 isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
 
                 break;
@@ -128,9 +133,15 @@ public class GovActionRatifier {
                 ParameterChangeAction parameterChangeAction = (ParameterChangeAction) govAction;
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
 
+                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
+
+                if (isBootstrapPhase) {
+                    isAccepted = committeeVotingState.isAccepted();
+                    break;
+                }
+
                 List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
                 dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
 
                 if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
                     spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
@@ -188,7 +199,7 @@ public class GovActionRatifier {
                                                                                 GovActionId lastEnactedGovActionId,
                                                                                 boolean isActionRatificationDelayed,
                                                                                 EpochParam currentEpochParam) {
-        return getRatificationResult(noConfidence, expiredEpoch, null, null, null, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
+        return getRatificationResult(noConfidence, false, expiredEpoch, null, null, null, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 dRepYesVoteStake, dRepNoVoteStake,
                 null, lastEnactedGovActionId, isActionRatificationDelayed, null, currentEpochParam);
     }
@@ -227,7 +238,7 @@ public class GovActionRatifier {
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                                                    ConstitutionCommitteeState ccState, GovActionId lastEnactedGovActionId,
                                                                                    boolean isActionRatificationDelayed, EpochParam currentEpochParam) {
-        return getRatificationResult(updateCommittee, expiredEpoch, null, null, null, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
+        return getRatificationResult(updateCommittee, false, expiredEpoch, null, null, null, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 dRepYesVoteStake, dRepNoVoteStake,
                 ccState, lastEnactedGovActionId, isActionRatificationDelayed, null, currentEpochParam);
     }
@@ -267,6 +278,7 @@ public class GovActionRatifier {
      * @return The ratification result for the Hard Fork Initiation action.
      */
     public static RatificationResult getRatificationResultForHardForkInitiationAction(HardForkInitiationAction hardForkInitiationAction,
+                                                                                      boolean isBootstrapPhase,
                                                                                       Integer expiredEpoch,
                                                                                       Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                       BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
@@ -274,7 +286,7 @@ public class GovActionRatifier {
                                                                                       GovActionId lastEnactedGovActionId,
                                                                                       boolean isActionRatificationDelayed,
                                                                                       EpochParam currentEpochParam) {
-        return getRatificationResult(hardForkInitiationAction, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
+        return getRatificationResult(hardForkInitiationAction, isBootstrapPhase, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 dRepYesVoteStake, dRepNoVoteStake,
                 null, lastEnactedGovActionId, isActionRatificationDelayed, null, currentEpochParam);
     }
@@ -314,7 +326,7 @@ public class GovActionRatifier {
                                                                                    GovActionId lastEnactedGovActionId,
                                                                                    boolean isActionRatificationDelayed,
                                                                                    EpochParam currentEpochParam) {
-        return getRatificationResult(newConstitution, expiredEpoch, ccYesVote, ccNoVote,  ccThreshold, null, null, null,
+        return getRatificationResult(newConstitution, false, expiredEpoch, ccYesVote, ccNoVote,  ccThreshold, null, null, null,
                 dRepYesVoteStake, dRepNoVoteStake,
                 null, lastEnactedGovActionId, isActionRatificationDelayed,null, currentEpochParam);
     }
@@ -354,7 +366,7 @@ public class GovActionRatifier {
                                                                                        boolean isActionRatificationDelayed,
                                                                                        BigInteger treasury,
                                                                                        EpochParam currentEpochParam) {
-        return getRatificationResult(treasuryWithdrawalsAction, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
+        return getRatificationResult(treasuryWithdrawalsAction, false, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 null, null,
                 null, lastEnactedGovActionId, isActionRatificationDelayed, treasury, currentEpochParam);
     }
@@ -392,13 +404,13 @@ public class GovActionRatifier {
      * @param currentEpochParam        The current epoch parameters.
      * @return The ratification result for the Parameter Change action.
      */
-    public static RatificationResult getRatificationResultForParameterChangeAction(ParameterChangeAction parameterChangeAction, Integer expiredEpoch,
-                                                                                   Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
+    public static RatificationResult getRatificationResultForParameterChangeAction(ParameterChangeAction parameterChangeAction, boolean isBootstrapPhase,
+                                                                                   Integer expiredEpoch, Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                                                    BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
                                                                                    BigInteger dRepYesVoteStake, BigInteger dRepNoVoteStake,
                                                                                    GovActionId lastEnactedGovActionId,
                                                                                    boolean isActionRatificationDelayed, EpochParam currentEpochParam) {
-        return getRatificationResult(parameterChangeAction, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
+        return getRatificationResult(parameterChangeAction, isBootstrapPhase, expiredEpoch, ccYesVote, ccNoVote, ccThreshold, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake,
                 dRepYesVoteStake, dRepNoVoteStake,
                 null, lastEnactedGovActionId, isActionRatificationDelayed, null, currentEpochParam);
     }

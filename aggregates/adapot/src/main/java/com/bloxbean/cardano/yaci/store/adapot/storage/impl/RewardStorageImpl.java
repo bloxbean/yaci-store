@@ -2,10 +2,12 @@ package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
+import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
@@ -16,6 +18,7 @@ import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
 @RequiredArgsConstructor
 public class RewardStorageImpl implements RewardStorage {
     private final InstantRewardRepository instantRewardRepository;
+    private final RewardRestRepository rewardRestRepository;
     private final RewardRepository rewardRepository;
     private final Mapper mapper;
     private final DSLContext dsl;
@@ -23,6 +26,11 @@ public class RewardStorageImpl implements RewardStorage {
     @Override
     public void saveInstantRewards(List<InstantReward> rewards) {
         instantRewardRepository.saveAll(rewards.stream().map(mapper::toInstantRewardEntity).toList());
+    }
+
+    @Override
+    public void saveRewardRest(List<RewardRest> rewards) {
+        rewardRestRepository.saveAll(rewards.stream().map(mapper::toRewardRestEntity).toList());
     }
 
     @Override

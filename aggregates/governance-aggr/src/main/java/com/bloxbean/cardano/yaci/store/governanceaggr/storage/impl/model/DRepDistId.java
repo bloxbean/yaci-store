@@ -7,8 +7,8 @@ import java.io.Serializable;
 
 @EqualsAndHashCode
 public class DRepDistId implements Serializable {
-    @Column(name = "drep_id")
-    private String drepId;
+    @Column(name = "drep_hash")
+    private String drepHash;
 
     @Column(name = "epoch")
     private Integer epoch;

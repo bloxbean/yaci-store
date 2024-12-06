@@ -84,4 +84,11 @@ public class GovernanceActionUtil {
     public static boolean isExpired(int expiredEpoch, int currentEpoch) {
         return expiredEpoch < currentEpoch;
     }
+
+    public static boolean isDelayingAction(GovActionType govActionType) {
+        return govActionType == GovActionType.HARD_FORK_INITIATION_ACTION
+                || govActionType == GovActionType.NEW_CONSTITUTION
+                || govActionType == GovActionType.UPDATE_COMMITTEE
+                || govActionType == GovActionType.NO_CONFIDENCE;
+    }
 }

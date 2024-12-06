@@ -17,10 +17,10 @@ import java.time.LocalDateTime;
 @IdClass(DRepDistId.class)
 public class DRepDistEntity {
 
-    @Id
     @Column(name = "drep_id")
     private String drepId;
 
+    @Id
     @Column(name = "drep_hash")
     private String drepHash;
 
@@ -30,9 +30,6 @@ public class DRepDistEntity {
     @Id
     @Column(name = "epoch")
     private Integer epoch;
-
-    @Column(name = "slot")
-    private Long slot;
 
     @UpdateTimestamp
     @Column(name = "update_datetime")

@@ -6,11 +6,11 @@ create table drep_dist
     amount          bigint,
     epoch           int,
     update_datetime timestamp,
-    primary key (drep_id, epoch)
+    primary key (drep_hash, epoch)
 );
 
-CREATE INDEX idx_drep_dist_drep_id
-    ON drep_dist (drep_id);
+CREATE INDEX idx_drep_dist_drep_hash
+    ON drep_dist (drep_hash);
 
 CREATE INDEX idx_drep_dist_epoch
     ON drep_dist (epoch);
@@ -38,8 +38,8 @@ create table drep
 CREATE INDEX idx_drep_slot
     ON drep (slot);
 
-CREATE INDEX idx_drep_drep_id
-    ON drep (drep_id);
+CREATE INDEX idx_drep_drep_hash
+    ON drep (drep_hash);
 
 CREATE INDEX idx_drep_epoch
     ON drep (epoch);
@@ -49,9 +49,9 @@ create table gov_action_proposal_status
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
+    type               varchar(50),
     status             varchar(20),
     epoch              int,
-    slot               bigint,
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index, epoch)
 );

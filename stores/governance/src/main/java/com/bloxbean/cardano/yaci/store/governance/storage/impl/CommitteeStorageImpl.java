@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeM
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.CommitteeRepository;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Optional;
+
 @RequiredArgsConstructor
 public class CommitteeStorageImpl implements CommitteeStorage {
     private final CommitteeRepository committeeRepository;
@@ -14,6 +16,12 @@ public class CommitteeStorageImpl implements CommitteeStorage {
     @Override
     public void save(Committee committee) {
         committeeRepository.save(committeeMapper.toCommitteeEntity(committee));
+    }
+
+    @Override
+    public Optional<Committee> getCommitteeByEpoch(int epoch) {
+        return committeeRepository.findCommitteeByEpoch(epoch)
+                .map(committeeEntity -> committeeMapper.toCommittee(committeeEntity));
     }
 
     @Override

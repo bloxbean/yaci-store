@@ -80,7 +80,15 @@ public class StakeSnapshotService {
                                   WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                   AND r.spendable_epoch <= :snapshot_epoch
                                   GROUP BY r.address
-                          ),   
+                          ),
+                          spendable_reward_rest AS (
+                                  SELECT r.address, SUM(r.amount) AS withdrawable_reward_rest
+                                  FROM reward_rest r
+                                           LEFT JOIN last_withdrawal lw ON r.address = lw.address
+                                  WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
+                                  AND r.spendable_epoch <= :snapshot_epoch
+                                  GROUP BY r.address
+                          ),
                         PoolStatus AS (
                                  SELECT
                                      pool_id,
@@ -101,7 +109,8 @@ public class StakeSnapshotService {
                     SELECT
                         :epoch,
                         d.address,
-                        (COALESCE(s.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(pr.pool_refund_withdrawable_reward, 0) + COALESCE(ir.insta_withdrawable_reward, 0)) ,
+                        (COALESCE(s.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                             + COALESCE(ir.insta_withdrawable_reward, 0) + COALESCE(rr.withdrawable_reward_rest, 0)),
                         d.pool_id,
                         d.epoch,
                         :activeEpoch,
@@ -117,7 +126,9 @@ public class StakeSnapshotService {
                             LEFT JOIN
                         pool_refund_rewards pr ON d.address = pr.address
                             LEFT JOIN
-                        insta_spendable_rewards ir ON d.address = ir.address           
+                        insta_spendable_rewards ir ON d.address = ir.address     
+                            LEFT JOIN
+                        spendable_reward_rest rr ON d.address = rr.address
                     WHERE
                             d.rn = 1
                     and not exists(

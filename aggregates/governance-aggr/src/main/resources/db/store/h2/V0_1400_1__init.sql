@@ -6,11 +6,11 @@ create table drep_dist
     amount          bigint,
     epoch           int,
     update_datetime timestamp,
-    primary key (drep_id, epoch)
+    primary key (drep_hash, epoch)
 );
 
-CREATE INDEX idx_drep_dist_drep_id
-    ON drep_dist (drep_id);
+CREATE INDEX idx_drep_dist_drep_hash
+    ON drep_dist (drep_hash);
 
 CREATE INDEX idx_drep_dist_epoch
     ON drep_dist (epoch);
