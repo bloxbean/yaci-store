@@ -1,0 +1,167 @@
+###
+### Get tx_hash from transaction information
+GET {{base_url}}/api/v1/txs?page=1&count=1
+
+> {%
+  client.test("Get transaction information", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body.transaction_summaries && response.body.transaction_summaries.length > 0,
+        "tx_hash not found. Actual value: " + JSON.stringify(response.body)
+    );
+    const txHash = response.body.transaction_summaries[0].tx_hash;
+
+    client.global.set("tx_hash", txHash);
+
+    client.log("Stored tx_hash: " + txHash);
+  });
+%}
+
+###
+### Get asset history by tx hash
+GET {{base_url}}/api/v1/assets/txs/{{tx_hash}}
+
+> {%
+  client.test("Get asset history by tx hash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const assets = response.body;
+
+    assets.forEach(function(asset) {
+      client.assert(asset.block_number !== null, "block_number is null");
+      client.assert(asset.block_time !== null, "block_time is null");
+      client.assert(asset.slot !== null, "slot is null");
+      client.assert(asset.tx_hash !== null, "tx_hash is null");
+      client.assert(asset.policy !== null, "policy is null");
+      client.assert(asset.asset_name !== null, "asset_name is null");
+      client.assert(asset.unit !== null, "unit is null");
+      client.assert(asset.fingerprint !== null, "fingerprint is null");
+      client.assert(asset.quantity !== null, "quantity is null");
+      client.assert(asset.mint_type !== null, "mint_type is null");
+
+      client.global.set("fingerprint", asset.fingerprint);
+      client.global.set("policy", asset.policy);
+      client.global.set("unit", asset.unit);
+    });
+  });
+%}
+
+###
+### Get utxo information of an asset
+GET {{base_url}}/api/v1/assets/utxos/unit/{{unit}}?page=1&count=1&order=asc
+
+> {%
+  client.test("Get utxo information of an asset", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const utxos = response.body;
+    client.assert(Array.isArray(utxos) && utxos.length > 0, "No utxo data found in response");
+
+    utxos.forEach(function(utxo) {
+      if (utxo.tx_hash !== null) client.assert(utxo.tx_hash !== null, "tx_hash is null");
+      if (utxo.output_index !== null) client.assert(utxo.output_index !== null, "output_index is null");
+      if (utxo.address !== null) client.assert(utxo.address !== null, "address is null");
+
+      if (utxo.amount && Array.isArray(utxo.amount)) {
+        utxo.amount.forEach(function(amountItem) {
+          if (amountItem.unit !== null) client.assert(amountItem.unit !== null, "amount unit is null");
+          if (amountItem.quantity !== null) client.assert(amountItem.quantity !== null, "amount quantity is null");
+        });
+      }
+
+      if (utxo.data_hash !== null) client.assert(utxo.data_hash !== null, "data_hash is null");
+      if (utxo.inline_datum !== null) client.assert(utxo.inline_datum !== null, "inline_datum is null");
+      if (utxo.reference_script_hash !== null) client.assert(utxo.reference_script_hash !== null, "reference_script_hash is null");
+      if (utxo.epoch !== null) client.assert(utxo.epoch !== null, "epoch is null");
+      if (utxo.block_number !== null) client.assert(utxo.block_number !== null, "block_number is null");
+      if (utxo.block_time !== null) client.assert(utxo.block_time !== null, "block_time is null");
+    });
+  });
+%}
+
+###
+### Get asset history by unit
+GET {{base_url}}/api/v1/assets/unit/{{unit}}?page=1&count=1&order=asc
+
+> {%
+  client.test("Get asset history by unit", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const assets = response.body;
+    client.assert(Array.isArray(assets) && assets.length > 0, "No asset data found in response");
+
+    assets.forEach(function(asset) {
+      client.assert(asset.block_number !== null, "block_number is null");
+      client.assert(asset.block_time !== null, "block_time is null");
+      client.assert(asset.slot !== null, "slot is null");
+      client.assert(asset.tx_hash !== null, "tx_hash is null");
+      client.assert(asset.policy !== null, "policy is null");
+      client.assert(asset.asset_name !== null, "asset_name is null");
+      client.assert(asset.unit !== null, "unit is null");
+      client.assert(asset.fingerprint !== null, "fingerprint is null");
+      client.assert(asset.quantity !== null, "quantity is null");
+      client.assert(asset.mint_type !== null, "mint_type is null");
+    });
+  });
+%}
+
+###
+### Get asset supply by unit
+GET {{base_url}}/api/v1/assets/supply/unit/{{unit}}
+
+> {%
+  client.test("Get asset supply by unit", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body.supply > 0, "There are no supply. Actual value: " + JSON.stringify(response.body))
+
+  });
+%}
+
+###
+### Get asset supply by policy
+GET {{base_url}}/api/v1/assets/supply/policy/{{policy}}
+
+> {%
+  client.test("Get asset supply by policy", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body.supply > 0, "There are no supply. Actual value: " + JSON.stringify(response.body))
+
+  });
+%}
+
+###
+### Get asset supply by fingerprint
+GET {{base_url}}/api/v1/assets/supply/fingerprint/{{fingerprint}}
+
+> {%
+  client.test("Get asset supply by fingerprint", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body.supply > 0, "There are no supply. Actual value: " + JSON.stringify(response.body))
+
+  });
+%}
+
+###
+### Get asset history by fingerprint
+GET {{base_url}}/api/v1/assets/fingerprint/{{fingerprint}}?page=1&count=1
+
+> {%
+  client.test("Get asset supply by fingerprint", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const assets = response.body;
+    client.assert(Array.isArray(assets) && assets.length > 0, "No asset data found in response");
+
+    assets.forEach(function(asset) {
+      client.assert(asset.block_number !== null, "block_number is null");
+      client.assert(asset.block_time !== null, "block_time is null");
+      client.assert(asset.slot !== null, "slot is null");
+      client.assert(asset.tx_hash !== null, "tx_hash is null");
+      client.assert(asset.policy !== null, "policy is null");
+      client.assert(asset.asset_name !== null, "asset_name is null");
+      client.assert(asset.unit !== null, "unit is null");
+      client.assert(asset.fingerprint !== null, "fingerprint is null");
+      client.assert(asset.quantity !== null, "quantity is null");
+      client.assert(asset.mint_type !== null, "mint_type is null");
+    });
+  });
+%}

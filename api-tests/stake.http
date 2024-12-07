@@ -1,0 +1,102 @@
+###
+### Get stake address registration
+GET {{base_url}}/api/v1/stake/registrations?page=1&count=1
+
+> {%
+  client.test("Get stake address registration", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(registration) {
+      client.assert(registration.block_number !== null, "block_number is null");
+      client.assert(registration.block_time !== null, "block_time is null");
+      client.assert(registration.credential !== null, "credential is null");
+      client.assert(registration.address !== null, "address is null");
+      client.assert(registration.tx_hash !== null, "tx_hash is null");
+      client.assert(registration.cert_index !== null, "cert_index is null");
+      client.assert(registration.type !== null, "type is null");
+      client.assert(registration.epoch !== null, "epoch is null");
+      client.assert(registration.slot !== null, "slot is null");
+      client.assert(registration.block_hash !== null, "block_hash is null");
+
+      client.global.set("stake_address", registration.address);
+      client.log("Stored address: " + registration.address);
+    });
+
+    client.log("All fields in stake address registration are valid (not null).");
+  });
+%}
+
+
+###
+### Get stake address de-registration
+GET {{base_url}}/api/v1/stake/deregistrations?page=1&count=1
+
+> {%
+  client.test("Get stake address de-registration", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(registration) {
+      client.assert(registration.block_number !== null, "block_number is null");
+      client.assert(registration.block_time !== null, "block_time is null");
+      client.assert(registration.credential !== null, "credential is null");
+      client.assert(registration.address !== null, "address is null");
+      client.assert(registration.tx_hash !== null, "tx_hash is null");
+      client.assert(registration.cert_index !== null, "cert_index is null");
+      client.assert(registration.type !== null, "type is null");
+      client.assert(registration.epoch !== null, "epoch is null");
+      client.assert(registration.slot !== null, "slot is null");
+      client.assert(registration.block_hash !== null, "block_hash is null");
+
+    });
+
+    client.log("All fields in stake address de-registration are valid (not null).");
+  });
+%}
+
+###
+### Get stake delegations
+GET {{base_url}}/api/v1/stake/delegations?page=1&count=1
+
+> {%
+  client.test("Get stake delegations", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(delegation) {
+      client.assert(delegation.block_number !== null, "block_number is null");
+      client.assert(delegation.block_time !== null, "block_time is null");
+      client.assert(delegation.credential !== null, "credential is null");
+      client.assert(delegation.address !== null, "address is null");
+      client.assert(delegation.pool_id !== null, "pool_id is null");
+      client.assert(delegation.tx_hash !== null, "tx_hash is null");
+      client.assert(delegation.cert_index !== null, "cert_index is null");
+      client.assert(delegation.epoch !== null, "epoch is null");
+      client.assert(delegation.slot !== null, "slot is null");
+      client.assert(delegation.block_hash !== null, "block_hash is null");
+    });
+
+    client.log("All fields in stake delegations are valid (not null).");
+  });
+%}
+
+###
+### Get withdrawals by stake address
+GET {{base_url}}/api/v1/accounts/{{stake_address}}/withdrawals?page=1&count=1
+
+> {%
+  client.test("Get stake delegations", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+  });
+%}

@@ -10,3 +10,293 @@ GET {{base_url}}/api/v1/txs/d9301af967fc9fe8995c297be05561859401b89c0c8237264e40
         client.assert(response.body.outputs[1].amount[0].quantity === "5000000", "Quantity mismatch : " + response.body.outputs[1].amount[0].quantity)
     });
 %}
+
+###
+### Get list of transaction information
+GET {{base_url}}/api/v1/txs?page=1&count=1
+
+> {%
+  client.test("Get list of transaction information", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(response.body.transaction_summaries !== null, "'transaction_summaries' is null");
+    client.assert(response.body.transaction_summaries.length > 0, "No transaction summaries found");
+    response.body.transaction_summaries.forEach(function(tx) {
+      client.global.set("tx_hash", tx.tx_hash);
+      client.log("Stored tx_hash: " + tx.tx_hash);
+
+      client.assert(tx.tx_hash !== null, "tx_hash is null");
+      client.assert(tx.block_number !== null, "block_number is null");
+      client.assert(tx.slot !== null, "slot is null");
+      client.assert(tx.output_addresses !== null && tx.output_addresses.length > 0, "output_addresses is null or empty");
+      client.assert(tx.total_output !== null, "total_output is null");
+      client.assert(tx.fee !== null, "fee is null");
+    });
+
+    client.log("All fields in transaction summaries are valid (not null).");
+  });
+%}
+
+###
+### Get transaction through index and tx_hash
+GET {{base_url}}/api/v1/utxos/{{tx_hash}}/1
+
+> {%
+  client.test("Get transaction through index and tx_hash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    if (response.body.block_number !== null) {
+      client.assert(response.body.block_number !== null, "block_number is null");
+    }
+
+    if (response.body.block_time !== null) {
+      client.assert(response.body.block_time !== null, "block_time is null");
+    }
+
+    if (response.body.tx_hash !== null) {
+      client.assert(response.body.tx_hash !== null, "tx_hash is null");
+    }
+
+    if (response.body.output_index !== null) {
+      client.assert(response.body.output_index !== null, "output_index is null");
+    }
+
+    if (response.body.slot !== null) {
+      client.assert(response.body.slot !== null, "slot is null");
+    }
+
+    if (response.body.block_hash !== null) {
+      client.assert(response.body.block_hash !== null, "block_hash is null");
+    }
+
+    if (response.body.epoch !== null) {
+      client.assert(response.body.epoch !== null, "epoch is null");
+    }
+
+    if (response.body.owner_addr !== null) {
+      client.assert(response.body.owner_addr !== null, "owner_addr is null");
+    }
+
+    if (response.body.owner_stake_addr !== null) {
+      client.assert(response.body.owner_stake_addr !== null, "owner_stake_addr is null");
+    }
+
+    if (response.body.owner_payment_credential !== null) {
+      client.assert(response.body.owner_payment_credential !== null, "owner_payment_credential is null");
+    }
+
+    if (response.body.owner_stake_credential !== null) {
+      client.assert(response.body.owner_stake_credential !== null, "owner_stake_credential is null");
+    }
+
+    if (response.body.lovelace_amount !== null) {
+      client.assert(response.body.lovelace_amount !== null, "lovelace_amount is null");
+    }
+
+    if (response.body.amounts !== null && response.body.amounts.length > 0) {
+      response.body.amounts.forEach(function(amount) {
+        if (amount.unit !== null) {
+          client.assert(amount.unit !== null, "amount.unit is null");
+        }
+        if (amount.asset_name !== null) {
+          client.assert(amount.asset_name !== null, "amount.asset_name is null");
+        }
+        if (amount.quantity !== null) {
+          client.assert(amount.quantity !== null, "amount.quantity is null");
+        }
+      });
+    }
+
+    if (response.body.data_hash !== null) {
+      client.assert(response.body.data_hash !== null, "data_hash is null");
+    }
+
+    if (response.body.inline_datum !== null) {
+      client.assert(response.body.inline_datum !== null, "inline_datum is null");
+    }
+
+    if (response.body.script_ref !== null) {
+      client.assert(response.body.script_ref !== null, "script_ref is null");
+    }
+
+    if (response.body.reference_script_hash !== null) {
+      client.assert(response.body.reference_script_hash !== null, "reference_script_hash is null");
+    }
+
+    if (response.body.is_collateral_return !== null) {
+      client.assert(response.body.is_collateral_return !== null, "is_collateral_return is null");
+    }
+
+    client.log("All relevant fields in the transaction response are valid (not null).");
+  });
+%}
+
+###
+### POST request to create UTXOs
+POST {{base_url}}/api/v1/utxos
+Content-Type: application/json
+accept: application/json
+
+[
+  {
+    "tx_hash": "{{tx_hash}}",
+    "output_index": 0
+  }
+]
+
+
+> {%
+  client.test("Assert not null for all relevant fields in the UTXO response", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    response.body.forEach(function(item) {
+      client.assert(item.block_number !== null, "block_number is null");
+      client.assert(item.block_time !== null, "block_time is null");
+      client.assert(item.tx_hash !== null, "tx_hash is null");
+      client.assert(item.output_index !== null, "output_index is null");
+      client.assert(item.slot !== null, "slot is null");
+      client.assert(item.block_hash !== null, "block_hash is null");
+      client.assert(item.epoch !== null, "epoch is null");
+      client.assert(item.owner_addr !== null, "owner_addr is null");
+      if (item.owner_stake_addr !== null) {
+        client.assert(item.owner_stake_addr !== null, "owner_stake_addr is null");
+      }
+      client.assert(item.owner_payment_credential !== null, "owner_payment_credential is null");
+      if (item.owner_stake_credential !== null) {
+        client.assert(item.owner_stake_credential !== null, "owner_stake_credential is null");
+      }
+      client.assert(item.lovelace_amount !== null, "lovelace_amount is null");
+      client.assert(item.amounts !== null && item.amounts.length > 0, "amounts array is null or empty");
+
+      item.amounts.forEach(function(amount) {
+        client.assert(amount.unit !== null, "amount.unit is null");
+        client.assert(amount.asset_name !== null, "amount.asset_name is null");
+        client.assert(amount.quantity !== null, "amount.quantity is null");
+      });
+      if (item.data_hash !== null) {
+        client.assert(item.data_hash !== null, "data_hash is null");
+      }
+      if (item.inline_datum !== null) {
+        client.assert(item.inline_datum !== null, "inline_datum is null");
+      }
+      if (item.script_ref !== null) {
+        client.assert(item.script_ref !== null, "script_ref is null");
+      }
+      if (item.reference_script_hash !== null) {
+        client.assert(item.reference_script_hash !== null, "reference_script_hash is null");
+      }
+      if (item.is_collateral_return !== null) {
+        client.assert(item.is_collateral_return !== null, "is_collateral_return is null");
+      }
+    });
+
+    client.log("All relevant fields in the response are valid (not null).");
+  });
+%}
+
+###
+### Get detail info about a specific transaction
+GET {{base_url}}/api/v1/txs/{{tx_hash}}
+
+> {%
+  client.test("Get detail info about a specific transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+%}
+
+###
+### Get Transaction Witnesses
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/witnesses
+
+> {%
+  client.test("Get witness of specific transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+%}
+
+###
+### Get Transaction Withdrawals
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/withdrawals
+
+> {%
+  client.test("Get transaction withdrawals", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+%}
+
+###
+### Get utxo of a transaction
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/utxos
+
+> {%
+  client.test("Get utxo of a transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+%}
+
+###
+### Get Script of a Transaction
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/scripts
+
+> {%
+  client.test("Get script of a transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+  %}
+
+###
+### Get Redeemers of a Transaction
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/redeemers
+
+> {%
+  client.test("Get redeemers of a transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+  %}
+
+###
+### Get Metadata CBOR of a Transaction
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/metadata/cbor
+
+> {%
+  client.test("Get metadata CBOR of a transaction", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+
+  });
+  %}
+
+###
+### Get Withdrawals
+GET {{base_url}}/api/v1/txs/withdrawals?page=1&count=1
+
+> {%
+  client.test("Get withdrawals", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+
+  });
+  %}
+
+
+
+
+
+
