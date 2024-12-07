@@ -421,16 +421,16 @@ public class ProposalStatusProcessor {
     }
 
     private List<DBSyncProposalInfo> loadDBSyncProposalInfo(long protocolMagic) throws IOException {
-        String file = "dbsync_gov_action_proposal.json";
+        List<DBSyncProposalInfo> DBSyncProposalInfoList = new ArrayList<>();
+        // todo: add files for other networks except preprod
+        String file;
         if (protocolMagic == 1) { //preprod
             file = "dbsync_gov_action_proposal_preprod.json";
-        } else if (protocolMagic == 2) { //preview
-            file = "dbsync_gov_action_proposal_preview.json";
+        } else {
+            return DBSyncProposalInfoList;
         }
-
         ObjectMapper objectMapper = new ObjectMapper();
-        List<DBSyncProposalInfo> DBSyncProposalInfoList =
-                objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream(file), new TypeReference<>() {
+        DBSyncProposalInfoList = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream(file), new TypeReference<>() {
                 });
 
         return DBSyncProposalInfoList;
