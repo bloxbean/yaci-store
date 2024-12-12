@@ -1,0 +1,72 @@
+###
+### Get pool retirements
+GET {{base_url}}/api/v1/pools/retirements?page=1&count=1
+
+> {%
+  client.test("Get pool retirements", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(retirement) {
+      client.assert(retirement.block_number !== null, "block_number is null");
+      client.assert(retirement.block_time !== null, "block_time is null");
+      client.assert(retirement.tx_hash !== null, "tx_hash is null");
+      client.assert(retirement.cert_index !== null, "cert_index is null");
+      client.assert(retirement.pool_id !== null, "pool_id is null");
+      client.assert(retirement.retirement_epoch !== null, "retirement_epoch is null");
+      client.assert(retirement.epoch !== null, "epoch is null");
+      client.assert(retirement.slot !== null, "slot is null");
+      client.assert(retirement.block_hash !== null, "block_hash is null");
+      client.assert(retirement.pool_id_bech32 !== null, "pool_id_bech32 is null");
+    });
+
+    client.log("All fields in pool retirements are valid (not null).");
+  });
+%}
+
+###
+### Get pool registrations
+GET {{base_url}}/api/v1/pools/registrations?page=1&count=1
+
+> {%
+  client.test("Get pool registrations", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(pool) {
+      client.assert(pool.block_number !== null, "block_number is null");
+      client.assert(pool.block_time !== null, "block_time is null");
+      client.assert(pool.tx_hash !== null, "tx_hash is null");
+      client.assert(pool.cert_index !== null, "cert_index is null");
+      client.assert(pool.pool_id !== null, "pool_id is null");
+      client.assert(pool.vrf_key_hash !== null, "vrf_key_hash is null");
+      client.assert(pool.pledge !== null, "pledge is null");
+      client.assert(pool.cost !== null, "cost is null");
+      client.assert(pool.margin !== null, "margin is null");
+      client.assert(pool.reward_account !== null, "reward_account is null");
+      client.assert(pool.pool_owners !== null && pool.pool_owners.length > 0, "pool_owners is null or empty");
+      client.assert(pool.relays !== null && pool.relays.length > 0, "relays is null or empty");
+      client.assert(pool.metadata_url !== null, "metadata_url is null");
+      client.assert(pool.metadata_hash !== null, "metadata_hash is null");
+      client.assert(pool.epoch !== null, "epoch is null");
+      client.assert(pool.slot !== null, "slot is null");
+      client.assert(pool.block_hash !== null, "block_hash is null");
+      client.assert(pool.pool_id_bech32 !== null, "pool_id_bech32 is null");
+      client.assert(pool.reward_account_bech32 !== null, "reward_account_bech32 is null");
+
+      pool.relays.forEach(function(relay) {
+        client.assert(relay.port !== null, "relay port is null");
+        client.assert(relay.dnsName !== null, "relay dnsName is null");
+      });
+    });
+
+    client.log("All fields in pool registrations are valid (not null).");
+  });
+%}
+
