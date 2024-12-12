@@ -1,0 +1,657 @@
+###
+### Get governance votes
+GET {{base_url}}/api/v1/governance/votes
+
+> {%
+  client.test("Get governance votes", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    const vote = response.body[0];
+
+    client.assert(vote.block_number !== null, "block_number is null");
+    client.assert(vote.block_time !== null, "block_time is null");
+    client.assert(vote.id !== null, "id is null");
+    client.assert(vote.tx_hash !== null, "tx_hash is null");
+    client.assert(vote.index !== null, "index is null");
+    client.assert(vote.slot !== null, "slot is null");
+    client.assert(vote.voter_type !== null, "voter_type is null");
+    client.assert(vote.voter_hash !== null, "voter_hash is null");
+    client.assert(vote.gov_action_tx_hash !== null, "gov_action_tx_hash is null");
+    client.assert(vote.gov_action_index !== null, "gov_action_index is null");
+    client.assert(vote.vote !== null, "vote is null");
+    client.assert(vote.anchor_url !== null, "anchor_url is null");
+    client.assert(vote.anchor_hash !== null, "anchor_hash is null");
+    client.assert(vote.epoch !== null, "epoch is null");
+    client.assert(vote.drep_id !== null, "drep_id is null");
+
+    client.global.set("tx_hash", vote.tx_hash);
+
+    client.log("Stored tx_hash: " + vote.tx_hash);
+  });
+%}
+
+###
+### Get voting procedure list by tx_hash
+GET {{base_url}}/api/v1/governance/votes/txs/{{tx_hash}}
+
+> {%
+  client.test("Get voting procedure list by tx_hash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    client.assert(response.body.length > 0, "No voting procedure returned");
+
+    const votingProcedure = response.body[0];
+
+    client.assert(votingProcedure.block_number !== null, "block_number is null");
+    client.assert(votingProcedure.block_time !== null, "block_time is null");
+    client.assert(votingProcedure.id !== null, "id is null");
+    client.assert(votingProcedure.tx_hash !== null, "tx_hash is null");
+    client.assert(votingProcedure.index !== null, "index is null");
+    client.assert(votingProcedure.slot !== null, "slot is null");
+    client.assert(votingProcedure.voter_type !== null, "voter_type is null");
+    client.assert(votingProcedure.voter_hash !== null, "voter_hash is null");
+    client.assert(votingProcedure.gov_action_tx_hash !== null, "gov_action_tx_hash is null");
+    client.assert(votingProcedure.gov_action_index !== null, "gov_action_index is null");
+    client.assert(votingProcedure.vote !== null, "vote is null");
+    client.assert(votingProcedure.anchor_url !== null, "anchor_url is null");
+    client.assert(votingProcedure.anchor_hash !== null, "anchor_hash is null");
+    client.assert(votingProcedure.epoch !== null, "epoch is null");
+    client.assert(votingProcedure.drep_id !== null, "drep_id is null");
+
+    client.global.set("id", votingProcedure.id);
+
+    client.log("Stored voting procedure id: " + votingProcedure.id);
+  });
+%}
+
+###
+### Get voting procedure list by id
+GET {{base_url}}/api/v1/governance/votes/id/{{id}}
+
+> {%
+  client.test("Get voting procedure list by id", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === 'object', "Response body is not an object");
+
+    const votingProcedure = response.body;
+
+    client.assert(votingProcedure.block_number !== null, "block_number is null");
+    client.assert(votingProcedure.block_time !== null, "block_time is null");
+    client.assert(votingProcedure.id !== null, "id is null");
+    client.assert(votingProcedure.tx_hash !== null, "tx_hash is null");
+    client.assert(votingProcedure.index !== null, "index is null");
+    client.assert(votingProcedure.slot !== null, "slot is null");
+    client.assert(votingProcedure.voter_type !== null, "voter_type is null");
+    client.assert(votingProcedure.voter_hash !== null, "voter_hash is null");
+    client.assert(votingProcedure.gov_action_tx_hash !== null, "gov_action_tx_hash is null");
+    client.assert(votingProcedure.gov_action_index !== null, "gov_action_index is null");
+    client.assert(votingProcedure.vote !== null, "vote is null");
+    client.assert(votingProcedure.anchor_url !== null, "anchor_url is null");
+    client.assert(votingProcedure.anchor_hash !== null, "anchor_hash is null");
+    client.assert(votingProcedure.epoch !== null, "epoch is null");
+    client.assert(votingProcedure.drep_id !== null, "drep_id is null");
+
+    client.log("All fields are valid (not null).");
+  });
+%}
+
+###
+### Get governance action proposal list
+GET {{base_url}}/api/v1/governance/proposals
+
+> {%
+  client.test("Get governance action proposal list", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(proposal) {
+      client.assert(proposal.block_number !== null, "block_number is null");
+      client.assert(proposal.block_time !== null, "block_time is null");
+      client.assert(proposal.tx_hash !== null, "tx_hash is null");
+      client.assert(proposal.index !== null, "index is null");
+      client.assert(proposal.slot !== null, "slot is null");
+      client.assert(proposal.deposit !== null, "deposit is null");
+      client.assert(proposal.return_address !== null, "return_address is null");
+      client.assert(proposal.type !== null, "type is null");
+      client.assert(proposal.details !== null, "details is null");
+      client.assert(proposal.anchor_url !== null, "anchor_url is null");
+      client.assert(proposal.anchor_hash !== null, "anchor_hash is null");
+      client.assert(proposal.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in governance proposals are valid (not null).");
+  });
+%}
+
+###
+### Get governance action proposal list by tx_hash
+GET {{base_url}}/api/v1/governance/proposals/{{tx_hash}}
+
+> {%
+  client.test("Get governance action proposal list by tx_hash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(proposal) {
+      client.assert(proposal.block_number !== null, "block_number is null");
+      client.assert(proposal.block_time !== null, "block_time is null");
+      client.assert(proposal.tx_hash !== null, "tx_hash is null");
+      client.assert(proposal.index !== null, "index is null");
+      client.assert(proposal.slot !== null, "slot is null");
+      client.assert(proposal.deposit !== null, "deposit is null");
+      client.assert(proposal.return_address !== null, "return_address is null");
+      client.assert(proposal.type !== null, "type is null");
+      client.assert(proposal.details !== null, "details is null");
+      client.assert(proposal.anchor_url !== null, "anchor_url is null");
+      client.assert(proposal.anchor_hash !== null, "anchor_hash is null");
+      client.assert(proposal.epoch !== null, "epoch is null");
+
+      client.global.set("return_address", proposal.return_address);
+      client.global.set("index", proposal.index);
+
+      client.log("Stored return_address value: " + proposal.return_address);
+      client.log("Stored index value: " + proposal.index);
+    });
+
+    client.log("All fields in governance proposals are valid (not null).");
+
+  });
+%}
+
+
+###
+### Get voting procedure list for a governance action proposal
+GET {{base_url}}/api/v1/governance/proposals/{{tx_hash}}/{{index}}/votes
+
+> {%
+  client.test("Get voting procedure list for governance action proposal", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(vote) {
+      client.assert(vote.block_number !== null, "block_number is null");
+      client.assert(vote.block_time !== null, "block_time is null");
+      client.assert(vote.id !== null, "id is null");
+      client.assert(vote.tx_hash !== null, "tx_hash is null");
+      client.assert(vote.index !== null, "index is null");
+      client.assert(vote.slot !== null, "slot is null");
+      client.assert(vote.voter_type !== null, "voter_type is null");
+      client.assert(vote.voter_hash !== null, "voter_hash is null");
+      client.assert(vote.gov_action_tx_hash !== null, "gov_action_tx_hash is null");
+      client.assert(vote.gov_action_index !== null, "gov_action_index is null");
+      client.assert(vote.vote !== null, "vote is null");
+      client.assert(vote.anchor_url !== null, "anchor_url is null");
+      client.assert(vote.anchor_hash !== null, "anchor_hash is null");
+      client.assert(vote.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in the voting procedure list are valid (not null).");
+  });
+%}
+
+###
+### Get voting procedure list by tx_hash of governance action proposal
+GET {{base_url}}/api/v1/governance/proposals/{{tx_hash}}/votes
+
+> {%
+  client.test("Get voting procedure list by tx_hash of governance action proposal", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(vote) {
+      client.assert(vote.block_number !== null, "block_number is null");
+      client.assert(vote.block_time !== null, "block_time is null");
+      client.assert(vote.id !== null, "id is null");
+      client.assert(vote.tx_hash !== null, "tx_hash is null");
+      client.assert(vote.index !== null, "index is null");
+      client.assert(vote.slot !== null, "slot is null");
+      client.assert(vote.voter_type !== null, "voter_type is null");
+      client.assert(vote.voter_hash !== null, "voter_hash is null");
+      client.assert(vote.gov_action_tx_hash !== null, "gov_action_tx_hash is null");
+      client.assert(vote.gov_action_index !== null, "gov_action_index is null");
+      client.assert(vote.vote !== null, "vote is null");
+      client.assert(vote.anchor_url !== null, "anchor_url is null");
+      client.assert(vote.anchor_hash !== null, "anchor_hash is null");
+      client.assert(vote.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in the voting procedure list are valid (not null).");
+  });
+%}
+
+###
+### Get governance action proposal list by return address
+GET {{base_url}}/api/v1/governance/proposals/return-address/{{return_address}}
+
+> {%
+  client.test("Get governance action proposal list by return address", function() {
+
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(proposal) {
+      client.assert(proposal.block_number !== null, "block_number is null");
+      client.assert(proposal.block_time !== null, "block_time is null");
+      client.assert(proposal.tx_hash !== null, "tx_hash is null");
+      client.assert(proposal.index !== null, "index is null");
+      client.assert(proposal.slot !== null, "slot is null");
+      client.assert(proposal.deposit !== null, "deposit is null");
+      client.assert(proposal.return_address !== null, "return_address is null");
+      client.assert(proposal.type !== null, "type is null");
+      client.assert(proposal.details !== null, "details is null");
+      client.assert(proposal.anchor_url !== null, "anchor_url is null");
+      client.assert(proposal.anchor_hash !== null, "anchor_hash is null");
+      client.assert(proposal.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in governance proposals by return address are valid (not null).");
+
+  });
+%}
+
+###
+### Get most recent governance action proposal for NEW_CONSTITUTION
+GET {{base_url}}/api/v1/governance/proposals/latest/gov-action-type/NEW_CONSTITUTION
+
+> {%
+  client.test("Get most recent governance action proposal for NEW_CONSTITUTION", function() {
+
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === "object", "Response body is not an object");
+
+    client.assert(response.body.block_number !== null, "block_number is null");
+    client.assert(response.body.block_time !== null, "block_time is null");
+    client.assert(response.body.tx_hash !== null, "tx_hash is null");
+    client.assert(response.body.index !== null, "index is null");
+    client.assert(response.body.slot !== null, "slot is null");
+    client.assert(response.body.deposit !== null, "deposit is null");
+    client.assert(response.body.return_address !== null, "return_address is null");
+    client.assert(response.body.type !== null, "type is null");
+    client.assert(response.body.details !== null, "details is null");
+    client.assert(response.body.anchor_url !== null, "anchor_url is null");
+    client.assert(response.body.anchor_hash !== null, "anchor_hash is null");
+    client.assert(response.body.epoch !== null, "epoch is null");
+
+    client.assert(response.body.type === "NEW_CONSTITUTION", "type is not 'NEW_CONSTITUTION'");
+
+    client.log("Stored tx_hash: " + response.body.tx_hash);
+    client.log("Stored index: " + response.body.index);
+
+    client.log("All fields in governance proposal for NEW_CONSTITUTION are valid (not null) and 'type' is correct.");
+
+  });
+%}
+
+###
+### Get governance action proposal list for NEW_CONSTITUTION
+GET {{base_url}}/api/v1/governance/proposals/gov-action-type/NEW_CONSTITUTION
+
+> {%
+  client.test("Get governance action proposal list for NEW_CONSTITUTION", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(proposal) {
+      client.assert(proposal.block_number !== null, "block_number is null");
+      client.assert(proposal.block_time !== null, "block_time is null");
+      client.assert(proposal.tx_hash !== null, "tx_hash is null");
+      client.assert(proposal.index !== null, "index is null");
+      client.assert(proposal.slot !== null, "slot is null");
+      client.assert(proposal.deposit !== null, "deposit is null");
+      client.assert(proposal.return_address !== null, "return_address is null");
+      client.assert(proposal.type !== null, "type is null");
+      client.assert(proposal.details !== null, "details is null");
+      client.assert(proposal.anchor_url !== null, "anchor_url is null");
+      client.assert(proposal.anchor_hash !== null, "anchor_hash is null");
+      client.assert(proposal.epoch !== null, "epoch is null");
+
+      client.assert(proposal.type === "NEW_CONSTITUTION", "type is not 'NEW_CONSTITUTION'");
+
+      client.log("Stored tx_hash: " + proposal.tx_hash);
+      client.log("Stored index: " + proposal.index);
+    });
+
+    client.log("All fields in governance proposals for 'NEW_CONSTITUTION' are valid (not null) and 'type' is correct.");
+
+  });
+%}
+
+###
+### Get drep updates
+GET {{base_url}}/api/v1/governance/dreps/updates
+
+> {%
+  client.test("Get drep updates", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(update) {
+      client.assert(update.block_number !== null, "block_number is null");
+      client.assert(update.block_time !== null, "block_time is null");
+      client.assert(update.tx_hash !== null, "tx_hash is null");
+      client.assert(update.cert_index !== null, "cert_index is null");
+      client.assert(update.type !== null, "type is null");
+      client.assert(update.slot !== null, "slot is null");
+      client.assert(update.deposit !== null, "deposit is null");
+      client.assert(update.drep_hash !== null, "drep_hash is null");
+      client.assert(update.drep_id !== null, "drep_id is null");
+      client.assert(update.anchor_url !== null, "anchor_url is null");
+      client.assert(update.anchor_hash !== null, "anchor_hash is null");
+      client.assert(update.cred_type !== null, "cred_type is null");
+      client.assert(update.epoch !== null, "epoch is null");
+
+      client.log("Stored tx_hash: " + update.tx_hash);
+    });
+
+    client.log("All fields in drep updates are valid (not null).");
+
+  });
+%}
+
+###
+### Get drep registrations
+GET {{base_url}}/api/v1/governance/dreps/registrations
+
+> {%
+  client.test("Get drep registrations", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(update) {
+      client.assert(update.block_number !== null, "block_number is null");
+      client.assert(update.block_time !== null, "block_time is null");
+      client.assert(update.tx_hash !== null, "tx_hash is null");
+      client.assert(update.cert_index !== null, "cert_index is null");
+      client.assert(update.type !== null, "type is null");
+      client.assert(update.slot !== null, "slot is null");
+      client.assert(update.deposit !== null, "deposit is null");
+      client.assert(update.drep_hash !== null, "drep_hash is null");
+      client.assert(update.drep_id !== null, "drep_id is null");
+      client.assert(update.anchor_url !== null, "anchor_url is null");
+      client.assert(update.anchor_hash !== null, "anchor_hash is null");
+      client.assert(update.cred_type !== null, "cred_type is null");
+      client.assert(update.epoch !== null, "epoch is null");
+
+      client.log("Stored tx_hash: " + update.tx_hash);
+    });
+
+    client.log("All fields in drep updates are valid (not null).");
+
+  });
+%}
+
+###
+### Get drep de-registrations
+GET {{base_url}}/api/v1/governance/dreps/deregistrations
+
+> {%
+  client.test("Get drep de-registrations", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(update) {
+      client.assert(update.block_number !== null, "block_number is null");
+      client.assert(update.block_time !== null, "block_time is null");
+      client.assert(update.tx_hash !== null, "tx_hash is null");
+      client.assert(update.cert_index !== null, "cert_index is null");
+      client.assert(update.type !== null, "type is null");
+      client.assert(update.slot !== null, "slot is null");
+      client.assert(update.deposit !== null, "deposit is null");
+      client.assert(update.drep_hash !== null, "drep_hash is null");
+      client.assert(update.drep_id !== null, "drep_id is null");
+      client.assert(update.anchor_url !== null, "anchor_url is null");
+      client.assert(update.anchor_hash !== null, "anchor_hash is null");
+      client.assert(update.cred_type !== null, "cred_type is null");
+      client.assert(update.epoch !== null, "epoch is null");
+
+      client.log("Stored tx_hash: " + update.tx_hash);
+    });
+
+    client.log("All fields in drep updates are valid (not null).");
+
+  });
+%}
+
+###
+### Get delegation votes
+GET {{base_url}}/api/v1/governance/delegation-votes
+
+> {%
+  client.test("Get delegation votes", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === "object", "Response body is not an object");
+
+    client.assert(response.body.block_number !== null, "block_number is null");
+    client.assert(response.body.block_time !== null, "block_time is null");
+    client.assert(response.body.tx_hash !== null, "tx_hash is null");
+    client.assert(response.body.cert_index !== null, "cert_index is null");
+    client.assert(response.body.slot !== null, "slot is null");
+    client.assert(response.body.address !== null, "address is null");
+    client.assert(response.body.drep_hash !== null, "drep_hash is null");
+    client.assert(response.body.drep_id !== null, "drep_id is null");
+    client.assert(response.body.drep_type !== null, "drep_type is null");
+    client.assert(response.body.credential !== null, "credential is null");
+    client.assert(response.body.cred_type !== null, "cred_type is null");
+    client.assert(response.body.epoch !== null, "epoch is null");
+
+    client.global.set("drep_id", response.body.drep_id);
+    client.global.set("address", response.body.address);
+
+    client.log("All fields in delegation vote are valid (not null).");
+
+  });
+%}
+
+###
+### Get delegation votes by drep_id
+GET {{base_url}}/api/v1/governance/delegation-votes/drep/{{drep_id}}
+
+> {%
+  client.test("Get delegation votes by drep_id", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === "object", "Response body is not an object");
+
+    client.assert(response.body.block_number !== null, "block_number is null");
+    client.assert(response.body.block_time !== null, "block_time is null");
+    client.assert(response.body.tx_hash !== null, "tx_hash is null");
+    client.assert(response.body.cert_index !== null, "cert_index is null");
+    client.assert(response.body.slot !== null, "slot is null");
+    client.assert(response.body.address !== null, "address is null");
+    client.assert(response.body.drep_hash !== null, "drep_hash is null");
+    client.assert(response.body.drep_id !== null, "drep_id is null");
+    client.assert(response.body.drep_type !== null, "drep_type is null");
+    client.assert(response.body.credential !== null, "credential is null");
+    client.assert(response.body.cred_type !== null, "cred_type is null");
+    client.assert(response.body.epoch !== null, "epoch is null");
+
+    client.global.set("drep_id", response.body.drep_id);
+    client.global.set("address", response.body.address);
+
+    client.log("All fields in delegation vote are valid (not null).");
+
+  });
+%}
+
+###
+### Get delegation votes by address
+GET {{base_url}}/api/v1/governance/delegation-votes/address/{{address}}
+
+> {%
+  client.test("Get delegation votes by address", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === "object", "Response body is not an object");
+
+    client.assert(response.body.block_number !== null, "block_number is null");
+    client.assert(response.body.block_time !== null, "block_time is null");
+    client.assert(response.body.tx_hash !== null, "tx_hash is null");
+    client.assert(response.body.cert_index !== null, "cert_index is null");
+    client.assert(response.body.slot !== null, "slot is null");
+    client.assert(response.body.address !== null, "address is null");
+    client.assert(response.body.drep_hash !== null, "drep_hash is null");
+    client.assert(response.body.drep_id !== null, "drep_id is null");
+    client.assert(response.body.drep_type !== null, "drep_type is null");
+    client.assert(response.body.credential !== null, "credential is null");
+    client.assert(response.body.cred_type !== null, "cred_type is null");
+    client.assert(response.body.epoch !== null, "epoch is null");
+
+    client.global.set("drep_id", response.body.drep_id);
+    client.global.set("address", response.body.address);
+
+    client.log("All fields in delegation vote are valid (not null).");
+
+  });
+%}
+
+###
+### Get current constitution
+GET {{base_url}}/api/v1/governance/consitution
+
+> {%
+  client.test("Get current constitution", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(response.body.active_epoch !== null, "active_epoch is null");
+    client.assert(response.body.anchor_url !== null, "anchor_url is null");
+    client.assert(response.body.anchor_hash !== null, "anchor_hash is null");
+    client.assert(response.body.script !== null, "script is null");
+
+    client.log("All fields in current constitution are valid (not null).");
+  });
+%}
+
+###
+### Get committee registration
+GET {{base_url}}/api/v1/governance/committees/registrations
+
+> {%
+  client.test("Get committee registration", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(registration) {
+      client.assert(registration.block_number !== null, "block_number is null");
+      client.assert(registration.block_time !== null, "block_time is null");
+      client.assert(registration.tx_hash !== null, "tx_hash is null");
+      client.assert(registration.cert_index !== null, "cert_index is null");
+      client.assert(registration.slot !== null, "slot is null");
+      client.assert(registration.cold_key !== null, "cold_key is null");
+      client.assert(registration.hot_key !== null, "hot_key is null");
+      client.assert(registration.cred_type !== null, "cred_type is null");
+      client.assert(registration.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in committee registration are valid (not null).");
+  });
+%}
+
+###
+### Get committee de-registration
+GET {{base_url}}/api/v1/governance/committees/deregistrations
+
+> {%
+  client.test("Get committee de-registration", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(Array.isArray(response.body), "Response body is not an array");
+
+    response.body.forEach(function(deRegistration) {
+      client.assert(deRegistration.block_number !== null, "block_number is null");
+      client.assert(deRegistration.block_time !== null, "block_time is null");
+      client.assert(deRegistration.tx_hash !== null, "tx_hash is null");
+      client.assert(deRegistration.cert_index !== null, "cert_index is null");
+      client.assert(deRegistration.slot !== null, "slot is null");
+      client.assert(deRegistration.anchor_url !== null, "anchor_url is null");
+      client.assert(deRegistration.anchor_hash !== null, "anchor_hash is null");
+      client.assert(deRegistration.cold_key !== null, "cold_key is null");
+      client.assert(deRegistration.cred_type !== null, "cred_type is null");
+      client.assert(deRegistration.epoch !== null, "epoch is null");
+    });
+
+    client.log("All fields in committee de-registration are valid (not null).");
+  });
+%}
+
+###
+### Get current committee info
+GET {{base_url}}/api/v1/governance/committees/current
+
+> {%
+  client.test("Get current committee info", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+
+    client.assert(typeof response.body === 'object', "Response body is not an object");
+
+    client.assert(response.body.threshold_numerator !== null, "threshold_numerator is null");
+    client.assert(response.body.threshold_denominator !== null, "threshold_denominator is null");
+
+    client.assert(Array.isArray(response.body.members), "members is not an array");
+    client.assert(response.body.members.length > 0, "members array is empty");
+
+    response.body.members.forEach(function(member) {
+      client.assert(member.hash !== null, "member.hash is null");
+      client.assert(member.cred_type !== null, "member.cred_type is null");
+      client.assert(member.start_epoch !== null, "member.start_epoch is null");
+      client.assert(member.expired_epoch !== null, "member.expired_epoch is null");
+    });
+
+    client.log("All fields in current committee info are valid (not null).");
+  });
+%}
+

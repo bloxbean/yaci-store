@@ -1,0 +1,82 @@
+###
+### Get tx_hash from transaction information
+GET {{base_url}}/api/v1/txs?page=1&count=1
+
+> {%
+  client.test("Get transaction information", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body.transaction_summaries && response.body.transaction_summaries.length > 0,
+        "tx_hash not found. Actual value: " + JSON.stringify(response.body)
+    );
+    const txHash = response.body.transaction_summaries[0].tx_hash;
+
+    client.global.set("tx_hash", txHash);
+
+    client.log("Stored tx_hash: " + txHash);
+  });
+%}
+
+###
+### Get script_hash
+GET {{base_url}}/api/v1/txs/{{tx_hash}}/scripts
+
+> {%
+  client.test("Get script_hash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    const scriptHash = response.body.script_hash;
+
+    client.global.set("script_hash", scriptHash);
+
+    client.log("Stored script_hash: " + scriptHash);
+  });
+%}
+
+###
+### Get script from scriptHash
+GET {{base_url}}/api/v1/scripts/{{script_hash}}
+
+> {%
+  client.test("Get script from scriptHash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(typeof response.body === 'object', "Response body is not an object");
+    client.assert(response.body.script_hash !== null, "script_hash is null");
+    client.assert(response.body.type !== null, "type is null");
+    client.assert(response.body.serialised_size !== null, "serialised_size is null");
+
+    client.log("All fields in script are valid (not null).");
+  });
+%}
+
+###
+### Get script json from scriptHash
+GET {{base_url}}/api/v1/scripts/{{script_hash}}/json
+
+> {%
+  client.test("Get script json from scriptHash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body.json !== null, "Response body json is null");
+
+    client.log("All fields in script are valid (not null).");
+  });
+%}
+
+###
+### Get detail from scriptHash
+GET {{base_url}}/api/v1/scripts/{{script_hash}}/details
+
+> {%
+  client.test("Get details from scriptHash", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(response.body.script_hash !== null, "script_hash is null");
+    client.assert(response.body.script_type !== null, "type is null");
+    client.assert(response.body.content !== null, "serialised_size is null");
+
+    client.log("All fields in script are valid (not null).");
+  });
+%}
