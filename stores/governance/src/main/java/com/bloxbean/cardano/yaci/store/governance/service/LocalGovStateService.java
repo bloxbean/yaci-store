@@ -26,7 +26,7 @@ import com.bloxbean.cardano.yaci.store.governance.annotation.LocalGovState;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Nullable;

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovActionProposalStatusEntity;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovActionProposalStatusId;
 import org.springframework.data.jpa.repository.JpaRepository;

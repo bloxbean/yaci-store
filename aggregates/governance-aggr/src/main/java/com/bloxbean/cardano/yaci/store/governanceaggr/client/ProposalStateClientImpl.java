@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -19,8 +19,8 @@ public class ProposalStateClientImpl implements ProposalStateClient {
     private final GovActionProposalStorage govActionProposalStorage;
 
     @Override
-    public List<GovActionProposal> getActiveProposals(int epoch) {
-        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
+    public List<GovActionProposal> getProposals(GovActionStatus status, int epoch) {
+        var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(status, epoch);
 
         return govActionProposalStorage.findByGovActionIds(proposalStatusList.stream()
                         .map(proposalStatus -> new GovActionId(proposalStatus.getGovActionTxHash(), proposalStatus.getGovActionIndex()))

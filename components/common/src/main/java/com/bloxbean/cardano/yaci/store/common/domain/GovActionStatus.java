@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.common.domain;
 
 public enum GovActionStatus {
     ACTIVE,
