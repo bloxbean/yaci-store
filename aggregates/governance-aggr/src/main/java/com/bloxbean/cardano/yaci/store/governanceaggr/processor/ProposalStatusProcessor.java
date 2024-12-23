@@ -38,22 +38,15 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.rule.GovActionRatifier;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import lombok.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
@@ -63,7 +56,6 @@ import java.util.stream.Stream;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-// TODO: Remove code related to db-sync data.
 // TODO: write tests
 public class ProposalStatusProcessor {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
@@ -78,13 +70,9 @@ public class ProposalStatusProcessor {
     private final AdaPotStorage adaPotStorage;
     private final CommitteeMemberStorage committeeMemberStorage;
     private final ProposalMapper proposalMapper;
-    private final StoreProperties storeProperties;
     private final ApplicationEventPublisher publisher;
 
     private boolean isBootstrapPhase = true;
-
-    @Value("${store.governance-aggr.handle-proposal-status-with-rule:false}")
-    private boolean handleProposalStatusByRule;
 
     @EventListener
     @Transactional
@@ -104,24 +92,6 @@ public class ProposalStatusProcessor {
                         .status(GovActionStatus.ACTIVE)
                         .build()
         ).toList());
-
-        if (!handleProposalStatusByRule) {
-            /*
-                if we don't use governance rule, temporarily: suppose all proposals are active over time
-                -> we get proposals in the prev epoch and save them into governance_action_proposal_status table with new epoch value
-             */
-            List<GovActionProposal> oldProposals = proposalStateClient.getProposals(GovActionStatus.ACTIVE, epoch - 1);
-
-            govActionProposalStatusStorage.saveAll(oldProposals.stream().map(govActionProposal ->
-                    GovActionProposalStatus.builder()
-                            .govActionTxHash(govActionProposal.getTxHash())
-                            .govActionIndex(govActionProposal.getIndex())
-                            .type(govActionProposal.getType())
-                            .epoch(epoch)
-                            .status(GovActionStatus.ACTIVE)
-                            .build()
-            ).toList());
-        }
     }
 
     @EventListener
@@ -129,12 +99,6 @@ public class ProposalStatusProcessor {
     public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
-
-        if (!handleProposalStatusByRule) {
-            dRepDistService.takeStakeSnapshot(epoch);
-            handleProposalRefund(currentEpoch, stakeSnapshotTakenEvent.getSlot());
-            return;
-        }
 
         try {
             if (isBootstrapPhase) {
@@ -155,47 +119,38 @@ public class ProposalStatusProcessor {
             List<GovActionProposal> expiredProposals = proposalStateClient.getProposals(GovActionStatus.EXPIRED, epoch);
             List<GovActionProposal> ratifiedProposals = proposalStateClient.getProposals(GovActionStatus.RATIFIED, epoch);
 
-            List<Proposal> expiredOrRatifiedProposals =
-                    (List<Proposal>) Stream.concat(expiredProposals.stream(), ratifiedProposals.stream())
-                            .map(govActionProposal -> {
-                                try {
-                                    return Optional.of(proposalMapper.toProposal(govActionProposal));
-                                } catch (JsonProcessingException e) {
-                                    return Optional.empty();
-                                }
-                            })
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .toList();
+            List<Proposal> expiredOrRatifiedProposals = Stream.concat(expiredProposals.stream(), ratifiedProposals.stream())
+                    .map(this::mapToProposal)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
 
-            List<Proposal> domainActiveProposals = (List<Proposal>) activeProposals.stream()
-                    .map(govActionProposal -> {
-                        try {
-                            return Optional.of(proposalMapper.toProposal(govActionProposal));
-                        } catch (JsonProcessingException e) {
-                            return Optional.empty();
-                        }
-                    })
+            List<Proposal> domainActiveProposals = activeProposals.stream()
+                    .map(this::mapToProposal)
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .toList();
 
             List<Proposal> allProposals = Stream.concat(expiredOrRatifiedProposals.stream(), domainActiveProposals.stream()).toList();
-            Map<GovActionId, Proposal> proposalsWillPruneInThisEpoch = new HashMap<>();
+            Map<GovActionId, Proposal> siblingsOrDescendantsBePrunedInThisEpoch = new HashMap<>();
 
             for (Proposal proposal : expiredOrRatifiedProposals) {
-                List<Proposal> proposalsWillPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
-                proposalsWillPrune.forEach(p -> proposalsWillPruneInThisEpoch.put(p.getGovActionId(), p));
+                List<Proposal> proposalsWillBePruned = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
+                proposalsWillBePruned.forEach(p -> siblingsOrDescendantsBePrunedInThisEpoch.put(p.getGovActionId(), p));
             }
 
-            List<GovActionProposal> remainingProposalsNeedToConsider = activeProposals.stream()
-                    .filter(govActionProposal -> !proposalsWillPruneInThisEpoch.containsKey(GovActionId.builder()
+            handleProposalRefund(
+                    Stream.concat(expiredOrRatifiedProposals.stream().map(Proposal::getGovActionId).toList().stream(),
+                            siblingsOrDescendantsBePrunedInThisEpoch.keySet().stream()).toList(), currentEpoch, stakeSnapshotTakenEvent.getSlot());
+
+            List<GovActionProposal> remainingProposals = activeProposals.stream()
+                    .filter(govActionProposal -> !siblingsOrDescendantsBePrunedInThisEpoch.containsKey(GovActionId.builder()
                             .gov_action_index(govActionProposal.getIndex())
                             .transactionId(govActionProposal.getTxHash())
                             .build()))
                     .toList();
 
-            if (remainingProposalsNeedToConsider.isEmpty()) {
+            if (remainingProposals.isEmpty()) {
                 return;
             }
 
@@ -218,14 +173,14 @@ public class ProposalStatusProcessor {
             var ccThreshold = committee.get().getThreshold();
 
             // get votes by committee member
-            List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, remainingProposalsNeedToConsider.stream().map(
+            List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, remainingProposals.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
                             .build()).toList());
 
             // get votes by SPO
-            List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, remainingProposalsNeedToConsider.stream().map(
+            List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, remainingProposals.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
@@ -235,7 +190,7 @@ public class ProposalStatusProcessor {
             List<VotingProcedure> votesByDRep = new ArrayList<>();
 
             if (!isBootstrapPhase) {
-                votesByDRep = votingAggrService.getVotesByDRep(epoch, remainingProposalsNeedToConsider.stream().map(
+                votesByDRep = votingAggrService.getVotesByDRep(epoch, remainingProposals.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -250,6 +205,7 @@ public class ProposalStatusProcessor {
 
             boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
                     .anyMatch(govActionProposalStatus -> GovernanceActionUtil.isDelayingAction(govActionProposalStatus.getType()));
+
             ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
 
             List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
@@ -264,7 +220,7 @@ public class ProposalStatusProcessor {
                             Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
 
             // use gov rule and update proposal status
-            for (var proposal : remainingProposalsNeedToConsider) {
+            for (var proposal : remainingProposals) {
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
 
                 int expiredEpoch = proposal.getEpoch() + govActionLifetime;
@@ -498,8 +454,6 @@ public class ProposalStatusProcessor {
             log.info("Error processing proposal status: {}", currentEpoch, e);
         }
 
-        handleProposalRefund(currentEpoch, stakeSnapshotTakenEvent.getSlot());
-
         log.info("Finish handling proposal status");
     }
 
@@ -519,98 +473,35 @@ public class ProposalStatusProcessor {
         };
     }
 
-    private List<DBSyncProposalInfo> loadDBSyncProposalInfo(long protocolMagic) throws IOException {
-        List<DBSyncProposalInfo> DBSyncProposalInfoList = new ArrayList<>();
-        // todo: add files for other networks except preprod
-        String file;
-        if (protocolMagic == 1) { //preprod
-            file = "dbsync_gov_action_proposal_preprod.json";
-        } else {
-            return DBSyncProposalInfoList;
-        }
-        ObjectMapper objectMapper = new ObjectMapper();
-        DBSyncProposalInfoList = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream(file), new TypeReference<>() {
-        });
-
-        return DBSyncProposalInfoList;
-    }
-
-    private void handleProposalRefund(int epoch, long slot) {
+    private void handleProposalRefund(List<GovActionId> proposalsBeDropped, int currentEpoch, long slot) {
         List<RewardRestAmt> rewardRestAmts = new ArrayList<>();
 
-        if (!handleProposalStatusByRule) {
-            // if we don't handle proposal status by rule, load DBSync proposal info
-            try {
-                long protocolMagic = storeProperties.getProtocolMagic();
-                List<DBSyncProposalInfo> dbSyncProposalsInfo = loadDBSyncProposalInfo(protocolMagic);
+        var proposals = govActionProposalStorage.findByGovActionIds(proposalsBeDropped);
 
-                for (var proposal : dbSyncProposalsInfo) {
-                    if ((proposal.getExpiredEpoch() != null && proposal.getExpiredEpoch() == epoch)
-                            || (proposal.getRatifiedEpoch() != null && proposal.getRatifiedEpoch() == epoch)) {
-                        rewardRestAmts.add(RewardRestAmt.builder()
-                                .address(proposal.getReturnAddress())
-                                .type(RewardRestType.proposal_refund)
-                                .amount(proposal.getDeposit())
-                                .build());
-                    }
-                }
-            } catch (IOException e) {
-                log.error("Error loading DBSync proposal info", e);
-            }
-        } else {
-            // get expired and ratified proposals in prev epoch, and handle to save proposal refund
-            List<GovActionProposalStatus> expiredProposalsInPrevEpoch = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.EXPIRED, epoch - 1);
-            List<GovActionProposalStatus> ratifiedProposalsInPrevEpoch = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
-
-            List<GovActionId> govActionIds = Stream.concat(expiredProposalsInPrevEpoch.stream().map(govActionProposalStatus ->
-                            GovActionId.builder()
-                                    .gov_action_index(govActionProposalStatus.getGovActionIndex())
-                                    .transactionId(govActionProposalStatus.getGovActionTxHash()).build()).toList().stream(),
-
-                    ratifiedProposalsInPrevEpoch.stream().map(govActionProposalStatus ->
-                            GovActionId.builder()
-                                    .gov_action_index(govActionProposalStatus.getGovActionIndex())
-                                    .transactionId(govActionProposalStatus.getGovActionTxHash()).build()).toList().stream()
-            ).toList();
-
-            var proposals = govActionProposalStorage.findByGovActionIds(govActionIds);
-
-            for (var proposal : proposals) {
-                rewardRestAmts.add(RewardRestAmt.builder()
-                        .address(proposal.getReturnAddress())
-                        .type(RewardRestType.proposal_refund)
-                        .amount(proposal.getDeposit())
-                        .build());
-            }
+        for (var proposal : proposals) {
+            rewardRestAmts.add(RewardRestAmt.builder()
+                    .address(proposal.getReturnAddress())
+                    .type(RewardRestType.proposal_refund)
+                    .amount(proposal.getDeposit())
+                    .build());
         }
+
         if (!rewardRestAmts.isEmpty()) {
             var rewardRestEvent = RewardRestEvent.builder()
-                    .earnedEpoch(epoch)
-                    .spendableEpoch(epoch + 1)
+                    .earnedEpoch(currentEpoch)
+                    .spendableEpoch(currentEpoch + 1)
                     .slot(slot)
                     .rewards(rewardRestAmts)
                     .build();
             publisher.publishEvent(rewardRestEvent);
         }
     }
-}
 
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-class DBSyncProposalInfo {
-    private String govActionTxHash;
-    private int govActionIndex;
-    private String returnAddress;
-    private BigInteger deposit;
-    private String type;
-    private Integer ratifiedEpoch;
-    private Integer enactedEpoch;
-    private Integer droppedEpoch;
-    private Integer expiredEpoch;
+    private Optional<Proposal> mapToProposal(GovActionProposal govActionProposal) {
+        try {
+            return Optional.of(proposalMapper.toProposal(govActionProposal));
+        } catch (JsonProcessingException e) {
+            return Optional.empty();
+        }
+    }
 }
-
