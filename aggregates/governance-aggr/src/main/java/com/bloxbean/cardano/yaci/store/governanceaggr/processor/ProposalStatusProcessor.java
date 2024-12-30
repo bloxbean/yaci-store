@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
-import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
@@ -23,7 +23,6 @@ import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.client.ProposalStateClientImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
@@ -61,7 +60,7 @@ public class ProposalStatusProcessor {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final GovActionProposalStorage govActionProposalStorage;
     private final DRepDistService dRepDistService;
-    private final ProposalStateClientImpl proposalStateClient;
+    private final ProposalStateClient proposalStateClient;
     private final EpochParamStorage epochParamStorage;
     private final CommitteeStorage committeeStorage;
     private final VotingAggrService votingAggrService;
@@ -103,7 +102,7 @@ public class ProposalStatusProcessor {
         try {
             if (isBootstrapPhase) {
                 // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
-                var enactedProposal = govActionProposalStatusStorage.findLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION);
+                var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
                 if (enactedProposal.stream().anyMatch(govActionProposalStatus
                         -> govActionProposalStatus.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
                     isBootstrapPhase = false;
@@ -115,9 +114,9 @@ public class ProposalStatusProcessor {
             List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
             // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
-            List<GovActionProposal> activeProposals = proposalStateClient.getProposals(GovActionStatus.ACTIVE, epoch);
-            List<GovActionProposal> expiredProposals = proposalStateClient.getProposals(GovActionStatus.EXPIRED, epoch);
-            List<GovActionProposal> ratifiedProposals = proposalStateClient.getProposals(GovActionStatus.RATIFIED, epoch);
+            List<GovActionProposal> activeProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
+            List<GovActionProposal> expiredProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch);
+            List<GovActionProposal> ratifiedProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
 
             List<Proposal> expiredOrRatifiedProposals = Stream.concat(expiredProposals.stream(), ratifiedProposals.stream())
                     .map(this::mapToProposal)
@@ -201,7 +200,7 @@ public class ProposalStatusProcessor {
             BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch)
                     .orElse(BigInteger.ZERO);
 
-            var enactedProposalsInPrevEpoch = govActionProposalStatusStorage.findByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
+            var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
 
             boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
                     .anyMatch(govActionProposalStatus -> GovernanceActionUtil.isDelayingAction(govActionProposalStatus.getType()));
@@ -396,10 +395,10 @@ public class ProposalStatusProcessor {
                 }
 
                 // Get the last enacted proposal with the same purpose
-                GovActionId lastEnactedGovActionIdWithSamePurpose = govActionProposalStatusStorage.findLastEnactedProposal(proposal.getType())
-                        .map(govActionProposalStatus -> GovActionId.builder()
-                                .transactionId(govActionProposalStatus.getGovActionTxHash())
-                                .gov_action_index(govActionProposalStatus.getGovActionIndex())
+                GovActionId lastEnactedGovActionIdWithSamePurpose = proposalStateClient.getLastEnactedProposal(proposal.getType(), currentEpoch)
+                        .map(govActionProposal -> GovActionId.builder()
+                                .transactionId(govActionProposal.getTxHash())
+                                .gov_action_index(govActionProposal.getIndex())
                                 .build())
                         .orElse(null);
 

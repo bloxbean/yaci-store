@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.client;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component("proposalStateClient")
@@ -19,7 +21,7 @@ public class ProposalStateClientImpl implements ProposalStateClient {
     private final GovActionProposalStorage govActionProposalStorage;
 
     @Override
-    public List<GovActionProposal> getProposals(GovActionStatus status, int epoch) {
+    public List<GovActionProposal> getProposalsByStatusAndEpoch(GovActionStatus status, int epoch) {
         var proposalStatusList = govActionProposalStatusStorage.findByStatusAndEpoch(status, epoch);
 
         return govActionProposalStorage.findByGovActionIds(proposalStatusList.stream()
@@ -36,10 +38,42 @@ public class ProposalStateClientImpl implements ProposalStateClient {
                                 .returnAddress(govActionProposal.getReturnAddress())
                                 .type(govActionProposal.getType())
                                 .blockNumber(govActionProposal.getBlockNumber())
+                                .blockTime(govActionProposal.getBlockTime())
                                 .slot(govActionProposal.getSlot())
                                 .epoch(govActionProposal.getEpoch())
                                 .details(govActionProposal.getDetails())
                                 .build())
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<GovActionProposal> getLastEnactedProposal(GovActionType govActionType, int currentEpoch) {
+        var govActionProposalStatusOpt = govActionProposalStatusStorage.findLastEnactedProposal(govActionType, currentEpoch);
+        if (govActionProposalStatusOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        var govActionProposals = govActionProposalStorage.findByGovActionIds(
+                List.of(new GovActionId(govActionProposalStatusOpt.get().getGovActionTxHash(), govActionProposalStatusOpt.get().getGovActionIndex())));
+
+        if (govActionProposals.isEmpty()) {
+            return Optional.empty();
+        } else {
+            var govActionProposal = govActionProposals.get(0);
+            return Optional.of(GovActionProposal.builder()
+                    .txHash(govActionProposal.getTxHash())
+                    .index((int) govActionProposal.getIndex())
+                    .anchorUrl(govActionProposal.getAnchorUrl())
+                    .anchorHash(govActionProposal.getAnchorHash())
+                    .deposit(govActionProposal.getDeposit())
+                    .returnAddress(govActionProposal.getReturnAddress())
+                    .type(govActionProposal.getType())
+                    .blockNumber(govActionProposal.getBlockNumber())
+                    .blockTime(govActionProposal.getBlockTime())
+                    .slot(govActionProposal.getSlot())
+                    .epoch(govActionProposal.getEpoch())
+                    .details(govActionProposal.getDetails())
+                    .build());
+        }
     }
 }
