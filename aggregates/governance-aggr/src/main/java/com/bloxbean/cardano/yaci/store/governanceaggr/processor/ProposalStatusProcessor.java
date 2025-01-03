@@ -14,15 +14,11 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
-import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer;
-import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialSerializer;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -43,7 +39,6 @@ import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -75,11 +70,14 @@ public class ProposalStatusProcessor {
     private final ApplicationEventPublisher publisher;
 
     private boolean isBootstrapPhase = true;
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
-    public ProposalStatusProcessor(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage, DRepDistService dRepDistService, ProposalStateClient proposalStateClient, EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage, VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage, DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage,
-                                   ProposalMapper proposalMapper,
+    public ProposalStatusProcessor(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage,
+                                   DRepDistService dRepDistService, ProposalStateClient proposalStateClient,
+                                   EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
+                                   VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
+                                   DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
+                                   CommitteeMemberStorage committeeMemberStorage, ProposalMapper proposalMapper,
                                    ApplicationEventPublisher publisher) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
@@ -123,6 +121,7 @@ public class ProposalStatusProcessor {
 
     @EventListener
     @Transactional
+    // TODO: enactment order
     public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
@@ -141,43 +140,9 @@ public class ProposalStatusProcessor {
 
             List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
-            // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
-            List<GovActionProposal> activeProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
-            List<GovActionProposal> expiredProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch);
-            List<GovActionProposal> ratifiedProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
+            List<GovActionProposal> proposalsForStatusCalculation = getProposalsForStatusCalculation(currentEpoch);
 
-            List<Proposal> expiredOrRatifiedProposals = Stream.concat(expiredProposals.stream(), ratifiedProposals.stream())
-                    .map(this::mapToProposal)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .toList();
-
-            List<Proposal> domainActiveProposals = activeProposals.stream()
-                    .map(this::mapToProposal)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .toList();
-
-            List<Proposal> allProposals = Stream.concat(expiredOrRatifiedProposals.stream(), domainActiveProposals.stream()).toList();
-            Map<GovActionId, Proposal> siblingsOrDescendantsBePrunedInThisEpoch = new HashMap<>();
-
-            for (Proposal proposal : expiredOrRatifiedProposals) {
-                List<Proposal> proposalsWillBePruned = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
-                proposalsWillBePruned.forEach(p -> siblingsOrDescendantsBePrunedInThisEpoch.put(p.getGovActionId(), p));
-            }
-
-            handleProposalRefund(
-                    Stream.concat(expiredOrRatifiedProposals.stream().map(Proposal::getGovActionId).toList().stream(),
-                            siblingsOrDescendantsBePrunedInThisEpoch.keySet().stream()).toList(), currentEpoch, stakeSnapshotTakenEvent.getSlot());
-
-            List<GovActionProposal> remainingProposals = activeProposals.stream()
-                    .filter(govActionProposal -> !siblingsOrDescendantsBePrunedInThisEpoch.containsKey(GovActionId.builder()
-                            .gov_action_index(govActionProposal.getIndex())
-                            .transactionId(govActionProposal.getTxHash())
-                            .build()))
-                    .toList();
-
-            if (remainingProposals.isEmpty()) {
+            if (proposalsForStatusCalculation.isEmpty()) {
                 return;
             }
 
@@ -200,14 +165,14 @@ public class ProposalStatusProcessor {
             var ccThreshold = committee.get().getThreshold();
 
             // get votes by committee member
-            List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, remainingProposals.stream().map(
+            List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, proposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
                             .build()).toList());
 
             // get votes by SPO
-            List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, remainingProposals.stream().map(
+            List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, proposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
@@ -217,7 +182,7 @@ public class ProposalStatusProcessor {
             List<VotingProcedure> votesByDRep = new ArrayList<>();
 
             if (!isBootstrapPhase) {
-                votesByDRep = votingAggrService.getVotesByDRep(epoch, remainingProposals.stream().map(
+                votesByDRep = votingAggrService.getVotesByDRep(epoch, proposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -247,7 +212,7 @@ public class ProposalStatusProcessor {
                             Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
 
             // use gov rule and update proposal status
-            for (var proposal : remainingProposals) {
+            for (var proposal : proposalsForStatusCalculation) {
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
 
                 int expiredEpoch = proposal.getEpoch() + govActionLifetime;
@@ -468,6 +433,7 @@ public class ProposalStatusProcessor {
                             .status(govActionStatus)
                             .build();
                     govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
+
                 } catch (Exception e) {
                     log.error("Error getting ratification result, epoch: {}", currentEpoch, e);
                 }
@@ -482,6 +448,47 @@ public class ProposalStatusProcessor {
         }
 
         log.info("Finish handling proposal status");
+
+        publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
+    }
+
+    /**
+     * Get proposals for status calculation
+     * @param epoch current epoch
+     * @return
+     */
+    private List<GovActionProposal> getProposalsForStatusCalculation(int epoch) {
+        List<GovActionProposal> activeProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch - 1);
+        List<GovActionProposal> expiredOrRatifiedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusListAndEpoch(
+                List.of(GovActionStatus.EXPIRED, GovActionStatus.RATIFIED), epoch - 1);
+
+        List<Proposal> expiredOrRatifiedProposals = expiredOrRatifiedProposalsInPrevEpoch.stream()
+                .map(this::mapToProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
+
+        List<Proposal> activeProposals = activeProposalsInPrevEpoch.stream()
+                .map(this::mapToProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
+
+        List<Proposal> allProposals = Stream.concat(expiredOrRatifiedProposals.stream(), activeProposals.stream()).toList();
+
+        Map<GovActionId, Proposal> siblingsOrDescendantsBeDroppedInCurrentEpoch = new HashMap<>();
+        for (Proposal proposal : expiredOrRatifiedProposals) {
+            List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
+            proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+        }
+
+        return activeProposalsInPrevEpoch.stream()
+                .filter(govActionProposal -> !siblingsOrDescendantsBeDroppedInCurrentEpoch.containsKey(
+                        GovActionId.builder()
+                                .gov_action_index(govActionProposal.getIndex())
+                                .transactionId(govActionProposal.getTxHash())
+                                .build()))
+                .toList();
     }
 
     private GovAction convertToGovAction(GovActionProposal govActionProposal) throws JsonProcessingException {
@@ -500,29 +507,6 @@ public class ProposalStatusProcessor {
         };
     }
 
-    private void handleProposalRefund(List<GovActionId> proposalsBeDropped, int currentEpoch, long slot) {
-        List<RewardRestAmt> rewardRestAmts = new ArrayList<>();
-
-        var proposals = govActionProposalStorage.findByGovActionIds(proposalsBeDropped);
-
-        for (var proposal : proposals) {
-            rewardRestAmts.add(RewardRestAmt.builder()
-                    .address(proposal.getReturnAddress())
-                    .type(RewardRestType.proposal_refund)
-                    .amount(proposal.getDeposit())
-                    .build());
-        }
-
-        if (!rewardRestAmts.isEmpty()) {
-            var rewardRestEvent = RewardRestEvent.builder()
-                    .earnedEpoch(currentEpoch)
-                    .spendableEpoch(currentEpoch + 1)
-                    .slot(slot)
-                    .rewards(rewardRestAmts)
-                    .build();
-            publisher.publishEvent(rewardRestEvent);
-        }
-    }
 
     private Optional<Proposal> mapToProposal(GovActionProposal govActionProposal) {
         try {
