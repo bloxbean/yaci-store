@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
+import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
@@ -20,6 +21,8 @@ import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer;
+import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialSerializer;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -39,6 +42,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.rule.GovActionRatifier;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -53,7 +57,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 // TODO: write tests
 public class ProposalStatusProcessor {
@@ -72,6 +75,31 @@ public class ProposalStatusProcessor {
     private final ApplicationEventPublisher publisher;
 
     private boolean isBootstrapPhase = true;
+    private ObjectMapper objectMapper;
+
+    public ProposalStatusProcessor(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage, DRepDistService dRepDistService, ProposalStateClient proposalStateClient, EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage, VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage, DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
+                                   CommitteeMemberStorage committeeMemberStorage,
+                                   ProposalMapper proposalMapper,
+                                   ApplicationEventPublisher publisher) {
+        this.govActionProposalStatusStorage = govActionProposalStatusStorage;
+        this.govActionProposalStorage = govActionProposalStorage;
+        this.dRepDistService = dRepDistService;
+        this.proposalStateClient = proposalStateClient;
+        this.epochParamStorage = epochParamStorage;
+        this.committeeStorage = committeeStorage;
+        this.votingAggrService = votingAggrService;
+        this.epochStakeStorage = epochStakeStorage;
+        this.dRepDistStorage = dRepDistStorage;
+        this.adaPotStorage = adaPotStorage;
+        this.committeeMemberStorage = committeeMemberStorage;
+        this.proposalMapper = proposalMapper;
+        this.publisher = publisher;
+
+        this.objectMapper = new ObjectMapper();
+        SimpleModule module = new SimpleModule();
+        module.addKeyDeserializer(Credential.class, new CredentialDeserializer());
+        this.objectMapper.registerModule(module);
+    }
 
     @EventListener
     @Transactional
@@ -457,7 +485,7 @@ public class ProposalStatusProcessor {
     }
 
     private GovAction convertToGovAction(GovActionProposal govActionProposal) throws JsonProcessingException {
-        var objectMapper = new ObjectMapper();
+
         return switch (govActionProposal.getType()) {
             case INFO_ACTION -> new InfoAction();
             case HARD_FORK_INITIATION_ACTION ->
