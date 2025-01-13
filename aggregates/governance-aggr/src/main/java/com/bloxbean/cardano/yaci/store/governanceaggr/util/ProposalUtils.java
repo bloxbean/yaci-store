@@ -44,11 +44,52 @@ public class ProposalUtils {
             );
         }
 
-
         return result;
     }
 
+    /**
+     * Find siblings of a proposal
+     * @param proposal
+     * @param allProposals
+     * @return
+     */
+    public static List<Proposal> findSiblings(Proposal proposal, List<Proposal> allProposals) {
+        GovActionType type = proposal.getType();
+
+        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+            return Collections.emptyList();
+        }
+
+        GovActionId parentId = proposal.getPreviousGovActionId();
+
+        if (parentId == null) {
+            return allProposals.stream()
+                    .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && type == p.getType())
+                    .toList();
+        } else {
+            return allProposals.stream()
+                    .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && type == p.getType())
+                    .toList();
+        }
+    }
+
+    /**
+     * Find descendants of a proposal
+     * @param proposal
+     * @param allProposals
+     * @return
+     */
+    public static List<Proposal> findDescendants(Proposal proposal, List<Proposal> allProposals) {
+        GovActionType type = proposal.getType();
+
+        return new ArrayList<>(findDescendants(proposal, allProposals, type));
+    }
+
     private static List<Proposal> findDescendants(Proposal rootProposal, List<Proposal> allProposals, GovActionType type) {
+        if (type == GovActionType.INFO_ACTION || type == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+            return Collections.emptyList();
+        }
+
         List<Proposal> descendants = new ArrayList<>();
         Queue<Proposal> queue = new LinkedList<>();
         queue.add(rootProposal);

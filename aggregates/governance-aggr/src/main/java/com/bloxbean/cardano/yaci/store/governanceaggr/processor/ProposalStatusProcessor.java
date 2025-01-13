@@ -459,10 +459,16 @@ public class ProposalStatusProcessor {
      */
     private List<GovActionProposal> getProposalsForStatusCalculation(int epoch) {
         List<GovActionProposal> activeProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch - 1);
-        List<GovActionProposal> expiredOrRatifiedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusListAndEpoch(
-                List.of(GovActionStatus.EXPIRED, GovActionStatus.RATIFIED), epoch - 1);
+        List<GovActionProposal> expiredProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED,  epoch - 1);
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED,  epoch - 1);
 
-        List<Proposal> expiredOrRatifiedProposals = expiredOrRatifiedProposalsInPrevEpoch.stream()
+        List<Proposal> expiredProposals = expiredProposalsInPrevEpoch.stream()
+                .map(this::mapToProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
+
+        List<Proposal> ratifiedProposals = ratifiedProposalsInPrevEpoch.stream()
                 .map(this::mapToProposal)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
@@ -474,10 +480,15 @@ public class ProposalStatusProcessor {
                 .map(Optional::get)
                 .toList();
 
-        List<Proposal> allProposals = Stream.concat(expiredOrRatifiedProposals.stream(), activeProposals.stream()).toList();
-
+        List<Proposal> allProposals = Stream.concat(expiredProposals.stream(), Stream.concat(ratifiedProposals.stream(), activeProposals.stream())).toList();
         Map<GovActionId, Proposal> siblingsOrDescendantsBeDroppedInCurrentEpoch = new HashMap<>();
-        for (Proposal proposal : expiredOrRatifiedProposals) {
+
+        for (Proposal proposal : expiredProposals) {
+            List<Proposal> proposalsToPrune = ProposalUtils.findDescendants(proposal, allProposals);
+            proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+        }
+
+        for (Proposal proposal : ratifiedProposals) {
             List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
             proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
         }
