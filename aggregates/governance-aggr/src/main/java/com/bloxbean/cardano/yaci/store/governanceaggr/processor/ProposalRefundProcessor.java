@@ -19,10 +19,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Stream;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -45,45 +44,30 @@ public class ProposalRefundProcessor {
     public void handleProposalStatusCapturedEvent(ProposalStatusCapturedEvent event) {
         int epoch = event.getEpoch();
 
-        List<Proposal> expiredProposalsInThisEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch)
-                .stream()
-                .map(this::mapToProposal)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .toList();
+        List<Proposal> expiredProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch);
+        List<Proposal> ratifiedProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
+        List<Proposal> proposalListInThisEpoch = getProposalsByStatusListAndEpoch(
+                List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED, GovActionStatus.EXPIRED), epoch);
 
-        List<Proposal> ratifiedProposalsInThisEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch)
-                        .stream()
-                        .map(this::mapToProposal)
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .toList();
+        Map<GovActionId, Proposal> siblingsOrDescendantsBePrunedInNextEpoch = new HashMap<>();
 
-        List<Proposal> proposalListInThisEpoch =
-                proposalStateClient.getProposalsByStatusListAndEpoch(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED, GovActionStatus.EXPIRED), epoch)
-                .stream()
-                .map(this::mapToProposal)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .toList();
+        expiredProposalsInThisEpoch.forEach(proposal ->
+                ProposalUtils.findDescendants(proposal, proposalListInThisEpoch)
+                        .forEach(p -> siblingsOrDescendantsBePrunedInNextEpoch.putIfAbsent(p.getGovActionId(), p))
+        );
 
-        List<Proposal> siblingsOrDescendantsBePrunedInNextEpoch = new ArrayList<>();
+        ratifiedProposalsInThisEpoch.forEach(proposal ->
+                ProposalUtils.findDescendantsAndSiblings(proposal, proposalListInThisEpoch)
+                        .forEach(p -> siblingsOrDescendantsBePrunedInNextEpoch.putIfAbsent(p.getGovActionId(), p))
+        );
 
-        for (Proposal proposal : expiredProposalsInThisEpoch) {
-            List<Proposal> proposalsBePrunedInNextEpoch = ProposalUtils.findDescendantsAndSiblings(proposal, proposalListInThisEpoch);
-            siblingsOrDescendantsBePrunedInNextEpoch.addAll(proposalsBePrunedInNextEpoch);
-        }
+        Map<GovActionId, Proposal> droppedProposals = new HashMap<>();
 
-        for (Proposal proposal : ratifiedProposalsInThisEpoch) {
-            List<Proposal> proposalsBePrunedInNextEpoch = ProposalUtils.findDescendantsAndSiblings(proposal, proposalListInThisEpoch);
-            siblingsOrDescendantsBePrunedInNextEpoch.addAll(proposalsBePrunedInNextEpoch);
-        }
+        droppedProposals.putAll(siblingsOrDescendantsBePrunedInNextEpoch);
+        droppedProposals.putAll(expiredProposalsInThisEpoch.stream().collect(Collectors.toMap(Proposal::getGovActionId, Function.identity())));
+        droppedProposals.putAll(ratifiedProposalsInThisEpoch.stream().collect(Collectors.toMap(Proposal::getGovActionId, Function.identity())));
 
-        handleProposalRefund(Stream.concat(siblingsOrDescendantsBePrunedInNextEpoch.stream(),
-                Stream.concat(expiredProposalsInThisEpoch.stream(), ratifiedProposalsInThisEpoch.stream())
-        ).map(Proposal::getGovActionId).toList(), epoch, event.getSlot());
+        handleProposalRefund(droppedProposals.keySet().stream().toList(), epoch, event.getSlot());
     }
 
     private void handleProposalRefund(List<GovActionId> proposalsBeDropped, int earnedEpoch, long slot) {
@@ -112,6 +96,24 @@ public class ProposalRefundProcessor {
                     .build();
             publisher.publishEvent(rewardRestEvent);
         }
+    }
+
+    private List<Proposal> getProposalsByStatusAndEpoch(GovActionStatus status, int epoch) {
+        return proposalStateClient.getProposalsByStatusAndEpoch(status, epoch)
+                .stream()
+                .map(this::mapToProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
+    }
+
+    private List<Proposal> getProposalsByStatusListAndEpoch(List<GovActionStatus> statuses, int epoch) {
+        return proposalStateClient.getProposalsByStatusListAndEpoch(statuses, epoch)
+                .stream()
+                .map(this::mapToProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
     }
 
     private Optional<Proposal> mapToProposal(GovActionProposal govActionProposal) {
