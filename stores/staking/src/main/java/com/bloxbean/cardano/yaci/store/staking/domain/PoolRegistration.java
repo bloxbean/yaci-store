@@ -44,14 +44,6 @@ public class PoolRegistration extends BlockAwareDomain {
     private String blockHash;
 
     //derived
-    public String getRewardAccountBech32() {
-        if (rewardAccount == null)
-            return "";
-
-        Address address = new Address(HexUtil.decodeHexString(rewardAccount));
-        return address.toBech32();
-    }
-
     public String getPoolIdBech32() {
         if (poolId == null)
             return "";
