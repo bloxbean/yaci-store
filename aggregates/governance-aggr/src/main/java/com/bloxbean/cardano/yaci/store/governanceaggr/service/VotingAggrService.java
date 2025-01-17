@@ -48,6 +48,7 @@ public class VotingAggrService {
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
                 .and(row(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, VOTING_PROCEDURE.GOV_ACTION_INDEX).in(govActionPairs))
+                .and(VOTING_PROCEDURE.VOTER_TYPE.eq("STAKING_POOL_KEY_HASH"))
                 .groupBy(
                         VOTING_PROCEDURE.VOTER_HASH,
                         VOTING_PROCEDURE.VOTER_TYPE,
@@ -70,7 +71,6 @@ public class VotingAggrService {
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
                         .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
-                .where(VOTING_PROCEDURE.VOTER_TYPE.eq("STAKING_POOL_KEY_HASH"))
                 .andExists(
                         selectOne()
                                 .from(EPOCH_STAKE)
@@ -83,7 +83,7 @@ public class VotingAggrService {
     }
 
     @Transactional
-    public List<VotingProcedure> getVotesByCommittee(int epoch, List<GovActionId> govActionIds) {
+    public List<VotingProcedure> getVotesByCommittee(int epoch, List<GovActionId> govActionIds, List<String> committeeHotKeys) {
         if (govActionIds == null || govActionIds.isEmpty()) {
             return List.of();
         }
@@ -102,6 +102,11 @@ public class VotingAggrService {
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
                 .and(row(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, VOTING_PROCEDURE.GOV_ACTION_INDEX).in(govActionPairs))
+                .and(VOTING_PROCEDURE.VOTER_TYPE.in(
+                        "CONSTITUTIONAL_COMMITTEE_HOT_SCRIPT_HASH",
+                        "CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH"
+                ))
+                .and(VOTING_PROCEDURE.VOTER_HASH.in(committeeHotKeys))
                 .groupBy(
                         VOTING_PROCEDURE.VOTER_HASH,
                         VOTING_PROCEDURE.VOTER_TYPE,
@@ -126,10 +131,6 @@ public class VotingAggrService {
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
                         .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
-                .where(VOTING_PROCEDURE.VOTER_TYPE.in(
-                        "CONSTITUTIONAL_COMMITTEE_HOT_SCRIPT_HASH",
-                        "CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH"
-                ))
                 .fetch();
 
         return mapToVotingProcedures(result);
@@ -155,6 +156,7 @@ public class VotingAggrService {
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
                 .and(row(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, VOTING_PROCEDURE.GOV_ACTION_INDEX).in(govActionPairs))
+                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
                 .groupBy(
                         VOTING_PROCEDURE.VOTER_HASH,
                         VOTING_PROCEDURE.VOTER_TYPE,
@@ -177,7 +179,6 @@ public class VotingAggrService {
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
                         .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
-                .where(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
                 .andExists(
                         selectOne()
                                 .from(DREP_DIST)

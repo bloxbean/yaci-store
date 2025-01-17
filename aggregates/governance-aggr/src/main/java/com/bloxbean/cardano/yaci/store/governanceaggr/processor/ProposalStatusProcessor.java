@@ -164,12 +164,25 @@ public class ProposalStatusProcessor {
             // cc threshold
             var ccThreshold = committee.get().getThreshold();
 
+            List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
+
+            // map (cold key, hot key)
+            Map<String, String> coldKeyHotKeyMap = membersCanVote.stream()
+                    .collect(Collectors.toMap(CommitteeMemberDetails::getColdKey, CommitteeMemberDetails::getHotKey));
+
+            // map (hot key, cold key list)
+            Map<String, List<String>> hotKeyColdKeysMap = membersCanVote.stream()
+                    .collect(Collectors.groupingBy(CommitteeMemberDetails::getHotKey,
+                            Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
+
             // get votes by committee member
             List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, proposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
-                            .build()).toList());
+                            .build()).toList(),
+                    coldKeyHotKeyMap.values().stream().toList()
+                    );
 
             // get votes by SPO
             List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, proposalsForStatusCalculation.stream().map(
@@ -199,17 +212,6 @@ public class ProposalStatusProcessor {
                     .anyMatch(govActionProposalStatus -> GovernanceActionUtil.isDelayingAction(govActionProposalStatus.getType()));
 
             ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
-
-            List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
-
-            // map (cold key, hot key)
-            Map<String, String> coldKeyHotKeyMap = membersCanVote.stream()
-                    .collect(Collectors.toMap(CommitteeMemberDetails::getColdKey, CommitteeMemberDetails::getHotKey));
-
-            // map (hot key, cold key list)
-            Map<String, List<String>> hotKeyColdKeysMap = membersCanVote.stream()
-                    .collect(Collectors.groupingBy(CommitteeMemberDetails::getHotKey,
-                            Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
 
             // use gov rule and update proposal status
             for (var proposal : proposalsForStatusCalculation) {
