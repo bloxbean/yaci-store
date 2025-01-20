@@ -1,3 +1,9 @@
 server:
   port: 8081
 
+spring:
+  config:
+    import: classpath:/git.properties
+  banner:
+    location: classpath:/banner.txt
+
