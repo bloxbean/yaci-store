@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -12,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStora
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,13 +31,15 @@ public class ProposalRefundProcessor {
     private final GovActionProposalStorage govActionProposalStorage;
     private final ProposalStateClient proposalStateClient;
     private final ProposalMapper proposalMapper;
+    private final StakingCertificateStorageReader stakingCertificateStorageReader;
     private final ApplicationEventPublisher publisher;
 
     public ProposalRefundProcessor(GovActionProposalStorage govActionProposalStorage, ProposalStateClient proposalStateClient,
-                                   ProposalMapper proposalMapper, ApplicationEventPublisher publisher) {
+                                   ProposalMapper proposalMapper, StakingCertificateStorageReader stakingCertificateStorageReader, ApplicationEventPublisher publisher) {
         this.govActionProposalStorage = govActionProposalStorage;
         this.proposalStateClient = proposalStateClient;
         this.proposalMapper = proposalMapper;
+        this.stakingCertificateStorageReader = stakingCertificateStorageReader;
         this.publisher = publisher;
     }
 
@@ -80,11 +84,20 @@ public class ProposalRefundProcessor {
         var proposals = govActionProposalStorage.findByGovActionIds(proposalsBeDropped);
 
         for (var proposal : proposals) {
-            rewardRestAmts.add(RewardRestAmt.builder()
-                    .address(proposal.getReturnAddress())
-                    .type(RewardRestType.proposal_refund)
-                    .amount(proposal.getDeposit())
-                    .build());
+            var regCert = stakingCertificateStorageReader
+                    .getRegistrationByStakeAddress(proposal.getReturnAddress(), slot)
+                    .orElse(null);
+
+            if (regCert == null || regCert.getType() == CertificateType.STAKE_DEREGISTRATION
+                    || regCert.getType() == CertificateType.UNREG_CERT) { //return account not found or deregistered
+                log.info("Proposal return account is not registered. or deregistered :{}", proposal.getReturnAddress());
+            } else {
+                rewardRestAmts.add(RewardRestAmt.builder()
+                        .address(proposal.getReturnAddress())
+                        .type(RewardRestType.proposal_refund)
+                        .amount(proposal.getDeposit())
+                        .build());
+            }
         }
 
         if (!rewardRestAmts.isEmpty()) {
