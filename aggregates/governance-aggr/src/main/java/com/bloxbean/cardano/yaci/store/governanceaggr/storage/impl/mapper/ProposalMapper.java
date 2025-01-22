@@ -1,18 +1,26 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper;
 
+import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
+import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class ProposalMapper {
     private final ObjectMapper objectMapper;
+
+    public ProposalMapper() {
+        this.objectMapper = new ObjectMapper();
+        SimpleModule module = new SimpleModule();
+        module.addKeyDeserializer(Credential.class, new CredentialDeserializer());
+        this.objectMapper.registerModule(module);
+    }
 
     public Proposal toProposal(GovActionProposal govActionProposal) throws JsonProcessingException {
         return Proposal.builder()
