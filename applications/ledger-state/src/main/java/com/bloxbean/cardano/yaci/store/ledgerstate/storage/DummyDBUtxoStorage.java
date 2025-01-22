@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation.storage;
+package com.bloxbean.cardano.yaci.store.ledgerstate.storage;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;

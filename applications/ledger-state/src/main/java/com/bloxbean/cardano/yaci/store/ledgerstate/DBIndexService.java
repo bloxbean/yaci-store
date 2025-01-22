@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation;
+package com.bloxbean.cardano.yaci.store.ledgerstate;
 
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;

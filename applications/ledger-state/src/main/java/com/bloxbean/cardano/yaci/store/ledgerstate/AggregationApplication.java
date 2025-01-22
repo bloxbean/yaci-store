@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation;
+package com.bloxbean.cardano.yaci.store.ledgerstate;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
