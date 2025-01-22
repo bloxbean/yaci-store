@@ -12,6 +12,7 @@ include 'applications:utxo-indexer'
 include 'applications:gateway'
 include 'applications:aggregation-app'
 include 'applications:admin'
+include 'applications:admin-cli'
 
 include 'components:core'
 include 'components:events'

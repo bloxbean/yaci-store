@@ -1,0 +1,25 @@
+plugins {
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
+    id "com.gorylenko.gradle-git-properties" version "2.4.1"
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.shell:spring-shell-starter'
+
+    runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.shell:spring-shell-dependencies:${springBootVersion}"
+    }
+}
+
+gitProperties {
+    failOnNoGitDirectory = false
+}
