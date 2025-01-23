@@ -1,6 +1,6 @@
-package com.bloxbean.cardano.yaci.store.aggregation.config;
+package com.bloxbean.cardano.yaci.store.ledgerstate.config;
 
-import com.bloxbean.cardano.yaci.store.aggregation.storage.DummyDBUtxoStorage;
+import com.bloxbean.cardano.yaci.store.ledgerstate.storage.DummyDBUtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
