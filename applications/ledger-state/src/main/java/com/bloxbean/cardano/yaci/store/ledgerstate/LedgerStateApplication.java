@@ -10,8 +10,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableBatchProcessing
 @Slf4j
-public class AggregationApplication {
+public class LedgerStateApplication {
     public static void main(String[] args) {
-        SpringApplication.run(AggregationApplication.class, args);
+        SpringApplication.run(LedgerStateApplication.class, args);
     }
 }
