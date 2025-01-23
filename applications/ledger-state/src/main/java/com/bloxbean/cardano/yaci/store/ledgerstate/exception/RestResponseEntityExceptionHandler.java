@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation.exception;
+package com.bloxbean.cardano.yaci.store.ledgerstate.exception;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;

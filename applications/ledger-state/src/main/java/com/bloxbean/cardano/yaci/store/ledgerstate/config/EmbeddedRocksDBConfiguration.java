@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.aggregation.config;
+package com.bloxbean.cardano.yaci.store.ledgerstate.config;
 
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
 import com.bloxbean.cardano.yaci.store.extensions.account.rocksdb.RocksDBAccountBalanceStorageImpl;
