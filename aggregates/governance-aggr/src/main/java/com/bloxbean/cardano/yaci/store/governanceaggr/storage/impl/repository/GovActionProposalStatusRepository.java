@@ -14,6 +14,7 @@ import java.util.Optional;
 @Repository
 public interface GovActionProposalStatusRepository extends JpaRepository<GovActionProposalStatusEntity,
         GovActionProposalStatusId> {
+    void deleteByEpoch(Integer epoch);
     List<GovActionProposalStatusEntity> findByStatusAndEpoch(GovActionStatus status, int epoch);
 
     @Query("select g from GovActionProposalStatusEntity g where g.status in :statusList and g.epoch = :epoch")

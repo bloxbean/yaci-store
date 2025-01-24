@@ -23,6 +23,11 @@ public class GovActionProposalStatusStorageImpl implements GovActionProposalStat
     }
 
     @Override
+    public void deleteByEpoch(Integer epoch) {
+        govActionProposalStatusRepository.deleteByEpoch(epoch);
+    }
+
+    @Override
     public List<GovActionProposalStatus> findByStatusAndEpoch(GovActionStatus status, int epoch) {
         return govActionProposalStatusRepository.findByStatusAndEpoch(status, epoch).stream()
                 .map(mapper::toGovActionProposalStatus).toList();

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 public interface GovActionProposalStatusStorage {
     void saveAll(List<GovActionProposalStatus> govActionProposalStatusList);
+    void deleteByEpoch(Integer epoch);
     List<GovActionProposalStatus> findByStatusAndEpoch(GovActionStatus status, int epoch);
     List<GovActionProposalStatus> findByStatusListAndEpoch(List<GovActionStatus> statusList, int epoch);
     Optional<GovActionProposalStatus> findLastEnactedProposal(GovActionType govActionType, int epoch);

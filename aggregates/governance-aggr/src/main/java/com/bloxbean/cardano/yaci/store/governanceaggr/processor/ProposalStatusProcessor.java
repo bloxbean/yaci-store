@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -26,6 +27,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DRepDistService;
+import com.bloxbean.cardano.yaci.store.governanceaggr.service.DelegationVoteDataService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
@@ -36,6 +38,9 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.rule.GovActionRatifier;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
+import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
+import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -66,18 +71,22 @@ public class ProposalStatusProcessor {
     private final DRepDistStorageReader dRepDistStorage;
     private final AdaPotStorage adaPotStorage;
     private final CommitteeMemberStorage committeeMemberStorage;
+    private final PoolStorage poolStorage;
+    private final PoolStorageReader poolStorageReader;
+    private final DelegationVoteDataService delegationVoteDataService;
     private final ProposalMapper proposalMapper;
     private final ApplicationEventPublisher publisher;
 
     private boolean isBootstrapPhase = true;
     private final ObjectMapper objectMapper;
+    private final int QUERY_BATCH_SIZE = 500;
 
     public ProposalStatusProcessor(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage,
                                    DRepDistService dRepDistService, ProposalStateClient proposalStateClient,
                                    EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage, ProposalMapper proposalMapper,
+                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper,
                                    ApplicationEventPublisher publisher) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
@@ -90,6 +99,9 @@ public class ProposalStatusProcessor {
         this.dRepDistStorage = dRepDistStorage;
         this.adaPotStorage = adaPotStorage;
         this.committeeMemberStorage = committeeMemberStorage;
+        this.poolStorage = poolStorage;
+        this.poolStorageReader = poolStorageReader;
+        this.delegationVoteDataService = delegationVoteDataService;
         this.proposalMapper = proposalMapper;
         this.publisher = publisher;
 
@@ -125,6 +137,8 @@ public class ProposalStatusProcessor {
     public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
+        // delete records if exists for the epoch
+        govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
         try {
             if (isBootstrapPhase) {
@@ -213,6 +227,45 @@ public class ProposalStatusProcessor {
 
             ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
 
+            List<String> activePools = poolStorage.findActivePools(epoch).stream()
+                    .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
+                    .toList();
+
+            // map (reward account, List of pools)
+            var activePoolsBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
+            Map<String, List<String>> rewardAccountPoolMap = activePoolsBatches.parallelStream()
+                    .flatMap(batch -> poolStorageReader.getPoolDetails(batch, epoch).stream())
+                    .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
+
+            // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep
+            List<String> poolsDelegatedToAlwaysAbstainDRep = new ArrayList<>();
+            var poolBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.values()), QUERY_BATCH_SIZE);
+            poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
+                    .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.ABSTAIN, epoch)
+                    .parallelStream()
+                    .forEach(delegationVote ->
+                            poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+
+            BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
+                    .getAllActiveStakesByEpochAndPools(epoch, poolsDelegatedToAlwaysAbstainDRep)
+                    .stream()
+                    .map(EpochStake::getAmount)
+                    .reduce(BigInteger.ZERO, BigInteger::add);
+
+            // Calculate the total stake of SPOs that delegated to NoConfidence DRep
+            List<String> poolsDelegatedToNoConfidenceDRep = new ArrayList<>();
+            poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
+                    .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.NO_CONFIDENCE, epoch)
+                    .parallelStream()
+                    .forEach(delegationVote ->
+                            poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+
+            BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
+                    .getAllActiveStakesByEpochAndPools(epoch, poolsDelegatedToNoConfidenceDRep)
+                    .stream()
+                    .map(EpochStake::getAmount)
+                    .reduce(BigInteger.ZERO, BigInteger::add);
+
             // use gov rule and update proposal status
             for (var proposal : proposalsForStatusCalculation) {
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
@@ -296,7 +349,7 @@ public class ProposalStatusProcessor {
                             .reduce(BigInteger.ZERO, BigInteger::add);
                 }
 
-                // calculate The total delegated stake from SPO that voted 'Abstain'
+                // calculate the total delegated stake from SPO that voted 'Abstain'
                 BigInteger spoAbstainStake = BigInteger.ZERO;
 
                 List<String> poolsVoteAbstain = votesBySPO.stream()
@@ -320,7 +373,6 @@ public class ProposalStatusProcessor {
                 BigInteger dRepNoStake = null;
 
                 if (!isBootstrapPhase) {
-
                     /* Calculate dRep 'yes' stake */
                     /*
                         dRepYesStake – The total stake of:
@@ -386,8 +438,35 @@ public class ProposalStatusProcessor {
                     if (dRepNoConfidenceStake.isPresent()) {
                         dRepNoStake = dRepNoStake.add(dRepNoConfidenceStake.get());
                     }
-
+                } else {
+                    /*
+                        During bootstrap phase, For `HardForkInitiation` all SPOs that didn't vote are considered as `No` votes.
+                        Whereas, for all other `GovAction`s, SPOs that didn't vote are considered as `Abstain` votes.
+                    */
+                    if (!proposal.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION)) {
+                        List<String> poolsDoNotVoteForThisAction = activePools.stream()
+                                .filter(poolId -> votesBySPO.stream()
+                                        .noneMatch(votingProcedure -> votingProcedure.getVoterHash().equals(poolId)
+                                                && votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
+                                                && votingProcedure.getGovActionIndex() == proposal.getIndex()))
+                                .toList();
+                        BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, poolsDoNotVoteForThisAction)
+                                .stream()
+                                .map(EpochStake::getAmount)
+                                .reduce(BigInteger.ZERO, BigInteger::add);
+                        spoAbstainStake = spoAbstainStake.add(totalStakeSPODoNotVote);
+                    }
                 }
+
+                /*
+                    Cases: a pool delegated to an `AlwaysNoConfidence` or an `AlwaysAbstain` DRep.
+                    In those cases, behaviour is as expected: vote `Yes` on `NoConfidence` proposals in case of the former
+                    and vote `Abstain` by default in case of the latter
+                 */
+                if (proposal.getType() == GovActionType.NO_CONFIDENCE) {
+                    spoYesStake = spoYesStake.and(totalStakeSPODelegatedToNoConfidenceDRep);
+                }
+                spoAbstainStake = spoAbstainStake.add(totalStakeSPODelegatedToAbstainDRep);
 
                 // Get the last enacted proposal with the same purpose
                 GovActionId lastEnactedGovActionIdWithSamePurpose = proposalStateClient.getLastEnactedProposal(proposal.getType(), currentEpoch)

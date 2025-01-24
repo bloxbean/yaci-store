@@ -55,6 +55,13 @@ public interface PoolStorage {
     List<Pool> findRetiredPools(Integer epoch);
 
     /**
+     * Find active pools for a given epoch
+     * @param epoch
+     * @return List of pools
+     */
+    List<Pool> findActivePools(Integer epoch);
+
+    /**
      * Delete all records with slot greater than the given slot
      * @param slot
      * @return
