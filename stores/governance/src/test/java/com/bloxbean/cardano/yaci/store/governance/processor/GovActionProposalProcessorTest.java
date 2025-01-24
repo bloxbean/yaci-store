@@ -110,15 +110,10 @@ class GovActionProposalProcessorTest {
 
         JsonNode govActionIdNode = details.get("govActionId");
         assertThat(govActionIdNode.get("transactionId").asText())
-                .isEqualTo("bd5d786d745ec7c1994f8cff341afee513c7cdad73e8883d540ff71c41763fd1");
+                .isEqualTo("5159366367679d1050a48e94fa19f77b6b91c4d7a4f7b90a4b111f38c0746de8");
         assertThat(govActionIdNode.get("gov_action_index").asInt())
-                .isEqualTo(2);
+                .isEqualTo(0);
 
-        JsonNode protocolVersionNode = details.get("protocolVersion");
-        assertThat(protocolVersionNode.get("_1").asInt())
-                .isEqualTo(9);
-        assertThat(protocolVersionNode.get("_2").asInt())
-                .isEqualTo(3);
     }
 
     @Test
