@@ -260,9 +260,14 @@ public class ProposalStatusProcessor {
                     .map(EpochStake::getAmount)
                     .reduce(BigInteger.ZERO, BigInteger::add);
 
-            BigInteger totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
-                    .orElse(BigInteger.ZERO);
-            var dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch);
+            BigInteger totalDRepStake = BigInteger.ZERO;
+            BigInteger dRepAutoAbstainStake = BigInteger.ZERO;
+
+            if (!isBootstrapPhase) {
+                totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
+                        .orElse(BigInteger.ZERO);
+                dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch).orElse(BigInteger.ZERO);
+            }
 
             // use gov rule and update proposal status
             for (var proposal : proposalsForStatusCalculation) {
@@ -425,7 +430,7 @@ public class ProposalStatusProcessor {
                             .reduce(BigInteger.ZERO, BigInteger::add);
 
                     // The total stake of active dReps that did not vote for this action = totalDRepStake - totalStakeDRepDoVote - dRepAutoAbstainStake - dRepNoConfidenceStake
-                    BigInteger totalStakeDRepDoNotVote = totalDRepStake.subtract(totalStakeDRepDoVote).subtract(dRepAutoAbstainStake.orElse(BigInteger.ZERO))
+                    BigInteger totalStakeDRepDoNotVote = totalDRepStake.subtract(totalStakeDRepDoVote).subtract(dRepAutoAbstainStake)
                             .subtract(dRepNoConfidenceStake.orElse(BigInteger.ZERO));
 
                     dRepNoStake = dRepNoStake.add(totalStakeDRepDoNotVote);
