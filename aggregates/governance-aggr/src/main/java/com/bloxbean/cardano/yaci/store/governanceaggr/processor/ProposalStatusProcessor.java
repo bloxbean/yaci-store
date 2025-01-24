@@ -113,32 +113,26 @@ public class ProposalStatusProcessor {
 
     @EventListener
     @Transactional
-    public void handleDuringEpochTransition(PreEpochTransitionEvent event) {
-        int epoch = event.getEpoch();
-        int prevEpoch = epoch - 1;
+    // TODO: enactment order
+    public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
+        int epoch = stakeSnapshotTakenEvent.getEpoch();
+        int currentEpoch = epoch + 1;
+
+        // delete records if exists for the epoch
+        govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
+
+        var newProposals = govActionProposalStorage.findByEpoch(epoch);
 
         // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
-        var newProposals = govActionProposalStorage.findByEpoch(prevEpoch);
-
         govActionProposalStatusStorage.saveAll(newProposals.stream().map(govActionProposal ->
                 GovActionProposalStatus.builder()
                         .govActionTxHash(govActionProposal.getTxHash())
                         .govActionIndex((int) govActionProposal.getIndex())
                         .type(govActionProposal.getType())
-                        .epoch(prevEpoch)
+                        .epoch(epoch)
                         .status(GovActionStatus.ACTIVE)
                         .build()
         ).toList());
-    }
-
-    @EventListener
-    @Transactional
-    // TODO: enactment order
-    public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
-        int epoch = stakeSnapshotTakenEvent.getEpoch();
-        int currentEpoch = epoch + 1;
-        // delete records if exists for the epoch
-        govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
         try {
             if (isBootstrapPhase) {
