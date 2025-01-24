@@ -266,6 +266,10 @@ public class ProposalStatusProcessor {
                     .map(EpochStake::getAmount)
                     .reduce(BigInteger.ZERO, BigInteger::add);
 
+            BigInteger totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
+                    .orElse(BigInteger.ZERO);
+            var dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch);
+
             // use gov rule and update proposal status
             for (var proposal : proposalsForStatusCalculation) {
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
@@ -425,9 +429,6 @@ public class ProposalStatusProcessor {
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
-                    BigInteger totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
-                            .orElse(BigInteger.ZERO);
-                    var dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch);
 
                     // The total stake of active dReps that did not vote for this action = totalDRepStake - totalStakeDRepDoVote - dRepAutoAbstainStake - dRepNoConfidenceStake
                     BigInteger totalStakeDRepDoNotVote = totalDRepStake.subtract(totalStakeDRepDoVote).subtract(dRepAutoAbstainStake.orElse(BigInteger.ZERO))
@@ -528,7 +529,7 @@ public class ProposalStatusProcessor {
             log.info("Error processing proposal status: {}", currentEpoch, e);
         }
 
-        log.info("Finish handling proposal status");
+        log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
 
         publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
     }
