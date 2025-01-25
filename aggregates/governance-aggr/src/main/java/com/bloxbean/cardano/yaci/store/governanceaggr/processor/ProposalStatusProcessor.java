@@ -464,7 +464,7 @@ public class ProposalStatusProcessor {
                     and vote `Abstain` by default in case of the latter
                  */
                 if (proposal.getType() == GovActionType.NO_CONFIDENCE) {
-                    spoYesStake = spoYesStake.and(totalStakeSPODelegatedToNoConfidenceDRep);
+                    spoYesStake = spoYesStake.add(totalStakeSPODelegatedToNoConfidenceDRep);
                 }
                 spoAbstainStake = spoAbstainStake.add(totalStakeSPODelegatedToAbstainDRep);
 
