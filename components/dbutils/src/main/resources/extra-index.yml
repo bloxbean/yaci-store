@@ -1,0 +1,8 @@
+- table: address_utxo
+  indexes:
+    - name: idx_address_utxo_amounts
+      columns:
+        - amounts
+      type: gin
+      excludes:
+        - mysql

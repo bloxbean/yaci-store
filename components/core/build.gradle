@@ -1,6 +1,7 @@
 dependencies {
     implementation project(':components:events')
     implementation project(':components:common')
+    implementation project(':components:dbutils')
 
     implementation(libs.yaci){
         exclude group: "com.bloxbean.cardano", module: "cardano-client-core"

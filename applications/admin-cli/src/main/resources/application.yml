@@ -2,8 +2,8 @@ spring:
   shell:
     interactive:
       enabled: true
-  config:
-    import: classpath:/git.properties
+#  config:
+#    import: classpath:/git.properties
   banner:
     location: classpath:/banner.txt
   devtools:

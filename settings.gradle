@@ -23,6 +23,7 @@ include 'components:remote'
 include 'components:rocksdb'
 include 'components:job'
 include 'components:admin'
+include 'components:dbutils'
 
 include 'stores:blocks'
 include 'stores:utxo'
