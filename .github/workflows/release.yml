@@ -41,10 +41,11 @@ jobs:
           files: |
             applications/all/build/libs/yaci-store-all-${{env.VERSION}}.jar
             applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar
-            applications/aggregation-app/build/libs/yaci-store-aggregation-app-${{env.VERSION}}.jar
+            applications/ledger-state/build/libs/yaci-store-ledger-state-${{env.VERSION}}.jar
             applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
             config/application.properties
-            config/application-aggr.properties
+            config/application-ledger-state.properties
+            config/application-balance.properties
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -77,18 +78,18 @@ jobs:
             APP_VERSION=${{env.VERSION}}
           tags: bloxbean/yaci-store-all:${{ env.VERSION }}
 
-      - name: Build and push yaci-store-aggregation-app docker image
+      - name: Build and push yaci-store-ledger-state docker image
         uses: docker/build-push-action@v4
         with:
           file: ./Dockerfile
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          target: yaci-store-aggregation-app
+          target: yaci-store-ledger-state
           build-args: |
-            TARGET=yaci-store-aggregation-app
+            TARGET=yaci-store-ledger-state
             APP_VERSION=${{env.VERSION}}
-          tags: bloxbean/yaci-store-aggregation-app:${{ env.VERSION }}
+          tags: bloxbean/yaci-store-ledger-state:${{ env.VERSION }}
 
       - name: Build and push yaci-store-utxo-indexer docker image
         uses: docker/build-push-action@v4

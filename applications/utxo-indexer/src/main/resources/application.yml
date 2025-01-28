@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:/git.properties
   banner:
     location: classpath:/banner.txt
   application:

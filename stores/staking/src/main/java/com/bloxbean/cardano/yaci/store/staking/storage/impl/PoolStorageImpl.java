@@ -63,6 +63,12 @@ public class PoolStorageImpl implements PoolStorage {
     }
 
     @Override
+    public List<Pool> findActivePools(Integer epoch) {
+        return poolStatusRepository.findActivePoolsByEpoch(epoch)
+                .stream().map(poolMapper::toDeposit).collect(Collectors.toList());
+    }
+
+    @Override
     public int deleteBySlotGreaterThan(long slot) {
         return poolStatusRepository.deleteBySlotGreaterThan(slot);
     }

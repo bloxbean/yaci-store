@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.domain.local;
 
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;

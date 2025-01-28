@@ -10,7 +10,7 @@ rootProject.name = 'yaci-store'
 include 'applications:all'
 include 'applications:utxo-indexer'
 include 'applications:gateway'
-include 'applications:aggregation-app'
+include 'applications:ledger-state'
 include 'applications:admin'
 include 'applications:admin-cli'
 

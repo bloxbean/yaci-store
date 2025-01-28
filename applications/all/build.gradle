@@ -3,6 +3,7 @@ import org.gradle.internal.os.OperatingSystem
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
     id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
+    id "com.gorylenko.gradle-git-properties" version "${gradleGitPropertiesVersion}"
 }
 
 dependencies {
@@ -113,3 +114,7 @@ task cliZip(type: Zip) {
 }
 
 cliZip.dependsOn nativeCompile
+
+gitProperties {
+    failOnNoGitDirectory = false
+}

@@ -37,6 +37,15 @@ public interface PoolStatusRepository extends JpaRepository<PoolEntity, PoolId> 
     @Query("SELECT d FROM PoolEntity d WHERE d.retireEpoch = :retireEpoch and d.status = 'RETIRED'")
     List<PoolEntity> findRetiredPoolsByRetireEpoch(Integer retireEpoch);
 
+    @Query("SELECT ps FROM PoolEntity ps WHERE ps.status != 'RETIRED' AND ps.epoch <= :epoch AND NOT EXISTS (" +
+            "SELECT ps2 FROM PoolEntity ps2 " +
+            "WHERE ps2.poolId = ps.poolId AND ps2.epoch <= :epoch " +
+            "AND (ps2.slot > ps.slot " +
+            "OR (ps2.slot = ps.slot AND ps2.txIndex > ps.txIndex) " +
+            "OR (ps2.slot = ps.slot AND ps2.txIndex = ps.txIndex AND ps2.certIndex > ps.certIndex))" +
+            ")")
+    List<PoolEntity> findActivePoolsByEpoch(Integer epoch);
+
     @Query("SELECT MAX(d.epoch) FROM PoolEntity d")
     Integer getMaxEpoch();
 
