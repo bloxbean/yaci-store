@@ -28,24 +28,8 @@ create table address_utxo
 CREATE INDEX idx_address_utxo_slot
     ON address_utxo(slot);
 
-CREATE INDEX idx_address_utxo_owner_addr
-    ON address_utxo(owner_addr);
-
-CREATE INDEX idx_address_utxo_owner_stake_addr
-    ON address_utxo(owner_stake_addr);
-
-CREATE INDEX idx_address_utxo_owner_paykey_hash
-    ON address_utxo(owner_payment_credential);
-
-CREATE INDEX idx_address_utxo_owner_stakekey_hash
-    ON address_utxo(owner_stake_credential);
-
 CREATE INDEX idx_reference_script_hash
     ON address_utxo(reference_script_hash);
-
-CREATE INDEX idx_address_utxo_epoch
-    ON address_utxo(epoch);
-
 
 -- tx_input
 drop table if exists tx_input;
