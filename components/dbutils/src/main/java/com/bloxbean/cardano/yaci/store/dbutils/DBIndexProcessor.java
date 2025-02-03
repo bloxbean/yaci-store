@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -101,30 +100,6 @@ public class DBIndexProcessor {
             log.warn("Total number of indexes that failed to apply : {}", result.getSecond().size());
         }
         return false;
-    }
-
-    private boolean isMysql() throws SQLException {
-        var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
-        if (vendor != null && vendor.toLowerCase().contains("mysql"))
-            return true;
-        else
-            return false;
-    }
-
-    private boolean isH2() throws SQLException {
-        var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
-        if (vendor != null && vendor.toLowerCase().contains("h2"))
-            return true;
-        else
-            return false;
-    }
-
-    private boolean isPostgres() throws SQLException {
-        var vendor = dataSource.getConnection().getMetaData().getDatabaseProductName();
-        if (vendor != null && vendor.toLowerCase().contains("postgres"))
-            return true;
-        else
-            return false;
     }
 
     private boolean isAutoIndexManagement() {

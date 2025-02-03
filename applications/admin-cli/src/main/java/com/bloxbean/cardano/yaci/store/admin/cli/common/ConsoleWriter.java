@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.admin.cli.common;
 
 public class ConsoleWriter {
+    private ConsoleWriter() {}
+
     public static void writeLn(String str, Object...args) {
         if (args.length != 0)
             System.out.println(String.format(str, args));

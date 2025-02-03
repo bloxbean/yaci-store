@@ -17,7 +17,7 @@ import java.util.Optional;
 @AllArgsConstructor
 @Slf4j
 public class DatabaseUtils {
-    public enum DbType {postgres, mysql, h2};
+    public enum DbType {postgres, mysql, h2}
 
     private final JdbcTemplate jdbcTemplate;
     private final DSLContext dsl;

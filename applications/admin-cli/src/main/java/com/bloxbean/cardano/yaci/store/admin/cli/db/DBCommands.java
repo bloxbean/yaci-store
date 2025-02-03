@@ -18,8 +18,8 @@ import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 @RequiredArgsConstructor
 @Slf4j
 public class DBCommands {
-    private final static String INDEX_FILE = "index.yml";
-    private final static String EXTRA_INDEX_FILE = "extra-index.yml";
+    private static final String INDEX_FILE = "index.yml";
+    private static final String EXTRA_INDEX_FILE = "extra-index.yml";
 
     private final IndexService indexService;
 
@@ -72,7 +72,6 @@ public class DBCommands {
 
         var resultPair = indexService.verifyIndexes(indexDefinitionList);
 
-        List<TableIndex> existsList = resultPair.getFirst();
         List<TableIndex> notExistsList = resultPair.getSecond();
 
         if (!notExistsList.isEmpty()) {
