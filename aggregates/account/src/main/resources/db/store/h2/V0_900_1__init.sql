@@ -16,23 +16,11 @@ create table address_balance
     primary key (address, unit, slot)
 );
 
-CREATE INDEX idx_address_balance_address
-    ON address_balance (address);
-
 CREATE INDEX idx_address_balance_slot
     ON address_balance (slot);
 
 CREATE INDEX idx_address_balance_block
     ON address_balance (block);
-
-CREATE INDEX idx_address_balance_block_time
-    ON address_balance (block_time);
-
-CREATE INDEX idx_address_balance_epoch
-    ON address_balance (epoch);
-
-CREATE INDEX idx_address_balance_unit
-    ON address_balance (unit);
 
 CREATE INDEX idx_address_balance_policy
     ON address_balance (policy);
@@ -56,21 +44,11 @@ create table stake_address_balance
     primary key (address, slot)
 );
 
-CREATE INDEX idx_stake_addr_balance_stake_addr
-    ON stake_address_balance (address);
-
 CREATE INDEX idx_stake_addr_balance_slot
     ON stake_address_balance (slot);
 
 CREATE INDEX idx_stake_addr_balance_block
     ON stake_address_balance (block);
-
-CREATE INDEX idx_stake_addr_balance_block_time
-    ON stake_address_balance (block_time);
-
-CREATE INDEX idx_stake_addr_balance_epoch
-    ON stake_address_balance (epoch);
-
 
 -- address_tx_amount
 

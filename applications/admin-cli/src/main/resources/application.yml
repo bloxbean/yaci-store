@@ -1,0 +1,25 @@
+spring:
+  shell:
+    interactive:
+      enabled: true
+#  config:
+#    import: classpath:/git.properties
+  banner:
+    location: classpath:/banner.txt
+  devtools:
+    add-properties:logging: false
+
+logging:
+  level:
+    org.springdoc: error
+    org.springframework: error
+    ch.qos.logback: error
+
+shell.out.info: CYAN
+shell.out.success: GREEN
+shell.out.warning: YELLOW
+shell.out.error: RED
+
+
+spring.shell.history.enabled: true
+spring.shell.history.name: admin-cli.history

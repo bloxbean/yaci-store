@@ -30,8 +30,8 @@ create table transaction_scripts
     update_datetime timestamp
 );
 
-CREATE INDEX idx_txn_scripts_tx_hash
-    ON transaction_scripts (tx_hash);
+CREATE INDEX idx_txn_scripts_slot
+    ON transaction_scripts (slot);
 
 drop table if exists datum;
 create table datum

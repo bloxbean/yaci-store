@@ -12,8 +12,5 @@ create table transaction_metadata
     update_datetime       timestamp
 );
 
-CREATE INDEX idx_txn_metadata_tx_hash
-    ON transaction_metadata(tx_hash);
-
-CREATE INDEX idx_txn_metadata_label
-    ON transaction_metadata(label);
+CREATE INDEX idx_txn_metadata_slot
+    ON transaction_metadata(slot);
