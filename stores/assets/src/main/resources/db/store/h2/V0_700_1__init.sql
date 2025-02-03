@@ -14,3 +14,6 @@ create table assets
     block_time            bigint,
     update_datetime       timestamp
 );
+
+CREATE INDEX idx_assets_slot
+    ON assets(slot);

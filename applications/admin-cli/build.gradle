@@ -1,0 +1,22 @@
+plugins {
+    id 'org.springframework.boot' version "${springBootVersion}"
+//    id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.shell:spring-shell-starter'
+
+    implementation project(':components:dbutils')
+
+    runtimeOnly "com.mysql:mysql-connector-j:${mysqlDriverVersion}"
+    runtimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.shell:spring-shell-dependencies:3.4.0"
+    }
+}

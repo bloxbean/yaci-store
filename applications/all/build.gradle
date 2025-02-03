@@ -24,6 +24,8 @@ dependencies {
     implementation project(':starters:epoch-aggr-spring-boot-starter')
 
     implementation project(':starters:admin-spring-boot-starter')
+    implementation project(':components:dbutils')
+
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
