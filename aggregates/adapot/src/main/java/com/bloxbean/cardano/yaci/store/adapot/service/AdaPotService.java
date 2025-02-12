@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AdaPotService {
     private final AdaPotStorage adaPotStorage;
-    private StoreProperties storeProperties;
+    private final StoreProperties storeProperties;
 
     /**
      * Create AdaPot for the given epoch
