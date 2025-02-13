@@ -90,6 +90,9 @@ public class TxnEntity extends BlockAwareEntity {
     @Column(name = "reference_inputs")
     private List<UtxoKey> referenceInputs;
 
+    @Column(name = "treasury_donation")
+    private BigInteger treasuryDonation;
+
     @Column(name = "invalid")
     private Boolean invalid;
 }

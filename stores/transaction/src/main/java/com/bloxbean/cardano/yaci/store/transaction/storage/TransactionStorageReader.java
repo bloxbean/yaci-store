@@ -14,4 +14,5 @@ public interface TransactionStorageReader {
     List<Txn> getTransactionsByBlockNumber(long blockNumber);
 
     BigInteger getTotalFee(int epoch);
+    BigInteger getTotalDonation(int epoch);
 }

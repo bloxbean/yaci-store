@@ -115,6 +115,7 @@ public class TransactionProcessor {
                     .totalCollateral(transaction.getBody().getTotalCollateral())
                     .collateralReturn(new UtxoKey(transaction.getTxHash(), outputs.size()))
                     .referenceInputs(referenceInputs)
+                    .treasuryDonation(transaction.getBody().getDonation())
                     .invalid(transaction.isInvalid())
                     .build();
 

@@ -74,4 +74,9 @@ public class TransactionStorageReaderImpl implements TransactionStorageReader {
         return txnEntityRepository.getTotalFee(epoch);
     }
 
+    @Override
+    public BigInteger getTotalDonation(int epoch) {
+        return txnEntityRepository.getTotalDonation(epoch);
+    }
+
 }
