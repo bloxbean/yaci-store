@@ -72,7 +72,7 @@ class TransactionStorageReaderImplTest {
                 .build();
 
 
-        transactionStorage.saveAll(List.of(txn1, txn2, txn3, txn4, txn5));
+        transactionStorage.saveAll(List.of(txn1, txn2, txn3, txn4, txn5, txn6));
 
         var epoch4Donation = transactionStorageReader.getTotalDonation(4);
         var epoch5Donation = transactionStorageReader.getTotalDonation(5);
