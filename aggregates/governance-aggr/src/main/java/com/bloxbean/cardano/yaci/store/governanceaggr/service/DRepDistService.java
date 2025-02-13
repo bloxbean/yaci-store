@@ -165,7 +165,7 @@ public class DRepDistService {
                           lw.max_slot is null
                           or r.slot > lw.max_slot
                         )
-                        and r.spendable_epoch <= :snapshot_epoch
+                        and r.spendable_epoch <= :epoch
                     group by
                       r.address
                   )
@@ -191,9 +191,8 @@ public class DRepDistService {
                     left join insta_spendable_rewards ir on rd.address = ir.address
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
-                    left join stake_address_balance sab on msb.address = sab.address
+                    left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join spendable_reward_rest rr ON rd.address = rr.address
-                    and msb.max_slot = sab.slot
                   where
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
@@ -247,9 +246,8 @@ public class DRepDistService {
                     left join insta_spendable_rewards ir on rd.address = ir.address
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
-                    left join stake_address_balance sab on msb.address = sab.address
+                    left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join spendable_reward_rest rr ON rd.address = rr.address
-                    and msb.max_slot = sab.slot
                   where
                     not exists (
                       select
