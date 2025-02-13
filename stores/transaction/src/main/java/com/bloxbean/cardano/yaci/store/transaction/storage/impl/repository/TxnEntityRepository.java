@@ -19,5 +19,8 @@ public interface TxnEntityRepository extends JpaRepository<TxnEntity, String> {
     @Query("select sum(t.fee) from TxnEntity t where t.epoch = :epoch")
     BigInteger getTotalFee(long epoch);
 
+    @Query("select sum(t.treasuryDonation) from TxnEntity t where t.epoch = :epoch and t.treasuryDonation is not null")
+    BigInteger getTotalDonation(long epoch);
+
     int deleteBySlotGreaterThan(Long slot);
 }

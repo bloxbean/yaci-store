@@ -21,6 +21,7 @@ create table transaction
     validity_interval_start bigint,
     collateral_return_json  json,
     tx_index                integer,
+    treasury_donation       bigint,
     epoch                   integer,
     block                   bigint,
     block_time              bigint,

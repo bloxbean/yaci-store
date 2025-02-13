@@ -41,5 +41,6 @@ public class Txn extends BlockAwareDomain {
     private TxOuput collateralReturnJson;
     private BigInteger totalCollateral;
     private List<UtxoKey> referenceInputs;
+    private BigInteger treasuryDonation;
     private Boolean invalid;
 }
