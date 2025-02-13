@@ -1,54 +1,54 @@
-# asset store
-- table: "asset"
-# block store
-- table: "block"
-# epoch store
-- table: "protocol_params_proposal"
-- table: "epoch_param"
-- table: "cost_model"
-# governance store
-- table: "gov_action_proposal"
-- table: "delegation_vote"
-- table: "drep_registration"
-- table: "committee"
-- table: "committee_deregistration"
-- table: "committee_member"
-- table: "committee_registration"
-- table: "constitution"
-- table: "voting_procedure"
-# metadata store
-- table: "transaction_metadata"
-# mir store
-- table: "mir"
-# script store
-- table: "script"
-- table: "transaction_scripts"
-# staking store
-- table: "stake_registration"
-- table: "delegation"
-- table: "pool_registration"
-- table: "pool_retirement"
-- table: "pool"
-# transaction store
-- table: "transaction"
-- table: "transaction_witness"
-- table: "withdrawal"
-- table: "invalid_transaction"
-# utxo store
-- table: "address_utxo"
-- table: "tx_input"
-
-# other tables from account, adapot, governance-aggr module
-- table: "adapot"
-- table: "address_balance"
-- table: "address_tx_amount"
-- table: "cost_model"
-- table: "instant_reward"
-- table: "reward"
-- table: "reward_rest"
-- table: "stake_address_balance"
-- table: "adapot_jobs"
-- table: "drep"
-- table: "epoch_stake"
-- table: "drep_dist"
-- table: "gov_action_proposal_status"
+tables:
+  # asset store
+  - asset
+  # block store
+  - block
+  # epoch store
+  - protocol_params_proposal
+  - epoch_param
+  - cost_model
+  # governance store
+  - gov_action_proposal
+  - delegation_vote
+  - drep_registration
+  - committee
+  - committee_deregistration
+  - committee_member
+  - committee_registration
+  - constitution
+  - voting_procedure
+  # metadata store
+  - transaction_metadata
+  # mir store
+  - mir
+  # script store
+  - script
+  - transaction_scripts
+  # staking store
+  - stake_registration
+  - delegation
+  - pool_registration
+  - pool_retirement
+  - pool
+  # transaction store
+  - transaction
+  - transaction_witness
+  - withdrawal
+  - invalid_transaction
+  # utxo store
+  - address_utxo
+  - tx_input
+  # other tables from account, adapot, governance-aggr module
+  - adapot
+  - address_balance
+  - address_tx_amount
+  - cost_model
+  - instant_reward
+  - reward
+  - reward_rest
+  - stake_address_balance
+  - adapot_jobs
+  - drep
+  - epoch_stake
+  - drep_dist
+  - gov_action_proposal_status

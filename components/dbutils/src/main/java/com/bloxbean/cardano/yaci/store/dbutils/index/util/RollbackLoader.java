@@ -18,15 +18,21 @@ public class RollbackLoader {
             throw new IllegalArgumentException("File not found: " + yamlFilePath);
         }
 
-        List<Map<String, Object>> data = yaml.load(is);
+        Map<String, Object> root = yaml.load(is);
         List<String> tables = new ArrayList<>();
 
-        for (Map<String, Object> item : data) {
-            String table = (String) item.get("table");
-            if (table != null && !table.trim().isEmpty()) {
-                tables.add(table);
+        Object tablesObj = root.get("tables");
+        if (tablesObj instanceof List) {
+            for (Object t : (List<Object>) tablesObj) {
+                if (t instanceof String) {
+                    String table = ((String) t).trim();
+                    if (!table.isEmpty()) {
+                        tables.add(table);
+                    }
+                }
             }
         }
+
         return tables;
     }
 }
