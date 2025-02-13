@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.EpochCalculation;
@@ -50,6 +51,7 @@ public class EpochRewardCalculationService {
     private final EpochInfoService epochInfoService;
     private final PoolStorage poolStorage;
     private final PoolStorageReader poolStorageReader;
+    private final TransactionStorageReader transactionStorageReader;
     private final BlockInfoService blockInfoService;
     private final PoolStateService poolStateService;
     private final EraService eraService;
@@ -309,6 +311,15 @@ public class EpochRewardCalculationService {
                 networkConfig);
         long end = System.currentTimeMillis();
         log.debug("Epoch calculation took " + Math.round((end - start) / 1000.0) + "s");
+
+        //Get donations in previous epoch
+        var donationInPrevEpoch = transactionStorageReader.getTotalDonation(epoch - 1);
+        if (donationInPrevEpoch != null
+                && donationInPrevEpoch.compareTo(BigInteger.ZERO) > 0) {
+            //add donation to the treasury value
+            epochCalculationResult.setTreasury(epochCalculationResult.getTreasury().add(donationInPrevEpoch));
+        }
+        log.info("Total donation in the epoch {} : {}", epoch - 1, donationInPrevEpoch);
 
         return epochCalculationResult;
     }
