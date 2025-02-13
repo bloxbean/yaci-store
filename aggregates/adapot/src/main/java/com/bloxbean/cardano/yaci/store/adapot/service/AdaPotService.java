@@ -135,8 +135,13 @@ public class AdaPotService {
         try {
             expectedPots = loadExpectedAdaPotValues(storeProperties.getProtocolMagic());
             var expectedPot = expectedPots.get(epoch);
-            adaPot.setTreasury(expectedPot.getTreasury());
-            adaPot.setReserves(expectedPot.getReserves());
+            if (expectedPot != null) {
+                adaPot.setTreasury(expectedPot.getTreasury());
+                adaPot.setReserves(expectedPot.getReserves());
+            } else {
+                adaPot.setTreasury(treasury);
+                adaPot.setReserves(reserves);
+            }
 
             adaPotStorage.save(adaPot);
         } catch (IOException e) {
