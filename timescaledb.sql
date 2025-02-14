@@ -1,0 +1,135 @@
+set search_path TO dev;
+
+SELECT create_hypertable('address_balance', 'slot', chunk_time_interval => 500000);
+
+CREATE INDEX idx_address_slot ON address_balance (address, slot DESC);
+
+WITH latest_balances AS (
+    SELECT DISTINCT ON (address) address, quantity, slot
+    FROM address_balance
+    WHERE unit = 'lovelace'
+    ORDER BY address, slot DESC
+)
+SELECT address, quantity
+FROM latest_balances
+ORDER BY quantity DESC
+LIMIT 100;
+
+WITH latest_balances AS (
+    SELECT DISTINCT ON (address) address, quantity, slot
+    FROM address_balance
+    ORDER BY address, slot DESC
+),
+     historic_balances AS (
+         SELECT address,
+                quantity AS balance_1d,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY slot) AS balance_7d,
+                LAG(quantity, 30) OVER (PARTITION BY address ORDER BY slot) AS balance_1m,
+                LAG(quantity, 90) OVER (PARTITION BY address ORDER BY slot) AS balance_3m,
+                LAG(quantity, 180) OVER (PARTITION BY address ORDER BY slot) AS balance_6m
+         FROM address_balance
+     )
+SELECT lb.address,
+       lb.quantity AS latest_balance,
+       hb.balance_1d,
+       lb.quantity - hb.balance_1d AS change_1d,
+       hb.balance_7d,
+       lb.quantity - hb.balance_7d AS change_7d,
+       hb.balance_1m,
+       lb.quantity - hb.balance_1m AS change_1m,
+       hb.balance_3m,
+       lb.quantity - hb.balance_3m AS change_3m,
+       hb.balance_6m,
+       lb.quantity - hb.balance_6m AS change_6m
+FROM latest_balances lb
+         LEFT JOIN historic_balances hb ON lb.address = hb.address;
+
+
+
+ALTER TABLE address_balance ADD COLUMN block_timestamp TIMESTAMP WITHOUT TIME ZONE;
+
+UPDATE address_balance
+SET block_timestamp = TO_TIMESTAMP(block_time);
+
+ALTER TABLE dev.address_balance
+    ADD COLUMN block_timestamp TIMESTAMPTZ
+        GENERATED ALWAYS AS (TO_TIMESTAMP(block_time)) STORED;
+
+
+ALTER TABLE address_balance
+    ALTER COLUMN block_timestamp TYPE TIMESTAMPTZ
+        USING block_timestamp AT TIME ZONE 'UTC';
+
+-- Convert to Hypertable
+SELECT public.create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 432000::BIGINT);
+
+
+SELECT public.create_hypertable('address_balance', 'block_timestamp', migrate_data => true, chunk_time_interval => INTERVAL '5 days');
+
+
+-- initialize
+ALTER TABLE dev.address_balance ADD COLUMN block_timestamp TIMESTAMPTZ;
+UPDATE dev.address_balance SET block_timestamp = TO_TIMESTAMP(block_time);
+
+CREATE OR REPLACE FUNCTION set_block_timestamp()
+    RETURNS TRIGGER AS $$
+BEGIN
+    NEW.block_timestamp = TO_TIMESTAMP(NEW.block_time);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_set_block_timestamp
+    BEFORE INSERT ON dev.address_balance
+    FOR EACH ROW EXECUTE FUNCTION set_block_timestamp();
+
+
+WITH latest_balances AS (
+    -- Get the latest balance per address
+    SELECT DISTINCT ON (address) address, quantity AS latest_balance, block_timestamp
+    FROM address_balance
+    ORDER BY address, block_timestamp DESC
+),
+     historic_balances AS (
+         -- Get balance changes at different time intervals
+         SELECT address,
+                quantity AS latest_balance,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '1 day' PRECEDING) AS balance_1d,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '7 days' PRECEDING) AS balance_7d,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '1 month' PRECEDING) AS balance_1m,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '3 months' PRECEDING) AS balance_3m,
+                LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '6 months' PRECEDING) AS balance_6m
+         FROM address_balance
+     )
+SELECT lb.address,
+       lb.latest_balance,
+       hb.balance_1d,
+       lb.latest_balance - hb.balance_1d AS change_1d,
+       hb.balance_7d,
+       lb.latest_balance - hb.balance_7d AS change_7d,
+       hb.balance_1m,
+       lb.latest_balance - hb.balance_1m AS change_1m,
+       hb.balance_3m,
+       lb.latest_balance - hb.balance_3m AS change_3m,
+       hb.balance_6m,
+       lb.latest_balance - hb.balance_6m AS change_6m
+FROM latest_balances lb
+         LEFT JOIN historic_balances hb ON lb.address = hb.address
+ORDER BY lb.latest_balance DESC
+LIMIT 100;
+
+
+
+CREATE INDEX idx_address_block_timestamp ON address_balance (address, block_timestamp DESC);
+
+
+WITH latest_balances AS (
+    SELECT DISTINCT ON (address) address, quantity, slot
+    FROM address_balance
+    WHERE unit = 'lovelace'
+    ORDER BY address, block_timestamp DESC
+)
+SELECT address, quantity
+FROM latest_balances
+ORDER BY quantity DESC
+LIMIT 100;
