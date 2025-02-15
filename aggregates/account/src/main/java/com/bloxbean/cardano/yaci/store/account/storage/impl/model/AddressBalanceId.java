@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import lombok.*;
 
 import java.io.Serializable;
+import java.time.LocalDateTime;
 
 @Getter
 @NoArgsConstructor
@@ -17,4 +18,7 @@ public class AddressBalanceId implements Serializable {
     private String unit;
     @Column(name = "slot")
     private Long slot;
+
+    @Column(name = "block_timestamp")
+    private LocalDateTime blockTimestamp;
 }

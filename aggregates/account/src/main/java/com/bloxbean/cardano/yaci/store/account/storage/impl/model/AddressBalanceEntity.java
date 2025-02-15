@@ -9,6 +9,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.DynamicUpdate;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -30,6 +31,10 @@ public class AddressBalanceEntity extends BlockAwareEntity {
     @Id
     @Column(name = "slot")
     private Long slot;
+
+    @Id
+    @Column(name = "block_timestamp")
+    private LocalDateTime blockTimestamp;
 
     @Column(name = "quantity")
     private BigInteger quantity;
