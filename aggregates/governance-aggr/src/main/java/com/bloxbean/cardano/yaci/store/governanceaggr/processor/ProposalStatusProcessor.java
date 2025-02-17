@@ -211,7 +211,7 @@ public class ProposalStatusProcessor {
             }
 
             // spo total stake
-            BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch)
+            BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
                     .orElse(BigInteger.ZERO);
 
             var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
@@ -241,7 +241,7 @@ public class ProposalStatusProcessor {
                             poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
 
             BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
-                    .getAllActiveStakesByEpochAndPools(epoch, poolsDelegatedToAlwaysAbstainDRep)
+                    .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToAlwaysAbstainDRep)
                     .stream()
                     .map(EpochStake::getAmount)
                     .reduce(BigInteger.ZERO, BigInteger::add);
@@ -255,7 +255,7 @@ public class ProposalStatusProcessor {
                             poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
 
             BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
-                    .getAllActiveStakesByEpochAndPools(epoch, poolsDelegatedToNoConfidenceDRep)
+                    .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToNoConfidenceDRep)
                     .stream()
                     .map(EpochStake::getAmount)
                     .reduce(BigInteger.ZERO, BigInteger::add);
@@ -346,7 +346,7 @@ public class ProposalStatusProcessor {
                         .toList();
 
                 if (!poolsVoteYes.isEmpty()) {
-                    spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, poolsVoteYes)
+                    spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsVoteYes)
                             .stream()
                             .map(EpochStake::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
@@ -364,7 +364,7 @@ public class ProposalStatusProcessor {
                         .toList();
 
                 if (!poolsVoteYes.isEmpty()) {
-                    spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, poolsVoteAbstain)
+                    spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsVoteAbstain)
                             .stream()
                             .map(EpochStake::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
@@ -450,7 +450,7 @@ public class ProposalStatusProcessor {
                                                 && votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
                                                 && votingProcedure.getGovActionIndex() == proposal.getIndex()))
                                 .toList();
-                        BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, poolsDoNotVoteForThisAction)
+                        BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsDoNotVoteForThisAction)
                                 .stream()
                                 .map(EpochStake::getAmount)
                                 .reduce(BigInteger.ZERO, BigInteger::add);
