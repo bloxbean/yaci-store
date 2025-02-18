@@ -273,7 +273,7 @@ public class ProposalStatusProcessor {
             for (var proposal : proposalsForStatusCalculation) {
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
 
-                int expiredEpoch = proposal.getEpoch() + govActionLifetime;
+                int maxAllowedVotingEpoch = proposal.getEpoch() + govActionLifetime;
 
                 if (proposal.getType().equals(GovActionType.INFO_ACTION)) {
                     GovActionProposalStatus govActionProposalStatus = GovActionProposalStatus
@@ -282,7 +282,7 @@ public class ProposalStatusProcessor {
                             .govActionTxHash(proposal.getTxHash())
                             .govActionIndex(proposal.getIndex())
                             .epoch(currentEpoch)
-                            .status(expiredEpoch < currentEpoch ? GovActionStatus.EXPIRED : GovActionStatus.ACTIVE)
+                            .status(maxAllowedVotingEpoch < currentEpoch ? GovActionStatus.EXPIRED : GovActionStatus.ACTIVE)
                             .build();
                     govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
                     continue;
@@ -488,7 +488,7 @@ public class ProposalStatusProcessor {
 
                     // get ratification result
                     RatificationResult ratificationResult = GovActionRatifier.getRatificationResult(
-                            govAction, isBootstrapPhase, expiredEpoch, ccYesVote, ccNoVote,
+                            govAction, isBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
                             BigDecimal.valueOf(ccThreshold), spoYesStake, spoAbstainStake, totalPoolStake,
                             dRepYesStake, dRepNoStake, ccState, lastEnactedGovActionIdWithSamePurpose, isActionRatificationDelayed,
                             treasury,
@@ -501,7 +501,7 @@ public class ProposalStatusProcessor {
                     GovActionStatus govActionStatus = GovActionStatus.ACTIVE;
                     if (ratificationResult.equals(RatificationResult.ACCEPT)) {
                         govActionStatus = GovActionStatus.RATIFIED;
-                    } else if (ratificationResult.equals(RatificationResult.REJECT) && proposal.getEpoch() + govActionLifetime < currentEpoch) {
+                    } else if (ratificationResult.equals(RatificationResult.REJECT) && maxAllowedVotingEpoch < currentEpoch) {
                         govActionStatus = GovActionStatus.EXPIRED;
                     }
 
