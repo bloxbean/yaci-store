@@ -122,6 +122,8 @@ LIMIT 100;
 
 CREATE INDEX idx_address_block_timestamp ON address_balance (address, block_timestamp DESC);
 
+CREATE INDEX idx_address_balance_addr_unit_slot ON address_balance (address, unit, slot DESC);
+
 
 WITH latest_balances AS (
     SELECT DISTINCT ON (address) address, quantity, slot
@@ -133,3 +135,9 @@ SELECT address, quantity
 FROM latest_balances
 ORDER BY quantity DESC
 LIMIT 100;
+
+
+--
+
+SELECT create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 432000);
+
