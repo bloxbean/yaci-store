@@ -9,4 +9,5 @@ import java.util.UUID;
 @Repository
 public interface RewardRestRepository extends JpaRepository<RewardRestEntity, UUID> {
 
+    int deleteBySlotGreaterThan(Long slot);
 }

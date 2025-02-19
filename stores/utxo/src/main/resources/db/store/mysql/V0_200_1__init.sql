@@ -63,9 +63,25 @@ create table address
     payment_credential varchar(56),
     stake_address      varchar(255),
     stake_credential   varchar(56),
+    slot               bigint,
     update_datetime    timestamp,
     primary key (id)
 );
 
 CREATE INDEX idx_address_stake_address
     ON address (stake_address);
+
+CREATE INDEX idx_address_slot
+    ON address (slot);
+
+-- ptr_address
+drop table if exists ptr_address;
+create table ptr_address
+(
+    address            varchar(500),
+    stake_address      varchar(255),
+    primary key (address)
+);
+
+CREATE INDEX idx_ptr_address_address
+    ON address (address);
