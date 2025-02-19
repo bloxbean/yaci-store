@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
+import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
@@ -15,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
@@ -321,6 +323,15 @@ public class EpochRewardCalculationService {
         }
         log.info("Total donation in the epoch {} : {}", epoch - 1, donationInPrevEpoch);
 
+        //Get any unclaimed proposal refunds earned in previous epoch
+        List<UnclaimedRewardRest> unclaimedRefunds = rewardStorage.findUnclaimedRewardRest(epoch);
+        unclaimedRefunds.stream()
+                .filter(unclaimedRewardRest -> unclaimedRewardRest.getType() == RewardRestType.proposal_refund)
+                .forEach(unclaimedRewardRest -> {
+                    var newTreasuryAmt = epochCalculationResult.getTreasury().add(unclaimedRewardRest.getAmount());
+                    epochCalculationResult.setTreasury(newTreasuryAmt);
+                });
+
         return epochCalculationResult;
     }
 
@@ -372,7 +383,9 @@ public class EpochRewardCalculationService {
 
             if(memberRewards != null && !memberRewards.isEmpty()) {
 
-                var memberRewardsList = memberRewards.stream().map(reward -> {
+                var memberRewardsList = memberRewards.stream()
+                        .filter(reward -> reward.getAmount() != null && reward.getAmount().compareTo(BigInteger.ZERO) > 0)
+                        .map(reward -> {
                     return com.bloxbean.cardano.yaci.store.adapot.domain.Reward.builder()
                             .address(reward.getStakeAddress())
                             .amount(reward.getAmount())
