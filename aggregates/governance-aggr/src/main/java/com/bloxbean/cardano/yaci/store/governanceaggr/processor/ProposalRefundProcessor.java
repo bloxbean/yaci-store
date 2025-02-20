@@ -5,10 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
+import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
@@ -80,6 +77,7 @@ public class ProposalRefundProcessor {
         }
 
         List<RewardRestAmt> rewardRestAmts = new ArrayList<>();
+        List<RewardRestAmt> unclaimedRewardRestAmts = new ArrayList<>();
 
         var proposals = govActionProposalStorage.findByGovActionIds(proposalsBeDropped);
 
@@ -91,6 +89,11 @@ public class ProposalRefundProcessor {
             if (regCert == null || regCert.getType() == CertificateType.STAKE_DEREGISTRATION
                     || regCert.getType() == CertificateType.UNREG_CERT) { //return account not found or deregistered
                 log.info("Proposal return account is not registered. or deregistered :{}", proposal.getReturnAddress());
+                unclaimedRewardRestAmts.add(RewardRestAmt.builder()
+                        .address(proposal.getReturnAddress())
+                        .type(RewardRestType.proposal_refund)
+                        .amount(proposal.getDeposit())
+                        .build());
             } else {
                 rewardRestAmts.add(RewardRestAmt.builder()
                         .address(proposal.getReturnAddress())
@@ -108,6 +111,16 @@ public class ProposalRefundProcessor {
                     .rewards(rewardRestAmts)
                     .build();
             publisher.publishEvent(rewardRestEvent);
+        }
+
+        if (!unclaimedRewardRestAmts.isEmpty()) {
+            var unclaimedRewardRestEvent = UnclaimedRewardRestEvent.builder()
+                    .earnedEpoch(earnedEpoch)
+                    .spendableEpoch(earnedEpoch + 1)
+                    .slot(slot)
+                    .rewards(unclaimedRewardRestAmts)
+                    .build();
+            publisher.publishEvent(unclaimedRewardRestEvent);
         }
     }
 

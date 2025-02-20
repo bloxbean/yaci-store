@@ -253,10 +253,19 @@ public class AdaPotJobManager {
                     var expectedPot = expectedPots.get(epoch);
 
                     if (expectedPot != null) {
-                        if (!epochCalculationResult.getReserves().equals(expectedPot.getReserves()))
-                            throw new RuntimeException("Reserves value mismatch for epoch : " + epoch);
-                        if (!epochCalculationResult.getTreasury().equals(expectedPot.getTreasury()))
-                            throw new RuntimeException("Treasury value mismatch for epoch : " + epoch);
+                        if (!epochCalculationResult.getReserves().equals(expectedPot.getReserves())) {
+                            log.error("Expected reserves: {}, Calculated reserves: {}",
+                                    expectedPot.getReserves(), epochCalculationResult.getReserves());
+                            throw new RuntimeException("Reserves value mismatch for epoch : " + epoch
+                                    + ", Expected: " + expectedPot.getReserves() + ", Actual: " + epochCalculationResult.getReserves());
+                        }
+
+                        if (!epochCalculationResult.getTreasury().equals(expectedPot.getTreasury())) {
+                            log.error("Expected treasury: {}, Calculated treasury: {}",
+                                    expectedPot.getTreasury(), epochCalculationResult.getTreasury());
+                            throw new RuntimeException("Treasury value mismatch for epoch : " + epoch
+                                    + ", Expected: " + expectedPot.getTreasury() + ", Actual: " + epochCalculationResult.getTreasury());
+                        }
 
                         log.info("Treasury and reserves value matched for epoch : {}", epoch);
                     }
