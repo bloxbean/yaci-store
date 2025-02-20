@@ -19,4 +19,6 @@ public interface RewardRepository extends JpaRepository<RewardEntity, RewardId> 
 
     @Query("select max(r.earnedEpoch) from RewardEntity r where r.type = :rewardType")
     Optional<Integer> getLastRewardCalculationEpoch(RewardType rewardType);
+
+    int deleteBySlotGreaterThan(Long slot);
 }
