@@ -3,12 +3,13 @@ package com.bloxbean.cardano.yaci.store.utxo.domain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-@Data
+import java.util.Objects;
+
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
@@ -19,4 +20,17 @@ public class Address {
     private String paymentCredential;
     private String stakeAddress;
     private String stakeCredential;
+    private Long slot;
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Address address1 = (Address) o;
+        return Objects.equals(address, address1.address);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(address);
+    }
 }
