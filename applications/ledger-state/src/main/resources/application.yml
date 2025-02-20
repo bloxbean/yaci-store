@@ -30,6 +30,6 @@ apiPrefix: /api/v1
 
 logging:
   file:
-    name: ./logs/yaci-store-aggr.log
+    name: ./logs/yaci-store-ledger-state.log
 
 

@@ -45,8 +45,9 @@ public class AdaPotConfiguration {
     public RewardStorage rewardStorage(InstantRewardRepository instantRewardRepository,
                                        RewardRestRepository rewardRestRepository,
                                        RewardRepository rewardRepository,
+                                       UnclaimedRewardRestRepository unclaimedRewardRestRepository,
                                        Mapper rewardMapper, DSLContext dslContext) {
-        return new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, rewardMapper, dslContext);
+        return new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, unclaimedRewardRestRepository, rewardMapper, dslContext);
     }
 
     @Bean

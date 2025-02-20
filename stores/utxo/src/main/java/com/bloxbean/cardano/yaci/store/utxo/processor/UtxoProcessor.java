@@ -19,7 +19,9 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.bloxbean.cardano.yaci.store.utxo.domain.PtrAddress;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.NonNull;
@@ -48,6 +50,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 @Slf4j
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
+    private final AddressStorage addressStorage;
     private final ApplicationEventPublisher publisher;
     private final StakingClient stakingClient;
     private final MeterRegistry meterRegistry;
@@ -265,12 +268,20 @@ public class UtxoProcessor {
                 return;
             }
 
+            List<PtrAddress> ptrAddressList = new ArrayList<>();
+
             for (var utxo : utxosWithPointerAddress) {
                 try {
                     var address = new PointerAddress(utxo.getAddress());
                     var pointer = address.getPointer();
 
+                    //Builder pointer address object
+                    var ptrAddress = new PtrAddress();
+                    ptrAddress.setAddress(utxo.getAddress());
+
                     var stakeAddressOptional = stakingClient.getStakeAddressFromPointer(pointer.getSlot(), pointer.getTxIndex(), pointer.getCertIndex());
+                    ptrAddress.setStakeAddress(stakeAddressOptional.orElse(null));
+
                     if (stakeAddressOptional.isPresent()) {
                         var stakeAddress = stakeAddressOptional.get();
                         var addressUtxoOptional = utxoStorage.findById(utxo.getTxHash(), utxo.getIndex());
@@ -283,9 +294,15 @@ public class UtxoProcessor {
                     } else {
                         log.warn("Stake address not found for pointer address: " + utxo.getAddress() + ", Pointer: " + pointer);
                     }
+
+                    ptrAddressList.add(ptrAddress);
                 } catch (Exception e) {
                     log.error("Error getting stake address from pointer address: " + utxo.getAddress(), e);
                 }
+            }
+
+            if (ptrAddressList.size() > 0) {
+                addressStorage.savePtrAddress(ptrAddressList);
             }
 
         } finally {
