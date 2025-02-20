@@ -1,19 +1,19 @@
 drop table if exists adapot;
 create table adapot
 (
-    epoch               int primary key,
-    slot                bigint,
-    deposits_stake      numeric(38),
-    fees                numeric(38),
-    utxo                numeric(38),
-    treasury            numeric(38),
-    reserves            numeric(38),
-    rewards             numeric(38),
-    deposits_drep       numeric(38),
-    deposits_proposal   numeric(38),
-    block               bigint,
-    block_time          bigint,
-    update_datetime     timestamp
+    epoch                   int primary key,
+    slot                    bigint,
+    deposits_stake          numeric(38),
+    fees                    numeric(38),
+    utxo                    numeric(38),
+    treasury                numeric(38),
+    reserves                numeric(38),
+    circulation             numeric(38),
+    distributed_rewards     numeric(38),
+    undistributed_rewards   numeric(38),
+    rewards_pot             numeric(38),
+    pool_rewards_pot        numeric(38),
+    update_datetime         timestamp
 );
 
 create index idx_adapot_slot
@@ -88,7 +88,7 @@ create index idx_reward_slot
 drop table if exists reward_rest;
 create table reward_rest
 (
-    id              uuid  primary key,
+    id              char(36) PRIMARY KEY,
     address         varchar(255),
     type            varchar(50),
     amount          numeric(38),
@@ -104,7 +104,7 @@ create index idx_reward_rest_slot
 drop table if exists unclaimed_reward_rest;
 create table unclaimed_reward_rest
 (
-    id              uuid  primary key,
+    id              char(36) PRIMARY KEY,
     address         varchar(255),
     type            varchar(50),
     amount          numeric(38),

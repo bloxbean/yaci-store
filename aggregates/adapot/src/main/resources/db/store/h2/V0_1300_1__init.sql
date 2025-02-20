@@ -1,19 +1,19 @@
 drop table if exists adapot;
 create table adapot
 (
-    epoch               int primary key,
-    slot                bigint,
-    deposits_stake      numeric(38),
-    fees                numeric(38),
-    utxo                numeric(38),
-    treasury            numeric(38),
-    reserves            numeric(38),
-    rewards             numeric(38),
-    deposits_drep       numeric(38),
-    deposits_proposal   numeric(38),
-    block               bigint,
-    block_time          bigint,
-    update_datetime     timestamp
+    epoch                   int primary key,
+    slot                    bigint,
+    deposits_stake          numeric(38),
+    fees                    numeric(38),
+    utxo                    numeric(38),
+    treasury                numeric(38),
+    reserves                numeric(38),
+    circulation             numeric(38),
+    distributed_rewards     numeric(38),
+    undistributed_rewards   numeric(38),
+    rewards_pot             numeric(38),
+    pool_rewards_pot        numeric(38),
+    update_datetime         timestamp
 );
 
 create index idx_adapot_slot
