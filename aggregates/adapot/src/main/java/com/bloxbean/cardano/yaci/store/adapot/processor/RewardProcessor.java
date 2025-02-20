@@ -3,14 +3,12 @@ package com.bloxbean.cardano.yaci.store.adapot.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
+import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardEvent;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
-import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -104,14 +102,45 @@ public class RewardProcessor {
 
     @EventListener
     @Transactional
+    public void handleUnclaimedRewardRestEvent(UnclaimedRewardRestEvent unclaimedRewardRestEvent) {
+        List<RewardRestAmt> unclaimedRewardRestAmts = unclaimedRewardRestEvent.getRewards();
+
+        if (unclaimedRewardRestAmts == null || unclaimedRewardRestAmts.isEmpty())
+            return;
+
+        var rewards = unclaimedRewardRestAmts.stream()
+                .map(rewardRestAmt -> {
+                    var reward = new UnclaimedRewardRest();
+                    reward.setAddress(rewardRestAmt.getAddress());
+                    reward.setAmount(rewardRestAmt.getAmount());
+                    reward.setType(rewardRestAmt.getType());
+                    reward.setEarnedEpoch(unclaimedRewardRestEvent.getEarnedEpoch());
+                    reward.setSpendableEpoch(unclaimedRewardRestEvent.getSpendableEpoch());
+                    reward.setSlot(unclaimedRewardRestEvent.getSlot());
+
+                    return reward;
+                }).toList();
+
+        rewardStorage.saveUnclaimedRewardRest(rewards);
+    }
+
+    @EventListener
+    @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        int count = rewardStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        int count = rewardStorage.deleteInstantRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} instant rewards records", count);
+
+        count = rewardStorage.deleteRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} rewards records", count);
+
+        count = rewardStorage.deleteRewardRestsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} reward_rest records", count);
+
+        count = rewardStorage.deleteUnclaimedRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} unclaimed rewards records", count);
 
         count = rewardCalcJobStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} reward calculation jobs", count);
-
-        //TODO -- Any missing rollbacks
     }
 
 }
