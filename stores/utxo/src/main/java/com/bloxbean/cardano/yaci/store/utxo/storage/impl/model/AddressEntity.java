@@ -33,6 +33,9 @@ public class AddressEntity {
     @Column(name = "stake_address")
     private String stakeAddress;
 
+    @Column(name = "slot")
+    private Long slot;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDateTime;

@@ -23,10 +23,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
 
 @Component
 @RequiredArgsConstructor
@@ -37,7 +37,7 @@ public class AddressProcessor {
     private final StoreProperties storeProperties;
 
     private Cache<String, String> cache;
-    private Map<String, Address> addresseCache = new ConcurrentHashMap<>();
+    private List<SlotAddresses> slotAddressesCache = Collections.synchronizedList(new ArrayList<>());
 
     @PostConstruct
     public void init() {
@@ -65,6 +65,7 @@ public class AddressProcessor {
             log.info("<< Using MVStore Cache for Address >>");
         }
 
+        LinkedHashSet<Address> addressesInBlock = new LinkedHashSet<>();
         //Get Addresses
         addressUtxoEvent.getTxInputOutputs()
                 .stream().flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
@@ -75,10 +76,15 @@ public class AddressProcessor {
                             .stakeAddress(addressUtxo.getOwnerStakeAddr())
                             .paymentCredential(addressUtxo.getOwnerPaymentCredential())
                             .stakeCredential(addressUtxo.getOwnerStakeCredential())
+                            .slot(addressUtxo.getSlot())
                             .build();
 
-                    addresseCache.putIfAbsent(address.getAddress(), address);
+                    if (!addressesInBlock.contains(address)) {
+                        addressesInBlock.add(address);
+                    }
                 });
+
+        slotAddressesCache.add(new SlotAddresses(addressUtxoEvent.getEventMetadata().getSlot(), addressesInBlock));
     }
 
     @EventListener
@@ -89,21 +95,26 @@ public class AddressProcessor {
         }
 
         try {
-            if (addresseCache.size() > 0) {
+            List<Address> addresses = slotAddressesCache.stream()
+                    .sorted(Comparator.comparingLong(slotAddresses -> slotAddresses.slot()))
+                    .flatMap(slotAddresses -> slotAddresses.address.stream())
+                    .distinct()
+                    .collect(toList());
+
+            if (addresses.size() > 0) {
                 long t1 = System.currentTimeMillis();
-                addressStorage.save(addresseCache.values());
+                addressStorage.save(addresses);
 
                 if (!commitEvent.getMetadata().isSyncMode()) { //Store only for initial sync
-                    addresseCache.values()
-                            .forEach(address -> cache.put(address.getAddress(), ""));
+                    addresses.forEach(address -> cache.put(address.getAddress(), ""));
                 }
 
                 long t2 = System.currentTimeMillis();
-                log.info("Address save size : {}, time: {} ms", addresseCache.size(), (t2 - t1));
+                log.info("Address save size : {}, time: {} ms", addresses.size(), (t2 - t1));
                 log.info("Address Cache Size: {}", cache.size());
             }
         } finally {
-            addresseCache.clear();
+            slotAddressesCache.clear();
         }
     }
 
@@ -151,8 +162,14 @@ public class AddressProcessor {
     @EventListener
     @Transactional
     public void handleRollback(RollbackEvent rollbackEvent) {
-        addresseCache.clear();
         if (cache != null)
             cache.clear();
+
+        slotAddressesCache.clear();
+
+        long count = addressStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        log.info("Rollback -- {} address records", count);
     }
+
+    record SlotAddresses(long slot, LinkedHashSet<Address> address) {};
 }

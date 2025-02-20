@@ -3,11 +3,13 @@ package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
+import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
@@ -20,6 +22,7 @@ public class RewardStorageImpl implements RewardStorage {
     private final InstantRewardRepository instantRewardRepository;
     private final RewardRestRepository rewardRestRepository;
     private final RewardRepository rewardRepository;
+    private final UnclaimedRewardRestRepository unclaimedRewardRestRepository;
     private final Mapper mapper;
     private final DSLContext dsl;
 
@@ -57,13 +60,40 @@ public class RewardStorageImpl implements RewardStorage {
     }
 
     @Override
+    public void saveUnclaimedRewardRest(List<UnclaimedRewardRest> unclaimedRewards) {
+        unclaimedRewardRestRepository.saveAll(unclaimedRewards.stream().map(mapper::toUnclaimedRewardRestEntity).toList());
+    }
+
+    @Override
+    public List<UnclaimedRewardRest> findUnclaimedRewardRest(int spendableEpoch) {
+        return unclaimedRewardRestRepository.findBySpendableEpoch(spendableEpoch)
+                .stream().map(mapper::toUnclaimedRewardRest)
+                .toList();
+    }
+
+    @Override
     public void deleteLeaderMemberRewards(int epoch) {
         rewardRepository.deleteLeaderMemberRewards(epoch);
     }
 
     @Override
-    public int deleteBySlotGreaterThan(long slot) {
-        //TODO- Delete pool rewards as well
+    public int deleteInstantRewardsBySlotGreaterThan(long slot) {
         return instantRewardRepository.deleteBySlotGreaterThan(slot);
     }
+
+    @Override
+    public int deleteRewardsBySlotGreaterThan(long slot) {
+        return rewardRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    @Override
+    public int deleteRewardRestsBySlotGreaterThan(long slot) {
+        return rewardRestRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    @Override
+    public int deleteUnclaimedRewardsBySlotGreaterThan(long slot) {
+        return unclaimedRewardRestRepository.deleteBySlotGreaterThan(slot);
+    }
+
 }
