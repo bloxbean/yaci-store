@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StakeSnapshotService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking stake snapshot for epoch : " + epoch);
 
@@ -22,6 +23,7 @@ public class StakeSnapshotService {
         jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
         var query = """
+                    insert into epoch_stake
                     WITH RankedDelegations AS (
                         SELECT
                             address,
@@ -103,9 +105,7 @@ public class StakeSnapshotService {
                                      pool
                                  WHERE
                                          epoch <= :epoch
-                        )
-
-                    insert into epoch_stake
+                        )              
                     SELECT
                         :epoch,
                         d.address,
