@@ -88,7 +88,7 @@ create index idx_reward_slot
 drop table if exists reward_rest;
 create table reward_rest
 (
-    id              char(36) PRIMARY KEY,
+    id              binary(16) PRIMARY KEY,
     address         varchar(255),
     type            varchar(50),
     amount          numeric(38),
@@ -104,7 +104,7 @@ create index idx_reward_rest_slot
 drop table if exists unclaimed_reward_rest;
 create table unclaimed_reward_rest
 (
-    id              char(36) PRIMARY KEY,
+    id              binary(16) PRIMARY KEY,
     address         varchar(255),
     type            varchar(50),
     amount          numeric(38),

@@ -49,6 +49,7 @@ create table gov_action_proposal_status
 (
     gov_action_tx_hash varchar(64),
     gov_action_index   int,
+    type               varchar(50),
     status             varchar(20),
     epoch              int,
     slot               bigint,
