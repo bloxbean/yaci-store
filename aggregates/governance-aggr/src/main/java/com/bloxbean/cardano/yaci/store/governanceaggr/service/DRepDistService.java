@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class DRepDistService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
-        String query = """ 
+        String query = """
+                  INSERT INTO drep_dist 
                   with ranked_delegations as (
                     select
                       address,
@@ -168,12 +170,11 @@ public class DRepDistService {
                         and r.spendable_epoch <= :epoch
                     group by
                       r.address
-                  )
-                  INSERT INTO drep_dist
+                  )               
                   select
                     rd.drep_hash,
                     rd.drep_id,
-                    sum (
+                    sum(
                       COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
                         pr.pool_refund_withdrawable_reward,
                         0
@@ -223,9 +224,9 @@ public class DRepDistService {
                     rd.drep_id
                   union all
                   select
-                    drep_type_info.drep_type,
+                    rd.drep_type,
                     null,
-                    sum (
+                    sum(
                       COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
                         pr.pool_refund_withdrawable_reward,
                         0
@@ -234,21 +235,17 @@ public class DRepDistService {
                     :epoch,
                     NOW()
                   from
-                    (
-                      values
-                        ('ABSTAIN'),
-                        ('NO_CONFIDENCE')
-                    ) as drep_type_info(drep_type)
-                    join ranked_delegations rd on rd.drep_type = drep_type_info.drep_type
-                    and rd.rn = 1
+                    ranked_delegations rd                      
                     left join pool_rewards r on rd.address = r.address
                     left join pool_refund_rewards pr on rd.address = pr.address
                     left join insta_spendable_rewards ir on rd.address = ir.address
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
                     left join max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join spendable_reward_rest rr ON rd.address = rr.address
+                    left join spendable_reward_rest rr ON rd.address = rr.address                                               
                   where
+                    rd.rn=1 AND (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
+                    AND
                     not exists (
                       select
                         1
@@ -272,7 +269,7 @@ public class DRepDistService {
                         )
                     )
                   group by
-                    drep_type_info.drep_type;
+                    rd.drep_type
                   
                 """;
 
