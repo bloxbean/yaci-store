@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -20,6 +22,37 @@ public class DRepDistService {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
+
+        //Drop temp tables
+        jdbcTemplate.update("DROP TABLE IF EXISTS last_withdrawal", Map.of());
+        jdbcTemplate.update("DROP TABLE IF EXISTS max_slot_balances", Map.of());
+
+        String lastWithdrawalQuery = """
+            CREATE TEMP TABLE last_withdrawal  AS
+                SELECT address, MAX(slot) AS max_slot
+                FROM withdrawal
+                WHERE epoch <= :epoch
+                GROUP BY address;
+        """;
+
+        String maxSlotBalancesQuery = """
+            CREATE TEMP TABLE max_slot_balances  AS
+                 select
+                      address,
+                      MAX(slot) as max_slot
+                    from
+                      stake_address_balance
+                    where
+                      epoch <= :epoch
+                    group by
+                      address
+        """;
+
+        var epochParam = new MapSqlParameterSource();
+        epochParam.addValue("epoch", epoch);
+
+        jdbcTemplate.update(lastWithdrawalQuery, epochParam);
+        jdbcTemplate.update(maxSlotBalancesQuery, epochParam);
 
         String query = """
                   INSERT INTO drep_dist 
@@ -63,17 +96,6 @@ public class DRepDistService {
                     where
                       epoch <= :epoch
                   ),
-                  max_slot_balances as (
-                    select
-                      address,
-                      MAX(slot) as max_slot
-                    from
-                      stake_address_balance
-                    where
-                      epoch <= :epoch
-                    group by
-                      address
-                  ),
                   active_proposal_deposits  as (
                     select
                       g.return_address,
@@ -88,17 +110,6 @@ public class DRepDistService {
                       and s.epoch = :epoch
                     group by
                       g.return_address
-                  ),
-                  last_withdrawal as (
-                    select
-                      address,
-                      MAX(slot) as max_slot
-                    from
-                      withdrawal
-                    where
-                      epoch <= :epoch
-                    group by
-                      address
                   ),
                   pool_refund_rewards as (
                     select
@@ -181,7 +192,7 @@ public class DRepDistService {
                       ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
                         + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
-                    :epoch,
+                    CAST(:epoch as integer),
                     NOW()
                   from
                     ranked_delegations rd
@@ -232,7 +243,7 @@ public class DRepDistService {
                         0
                       ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
                     ),
-                    :epoch,
+                    CAST(:epoch as integer),
                     NOW()
                   from
                     ranked_delegations rd                      

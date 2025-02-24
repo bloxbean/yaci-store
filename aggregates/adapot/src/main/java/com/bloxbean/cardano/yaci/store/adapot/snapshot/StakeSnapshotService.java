@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -21,6 +23,37 @@ public class StakeSnapshotService {
 
         // Delete existing snapshot data if any for the epoch using jdbc tempalte
         jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
+
+        //Drop temp tables
+        jdbcTemplate.update("DROP TABLE IF EXISTS last_withdrawal", Map.of());
+        jdbcTemplate.update("DROP TABLE IF EXISTS MaxSlotBalances", Map.of());
+
+        String lastWithdrawalQuery = """
+            CREATE TEMP TABLE last_withdrawal  AS
+                SELECT address, MAX(slot) AS max_slot
+                FROM withdrawal
+                WHERE epoch <= :epoch
+                GROUP BY address;
+        """;
+
+        String maxSlotBalancesQuery = """
+            CREATE TEMP TABLE MaxSlotBalances  AS
+                 SELECT
+                                 address,
+                                 MAX(slot) AS max_slot
+                             FROM
+                                 stake_address_balance
+                             WHERE
+                                     epoch <= :epoch
+                             GROUP BY
+                                 address
+        """;
+
+        var epochParam = new MapSqlParameterSource();
+        epochParam.addValue("epoch", epoch);
+
+        jdbcTemplate.update(lastWithdrawalQuery, epochParam);
+        jdbcTemplate.update(maxSlotBalancesQuery, epochParam);
 
         var query = """
                     insert into epoch_stake
@@ -41,23 +74,6 @@ public class StakeSnapshotService {
                         WHERE
                                 epoch <= :epoch
                     ),
-                         MaxSlotBalances AS (
-                             SELECT
-                                 address,
-                                 MAX(slot) AS max_slot
-                             FROM
-                                 stake_address_balance
-                             WHERE
-                                     epoch <= :epoch
-                             GROUP BY
-                                 address
-                         ),
-                         last_withdrawal AS (
-                              SELECT address, MAX(slot) AS max_slot
-                              FROM withdrawal
-                              where epoch <= :epoch
-                              GROUP BY address
-                          ),
                          pool_refund_rewards AS (
                                      SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward
                                      FROM reward r
