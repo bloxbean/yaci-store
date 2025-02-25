@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.domain;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -18,7 +19,6 @@ import java.math.BigInteger;
 @SuperBuilder
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-// TODO: should add prevGovActionId?
 public class GovActionProposal extends BlockAwareDomain {
 
     private String txHash;
@@ -31,9 +31,7 @@ public class GovActionProposal extends BlockAwareDomain {
 
     private String returnAddress;
 
-    private GovActionType type;
-
-    private JsonNode details;
+    private GovAction govAction;
 
     private String anchorUrl;
 
