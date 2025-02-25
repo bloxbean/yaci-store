@@ -139,7 +139,7 @@ public class ProposalStatusProcessor {
                 // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
                 var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
                 if (enactedProposal.stream().anyMatch(govActionProposalStatus
-                        -> govActionProposalStatus.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
+                        -> govActionProposalStatus.getGovAction().getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
                     isBootstrapPhase = false;
                 }
             }
@@ -217,7 +217,7 @@ public class ProposalStatusProcessor {
             var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
 
             boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
-                    .anyMatch(govActionProposalStatus -> GovernanceActionUtil.isDelayingAction(govActionProposalStatus.getType()));
+                    .anyMatch(govActionProposal-> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
 
             ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
 
@@ -271,14 +271,16 @@ public class ProposalStatusProcessor {
 
             // use gov rule and update proposal status
             for (var proposal : proposalsForStatusCalculation) {
+                var govActionDetail = proposal.getGovAction();
+
                 var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
 
                 int maxAllowedVotingEpoch = proposal.getEpoch() + govActionLifetime;
 
-                if (proposal.getType().equals(GovActionType.INFO_ACTION)) {
+                if (govActionDetail.getType().equals(GovActionType.INFO_ACTION)) {
                     GovActionProposalStatus govActionProposalStatus = GovActionProposalStatus
                             .builder()
-                            .type(proposal.getType())
+                            .type(govActionDetail.getType())
                             .govActionTxHash(proposal.getTxHash())
                             .govActionIndex(proposal.getIndex())
                             .epoch(currentEpoch)
@@ -399,7 +401,7 @@ public class ProposalStatusProcessor {
                                 .reduce(BigInteger.ZERO, BigInteger::add);
                     }
                     var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.NO_CONFIDENCE.name(), epoch);
-                    if (proposal.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
+                    if (govActionDetail.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
                         dRepYesStake = dRepYesStake.add(dRepNoConfidenceStake.get());
                     }
 
@@ -443,7 +445,7 @@ public class ProposalStatusProcessor {
                         During bootstrap phase, For `HardForkInitiation` all SPOs that didn't vote are considered as `No` votes.
                         Whereas, for all other `GovAction`s, SPOs that didn't vote are considered as `Abstain` votes.
                     */
-                    if (!proposal.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION)) {
+                    if (!govActionDetail.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION)) {
                         List<String> poolsDoNotVoteForThisAction = activePools.stream()
                                 .filter(poolId -> votesBySPO.stream()
                                         .noneMatch(votingProcedure -> votingProcedure.getVoterHash().equals(poolId)
@@ -463,13 +465,13 @@ public class ProposalStatusProcessor {
                     In those cases, behaviour is as expected: vote `Yes` on `NoConfidence` proposals in case of the former
                     and vote `Abstain` by default in case of the latter
                  */
-                if (proposal.getType() == GovActionType.NO_CONFIDENCE) {
+                if (govActionDetail.getType() == GovActionType.NO_CONFIDENCE) {
                     spoYesStake = spoYesStake.add(totalStakeSPODelegatedToNoConfidenceDRep);
                 }
                 spoAbstainStake = spoAbstainStake.add(totalStakeSPODelegatedToAbstainDRep);
 
                 // Get the last enacted proposal with the same purpose
-                GovActionId lastEnactedGovActionIdWithSamePurpose = proposalStateClient.getLastEnactedProposal(proposal.getType(), currentEpoch)
+                GovActionId lastEnactedGovActionIdWithSamePurpose = proposalStateClient.getLastEnactedProposal(govActionDetail.getType(), currentEpoch)
                         .map(govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -478,17 +480,15 @@ public class ProposalStatusProcessor {
 
                 // Calculate the treasury
                 BigInteger treasury = null;
-                if (proposal.getType().equals(GovActionType.TREASURY_WITHDRAWALS_ACTION)) {
+                if (govActionDetail.getType().equals(GovActionType.TREASURY_WITHDRAWALS_ACTION)) {
                     treasury = adaPotStorage.findByEpoch(epoch)
                             .map(AdaPot::getTreasury).orElse(null);
                 }
 
                 try {
-                    GovAction govAction = convertToGovAction(proposal);
-
                     // get ratification result
                     RatificationResult ratificationResult = GovActionRatifier.getRatificationResult(
-                            govAction, isBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
+                            govActionDetail, isBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
                             BigDecimal.valueOf(ccThreshold), spoYesStake, spoAbstainStake, totalPoolStake,
                             dRepYesStake, dRepNoStake, ccState, lastEnactedGovActionIdWithSamePurpose, isActionRatificationDelayed,
                             treasury,
@@ -507,7 +507,7 @@ public class ProposalStatusProcessor {
 
                     GovActionProposalStatus govActionProposalStatus = GovActionProposalStatus
                             .builder()
-                            .type(proposal.getType())
+                            .type(govActionDetail.getType())
                             .govActionTxHash(proposal.getTxHash())
                             .govActionIndex(proposal.getIndex())
                             .epoch(currentEpoch)
@@ -544,21 +544,15 @@ public class ProposalStatusProcessor {
         List<GovActionProposal> ratifiedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED,  epoch - 1);
 
         List<Proposal> expiredProposals = expiredProposalsInPrevEpoch.stream()
-                .map(this::mapToProposal)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                .map(proposalMapper::toProposal)
                 .toList();
 
         List<Proposal> ratifiedProposals = ratifiedProposalsInPrevEpoch.stream()
-                .map(this::mapToProposal)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                .map(proposalMapper::toProposal)
                 .toList();
 
         List<Proposal> activeProposals = activeProposalsInPrevEpoch.stream()
-                .map(this::mapToProposal)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                .map(proposalMapper::toProposal)
                 .toList();
 
         List<Proposal> allProposals = Stream.concat(expiredProposals.stream(), Stream.concat(ratifiedProposals.stream(), activeProposals.stream())).toList();
@@ -583,28 +577,4 @@ public class ProposalStatusProcessor {
                 .toList();
     }
 
-    private GovAction convertToGovAction(GovActionProposal govActionProposal) throws JsonProcessingException {
-
-        return switch (govActionProposal.getType()) {
-            case INFO_ACTION -> new InfoAction();
-            case HARD_FORK_INITIATION_ACTION ->
-                    objectMapper.treeToValue(govActionProposal.getDetails(), HardForkInitiationAction.class);
-            case TREASURY_WITHDRAWALS_ACTION ->
-                    objectMapper.treeToValue(govActionProposal.getDetails(), TreasuryWithdrawalsAction.class);
-            case NO_CONFIDENCE -> objectMapper.treeToValue(govActionProposal.getDetails(), NoConfidence.class);
-            case UPDATE_COMMITTEE -> objectMapper.treeToValue(govActionProposal.getDetails(), UpdateCommittee.class);
-            case NEW_CONSTITUTION -> objectMapper.treeToValue(govActionProposal.getDetails(), NewConstitution.class);
-            case PARAMETER_CHANGE_ACTION ->
-                    objectMapper.treeToValue(govActionProposal.getDetails(), ParameterChangeAction.class);
-        };
-    }
-
-
-    private Optional<Proposal> mapToProposal(GovActionProposal govActionProposal) {
-        try {
-            return Optional.of(proposalMapper.toProposal(govActionProposal));
-        } catch (JsonProcessingException e) {
-            return Optional.empty();
-        }
-    }
 }

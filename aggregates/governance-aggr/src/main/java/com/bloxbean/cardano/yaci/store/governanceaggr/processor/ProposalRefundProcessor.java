@@ -143,10 +143,6 @@ public class ProposalRefundProcessor {
     }
 
     private Optional<Proposal> mapToProposal(GovActionProposal govActionProposal) {
-        try {
-            return Optional.of(proposalMapper.toProposal(govActionProposal));
-        } catch (JsonProcessingException e) {
-            return Optional.empty();
-        }
+        return Optional.of(proposalMapper.toProposal(govActionProposal));
     }
 }

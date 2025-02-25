@@ -1,10 +1,17 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
+import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -25,7 +32,8 @@ public class EpochParamProcessor {
     private final EpochParamStorage epochParamStorage;
     private final ProtocolParamsProposalStorage protocolParamsProposalStorage;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
-
+    private final ProposalStateClient proposalStateClient;
+    private final DomainMapper mapper = DomainMapper.INSTANCE;
     private PPEraChangeRules ppEraChangeRules = new PPEraChangeRules();
 
     @EventListener
@@ -69,6 +77,22 @@ public class EpochParamProcessor {
 
         //Additional Era change specific rules
         ppEraChangeRules.apply(newEra, prevEra, protocolParams);
+
+        // handle parameter change from gov action proposal
+        if (epochChangeEvent.getEra().getValue() >= Era.Conway.getValue()) {
+            List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                    proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, newEpoch - 1);
+
+            for (var proposal : ratifiedProposalsInPrevEpoch) {
+                if (proposal.getGovAction() != null && proposal.getGovAction().getType() == GovActionType.PARAMETER_CHANGE_ACTION) {
+                    ParameterChangeAction parameterChangeAction = (ParameterChangeAction) proposal.getGovAction();
+                    ProtocolParamUpdate protocolParamUpdate = parameterChangeAction.getProtocolParamUpdate();
+
+                    if (protocolParamUpdate != null)
+                        protocolParams.merge(mapper.toProtocolParams(protocolParamUpdate));
+                }
+            }
+        }
 
         //merge protocol params
         if (log.isDebugEnabled())
