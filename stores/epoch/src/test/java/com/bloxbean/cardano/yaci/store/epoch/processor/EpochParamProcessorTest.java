@@ -123,7 +123,7 @@ class EpochParamProcessorTest {
     }
 
     @Test
-    void givenEpochChangeEvent_whenEraIsConway_ProtocolParamChangeActionEnacted_shouldUpdatePPram() {
+    void givenEpochChangeEvent_whenEraIsConwayOrLater_ProtocolParamChangeActionEnacted_shouldUpdatePPram() {
         PreEpochTransitionEvent epochChangeEvent = PreEpochTransitionEvent.builder()
                 .epoch(28)
                 .previousEpoch(27)

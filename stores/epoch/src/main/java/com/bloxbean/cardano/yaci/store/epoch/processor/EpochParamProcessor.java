@@ -79,7 +79,7 @@ public class EpochParamProcessor {
         ppEraChangeRules.apply(newEra, prevEra, protocolParams);
 
         // handle parameter change from gov action proposal
-        if (epochChangeEvent.getEra() == Era.Conway) {
+        if (epochChangeEvent.getEra().getValue() >= Era.Conway.getValue()) {
             List<GovActionProposal> ratifiedProposalsInPrevEpoch =
                     proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, newEpoch - 1);
 
