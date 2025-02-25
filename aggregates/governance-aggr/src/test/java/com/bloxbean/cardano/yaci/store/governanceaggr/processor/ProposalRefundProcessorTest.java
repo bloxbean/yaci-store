@@ -13,7 +13,6 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -52,7 +51,7 @@ class ProposalRefundProcessorTest {
     private ProposalRefundProcessor proposalRefundProcessor;
 
     @Test
-    void testHandleProposalStatusCapturedEvent() throws JsonProcessingException {
+    void testHandleProposalStatusCapturedEvent() {
 
         ProposalStatusCapturedEvent event = new ProposalStatusCapturedEvent(1, 100);
 
