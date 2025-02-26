@@ -2,11 +2,16 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.Committee;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorageReader;
@@ -17,7 +22,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -26,15 +33,20 @@ public class CommitteeProcessor {
     private final StoreProperties storeProperties;
     private final CommitteeStorage committeeStorage;
     private final CommitteeStorageReader committeeStorageReader;
+    private final ProposalStateClient proposalStateClient;
 
     @EventListener
     @Transactional
-    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        Era prevEra = epochChangeEvent.getPreviousEra();
-        Era newEra = epochChangeEvent.getEra();
-        long protocolMagic = epochChangeEvent.getEventMetadata().getProtocolMagic();
-        long slot = epochChangeEvent.getEventMetadata().getSlot();
-        int epoch = epochChangeEvent.getEventMetadata().getEpochNumber();
+    public void handleEpochChangeEvent(PreEpochTransitionEvent event) {
+        if (event.getEra().getValue() < Era.Conway.getValue()) {
+            return;
+        }
+
+        Era prevEra = event.getPreviousEra();
+        Era newEra = event.getEra();
+        long protocolMagic = event.getMetadata().getProtocolMagic();
+        long slot = event.getMetadata().getSlot();
+        int epoch = event.getMetadata().getEpochNumber();
 
         // store data from genesis file
         if (newEra.equals(Era.Conway) && prevEra != Era.Conway) {
@@ -51,6 +63,31 @@ public class CommitteeProcessor {
             var govActionTxHash = "genesis.conway";
             Committee committee = buildCommittee(govActionTxHash, null, numerator, denominator, threshold, epoch, slot);
             committeeStorage.save(committee);
+        }
+
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+
+        for (var proposal : ratifiedProposalsInPrevEpoch) {
+            if (proposal.getGovAction() instanceof UpdateCommittee updateCommittee) {
+                BigDecimal quorumThreshold = updateCommittee.getQuorumThreshold();
+
+                if (quorumThreshold != null) {
+                    BigInteger thresholdNumerator = null;
+                    BigInteger thresholdDenominator = null;
+                    Double threshold = quorumThreshold.doubleValue();
+
+                    Committee committee = buildCommittee(proposal.getTxHash(),
+                            proposal.getIndex(),
+                            thresholdNumerator,
+                            thresholdDenominator,
+                            threshold,
+                            epoch,
+                            slot);
+
+                    committeeStorage.save(committee);
+                }
+            }
         }
     }
 

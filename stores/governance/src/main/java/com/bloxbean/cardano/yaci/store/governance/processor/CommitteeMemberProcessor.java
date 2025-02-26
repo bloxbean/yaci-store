@@ -1,14 +1,19 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GenesisCommitteeMember;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
-import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMember;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorageReader;
@@ -19,7 +24,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
@@ -29,14 +36,20 @@ public class CommitteeMemberProcessor {
     private final StoreProperties storeProperties;
     private final CommitteeMemberStorage committeeMemberStorage;
     private final CommitteeMemberStorageReader committeeMemberStorageReader;
+    private final ProposalStateClient proposalStateClient;
 
     @EventListener
     @Transactional
-    public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        Era prevEra = epochChangeEvent.getPreviousEra();
-        Era newEra = epochChangeEvent.getEra();
-        long protocolMagic = epochChangeEvent.getEventMetadata().getProtocolMagic();
-        long slot = epochChangeEvent.getEventMetadata().getSlot();
+    public void handleEpochChangeEvent(PreEpochTransitionEvent event) {
+        if (event.getEra().getValue() < Era.Conway.getValue()) {
+            return;
+        }
+
+        Era prevEra = event.getPreviousEra();
+        Era newEra = event.getEra();
+        long protocolMagic = event.getMetadata().getProtocolMagic();
+        long slot = event.getMetadata().getSlot();
+        Integer epoch = event.getEpoch();
 
         // store data from genesis file
         if (newEra.equals(Era.Conway) && prevEra != Era.Conway) {
@@ -49,10 +62,54 @@ public class CommitteeMemberProcessor {
             var committeeMembers = getGenesisCommitteeMembers(protocolMagic);
             if (committeeMembers != null && !committeeMembers.isEmpty()) {
                 var committeeMembersToSave = committeeMembers.stream().map(committeeMember ->
-                                buildCommitteeMember(committeeMember, epochChangeEvent.getEpoch(), slot))
+                                buildCommitteeMember(committeeMember, epoch, slot))
                         .collect(Collectors.toList());
                 committeeMemberStorage.saveAll(committeeMembersToSave);
             }
+        }
+
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+        List<CommitteeMember> updatedCommitteeMembers = new ArrayList<>();
+
+        for (var proposal : ratifiedProposalsInPrevEpoch) {
+            if (!(proposal.getGovAction() instanceof UpdateCommittee updateCommittee)) {
+                continue;
+            }
+
+            var currentCommitteeMembers = committeeMemberStorage.getCommitteeMembersByEpoch(event.getPreviousEpoch());
+
+            Set<String> membersForRemovalHashes = updateCommittee.getMembersForRemoval()
+                    .stream().map(Credential::getHash).collect(Collectors.toSet());
+
+            // Remove members
+            currentCommitteeMembers.stream()
+                    .filter(member -> !membersForRemovalHashes.contains(member.getHash()))
+                    .map(member -> CommitteeMember.builder()
+                            .startEpoch(epoch)
+                            .expiredEpoch(member.getExpiredEpoch())
+                            .hash(member.getHash())
+                            .credType(member.getCredType())
+                            .slot(slot)
+                            .build())
+                    .forEach(updatedCommitteeMembers::add);
+
+            // Add new members
+            updateCommittee.getNewMembersAndTerms().forEach((credential, term) ->
+                    updatedCommitteeMembers.add(CommitteeMember.builder()
+                            .hash(credential.getHash())
+                            .startEpoch(epoch)
+                            .expiredEpoch(epoch + term)
+                            .credType(credential.getType().equals(StakeCredType.ADDR_KEYHASH)
+                                    ? CredentialType.ADDR_KEYHASH
+                                    : CredentialType.SCRIPTHASH)
+                            .slot(slot)
+                            .build())
+            );
+        }
+
+        if (!updatedCommitteeMembers.isEmpty()) {
+            committeeMemberStorage.saveAll(updatedCommitteeMembers);
         }
     }
 
