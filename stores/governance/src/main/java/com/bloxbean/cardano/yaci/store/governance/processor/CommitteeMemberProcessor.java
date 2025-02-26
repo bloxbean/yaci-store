@@ -62,7 +62,7 @@ public class CommitteeMemberProcessor {
             var committeeMembers = getGenesisCommitteeMembers(protocolMagic);
             if (committeeMembers != null && !committeeMembers.isEmpty()) {
                 var committeeMembersToSave = committeeMembers.stream().map(committeeMember ->
-                                buildCommitteeMember(committeeMember, epoch, slot))
+                                buildCommitteeMember(committeeMember, epoch, epoch, slot))
                         .collect(Collectors.toList());
                 committeeMemberStorage.saveAll(committeeMembersToSave);
             }
@@ -86,10 +86,11 @@ public class CommitteeMemberProcessor {
             currentCommitteeMembers.stream()
                     .filter(member -> !membersForRemovalHashes.contains(member.getHash()))
                     .map(member -> CommitteeMember.builder()
-                            .startEpoch(epoch)
+                            .startEpoch(member.getStartEpoch())
                             .expiredEpoch(member.getExpiredEpoch())
                             .hash(member.getHash())
                             .credType(member.getCredType())
+                            .epoch(epoch)
                             .slot(slot)
                             .build())
                     .forEach(updatedCommitteeMembers::add);
@@ -103,6 +104,7 @@ public class CommitteeMemberProcessor {
                             .credType(credential.getType().equals(StakeCredType.ADDR_KEYHASH)
                                     ? CredentialType.ADDR_KEYHASH
                                     : CredentialType.SCRIPTHASH)
+                            .epoch(epoch)
                             .slot(slot)
                             .build())
             );
@@ -122,12 +124,13 @@ public class CommitteeMemberProcessor {
             return new ConwayGenesis(new File(conwayGenesisFile)).getCommitteeMembers();
     }
 
-    private CommitteeMember buildCommitteeMember(GenesisCommitteeMember committeeMember, Integer startEpoch, Long slot) {
+    private CommitteeMember buildCommitteeMember(GenesisCommitteeMember committeeMember, Integer startEpoch, Integer epoch, Long slot) {
         return CommitteeMember.builder()
                 .hash(committeeMember.getHash())
                 .startEpoch(startEpoch)
                 .expiredEpoch(committeeMember.getExpiredEpoch())
                 .credType(committeeMember.getHasScript() ? CredentialType.SCRIPTHASH : CredentialType.ADDR_KEYHASH)
+                .epoch(epoch)
                 .slot(slot)
                 .build();
     }
