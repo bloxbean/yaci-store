@@ -83,18 +83,22 @@ class CommitteeMemberProcessorTest {
         List<CommitteeMember> existingMembers = List.of(
                 CommitteeMember.builder()
                         .credType(CredentialType.ADDR_KEYHASH)
+                        .startEpoch(80)
                         .expiredEpoch(199)
                         .hash("aaaaaa06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b").build(),
                 CommitteeMember.builder()
                         .credType(CredentialType.SCRIPTHASH)
+                        .startEpoch(80)
                         .expiredEpoch(199)
                         .hash("bbbbbb06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b").build(),
                 CommitteeMember.builder()
                         .credType(CredentialType.SCRIPTHASH)
+                        .startEpoch(80)
                         .expiredEpoch(200)
                         .hash("cccccc06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b").build(),
                 CommitteeMember.builder()
                         .credType(CredentialType.SCRIPTHASH)
+                        .startEpoch(80)
                         .expiredEpoch(200)
                         .hash("dddddd06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b").build()
         );
@@ -109,13 +113,13 @@ class CommitteeMemberProcessorTest {
         assertThat(savedMembers).hasSize(4);
 
         assertThat(savedMembers.stream().anyMatch(member -> member.getHash().equals("cccccc06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
-                && member.getStartEpoch() == 101
+                && member.getStartEpoch() == 80
                 && member.getExpiredEpoch() == 200
                 && member.getCredType() == CredentialType.SCRIPTHASH
                 && member.getSlot() == 6000L))
                 .isTrue();
         assertThat(savedMembers.stream().anyMatch(member -> member.getHash().equals("dddddd06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
-                && member.getStartEpoch() == 101
+                && member.getStartEpoch() == 80
                 && member.getExpiredEpoch() == 200
                 && member.getCredType() == CredentialType.SCRIPTHASH
                 && member.getSlot() == 6000L))

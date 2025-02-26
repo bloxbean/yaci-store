@@ -140,6 +140,7 @@ create table committee_member
     cred_type       varchar(40),
     start_epoch     int,
     expired_epoch   int,
+    epoch           int,
     slot            bigint,
     update_datetime timestamp,
     primary key (hash, slot)
