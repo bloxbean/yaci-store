@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRew
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
@@ -68,6 +69,13 @@ public class RewardStorageImpl implements RewardStorage {
     public List<UnclaimedRewardRest> findUnclaimedRewardRest(int spendableEpoch) {
         return unclaimedRewardRestRepository.findBySpendableEpoch(spendableEpoch)
                 .stream().map(mapper::toUnclaimedRewardRest)
+                .toList();
+    }
+
+    @Override
+    public List<RewardRest> findTreasuryWithdrawals(int spendableEpoch) {
+        return rewardRestRepository.findBySpendableEpochAndType(spendableEpoch, RewardRestType.treasury)
+                .stream().map(mapper::toRewardRest)
                 .toList();
     }
 
