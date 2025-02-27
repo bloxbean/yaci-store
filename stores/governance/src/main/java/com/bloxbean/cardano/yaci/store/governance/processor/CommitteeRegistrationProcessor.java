@@ -37,6 +37,7 @@ public class CommitteeRegistrationProcessor {
 
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
+            int txIndex = txCertificates.getTxIndex();
 
             int index = 0;
             for (var certificate : txCertificates.getCertificates()) {
@@ -45,6 +46,7 @@ public class CommitteeRegistrationProcessor {
 
                     CommitteeDeRegistration committeeDeRegistration = CommitteeDeRegistration.builder()
                             .txHash(txHash)
+                            .txIndex(txIndex)
                             .slot(eventMetadata.getSlot())
                             .blockNumber(eventMetadata.getBlock())
                             .blockTime(eventMetadata.getBlockTime())
@@ -65,6 +67,7 @@ public class CommitteeRegistrationProcessor {
 
                     CommitteeRegistration committeeRegistration = CommitteeRegistration.builder()
                             .txHash(txHash)
+                            .txIndex(txIndex)
                             .slot(eventMetadata.getSlot())
                             .blockNumber(eventMetadata.getBlock())
                             .blockTime(eventMetadata.getBlockTime())

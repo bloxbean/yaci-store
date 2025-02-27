@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V3;
@@ -54,7 +55,7 @@ public class ConwayGenesis extends GenesisFile {
     @Getter
     private List<GenesisCommitteeMember> committeeMembers;
     @Getter
-    private Double committeeThreshold;
+    private BigDecimal committeeThreshold;
     @Getter
     private BigInteger committeeNumerator;
     @Getter
@@ -218,10 +219,14 @@ public class ConwayGenesis extends GenesisFile {
                     committeeDenominator = denominatorNode != null ? denominatorNode.bigIntegerValue() : null;
 
                     if (committeeNumerator != null && committeeDenominator != null && committeeDenominator.compareTo(BigInteger.ZERO) != 0) {
-                        committeeThreshold = committeeNumerator.doubleValue() / committeeDenominator.doubleValue();
+                        try {
+                            committeeThreshold =  new BigDecimal(committeeNumerator).divide(new BigDecimal(committeeDenominator));
+                        } catch (ArithmeticException e) { //set scale and try again
+                            committeeThreshold =  new BigDecimal(committeeNumerator).divide(new BigDecimal(committeeDenominator), 10, RoundingMode.HALF_UP);
+                        }
                     }
                 } else {
-                    committeeThreshold = ccThresholdNode.decimalValue().doubleValue();
+                    committeeThreshold = ccThresholdNode.decimalValue();
                 }
             }
         }

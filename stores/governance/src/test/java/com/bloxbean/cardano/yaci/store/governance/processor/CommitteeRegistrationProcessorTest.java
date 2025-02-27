@@ -49,6 +49,7 @@ class CommitteeRegistrationProcessorTest {
                 .metadata(eventMetadata())
                 .txCertificatesList(List.of(TxCertificates.builder()
                         .txHash(txHash)
+                        .txIndex(1)
                         .certificates(List.of(
                                 ResignCommitteeColdCert.builder()
                                         .committeeColdCredential(Credential.builder()
@@ -71,6 +72,7 @@ class CommitteeRegistrationProcessorTest {
         CommitteeDeRegistration savedCommitteeDeRegistration = committeeDeRegistrationsCaptor.getValue().get(0);
 
         assertThat(savedCommitteeDeRegistration.getTxHash()).isEqualTo(txHash);
+        assertThat(savedCommitteeDeRegistration.getTxIndex()).isEqualTo(1);
         assertThat(savedCommitteeDeRegistration.getAnchorHash()).isEqualTo("cd4ca39b59b7c1133635fb97668bde1f28934af4dfd524fdeacda0d47ffb8bf2");
         assertThat(savedCommitteeDeRegistration.getAnchorUrl()).isEqualTo("http://bit.ly/3QFMhii?index=0");
         assertThat(savedCommitteeDeRegistration.getColdKey()).isEqualTo("50b0f0893285e237641df982bf8cbd277a5788bd81e1014eb9e8e207");
@@ -88,6 +90,7 @@ class CommitteeRegistrationProcessorTest {
                 .metadata(eventMetadata())
                 .txCertificatesList(List.of(TxCertificates.builder()
                         .txHash(txHash)
+                        .txIndex(1)
                         .certificates(List.of(
                                 AuthCommitteeHotCert.builder()
                                         .committeeColdCredential(Credential.builder()
@@ -110,6 +113,7 @@ class CommitteeRegistrationProcessorTest {
         CommitteeRegistration savedCommitteeRegistration = committeeRegistrationsCaptor.getValue().get(0);
 
         assertThat(savedCommitteeRegistration.getTxHash()).isEqualTo(txHash);
+        assertThat(savedCommitteeRegistration.getTxIndex()).isEqualTo(1);
         assertThat(savedCommitteeRegistration.getColdKey()).isEqualTo("50b0f0893285e237641df982bf8cbd277a5788bd81e1014eb9e8e207");
         assertThat(savedCommitteeRegistration.getHotKey()).isEqualTo("212f86a07149f5d19e1f841d065f9e76c6b4a76db727ae7afc2cb2e4");
         assertThat(savedCommitteeRegistration.getCredType()).isEqualTo(StakeCredType.ADDR_KEYHASH);
