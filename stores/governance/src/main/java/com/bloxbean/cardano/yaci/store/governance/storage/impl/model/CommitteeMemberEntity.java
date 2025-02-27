@@ -36,6 +36,9 @@ public class CommitteeMemberEntity {
     @Column(name = "expired_epoch")
     private Integer expiredEpoch;
 
+    @Column(name = "epoch")
+    private Integer epoch;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDateTime;

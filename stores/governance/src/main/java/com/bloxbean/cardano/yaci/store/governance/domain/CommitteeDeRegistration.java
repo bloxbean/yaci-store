@@ -21,6 +21,8 @@ public class CommitteeDeRegistration extends BlockAwareDomain {
 
     private long certIndex;
 
+    private int txIndex;
+
     private Long slot;
 
     private String anchorUrl;

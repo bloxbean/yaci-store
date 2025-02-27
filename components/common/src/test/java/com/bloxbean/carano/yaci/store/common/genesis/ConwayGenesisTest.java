@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +22,7 @@ public class ConwayGenesisTest {
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
         BigInteger committeeNumerator = conwayGenesis.getCommitteeNumerator();
         BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
-        Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
+        BigDecimal committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.51);
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.51);
@@ -61,7 +62,7 @@ public class ConwayGenesisTest {
 
         assertThat(committeeNumerator).isEqualTo(2);
         assertThat(committeeDenominator).isEqualTo(3);
-        assertThat(committeeThreshold).isEqualTo((double) 2/3);
+        assertThat(committeeThreshold).isEqualTo( new BigDecimal(committeeNumerator).divide(new BigDecimal(committeeDenominator), 10, RoundingMode.HALF_UP));
     }
 
     @Test
@@ -71,7 +72,7 @@ public class ConwayGenesisTest {
         List<GenesisCommitteeMember> committeeMembers = conwayGenesis.getCommitteeMembers();
         BigInteger committeeNumerator = conwayGenesis.getCommitteeNumerator();
         BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
-        Double committeeThreshold = conwayGenesis.getCommitteeThreshold();
+        BigDecimal committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.65);
         assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.65);
@@ -108,7 +109,7 @@ public class ConwayGenesisTest {
         assertThat(committeeMembers.stream().map(GenesisCommitteeMember::getExpiredEpoch))
                 .contains(500, 500, 500, 500, 500);
         assertThat(committeeMembers.stream().allMatch(GenesisCommitteeMember::getHasScript)).isTrue();
-        assertThat(committeeThreshold).isEqualTo(0.67);
+        assertThat(committeeThreshold).isEqualTo(BigDecimal.valueOf(0.67));
         assertThat(committeeNumerator).isNull();
         assertThat(committeeDenominator).isNull();
     }
