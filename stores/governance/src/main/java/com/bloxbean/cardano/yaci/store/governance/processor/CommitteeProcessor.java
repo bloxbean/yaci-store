@@ -2,7 +2,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
@@ -75,13 +74,12 @@ public class CommitteeProcessor {
                 if (quorumThreshold != null) {
                     BigInteger thresholdNumerator = null;
                     BigInteger thresholdDenominator = null;
-                    Double threshold = quorumThreshold.doubleValue();
 
                     Committee committee = buildCommittee(proposal.getTxHash(),
                             proposal.getIndex(),
                             thresholdNumerator,
                             thresholdDenominator,
-                            threshold,
+                            quorumThreshold,
                             epoch,
                             slot);
 
@@ -101,7 +99,7 @@ public class CommitteeProcessor {
     }
 
     private Committee buildCommittee(String govActionTxHash, Integer govActionIndex,
-                                     BigInteger thresholdNumerator, BigInteger thresholdDenominator, Double threshold,
+                                     BigInteger thresholdNumerator, BigInteger thresholdDenominator, BigDecimal threshold,
                                      int epoch, long slot) {
         return Committee.builder()
                 .govActionTxHash(govActionTxHash)

@@ -49,6 +49,7 @@ create table committee_registration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     cold_key        varchar,
     hot_key         varchar,
     cred_type       varchar(40),
@@ -68,6 +69,7 @@ create table committee_deregistration
 (
     tx_hash         varchar(64) not null,
     cert_index      int         not null,
+    tx_index        int         not null,
     anchor_url      varchar,
     anchor_hash     varchar(64),
     cold_key        varchar     not null,

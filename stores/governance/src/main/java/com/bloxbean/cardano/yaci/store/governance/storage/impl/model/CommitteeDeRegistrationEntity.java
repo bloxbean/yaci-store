@@ -24,6 +24,9 @@ public class CommitteeDeRegistrationEntity extends BlockAwareEntity {
     @Column(name = "cert_index")
     private long certIndex;
 
+    @Column(name = "tx_index")
+    private int txIndex;
+
     @Column(name = "slot")
     private Long slot;
 
