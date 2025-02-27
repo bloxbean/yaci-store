@@ -36,12 +36,13 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                 .collect(Collectors.toList());
     }
 
-    // todo: tx index? , add integration test
+    // todo: add integration test
     @Override
     public List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsByEpoch(int epoch) {
         var latestRegistration = dsl.select(
                         COMMITTEE_REGISTRATION.COLD_KEY,
                         max(COMMITTEE_REGISTRATION.SLOT).as("latest_slot"),
+                        max(COMMITTEE_REGISTRATION.TX_INDEX).as("latest_tx_index"),
                         max(COMMITTEE_REGISTRATION.CERT_INDEX).as("latest_cert_index")
                 )
                 .from(COMMITTEE_REGISTRATION)
@@ -75,6 +76,7 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                 .join(latestRegistration)
                 .on(COMMITTEE_REGISTRATION.COLD_KEY.eq(latestRegistration.field(COMMITTEE_REGISTRATION.COLD_KEY)))
                 .and(COMMITTEE_REGISTRATION.SLOT.eq(latestRegistration.field("latest_slot", Long.class)))
+                .and(COMMITTEE_REGISTRATION.TX_INDEX.eq(latestRegistration.field("latest_tx_index", Integer.class)))
                 .and(COMMITTEE_REGISTRATION.CERT_INDEX.eq(latestRegistration.field("latest_cert_index", Integer.class)))
                 .join(latestCommitteeMembers)
                 .on(COMMITTEE_REGISTRATION.COLD_KEY.eq(latestCommitteeMembers.field(COMMITTEE_MEMBER.HASH)))
@@ -86,6 +88,11 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                                         COMMITTEE_DEREGISTRATION.SLOT.gt(COMMITTEE_REGISTRATION.SLOT)
                                                 .or(
                                                         COMMITTEE_DEREGISTRATION.SLOT.eq(COMMITTEE_REGISTRATION.SLOT)
+                                                                .and(COMMITTEE_DEREGISTRATION.TX_INDEX.gt(COMMITTEE_REGISTRATION.TX_INDEX))
+                                                )
+                                                .or(
+                                                        COMMITTEE_DEREGISTRATION.SLOT.eq(COMMITTEE_REGISTRATION.SLOT)
+                                                                .and(COMMITTEE_DEREGISTRATION.TX_INDEX.eq(COMMITTEE_REGISTRATION.TX_INDEX))
                                                                 .and(COMMITTEE_DEREGISTRATION.CERT_INDEX.gt(COMMITTEE_REGISTRATION.CERT_INDEX))
                                                 )
                                 )

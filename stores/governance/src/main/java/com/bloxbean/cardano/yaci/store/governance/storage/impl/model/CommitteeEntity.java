@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 
@@ -36,7 +37,7 @@ public class CommitteeEntity {
     private BigInteger thresholdDenominator;
 
     @Column(name = "threshold")
-    private Double threshold;
+    private BigDecimal threshold;
 
     @Column(name = "slot")
     private Long slot;

@@ -489,7 +489,7 @@ public class ProposalStatusProcessor {
                     // get ratification result
                     RatificationResult ratificationResult = GovActionRatifier.getRatificationResult(
                             govActionDetail, isBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
-                            BigDecimal.valueOf(ccThreshold), spoYesStake, spoAbstainStake, totalPoolStake,
+                            ccThreshold, spoYesStake, spoAbstainStake, totalPoolStake,
                             dRepYesStake, dRepNoStake, ccState, lastEnactedGovActionIdWithSamePurpose, isActionRatificationDelayed,
                             treasury,
                             EpochParam.builder()
