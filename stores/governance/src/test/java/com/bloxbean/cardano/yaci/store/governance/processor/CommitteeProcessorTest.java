@@ -87,7 +87,7 @@ class CommitteeProcessorTest {
 
         assertThat(savedCommittee.getEpoch()).isEqualTo(101);
         assertThat(savedCommittee.getSlot()).isEqualTo(6000);
-        assertThat(savedCommittee.getThreshold()).isEqualTo(0.75);
+        assertThat(savedCommittee.getThreshold()).isEqualTo(BigDecimal.valueOf(0.75));
         assertThat(savedCommittee.getGovActionTxHash()).isEqualTo("acc84cdb5eae8fe33793a9329bdd73b51eef7d9a33f25352783015aaa63c16fe");
         assertThat(savedCommittee.getGovActionIndex()).isEqualTo(1);
     }
