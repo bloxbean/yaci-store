@@ -288,10 +288,13 @@ public class DRepDistService {
         params.addValue("epoch", epoch);
         params.addValue("snapshot_epoch", epoch + 1);
 
+        long t1 = System.currentTimeMillis();
         jdbcTemplate.update(query, params);
+        long t2 = System.currentTimeMillis();
 
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
+        log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", epoch, (t2 - t1));
 
     }
 }

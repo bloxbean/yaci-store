@@ -13,6 +13,8 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedR
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
@@ -57,6 +59,36 @@ public class RewardStorageImpl implements RewardStorage {
                         .set(REWARD.SLOT, reward.getSlot())).toList();
 
         dsl.batch(inserts).execute();
+    }
+
+    @Override
+    public void bulkSaveRewards(List<Reward> rewards, int batchSize) {
+        var currentTime = LocalDateTime.now();
+        var rewardRecords = rewards.stream()
+                .map(reward -> {
+                    var rewardRecord = dsl.newRecord(REWARD);
+                    rewardRecord.setAddress(reward.getAddress());
+                    rewardRecord.setEarnedEpoch(reward.getEarnedEpoch());
+                    rewardRecord.setType(reward.getType().toString());
+                    rewardRecord.setPoolId(reward.getPoolId());
+                    rewardRecord.setAmount(reward.getAmount());
+                    rewardRecord.setSpendableEpoch(reward.getSpendableEpoch());
+                    rewardRecord.setSlot(reward.getSlot());
+                    rewardRecord.setUpdateDatetime(currentTime);
+                    return rewardRecord;
+                });
+
+        try {
+            dsl.loadInto(REWARD)
+                    //.bulkAfter(batchSize)
+                    //.batchAfter(batchSize)
+                    .commitAfter(batchSize)
+                    .loadRecords(rewardRecords)
+                    .fields(REWARD.ADDRESS, REWARD.EARNED_EPOCH, REWARD.TYPE, REWARD.POOL_ID, REWARD.AMOUNT, REWARD.SPENDABLE_EPOCH, REWARD.SLOT)
+                    .execute();
+        } catch (IOException e) {
+            throw new RuntimeException("Reward data could not be loaded", e);
+        }
     }
 
     @Override
