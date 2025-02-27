@@ -109,7 +109,7 @@ public class ConwayGenesisTest {
         assertThat(committeeMembers.stream().map(GenesisCommitteeMember::getExpiredEpoch))
                 .contains(500, 500, 500, 500, 500);
         assertThat(committeeMembers.stream().allMatch(GenesisCommitteeMember::getHasScript)).isTrue();
-        assertThat(committeeThreshold).isEqualTo(0.67);
+        assertThat(committeeThreshold).isEqualTo(BigDecimal.valueOf(0.67));
         assertThat(committeeNumerator).isNull();
         assertThat(committeeDenominator).isNull();
     }
