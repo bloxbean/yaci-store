@@ -26,14 +26,14 @@ public class StakeSnapshotService {
 
         // Drop temp tables in parallel
         List<String> dropQueries = List.of(
-                "DROP TABLE IF EXISTS last_withdrawal",
-                "DROP TABLE IF EXISTS MaxSlotBalances",
-                "DROP TABLE IF EXISTS RankedDelegations",
-                "DROP TABLE IF EXISTS pool_refund_rewards",
-                "DROP TABLE IF EXISTS pool_rewards",
-                "DROP TABLE IF EXISTS insta_spendable_rewards",
-                "DROP TABLE IF EXISTS spendable_reward_rest",
-                "DROP TABLE IF EXISTS PoolStatus"
+                "DROP TABLE IF EXISTS ss_last_withdrawal",
+                "DROP TABLE IF EXISTS ss_max_slot_balances",
+                "DROP TABLE IF EXISTS ss_ranked_delegations",
+                "DROP TABLE IF EXISTS ss_pool_refund_rewards",
+                "DROP TABLE IF EXISTS ss_pool_rewards",
+                "DROP TABLE IF EXISTS ss_insta_spendable_rewards",
+                "DROP TABLE IF EXISTS ss_spendable_reward_rest",
+                "DROP TABLE IF EXISTS ss_pool_status"
         );
 
 
@@ -43,7 +43,7 @@ public class StakeSnapshotService {
         log.info("Dropped existing temp tables");
 
         String lastWithdrawalQuery = """
-                    CREATE TABLE last_withdrawal  AS
+                    CREATE TABLE ss_last_withdrawal  AS
                         SELECT address, MAX(slot) AS max_slot
                         FROM withdrawal
                         WHERE epoch <= :epoch
@@ -57,13 +57,13 @@ public class StakeSnapshotService {
 
         log.info(">> Creating temp tables for stake snapshot");
         jdbcTemplate.update(lastWithdrawalQuery, epochParam);
-        jdbcTemplate.update("CREATE INDEX idx_last_withdrawal_address ON last_withdrawal(address)", Map.of());
-        jdbcTemplate.update("CREATE INDEX idx_last_withdrawal_address_max_slot on last_withdrawal(address, max_slot)", Map.of());
-        log.info(">> last_withdrawal temp table created");
+        jdbcTemplate.update("CREATE INDEX idx_ss_last_withdrawal_address ON ss_last_withdrawal(address)", Map.of());
+        jdbcTemplate.update("CREATE INDEX idx_ss_last_withdrawal_address_max_slot on ss_last_withdrawal(address, max_slot)", Map.of());
+        log.info(">> ss_last_withdrawal temp table created");
 
 
         String maxSlotBalancesQuery = """
-                    CREATE TABLE MaxSlotBalances  AS
+                    CREATE TABLE ss_max_slot_balances  AS
                          SELECT
                                          address,
                                          MAX(slot) AS max_slot
@@ -76,7 +76,7 @@ public class StakeSnapshotService {
                 """;
 
         String rankedDelegationQuery = """
-                CREATE TABLE  RankedDelegations AS
+                CREATE TABLE  ss_ranked_delegations AS
                 SELECT
                     address,
                     pool_id,
@@ -95,20 +95,20 @@ public class StakeSnapshotService {
                 """;
 
         String poolRefundRewardsQuery = """
-                        CREATE TABLE pool_refund_rewards AS
+                        CREATE TABLE ss_pool_refund_rewards AS
                         SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward
                         FROM reward r
-                                 LEFT JOIN last_withdrawal lw ON r.address = lw.address
+                                 LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                         WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                           AND r.spendable_epoch <= :epoch and r.type = 'refund'
                         GROUP BY r.address
                 """;
 
         String poolRewardsQuery = """
-                        CREATE TABLE pool_rewards AS
+                        CREATE TABLE ss_pool_rewards AS
                                 SELECT r.address, SUM(r.amount) AS withdrawable_reward
                                 FROM reward r
-                                         LEFT JOIN last_withdrawal lw ON r.address = lw.address
+                                         LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                 WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                   AND  r.earned_epoch <= :epoch
                                   AND  r.spendable_epoch <= :snapshot_epoch and r.type IN ('member', 'leader')
@@ -116,27 +116,27 @@ public class StakeSnapshotService {
                 """;
 
         String instaSpendableRewardsQuery = """
-                        CREATE TABLE insta_spendable_rewards AS
+                        CREATE TABLE ss_insta_spendable_rewards AS
                                                   SELECT r.address, SUM(r.amount) AS insta_withdrawable_reward
                                                   FROM instant_reward r
-                                                           LEFT JOIN last_withdrawal lw ON r.address = lw.address
+                                                           LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                   WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                                     AND r.spendable_epoch <= :snapshot_epoch
                                                   GROUP BY r.address
                 """;
 
         String spendableRewardRestQuery = """
-                        CREATE TABLE spendable_reward_rest AS
+                        CREATE TABLE ss_spendable_reward_rest AS
                                                                      SELECT r.address, SUM(r.amount) AS withdrawable_reward_rest
                                                                             FROM reward_rest r
-                                                                                     LEFT JOIN last_withdrawal lw ON r.address = lw.address
+                                                                                     LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                                             WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                                                               AND r.spendable_epoch <= :epoch
                                                                             GROUP BY r.address
                 """;
 
         String poolStatusQuery = """
-                        CREATE TABLE PoolStatus AS
+                        CREATE TABLE ss_pool_status AS
                                  SELECT
                                      pool_id,
                                      status,
@@ -174,16 +174,15 @@ public class StakeSnapshotService {
 
         // Create indexes in parallel (if required, otherwise skip this part)
         List<String> createIndexQueries = List.of(
-                "CREATE INDEX idx_MaxSlotBalances_address ON MaxSlotBalances(address)",
-                "CREATE INDEX idx_RankedDelegations_address ON RankedDelegations(address)",
-                "CREATE INDEX idx_RankedDelegations_rn ON RankedDelegations(rn)",
-                "CREATE INDEX idx_pool_refund_rewards_address ON pool_refund_rewards(address)",
-                "CREATE INDEX idx_pool_rewards_address on pool_rewards (address)",
-                "CREATE INDEX idx_insta_spendable_rewards_address ON insta_spendable_rewards(address)",
-                "CREATE INDEX idx_spendable_reward_rest_address ON spendable_reward_rest(address)",
-                "CREATE INDEX idx_PoolStatus_pool_id ON PoolStatus(pool_id)",
-                "CREATE INDEX idx_PoolStatus_rn ON PoolStatus(rn)"
-
+                "CREATE INDEX idx_ss_max_slot_balances_address ON ss_max_slot_balances(address)",
+                "CREATE INDEX idx_ss_ranked_delegations_address ON ss_ranked_delegations(address)",
+                "CREATE INDEX idx_ss_ranked_delegations_rn ON ss_ranked_delegations(rn)",
+                "CREATE INDEX idx_ss_pool_refund_rewards_address ON ss_pool_refund_rewards(address)",
+                "CREATE INDEX idx_ss_pool_rewards_address on ss_pool_rewards (address)",
+                "CREATE INDEX idx_ss_insta_spendable_rewards_address ON ss_insta_spendable_rewards(address)",
+                "CREATE INDEX idx_ss_spendable_reward_rest_address ON ss_spendable_reward_rest(address)",
+                "CREATE INDEX idx_ss_pool_status_pool_id ON ss_pool_status(pool_id)",
+                "CREATE INDEX idx_ss_pool_status_rn ON ss_pool_status(rn)"
         );
 
         start = System.currentTimeMillis();
@@ -205,19 +204,19 @@ public class StakeSnapshotService {
                         :activeEpoch,
                         now()
                     FROM
-                        RankedDelegations d
+                        ss_ranked_delegations d
                             LEFT JOIN
-                        MaxSlotBalances msb ON d.address = msb.address
+                        ss_max_slot_balances msb ON d.address = msb.address
                             LEFT JOIN
                         stake_address_balance s ON msb.address = s.address AND msb.max_slot = s.slot
                             LEFT JOIN
-                        pool_rewards r ON d.address = r.address           
+                        ss_pool_rewards r ON d.address = r.address           
                             LEFT JOIN
-                        pool_refund_rewards pr ON d.address = pr.address
+                        ss_pool_refund_rewards pr ON d.address = pr.address
                             LEFT JOIN
-                        insta_spendable_rewards ir ON d.address = ir.address     
+                        ss_insta_spendable_rewards ir ON d.address = ir.address     
                             LEFT JOIN
-                        spendable_reward_rest rr ON d.address = rr.address
+                        ss_spendable_reward_rest rr ON d.address = rr.address
                             LEFT JOIN 
                         stake_registration sd
                                           ON sd.address = d.address
@@ -231,7 +230,7 @@ public class StakeSnapshotService {
                     WHERE
                             d.rn = 1
                     and not exists(
-                                    select 1 from PoolStatus p
+                                    select 1 from ss_pool_status p
                                     where d.pool_id = p.pool_id and p.rn = 1 and (p.status = 'RETIRED' or d.slot < p.registration_slot)
                             )
                             AND sd.address IS NULL;
