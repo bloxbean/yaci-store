@@ -9,8 +9,6 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -22,37 +20,6 @@ public class DRepDistService {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
-
-        //Drop temp tables
-        jdbcTemplate.update("DROP TABLE IF EXISTS last_withdrawal", Map.of());
-        jdbcTemplate.update("DROP TABLE IF EXISTS max_slot_balances", Map.of());
-
-        String lastWithdrawalQuery = """
-            CREATE TEMP TABLE last_withdrawal  AS
-                SELECT address, MAX(slot) AS max_slot
-                FROM withdrawal
-                WHERE epoch <= :epoch
-                GROUP BY address;
-        """;
-
-        String maxSlotBalancesQuery = """
-            CREATE TEMP TABLE max_slot_balances  AS
-                 select
-                      address,
-                      MAX(slot) as max_slot
-                    from
-                      stake_address_balance
-                    where
-                      epoch <= :epoch
-                    group by
-                      address
-        """;
-
-        var epochParam = new MapSqlParameterSource();
-        epochParam.addValue("epoch", epoch);
-
-        jdbcTemplate.update(lastWithdrawalQuery, epochParam);
-        jdbcTemplate.update(maxSlotBalancesQuery, epochParam);
 
         String query = """
                   INSERT INTO drep_dist 
@@ -110,78 +77,7 @@ public class DRepDistService {
                       and s.epoch = :epoch
                     group by
                       g.return_address
-                  ),
-                  pool_refund_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as pool_refund_withdrawable_reward
-                    from
-                      reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.spendable_epoch <= :epoch
-                      and r.type = 'refund'
-                    group by
-                      r.address
-                  ),
-                  pool_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as withdrawable_reward
-                    from
-                      reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.earned_epoch <= :epoch
-                      and (
-                        r.type = 'member'
-                        or r.type = 'leader'
-                      )
-                      and r.spendable_epoch <= :snapshot_epoch
-                    group by
-                      r.address
-                  ),
-                  insta_spendable_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as insta_withdrawable_reward
-                    from
-                      instant_reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.spendable_epoch <= :snapshot_epoch
-                    group by
-                      r.address
-                  ),
-                  spendable_reward_rest as (
-                    select
-                       r.address,
-                       SUM(r.amount) as withdrawable_reward_rest
-                    from
-                    reward_rest r
-                    left join last_withdrawal lw on
-                       r.address = lw.address
-                    where
-                       (
-                          lw.max_slot is null
-                          or r.slot > lw.max_slot
-                        )
-                        and r.spendable_epoch <= :epoch
-                    group by
-                      r.address
-                  )               
+                  )                
                   select
                     rd.drep_hash,
                     rd.drep_id,
@@ -198,38 +94,26 @@ public class DRepDistService {
                     ranked_delegations rd
                     left join drep_status ds on rd.drep_id = ds.drep_id
                     and rd.rn = 1
-                    left join pool_rewards r on rd.address = r.address
-                    left join pool_refund_rewards pr on rd.address = pr.address
-                    left join insta_spendable_rewards ir on rd.address = ir.address
+                    left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_pool_refund_rewards pr on rd.address = pr.address
+                    left join ss_insta_spendable_rewards ir on rd.address = ir.address
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
-                    left join max_slot_balances msb on msb.address = rd.address
+                    left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join spendable_reward_rest rr ON rd.address = rr.address
+                    left join ss_spendable_reward_rest rr ON rd.address = rr.address
+                    left join stake_registration sd
+                                          ON sd.address = rd.address
+                                              AND sd.type = 'STAKE_DEREGISTRATION'
+                                              AND sd.epoch <= :epoch
+                                              AND (
+                                                 sd.slot > rd.slot OR
+                                                 (sd.slot = rd.slot AND sd.tx_index > rd.tx_index) OR
+                                                 (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
+                                                 )
                   where
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
-                    and not exists (
-                      select
-                        1
-                      from
-                        stake_registration sd
-                      where
-                        sd.address = rd.address
-                        and sd.type = 'STAKE_DEREGISTRATION'
-                        and sd.epoch <= :epoch
-                        and (
-                          sd.slot > rd.slot
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index > rd.tx_index
-                          )
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index = rd.tx_index
-                            and sd.cert_index > rd.cert_index
-                          )
-                        )
-                    )
+                    and sd.address IS NULL           
                   group by
                     rd.drep_hash,
                     rd.drep_id
@@ -247,38 +131,25 @@ public class DRepDistService {
                     NOW()
                   from
                     ranked_delegations rd                      
-                    left join pool_rewards r on rd.address = r.address
-                    left join pool_refund_rewards pr on rd.address = pr.address
-                    left join insta_spendable_rewards ir on rd.address = ir.address
+                    left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_pool_refund_rewards pr on rd.address = pr.address
+                    left join ss_insta_spendable_rewards ir on rd.address = ir.address
                     left join active_proposal_deposits  apd on apd.return_address = rd.address
-                    left join max_slot_balances msb on msb.address = rd.address
+                    left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join spendable_reward_rest rr ON rd.address = rr.address                                               
+                    left join ss_spendable_reward_rest rr ON rd.address = rr.address
+                    left join stake_registration sd
+                                          ON sd.address = rd.address
+                                              AND sd.type = 'STAKE_DEREGISTRATION'
+                                              AND sd.epoch <= :epoch
+                                              AND (
+                                                 sd.slot > rd.slot OR
+                                                 (sd.slot = rd.slot AND sd.tx_index > rd.tx_index) OR
+                                                 (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
+                                                 )
                   where
                     rd.rn=1 AND (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
-                    AND
-                    not exists (
-                      select
-                        1
-                      from
-                        stake_registration sd
-                      where
-                        sd.address = rd.address
-                        and sd.type = 'STAKE_DEREGISTRATION'
-                        and sd.epoch <= :epoch
-                        and (
-                          sd.slot > rd.slot
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index > rd.tx_index
-                          )
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index = rd.tx_index
-                            and sd.cert_index > rd.cert_index
-                          )
-                        )
-                    )
+                    AND sd.address IS NULL              
                   group by
                     rd.drep_type
                   

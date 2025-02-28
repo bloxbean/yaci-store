@@ -44,7 +44,7 @@ public class StakeSnapshotService {
 
         String lastWithdrawalQuery = """
                     CREATE TABLE ss_last_withdrawal  AS
-                        SELECT address, MAX(slot) AS max_slot
+                        SELECT address, MAX(slot) AS max_slot, :epoch as mark_epoch
                         FROM withdrawal
                         WHERE epoch <= :epoch
                         GROUP BY address;
@@ -66,7 +66,8 @@ public class StakeSnapshotService {
                     CREATE TABLE ss_max_slot_balances  AS
                          SELECT
                                          address,
-                                         MAX(slot) AS max_slot
+                                         MAX(slot) AS max_slot,
+                                         :epoch as mark_epoch
                                      FROM
                                          stake_address_balance
                                      WHERE
@@ -87,7 +88,8 @@ public class StakeSnapshotService {
                     ROW_NUMBER() OVER (
                         PARTITION BY address
                         ORDER BY slot DESC, tx_index DESC, cert_index DESC
-                        ) AS rn
+                        ) AS rn,
+                     :epoch as mark_epoch    
                 FROM
                     delegation
                 WHERE
@@ -96,7 +98,7 @@ public class StakeSnapshotService {
 
         String poolRefundRewardsQuery = """
                         CREATE TABLE ss_pool_refund_rewards AS
-                        SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward
+                        SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward, :epoch as mark_epoch
                         FROM reward r
                                  LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                         WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
@@ -106,7 +108,7 @@ public class StakeSnapshotService {
 
         String poolRewardsQuery = """
                         CREATE TABLE ss_pool_rewards AS
-                                SELECT r.address, SUM(r.amount) AS withdrawable_reward
+                                SELECT r.address, SUM(r.amount) AS withdrawable_reward, :epoch as mark_epoch
                                 FROM reward r
                                          LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                 WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
@@ -117,7 +119,7 @@ public class StakeSnapshotService {
 
         String instaSpendableRewardsQuery = """
                         CREATE TABLE ss_insta_spendable_rewards AS
-                                                  SELECT r.address, SUM(r.amount) AS insta_withdrawable_reward
+                                                  SELECT r.address, SUM(r.amount) AS insta_withdrawable_reward, :epoch as mark_epoch
                                                   FROM instant_reward r
                                                            LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                   WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
@@ -127,7 +129,7 @@ public class StakeSnapshotService {
 
         String spendableRewardRestQuery = """
                         CREATE TABLE ss_spendable_reward_rest AS
-                                                                     SELECT r.address, SUM(r.amount) AS withdrawable_reward_rest
+                                                                     SELECT r.address, SUM(r.amount) AS withdrawable_reward_rest, :epoch as mark_epoch
                                                                             FROM reward_rest r
                                                                                      LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                                             WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
@@ -145,7 +147,8 @@ public class StakeSnapshotService {
                                      ROW_NUMBER() OVER (
                                          PARTITION BY pool_id
                                          ORDER BY slot DESC, tx_index DESC, cert_index DESC
-                                         ) AS rn
+                                         ) AS rn,
+                                     :epoch as mark_epoch    
                                  FROM
                                      pool
                                  WHERE
