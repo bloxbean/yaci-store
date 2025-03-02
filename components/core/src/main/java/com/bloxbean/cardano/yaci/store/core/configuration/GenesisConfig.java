@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
+import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -186,6 +187,18 @@ public class GenesisConfig {
             genesisBalances.addAll(shelleyGenesis.getInitialFunds());
 
         return genesisBalances;
+    }
+
+    //Only set for devnets
+    public GenesisStaking getGenesisStaking() {
+        ShelleyGenesis shelleyGenesis;
+        if (!StringUtil.isEmpty(storeProperties.getShelleyGenesisFile())) {
+            shelleyGenesis = getShelleyGenesis(storeProperties.getShelleyGenesisFile());
+        } else {
+            shelleyGenesis = new ShelleyGenesis(storeProperties.getProtocolMagic());
+        }
+
+        return shelleyGenesis.getGenesisStaking();
     }
 
     public long getRandomnessStabilisationWindow() {

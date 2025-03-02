@@ -13,13 +13,16 @@ import java.util.List;
 @AllArgsConstructor
 @Builder(toBuilder = true)
 public class GenesisBlockEvent {
+    private long protocolMagic;
     private String blockHash;
     private long blockTime;
     private long block;
     private long slot;
+    private int epoch;
     private Era era;
 
     private List<GenesisBalance> genesisBalances;
+    private GenesisStaking genesisStaking;
 
     private boolean remotePublish; //Is published by a remote publisher
 }

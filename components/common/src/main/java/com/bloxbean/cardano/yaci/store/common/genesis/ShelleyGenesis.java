@@ -1,21 +1,29 @@
 package com.bloxbean.cardano.yaci.store.common.genesis;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.PoolParams;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
+import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import lombok.Data;
 import lombok.ToString;
 
 import java.io.File;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @ToString
@@ -60,6 +68,7 @@ public class ShelleyGenesis extends GenesisFile {
 
     private List<GenesisBalance> initialFunds;
     private ProtocolParams protocolParams;
+    private GenesisStaking genesisStaking;
 
     public ShelleyGenesis(File shelleyGenesisFile) {
         super(shelleyGenesisFile);
@@ -103,6 +112,7 @@ public class ShelleyGenesis extends GenesisFile {
         }
 
         readProtocolParameters(genesisJson.get("protocolParams"));
+        readStakingInfo(genesisJson.get("staking"));
     }
 
     @Override
@@ -162,5 +172,84 @@ public class ShelleyGenesis extends GenesisFile {
                 .minUtxo(minUTxOValue)
                 .minPoolCost(minPoolCost)
                 .build();
+    }
+
+    /**
+     * This method is only used for local devnet where pool/stakings are part of genesis file.
+     * @param stakingJson
+     */
+    private void readStakingInfo(JsonNode stakingJson) {
+        if (stakingJson == null)
+            return;
+
+        List<PoolParams> poolParamsList = new ArrayList<>();
+
+        JsonNode poolsJson = stakingJson.get("pools");
+        if (poolsJson != null && poolsJson.fields().hasNext()) {
+            poolsJson.fields().forEachRemaining(entry -> {
+                String poolHash = entry.getKey();
+                JsonNode poolDetailsJson = entry.getValue();
+
+                BigInteger cost = poolDetailsJson.get("cost") != null? poolDetailsJson.get("cost").bigIntegerValue(): null;
+                BigDecimal margin = poolDetailsJson.get("margin") != null? poolDetailsJson.get("margin").decimalValue(): null;
+                String metadata = poolDetailsJson.get("metadata") != null? poolDetailsJson.get("metadata").asText(): null;
+                ArrayNode ownersJson = poolDetailsJson.get("owners") != null? (ArrayNode) poolDetailsJson.get("owners"): null;
+                Set<String> owners = new HashSet<>();
+                if (ownersJson != null) {
+                    for (int i=0; i<ownersJson.size(); i++) {
+                        owners.add(ownersJson.get(i).asText());
+                    }
+                }
+
+                BigInteger pledge = poolDetailsJson.get("pledge") != null? poolDetailsJson.get("pledge").bigIntegerValue(): null;
+                String publicKey = poolDetailsJson.get("publicKey") != null? poolDetailsJson.get("publicKey").asText(): null;
+                //TODO relays
+
+                JsonNode rewardAccsJson = poolDetailsJson.get("rewardAccount") != null? poolDetailsJson.get("rewardAccount"): null;
+                Credential rewardAccCredential = null;
+                if (rewardAccsJson != null) {
+                    var credentialJson = rewardAccsJson.get("credential");
+                    if (credentialJson != null) {
+                        var keyHash = credentialJson.get("keyHash") != null ? credentialJson.get("keyHash").asText() : null;
+                        var scriptHash = credentialJson.get("scriptHash") != null ? credentialJson.get("scriptHash").asText() : null;
+                        if (keyHash != null)
+                            rewardAccCredential = Credential.fromKey(HexUtil.decodeHexString(keyHash));
+                        else if (scriptHash != null)
+                            rewardAccCredential = Credential.fromScript(HexUtil.decodeHexString(scriptHash));
+                    }
+                }
+
+                Address rewardAddress = AddressProvider.getRewardAddress(rewardAccCredential, Networks.testnet());
+                String rewardAccountHash = HexUtil.encodeHexString(rewardAddress.getBytes());
+
+                String vrf = poolDetailsJson.get("vrf") != null? poolDetailsJson.get("vrf").asText(): null;
+
+                PoolParams poolParams = PoolParams.builder()
+                        .cost(cost)
+                        .margin(margin.toString())
+                        .pledge(pledge)
+                        .operator(publicKey)
+                        .rewardAccount(rewardAccountHash)
+                        .relays(List.of())
+                        .poolOwners(owners)
+                        .vrfKeyHash(vrf)
+                        .build();
+
+                poolParamsList.add(poolParams);
+            });
+        }
+
+        List<GenesisStaking.Stake> stakes = new ArrayList<>();
+        //stake info
+        JsonNode stakeJson = stakingJson.get("stake");
+        if (stakeJson != null && stakeJson.fields().hasNext()) {
+            stakeJson.fields().forEachRemaining(entry -> {
+                String stakeHash = entry.getKey();
+                String poolHash = entry.getValue().asText();
+                stakes.add(new GenesisStaking.Stake(stakeHash, poolHash));
+            });
+        }
+
+        this.genesisStaking = new GenesisStaking(poolParamsList, stakes);
     }
 }

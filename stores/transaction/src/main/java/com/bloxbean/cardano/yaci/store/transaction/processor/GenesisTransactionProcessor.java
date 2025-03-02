@@ -41,6 +41,7 @@ public class GenesisTransactionProcessor {
                     .blockNumber(genesisBlockEvent.getBlock())
                     .blockTime(genesisBlockEvent.getBlockTime())
                     .slot(genesisBlockEvent.getSlot())
+                    .epoch(genesisBlockEvent.getEpoch())
                     .inputs(Collections.emptyList())
                     .outputs(List.of(output))
                     .fee(BigInteger.ZERO)

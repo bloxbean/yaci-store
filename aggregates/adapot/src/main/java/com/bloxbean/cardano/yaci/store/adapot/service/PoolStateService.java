@@ -59,7 +59,7 @@ public class PoolStateService {
             log.info("fetching pool history batch " + i + " / " + batches + " for epoch " + epoch + " with " + poolIdBatch.size() + " pools");
             List<EpochStake> delgatorStakes = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, poolIdBatch);
 
-            for (String poolId: poolIdBatch) {
+            for (String poolId : poolIdBatch) {
                 PoolState poolState = new PoolState();
 
                 HashSet<Delegator> delegators = delgatorStakes.stream()
@@ -72,82 +72,80 @@ public class PoolStateService {
                                 .build())
                         .collect(Collectors.toCollection(HashSet::new));
 
-                if (!delgatorStakes.isEmpty()) {
-                    BigInteger activeStake = delegators.stream()
-                            .map(Delegator::getActiveStake)
-                            .reduce(BigInteger::add)
-                            .orElse(BigInteger.ZERO);
+                BigInteger activeStake = delegators.stream()
+                        .map(Delegator::getActiveStake)
+                        .reduce(BigInteger::add)
+                        .orElse(BigInteger.ZERO);
 
-                    poolState.setActiveStake(activeStake);
-                    poolState.setDelegators(delegators);
+                poolState.setActiveStake(activeStake);
+                poolState.setDelegators(delegators);
 
-                    Integer blockCount = poolBlocksInEpoch.stream()
-                            .filter(poolBlocks -> poolBlocks.getPoolId().equals(poolId))
-                            .map(PoolBlock::getBlockCount)
-                            .findFirst()
-                            .orElse(0);
-                    poolState.setBlockCount(blockCount);
+                Integer blockCount = poolBlocksInEpoch.stream()
+                        .filter(poolBlocks -> poolBlocks.getPoolId().equals(poolId))
+                        .map(PoolBlock::getBlockCount)
+                        .findFirst()
+                        .orElse(0);
+                poolState.setBlockCount(blockCount);
 
-                    PoolDetails latestUpdate = latestPoolDetails.stream()
-                            .filter(update -> update.getPoolId().equals(poolId))
-                            .findFirst()
+                PoolDetails latestUpdate = latestPoolDetails.stream()
+                        .filter(update -> update.getPoolId().equals(poolId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (latestUpdate == null) {
+                    log.info("No update for pool " + poolId + " in epoch " + epoch);
+                    continue;
+                }
+
+                String rewardAccount = latestUpdate.getRewardAccount();
+                if (storeProperties.isMainnet() && rewardAccount.startsWith("stake_test")) { //testnet addr in mainnet
+                    //convert it to mainnet address
+                    var stakeAddr = new Address(rewardAccount);
+                    var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
+                    if (stakeCred != null) {
+                        rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.mainnet()).toBech32();
+                    }
+                } else if (!storeProperties.isMainnet() && !rewardAccount.startsWith("stake_test")) { //mainnet address in testnet
+                    //convert it to testnet address
+                    var stakeAddr = new Address(rewardAccount);
+                    var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
+                    if (stakeCred != null) {
+                        rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.testnet()).toBech32();
+                    }
+                }
+
+                poolState.setRewardAddress(rewardAccount);
+
+                poolState.setFixedCost(latestUpdate.getCost());
+                poolState.setMargin(latestUpdate.getMargin());
+                poolState.setPledge(latestUpdate.getPledge());
+                poolState.setEpoch(epoch);
+                poolState.setPoolId(PoolUtil.getBech32PoolId(poolId)); //bech32
+
+                var poolOwnerStakeAddresses = latestUpdate.getPoolOwners()
+                        .stream()
+                        .map(addressHex ->
+                                AddressProvider.getRewardAddress(Credential.fromKey(HexUtil.decodeHexString(addressHex)),
+                                        storeProperties.isMainnet() ? Networks.mainnet() : Networks.testnet()).toBech32())
+                        .collect(Collectors.toSet());
+
+
+                poolState.setOwners(new HashSet<>(poolOwnerStakeAddresses));
+
+                BigInteger poolOwnerActiveStake = BigInteger.ZERO;
+                for (Delegator delegator : delegators) {
+                    Address delegatorStakeAddress = new Address(delegator.getStakeAddress());
+                    var delegatorStakeAddressHex = delegatorStakeAddress.getDelegationCredentialHash()
+                            .map(bytes -> HexUtil.encodeHexString(bytes))
                             .orElse(null);
 
-                    if (latestUpdate == null) {
-                        log.info("No update for pool " + poolId + " in epoch " + epoch);
-                        continue;
+                    if (latestUpdate.getPoolOwners() != null && latestUpdate.getPoolOwners().contains(delegatorStakeAddressHex)) {
+                        poolOwnerActiveStake = poolOwnerActiveStake.add(delegator.getActiveStake());
                     }
-
-                    String rewardAccount = latestUpdate.getRewardAccount();
-                    if (storeProperties.isMainnet() && rewardAccount.startsWith("stake_test")) { //testnet addr in mainnet
-                        //convert it to mainnet address
-                        var stakeAddr = new Address(rewardAccount);
-                        var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
-                        if (stakeCred != null) {
-                            rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.mainnet()).toBech32();
-                        }
-                    } else if (!storeProperties.isMainnet() && !rewardAccount.startsWith("stake_test")) { //mainnet address in testnet
-                        //convert it to testnet address
-                        var stakeAddr = new Address(rewardAccount);
-                        var stakeCred = stakeAddr.getDelegationCredential().orElse(null);
-                        if (stakeCred != null) {
-                            rewardAccount = AddressProvider.getRewardAddress(stakeCred, Networks.testnet()).toBech32();
-                        }
-                    }
-
-                    poolState.setRewardAddress(rewardAccount);
-
-                    poolState.setFixedCost(latestUpdate.getCost());
-                    poolState.setMargin(latestUpdate.getMargin());
-                    poolState.setPledge(latestUpdate.getPledge());
-                    poolState.setEpoch(epoch);
-                    poolState.setPoolId(PoolUtil.getBech32PoolId(poolId)); //bech32
-
-                    var poolOwnerStakeAddresses = latestUpdate.getPoolOwners()
-                                    .stream()
-                                    .map(addressHex ->
-                                            AddressProvider.getRewardAddress(Credential.fromKey(HexUtil.decodeHexString(addressHex)),
-                                                    storeProperties.isMainnet()? Networks.mainnet(): Networks.testnet()).toBech32())
-                                    .collect(Collectors.toSet());
-
-
-                    poolState.setOwners(new HashSet<>(poolOwnerStakeAddresses));
-
-                    BigInteger poolOwnerActiveStake = BigInteger.ZERO;
-                    for (Delegator delegator : delegators) {
-                        Address delegatorStakeAddress = new Address(delegator.getStakeAddress());
-                        var delegatorStakeAddressHex = delegatorStakeAddress.getDelegationCredentialHash()
-                                .map(bytes -> HexUtil.encodeHexString(bytes))
-                                .orElse(null);
-
-                        if (latestUpdate.getPoolOwners() != null && latestUpdate.getPoolOwners().contains(delegatorStakeAddressHex)) {
-                            poolOwnerActiveStake = poolOwnerActiveStake.add(delegator.getActiveStake());
-                        }
-                    }
-
-                    poolState.setOwnerActiveStake(poolOwnerActiveStake);
-                    poolHistories.add(poolState);
                 }
+
+                poolState.setOwnerActiveStake(poolOwnerActiveStake);
+                poolHistories.add(poolState);
             }
         }
 
