@@ -660,6 +660,7 @@ public class AccountBalanceProcessor {
                             .slot(genesisBlockEvent.getSlot())
                             .blockNumber(genesisBlockEvent.getBlock())
                             .blockTime(genesisBlockEvent.getBlockTime())
+                            .epoch(genesisBlockEvent.getEpoch())
                             .unit(LOVELACE)
                             .quantity(genesisBalance.getBalance())
                             .build();
@@ -684,6 +685,7 @@ public class AccountBalanceProcessor {
                             .slot(genesisBlockEvent.getSlot())
                             .blockNumber(genesisBlockEvent.getBlock())
                             .blockTime(genesisBlockEvent.getBlockTime())
+                            .epoch(genesisBlockEvent.getEpoch())
                             .quantity(genesisBalance.getBalance())
                             //.stakeCredential(HexUtil.encodeHexString(stakeAddress.getDelegationCredential().get().getBytes()))
                             .build();
