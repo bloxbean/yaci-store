@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,35 @@ public class EpochParamProcessor {
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
 
     private PPEraChangeRules ppEraChangeRules = new PPEraChangeRules();
+
+    /**
+     * This is mostly be used for custom networks or test networks which start directly from a non-byron era
+     * @param genesisBlockEvent
+     */
+    @EventListener
+    @Transactional
+    public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        Era startEra = genesisBlockEvent.getEra();
+        ProtocolParams genesisProtocolParams = eraGenesisProtocolParamsUtil
+                .getGenesisProtocolParameters(startEra, null, genesisBlockEvent.getProtocolMagic())
+                .orElse(null);
+
+        if (genesisProtocolParams != null) {
+            log.info("Network is starting with the following protocol params : \n" + genesisProtocolParams);
+
+            EpochParam epochParam = EpochParam.builder()
+                    .epoch(genesisBlockEvent.getEpoch())
+                    .params(genesisProtocolParams)
+                    .slot(genesisBlockEvent.getSlot())
+                    .blockNumber(genesisBlockEvent.getBlock())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .build();
+
+            epochParamStorage.save(epochParam);
+        } else {
+            log.info("No protocol parameters found for genesis block {}", startEra);
+        }
+    }
 
     @EventListener
     @Transactional
