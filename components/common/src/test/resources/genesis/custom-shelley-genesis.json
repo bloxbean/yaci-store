@@ -55,7 +55,7 @@
   "staking": {
   "pools": {
     "7301761068762f5900bde9eb7c1c15b09840285130f5b0f53606cc57": {
-        "cost": 0,
+        "cost": 340000000,
         "margin": 0,
         "metadata": null,
         "owners": [],
@@ -64,7 +64,7 @@
         "relays": [],
         "rewardAccount": {
           "credential": {
-            "key hash": "11a14edf73b08a0a27cb98b2c57eb37c780df18fcfcf6785ed5df84a"
+            "keyHash": "11a14edf73b08a0a27cb98b2c57eb37c780df18fcfcf6785ed5df84a"
           },
           "network": "Testnet"
          },
