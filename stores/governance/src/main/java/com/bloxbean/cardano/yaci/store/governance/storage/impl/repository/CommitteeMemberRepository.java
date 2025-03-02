@@ -14,6 +14,6 @@ public interface CommitteeMemberRepository extends JpaRepository<CommitteeMember
 
     @Query("select c from CommitteeMemberEntity c where c.slot = (select max(c.slot) from CommitteeMemberEntity c)")
     List<CommitteeMemberEntity> findCommitteeMemberEntitiesWithMaxSlot();
-    @Query("select c from CommitteeMemberEntity c where c.startEpoch = (select max(c.startEpoch) from CommitteeMemberEntity c where c.startEpoch <= :epoch)")
+    @Query("select c from CommitteeMemberEntity c where c.epoch = (select max(c.epoch) from CommitteeMemberEntity c where c.epoch <= :epoch)")
     List<CommitteeMemberEntity> findCommitteeMembersByEpoch(int epoch);
 }

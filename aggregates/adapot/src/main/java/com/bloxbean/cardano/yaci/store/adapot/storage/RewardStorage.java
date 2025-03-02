@@ -20,6 +20,8 @@ public interface RewardStorage {
 
     List<UnclaimedRewardRest> findUnclaimedRewardRest(int spendableEpoch);
 
+    List<RewardRest> findTreasuryWithdrawals(int spendableEpoch);
+
     void deleteLeaderMemberRewards(int epoch);
 
     int deleteInstantRewardsBySlotGreaterThan(long slot);

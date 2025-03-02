@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.starter.core;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
+import com.bloxbean.cardano.yaci.store.client.governance.DummyProposalStateClientImpl;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.client.staking.DummyStakingClient;
 import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
@@ -140,6 +142,12 @@ public class YaciStoreAutoConfiguration {
     @ConditionalOnMissingBean(name = "stakingClient")
     public StakingClient stakingClient() {
         return new DummyStakingClient();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "proposalStateClient")
+    public ProposalStateClient proposalStateClient() {
+        return new DummyProposalStateClientImpl();
     }
 
     @Bean

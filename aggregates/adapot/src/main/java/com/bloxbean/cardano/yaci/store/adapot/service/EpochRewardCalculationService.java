@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
+import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
@@ -313,26 +314,53 @@ public class EpochRewardCalculationService {
         long end = System.currentTimeMillis();
         log.debug("Epoch calculation took " + Math.round((end - start) / 1000.0) + "s");
 
+        var newTreasuryAmount = adjustTreasuryAmount(epoch, epochCalculationResult.getTreasury());
+
+        epochCalculationResult.setTreasury(newTreasuryAmount);
+
+        return epochCalculationResult;
+    }
+
+    /**
+     * Adjust treasury amount with donations, unclaimed proposal refunds, any treasury withdrawals
+     * @param epoch
+     * @param treasuryAmount
+     */
+    public BigInteger adjustTreasuryAmount(int epoch, BigInteger treasuryAmount) {
+        BigInteger updatedTreasuryAmt = treasuryAmount;
+
         //Get donations in previous epoch
         var donationInPrevEpoch = transactionStorageReader.getTotalDonation(epoch - 1);
         if (donationInPrevEpoch != null
                 && donationInPrevEpoch.compareTo(BigInteger.ZERO) > 0) {
             //add donation to the treasury value
-            epochCalculationResult.setTreasury(epochCalculationResult.getTreasury().add(donationInPrevEpoch));
+            updatedTreasuryAmt = updatedTreasuryAmt.add(donationInPrevEpoch);
         }
         log.info("Total donation in the epoch {} : {}", epoch - 1, donationInPrevEpoch);
 
         //Get any unclaimed proposal refunds earned in previous epoch
-        List<UnclaimedRewardRest> unclaimedRefunds = rewardStorage.findUnclaimedRewardRest(epoch);
-        unclaimedRefunds.stream()
+        List<UnclaimedRewardRest> unclaimedProposalRefunds = rewardStorage.findUnclaimedRewardRest(epoch);
+        var totalUnclaimedProposalRefunds = unclaimedProposalRefunds.stream()
                 .filter(unclaimedRewardRest -> unclaimedRewardRest.getType() == RewardRestType.proposal_refund)
-                .forEach(unclaimedRewardRest -> {
-                    var newTreasuryAmt = epochCalculationResult.getTreasury().add(unclaimedRewardRest.getAmount());
-                    epochCalculationResult.setTreasury(newTreasuryAmt);
-                });
+                .map(unclaimedRewardRest -> unclaimedRewardRest.getAmount())
+                .reduce(BigInteger::add)
+                .orElse(BigInteger.ZERO);
 
-        return epochCalculationResult;
+        updatedTreasuryAmt = updatedTreasuryAmt.add(totalUnclaimedProposalRefunds);
+
+
+        //Substract any treasury withdrawals from treasury amount
+        List<RewardRest> treasuryWithdrawals = rewardStorage.findTreasuryWithdrawals(epoch);
+        var totalTreasuryWithdrawals = treasuryWithdrawals.stream()
+                .map(rewardRest -> rewardRest.getAmount())
+                .reduce(BigInteger::add)
+                .orElse(BigInteger.ZERO);
+
+        updatedTreasuryAmt = updatedTreasuryAmt.subtract(totalTreasuryWithdrawals);
+
+        return updatedTreasuryAmt;
     }
+
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateEpochRewards(int epoch, EpochCalculationResult epochCalculationResult) {

@@ -26,4 +26,6 @@ public class CommitteeMember {
     private Integer startEpoch;
 
     private Integer expiredEpoch;
+
+    private Integer epoch;
 }

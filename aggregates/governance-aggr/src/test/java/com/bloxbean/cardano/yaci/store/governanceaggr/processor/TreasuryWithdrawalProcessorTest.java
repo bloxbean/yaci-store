@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -10,7 +11,6 @@ import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,12 +40,9 @@ class TreasuryWithdrawalProcessorTest {
 
     private TreasuryWithdrawalProcessor treasuryWithdrawalProcessor;
 
-    private ObjectMapper objectMapper;
-
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
-        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader, objectMapper);
+        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader);
     }
 
     @Test
@@ -74,7 +71,7 @@ class TreasuryWithdrawalProcessorTest {
         GovActionProposal ratifiedProposalInPrevEpoch = new GovActionProposal();
 
         ratifiedProposalInPrevEpoch.setEpoch(100);
-        ratifiedProposalInPrevEpoch.setType(GovActionType.NEW_CONSTITUTION);
+        ratifiedProposalInPrevEpoch.setGovAction(NewConstitution.builder().build());
 
         when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(Collections.singletonList(ratifiedProposalInPrevEpoch));
@@ -86,32 +83,7 @@ class TreasuryWithdrawalProcessorTest {
     }
 
     @Test
-    void testHandleTreasuryWithdrawal_treasuryTypeButInvalidJson_noEventsPublished() {
-        ProposalStatusCapturedEvent event = ProposalStatusCapturedEvent.builder()
-                .epoch(100)
-                .slot(1234L)
-                .build();
-
-        GovActionProposal proposal = new GovActionProposal();
-
-        proposal.setEpoch(100);
-        proposal.setType(GovActionType.TREASURY_WITHDRAWALS_ACTION);
-
-        JsonNode invalidJsonNode = objectMapper.createObjectNode().put("invalid", "data");
-        proposal.setDetails(invalidJsonNode);
-
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
-                .thenReturn(Collections.singletonList(proposal));
-
-
-        treasuryWithdrawalProcessor.handleTreasuryWithdrawal(event);
-
-        verify(publisher, never()).publishEvent(any(RewardRestEvent.class));
-        verify(publisher, never()).publishEvent(any(UnclaimedRewardRestEvent.class));
-    }
-
-    @Test
-    void testHandleTreasuryWithdrawal_validTreasuryProposal_someAddresses() throws Exception {
+    void testHandleTreasuryWithdrawal_treasuryWithdrawalProposal_someAddresses() throws Exception {
         int epoch = 100;
         long slot = 2000;
 
@@ -135,10 +107,10 @@ class TreasuryWithdrawalProcessorTest {
         GovActionProposal proposal = new GovActionProposal();
 
         proposal.setEpoch(epoch);
-        proposal.setType(GovActionType.TREASURY_WITHDRAWALS_ACTION);
-        JsonNode detailsNode = objectMapper.valueToTree(treasuryWithdrawalsAction);
-        proposal.setDetails(detailsNode);
+        proposal.setGovAction(treasuryWithdrawalsAction);
 
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch))
+                .thenReturn(Collections.singletonList(proposal));
         when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch))
                 .thenReturn(Collections.singletonList(proposal));
 
