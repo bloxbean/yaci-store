@@ -9,6 +9,9 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -21,10 +24,21 @@ public class DRepDistService {
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
-        String query = """
-                  INSERT INTO drep_dist 
-                  with ranked_delegations as (
-                    select
+        //Drop temp tables in parallel
+        List<String> dropQueries = List.of(
+            "DROP TABLE IF EXISTS ss_drep_ranked_delegations",
+            "DROP TABLE IF EXISTS ss_drep_status",
+            "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits"
+        );
+
+        for (String query : dropQueries) {
+            jdbcTemplate.update(query, Map.of());
+        }
+        log.info("Dropped existing temp tables for DRep distribution !!!");
+
+        String rankedDelegationsQuery = """
+                CREATE TABLE ss_drep_ranked_delegations AS
+                select
                       address,
                       drep_id,
                       drep_hash,
@@ -44,9 +58,11 @@ public class DRepDistService {
                       delegation_vote
                     where
                       epoch <= :epoch
-                  ),
-                  drep_status as (
-                    select
+                """;
+
+        String drepStatusQuery = """
+                CREATE TABLE ss_drep_status AS
+                select
                       drep_id,
                       drep_hash,
                       status,
@@ -62,9 +78,11 @@ public class DRepDistService {
                       drep
                     where
                       epoch <= :epoch
-                  ),
-                  active_proposal_deposits  as (
-                    select
+                """;
+
+        String activeProposalDepositsQuery = """
+                CREATE TABLE ss_gov_active_proposal_deposits AS
+                select
                       g.return_address,
                       SUM(g.deposit) as deposit
                     from
@@ -77,7 +95,45 @@ public class DRepDistService {
                       and s.epoch = :epoch
                     group by
                       g.return_address
-                  )                
+                """;
+
+        List<String> createTableQueries = List.of(
+                rankedDelegationsQuery,
+                drepStatusQuery,
+                activeProposalDepositsQuery
+        );
+
+        long start = System.currentTimeMillis();
+        var epochParam = new MapSqlParameterSource();
+        epochParam.addValue("epoch", epoch);
+
+        for (String query : createTableQueries) {
+            log.info("Executing query : " + query);
+            jdbcTemplate.update(query, epochParam);
+            log.info(">> Temp table created for Drep dist query : " + query);
+        }
+        long end = System.currentTimeMillis();
+        log.info(">> Created all temp tables for Drep dist << " + (end - start) + " ms");
+
+        // Create indexes in parallel (if required, otherwise skip this part)
+        List<String> createIndexQueries = List.of(
+                "CREATE INDEX idx_ss_drep_ranked_delegations_address ON ss_drep_ranked_delegations(address)",
+                "CREATE INDEX idx_ss_drep_ranked_delegations_drep_id ON ss_drep_ranked_delegations(drep_id)",
+                "CREATE INDEX idx_ss_drep_ranked_delegations_rn ON ss_ranked_delegations(rn)",
+
+                "CREATE INDEX idx_ss_drep_status_drep_id ON ss_drep_status(drep_id)",
+                "CREATE INDEX idx_ss_gov_active_proposal_deposits_ret_address ON ss_gov_active_proposal_deposits(return_address)"
+        );
+
+        start = System.currentTimeMillis();
+        for (String indexQuery : createIndexQueries) {
+            jdbcTemplate.update(indexQuery, Map.of());
+        }
+        end = System.currentTimeMillis();
+        log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
+
+        String query1 = """
+                  INSERT INTO drep_dist               
                   select
                     rd.drep_hash,
                     rd.drep_id,
@@ -92,13 +148,13 @@ public class DRepDistService {
                     :epoch,
                     NOW()
                   from
-                    ranked_delegations rd
-                    left join drep_status ds on rd.drep_id = ds.drep_id
+                    ss_drep_ranked_delegations rd
+                    left join ss_drep_status ds on rd.drep_id = ds.drep_id
                     and rd.rn = 1
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_insta_spendable_rewards ir on rd.address = ir.address
-                    left join active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join ss_spendable_reward_rest rr ON rd.address = rr.address
@@ -118,7 +174,10 @@ public class DRepDistService {
                   group by
                     rd.drep_hash,
                     rd.drep_id
-                  union all
+                    """;
+
+        String query2 = """
+                  INSERT INTO drep_dist
                   select
                     rd.drep_type,
                     null,
@@ -132,11 +191,11 @@ public class DRepDistService {
                     :epoch,
                     NOW()
                   from
-                    ranked_delegations rd                      
+                    ss_drep_ranked_delegations rd                      
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_insta_spendable_rewards ir on rd.address = ir.address
-                    left join active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join ss_spendable_reward_rest rr ON rd.address = rr.address
@@ -154,7 +213,6 @@ public class DRepDistService {
                     AND sd.address IS NULL              
                   group by
                     rd.drep_type
-                  
                 """;
 
         var params = new MapSqlParameterSource();
@@ -162,7 +220,8 @@ public class DRepDistService {
         params.addValue("snapshot_epoch", epoch + 1);
 
         long t1 = System.currentTimeMillis();
-        jdbcTemplate.update(query, params);
+        jdbcTemplate.update(query1, params);
+        jdbcTemplate.update(query2, params);
         long t2 = System.currentTimeMillis();
 
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
