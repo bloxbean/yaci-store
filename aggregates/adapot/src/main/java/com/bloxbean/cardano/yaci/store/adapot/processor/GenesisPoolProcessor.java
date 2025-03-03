@@ -53,6 +53,10 @@ public class GenesisPoolProcessor {
     @EventListener
     @Transactional
     public void handleGenesisPoolRegistration(GenesisBlockEvent genesisBlockEvent) {
+        //If genesis block starts with Byron, don't do anything
+        if (genesisBlockEvent.getEra().getValue() < Era.Shelley.getValue())
+            return;
+
         var genesisStaking = genesisBlockEvent.getGenesisStaking();
         if (genesisStaking == null)
             return;
@@ -151,6 +155,10 @@ public class GenesisPoolProcessor {
     @EventListener
     @Transactional
     public void handleGenesisEpochStake(GenesisBlockEvent genesisBlockEvent) {
+        //If genesis block starts with Byron, don't do anything
+        if (genesisBlockEvent.getEra().getValue() < Era.Shelley.getValue())
+            return;
+
         var genesisStaking = genesisBlockEvent.getGenesisStaking();
         if (genesisStaking == null)
             return;
@@ -212,6 +220,9 @@ public class GenesisPoolProcessor {
 
         //calculate reward for epoch 0
         if (genesisBlockEvent.getEra().getValue() >= Era.Shelley.value) {
+            //create adapot
+            adaPotService.createAdaPot(0, 0L);
+
             var totalInitialBalance = genesisBlockEvent.getGenesisBalances()
                     .stream()
                     .map(genesisBalance -> genesisBalance.getBalance())

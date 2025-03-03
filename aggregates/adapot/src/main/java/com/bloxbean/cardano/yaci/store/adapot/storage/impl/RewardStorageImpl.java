@@ -112,8 +112,18 @@ public class RewardStorageImpl implements RewardStorage {
     }
 
     @Override
-    public void deleteLeaderMemberRewards(int epoch) {
-        rewardRepository.deleteLeaderMemberRewards(epoch);
+    public int deleteLeaderMemberRewards(int earnedEpoch) {
+        return rewardRepository.deleteLeaderMemberRewards(earnedEpoch);
+    }
+
+    @Override
+    public int deleteRewardRest(int earnedEpoch, RewardRestType type) {
+        return rewardRestRepository.deleteByEarnedEpochAndType(earnedEpoch, type);
+    }
+
+    @Override
+    public int deleteUnclaimedRewardRest(int earnedEpoch, RewardRestType type) {
+        return unclaimedRewardRestRepository.deleteByEarnedEpochAndType(earnedEpoch, type);
     }
 
     @Override

@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMember;
@@ -133,6 +134,32 @@ public class CommitteeMemberProcessor {
                 .epoch(epoch)
                 .slot(slot)
                 .build();
+    }
+
+    /**
+     * This will be invoked for custom devnet like Yaci DevKit devnet which directly starts from Conway
+     * @param genesisBlockEvent
+     */
+    @EventListener
+    @Transactional
+    public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        if (genesisBlockEvent.getEra().getValue() < Era.Conway.getValue())
+            return;
+
+        boolean isCommitteeMemberDataPresent = committeeMemberStorageReader.findAll(0, 1, null).size() > 0;
+        if (isCommitteeMemberDataPresent) {
+            log.debug("Committee members already exists. Skipping storing committee members from genesis file");
+            return;
+        }
+
+        var committeeMembers = getGenesisCommitteeMembers(storeProperties.getProtocolMagic());
+        if (committeeMembers != null && !committeeMembers.isEmpty()) {
+            var committeeMembersToSave = committeeMembers.stream().map(committeeMember ->
+                            buildCommitteeMember(committeeMember, genesisBlockEvent.getEpoch(), genesisBlockEvent.getEpoch(), genesisBlockEvent.getSlot()))
+                    .collect(Collectors.toList());
+            committeeMemberStorage.saveAll(committeeMembersToSave);
+        }
+
     }
 
     @EventListener

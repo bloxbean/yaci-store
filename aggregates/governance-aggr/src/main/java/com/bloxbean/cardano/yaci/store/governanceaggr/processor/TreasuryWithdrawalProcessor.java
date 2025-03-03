@@ -6,17 +6,18 @@ import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
+import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -29,21 +30,32 @@ public class TreasuryWithdrawalProcessor {
     private final ProposalStateClient proposalStateClient;
     private final ApplicationEventPublisher publisher;
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
+    //This is here only for cleanup purpose. Ideally, according to domain, it should be in RewardProcessor of adapot
+    //Refactor it later to remove direct dependency with RewardStorage here.
+    private final RewardStorage rewardStorage;
 
     public TreasuryWithdrawalProcessor(ProposalStateClient proposalStateClient, ApplicationEventPublisher publisher,
-                                       StakingCertificateStorageReader stakingCertificateStorageReader) {
+                                       StakingCertificateStorageReader stakingCertificateStorageReader, RewardStorage rewardStorage) {
         this.proposalStateClient = proposalStateClient;
         this.publisher = publisher;
         this.stakingCertificateStorageReader = stakingCertificateStorageReader;
+        this.rewardStorage = rewardStorage;
     }
 
     @EventListener
-    public void handleTreasuryWithdrawal(ProposalStatusCapturedEvent event) {
-        int currentEpoch = event.getEpoch();
+    @Transactional
+    public void handleTreasuryWithdrawal(PreAdaPotJobProcessingEvent event) {
+        //Find status of proposals in previous epoch to process ratified treasury withdrawals.
+        int epoch = event.getEpoch() - 1;
         long slot = event.getSlot();
 
+        //Delete if any existing treasury withdrawals both in reward_rest and unclaimed_reward_rest
+        //earned epoch = epoch
+        rewardStorage.deleteRewardRest(epoch, RewardRestType.treasury);
+        rewardStorage.deleteUnclaimedRewardRest(epoch, RewardRestType.treasury);
+
         List<GovActionProposal> ratifiedProposalsInPrevEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, currentEpoch);
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
 
         List<RewardRestAmt> rewardRestAmts = new ArrayList<>();
         List<RewardRestAmt> unclaimedRewardRestAmts = new ArrayList<>();
@@ -89,8 +101,8 @@ public class TreasuryWithdrawalProcessor {
 
         if (!rewardRestAmts.isEmpty()) {
             var rewardRestEvent = RewardRestEvent.builder()
-                    .earnedEpoch(currentEpoch)
-                    .spendableEpoch(currentEpoch + 1)
+                    .earnedEpoch(epoch)
+                    .spendableEpoch(epoch + 1)
                     .slot(slot)
                     .rewards(rewardRestAmts)
                     .build();
@@ -99,8 +111,8 @@ public class TreasuryWithdrawalProcessor {
 
         if (!unclaimedRewardRestAmts.isEmpty()) {
             var unclaimedRewardRestEvent = UnclaimedRewardRestEvent.builder()
-                    .earnedEpoch(currentEpoch)
-                    .spendableEpoch(currentEpoch + 1)
+                    .earnedEpoch(epoch)
+                    .spendableEpoch(epoch + 1)
                     .slot(slot)
                     .rewards(unclaimedRewardRestAmts)
                     .build();

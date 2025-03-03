@@ -82,13 +82,14 @@ public class DRepDistService {
                     rd.drep_hash,
                     rd.drep_id,
                     sum(
-                      COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
-                        pr.pool_refund_withdrawable_reward,
-                        0
-                      ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
-                        + COALESCE(rr.withdrawable_reward_rest, 0)
+                      COALESCE(sab.quantity, 0) 
+                          + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0) 
+                          + coalesce(apd.deposit, 0) 
+                          + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
-                    CAST(:epoch as integer),
+                    :epoch,
                     NOW()
                   from
                     ranked_delegations rd
@@ -122,12 +123,13 @@ public class DRepDistService {
                     rd.drep_type,
                     null,
                     sum(
-                      COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
-                        pr.pool_refund_withdrawable_reward,
-                        0
-                      ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
+                      COALESCE(sab.quantity, 0)
+                          + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0) 
+                          + coalesce(apd.deposit, 0)
                     ),
-                    CAST(:epoch as integer),
+                    :epoch,
                     NOW()
                   from
                     ranked_delegations rd                      
