@@ -30,6 +30,10 @@ public class SPOVotingState extends VotingState {
         boolean result;
         double acceptedStakeRatio;
 
+        if (poolVotingThresholds == null || yesVoteStake == null || abstainVoteStake == null || totalStake == null || ccState == null) {
+            return false;
+        }
+
         if (totalStake.equals(BigInteger.ZERO) || abstainVoteStake.equals(totalStake)) {
             acceptedStakeRatio = 0;
         } else {

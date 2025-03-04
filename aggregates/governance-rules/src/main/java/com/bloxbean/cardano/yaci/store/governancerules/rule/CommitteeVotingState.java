@@ -18,6 +18,13 @@ public class CommitteeVotingState extends VotingState {
 
     @Override
     public boolean isAccepted() {
+        if (threshold == null || yesVote == null || noVote == null) {
+            return false;
+        }
+        if (threshold.equals(BigDecimal.ZERO)) {
+            return true;
+        }
+
         int totalVotes = yesVote + noVote;
         if (totalVotes == 0) {
             return false;

@@ -28,6 +28,10 @@ public class DRepVotingState extends VotingState {
 
     @Override
     public boolean isAccepted() {
+        if (ccState == null || dRepVotingThresholds == null || yesVoteStake == null || noVoteStake == null) {
+            return false;
+        }
+
         BigInteger totalExcludingAbstainStake = yesVoteStake.add(noVoteStake);
         double acceptedStakeRatio;
         if (totalExcludingAbstainStake.equals(BigInteger.ZERO)) {

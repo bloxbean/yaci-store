@@ -123,9 +123,9 @@ public class GovActionRatifier {
             case TREASURY_WITHDRAWALS_ACTION:
                 TreasuryWithdrawalsAction treasuryWithdrawalsAction = (TreasuryWithdrawalsAction) govAction;
                 withdrawalCanWithdraw = GovernanceActionUtil.withdrawalCanWithdraw(treasuryWithdrawalsAction, treasury);
-                spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
+                dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
-                isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted();
+                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
                 isNotDelayed = true;
 
                 break;
