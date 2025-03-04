@@ -1,16 +1,16 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
+import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,17 +38,20 @@ class TreasuryWithdrawalProcessorTest {
     @Mock
     private StakingCertificateStorageReader stakingCertificateStorageReader;
 
+    @Mock
+    private RewardStorage rewardStorage;
+
     private TreasuryWithdrawalProcessor treasuryWithdrawalProcessor;
 
     @BeforeEach
     void setUp() {
-        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader);
+        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader, rewardStorage);
     }
 
     @Test
     void testHandleTreasuryWithdrawal_noEnactedProposals_found() {
-        ProposalStatusCapturedEvent event = ProposalStatusCapturedEvent.builder()
-                .epoch(100)
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
+                .epoch(101)
                 .slot(1234L)
                 .build();
 
@@ -63,8 +66,8 @@ class TreasuryWithdrawalProcessorTest {
 
     @Test
     void testHandleTreasuryWithdrawal_proposalsButNoTreasuryType_noEventsPublished() {
-        ProposalStatusCapturedEvent event = ProposalStatusCapturedEvent.builder()
-                .epoch(100)
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
+                .epoch(101)
                 .slot(1234L)
                 .build();
 
@@ -84,10 +87,10 @@ class TreasuryWithdrawalProcessorTest {
 
     @Test
     void testHandleTreasuryWithdrawal_treasuryWithdrawalProposal_someAddresses() throws Exception {
-        int epoch = 100;
+        int epoch = 101;
         long slot = 2000;
 
-        ProposalStatusCapturedEvent event = ProposalStatusCapturedEvent.builder()
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
                 .epoch(epoch)
                 .slot(slot)
                 .build();
@@ -109,9 +112,9 @@ class TreasuryWithdrawalProcessorTest {
         proposal.setEpoch(epoch);
         proposal.setGovAction(treasuryWithdrawalsAction);
 
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch))
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(Collections.singletonList(proposal));
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch))
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(Collections.singletonList(proposal));
 
         StakeRegistrationDetail stakingCertA = new StakeRegistrationDetail();
@@ -147,8 +150,8 @@ class TreasuryWithdrawalProcessorTest {
         }
 
         assertNotNull(rewardEvent);
-        assertEquals(epoch, rewardEvent.getEarnedEpoch());
-        assertEquals(epoch + 1, rewardEvent.getSpendableEpoch());
+        assertEquals(epoch - 1, rewardEvent.getEarnedEpoch());
+        assertEquals(epoch, rewardEvent.getSpendableEpoch());
         assertEquals(slot, rewardEvent.getSlot());
         assertEquals(1, rewardEvent.getRewards().size());
         RewardRestAmt rrA = rewardEvent.getRewards().get(0);
@@ -157,8 +160,8 @@ class TreasuryWithdrawalProcessorTest {
         assertEquals(RewardRestType.treasury, rrA.getType());
 
         assertNotNull(unclaimedEvent);
-        assertEquals(epoch, unclaimedEvent.getEarnedEpoch());
-        assertEquals(epoch + 1, unclaimedEvent.getSpendableEpoch());
+        assertEquals(epoch - 1, unclaimedEvent.getEarnedEpoch());
+        assertEquals(epoch, unclaimedEvent.getSpendableEpoch());
         assertEquals(slot, unclaimedEvent.getSlot());
         assertEquals(1, unclaimedEvent.getRewards().size());
         RewardRestAmt rrB = unclaimedEvent.getRewards().get(0);

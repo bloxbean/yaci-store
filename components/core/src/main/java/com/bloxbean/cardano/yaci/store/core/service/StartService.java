@@ -88,9 +88,12 @@ public class StartService {
                             .blockHash(genesisHash)
                             .blockTime(genesisConfig.getStartTime(protocolMagic))
                             .genesisBalances(genesisConfig.getGenesisBalances())
+                            .genesisStaking(genesisConfig.getGenesisStaking())
                             .era(startPoint.get().getFirstBlockEra()) //Set first block era to set start era
                             .slot(-1) //dummy value
                             .block(-1) //dummy value
+                            .epoch(0)
+                            .protocolMagic(protocolMagic)
                             .build();
                     publisher.publishEvent(genesisBlockEvent);
                     from = startPoint.get().getFirstBlock();

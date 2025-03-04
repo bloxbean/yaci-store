@@ -33,7 +33,7 @@ public class ByronBlockProcessor {
                 .hash(genesisBlockEvent.getBlockHash())
                 .slot(genesisBlockEvent.getSlot())
                 .number(genesisBlockEvent.getBlock())
-                .epochNumber(0)
+                .epochNumber(genesisBlockEvent.getEpoch())
                 .epochSlot(-1)
                 .totalOutput(BigInteger.valueOf(0))
                 .blockTime(genesisBlockEvent.getBlockTime())

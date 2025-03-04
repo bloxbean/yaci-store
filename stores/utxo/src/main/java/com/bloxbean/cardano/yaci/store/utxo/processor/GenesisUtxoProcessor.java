@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
@@ -38,6 +40,7 @@ public class GenesisUtxoProcessor {
         for(GenesisBalance genesisBalance: genesisBalanceList) {
             String ownerPaymentCredential = null;
             String ownerStakeCredential = null;
+            String stakeAddress = null;
             if (genesisBalance.getAddress() != null &&
                     genesisBalance.getAddress().startsWith("addr")) { //If shelley address
                 Address address = new Address(genesisBalance.getAddress());
@@ -45,6 +48,8 @@ public class GenesisUtxoProcessor {
                         .orElse(null);
                 ownerStakeCredential = address.getDelegationCredential().map(delegationHash -> HexUtil.encodeHexString(delegationHash.getBytes()))
                         .orElse(null);
+                if (address.getAddressType() == AddressType.Base)
+                    stakeAddress = AddressProvider.getStakeAddress(address).getAddress();
             }
 
             AddressUtxo addressUtxo = AddressUtxo.builder()
@@ -57,6 +62,7 @@ public class GenesisUtxoProcessor {
                     .outputIndex(0)
                     .ownerAddr(genesisBalance.getAddress())
                     .ownerPaymentCredential(ownerPaymentCredential)
+                    .ownerStakeAddr(stakeAddress)
                     .ownerStakeCredential(ownerStakeCredential)
                     .lovelaceAmount(genesisBalance.getBalance())
                     .amounts(List.of(new Amt(LOVELACE, "", LOVELACE, genesisBalance.getBalance())))

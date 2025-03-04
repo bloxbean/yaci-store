@@ -75,6 +75,9 @@ public class EpochInfoService {
             epochInfo.setActiveStake(stake);
         });
 
+        if (epochInfo.getActiveStake() == null)
+            epochInfo.setActiveStake(BigInteger.ZERO);
+
         return Optional.of(epochInfo);
 
     }

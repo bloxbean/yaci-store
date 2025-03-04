@@ -2,10 +2,11 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -47,13 +48,15 @@ class ProposalRefundProcessorTest {
     @Mock
     private StakingCertificateStorageReader stakingCertificateStorageReader;
 
+    @Mock
+    private RewardStorage rewardStorage;
+
     @InjectMocks
     private ProposalRefundProcessor proposalRefundProcessor;
 
     @Test
     void testHandleProposalStatusCapturedEvent() {
-
-        ProposalStatusCapturedEvent event = new ProposalStatusCapturedEvent(1, 100);
+        PreAdaPotJobProcessingEvent event = new PreAdaPotJobProcessingEvent(2, 100);
 
         Proposal proposal1 = new Proposal(GovActionId.builder()
                 .gov_action_index(0)
@@ -160,7 +163,7 @@ class ProposalRefundProcessorTest {
                 .getRegistrationByStakeAddress("stake_test1upnakjguet3zc7qzrw54p3nc3j8c7pd5v4w8x5evdzseygs9ddddd",100L))
                 .thenReturn(Optional.of(stakeRegistrationDetail4));
 
-        proposalRefundProcessor.handleProposalStatusCapturedEvent(event);
+        proposalRefundProcessor.handleProposalRefund(event);
 
         ArgumentCaptor<List<GovActionId>> govActionIdsCaptor = ArgumentCaptor.forClass(List.class);
         verify(govActionProposalStorage).findByGovActionIds(govActionIdsCaptor.capture());

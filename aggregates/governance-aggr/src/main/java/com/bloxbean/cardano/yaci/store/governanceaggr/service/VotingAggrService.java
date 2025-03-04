@@ -191,19 +191,25 @@ public class VotingAggrService {
     }
 
     private List<VotingProcedure> mapToVotingProcedures(Result<Record> result) {
-        return result.map(record -> VotingProcedure.builder()
-                .id(UUID.fromString(record.get(VOTING_PROCEDURE.ID, String.class)))
-                .txHash(record.get(VOTING_PROCEDURE.TX_HASH, String.class))
-                .index(record.get(VOTING_PROCEDURE.IDX, Long.class))
-                .slot(record.get(VOTING_PROCEDURE.SLOT, Long.class))
-                .voterType(VoterType.valueOf(record.get(VOTING_PROCEDURE.VOTER_TYPE, String.class)))
-                .voterHash(record.get(VOTING_PROCEDURE.VOTER_HASH, String.class))
-                .govActionTxHash(record.get(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, String.class))
-                .govActionIndex(record.get(VOTING_PROCEDURE.GOV_ACTION_INDEX, Integer.class))
-                .vote(record.get(VOTING_PROCEDURE.VOTE, String.class) != null ? Vote.valueOf(record.get(VOTING_PROCEDURE.VOTE, String.class)) : null)
-                .anchorUrl(record.get(VOTING_PROCEDURE.ANCHOR_URL, String.class))
-                .anchorHash(record.get(VOTING_PROCEDURE.ANCHOR_HASH, String.class))
-                .epoch(record.get(VOTING_PROCEDURE.EPOCH, Integer.class))
-                .build());
+        return result.map(record -> {
+            //TODO: For mysql the id value is currently returned as null as column type is binary(16) for mysql
+            var id = record.get(VOTING_PROCEDURE.ID, String.class);
+            var uuid = id != null? UUID.fromString(id): null;
+
+            return VotingProcedure.builder()
+                    .id(uuid)
+                    .txHash(record.get(VOTING_PROCEDURE.TX_HASH, String.class))
+                    .index(record.get(VOTING_PROCEDURE.IDX, Long.class))
+                    .slot(record.get(VOTING_PROCEDURE.SLOT, Long.class))
+                    .voterType(VoterType.valueOf(record.get(VOTING_PROCEDURE.VOTER_TYPE, String.class)))
+                    .voterHash(record.get(VOTING_PROCEDURE.VOTER_HASH, String.class))
+                    .govActionTxHash(record.get(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, String.class))
+                    .govActionIndex(record.get(VOTING_PROCEDURE.GOV_ACTION_INDEX, Integer.class))
+                    .vote(record.get(VOTING_PROCEDURE.VOTE, String.class) != null ? Vote.valueOf(record.get(VOTING_PROCEDURE.VOTE, String.class)) : null)
+                    .anchorUrl(record.get(VOTING_PROCEDURE.ANCHOR_URL, String.class))
+                    .anchorHash(record.get(VOTING_PROCEDURE.ANCHOR_HASH, String.class))
+                    .epoch(record.get(VOTING_PROCEDURE.EPOCH, Integer.class))
+                    .build();
+        });
     }
 }

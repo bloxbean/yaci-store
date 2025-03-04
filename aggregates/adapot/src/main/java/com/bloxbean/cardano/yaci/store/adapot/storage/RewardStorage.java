@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 
 import java.util.List;
 
@@ -14,13 +15,18 @@ public interface RewardStorage {
 
     void saveRewards(List<Reward> poolRewards);
 
+    void bulkSaveRewards(List<Reward> rewards, int batchSize);
+
     void saveUnclaimedRewardRest(List<UnclaimedRewardRest> rewards);
 
     List<UnclaimedRewardRest> findUnclaimedRewardRest(int spendableEpoch);
 
     List<RewardRest> findTreasuryWithdrawals(int spendableEpoch);
 
-    void deleteLeaderMemberRewards(int epoch);
+    int deleteLeaderMemberRewards(int earnedEpoch);
+
+    int deleteRewardRest(int earnedEpoch, RewardRestType type);
+    int deleteUnclaimedRewardRest(int earnedEpoch, RewardRestType type);
 
     int deleteInstantRewardsBySlotGreaterThan(long slot);
 

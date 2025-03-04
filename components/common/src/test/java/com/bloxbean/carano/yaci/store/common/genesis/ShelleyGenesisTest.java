@@ -1,9 +1,13 @@
 package com.bloxbean.carano.yaci.store.common.genesis;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.PoolParams;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
+import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -47,6 +51,27 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(42);
 
         assertThat(shelleyGenesis.getInitialFunds()).containsAll(expectedInitialUtxos);
+
+        assertThat(shelleyGenesis.getGenesisStaking()).isNotNull();
+        assertThat(shelleyGenesis.getGenesisStaking().getPools()).hasSize(1);
+        assertThat(shelleyGenesis.getGenesisStaking().getStakes()).hasSize(1);
+
+        PoolParams poolParams = shelleyGenesis.getGenesisStaking().getPools().get(0);
+        GenesisStaking.Stake stake = shelleyGenesis.getGenesisStaking().getStakes().get(0);
+
+        String rewardAcc = new Address(HexUtil.decodeHexString(poolParams.getRewardAccount())).toBech32();
+
+        assertThat(poolParams.getOperator()).isEqualTo("7301761068762f5900bde9eb7c1c15b09840285130f5b0f53606cc57");
+        assertThat(poolParams.getCost()).isEqualTo(new BigInteger("340000000"));
+        assertThat(poolParams.getMargin()).isEqualTo("0");
+        assertThat(poolParams.getPoolMetadataUrl()).isNull();
+        assertThat(poolParams.getPoolOwners()).isEmpty();
+        assertThat(poolParams.getPledge()).isEqualTo(BigInteger.ZERO);
+        assertThat(rewardAcc).isEqualTo("stake_test1uqg6znklwwcg5z38ewvt93t7kd78sr033l8u7eu9a4wlsjszpckek");
+        assertThat(poolParams.getVrfKeyHash()).isEqualTo("c2b62ffa92ad18ffc117ea3abeb161a68885000a466f9c71db5e4731d6630061");
+
+        assertThat(stake.getStakeKeyHash()).isEqualTo("295b987135610616f3c74e11c94d77b6ced5ccc93a7d719cfb135062");
+        assertThat(stake.getPoolHash()).isEqualTo("7301761068762f5900bde9eb7c1c15b09840285130f5b0f53606cc57");
     }
 
     @Test

@@ -25,7 +25,9 @@ public class AdaPot extends BlockAwareDomain {
     private BigInteger utxo;
     private BigInteger treasury;
     private BigInteger reserves;
-    private BigInteger rewards;
-    private BigInteger depositsDrep;
-    private BigInteger depositsProposal;
+    private BigInteger circulation;
+    private BigInteger distributedRewards;
+    private BigInteger undistributedRewards;
+    private BigInteger rewardsPot;
+    private BigInteger poolRewardsPot;
 }

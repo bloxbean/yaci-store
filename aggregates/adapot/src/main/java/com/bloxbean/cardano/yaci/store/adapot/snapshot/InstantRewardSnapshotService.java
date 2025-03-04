@@ -53,6 +53,7 @@ public class InstantRewardSnapshotService {
 
         //Only take the latest mir record for each address (Pre Alonzo)
         String preAlonzoQuery = """
+                insert into instant_reward(address, type, amount, earned_epoch, spendable_epoch, slot, create_datetime)
                 WITH LatestMIR AS (SELECT tx_hash,
                                           cert_index,
                                           pot,
@@ -66,15 +67,14 @@ public class InstantRewardSnapshotService {
                                           block_time,
                                           ROW_NUMBER() OVER (PARTITION BY address ORDER BY slot DESC) AS rn
                                    FROM mir
-                                   WHERE epoch = :epoch)
-                insert into instant_reward
-                select address          as address,
-                       pot              as type,
-                       amount           as amount,
-                       m.epoch          as earned_epoch,
-                       :spendable_epoch as spendable_epoch,
-                       :current_slot    as slot,
-                       now()            as create_datetime
+                                   WHERE epoch = :epoch)               
+                select address,
+                       pot,
+                       amount,
+                       m.epoch,
+                       :spendable_epoch,
+                       :current_slot,
+                       now()
                 from LatestMIR m
                 where m.rn = 1
                   and not exists(SELECT 1

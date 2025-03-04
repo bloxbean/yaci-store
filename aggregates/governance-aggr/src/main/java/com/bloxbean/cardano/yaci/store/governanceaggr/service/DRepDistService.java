@@ -5,8 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -14,15 +18,27 @@ import org.springframework.transaction.annotation.Transactional;
 public class DRepDistService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
-        String query = """ 
-                  with ranked_delegations as (
-                    select
+        //Drop temp tables in parallel
+        List<String> dropQueries = List.of(
+            "DROP TABLE IF EXISTS ss_drep_ranked_delegations",
+            "DROP TABLE IF EXISTS ss_drep_status",
+            "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits"
+        );
+
+        for (String query : dropQueries) {
+            jdbcTemplate.update(query, Map.of());
+        }
+        log.info("Dropped existing temp tables for DRep distribution !!!");
+
+        String rankedDelegationsQuery = """
+                CREATE TABLE ss_drep_ranked_delegations AS
+                select
                       address,
                       drep_id,
                       drep_hash,
@@ -42,9 +58,11 @@ public class DRepDistService {
                       delegation_vote
                     where
                       epoch <= :epoch
-                  ),
-                  drep_status as (
-                    select
+                """;
+
+        String drepStatusQuery = """
+                CREATE TABLE ss_drep_status AS
+                select
                       drep_id,
                       drep_hash,
                       status,
@@ -60,20 +78,11 @@ public class DRepDistService {
                       drep
                     where
                       epoch <= :epoch
-                  ),
-                  max_slot_balances as (
-                    select
-                      address,
-                      MAX(slot) as max_slot
-                    from
-                      stake_address_balance
-                    where
-                      epoch <= :epoch
-                    group by
-                      address
-                  ),
-                  active_proposal_deposits  as (
-                    select
+                """;
+
+        String activeProposalDepositsQuery = """
+                CREATE TABLE ss_gov_active_proposal_deposits AS
+                select
                       g.return_address,
                       SUM(g.deposit) as deposit
                     from
@@ -86,204 +95,138 @@ public class DRepDistService {
                       and s.epoch = :epoch
                     group by
                       g.return_address
-                  ),
-                  last_withdrawal as (
-                    select
-                      address,
-                      MAX(slot) as max_slot
-                    from
-                      withdrawal
-                    where
-                      epoch <= :epoch
-                    group by
-                      address
-                  ),
-                  pool_refund_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as pool_refund_withdrawable_reward
-                    from
-                      reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.spendable_epoch <= :epoch
-                      and r.type = 'refund'
-                    group by
-                      r.address
-                  ),
-                  pool_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as withdrawable_reward
-                    from
-                      reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.earned_epoch <= :epoch
-                      and (
-                        r.type = 'member'
-                        or r.type = 'leader'
-                      )
-                      and r.spendable_epoch <= :snapshot_epoch
-                    group by
-                      r.address
-                  ),
-                  insta_spendable_rewards as (
-                    select
-                      r.address,
-                      SUM(r.amount) as insta_withdrawable_reward
-                    from
-                      instant_reward r
-                      left join last_withdrawal lw on r.address = lw.address
-                    where
-                      (
-                        lw.max_slot is null
-                        or r.slot > lw.max_slot
-                      )
-                      and r.spendable_epoch <= :snapshot_epoch
-                    group by
-                      r.address
-                  ),
-                  spendable_reward_rest as (
-                    select
-                       r.address,
-                       SUM(r.amount) as withdrawable_reward_rest
-                    from
-                    reward_rest r
-                    left join last_withdrawal lw on
-                       r.address = lw.address
-                    where
-                       (
-                          lw.max_slot is null
-                          or r.slot > lw.max_slot
-                        )
-                        and r.spendable_epoch <= :epoch
-                    group by
-                      r.address
-                  )
-                  INSERT INTO drep_dist
+                """;
+
+        List<String> createTableQueries = List.of(
+                rankedDelegationsQuery,
+                drepStatusQuery,
+                activeProposalDepositsQuery
+        );
+
+        long start = System.currentTimeMillis();
+        var epochParam = new MapSqlParameterSource();
+        epochParam.addValue("epoch", epoch);
+
+        for (String query : createTableQueries) {
+            log.info("Executing query : " + query);
+            jdbcTemplate.update(query, epochParam);
+            log.info(">> Temp table created for Drep dist query : " + query);
+        }
+        long end = System.currentTimeMillis();
+        log.info(">> Created all temp tables for Drep dist << " + (end - start) + " ms");
+
+        // Create indexes in parallel (if required, otherwise skip this part)
+        List<String> createIndexQueries = List.of(
+                "CREATE INDEX idx_ss_drep_ranked_delegations_address ON ss_drep_ranked_delegations(address)",
+                "CREATE INDEX idx_ss_drep_ranked_delegations_drep_id ON ss_drep_ranked_delegations(drep_id)",
+                "CREATE INDEX idx_ss_drep_ranked_delegations_rn ON ss_ranked_delegations(rn)",
+
+                "CREATE INDEX idx_ss_drep_status_drep_id ON ss_drep_status(drep_id)",
+                "CREATE INDEX idx_ss_gov_active_proposal_deposits_ret_address ON ss_gov_active_proposal_deposits(return_address)"
+        );
+
+        start = System.currentTimeMillis();
+        for (String indexQuery : createIndexQueries) {
+            jdbcTemplate.update(indexQuery, Map.of());
+        }
+        end = System.currentTimeMillis();
+        log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
+
+        String query1 = """
+                  INSERT INTO drep_dist               
                   select
                     rd.drep_hash,
                     rd.drep_id,
-                    sum (
-                      COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
-                        pr.pool_refund_withdrawable_reward,
-                        0
-                      ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
-                        + COALESCE(rr.withdrawable_reward_rest, 0)
+                    sum(
+                      COALESCE(sab.quantity, 0) 
+                          + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0) 
+                          + coalesce(apd.deposit, 0) 
+                          + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :epoch,
                     NOW()
                   from
-                    ranked_delegations rd
-                    left join drep_status ds on rd.drep_id = ds.drep_id
+                    ss_drep_ranked_delegations rd
+                    left join ss_drep_status ds on rd.drep_id = ds.drep_id
                     and rd.rn = 1
-                    left join pool_rewards r on rd.address = r.address
-                    left join pool_refund_rewards pr on rd.address = pr.address
-                    left join insta_spendable_rewards ir on rd.address = ir.address
-                    left join active_proposal_deposits  apd on apd.return_address = rd.address
-                    left join max_slot_balances msb on msb.address = rd.address
+                    left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_pool_refund_rewards pr on rd.address = pr.address
+                    left join ss_insta_spendable_rewards ir on rd.address = ir.address
+                    left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join spendable_reward_rest rr ON rd.address = rr.address
+                    left join ss_spendable_reward_rest rr ON rd.address = rr.address
+                    left join stake_registration sd
+                                          ON sd.address = rd.address
+                                              AND sd.type = 'STAKE_DEREGISTRATION'
+                                              AND sd.epoch <= :epoch
+                                              AND (
+                                                 sd.slot > rd.slot OR
+                                                 (sd.slot = rd.slot AND sd.tx_index > rd.tx_index) OR
+                                                 (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
+                                                 )
                   where
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
-                    and not exists (
-                      select
-                        1
-                      from
-                        stake_registration sd
-                      where
-                        sd.address = rd.address
-                        and sd.type = 'STAKE_DEREGISTRATION'
-                        and sd.epoch <= :epoch
-                        and (
-                          sd.slot > rd.slot
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index > rd.tx_index
-                          )
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index = rd.tx_index
-                            and sd.cert_index > rd.cert_index
-                          )
-                        )
-                    )
+                    and sd.address IS NULL           
                   group by
                     rd.drep_hash,
                     rd.drep_id
-                  union all
+                    """;
+
+        String query2 = """
+                  INSERT INTO drep_dist
                   select
-                    drep_type_info.drep_type,
+                    rd.drep_type,
                     null,
-                    sum (
-                      COALESCE(sab.quantity, 0) + COALESCE(r.withdrawable_reward, 0) + COALESCE(
-                        pr.pool_refund_withdrawable_reward,
-                        0
-                      ) + COALESCE(ir.insta_withdrawable_reward, 0) + coalesce(apd.deposit, 0)
+                    sum(
+                      COALESCE(sab.quantity, 0)
+                          + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0) 
+                          + coalesce(apd.deposit, 0)
                     ),
                     :epoch,
                     NOW()
                   from
-                    (
-                      values
-                        ('ABSTAIN'),
-                        ('NO_CONFIDENCE')
-                    ) as drep_type_info(drep_type)
-                    join ranked_delegations rd on rd.drep_type = drep_type_info.drep_type
-                    and rd.rn = 1
-                    left join pool_rewards r on rd.address = r.address
-                    left join pool_refund_rewards pr on rd.address = pr.address
-                    left join insta_spendable_rewards ir on rd.address = ir.address
-                    left join active_proposal_deposits  apd on apd.return_address = rd.address
-                    left join max_slot_balances msb on msb.address = rd.address
+                    ss_drep_ranked_delegations rd                      
+                    left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_pool_refund_rewards pr on rd.address = pr.address
+                    left join ss_insta_spendable_rewards ir on rd.address = ir.address
+                    left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join spendable_reward_rest rr ON rd.address = rr.address
+                    left join ss_spendable_reward_rest rr ON rd.address = rr.address
+                    left join stake_registration sd
+                                          ON sd.address = rd.address
+                                              AND sd.type = 'STAKE_DEREGISTRATION'
+                                              AND sd.epoch <= :epoch
+                                              AND (
+                                                 sd.slot > rd.slot OR
+                                                 (sd.slot = rd.slot AND sd.tx_index > rd.tx_index) OR
+                                                 (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
+                                                 )
                   where
-                    not exists (
-                      select
-                        1
-                      from
-                        stake_registration sd
-                      where
-                        sd.address = rd.address
-                        and sd.type = 'STAKE_DEREGISTRATION'
-                        and sd.epoch <= :epoch
-                        and (
-                          sd.slot > rd.slot
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index > rd.tx_index
-                          )
-                          or (
-                            sd.slot = rd.slot
-                            and sd.tx_index = rd.tx_index
-                            and sd.cert_index > rd.cert_index
-                          )
-                        )
-                    )
+                    rd.rn=1 AND (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
+                    AND sd.address IS NULL              
                   group by
-                    drep_type_info.drep_type;
-                  
+                    rd.drep_type
                 """;
 
         var params = new MapSqlParameterSource();
         params.addValue("epoch", epoch);
         params.addValue("snapshot_epoch", epoch + 1);
 
-        jdbcTemplate.update(query, params);
+        long t1 = System.currentTimeMillis();
+        jdbcTemplate.update(query1, params);
+        jdbcTemplate.update(query2, params);
+        long t2 = System.currentTimeMillis();
 
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
+        log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", epoch, (t2 - t1));
 
     }
 }

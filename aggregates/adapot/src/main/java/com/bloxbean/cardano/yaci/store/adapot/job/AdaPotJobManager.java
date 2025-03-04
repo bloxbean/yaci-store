@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.job;
 
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
+import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
@@ -157,6 +158,11 @@ public class AdaPotJobManager {
                 job.setUpdateRewardTime(0L);
 
                 var start = Instant.now();
+
+                //Fire pre-adapot job processing event
+                var preAdaPotJobProcessingEvent = new PreAdaPotJobProcessingEvent(job.getEpoch(), job.getSlot());
+                publisher.publishEvent(preAdaPotJobProcessingEvent);
+
                 //create AdaPot entry for the epoch
                 adaPotService.createAdaPot(job.getEpoch(), job.getSlot());
 

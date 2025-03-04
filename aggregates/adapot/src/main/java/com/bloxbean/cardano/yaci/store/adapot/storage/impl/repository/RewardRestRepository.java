@@ -14,4 +14,6 @@ public interface RewardRestRepository extends JpaRepository<RewardRestEntity, UU
     int deleteBySlotGreaterThan(Long slot);
 
     List<RewardRestEntity> findBySpendableEpochAndType(Integer spendableEpoch, RewardRestType type);
+
+    int deleteByEarnedEpochAndType(Integer earnedEpoch, RewardRestType type);
 }
