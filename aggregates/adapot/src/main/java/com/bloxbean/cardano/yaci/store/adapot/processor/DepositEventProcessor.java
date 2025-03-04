@@ -34,45 +34,6 @@ public class DepositEventProcessor {
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
     private final ApplicationEventPublisher publisher;
 
-//    private BigInteger batchDepositAmount = BigInteger.ZERO;
-//    private BigInteger batchRefundAmount = BigInteger.ZERO;
-//    private BigInteger poolRefundAmount = BigInteger.ZERO;
-//    private BigInteger refundToTreasury = BigInteger.ZERO;
-
-   // @EventListener
-   // @Transactional
-    /**
-    public void handleStakingDepositEvent(StakingDepositEvent stakingDepositEvent) {
-        var metadata = stakingDepositEvent.getMetadata();
-        //Check if there is any existing value for this epoch
-        var prevAdaPot = adaPotService.getAdaPot(metadata.getEpochNumber());
-
-        var keyDeposit = depositParamService.getKeyDeposit(metadata.getEpochNumber());
-
-        BigInteger totalRegDeposit = BigInteger.ZERO;
-        BigInteger totalKeyRegRefund = BigInteger.ZERO;
-        if (stakingDepositEvent.getStakeKeyRegistrationCount() > 0)
-            totalRegDeposit = keyDeposit.multiply(BigInteger.valueOf(stakingDepositEvent.getStakeKeyRegistrationCount()));
-
-        if (stakingDepositEvent.getStakeKeyDeRegistrationCount() > 0)
-            totalKeyRegRefund = keyDeposit.multiply(BigInteger.valueOf(stakingDepositEvent.getStakeKeyDeRegistrationCount()));
-
-        var totalDepositAmount = totalRegDeposit.subtract(totalKeyRegRefund);
-
-        var poolDeposit = depositParamService.getPoolDeposit(metadata.getEpochNumber());
-        //sum deposit amount in poolDeposits
-        if (stakingDepositEvent.getStakePoolRegistrationCount() > 0) {
-            var totalPoolDeposit = poolDeposit.multiply(BigInteger.valueOf(stakingDepositEvent.getStakePoolRegistrationCount()));
-            totalDepositAmount = totalDepositAmount.add(totalPoolDeposit);
-        }
-
-        if (log.isDebugEnabled())
-            log.debug("Total deposit amount : {}", totalDepositAmount);
-
-        batchDepositAmount = totalDepositAmount;
-    }
-    **/
-
     //Handles pool deposit refund for retire pool during epoch change
     //PoolRetiredEvent is published during PreEpochTransitionEvent
     @EventListener
@@ -132,8 +93,6 @@ public class DepositEventProcessor {
             }
         }
 
-        //poolRefundAmount = refundAmt;
-
         //Publish reward event to process refund
         var rewardEvent = RewardEvent.builder()
                 .metadata(poolRetiredEvent.getMetadata())
@@ -143,29 +102,6 @@ public class DepositEventProcessor {
                 .build();
         publisher.publishEvent(rewardEvent);
     }
-
-//    public BigInteger getBatchDepositAmount() {
-//        return batchDepositAmount;
-//    }
-//
-//    public BigInteger getBatchRefundAmount() {
-//        return batchRefundAmount;
-//    }
-//
-//    public BigInteger getPoolRefundAmount() {
-//        return poolRefundAmount;
-//    }
-//
-//    public BigInteger getRefundToTreasury() {
-//        return refundToTreasury;
-//    }
-//
-//    public void reset() {
-//        batchDepositAmount = BigInteger.ZERO;
-//        batchRefundAmount = BigInteger.ZERO;
-//        poolRefundAmount = BigInteger.ZERO;
-//        refundToTreasury = BigInteger.ZERO;
-//    }
 
     @EventListener
     @Transactional

@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.Committee;
@@ -110,6 +111,25 @@ public class CommitteeProcessor {
                 .epoch(epoch)
                 .slot(slot)
                 .build();
+    }
+
+    /**
+     * This will be invoked for custom devnet like Yaci DevKit devnet which directly starts from Conway
+     * @param genesisBlockEvent
+     */
+    @EventListener
+    @Transactional
+    public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
+        if (genesisBlockEvent.getEra().getValue() < Era.Conway.getValue())
+            return;
+
+        var conwayGenesis = getConwayGenesis(storeProperties.getProtocolMagic());
+        var numerator = conwayGenesis.getCommitteeNumerator();
+        var denominator = conwayGenesis.getCommitteeDenominator();
+        var threshold = conwayGenesis.getCommitteeThreshold();
+        var govActionTxHash = "genesis.conway";
+        Committee committee = buildCommittee(govActionTxHash, null, numerator, denominator, threshold, genesisBlockEvent.getEpoch(), genesisBlockEvent.getSlot());
+        committeeStorage.save(committee);
     }
 
     @EventListener

@@ -1,13 +1,14 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl.model;
 
-import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -16,7 +17,7 @@ import java.math.BigInteger;
 @Entity
 @Table(name = "adapot")
 @IdClass(AdaPotId.class)
-public class AdaPotEntity extends BlockAwareEntity {
+public class AdaPotEntity {
     @Id
     @Column(name = "epoch")
     private Integer epoch;
@@ -40,13 +41,22 @@ public class AdaPotEntity extends BlockAwareEntity {
     @Column(name = "reserves")
     private BigInteger reserves;
 
-    @Column(name = "rewards")
-    private BigInteger rewards;
+    @Column(name = "circulation")
+    private BigInteger circulation;
 
-    @Column(name = "deposits_drep")
-    private BigInteger depositsDrep;
+    @Column(name = "distributed_rewards")
+    private BigInteger distributedRewards;
 
-    @Column(name = "deposits_proposal")
-    private BigInteger depositsProposal;
+    @Column(name = "undistributed_rewards")
+    private BigInteger undistributedRewards;
 
+    @Column(name = "rewards_pot")
+    private BigInteger rewardsPot;
+
+    @Column(name = "pool_rewards_pot")
+    private BigInteger poolRewardsPot;
+
+    @UpdateTimestamp
+    @Column(name = "update_datetime")
+    private LocalDateTime updateDateTime;
 }

@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.cardanofoundation.rewards.calculation.domain.EpochCalculationResult;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
@@ -112,16 +113,20 @@ public class AdaPotService {
     }
 
     @Transactional
-    public boolean updateReserveAndTreasury(int epoch, BigInteger treasury, BigInteger reserves, BigInteger rewards) {
+    public boolean updateAdaPot(int epoch, EpochCalculationResult epochCalculationResult) {
         var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
         if(adaPot == null) {
             log.error("AdaPot not found for epoch to update reserve and treasury: {}", epoch);
             return false;
         }
 
-        adaPot.setTreasury(treasury);
-        adaPot.setReserves(reserves);
-        adaPot.setRewards(rewards);
+        adaPot.setTreasury(epochCalculationResult.getTreasury());
+        adaPot.setReserves(epochCalculationResult.getReserves());
+        adaPot.setCirculation(epochCalculationResult.getTotalAdaInCirculation());
+        adaPot.setDistributedRewards(epochCalculationResult.getTotalDistributedRewards());
+        adaPot.setUndistributedRewards(epochCalculationResult.getTotalUndistributedRewards());
+        adaPot.setRewardsPot(epochCalculationResult.getTotalRewardsPot());
+        adaPot.setPoolRewardsPot(epochCalculationResult.getTotalPoolRewardsPot());
         adaPotStorage.save(adaPot);
 
         return true;

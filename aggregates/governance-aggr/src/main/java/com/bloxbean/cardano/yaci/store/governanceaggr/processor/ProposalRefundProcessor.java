@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
+import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
@@ -11,7 +13,6 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -29,21 +30,33 @@ public class ProposalRefundProcessor {
     private final ProposalStateClient proposalStateClient;
     private final ProposalMapper proposalMapper;
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
+    //This is here only for cleanup purpose. Ideally, according to domain, it should be in RewardProcessor of adapot
+    //Refactor it later to remove direct dependency with RewardStorage here.
+    private final RewardStorage rewardStorage;
     private final ApplicationEventPublisher publisher;
 
     public ProposalRefundProcessor(GovActionProposalStorage govActionProposalStorage, ProposalStateClient proposalStateClient,
-                                   ProposalMapper proposalMapper, StakingCertificateStorageReader stakingCertificateStorageReader, ApplicationEventPublisher publisher) {
+                                   ProposalMapper proposalMapper, StakingCertificateStorageReader stakingCertificateStorageReader,
+                                   RewardStorage rewardStorage, ApplicationEventPublisher publisher) {
         this.govActionProposalStorage = govActionProposalStorage;
         this.proposalStateClient = proposalStateClient;
         this.proposalMapper = proposalMapper;
         this.stakingCertificateStorageReader = stakingCertificateStorageReader;
+        this.rewardStorage = rewardStorage;
         this.publisher = publisher;
     }
 
     @EventListener
     @Transactional
-    public void handleProposalStatusCapturedEvent(ProposalStatusCapturedEvent event) {
-        int epoch = event.getEpoch();
+    public void handleProposalRefund(PreAdaPotJobProcessingEvent event) {
+        //Find status of proposals in previous epoch to process refund.
+        int epoch = event.getEpoch() - 1;
+        log.info("Processing proposal refund for epoch : {}", epoch);
+
+        //Delete if any existing proposal refunds both in reward_rest and unclaimed_reward_rest
+        //earned epoch = epoch
+        rewardStorage.deleteRewardRest(epoch, RewardRestType.proposal_refund);
+        rewardStorage.deleteUnclaimedRewardRest(epoch, RewardRestType.proposal_refund);
 
         List<Proposal> expiredProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch);
         List<Proposal> ratifiedProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
