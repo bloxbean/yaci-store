@@ -1,22 +1,23 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
-import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.events.domain.*;
-import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
+import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer;
@@ -41,7 +42,6 @@ import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -75,6 +78,7 @@ public class ProposalStatusProcessor {
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
     private final ProposalMapper proposalMapper;
+    private final StoreProperties storeProperties;
     private final ApplicationEventPublisher publisher;
 
     private boolean isBootstrapPhase = true;
@@ -86,7 +90,7 @@ public class ProposalStatusProcessor {
                                    EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper,
+                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper, StoreProperties storeProperties,
                                    ApplicationEventPublisher publisher) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
@@ -103,6 +107,7 @@ public class ProposalStatusProcessor {
         this.poolStorageReader = poolStorageReader;
         this.delegationVoteDataService = delegationVoteDataService;
         this.proposalMapper = proposalMapper;
+        this.storeProperties = storeProperties;
         this.publisher = publisher;
 
         this.objectMapper = new ObjectMapper();
@@ -133,6 +138,10 @@ public class ProposalStatusProcessor {
                         .status(GovActionStatus.ACTIVE)
                         .build()
         ).toList());
+
+        if (isDevnet()) {
+            isBootstrapPhase = false;
+        }
 
         try {
             if (isBootstrapPhase) {
@@ -170,7 +179,7 @@ public class ProposalStatusProcessor {
             }
 
             // cc threshold
-            var ccThreshold = committee.get().getThreshold();
+            var ccThreshold = committee.get().getThreshold() == null ? BigDecimal.ZERO : committee.get().getThreshold();
 
             List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
 
@@ -481,7 +490,7 @@ public class ProposalStatusProcessor {
                 // Calculate the treasury
                 BigInteger treasury = null;
                 if (govActionDetail.getType().equals(GovActionType.TREASURY_WITHDRAWALS_ACTION)) {
-                    treasury = adaPotStorage.findByEpoch(epoch)
+                    treasury = adaPotStorage.findByEpoch(currentEpoch)
                             .map(AdaPot::getTreasury).orElse(null);
                 }
 
@@ -577,4 +586,9 @@ public class ProposalStatusProcessor {
                 .toList();
     }
 
+    private boolean isDevnet() {
+        return storeProperties.getProtocolMagic() != Networks.mainnet().getProtocolMagic()
+                && storeProperties.getProtocolMagic() != Networks.preprod().getProtocolMagic()
+                && storeProperties.getProtocolMagic() != Networks.preview().getProtocolMagic();
+    }
 }
