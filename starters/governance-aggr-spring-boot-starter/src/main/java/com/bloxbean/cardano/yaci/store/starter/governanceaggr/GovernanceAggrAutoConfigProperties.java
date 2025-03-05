@@ -16,7 +16,7 @@ public class GovernanceAggrAutoConfigProperties {
         private boolean enabled = false;
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
-        private boolean conwayBootstrapAvailable = false;
+        private boolean devnetConwayBootstrapAvailable = false;
     }
 
     @Getter

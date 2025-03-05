@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
@@ -10,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
@@ -79,6 +81,7 @@ public class ProposalStatusProcessor {
     private final ProposalMapper proposalMapper;
     private final ApplicationEventPublisher publisher;
     private final GovernanceAggrProperties governanceAggrProperties;
+    private final StoreProperties storeProperties;
     private boolean isInConwayBootstrapPhase;
     private final ObjectMapper objectMapper;
     private final int QUERY_BATCH_SIZE = 500;
@@ -89,7 +92,7 @@ public class ProposalStatusProcessor {
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
                                    CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper,
-                                   ApplicationEventPublisher publisher, GovernanceAggrProperties governanceAggrProperties) {
+                                   ApplicationEventPublisher publisher, GovernanceAggrProperties governanceAggrProperties, StoreProperties storeProperties) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
         this.dRepDistService = dRepDistService;
@@ -107,13 +110,18 @@ public class ProposalStatusProcessor {
         this.proposalMapper = proposalMapper;
         this.publisher = publisher;
         this.governanceAggrProperties = governanceAggrProperties;
+        this.storeProperties = storeProperties;
 
         this.objectMapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
         module.addKeyDeserializer(Credential.class, new CredentialDeserializer());
         this.objectMapper.registerModule(module);
 
-        this.isInConwayBootstrapPhase = governanceAggrProperties.isConwayBootstrapAvailable();
+        if (isPublicNetwork()) {
+            this.isInConwayBootstrapPhase = true;
+        } else {
+            this.isInConwayBootstrapPhase = governanceAggrProperties.isDevnetConwayBootstrapAvailable();
+        }
     }
 
     @EventListener
@@ -580,5 +588,11 @@ public class ProposalStatusProcessor {
                                 .transactionId(govActionProposal.getTxHash())
                                 .build()))
                 .toList();
+    }
+
+    private boolean isPublicNetwork() {
+        return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
     }
 }
