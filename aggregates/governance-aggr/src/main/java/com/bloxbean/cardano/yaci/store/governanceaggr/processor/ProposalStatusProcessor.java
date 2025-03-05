@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
-import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
@@ -11,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
-import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
@@ -24,6 +22,7 @@ import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
@@ -78,10 +77,9 @@ public class ProposalStatusProcessor {
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
     private final ProposalMapper proposalMapper;
-    private final StoreProperties storeProperties;
     private final ApplicationEventPublisher publisher;
-
-    private boolean isBootstrapPhase = true;
+    private final GovernanceAggrProperties governanceAggrProperties;
+    private boolean isInConwayBootstrapPhase;
     private final ObjectMapper objectMapper;
     private final int QUERY_BATCH_SIZE = 500;
 
@@ -90,8 +88,8 @@ public class ProposalStatusProcessor {
                                    EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper, StoreProperties storeProperties,
-                                   ApplicationEventPublisher publisher) {
+                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, ProposalMapper proposalMapper,
+                                   ApplicationEventPublisher publisher, GovernanceAggrProperties governanceAggrProperties) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
         this.dRepDistService = dRepDistService;
@@ -107,13 +105,15 @@ public class ProposalStatusProcessor {
         this.poolStorageReader = poolStorageReader;
         this.delegationVoteDataService = delegationVoteDataService;
         this.proposalMapper = proposalMapper;
-        this.storeProperties = storeProperties;
         this.publisher = publisher;
+        this.governanceAggrProperties = governanceAggrProperties;
 
         this.objectMapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
         module.addKeyDeserializer(Credential.class, new CredentialDeserializer());
         this.objectMapper.registerModule(module);
+
+        this.isInConwayBootstrapPhase = governanceAggrProperties.isConwayBootstrapAvailable();
     }
 
     @EventListener
@@ -139,17 +139,13 @@ public class ProposalStatusProcessor {
                         .build()
         ).toList());
 
-        if (isDevnet()) {
-            isBootstrapPhase = false;
-        }
-
         try {
-            if (isBootstrapPhase) {
+            if (isInConwayBootstrapPhase) {
                 // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
                 var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
                 if (enactedProposal.stream().anyMatch(govActionProposalStatus
                         -> govActionProposalStatus.getGovAction().getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
-                    isBootstrapPhase = false;
+                    isInConwayBootstrapPhase = false;
                 }
             }
             // take dRep stake distribution snapshot
@@ -211,7 +207,7 @@ public class ProposalStatusProcessor {
             // get votes by DRep
             List<VotingProcedure> votesByDRep = new ArrayList<>();
 
-            if (!isBootstrapPhase) {
+            if (!isInConwayBootstrapPhase) {
                 votesByDRep = votingAggrService.getVotesByDRep(epoch, proposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
@@ -272,7 +268,7 @@ public class ProposalStatusProcessor {
             BigInteger totalDRepStake = BigInteger.ZERO;
             BigInteger dRepAutoAbstainStake = BigInteger.ZERO;
 
-            if (!isBootstrapPhase) {
+            if (!isInConwayBootstrapPhase) {
                 totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
                         .orElse(BigInteger.ZERO);
                 dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch).orElse(BigInteger.ZERO);
@@ -386,7 +382,7 @@ public class ProposalStatusProcessor {
                 // DRep 'no' stake
                 BigInteger dRepNoStake = null;
 
-                if (!isBootstrapPhase) {
+                if (!isInConwayBootstrapPhase) {
                     /* Calculate dRep 'yes' stake */
                     /*
                         dRepYesStake – The total stake of:
@@ -497,7 +493,7 @@ public class ProposalStatusProcessor {
                 try {
                     // get ratification result
                     RatificationResult ratificationResult = GovActionRatifier.getRatificationResult(
-                            govActionDetail, isBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
+                            govActionDetail, isInConwayBootstrapPhase, maxAllowedVotingEpoch, ccYesVote, ccNoVote,
                             ccThreshold, spoYesStake, spoAbstainStake, totalPoolStake,
                             dRepYesStake, dRepNoStake, ccState, lastEnactedGovActionIdWithSamePurpose, isActionRatificationDelayed,
                             treasury,
@@ -584,11 +580,5 @@ public class ProposalStatusProcessor {
                                 .transactionId(govActionProposal.getTxHash())
                                 .build()))
                 .toList();
-    }
-
-    private boolean isDevnet() {
-        return storeProperties.getProtocolMagic() != Networks.mainnet().getProtocolMagic()
-                && storeProperties.getProtocolMagic() != Networks.preprod().getProtocolMagic()
-                && storeProperties.getProtocolMagic() != Networks.preview().getProtocolMagic();
     }
 }
