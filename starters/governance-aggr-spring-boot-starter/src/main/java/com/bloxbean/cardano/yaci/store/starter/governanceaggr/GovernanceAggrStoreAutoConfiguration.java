@@ -21,7 +21,7 @@ public class GovernanceAggrStoreAutoConfiguration {
     @Bean
     public GovernanceAggrProperties governanceAggrProperties() {
         GovernanceAggrProperties governanceAggrProperties = new GovernanceAggrProperties();
-        governanceAggrProperties.setConwayBootstrapAvailable(properties.getGovernanceAggr().isConwayBootstrapAvailable());
+        governanceAggrProperties.setDevnetConwayBootstrapAvailable(properties.getGovernanceAggr().isDevnetConwayBootstrapAvailable());
 
         return governanceAggrProperties;
     }
