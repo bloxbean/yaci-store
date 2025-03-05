@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
-public class GovernanceAggrStoreAutoConfigProperties {
+public class GovernanceAggrAutoConfigProperties {
     private GovernanceAggr governanceAggr;
 
     @Getter
@@ -16,6 +16,7 @@ public class GovernanceAggrStoreAutoConfigProperties {
         private boolean enabled = false;
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
+        private boolean conwayBootstrapAvailable = false;
     }
 
     @Getter
