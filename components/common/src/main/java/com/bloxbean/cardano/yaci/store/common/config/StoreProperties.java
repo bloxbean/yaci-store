@@ -42,6 +42,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String alonzoGenesisFile;
     private String conwayGenesisFile;
 
+    //For yaci devkit integration
+    private boolean devkitNode;
+
     @Builder.Default
     private int blockDiffToStartSyncProtocol = 2000;
 
