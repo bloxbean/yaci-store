@@ -17,17 +17,23 @@ dependencies {
     //For governance data aggr
     implementation project(':starters:governance-aggr-spring-boot-starter')
 
-    implementation project(':extensions:utxo-rocksdb')
-    implementation project(':extensions:account-rocksdb')
-
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-batch'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     implementation libs.spring.boot.admin.client
 
+    compileOnly 'org.projectlombok:lombok'
+
     runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
     runtimeOnly 'org.postgresql:postgresql:42.7.1'
+
+    testCompileOnly 'org.projectlombok:lombok'
+
+    testImplementation(libs.cardano.client.backend.blockfrost)
+    testImplementation(libs.rest.assured)
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.awaitility)
 }
 
 gitProperties {
