@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +25,7 @@ import java.util.List;
 @Component
 @Getter
 @ReadOnly(false)
+@Slf4j
 public class GenesisConfig {
     public static final int PREVIEW_EPOCH_LENGTH = 86400;
     public static final int DEFAULT_SECURITY_PARAM = 2160;
@@ -54,7 +56,39 @@ public class GenesisConfig {
         this.objectMapper = objectMapper;
         this.resourceLoader = resourceLoader;
 
+        downloadGenesisFilesIfDevkitNode();
         parseGenesisFiles();
+    }
+
+    private void downloadGenesisFilesIfDevkitNode() {
+        if (!storeProperties.isDevkitNode())
+            return;
+
+        if (storeProperties.getByronGenesisFile() != null
+                || storeProperties.getShelleyGenesisFile() != null
+                || storeProperties.getAlonzoGenesisFile() != null
+                || storeProperties.getConwayGenesisFile() != null) {
+
+            throw new IllegalStateException("You can't set both `store.cardano.devkit-node=true` and the genesis file locations");
+        }
+
+        log.info("Trying to download genesis files from Yaci DevKit's admin endpoint...");
+        try {
+            String defaultDevkitAdminBaseUrl = "http://localhost:10000";
+            var devkitGenesisFiles = DevkitGenesisFetcher.fetchDevkitGenesisFiles(defaultDevkitAdminBaseUrl);
+            storeProperties.setByronGenesisFile(devkitGenesisFiles.byronGenesis());
+            storeProperties.setShelleyGenesisFile(devkitGenesisFiles.shelleyGenesis());
+            storeProperties.setAlonzoGenesisFile(devkitGenesisFiles.alonzoGenesis());
+            storeProperties.setConwayGenesisFile(devkitGenesisFiles.conwayGenesis());
+
+            log.info("<<< Genesis file locations are configured as follows >>>");
+            log.info("Byron Genesis file: {}", storeProperties.getByronGenesisFile());
+            log.info("Shelley Genesis file: {}", storeProperties.getShelleyGenesisFile());
+            log.info("Alonzo Genesis file: {}", storeProperties.getAlonzoGenesisFile());
+            log.info("Conway Genesis file: {}", storeProperties.getConwayGenesisFile());
+        } catch (Exception e) {
+            throw new IllegalStateException("The Devkit node's genesis files could not be fetched. Please configure them manually.", e);
+        }
     }
 
     public double slotDuration(Era era) {

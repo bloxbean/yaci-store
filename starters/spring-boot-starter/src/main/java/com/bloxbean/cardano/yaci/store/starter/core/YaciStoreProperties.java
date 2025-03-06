@@ -48,6 +48,8 @@ public class YaciStoreProperties {
         private String alonzoGenesisFile;
         private String conwayGenesisFile;
 
+        private boolean devkitNode;
+
         private int blockDiffToStartSyncProtocol = 2000;
 
         private int cursorNoOfBlocksToKeep = 2160;
