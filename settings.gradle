@@ -75,3 +75,5 @@ include ':starters:adapot-spring-boot-starter'
 
 include ':extensions:utxo-rocksdb'
 include ':extensions:account-rocksdb'
+
+include 'e2e-tests'

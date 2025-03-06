@@ -1,8 +1,9 @@
 [libraries]
 yaci = "com.bloxbean.cardano:yaci:0.3.5"
-cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.6.2"
-cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.6.2"
-cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.6.2"
+cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.6.3"
+cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.6.3"
+cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.6.3"
+cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.6.3"
 
 cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.0"
 
@@ -16,8 +17,6 @@ springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-w
 mapstruct="org.mapstruct:mapstruct:1.5.5.Final"
 mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.5.Final"
 
-assertj-core="org.assertj:assertj-core:3.25.1"
-
 spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.2.1"
 spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
 
@@ -28,3 +27,7 @@ parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
 apache-commons-pool="org.apache.commons:commons-pool2:2.12.0"
 
 vavr="io.vavr:vavr:0.10.5"
+
+assertj-core="org.assertj:assertj-core:3.25.1"
+rest-assured="io.rest-assured:rest-assured:5.5.1"
+awaitility="org.awaitility:awaitility:4.3.0"

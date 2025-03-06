@@ -202,6 +202,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setAlonzoGenesisFile(properties.getCardano().getAlonzoGenesisFile());
         storeProperties.setConwayGenesisFile(properties.getCardano().getConwayGenesisFile());
 
+        storeProperties.setDevkitNode(properties.getCardano().isDevkitNode());
+
         storeProperties.setBlockDiffToStartSyncProtocol(properties.getCardano().getBlockDiffToStartSyncProtocol());
         storeProperties.setCursorNoOfBlocksToKeep(properties.getCardano().getCursorNoOfBlocksToKeep());
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
