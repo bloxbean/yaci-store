@@ -44,3 +44,10 @@ create-node -o --start --epoch-length 50
 
 Yaci DevKit provides a `create` admin endpoint which can be used to initialize a devnet with a different configuration and start.
 This is useful when we want to verify various configuration scenario in our test cases.
+
+### 4. Run e2e test
+
+```
+./gradlew :e2e-tests:test -PrunE2ETests
+
+```

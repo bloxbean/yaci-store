@@ -36,6 +36,12 @@ dependencies {
     testImplementation(libs.awaitility)
 }
 
+test {
+    // Run tests only if 'runE2ETests' is provided
+    onlyIf { project.rootProject.hasProperty('runE2ETests') }
+}
+
+
 gitProperties {
     failOnNoGitDirectory = false
 }
