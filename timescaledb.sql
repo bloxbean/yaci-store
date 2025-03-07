@@ -137,7 +137,40 @@ ORDER BY quantity DESC
 LIMIT 100;
 
 
---
+-- Final Query to Create
 
 SELECT create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 432000);
 
+-- CREATE INDEX
+
+CREATE INDEX idx_address_unit_slot_desc ON address_balance (address, unit, slot DESC);
+
+
+-- Top 100 Addresses
+--
+WITH latest_balances AS (
+    SELECT DISTINCT ON (address) address, quantity, slot
+    FROM address_balance
+    WHERE unit = 'lovelace'
+    ORDER BY address, slot DESC
+)
+SELECT address, quantity
+FROM latest_balances
+ORDER BY quantity DESC
+LIMIT 100;
+
+WITH latest_balance AS (
+    SELECT address, quantity
+    FROM address_balance
+    WHERE unit = 'lovelace'
+      AND slot = (
+        SELECT MAX(slot) FROM address_balance AS sub
+        WHERE sub.address = address_balance.address
+          AND sub.unit = 'lovelace'
+    )
+)
+SELECT address, SUM(quantity) AS total_balance
+FROM latest_balance
+GROUP BY address
+ORDER BY quantity DESC
+LIMIT 100;
