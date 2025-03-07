@@ -24,7 +24,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.util.Pair;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -123,10 +125,15 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         LocalDateTime localDateTime = LocalDateTime.now();
 
         var inserts = addressBalanceEntities.stream()
-                .map(addressBalance ->   dsl.insertInto(ADDRESS_BALANCE)
+                .map(addressBalance ->   {
+                    var blockTimeInstance = Instant.ofEpochSecond(addressBalance.getBlockTime());
+                    var blockTimestamp = LocalDateTime.ofInstant(blockTimeInstance, ZoneOffset.UTC);
+
+                    return dsl.insertInto(ADDRESS_BALANCE)
                                 .set(ADDRESS_BALANCE.ADDRESS, addressBalance.getAddress())
                                 .set(ADDRESS_BALANCE.UNIT, addressBalance.getUnit())
                                 .set(ADDRESS_BALANCE.SLOT, addressBalance.getSlot())
+                                .set(ADDRESS_BALANCE.BLOCK_TIMESTAMP, blockTimestamp)
                                 .set(ADDRESS_BALANCE.QUANTITY, addressBalance.getQuantity())
                                 .set(ADDRESS_BALANCE.ADDR_FULL, addressBalance.getAddrFull())
                                 .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
@@ -139,7 +146,8 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                                 .set(ADDRESS_BALANCE.BLOCK, addressBalance.getBlockNumber())
                                 .set(ADDRESS_BALANCE.BLOCK_TIME, addressBalance.getBlockTime())
                                 .set(ADDRESS_BALANCE.EPOCH, addressBalance.getEpoch())
-                                .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime)).toList();
+                                .set(ADDRESS_BALANCE.UPDATE_DATETIME, localDateTime);
+                }).toList();
 
         dsl.batch(inserts).execute();
     }

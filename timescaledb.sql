@@ -46,7 +46,7 @@ FROM latest_balances lb
 
 
 
-ALTER TABLE address_balance ADD COLUMN block_timestamp TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE address_balance ADD COLUMN block_timestamp TIMESTAMPTZ;
 
 UPDATE address_balance
 SET block_timestamp = TO_TIMESTAMP(block_time);
@@ -88,6 +88,7 @@ WITH latest_balances AS (
     -- Get the latest balance per address
     SELECT DISTINCT ON (address) address, quantity AS latest_balance, block_timestamp
     FROM address_balance
+    WHERE unit = 'lovelace'
     ORDER BY address, block_timestamp DESC
 ),
      historic_balances AS (
@@ -100,6 +101,7 @@ WITH latest_balances AS (
                 LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '3 months' PRECEDING) AS balance_3m,
                 LAG(quantity) OVER (PARTITION BY address ORDER BY block_timestamp RANGE INTERVAL '6 months' PRECEDING) AS balance_6m
          FROM address_balance
+         WHERE unit = 'lovelace'
      )
 SELECT lb.address,
        lb.latest_balance,

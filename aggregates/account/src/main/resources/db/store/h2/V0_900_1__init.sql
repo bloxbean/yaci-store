@@ -4,6 +4,7 @@ create table address_balance
     address            varchar(500),
     unit               varchar(255),
     slot               bigint,
+    block_timestamp    timestamp,
     quantity           numeric(38)  null,
     addr_full          clob null,
     policy             varchar(56),
@@ -13,7 +14,7 @@ create table address_balance
     block_time         bigint,
     epoch              integer,
     update_datetime    timestamp,
-    primary key (address, unit, slot)
+    primary key (address, unit, slot, block_timestamp)
 );
 
 CREATE INDEX idx_address_balance_slot
