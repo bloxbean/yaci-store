@@ -176,3 +176,27 @@ FROM latest_balance
 GROUP BY address
 ORDER BY quantity DESC
 LIMIT 100;
+
+
+CREATE MATERIALIZED VIEW top100_address AS
+WITH latest_balances AS (
+    SELECT DISTINCT ON (address) address, quantity, slot
+    FROM address_balance
+    WHERE unit = 'lovelace'
+    ORDER BY address, slot DESC
+),
+current_slot AS (
+    SELECT MAX(slot) AS current_slot FROM address_balance
+)
+SELECT 
+    lb.address, 
+    lb.quantity,
+    cs.current_slot
+FROM latest_balances lb, current_slot cs
+ORDER BY lb.quantity DESC
+LIMIT 100;
+
+-- Refresh
+
+crontab -e
+0 */2 * * * psql -U your_username -d your_database -c "REFRESH MATERIALIZED VIEW top100_address;"
