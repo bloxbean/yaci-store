@@ -208,12 +208,12 @@ WITH balance_changes AS (
     SELECT 
         t.address,
         t.quantity AS current_balance,
-        t.current_slot,  
+        t.current_slot,  -- Using current_slot instead of slot
         
         -- Change over the last 1 day (86400 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -230,7 +230,7 @@ WITH balance_changes AS (
         -- Change over the last 7 days (604800 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -247,7 +247,7 @@ WITH balance_changes AS (
         -- Change over the last 1 month (2592000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -264,7 +264,7 @@ WITH balance_changes AS (
         -- Change over the last 3 months (7776000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -281,7 +281,7 @@ WITH balance_changes AS (
         -- Change over the last 6 months (15552000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -298,7 +298,7 @@ WITH balance_changes AS (
         -- Change over the last 1 year (31536000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -315,7 +315,7 @@ WITH balance_changes AS (
         -- Change over the last 3 years (94608000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
@@ -332,7 +332,7 @@ WITH balance_changes AS (
         -- Change over the last 5 years (157680000 seconds)
         COALESCE(
             (
-                SELECT ABS(b.quantity - t.quantity)
+                SELECT b.quantity - t.quantity
                 FROM address_balance b
                 WHERE b.address = t.address 
                   AND b.unit = 'lovelace'
