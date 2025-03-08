@@ -348,5 +348,80 @@ WITH balance_changes AS (
 
     FROM top100_address t
 )
-SELECT * FROM balance_changes;
+
+--- 
+
+SELECT 
+    address,
+    -- Convert current_balance from lovelace to ada
+    current_balance / 1000000 AS current_balance_ada,
+    
+    -- Change over the last 1 day (in Ada)
+    change_1d / 1000000 AS change_1d_ada,
+    -- Percentage change over the last 1 day
+    CASE WHEN change_1d != 0
+        THEN (change_1d / current_balance) * 100
+        ELSE 0
+    END AS percent_change_1d,
+
+    -- Change over the last 7 days (in Ada)
+    change_7d / 1000000 AS change_7d_ada,
+    -- Percentage change over the last 7 days
+    CASE WHEN change_7d != 0
+        THEN (change_7d / current_balance) * 100
+        ELSE 0
+    END AS percent_change_7d,
+
+    -- Change over the last 1 month (in Ada)
+    change_1m / 1000000 AS change_1m_ada,
+    -- Percentage change over the last 1 month
+    CASE WHEN change_1m != 0
+        THEN (change_1m / current_balance) * 100
+        ELSE 0
+    END AS percent_change_1m,
+
+    -- Change over the last 3 months (in Ada)
+    change_3m / 1000000 AS change_3m_ada,
+    -- Percentage change over the last 3 months
+    CASE WHEN change_3m != 0
+        THEN (change_3m / current_balance) * 100
+        ELSE 0
+    END AS percent_change_3m,
+
+    -- Change over the last 6 months (in Ada)
+    change_6m / 1000000 AS change_6m_ada,
+    -- Percentage change over the last 6 months
+    CASE WHEN change_6m != 0
+        THEN (change_6m / current_balance) * 100
+        ELSE 0
+    END AS percent_change_6m,
+
+    -- Change over the last 1 year (in Ada)
+    change_1y / 1000000 AS change_1y_ada,
+    -- Percentage change over the last 1 year
+    CASE WHEN change_1y != 0
+        THEN (change_1y / current_balance) * 100
+        ELSE 0
+    END AS percent_change_1y,
+
+    -- Change over the last 3 years (in Ada)
+    change_3y / 1000000 AS change_3y_ada,
+    -- Percentage change over the last 3 years
+    CASE WHEN change_3y != 0
+        THEN (change_3y / current_balance) * 100
+        ELSE 0
+    END AS percent_change_3y,
+
+    -- Change over the last 5 years (in Ada)
+    change_5y / 1000000 AS change_5y_ada,
+    -- Percentage change over the last 5 years
+    CASE WHEN change_5y != 0
+        THEN (change_5y / current_balance) * 100
+        ELSE 0
+    END AS percent_change_5y
+
+FROM balance2.address_balance_changes
+ORDER BY current_balance_ada DESC
+LIMIT 100;
+
 
