@@ -200,3 +200,153 @@ LIMIT 100;
 
 crontab -e
 0 */2 * * * psql -U your_username -d your_database -c "REFRESH MATERIALIZED VIEW top100_address;"
+
+-- Find balance at different time windows for top 100
+
+CREATE MATERIALIZED VIEW address_balance_changes AS
+WITH balance_changes AS (
+    SELECT 
+        t.address,
+        t.quantity AS current_balance,
+        t.current_slot,  
+        
+        -- Change over the last 1 day (86400 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 86400) -- 1 day ago
+                  )
+                LIMIT 1
+            ), 0) AS change_1d,
+        
+        -- Change over the last 7 days (604800 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 604800) -- 7 days ago
+                  )
+                LIMIT 1
+            ), 0) AS change_7d,
+
+        -- Change over the last 1 month (2592000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 2592000) -- 1 month ago
+                  )
+                LIMIT 1
+            ), 0) AS change_1m,
+        
+        -- Change over the last 3 months (7776000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 7776000) -- 3 months ago
+                  )
+                LIMIT 1
+            ), 0) AS change_3m,
+
+        -- Change over the last 6 months (15552000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 15552000) -- 6 months ago
+                  )
+                LIMIT 1
+            ), 0) AS change_6m,
+
+        -- Change over the last 1 year (31536000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 31536000) -- 1 year ago
+                  )
+                LIMIT 1
+            ), 0) AS change_1y,
+
+        -- Change over the last 3 years (94608000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 94608000) -- 3 years ago
+                  )
+                LIMIT 1
+            ), 0) AS change_3y,
+
+        -- Change over the last 5 years (157680000 seconds)
+        COALESCE(
+            (
+                SELECT ABS(b.quantity - t.quantity)
+                FROM address_balance b
+                WHERE b.address = t.address 
+                  AND b.unit = 'lovelace'
+                  AND b.slot = (
+                      SELECT MAX(b2.slot)
+                      FROM address_balance b2
+                      WHERE b2.address = b.address 
+                        AND b2.unit = 'lovelace' 
+                        AND b2.slot <= (t.current_slot - 157680000) -- 5 years ago
+                  )
+                LIMIT 1
+            ), 0) AS change_5y
+
+    FROM top100_address t
+)
+SELECT * FROM balance_changes;
+
