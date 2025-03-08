@@ -1,0 +1,20 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.Drep",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepDist",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.GovActionProposalStatus",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  }
+]
