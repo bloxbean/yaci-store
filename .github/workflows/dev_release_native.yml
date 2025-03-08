@@ -9,7 +9,7 @@ jobs:
       matrix:
         #        os: ["ubuntu-20.04", "macos-14"]
         os: [ "ubuntu-20.04", "macOS", "macos-13" ]
-        profile: [ "n2c", "" ]
+        profile: [ "n2c", "all" ]
     runs-on: ${{ matrix.os }}
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -61,7 +61,7 @@ jobs:
       matrix:
         #        os: ["ubuntu-20.04", "macos-14"]
         os: ["ubuntu-20.04"]
-        profile: ["n2c", ""]
+        profile: ["n2c", "all"]
     runs-on: ${{ matrix.os }}
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -113,7 +113,7 @@ jobs:
   windowBuild:
     strategy:
       matrix:
-        profile: ["n2c", ""]
+        profile: ["n2c", "all"]
     runs-on: windows-latest
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
