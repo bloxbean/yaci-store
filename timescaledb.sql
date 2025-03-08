@@ -205,7 +205,6 @@ crontab -e
 -- Find balance at different time windows for top 100
 
 CREATE MATERIALIZED VIEW address_balance_changes AS
-WITH balance_changes AS (
     SELECT
         t.seq_no,
         t.address,
@@ -349,7 +348,7 @@ WITH balance_changes AS (
             ), 0) AS change_5y
 
     FROM top100_address t
-)
+
 
 --- 
 
