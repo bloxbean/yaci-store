@@ -189,6 +189,7 @@ current_slot AS (
     SELECT MAX(slot) AS current_slot FROM address_balance
 )
 SELECT 
+    ROW_NUMBER() OVER (ORDER BY lb.quantity DESC) AS seq_no,
     lb.address, 
     lb.quantity,
     cs.current_slot
@@ -205,7 +206,8 @@ crontab -e
 
 CREATE MATERIALIZED VIEW address_balance_changes AS
 WITH balance_changes AS (
-    SELECT 
+    SELECT
+        t.seq_no,
         t.address,
         t.quantity AS current_balance,
         t.current_slot,  -- Using current_slot instead of slot
@@ -351,7 +353,9 @@ WITH balance_changes AS (
 
 --- 
 
-SELECT 
+CREATE MATERIALIZED VIEW address_ada_balance_history AS
+SELECT
+    seq_no,
     address,
     -- Convert current_balance from lovelace to ada
     current_balance / 1000000 AS current_balance_ada,
@@ -420,8 +424,6 @@ SELECT
         ELSE 0
     END AS percent_change_5y
 
-FROM balance2.address_balance_changes
-ORDER BY current_balance_ada DESC
-LIMIT 100;
+FROM address_balance_changes;
 
 
