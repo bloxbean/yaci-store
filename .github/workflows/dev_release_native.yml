@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         #        os: ["ubuntu-20.04", "macos-14"]
-        os: [ "ubuntu-20.04", "macOS", "macos-13" ]
+        os: [ "ubuntu-20.04", "macos-14", "macos-13" ]
         profile: [ "n2c", "all" ]
     runs-on: ${{ matrix.os }}
     env:
