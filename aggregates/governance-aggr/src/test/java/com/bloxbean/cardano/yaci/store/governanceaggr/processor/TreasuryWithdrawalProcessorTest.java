@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,9 +44,13 @@ class TreasuryWithdrawalProcessorTest {
 
     private TreasuryWithdrawalProcessor treasuryWithdrawalProcessor;
 
+    private GovernanceAggrProperties governanceAggrProperties;
+
     @BeforeEach
     void setUp() {
-        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader, rewardStorage);
+        governanceAggrProperties = new GovernanceAggrProperties();
+        governanceAggrProperties.setEnabled(true);
+        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(governanceAggrProperties, proposalStateClient, publisher, stakingCertificateStorageReader, rewardStorage);
     }
 
     @Test
