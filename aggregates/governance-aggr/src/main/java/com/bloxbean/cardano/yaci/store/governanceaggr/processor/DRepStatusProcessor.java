@@ -24,7 +24,6 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-// todo: 'inactive', 'active again' case
 public class DRepStatusProcessor {
     private final GovernanceAggrProperties governanceAggrProperties;
     private final DRepStorage dRepStorage;
@@ -69,7 +68,7 @@ public class DRepStatusProcessor {
                             .blockHash(metadata.getBlockHash());
 
                     if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
-                        dRepBuilder.status(DRepStatus.ACTIVE);
+                        dRepBuilder.status(DRepStatus.REGISTERED);
                     } else {
                         var recentDRepOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
 
@@ -86,7 +85,7 @@ public class DRepStatusProcessor {
                         }
 
                         if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
-                            dRepBuilder.status(DRepStatus.ACTIVE);
+                            dRepBuilder.status(DRepStatus.UPDATED);
                         } else if (drepRegistration.getType() == CertificateType.UNREG_DREP_CERT) {
                             dRepBuilder.status(DRepStatus.RETIRED);
                         }
