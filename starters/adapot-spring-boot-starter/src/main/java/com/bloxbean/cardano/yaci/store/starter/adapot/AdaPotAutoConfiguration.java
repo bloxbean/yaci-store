@@ -22,6 +22,7 @@ public class AdaPotAutoConfiguration {
     @Bean
     public AdaPotProperties adaPotProperties() {
         AdaPotProperties adaPotProperties = new AdaPotProperties();
+        adaPotProperties.setEnabled(properties.getAdaPot().isEnabled());
         adaPotProperties.setUpdateRewardDbBatchSize(properties.getAdaPot().getUpdateRewardDbBatchSize());
         adaPotProperties.setBulkUpdateReward(properties.getAdaPot().isBulkUpdateReward());
         adaPotProperties.setVerifyAdapotCalcValues(properties.getAdaPot().isVerifyAdapotCalcValues());
