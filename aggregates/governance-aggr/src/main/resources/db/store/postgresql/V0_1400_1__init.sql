@@ -56,3 +56,18 @@ create table gov_action_proposal_status
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index, epoch)
 );
+
+drop table if exists drep_expiry;
+create table drep_expiry
+(
+    drep_id           varchar(255),
+    drep_hash         varchar(56),
+    dormant_epochs    int,
+    active_until      int,
+    epoch             int,
+    update_datetime   timestamp,
+    primary key  (drep_id, epoch)
+);
+
+CREATE INDEX idx_drep_expiry_epoch
+    ON drep_expiry (epoch);

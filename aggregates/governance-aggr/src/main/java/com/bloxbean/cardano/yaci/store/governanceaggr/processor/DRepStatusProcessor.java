@@ -106,6 +106,9 @@ public class DRepStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        if (!governanceAggrProperties.isEnabled())
+            return;
+
         int count = dRepStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} drep records", count);
     }
