@@ -128,6 +128,9 @@ public class ProposalStatusProcessor {
     @Transactional
     // TODO: enactment order
     public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
+        if (!governanceAggrProperties.isEnabled())
+            return;
+
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
 

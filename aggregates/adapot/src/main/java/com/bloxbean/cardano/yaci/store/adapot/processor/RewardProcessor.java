@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
@@ -22,6 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class RewardProcessor {
+    private final AdaPotProperties adaPotProperties;
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
     private final AdaPotJobStorage rewardCalcJobStorage;
@@ -29,6 +31,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleRewardEvent(RewardEvent rewardEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         var metadata = rewardEvent.getMetadata();
         List<RewardAmt> rewardAmts = rewardEvent.getRewards();
 
@@ -55,6 +60,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleInstantRewardSnapshot(PreEpochTransitionEvent epochTransitionCommitEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         if (epochTransitionCommitEvent.getEra() == Era.Byron)
             return;
 
@@ -79,6 +87,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleRewardRestEvent(RewardRestEvent rewardRestEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         List<RewardRestAmt> rewardRestAmts = rewardRestEvent.getRewards();
 
         if (rewardRestAmts == null || rewardRestAmts.isEmpty())
@@ -103,6 +114,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleUnclaimedRewardRestEvent(UnclaimedRewardRestEvent unclaimedRewardRestEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         List<RewardRestAmt> unclaimedRewardRestAmts = unclaimedRewardRestEvent.getRewards();
 
         if (unclaimedRewardRestAmts == null || unclaimedRewardRestAmts.isEmpty())
@@ -127,6 +141,9 @@ public class RewardProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         int count = rewardStorage.deleteInstantRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} instant rewards records", count);
 

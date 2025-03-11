@@ -1,12 +1,11 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
-import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRetiredEvent;
-import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
@@ -25,9 +24,9 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class DepositEventProcessor {
+public class PoolDepositRefundProcessor {
+    private final AdaPotProperties adaPotProperties;
     private final AdaPotService adaPotService;
-    private final DepositParamService depositParamService;
 
     private final PoolCertificateStorageReader poolCertificateStorageReader;
     private final PoolStorage poolStorage;
@@ -39,6 +38,9 @@ public class DepositEventProcessor {
     @EventListener
     @Transactional
     public void handlePoolRetiredEvent(PoolRetiredEvent poolRetiredEvent) {
+        if (!adaPotProperties.isEnabled())
+            return;
+
         log.info("Processing pool deposit events for retired pools. Total # of retired pools {}", poolRetiredEvent.getRetiredPools().size());
         if (poolRetiredEvent.getRetiredPools().isEmpty())
             return;
@@ -101,13 +103,6 @@ public class DepositEventProcessor {
                 .rewards(rewardAmts)
                 .build();
         publisher.publishEvent(rewardEvent);
-    }
-
-    @EventListener
-    @Transactional
-    public void rollback(RollbackEvent rollbackEvent) {
-        int count = adaPotService.rollbackAdaPot(rollbackEvent.getRollbackTo().getSlot());
-        log.info("Rollback -- {} adaPot records", count);
     }
 
 }

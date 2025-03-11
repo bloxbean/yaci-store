@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class GovernanceAggrProperties {
+    private boolean enabled;
+
     @Builder.Default
     private boolean isDevnetConwayBootstrapAvailable = false;
 }
