@@ -47,7 +47,7 @@ public class DBCommands {
 
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                         @Option(longNames = "event-publisher-id", defaultValue = "1000", description = "Event Publisher ID") long eventPublisherId) {
+                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId) {
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
             verifyRollback(ROLLBACK_FILE);

@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class GovernanceAggrAutoConfigProperties {
-    private GovernanceAggr governanceAggr;
+    private GovernanceAggr governanceAggr = new GovernanceAggr();
 
     @Getter
     @Setter

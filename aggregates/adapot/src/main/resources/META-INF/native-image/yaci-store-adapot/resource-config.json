@@ -1,0 +1,16 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\Qdbsync_ada_pots.json\\E"
+      },
+      {
+        "pattern": "\\Qdbsync_ada_pots_preprod.json\\E"
+      },
+      {
+        "pattern": "\\Qdbsync_ada_pots_preview.json\\E"
+      }
+    ]
+  },
+  "bundles": []
+}
