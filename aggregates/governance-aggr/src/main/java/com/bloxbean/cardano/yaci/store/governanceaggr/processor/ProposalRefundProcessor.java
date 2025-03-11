@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class ProposalRefundProcessor {
+    private final GovernanceAggrProperties governanceAggrProperties;
     private final GovActionProposalStorage govActionProposalStorage;
     private final ProposalStateClient proposalStateClient;
     private final ProposalMapper proposalMapper;
@@ -35,9 +37,10 @@ public class ProposalRefundProcessor {
     private final RewardStorage rewardStorage;
     private final ApplicationEventPublisher publisher;
 
-    public ProposalRefundProcessor(GovActionProposalStorage govActionProposalStorage, ProposalStateClient proposalStateClient,
+    public ProposalRefundProcessor(GovernanceAggrProperties governanceAggrProperties, GovActionProposalStorage govActionProposalStorage, ProposalStateClient proposalStateClient,
                                    ProposalMapper proposalMapper, StakingCertificateStorageReader stakingCertificateStorageReader,
                                    RewardStorage rewardStorage, ApplicationEventPublisher publisher) {
+        this.governanceAggrProperties = governanceAggrProperties;
         this.govActionProposalStorage = govActionProposalStorage;
         this.proposalStateClient = proposalStateClient;
         this.proposalMapper = proposalMapper;
@@ -49,6 +52,9 @@ public class ProposalRefundProcessor {
     @EventListener
     @Transactional
     public void handleProposalRefund(PreAdaPotJobProcessingEvent event) {
+        if (!governanceAggrProperties.isEnabled())
+            return;
+
         //Find status of proposals in previous epoch to process refund.
         int epoch = event.getEpoch() - 1;
         log.info("Processing proposal refund for epoch : {}", epoch);

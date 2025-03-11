@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,7 +27,7 @@ import java.util.List;
 @Component
 @Slf4j
 public class TreasuryWithdrawalProcessor {
-
+    private final GovernanceAggrProperties governanceAggrProperties;
     private final ProposalStateClient proposalStateClient;
     private final ApplicationEventPublisher publisher;
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
@@ -34,8 +35,9 @@ public class TreasuryWithdrawalProcessor {
     //Refactor it later to remove direct dependency with RewardStorage here.
     private final RewardStorage rewardStorage;
 
-    public TreasuryWithdrawalProcessor(ProposalStateClient proposalStateClient, ApplicationEventPublisher publisher,
+    public TreasuryWithdrawalProcessor(GovernanceAggrProperties governanceAggrProperties, ProposalStateClient proposalStateClient, ApplicationEventPublisher publisher,
                                        StakingCertificateStorageReader stakingCertificateStorageReader, RewardStorage rewardStorage) {
+        this.governanceAggrProperties = governanceAggrProperties;
         this.proposalStateClient = proposalStateClient;
         this.publisher = publisher;
         this.stakingCertificateStorageReader = stakingCertificateStorageReader;
@@ -45,6 +47,9 @@ public class TreasuryWithdrawalProcessor {
     @EventListener
     @Transactional
     public void handleTreasuryWithdrawal(PreAdaPotJobProcessingEvent event) {
+        if (!governanceAggrProperties.isEnabled())
+            return;
+
         //Find status of proposals in previous epoch to process ratified treasury withdrawals.
         int epoch = event.getEpoch() - 1;
         long slot = event.getSlot();

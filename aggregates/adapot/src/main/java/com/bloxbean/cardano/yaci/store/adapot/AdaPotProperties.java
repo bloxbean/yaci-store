@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class AdaPotProperties {
 
+    private boolean enabled;
+
     @Builder.Default
     private int updateRewardDbBatchSize = 200;
 

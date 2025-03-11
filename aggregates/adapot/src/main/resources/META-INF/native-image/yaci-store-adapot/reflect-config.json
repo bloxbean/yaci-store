@@ -1,0 +1,92 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.Adapot",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.AdapotJobs",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.EpochStake",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.InstantReward",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.Reward",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.RewardRest",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.pojos.UnclaimedRewardRest",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.AdapotJobsRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.AdapotRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.EpochStakeRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.InstantRewardRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.RewardRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.RewardRestRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.jooq.tables.records.UnclaimedRewardRestRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.adapot.job.ExpectedAdaPot",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  }
+]

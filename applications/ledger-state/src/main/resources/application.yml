@@ -17,7 +17,6 @@ spring:
       enabled: false
 
 store:
-  event-publisher-id: 1000
   account:
     enabled: true
     balance-aggregation-enabled: true

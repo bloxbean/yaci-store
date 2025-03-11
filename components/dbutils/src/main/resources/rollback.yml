@@ -22,7 +22,7 @@ tables:
   # mir store
   - mir
   # script store
-  - script
+  ##- script
   - transaction_scripts
   # staking store
   - stake_registration
