@@ -142,7 +142,7 @@ LIMIT 100;
 -- Final Query to Create
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-SELECT create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 432000);
+SELECT create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 2592000);
 
 -- CREATE INDEX
 
