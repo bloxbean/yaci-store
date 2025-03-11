@@ -175,9 +175,9 @@ public class DRepDistService {
                                                  (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
                                                  )
                   where
-                    ds.status = 'ACTIVE'
+                    (ds.status = 'REGISTERED' OR ds.status = 'UPDATED') 
                     and ds.rn = 1
-                    and sd.address IS NULL           
+                    and sd.address IS NULL
                   group by
                     rd.drep_hash,
                     rd.drep_id

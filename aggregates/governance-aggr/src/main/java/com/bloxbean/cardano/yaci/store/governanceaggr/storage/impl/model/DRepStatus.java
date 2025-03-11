@@ -4,8 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum DRepStatus {
-    ACTIVE("active"),
-    INACTIVE("inactive"),
+    REGISTERED("registered"),
+    UPDATED("updated"),
     RETIRED("retired");
 
     private final String value;
