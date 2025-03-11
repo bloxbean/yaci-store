@@ -5,7 +5,7 @@ SELECT create_hypertable('address_balance', 'slot', chunk_time_interval => 50000
 CREATE INDEX idx_address_slot ON address_balance (address, slot DESC);
 
 WITH latest_balances AS (
-    SELECT DISTINCT ON (address) address, quantity, slot
+    SELECT DISTINCT ON (address) address, quantity, slot, block, block_time
     FROM address_balance
     WHERE unit = 'lovelace'
     ORDER BY address, slot DESC
@@ -140,6 +140,7 @@ LIMIT 100;
 
 
 -- Final Query to Create
+CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 SELECT create_hypertable('address_balance', 'slot', migrate_data => true, chunk_time_interval => 432000);
 
