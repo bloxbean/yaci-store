@@ -1,7 +1,7 @@
 services:
-  yaci-store-all:
-    image: bloxbean/yaci-store-all:0.1.0
-    container_name: yaci-store-all
+  yaci-store:
+    image: bloxbean/yaci-store:${tag}
+    container_name: yaci-store
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
