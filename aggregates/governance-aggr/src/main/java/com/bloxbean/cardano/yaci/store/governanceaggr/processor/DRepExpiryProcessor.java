@@ -6,6 +6,9 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepExpiry;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepExpiryStorage;
@@ -20,7 +23,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -32,6 +38,7 @@ public class DRepExpiryProcessor {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final VotingAggrService votingAggrService;
     private final EpochParamStorage epochParamStorage;
+    private final GovActionProposalStorage govActionProposalStorage;
 
     @EventListener
     @Transactional
@@ -54,24 +61,33 @@ public class DRepExpiryProcessor {
 
         log.info("Taking snapshot for DRep status tracking for epoch : {}", prevEpoch);
 
-        List<GovActionProposal> ratifiedOrActiveProposalsInPrevEpoch =
+        List<GovActionProposal> ratifiedOrActiveProposalsInPrevSnapshot =
                 proposalStateClient.getProposalsByStatusListAndEpoch(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
-        final boolean proposalsExistedInPrevEpoch = !ratifiedOrActiveProposalsInPrevEpoch.isEmpty();
+        List<com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal> govActionProposalsCreatedInPrevEpoch =
+                govActionProposalStorage.findByEpoch(prevEpoch)
+                        .stream().sorted(Comparator.comparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getSlot)
+                                .thenComparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getIndex))
+                        .toList();
 
-        final List<DRepInfo> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
-                .stream().map(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId())).toList();
+        Long firstProposalCreatedSlot = !govActionProposalsCreatedInPrevEpoch.isEmpty() ? govActionProposalsCreatedInPrevEpoch.get(0).getSlot() : null;
 
-        final List<DRepInfo> registeredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.REGISTERED, prevEpoch)
-                .stream().map(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId())).toList();
+        final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
+                .stream()
+                .collect(Collectors.toMap(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId()), DRep::getSlot));
 
-        final List<DRepInfo> updatedDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.UPDATED, prevEpoch)
-                .stream().map(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId())).toList();
+        final Map<DRepInfo, Long> registeredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.REGISTERED, prevEpoch)
+                .stream()
+                .collect(Collectors.toMap(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId()), DRep::getSlot));
+
+        final Map<DRepInfo, Long> updatedDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.UPDATED, prevEpoch)
+                .stream()
+                .collect(Collectors.toMap(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId()), DRep::getSlot));
 
         // find dReps did vote in prev epoch
-        final List<String> dRepsVotedInPrevEpoch = votingAggrService.getVotesByVoterTypesInEpoch(List.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH), prevEpoch)
-                .stream().map(votingProcedure -> votingProcedure.getVoterHash())
-                .toList();
+        final Map<String, Long> dRepsVotedInPrevEpoch = votingAggrService.getVotesByVoterTypesInEpoch(List.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH), prevEpoch)
+                .stream()
+                .collect(Collectors.toMap(VotingProcedure::getVoterHash, VotingProcedure::getSlot));
 
         final List<DRepExpiry> dRepExpiryListInPrevSnapshot = dRepExpiryStorage.findByEpoch(prevEpoch - 1);
 
@@ -80,11 +96,10 @@ public class DRepExpiryProcessor {
         dRepExpiryListInPrevSnapshot
                 .stream()
                 .filter(dRepExpiry ->
-                        !deregisteredDRepsInPrevEpoch.contains(new DRepInfo(
-                                dRepExpiry.getDrepHash(), dRepExpiry.getDrepId())))
+                        !deregisteredDRepsInPrevEpoch.containsKey(new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId())))
                 .forEach(dRepExpiry -> {
                     DRepInfo dRepInfo = new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId());
-                    int oldDormantEpoch = dRepExpiry.getDormantEpoch();
+                    int oldDormantEpoch = dRepExpiry.getDormantEpochs();
                     int oldActiveUntil = dRepExpiry.getActiveUntil();
 
                     var newDRepExpiry = DRepExpiry.builder()
@@ -93,63 +108,86 @@ public class DRepExpiryProcessor {
                             .epoch(prevEpoch)
                             .build();
 
-                    if (registeredDRepsInPrevEpoch.contains(dRepInfo) || updatedDRepsInPrevEpoch.contains(dRepInfo)) {
-                        newDRepExpiry.setDormantEpoch(0);
-                        newDRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    final boolean isDRepInactive = oldDormantEpoch + oldActiveUntil < prevEpoch;
+
+                    newDRepExpiry.setActiveUntil(oldActiveUntil);
+
+                    if (!ratifiedOrActiveProposalsInPrevSnapshot.isEmpty() || firstProposalCreatedSlot != null) {
+                        newDRepExpiry.setDormantEpochs(0);
+                        if (oldDormantEpoch > 0) {
+                            newDRepExpiry.setActiveUntil(oldDormantEpoch + 1 + oldActiveUntil);
+                        }
+                    } else if (isDRepInactive) {
+                        newDRepExpiry.setDormantEpochs(0); // Dormant epoch is not updated for inactive DRep.
                     } else {
-                        final boolean isDRepInactive = oldDormantEpoch + oldActiveUntil < prevEpoch;
-
-                        if (proposalsExistedInPrevEpoch) {
-                            newDRepExpiry.setDormantEpoch(0);
-                            if (oldDormantEpoch > 0) {
-                                newDRepExpiry.setActiveUntil(oldDormantEpoch + 1 + oldActiveUntil);
-                            }
-                        } else {
-                            if (!isDRepInactive) { // drep is not inactive
-                                newDRepExpiry.setDormantEpoch(oldDormantEpoch + 1);
-                            } else {
-                                newDRepExpiry.setDormantEpoch(0); // Dormant epoch is not updated for inactive DRep.
-                            }
-                        }
-
-                        if (dRepsVotedInPrevEpoch.contains(dRepExpiry.getDrepHash())) {
-                            newDRepExpiry.setActiveUntil(prevEpoch + drepActivity);
-                        } else {
-                            newDRepExpiry.setActiveUntil(oldActiveUntil);
-                        }
+                        newDRepExpiry.setDormantEpochs(oldDormantEpoch + 1);
                     }
+
+                    Long updatedSlot = updatedDRepsInPrevEpoch.get(dRepInfo);
+                    Long votedSlot = dRepsVotedInPrevEpoch.get(dRepInfo.getDRepHash());
+
+                    if (updatedSlot != null || votedSlot != null) {
+                        newDRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    }
+
                     newDRepExpiryList.add(newDRepExpiry);
                 });
 
-        registeredDRepsInPrevEpoch.stream()
-                .filter(dRepInfo -> !dRepExpiryListInPrevSnapshot.stream()
+        // new DReps
+        registeredDRepsInPrevEpoch.keySet().stream()
+                .filter(dRepInfo -> dRepExpiryListInPrevSnapshot.stream()
                         .map(dRepExpiry -> new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId()))
-                        .toList()
-                        .contains(dRepInfo))
+                        .noneMatch(dRepInfo::equals))
                 .forEach(dRepInfo -> {
                     var dRepExpiry = DRepExpiry.builder()
                             .drepId(dRepInfo.getDRepId())
                             .drepHash(dRepInfo.getDRepHash())
-                            .dormantEpoch(0)
-                            .activeUntil(prevEpoch + drepActivity)
+                            .dormantEpochs(0)
                             .epoch(prevEpoch)
                             .build();
+
+                    if (!ratifiedOrActiveProposalsInPrevSnapshot.isEmpty()) {
+                        dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    } else if (firstProposalCreatedSlot != null) {
+                        if (registeredDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlot) < 0) {
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1);
+                        } else {
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                        }
+                    } else {
+                        dRepExpiry.setDormantEpochs(1);
+                        dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    }
+
                     newDRepExpiryList.add(dRepExpiry);
                 });
 
-        updatedDRepsInPrevEpoch.stream()
-                .filter(dRepInfo -> !dRepExpiryListInPrevSnapshot.stream()
+        // new dreps and last cert is UPDATE_CERT
+        updatedDRepsInPrevEpoch.keySet().stream()
+                .filter(dRepInfo -> dRepExpiryListInPrevSnapshot.stream()
                         .map(dRepExpiry -> new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId()))
-                        .toList()
-                        .contains(dRepInfo))
+                        .noneMatch(dRepInfo::equals))
                 .forEach(dRepInfo -> {
                     var dRepExpiry = DRepExpiry.builder()
                             .drepId(dRepInfo.getDRepId())
                             .drepHash(dRepInfo.getDRepHash())
-                            .dormantEpoch(0)
-                            .activeUntil(prevEpoch + drepActivity)
+                            .dormantEpochs(0)
                             .epoch(prevEpoch)
                             .build();
+
+                    if (!ratifiedOrActiveProposalsInPrevSnapshot.isEmpty()) {
+                        dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    } else if (firstProposalCreatedSlot != null) {
+                        if (updatedDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlot) < 0) {
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1);
+                        } else {
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                        }
+                    } else {
+                        dRepExpiry.setDormantEpochs(1);
+                        dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
+                    }
+
                     newDRepExpiryList.add(dRepExpiry);
                 });
 

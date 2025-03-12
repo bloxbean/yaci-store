@@ -23,11 +23,8 @@ public class DRepExpiryEntity {
     @Column(name = "drep_hash")
     private String drepHash;
 
-    @Column(name = "status")
-    private DRepStatus status;
-
-    @Column(name = "dormant_epoch")
-    private Integer dormantEpoch;
+    @Column(name = "dormant_epochs")
+    private Integer dormantEpochs;
 
     @Column(name = "active_until")
     private Integer activeUntil;
