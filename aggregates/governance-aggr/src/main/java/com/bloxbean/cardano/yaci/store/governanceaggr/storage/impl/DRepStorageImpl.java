@@ -56,8 +56,7 @@ public class DRepStorageImpl implements DRepStorage {
                                 .as("row_num")
                 )
                 .from(DREP)
-                .where(DREP.STATUS.eq(status.name()))
-                .and(DREP.EPOCH.eq(epoch))
+                .where(DREP.EPOCH.eq(epoch))
                 .asTable("drep_with_rn");
 
         return dslContext.selectFrom(drepTable)
