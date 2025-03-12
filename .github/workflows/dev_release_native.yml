@@ -49,12 +49,16 @@ jobs:
           fi
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
-      - name: Copy artifacts
+      - name: Copy yaci-store artifact
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+      - name: Copy utxo-indexer artifact
+        run: mv applications/utxo-indexer/build/output/yaci-store-utxo-indexer-*.zip applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          path: | 
+            ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+            ./applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
 
   buildAndUpload-musl:
     strategy:
@@ -104,11 +108,15 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
       - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+        run: | 
+          mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          mv applications/utxo-indexer/build/output/yaci-store-utxo-indexer-*.zip applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          path: |
+            ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+            ./applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
 
   windowBuild:
     strategy:
@@ -154,9 +162,13 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "arch=$arch"
       - name: Build with Gradle
         run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean distNativeZip
-      - name: Copy artifacts
+      - name: Copy yaci-store artifacts
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+      - name: Copy utxo-indexer artifacts
+        run: mv applications/utxo-indexer/build/output/yaci-store-utxo-indexer-*.zip applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          path: |
+            ./applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+            ./applications/utxo-indexer/build/output/yaci-store-utxo-indexer-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
