@@ -48,7 +48,7 @@ jobs:
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
           fi
       - name: Build with Gradle
-        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean cliZip
+        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
       - name: Copy artifacts
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
@@ -102,7 +102,7 @@ jobs:
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
           fi
       - name: Build with Gradle
-        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean cliZip
+        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
       - name: Copy artifacts
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4
@@ -113,7 +113,7 @@ jobs:
   windowBuild:
     strategy:
       matrix:
-        profile: ["n2c", "all"]
+        profile: ["all"]
     runs-on: windows-latest
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -153,7 +153,7 @@ jobs:
           $arch = "${{ runner.arch }}".ToLower()
           Add-Content -Path $env:GITHUB_ENV -Value "arch=$arch"
       - name: Build with Gradle
-        run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean cliZip
+        run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean distNativeZip
       - name: Copy artifacts
         run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
       - uses: actions/upload-artifact@v4

@@ -19,7 +19,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Build with Gradle
-        run: ./gradlew clean build
+        run: ./gradlew clean build distZip
       - name: Decode GPG Key
         run: |
           mkdir -p ~/.gradle/
@@ -39,13 +39,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            applications/all/build/libs/yaci-store-all-${{env.VERSION}}.jar
-            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar
-            applications/ledger-state/build/libs/yaci-store-ledger-state-${{env.VERSION}}.jar
+            applications/build/dist/yaci-store-${{env.VERSION}}.zip          
+            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar            
             applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
-            config/application.properties
-            config/application-ledger-state.properties
-            config/application-balance.properties
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,18 +61,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push yaci-store-all docker image
+      - name: Build and push yaci-store docker image
         uses: docker/build-push-action@v5
         with:
           file: ./Dockerfile
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          target: yaci-store-all
+          target: yaci-store
           build-args: |
-            TARGET=yaci-store-all
+            TARGET=yaci-store
             APP_VERSION=${{env.VERSION}}
-          tags: bloxbean/yaci-store-all:${{ env.VERSION }}
+          tags: bloxbean/yaci-store:${{ env.VERSION }}
 
       - name: Build and push yaci-store-ledger-state docker image
         uses: docker/build-push-action@v4

@@ -83,7 +83,7 @@ tasks.withType(org.springframework.boot.gradle.tasks.aot.ProcessAot) {
     args = ["--spring.profiles.active=" + (project.properties["profile"] ?: "")]
 }
 
-task cliZip(type: Zip) {
+task distNativeZip(type: Zip) {
     def profile = project.properties["profile"] ?: ""
 
     def zipDirName = profile == ""? "yaci-store-${project.version}" : "yaci-store-${project.version}-${profile}"
@@ -101,6 +101,7 @@ task cliZip(type: Zip) {
 
     from('../../config') {
         include 'application.properties'
+        include 'application-ledger-state.properties'
         into zipDirName + '/' + configDir
     }
 
@@ -115,7 +116,7 @@ task cliZip(type: Zip) {
     destinationDirectory = file("build/output")
 }
 
-cliZip.dependsOn nativeCompile
+distNativeZip.dependsOn nativeCompile
 
 gitProperties {
     failOnNoGitDirectory = false

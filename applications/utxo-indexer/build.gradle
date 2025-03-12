@@ -1,6 +1,6 @@
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
-//    id 'org.graalvm.buildtools.native' version ${graalvmBuildToolVersion}
+    id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
     id "com.gorylenko.gradle-git-properties" version "${gradleGitPropertiesVersion}"
 }
 
@@ -12,6 +12,7 @@ dependencies {
 
     implementation project(':extensions:utxo-rocksdb')
 
+    implementation project(':components:dbutils')
     implementation project(':starters:admin-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -23,18 +24,40 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql:42.7.1'
 }
 
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'utxo-indexer'
+            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication']
+            sharedLibrary = false
 
-//graalvmNative {
-//    binaries {
-//        main {
-//            imageName = 'yaci-store-all'
-//            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
-////            buildArgs = ['-H:+ReportExceptionStackTraces',  '-H:Class=com.bloxbean.cardano.yaci.store.app.utxo.YaciStoreUtxoIndexerApplication' ]
-//            sharedLibrary = false
-//        }
-//    }
-//
-//}
+            def os = org.gradle.internal.os.OperatingSystem.current()
+            def vendor = System.getProperty('java.vendor')
+            def version = System.getProperty('java.version')
+            def vmName = System.getProperty('java.vm.name')
+
+            // Check for Oracle GraalVM
+            if (vendor.contains("Oracle") && !vmName.contains("Community")) {
+                // Oracle GraalVM detected, set GC to G1 for Linux systems
+                if (os.isLinux()) {
+                    buildArgs.add('--gc=G1')
+                    println "Oracle GraalVM detected, setting GC to G1"
+                } else {
+                    //use default
+                    println "Oracle GraalVM detected, setting GC to default"
+                }
+            }
+
+            // Check for Liberica NIK
+            else if (vendor.contains("BellSoft") || vendor.contains("Liberica")) {
+                // Liberica NIK detected, set GC to parallel for all environments
+                buildArgs.add('--gc=parallel')
+                println "Liberica NIK detected, setting GC to parallel"
+            }
+        }
+    }
+
+}
 
 java {
     toolchain {
@@ -42,6 +65,45 @@ java {
     }
 }
 
+tasks.withType(org.springframework.boot.gradle.tasks.aot.ProcessAot) {
+    args = ["--spring.profiles.active=" + (project.properties["profile"] ?: "")]
+}
+
+task distNativeZip(type: Zip) {
+    def profile = project.properties["profile"] ?: ""
+
+    def zipDirName = profile == ""? "yaci-store-utxo-indexer-${project.version}" : "yaci-store-utxo-indexer-${project.version}-${profile}"
+    def configDir = "config"
+
+    from('build/native/nativeCompile') {
+        include 'utxo-indexer*'
+        into(zipDirName)
+    }
+
+    from('../../') {
+        into(zipDirName)
+        include 'LICENSE'
+    }
+
+    from('../../config') {
+        include 'application.properties'
+        into zipDirName + '/' + configDir
+    }
+
+
+    archiveFileName = "yaci-store-utxo-indexer-${project.version}.zip"
+
+    //If profile is n2c, then add n2c to the archive file name
+    if (profile == "n2c") {
+        archiveFileName = "yaci-store-utxo-indexer-${project.version}-${profile}.zip"
+    }
+
+    destinationDirectory = file("build/output")
+}
+
+distNativeZip.dependsOn nativeCompile
+
 gitProperties {
     failOnNoGitDirectory = false
 }
+
