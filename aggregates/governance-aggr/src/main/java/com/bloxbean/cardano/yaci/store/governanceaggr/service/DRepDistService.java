@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -17,9 +19,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DRepDistService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final EraService eraService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
+        if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
+            return;
+        }
+
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
