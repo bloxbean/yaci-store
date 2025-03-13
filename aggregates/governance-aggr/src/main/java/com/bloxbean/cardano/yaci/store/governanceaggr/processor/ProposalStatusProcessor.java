@@ -9,6 +9,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
@@ -55,10 +57,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.Instant;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -81,6 +81,7 @@ public class ProposalStatusProcessor {
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
     private final EraService eraService;
+    private final AdaPotJobStorage adaPotJobStorage;
     private final ProposalMapper proposalMapper;
     private final ApplicationEventPublisher publisher;
     private final GovernanceAggrProperties governanceAggrProperties;
@@ -94,7 +95,7 @@ public class ProposalStatusProcessor {
                                    EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, EraService eraService, ProposalMapper proposalMapper,
+                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, EraService eraService, AdaPotJobStorage adaPotJobStorage, ProposalMapper proposalMapper,
                                    ApplicationEventPublisher publisher, GovernanceAggrProperties governanceAggrProperties, StoreProperties storeProperties) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
@@ -111,6 +112,7 @@ public class ProposalStatusProcessor {
         this.poolStorageReader = poolStorageReader;
         this.delegationVoteDataService = delegationVoteDataService;
         this.eraService = eraService;
+        this.adaPotJobStorage = adaPotJobStorage;
         this.proposalMapper = proposalMapper;
         this.publisher = publisher;
         this.governanceAggrProperties = governanceAggrProperties;
@@ -142,6 +144,8 @@ public class ProposalStatusProcessor {
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
 
+        takeDRepDistrSnapshot(epoch);
+
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
@@ -166,8 +170,6 @@ public class ProposalStatusProcessor {
                 isInConwayBootstrapPhase = false;
             }
         }
-        // take dRep stake distribution snapshot
-        dRepDistService.takeStakeSnapshot(epoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
@@ -546,6 +548,20 @@ public class ProposalStatusProcessor {
         log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
 
         publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
+    }
+
+    private void takeDRepDistrSnapshot(int epoch) {
+        var start = Instant.now();
+        dRepDistService.takeStakeSnapshot(epoch);
+        var end = Instant.now();
+
+        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByEpoch(epoch + 1);
+        if (adaPotJobOpt.isPresent()) {
+            var job = adaPotJobOpt.get();
+            job.setDrepDistrSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
+
+            adaPotJobStorage.save(job);
+        }
     }
 
     /**

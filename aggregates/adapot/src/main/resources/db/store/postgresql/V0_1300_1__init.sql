@@ -30,6 +30,7 @@ create table adapot_jobs
     reward_calc_time bigint,
     update_reward_time bigint,
     stake_snapshot_time bigint,
+    drep_distr_snapshot_time bigint,
     error_message text
 );
 
