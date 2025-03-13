@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 public class AdaPotJobStorageImpl implements AdaPotJobStorage {
@@ -20,6 +21,12 @@ public class AdaPotJobStorageImpl implements AdaPotJobStorage {
                 .stream()
                 .map(rewardCalcJobEntity -> mapper.toDomain(rewardCalcJobEntity))
                 .toList();
+    }
+
+    @Override
+    public Optional<AdaPotJob> getJobByEpoch(int epoch) {
+        return adaPotJobRepository.findByEpoch(epoch)
+                .map(mapper::toDomain);
     }
 
     @Override
