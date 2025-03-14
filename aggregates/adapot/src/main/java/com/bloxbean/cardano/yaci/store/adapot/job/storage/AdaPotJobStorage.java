@@ -11,7 +11,7 @@ public interface AdaPotJobStorage {
 
     List<AdaPotJob> getJobsByTypeAndStatus(AdaPotJobType type, AdaPotJobStatus status);
 
-    Optional<AdaPotJob> getJobByEpoch(int epoch);
+    Optional<AdaPotJob> getJobByTypeAndEpoch(AdaPotJobType type, int epoch);
 
     void save(AdaPotJob job);
 

@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
@@ -144,8 +145,6 @@ public class ProposalStatusProcessor {
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
 
-        takeDRepDistrSnapshot(epoch);
-
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
@@ -170,6 +169,8 @@ public class ProposalStatusProcessor {
                 isInConwayBootstrapPhase = false;
             }
         }
+
+        takeDRepDistrSnapshot(epoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
@@ -555,7 +556,7 @@ public class ProposalStatusProcessor {
         dRepDistService.takeStakeSnapshot(epoch);
         var end = Instant.now();
 
-        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByEpoch(epoch + 1);
+        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch + 1);
         if (adaPotJobOpt.isPresent()) {
             var job = adaPotJobOpt.get();
             job.setDrepDistrSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
