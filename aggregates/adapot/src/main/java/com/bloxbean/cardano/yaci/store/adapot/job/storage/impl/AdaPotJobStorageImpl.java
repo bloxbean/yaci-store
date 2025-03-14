@@ -24,8 +24,8 @@ public class AdaPotJobStorageImpl implements AdaPotJobStorage {
     }
 
     @Override
-    public Optional<AdaPotJob> getJobByEpoch(int epoch) {
-        return adaPotJobRepository.findByEpoch(epoch)
+    public Optional<AdaPotJob> getJobByTypeAndEpoch(AdaPotJobType type, int epoch) {
+        return adaPotJobRepository.findByTypeAndEpoch(type, epoch)
                 .map(mapper::toDomain);
     }
 

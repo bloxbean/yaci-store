@@ -293,7 +293,7 @@ public class AdaPotJobManager {
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
 
             publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1, job.getSlot()));
-            job.setDrepDistrSnapshotTime(adaPotJobStorage.getJobByEpoch(epoch).map(AdaPotJob::getDrepDistrSnapshotTime).orElse(0L));
+            job.setDrepDistrSnapshotTime(adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch).map(AdaPotJob::getDrepDistrSnapshotTime).orElse(0L));
             return Either.right(true);
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);
