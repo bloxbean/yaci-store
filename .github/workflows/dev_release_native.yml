@@ -42,7 +42,9 @@ jobs:
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
         run: |
-          if [ -n "${{ matrix.profile }}" ]; then
+          if [ "${{ matrix.profile }}" == "all" ]; then
+            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+          elif [ -n "${{ matrix.profile }}" ]; then
             echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
           else
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
@@ -96,7 +98,9 @@ jobs:
         run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Set Profile Suffix
         run: |
-          if [ -n "${{ matrix.profile }}" ]; then
+          if [ "${{ matrix.profile }}" == "all" ]; then
+            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
+          elif [ -n "${{ matrix.profile }}" ]; then
             echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
           else
             echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
@@ -136,7 +140,9 @@ jobs:
       - name: Set Profile Suffix
         shell: pwsh
         run: |
-          if ("${{ matrix.profile }}" -ne "") {
+          if ("${{ matrix.profile }}" -eq "all") {
+              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
+          } elseif ("${{ matrix.profile }}" -ne "") {
               Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX=-${{ matrix.profile }}"
           } else {
               Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
