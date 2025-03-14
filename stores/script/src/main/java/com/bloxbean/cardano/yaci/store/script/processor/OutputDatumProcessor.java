@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -22,10 +23,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumHash;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_SCRIPT_ENABLED)
 @Slf4j
 public class OutputDatumProcessor {
     private final DatumStorage datumStorage;

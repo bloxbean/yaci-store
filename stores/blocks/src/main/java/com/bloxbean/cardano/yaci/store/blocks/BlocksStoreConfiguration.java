@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class BlocksStoreConfiguration {
+    public final static String STORE_BLOCKS_ENABLED = "store.blocks.enabled";
 
     @Bean
     @ConditionalOnMissingBean

@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.assets.storage"})
 @EnableTransactionManagement
 public class AssetsStoreConfiguration {
+    public final static String STORE_ASSETS_ENABLED = "store.assets.enabled";
 
     @Bean
     @ConditionalOnMissingBean

@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class GovernanceAggrConfiguration {
+    public final static String STORE_GOVERNANCEAGGR_ENABLED = "store.governance-aggr.enabled";
 
     @Bean
     @ConditionalOnMissingBean

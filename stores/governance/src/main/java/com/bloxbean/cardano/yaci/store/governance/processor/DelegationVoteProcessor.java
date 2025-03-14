@@ -8,6 +8,7 @@ import com.bloxbean.cardano.client.governance.DRepId;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -23,8 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class DelegationVoteProcessor {
     private final DelegationVoteStorage delegationVoteStorage;

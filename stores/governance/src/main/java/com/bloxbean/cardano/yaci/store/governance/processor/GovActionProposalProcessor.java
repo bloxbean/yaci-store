@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.governance.ProposalProcedure;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
@@ -25,7 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class GovActionProposalProcessor {
 
@@ -71,7 +75,7 @@ public class GovActionProposalProcessor {
                 if (proposalProcedure.getGovAction() instanceof ParameterChangeAction action) {
                     ProtocolParamUpdate protocolParamUpdate = action.getProtocolParamUpdate();
                         Map<String, Object> fields = new HashMap<>();
-                        
+
                         if (protocolParamUpdate != null) {
                             Map<String, Object> protocolParamUpdateMap = objectMapper.convertValue(protocolParamUpdate, Map.class);
                             protocolParamUpdateMap.entrySet().removeIf(entry -> entry.getValue() == null);

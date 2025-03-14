@@ -19,4 +19,6 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.live"})
 @EnableTransactionManagement
 public class LiveStoreConfiguration {
+    public final static String STORE_LIVE_ENABLED = "store.live.enabled";
+    public final static String STORE_CARDANO_MEMPOOL_MONITORING_ENABLED = "store.cardano.mempool.monitoring.enabled";
 }

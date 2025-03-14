@@ -9,10 +9,10 @@ import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawa
 import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,10 +24,12 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
+
 @Component
+@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
 public class TreasuryWithdrawalProcessor {
-    private final GovernanceAggrProperties governanceAggrProperties;
     private final ProposalStateClient proposalStateClient;
     private final ApplicationEventPublisher publisher;
     private final StakingCertificateStorageReader stakingCertificateStorageReader;
@@ -35,9 +37,8 @@ public class TreasuryWithdrawalProcessor {
     //Refactor it later to remove direct dependency with RewardStorage here.
     private final RewardStorage rewardStorage;
 
-    public TreasuryWithdrawalProcessor(GovernanceAggrProperties governanceAggrProperties, ProposalStateClient proposalStateClient, ApplicationEventPublisher publisher,
+    public TreasuryWithdrawalProcessor(ProposalStateClient proposalStateClient, ApplicationEventPublisher publisher,
                                        StakingCertificateStorageReader stakingCertificateStorageReader, RewardStorage rewardStorage) {
-        this.governanceAggrProperties = governanceAggrProperties;
         this.proposalStateClient = proposalStateClient;
         this.publisher = publisher;
         this.stakingCertificateStorageReader = stakingCertificateStorageReader;
@@ -47,8 +48,6 @@ public class TreasuryWithdrawalProcessor {
     @EventListener
     @Transactional
     public void handleTreasuryWithdrawal(PreAdaPotJobProcessingEvent event) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
 
         //Find status of proposals in previous epoch to process ratified treasury withdrawals.
         int epoch = event.getEpoch() - 1;

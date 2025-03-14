@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.processor;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.cache.GuavaCache;
 import com.bloxbean.cardano.yaci.store.utxo.cache.NoCache;
@@ -26,10 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
 import static java.util.stream.Collectors.toList;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_UTXO_ENABLED)
 @Slf4j
 public class AddressProcessor {
     private final AddressStorage addressStorage;

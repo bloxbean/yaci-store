@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.scheduler;
 
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
@@ -18,12 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration.STORE_TRANSACTION_PRUNING_ENABLED;
+
 @Component
 @ConditionalOnProperty(
         value = "store.transaction.pruning-enabled",
         havingValue = "true"
 )
 @RequiredArgsConstructor
+@EnableIf(STORE_TRANSACTION_PRUNING_ENABLED)
 @Slf4j
 public class TransactionPruningService {
     private final TransactionStorage transactionStorage;

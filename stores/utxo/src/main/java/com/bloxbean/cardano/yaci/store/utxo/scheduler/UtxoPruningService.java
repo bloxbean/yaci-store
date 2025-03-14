@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.scheduler;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
@@ -16,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_PRUNING_ENABLED;
+
 @Component
 @ConditionalOnProperty(
         value="store.utxo.pruning-enabled",
@@ -23,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
         matchIfMissing = false
 )
 @RequiredArgsConstructor
+@EnableIf(STORE_UTXO_PRUNING_ENABLED)
 @Slf4j
 public class UtxoPruningService {
     private final UtxoStorage utxoStorage;

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.script.storage.TxScriptStorage;
 import lombok.RequiredArgsConstructor;
@@ -8,12 +9,15 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
+
 /**
  * Rollbacks transaction_scripts table
  */
 @Component
 @RequiredArgsConstructor
 @Transactional
+@EnableIf(STORE_SCRIPT_ENABLED)
 @Slf4j
 public class ScriptRollbackProcessor {
 

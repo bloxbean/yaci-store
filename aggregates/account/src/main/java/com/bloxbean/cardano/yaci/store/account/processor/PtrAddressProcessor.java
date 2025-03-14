@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAddressBalance;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -19,8 +20,11 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class PtrAddressProcessor {
     private final AccountBalanceStorage accountBalanceStorage;

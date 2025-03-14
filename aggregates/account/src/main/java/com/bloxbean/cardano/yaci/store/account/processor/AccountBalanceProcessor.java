@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.account.util.ConfigIds;
 import com.bloxbean.cardano.yaci.store.account.util.ConfigStatus;
 import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
@@ -45,10 +46,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
 import static com.pivovarit.collectors.ParallelCollectors.parallel;
 import static java.util.stream.Collectors.toList;
 
 @Component
+@EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class AccountBalanceProcessor {
     private final AccountBalanceStorage accountBalanceStorage;

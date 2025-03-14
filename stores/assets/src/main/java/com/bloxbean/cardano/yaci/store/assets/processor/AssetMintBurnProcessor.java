@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.assets.domain.MintType;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAssetEvent;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.MintBurnEvent;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +20,11 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.assets.AssetsStoreConfiguration.STORE_ASSETS_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_ASSETS_ENABLED)
 @Slf4j
 public class AssetMintBurnProcessor {
     private final AssetStorage assetStorage;
