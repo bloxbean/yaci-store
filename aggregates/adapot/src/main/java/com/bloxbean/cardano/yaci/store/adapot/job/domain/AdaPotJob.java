@@ -23,5 +23,6 @@ public class AdaPotJob {
     private Long rewardCalcTime;
     private Long updateRewardTime;
     private Long stakeSnapshotTime;
+    private Long drepDistrSnapshotTime;
     private String errorMessage;
 }
