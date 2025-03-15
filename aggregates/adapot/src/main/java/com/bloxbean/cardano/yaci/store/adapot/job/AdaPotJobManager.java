@@ -110,7 +110,7 @@ public class AdaPotJobManager {
      * @param slot  slot number
      */
     public void triggerRewardCalcJob(int epoch, long slot) {
-        AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, null);
+        AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L, null);
         adaPotJobStorage.save(job);
         jobQueue.add(job);
     }
@@ -291,7 +291,9 @@ public class AdaPotJobManager {
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
+
             publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1, job.getSlot()));
+            job.setDrepDistrSnapshotTime(adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch).map(AdaPotJob::getDrepDistrSnapshotTime).orElse(0L));
             return Either.right(true);
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);

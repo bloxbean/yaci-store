@@ -34,6 +34,9 @@ public class AdaPotJobEntity {
     @Column(name = "stake_snapshot_time")
     private Long stakeSnapshotTime;
 
+    @Column(name = "drep_distr_snapshot_time")
+    private Long drepDistrSnapshotTime;
+
     @Column(name = "error_message")
     private String errorMessage;
 
@@ -101,6 +104,14 @@ public class AdaPotJobEntity {
 
     public void setStakeSnapshotTime(Long stakeSnapshotTime) {
         this.stakeSnapshotTime = stakeSnapshotTime;
+    }
+
+    public Long getDrepDistrSnapshotTime() {
+        return drepDistrSnapshotTime;
+    }
+
+    public void setDrepDistrSnapshotTime(Long dRepDistrSnapshotTime) {
+        this.drepDistrSnapshotTime = dRepDistrSnapshotTime;
     }
 
     public String getErrorMessage() {
