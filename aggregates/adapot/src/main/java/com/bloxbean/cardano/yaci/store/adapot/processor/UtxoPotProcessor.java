@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.processor;
 
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
@@ -18,9 +19,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
+
 //@Component
 //TODO : Enable this with a second database as temp database
 @RequiredArgsConstructor
+@EnableIf(value = STORE_ADAPOT_ENABLED, defaultValue = false)
 @Slf4j
 public class UtxoPotProcessor {
     private final UtxoClient utxoClient;

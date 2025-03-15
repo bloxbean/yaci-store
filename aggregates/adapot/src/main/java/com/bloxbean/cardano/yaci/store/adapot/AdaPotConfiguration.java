@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class AdaPotConfiguration {
+    public final static String STORE_ADAPOT_ENABLED = "store.adapot.enabled";
 
     @Bean
     @ConditionalOnMissingBean

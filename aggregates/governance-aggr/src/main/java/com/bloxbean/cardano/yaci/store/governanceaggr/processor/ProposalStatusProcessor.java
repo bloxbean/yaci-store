@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
@@ -63,7 +64,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
+
 @Component
+@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
 // TODO: write tests
 public class ProposalStatusProcessor {
@@ -135,9 +139,6 @@ public class ProposalStatusProcessor {
     @Transactional
     // TODO: enactment order
     public void handleProposalStatus(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         if (eraService.getEraForEpoch(stakeSnapshotTakenEvent.getEpoch()).getValue() < Era.Conway.getValue()) {
             return;
         }

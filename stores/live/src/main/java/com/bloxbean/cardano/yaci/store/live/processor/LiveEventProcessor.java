@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.live.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -28,9 +29,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.live.LiveStoreConfiguration.STORE_LIVE_ENABLED;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_LIVE_ENABLED)
 @Slf4j
 public class LiveEventProcessor {
     private DecimalFormat df = new DecimalFormat("0.00");

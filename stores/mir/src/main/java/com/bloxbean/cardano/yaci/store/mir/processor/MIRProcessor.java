@@ -6,6 +6,7 @@ import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.certs.MoveInstataneous;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -28,9 +29,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.common.util.CCLUtil.toCCLCredential;
+import static com.bloxbean.cardano.yaci.store.mir.MIRStoreConfiguration.STORE_MIR_ENABLED;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_MIR_ENABLED)
 @Slf4j
 public class MIRProcessor {
     private final MIRStorage mirStorage;

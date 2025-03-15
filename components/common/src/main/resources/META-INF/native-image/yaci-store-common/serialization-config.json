@@ -31,6 +31,9 @@
       "name":"java.util.HashMap"
     },
     {
+      "name": "java.util.LinkedHashMap"
+    },
+    {
       "name":"long[]"
     }
   ],

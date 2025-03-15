@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.scheduler;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
@@ -19,12 +20,15 @@ import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_PRUNING_ENABLED;
+
 @Component
 @ConditionalOnProperty(
         value="store.account.pruning-enabled",
         havingValue = "true",
         matchIfMissing = false
 )
+@EnableIf(value = STORE_ACCOUNT_PRUNING_ENABLED, defaultValue = false)
 @Slf4j
 public class BalancePruningService {
     private final CursorService cursorService;

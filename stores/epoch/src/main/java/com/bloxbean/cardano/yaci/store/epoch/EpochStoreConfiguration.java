@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableCaching
 public class EpochStoreConfiguration {
+    public final static String STORE_EPOCH_ENABLED = "store.epoch.enabled";
 
     @Bean
     @ConditionalOnMissingBean

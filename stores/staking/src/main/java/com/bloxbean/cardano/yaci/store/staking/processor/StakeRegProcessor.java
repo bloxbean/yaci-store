@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -21,8 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_STAKING_ENABLED)
 @Slf4j
 public class StakeRegProcessor {
     private final StakingCertificateStorage stakingStorage;

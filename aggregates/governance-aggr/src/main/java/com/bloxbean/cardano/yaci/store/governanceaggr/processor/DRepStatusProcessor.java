@@ -1,12 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepRegistrationEvent;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.DRepStatus;
@@ -21,30 +21,26 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
 // todo: 'inactive', 'active again' case
 public class DRepStatusProcessor {
-    private final GovernanceAggrProperties governanceAggrProperties;
     private final DRepStorage dRepStorage;
 
     private final List<DRepRegistrationEvent> dRepRegistrationsCache = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
     public void processDRepRegistrationEvent(DRepRegistrationEvent dRepRegistrationEvent) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         dRepRegistrationsCache.add(dRepRegistrationEvent);
     }
 
     @EventListener
     @Transactional
     public void handleCommitEventToProcessDRepStatus(PreCommitEvent preCommitEvent) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         try {
             dRepRegistrationsCache.sort(Comparator.comparingLong(e -> e.getMetadata().getSlot()));
             List<DRep> dReps = new ArrayList<>();
@@ -106,9 +102,6 @@ public class DRepStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         int count = dRepStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} drep records", count);
     }

@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import jakarta.validation.constraints.NotNull;
@@ -19,10 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.STORE_BLOCKS_ENABLED;
+
 @Component
+@EnableIf(STORE_BLOCKS_ENABLED)
 @Slf4j
 public class BlockProcessor {
-
     private BlockStorage blockStorage;
 
     public BlockProcessor(BlockStorage blockStorage) {

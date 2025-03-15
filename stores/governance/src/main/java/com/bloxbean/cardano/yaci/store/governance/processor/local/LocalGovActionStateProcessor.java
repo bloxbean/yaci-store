@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor.local;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -14,9 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.TimeUnit;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @Slf4j
 @ConditionalOnBean(LocalGovStateService.class)
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 public class LocalGovActionStateProcessor {
     private final LocalGovStateService localGovStateService;
     private final LocalGovActionProposalStatusStorage localGovActionProposalStatusStorage;

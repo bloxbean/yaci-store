@@ -50,7 +50,7 @@ class TreasuryWithdrawalProcessorTest {
     void setUp() {
         governanceAggrProperties = new GovernanceAggrProperties();
         governanceAggrProperties.setEnabled(true);
-        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(governanceAggrProperties, proposalStateClient, publisher, stakingCertificateStorageReader, rewardStorage);
+        treasuryWithdrawalProcessor = new TreasuryWithdrawalProcessor(proposalStateClient, publisher, stakingCertificateStorageReader, rewardStorage);
     }
 
     @Test

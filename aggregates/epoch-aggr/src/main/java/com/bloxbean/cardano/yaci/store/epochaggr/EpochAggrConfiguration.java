@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class EpochAggrConfiguration {
+    public final static String STORE_EPOCHAGGR_ENABLED = "store.epoch-aggr.enabled";
 
     @Bean
     @ConditionalOnMissingBean

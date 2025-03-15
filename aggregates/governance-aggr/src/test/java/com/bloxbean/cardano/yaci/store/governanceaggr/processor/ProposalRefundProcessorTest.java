@@ -52,16 +52,11 @@ class ProposalRefundProcessorTest {
     @Mock
     private RewardStorage rewardStorage;
 
-    @Mock
-    private GovernanceAggrProperties governanceAggrProperties;
-
     @InjectMocks
     private ProposalRefundProcessor proposalRefundProcessor;
 
     @Test
     void testHandleProposalStatusCapturedEvent() {
-        when(governanceAggrProperties.isEnabled()).thenReturn(true);
-
         PreAdaPotJobProcessingEvent event = new PreAdaPotJobProcessingEvent(2, 100);
 
         Proposal proposal1 = new Proposal(GovActionId.builder()

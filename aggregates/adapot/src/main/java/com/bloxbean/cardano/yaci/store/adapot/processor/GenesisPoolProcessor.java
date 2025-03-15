@@ -7,9 +7,9 @@ import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 
 /**
@@ -41,10 +42,10 @@ import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
  */
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_ADAPOT_ENABLED, defaultValue = false)
 @Slf4j
 public class GenesisPoolProcessor {
     private final StoreProperties storeProperties;
-    private final AdaPotProperties adaPotProperties;
     private final PoolStorage poolStorage;
     private final PoolCertificateStorage poolCertificateStorage;
     private final StakingCertificateStorage stakingCertificateStorage;
@@ -55,9 +56,6 @@ public class GenesisPoolProcessor {
     @EventListener
     @Transactional
     public void handleGenesisPoolRegistration(GenesisBlockEvent genesisBlockEvent) {
-        if (!adaPotProperties.isEnabled())
-            return;
-
         //If genesis block starts with Byron, don't do anything
         if (genesisBlockEvent.getEra().getValue() < Era.Shelley.getValue())
             return;

@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Transactional
+@EnableIf(TransactionStoreConfiguration.STORE_TRANSACTION_ENABLED)
 @Slf4j
 public class TransactionRollbackProcessor {
     private final TransactionStorage transactionStorage;

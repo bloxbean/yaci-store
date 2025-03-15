@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.processor;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.epochaggr.service.EpochService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -16,10 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.TimeUnit;
 
+import static com.bloxbean.cardano.yaci.store.epochaggr.EpochAggrConfiguration.STORE_EPOCHAGGR_ENABLED;
+
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "store.epoch-aggr.epoch-calculation-enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
+@EnableIf(value = STORE_EPOCHAGGR_ENABLED, defaultValue = false)
 public class EpochProcessor {
 
     private final EpochService epochService;

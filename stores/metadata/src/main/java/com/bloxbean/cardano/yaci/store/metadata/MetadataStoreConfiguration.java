@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.metadata"})
 @EnableTransactionManagement
 public class MetadataStoreConfiguration {
+    public final static String STORE_METADATA_ENABLED = "store.metadata.enabled";
 
     @Bean
     @ConditionalOnMissingBean

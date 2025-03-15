@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(TransactionStoreConfiguration.STORE_TRANSACTION_ENABLED)
 @Slf4j
 public class GenesisTransactionProcessor {
     private final TransactionStorage transactionStorage;

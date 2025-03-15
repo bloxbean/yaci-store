@@ -35,6 +35,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class UtxoStoreConfiguration {
+    public static final String STORE_UTXO_ENABLED = "store.utxo.enabled";
+    public static final String STORE_UTXO_PRUNING_ENABLED = "store.utxo.pruning-enabled";
 
     @Bean
     @ConditionalOnMissingBean

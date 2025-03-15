@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.staking"})
 @EnableTransactionManagement
 public class StakingStoreConfiguration {
+    public final static String STORE_STAKING_ENABLED = "store.staking.enabled";
 
     @Bean
     @ConditionalOnMissingBean

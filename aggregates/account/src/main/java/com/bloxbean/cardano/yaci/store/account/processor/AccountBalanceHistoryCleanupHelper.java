@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.storage.AccountBalanceStorage;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
@@ -10,8 +11,11 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class AccountBalanceHistoryCleanupHelper {
     private final AccountBalanceStorage accountBalanceStorage;

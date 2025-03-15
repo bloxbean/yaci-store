@@ -33,6 +33,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class AccountStoreConfiguration {
+    public final static String STORE_ACCOUNT_ENABLED = "store.account.enabled";
+    public final static String STORE_ACCOUNT_PRUNING_ENABLED = "store.account.pruning-enabled";
 
     @Bean
     @ConditionalOnMissingBean

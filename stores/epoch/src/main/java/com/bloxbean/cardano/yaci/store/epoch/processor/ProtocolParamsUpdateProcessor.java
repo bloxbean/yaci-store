@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.epoch.processor;
 
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.Update;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
@@ -19,8 +20,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration.STORE_EPOCH_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_EPOCH_ENABLED)
 @Slf4j
 public class ProtocolParamsUpdateProcessor {
     private final ProtocolParamsProposalStorage protocolParamsProposalStorage;

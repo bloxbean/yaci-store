@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
@@ -42,11 +43,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getPaymentKeyHash;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_UTXO_ENABLED)
 @Slf4j
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;

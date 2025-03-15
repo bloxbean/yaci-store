@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
@@ -16,7 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 
+import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.STORE_BLOCKS_ENABLED;
+
 @Component
+@EnableIf(STORE_BLOCKS_ENABLED)
 @Slf4j
 public class ByronBlockProcessor {
     private BlockStorage blockStorage;

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.AlonzoGenesis;
@@ -16,8 +17,11 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration.STORE_EPOCH_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_EPOCH_ENABLED)
 @Slf4j
 //TODO -- Write tests
 public class EraGenesisProtocolParamsUtil {

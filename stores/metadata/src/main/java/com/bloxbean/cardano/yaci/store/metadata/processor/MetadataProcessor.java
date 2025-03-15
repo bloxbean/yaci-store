@@ -4,6 +4,7 @@ import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.AuxDataEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -24,8 +25,11 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.metadata.MetadataStoreConfiguration.STORE_METADATA_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_METADATA_ENABLED)
 @Slf4j
 public class MetadataProcessor {
     private final TxMetadataStorage metadataStorage;
