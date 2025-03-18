@@ -13,4 +13,5 @@ public interface GovActionProposalStatusStorage {
     List<GovActionProposalStatus> findByStatusAndEpoch(GovActionStatus status, int epoch);
     List<GovActionProposalStatus> findByStatusListAndEpoch(List<GovActionStatus> statusList, int epoch);
     Optional<GovActionProposalStatus> findLastEnactedProposal(GovActionType govActionType, int epoch);
+    Optional<Integer> findLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch);
 }

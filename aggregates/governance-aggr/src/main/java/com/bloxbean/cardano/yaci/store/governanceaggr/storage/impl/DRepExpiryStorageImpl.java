@@ -39,7 +39,6 @@ public class DRepExpiryStorageImpl implements DRepExpiryStorage {
                 .map(dRepExpiry -> dsl.insertInto(DREP_EXPIRY)
                         .set(DREP_EXPIRY.DREP_HASH, dRepExpiry.getDrepHash())
                         .set(DREP_EXPIRY.DREP_ID, dRepExpiry.getDrepId())
-                        .set(DREP_EXPIRY.DORMANT_EPOCHS, dRepExpiry.getDormantEpochs())
                         .set(DREP_EXPIRY.ACTIVE_UNTIL, dRepExpiry.getActiveUntil())
                         .set(DREP_EXPIRY.EPOCH, dRepExpiry.getEpoch())
                         .set(DREP_EXPIRY.UPDATE_DATETIME, localDateTime))
