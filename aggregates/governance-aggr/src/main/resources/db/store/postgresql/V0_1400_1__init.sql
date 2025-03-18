@@ -62,7 +62,6 @@ create table drep_expiry
 (
     drep_id           varchar(255),
     drep_hash         varchar(56),
-    dormant_epochs    int,
     active_until      int,
     epoch             int,
     update_datetime   timestamp,

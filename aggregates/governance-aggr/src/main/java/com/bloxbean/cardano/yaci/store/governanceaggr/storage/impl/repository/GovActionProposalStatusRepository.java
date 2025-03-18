@@ -25,4 +25,6 @@ public interface GovActionProposalStatusRepository extends JpaRepository<GovActi
 
     @Query("select g from GovActionProposalStatusEntity g where g.type = :govActionType and g.status = 'RATIFIED' and g.epoch < :epoch order by g.epoch desc limit 1")
     Optional<GovActionProposalStatusEntity> findLastEnactedProposal(GovActionType govActionType, int epoch);
+    @Query("SELECT MAX(g.epoch) FROM GovActionProposalStatusEntity g WHERE g.epoch < :epoch AND g.status IN :statusList")
+    Optional<Integer> findLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch);
 }

@@ -23,4 +23,10 @@ public class DummyProposalStateClientImpl implements ProposalStateClient {
     public Optional<GovActionProposal> getLastEnactedProposal(GovActionType govActionType, int currentEpoch) {
         return Optional.empty();
     }
+
+    @Override
+    public Optional<Integer> getLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch) {
+        return Optional.empty();
+    }
+
 }

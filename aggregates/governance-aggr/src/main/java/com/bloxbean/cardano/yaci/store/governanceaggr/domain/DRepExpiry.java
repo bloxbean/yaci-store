@@ -19,8 +19,6 @@ public class DRepExpiry {
 
     private String drepHash;
 
-    private Integer dormantEpochs;
-
     private Integer activeUntil;
 
     private Integer epoch;
