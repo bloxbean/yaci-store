@@ -12,10 +12,16 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class EpochDto {
-    private Integer epoch;
-    private Long startTime;
-    private Long endTime;
+    private int epoch;
+    private long startTime;
+    private long endTime;
+    private long firstBlockTime;
+    private long lastBlockTime;
+    private long blockCount;
+    private long txCount;
+    private String output;
+    private String fees;
+    private String activeStake;
 }
