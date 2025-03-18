@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 
-import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochNo;
+import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochDto;
+import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamServiceReader;
@@ -26,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class LocalEpochController {
 
     private final LocalEpochParamServiceReader protocolParamService;
+    private final EpochParamService epochParamService;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
 
     @PostConstruct
@@ -33,8 +35,9 @@ public class LocalEpochController {
         log.info("LocalEpochController initialized >>>");
     }
 
-    public LocalEpochController(LocalEpochParamServiceReader protocolParamService) {
+    public LocalEpochController(LocalEpochParamServiceReader protocolParamService, EpochParamService epochParamService) {
         this.protocolParamService = protocolParamService;
+        this.epochParamService = epochParamService;
     }
 
     @GetMapping("parameters")
@@ -61,9 +64,10 @@ public class LocalEpochController {
 
     @Operation(summary = "Get the latest epoch no")
     @GetMapping("latest")
-    public EpochNo getLatestEpoch() {
-        return protocolParamService.getMaxEpoch()
-                .map(EpochNo::new)
+    public EpochDto getLatestEpoch() {
+        var latestEpoch =  protocolParamService.getMaxEpoch()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Latest epoch not found"));
+
+        return epochParamService.getEpochDetails(latestEpoch);
     }
 }
