@@ -124,11 +124,10 @@ public class DRepExpiryProcessor {
                     .build();
 
             newDRepExpiry.setActiveUntil(oldActiveUntil);
-            if ((!ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty() || firstProposalCreatedSlotInPrevEpoch != null)
-                    && dormantEpochs > 0) {
-                    // extend expiry
-                    newDRepExpiry.setActiveUntil(oldActiveUntil + dormantEpochs);
-                }
+            if ((ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty() && firstProposalCreatedSlotInPrevEpoch != null && dormantEpochs > 0)) {
+                // extend expiry
+                newDRepExpiry.setActiveUntil(oldActiveUntil + dormantEpochs + 1);
+            }
 
             Long updatedSlot = updatedDRepsInPrevEpoch.get(dRepInfo);
 
