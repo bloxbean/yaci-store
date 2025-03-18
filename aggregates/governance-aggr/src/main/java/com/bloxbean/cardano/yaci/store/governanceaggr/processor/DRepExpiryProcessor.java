@@ -81,12 +81,12 @@ public class DRepExpiryProcessor {
                         .toList();
 
         Long firstProposalCreatedSlotInPrevEpoch = !govActionProposalsCreatedInPrevEpoch.isEmpty() ? govActionProposalsCreatedInPrevEpoch.get(0).getSlot() : null;
-        Optional<Integer> dormantEpochsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
+        Optional<Integer> lastEpochsHadProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
-        if (dormantEpochsOpt.isEmpty()) {
+        if (lastEpochsHadProposalsOpt.isEmpty()) {
             // TODO
         } else
-            dormantEpochs = dormantEpochsOpt.get();
+            dormantEpochs = prevEpoch - lastEpochsHadProposalsOpt.get() - 1;
 
         final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
                 .stream()
