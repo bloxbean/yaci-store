@@ -45,6 +45,7 @@ public class DRepExpiryProcessor {
     @EventListener
     @Transactional
     public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        // Taking snapshot for DRep expiry
         if (!governanceAggrProperties.isEnabled())
             return;
 
@@ -68,25 +69,31 @@ public class DRepExpiryProcessor {
             return;
         }
 
-        log.info("Taking snapshot for DRep status tracking for epoch : {}", prevEpoch);
-        int dormantEpochs = 0;
+        log.info("Taking snapshot for DRep expiry for epoch : {}", prevEpoch);
 
+        // get ratified or active proposals in prev proposal status snapshot (the epoch = current epoch - 1)
         List<GovActionProposal> ratifiedOrActiveProposalsInPrevProposalStatusSnapshot =
                 proposalStateClient.getProposalsByStatusListAndEpoch(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
+        // get governance action proposals that were created in previous epoch, at this point of time they're not in prev proposal status snapshot
         List<com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal> govActionProposalsCreatedInPrevEpoch =
                 govActionProposalStorage.findByEpoch(prevEpoch)
                         .stream().sorted(Comparator.comparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getSlot)
                                 .thenComparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getIndex))
                         .toList();
 
+        // The slot the first proposal was created slot in the previous epoch
         Long firstProposalCreatedSlotInPrevEpoch = !govActionProposalsCreatedInPrevEpoch.isEmpty() ? govActionProposalsCreatedInPrevEpoch.get(0).getSlot() : null;
-        Optional<Integer> lastEpochsHadProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
-        if (lastEpochsHadProposalsOpt.isEmpty()) {
+        // get last epoch (before the prev epoch) that had ratified or active proposals
+        Optional<Integer> lastEpochsHadRatifiedOrActiveProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
+
+        int dormantEpochsCount = 0;
+
+        if (lastEpochsHadRatifiedOrActiveProposalsOpt.isEmpty()) {
             // TODO
         } else
-            dormantEpochs = prevEpoch - lastEpochsHadProposalsOpt.get() - 1;
+            dormantEpochsCount = prevEpoch - lastEpochsHadRatifiedOrActiveProposalsOpt.get() - 1;
 
         final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
                 .stream()
@@ -124,9 +131,9 @@ public class DRepExpiryProcessor {
                     .build();
 
             newDRepExpiry.setActiveUntil(oldActiveUntil);
-            if ((ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty() && firstProposalCreatedSlotInPrevEpoch != null && dormantEpochs > 0)) {
+            if ((ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty() && firstProposalCreatedSlotInPrevEpoch != null)) {
                 // extend expiry
-                newDRepExpiry.setActiveUntil(oldActiveUntil + dormantEpochs + 1);
+                newDRepExpiry.setActiveUntil(oldActiveUntil + dormantEpochsCount + 1);
             }
 
             Long updatedSlot = updatedDRepsInPrevEpoch.get(dRepInfo);
@@ -140,7 +147,7 @@ public class DRepExpiryProcessor {
             newDRepExpiryList.add(newDRepExpiry);
         }
 
-        // new DReps
+        // new DReps and last cert type is REG_DREP_CERT
         registeredDRepsInPrevEpoch.keySet().stream()
                 .filter(dRepInfo -> dRepExpiryListInPrevSnapshot.stream()
                         .map(dRepExpiry -> new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId()))
@@ -167,7 +174,7 @@ public class DRepExpiryProcessor {
                     newDRepExpiryList.add(dRepExpiry);
                 });
 
-        // new dreps and last cert is UPDATE_CERT
+        // new DReps and last cert is UPDATE_DREP_CERT
         updatedDRepsInPrevEpoch.keySet().stream()
                 .filter(dRepInfo -> dRepExpiryListInPrevSnapshot.stream()
                         .map(dRepExpiry -> new DRepInfo(dRepExpiry.getDrepHash(), dRepExpiry.getDrepId()))
