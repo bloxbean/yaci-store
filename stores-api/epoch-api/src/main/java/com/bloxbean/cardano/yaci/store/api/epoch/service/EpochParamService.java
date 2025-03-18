@@ -54,10 +54,16 @@ public class EpochParamService {
                     .epoch(epoch)
                     .startTime(startTime)
                     .endTime(endTime)
+                    .output("0")
+                    .fees("0")
+                    .activeStake("0")
                     .build();
         } else { //Byron epoch. Just return epoch no for now
             return EpochDto.builder()
                     .epoch(epoch)
+                    .output("0")
+                    .fees("0")
+                    .activeStake("0")
                     .build();
         }
     }
