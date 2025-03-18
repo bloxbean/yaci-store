@@ -108,9 +108,10 @@ public class DRepExpiryProcessor {
                 .collect(Collectors.toMap(dRep -> new DRepInfo(dRep.getDrepHash(), dRep.getDrepId()), DRep::getSlot));
 
         // find dReps did vote in prev epoch
-        final Map<String, Long> dRepsVotedInPrevEpoch = votingAggrService.getVotesByVoterTypesInEpoch(List.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH), prevEpoch)
+        final List<String> dRepsVotedInPrevEpoch = votingAggrService.getVotesByVoterTypesInEpoch(List.of(VoterType.DREP_KEY_HASH, VoterType.DREP_SCRIPT_HASH), prevEpoch)
                 .stream()
-                .collect(Collectors.toMap(VotingProcedure::getVoterHash, VotingProcedure::getSlot));
+                .map(VotingProcedure::getVoterHash)
+                .collect(Collectors.toList());
 
         final List<DRepExpiry> dRepExpiryListInPrevSnapshot = dRepExpiryStorage.findByEpoch(prevEpoch - 1);
 
@@ -137,7 +138,7 @@ public class DRepExpiryProcessor {
             }
 
             // the case DRep is updated or DRep did vote in the previous epoch
-            if (updatedDRepsInPrevEpoch.get(dRepInfo) != null || dRepsVotedInPrevEpoch.get(dRepInfo.getDRepHash()) != null) {
+            if (updatedDRepsInPrevEpoch.get(dRepInfo) != null || dRepsVotedInPrevEpoch.contains(dRepInfo.getDRepHash())) {
                 newDRepExpiry.setActiveUntil(prevEpoch + drepActivity);
             }
 
