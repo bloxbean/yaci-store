@@ -132,15 +132,12 @@ public class DRepExpiryProcessor {
 
             newDRepExpiry.setActiveUntil(oldActiveUntil);
             if ((ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty() && firstProposalCreatedSlotInPrevEpoch != null)) {
-                // extend expiry
+                // extend DRep expiry
                 newDRepExpiry.setActiveUntil(oldActiveUntil + dormantEpochsCount + 1);
             }
 
-            Long updatedSlot = updatedDRepsInPrevEpoch.get(dRepInfo);
-
-            Long votedSlot = dRepsVotedInPrevEpoch.get(dRepInfo.getDRepHash());
-
-            if (updatedSlot != null || votedSlot != null) {
+            // the case DRep is updated or DRep did vote in the previous epoch
+            if (updatedDRepsInPrevEpoch.get(dRepInfo) != null || dRepsVotedInPrevEpoch.get(dRepInfo.getDRepHash()) != null) {
                 newDRepExpiry.setActiveUntil(prevEpoch + drepActivity);
             }
 
@@ -162,8 +159,8 @@ public class DRepExpiryProcessor {
                     if (!ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty()) {
                         dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
                     } else if (firstProposalCreatedSlotInPrevEpoch != null) {
-                        if (registeredDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlotInPrevEpoch) < 0) {
-                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1);
+                        if (registeredDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlotInPrevEpoch) < 0) { // the DRep was updated before the first proposal was created
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1); // in this case, we plus 1, which is the value of the dormant epoch counter
                         } else {
                             dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
                         }
@@ -189,8 +186,8 @@ public class DRepExpiryProcessor {
                     if (!ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty()) {
                         dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
                     } else if (firstProposalCreatedSlotInPrevEpoch != null) {
-                        if (updatedDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlotInPrevEpoch) < 0) {
-                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1);
+                        if (updatedDRepsInPrevEpoch.get(dRepInfo).compareTo(firstProposalCreatedSlotInPrevEpoch) < 0) { // the DRep was updated before the first proposal was created
+                            dRepExpiry.setActiveUntil(prevEpoch + drepActivity + 1); // in this case, we plus 1, which is the value of the dormant epoch counter
                         } else {
                             dRepExpiry.setActiveUntil(prevEpoch + drepActivity);
                         }
