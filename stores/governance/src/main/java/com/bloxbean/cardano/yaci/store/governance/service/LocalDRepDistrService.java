@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
@@ -30,10 +31,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @LocalSupport
 @LocalDRepStake
 @ReadOnly(false)
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;

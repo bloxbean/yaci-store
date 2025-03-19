@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.adapot.snapshot;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +13,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_ADAPOT_ENABLED)
 @Slf4j
 public class InstantRewardSnapshotService {
     private final NamedParameterJdbcTemplate jdbcTemplate;

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
@@ -24,9 +25,11 @@ import java.math.BigInteger;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.common.util.AddressUtil.getAddress;
 
 @Component
+@EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class AddressTxAmountProcessor {
     public static final int BLOCK_ADDRESS_TX_AMT_THRESHOLD = 100; //Threshold to save address_tx_amounts records for block

@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.transaction"})
 @EnableTransactionManagement
 public class TransactionStoreConfiguration {
+    public final static String STORE_TRANSACTION_ENABLED = "store.transaction.enabled";
+    public final static String STORE_TRANSACTION_PRUNING_ENABLED = "store.transaction.pruning-enabled";
 
     @Autowired
     private DSLContext dslContext;

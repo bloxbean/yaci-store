@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.transaction.util.TransactionUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.helper.LocalTxMonitorClient;
 import com.bloxbean.cardano.yaci.helper.model.MempoolStatus;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.live.BlocksWebSocketHandler;
 import com.bloxbean.cardano.yaci.store.live.dto.MempoolTx;
 import com.bloxbean.cardano.yaci.store.live.dto.MempoolTxs;
@@ -17,12 +18,15 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.live.LiveStoreConfiguration.STORE_CARDANO_MEMPOOL_MONITORING_ENABLED;
+
 @Service
 @ConditionalOnBean(LocalClientProvider.class)
 @ConditionalOnProperty(
-        value="cardano.mempool.monitoring.enabled",
+        value=STORE_CARDANO_MEMPOOL_MONITORING_ENABLED,
         havingValue = "true"
 )
+@EnableIf(STORE_CARDANO_MEMPOOL_MONITORING_ENABLED)
 @Slf4j
 public class LocalTxMonitorService {
     private final LocalClientProvider localClientProvider;

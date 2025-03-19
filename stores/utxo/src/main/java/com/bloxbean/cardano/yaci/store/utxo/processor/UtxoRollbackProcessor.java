@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.processor;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.RequiredArgsConstructor;
@@ -8,8 +9,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_UTXO_ENABLED)
 @Slf4j
 public class UtxoRollbackProcessor {
     private final UtxoStorage utxoStorage;

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GenesisConstitution;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -24,8 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class ConstitutionProcessor {
     private final StoreProperties storeProperties;

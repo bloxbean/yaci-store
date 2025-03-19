@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -31,10 +32,11 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
+import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumHash;
-import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getPlutusScriptHash;
 
 @Component
+@EnableIf(STORE_SCRIPT_ENABLED)
 @Slf4j
 public class ScriptRedeemerDatumProcessor {
     private final TxScriptStorage txScriptStorage;

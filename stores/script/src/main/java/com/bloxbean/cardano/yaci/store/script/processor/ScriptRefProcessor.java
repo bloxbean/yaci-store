@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -21,11 +22,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.toPlutusScript;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.toScriptType;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_SCRIPT_ENABLED)
 @Slf4j
 public class ScriptRefProcessor {
     private final ScriptStorage scriptStorage;

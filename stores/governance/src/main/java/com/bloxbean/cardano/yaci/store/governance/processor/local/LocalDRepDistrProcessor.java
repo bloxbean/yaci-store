@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor.local;
 
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -11,9 +12,12 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @Slf4j
 @ConditionalOnBean(LocalDRepDistrService.class)
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 public class LocalDRepDistrProcessor {
     private final LocalDRepDistrService localDRepDistrService;
     private final LocalDRepDistrStorage localDRepDistrStorage;

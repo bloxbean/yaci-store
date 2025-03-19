@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.script"})
 @EnableTransactionManagement
 public class ScriptStoreConfiguration {
+    public final static String STORE_SCRIPT_ENABLED = "store.script.enabled";
 
     @Bean
     @ConditionalOnMissingBean

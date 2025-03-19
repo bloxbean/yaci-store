@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -21,9 +22,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
+
 //TODO -- Add tests
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_STAKING_ENABLED)
 @Slf4j
 public class PoolStatusProcessor {
     private final PoolStorage poolStorage;

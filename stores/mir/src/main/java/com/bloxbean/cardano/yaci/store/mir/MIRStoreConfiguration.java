@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.mir"})
 @EnableTransactionManagement
 public class MIRStoreConfiguration {
+    public final static String STORE_MIR_ENABLED = "store.mir.enabled";
 
     @Bean
     @ConditionalOnMissingBean
