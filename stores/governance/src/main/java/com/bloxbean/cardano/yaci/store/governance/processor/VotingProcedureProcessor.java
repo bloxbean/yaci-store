@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.governance.processor;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.Voter;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxGovernance;
@@ -21,8 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class VotingProcedureProcessor {
 

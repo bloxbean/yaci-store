@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
 import com.bloxbean.cardano.yaci.store.transaction.domain.WithdrawalEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.WithdrawalStorage;
@@ -21,6 +23,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(TransactionStoreConfiguration.STORE_TRANSACTION_ENABLED)
 @Slf4j
 public class WithdrawalProcessor {
     private final WithdrawalStorage withdrawalStorage;

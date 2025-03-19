@@ -9,10 +9,10 @@ services:
     networks:
       - yaci-store-net
 
-  yaci-store-all:
+  yaci-store:
     extends:
-      file: yaci-store-all.yml
-      service: yaci-store-all
+      file: yaci-store.yml
+      service: yaci-store
     depends_on:
       yaci-store-postgres:
         condition: service_healthy

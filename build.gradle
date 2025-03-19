@@ -21,7 +21,10 @@ subprojects {
         }
     }
 
-    archivesBaseName = 'yaci-store-' + project.name
+    if (project.name == "all") {
+        archivesBaseName = 'yaci-store';
+    } else
+        archivesBaseName = 'yaci-store-' + project.name
 
     def commit_id=getCheckedOutGitCommitHash()
     if (project.version.endsWith("-SNAPSHOT")) {
@@ -84,6 +87,95 @@ subprojects {
     test {
         useJUnitPlatform()
     }
+}
+
+def commit_id=getCheckedOutGitCommitHash()
+def final_version = project.version
+if (project.version.endsWith("-SNAPSHOT")) {
+    final_version = "${project.version}".replace("-SNAPSHOT", "-${commit_id}-SNAPSHOT")
+}
+
+task distZip(type: Zip) {
+    dependsOn ':applications:all:bootJar', ':applications:ledger-state:bootJar', ':applications:admin-cli:bootJar'
+
+    if (gradle.taskGraph.hasTask(distZip)) {
+        dependsOn build
+    }
+
+    print(final_version)
+
+    def zipDirName ="yaci-store-${final_version}"
+    def configDir = "config"
+    def binDir = "bin"
+
+    from('applications/all/build/libs') {
+        include "yaci-store-${final_version}.jar"
+        into(zipDirName)
+        rename "yaci-store-${final_version}.jar", "yaci-store.jar"
+    }
+
+    from('applications/ledger-state/build/libs') {
+        include "yaci-store-ledger-state-${final_version}.jar"
+        into(zipDirName)
+        rename "yaci-store-ledger-state-${final_version}.jar", "yaci-store-ledger-state.jar"
+    }
+
+    from('applications/admin-cli/build/libs') {
+        include "yaci-store-admin-cli-${final_version}.jar"
+        into(zipDirName)
+        rename "yaci-store-admin-cli-${final_version}.jar", "yaci-store-admin-cli.jar"
+    }
+
+    from('./') {
+        into(zipDirName)
+        include 'LICENSE'
+    }
+
+    from('./config') {
+        include 'application.properties'
+        include 'application-ledger-state.properties'
+        into zipDirName + '/' + configDir
+    }
+
+    from('./bin') {
+        include("*.sh", "*.bat")
+        into zipDirName + '/' + binDir
+        eachFile { file ->
+            if (file.name.endsWith(".sh")) {
+                file.mode = 0b111101101  // 755 in octal
+            }
+        }
+    }
+
+    archiveFileName = "yaci-store-${final_version}.zip"
+
+    destinationDirectory = file("applications/build/dist")
+}
+
+task dockerZip(type: Zip) {
+    def zipDirName ="yaci-store-docker-${final_version}"
+
+    from('./') {
+        into(zipDirName)
+        include 'LICENSE'
+    }
+
+    from('./docker') {
+        into(zipDirName)
+        include '*.yml'
+        include '*.sh'
+        include 'env'
+    }
+
+    from('./config') {
+        include 'application.properties'
+        include 'application-ledger-state.properties'
+        into zipDirName
+    }
+
+    archiveFileName = "yaci-store-docker-${final_version}.zip"
+
+    destinationDirectory = file("applications/build/dist")
 }
 
 def getCheckedOutGitCommitHash() {

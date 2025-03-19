@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GenesisCommitteeMember;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -30,8 +31,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class CommitteeMemberProcessor {
     private final StoreProperties storeProperties;

@@ -9,10 +9,10 @@ services:
     networks:
       - yaci-store-net
 
-  yaci-store-aggregation:
+  yaci-store-ledger-state:
     extends:
-      file: yaci-store-aggregation.yml
-      service: yaci-store-aggregation
+      file: yaci-store-ledger-state.yml
+      service: yaci-store-ledger-state
     depends_on:
       yaci-store-postgres:
         condition: service_healthy

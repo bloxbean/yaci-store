@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.domain.AddressTxAmount;
 import com.bloxbean.cardano.yaci.store.account.storage.AddressTxAmountStorage;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +18,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.common.util.AddressUtil.getAddress;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class GensisBlockAddressTxAmtProcessor {
     private final AddressTxAmountStorage addressTxAmountStorage;

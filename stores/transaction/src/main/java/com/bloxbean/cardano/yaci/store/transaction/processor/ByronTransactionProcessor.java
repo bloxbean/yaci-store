@@ -8,11 +8,13 @@ import com.bloxbean.cardano.yaci.core.model.byron.payload.ByronTxPayload;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(TransactionStoreConfiguration.STORE_TRANSACTION_ENABLED)
 @Slf4j
 public class ByronTransactionProcessor {
 

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Amount;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronTx;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronTxOut;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
@@ -27,9 +28,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
 
 @Component
 @RequiredArgsConstructor
+@EnableIf(STORE_UTXO_ENABLED)
 @Slf4j
 public class ByronUtxoProcessor {
     private final UtxoStorage utxoStorage;
