@@ -88,12 +88,8 @@ public class DRepExpiryProcessor {
         // get last epoch (before the prev epoch) that had ratified or active proposals
         Optional<Integer> lastEpochsHadRatifiedOrActiveProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
-        int dormantEpochsCount = 0;
-
-        if (lastEpochsHadRatifiedOrActiveProposalsOpt.isEmpty()) {
-            // TODO
-        } else
-            dormantEpochsCount = prevEpoch - lastEpochsHadRatifiedOrActiveProposalsOpt.get() - 1;
+        int dormantEpochsCount = lastEpochsHadRatifiedOrActiveProposalsOpt
+                .map(epochCount -> prevEpoch - epochCount - 1).orElseGet(() -> prevEpoch - 1);
 
         final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
                 .stream()
