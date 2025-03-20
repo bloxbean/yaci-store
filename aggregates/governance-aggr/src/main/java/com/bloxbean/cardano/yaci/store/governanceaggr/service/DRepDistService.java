@@ -140,6 +140,15 @@ public class DRepDistService {
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
         String query1 = """
+                  WITH latest_drep_deregister AS (
+                          select
+                              drep_id,
+                              MAX(slot) AS last_deregistered_slot 
+                          from drep
+                          where status = 'RETIRED'
+                            and epoch <= :epoch
+                          group by drep_id
+                  )
                   INSERT INTO drep_dist               
                   select
                     rd.drep_hash,
@@ -158,6 +167,7 @@ public class DRepDistService {
                     ss_drep_ranked_delegations rd
                     left join ss_drep_status ds on rd.drep_id = ds.drep_id
                     and rd.rn = 1
+                    left join latest_drep_deregister ldd ON rd.drep_id = ldd.drep_id
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_insta_spendable_rewards ir on rd.address = ir.address
@@ -177,7 +187,10 @@ public class DRepDistService {
                   where
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
-                    and sd.address IS NULL           
+                    and sd.address IS NULL
+                    and (
+                      ldd.last_deregistered_slot IS NULL
+                      or rd.slot > ldd.last_deregistered_slot)
                   group by
                     rd.drep_hash,
                     rd.drep_id
