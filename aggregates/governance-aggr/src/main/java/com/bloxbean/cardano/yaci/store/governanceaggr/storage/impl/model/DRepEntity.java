@@ -54,6 +54,9 @@ public class DRepEntity extends BlockAwareEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
+    @Column(name = "registration_slot")
+    private Long registrationSlot;
+
     @Column(name = "block_hash")
     private String blockHash;
 }
