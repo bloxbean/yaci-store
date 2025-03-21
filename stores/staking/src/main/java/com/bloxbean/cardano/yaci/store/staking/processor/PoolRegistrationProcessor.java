@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -24,6 +25,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,6 +69,10 @@ public class PoolRegistrationProcessor {
                         }
                     }
 
+                    var marginTuple = getMarginNumeratorDenominator(poolRegistrationCert.getPoolParams().getMargin());
+                    var marginNumerator = marginTuple._1;
+                    var marginDenominator = marginTuple._2;
+
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
                             .certIndex(index)
@@ -75,7 +81,8 @@ public class PoolRegistrationProcessor {
                             .vrfKeyHash(poolRegistrationCert.getPoolParams().getVrfKeyHash())
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
-                            .margin(poolMarginToDouble(poolRegistrationCert.getPoolParams().getMargin()))
+                            .marginNumerator(marginNumerator)
+                            .marginDenominator(marginDenominator)
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolRegistrationCert.getPoolParams().getPoolOwners())
                             .relays(poolRegistrationCert.getPoolParams().getRelays())
@@ -124,18 +131,19 @@ public class PoolRegistrationProcessor {
         }
     }
 
-    private double poolMarginToDouble(String margin) {
+    private Tuple<BigInteger, BigInteger> getMarginNumeratorDenominator(String margin) {
+        if (margin == null)
+            return new Tuple<>(BigInteger.ZERO, BigInteger.ZERO);
+
         String[] tokens = margin.split("/");
-        if(tokens.length == 2) {
-            //handle divide by zero
-            if(Double.parseDouble(tokens[1]) == 0) {
-                log.error("Invalid margin value: " + margin);
-                return 0.0;
-            }
-            return Double.parseDouble(tokens[0]) / Double.parseDouble(tokens[1]);
+
+        if (tokens.length == 2) {
+            var numerator = new BigInteger(tokens[0]);
+            var denominator = new BigInteger(tokens[1]);
+
+            return new Tuple<>(numerator, denominator);
         } else {
-            log.error("Invalid margin value: " + margin);
-            return 0.0;
+            return new Tuple<>(BigInteger.ZERO, BigInteger.ZERO);
         }
     }
 

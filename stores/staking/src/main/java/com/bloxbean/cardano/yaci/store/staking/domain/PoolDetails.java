@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Set;
@@ -25,7 +26,8 @@ public class PoolDetails {
     private String vrfKeyHash;
     private BigInteger pledge;
     private BigInteger cost;
-    private double margin;
+    private BigInteger marginNumerator;
+    private BigInteger marginDenominator;
     private String rewardAccount; //stake address
     private Set<String> poolOwners;
     private List<Relay> relays;
@@ -37,4 +39,20 @@ public class PoolDetails {
     private Integer certIndex;
     private PoolStatusType status;
     private Integer retireEpoch;
+
+    //derived
+    public BigDecimal getMargin() {
+        if (marginNumerator == null || marginDenominator == null)
+            return BigDecimal.ZERO;
+
+        //handle divide by zero
+        if (marginDenominator == BigInteger.ZERO) {
+            return BigDecimal.ZERO;
+        }
+
+        var numerator = new BigDecimal(marginNumerator);
+        var denominator = new BigDecimal(marginDenominator);
+
+        return numerator.divide(denominator);
+    }
 }

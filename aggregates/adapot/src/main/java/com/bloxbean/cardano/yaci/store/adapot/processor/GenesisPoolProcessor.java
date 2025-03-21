@@ -29,6 +29,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
@@ -84,7 +85,7 @@ public class GenesisPoolProcessor {
                             .vrfKeyHash(poolParams.getVrfKeyHash())
                             .pledge(poolParams.getPledge())
                             .cost(poolParams.getCost())
-                            .margin(Double.parseDouble(poolParams.getMargin()))
+                            .margin(new BigDecimal(poolParams.getMargin()))
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolParams.getPoolOwners())
                             .relays(poolParams.getRelays())

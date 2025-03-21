@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Set;
@@ -98,7 +99,7 @@ class PoolRegistrationProcessorTest {
         assertThat(poolRegistrationSaved.getVrfKeyHash()).isEqualTo(poolRegistrationCert.getPoolParams().getVrfKeyHash());
         assertThat(poolRegistrationSaved.getPledge()).isEqualTo(poolRegistrationCert.getPoolParams().getPledge());
         assertThat(poolRegistrationSaved.getCost()).isEqualTo(poolRegistrationCert.getPoolParams().getCost());
-        assertThat(poolRegistrationSaved.getMargin()).isEqualTo(0.075);
+        assertThat(poolRegistrationSaved.getMargin()).isEqualTo(new BigDecimal("0.075"));
         assertThat(poolRegistrationSaved.getRewardAccount()).isEqualTo("stake_test1uq5teukd4ta7wdf2fuyuhjxpyaa8y373jd2hwtklfwyu4es7clcde");
         assertThat(poolRegistrationSaved.getPoolOwners()).isEqualTo(poolRegistrationCert.getPoolParams().getPoolOwners());
         assertThat(poolRegistrationSaved.getRelays()).isEqualTo(poolRegistrationCert.getPoolParams().getRelays());
