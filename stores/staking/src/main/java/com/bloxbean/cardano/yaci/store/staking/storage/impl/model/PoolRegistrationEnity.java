@@ -47,6 +47,9 @@ public class PoolRegistrationEnity extends BlockAwareEntity {
     @Column(name = "cost")
     private BigInteger cost;
 
+    @Column(name = "margin")
+    private Double margin;
+
     @Column(name = "margin_numerator")
     private BigInteger marginNumerator;
 

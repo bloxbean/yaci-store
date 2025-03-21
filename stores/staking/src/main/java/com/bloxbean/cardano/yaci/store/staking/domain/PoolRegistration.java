@@ -12,7 +12,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Set;
@@ -31,7 +30,7 @@ public class PoolRegistration extends BlockAwareDomain {
     private String vrfKeyHash;
     private BigInteger pledge;
     private BigInteger cost;
-    private BigDecimal margin;
+    private double margin;
     private BigInteger marginNumerator;
     private BigInteger marginDenominator;
     private String rewardAccount; //stake address
@@ -52,19 +51,4 @@ public class PoolRegistration extends BlockAwareDomain {
         return Bech32.encode(HexUtil.decodeHexString(poolId), "pool");
     }
 
-    //derived
-    public BigDecimal getMargin() {
-        if (marginNumerator == null || marginDenominator == null)
-            return BigDecimal.ZERO;
-
-        //handle divide by zero
-        if (marginDenominator == BigInteger.ZERO) {
-            return BigDecimal.ZERO;
-        }
-
-        var numerator = new BigDecimal(marginNumerator);
-        var denominator = new BigDecimal(marginDenominator);
-
-        return numerator.divide(denominator);
-    }
 }

@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -25,10 +24,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.stringToNumeratorDenominator;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
 @Component
@@ -69,9 +69,13 @@ public class PoolRegistrationProcessor {
                         }
                     }
 
-                    var marginTuple = getMarginNumeratorDenominator(poolRegistrationCert.getPoolParams().getMargin());
+                    var marginTuple = stringToNumeratorDenominator(poolRegistrationCert.getPoolParams().getMargin());
                     var marginNumerator = marginTuple._1;
                     var marginDenominator = marginTuple._2;
+
+                    //This value is just for display purpose.
+                    //For calc like reward calc, numerator and denominator are used to avoid rounding issue
+                    double margin = safeRatio(marginNumerator, marginDenominator).doubleValue();
 
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
@@ -81,6 +85,7 @@ public class PoolRegistrationProcessor {
                             .vrfKeyHash(poolRegistrationCert.getPoolParams().getVrfKeyHash())
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
+                            .margin(margin)
                             .marginNumerator(marginNumerator)
                             .marginDenominator(marginDenominator)
                             .rewardAccount(rewardAddressBech32)
@@ -128,22 +133,6 @@ public class PoolRegistrationProcessor {
 
             if (poolRetirements.size() > 0)
                 publisher.publishEvent(new PoolRetirementEvent(eventMetadata, poolRetirements));
-        }
-    }
-
-    private Tuple<BigInteger, BigInteger> getMarginNumeratorDenominator(String margin) {
-        if (margin == null)
-            return new Tuple<>(BigInteger.ZERO, BigInteger.ZERO);
-
-        String[] tokens = margin.split("/");
-
-        if (tokens.length == 2) {
-            var numerator = new BigInteger(tokens[0]);
-            var denominator = new BigInteger(tokens[1]);
-
-            return new Tuple<>(numerator, denominator);
-        } else {
-            return new Tuple<>(BigInteger.ZERO, BigInteger.ZERO);
         }
     }
 

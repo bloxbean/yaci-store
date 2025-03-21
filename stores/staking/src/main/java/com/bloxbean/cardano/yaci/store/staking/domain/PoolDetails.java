@@ -14,6 +14,8 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Set;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -42,17 +44,6 @@ public class PoolDetails {
 
     //derived
     public BigDecimal getMargin() {
-        if (marginNumerator == null || marginDenominator == null)
-            return BigDecimal.ZERO;
-
-        //handle divide by zero
-        if (marginDenominator == BigInteger.ZERO) {
-            return BigDecimal.ZERO;
-        }
-
-        var numerator = new BigDecimal(marginNumerator);
-        var denominator = new BigDecimal(marginDenominator);
-
-        return numerator.divide(denominator);
+        return safeRatio(marginNumerator, marginDenominator);
     }
 }
