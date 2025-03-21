@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.staking.domain;
 
-import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.Relay;
@@ -32,6 +31,8 @@ public class PoolRegistration extends BlockAwareDomain {
     private BigInteger pledge;
     private BigInteger cost;
     private double margin;
+    private BigInteger marginNumerator;
+    private BigInteger marginDenominator;
     private String rewardAccount; //stake address
     private Set<String> poolOwners;
     private List<Relay> relays;
@@ -49,4 +50,5 @@ public class PoolRegistration extends BlockAwareDomain {
             return "";
         return Bech32.encode(HexUtil.decodeHexString(poolId), "pool");
     }
+
 }

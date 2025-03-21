@@ -74,6 +74,8 @@ create table pool_registration
     pledge          numeric(20, 0),
     cost            numeric(20, 0),
     margin          double,
+    margin_numerator   numeric(20,0),
+    margin_denominator numeric(20, 0),
     reward_account  varchar(255),
     pool_owners     json,
     relays          json,
