@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
@@ -29,6 +30,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
@@ -76,6 +78,23 @@ public class GenesisPoolProcessor {
                     Address rewardAddress = new Address(HexUtil.decodeHexString(poolParams.getRewardAccount()));
                     String rewardAddressBech32 = rewardAddress.toBech32();
 
+                    BigInteger numerator;
+                    BigInteger denominator;
+                    Double marginDbl;
+                    if (poolParams.getMargin() != null &&
+                            poolParams.getMargin().contains("/")) {
+                        var marginTuple = UnitIntervalUtil.stringToNumeratorDenominator(poolParams.getMargin());
+                        numerator = marginTuple._1;
+                        denominator = marginTuple._2;
+                        marginDbl = UnitIntervalUtil.safeRatio(numerator, denominator).doubleValue();
+                    } else {
+                        BigDecimal margin = new BigDecimal(poolParams.getMargin());
+                        var tuple = UnitIntervalUtil.marginToNumeratorDenominator(margin);
+                        numerator = tuple._1;
+                        denominator = tuple._2;
+                        marginDbl = margin.doubleValue();
+                    }
+
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(genesisTxHash)
                             .certIndex(0)
@@ -84,7 +103,9 @@ public class GenesisPoolProcessor {
                             .vrfKeyHash(poolParams.getVrfKeyHash())
                             .pledge(poolParams.getPledge())
                             .cost(poolParams.getCost())
-                            .margin(Double.parseDouble(poolParams.getMargin()))
+                            .margin(marginDbl)
+                            .marginNumerator(numerator)
+                            .marginDenominator(denominator)
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolParams.getPoolOwners())
                             .relays(poolParams.getRelays())

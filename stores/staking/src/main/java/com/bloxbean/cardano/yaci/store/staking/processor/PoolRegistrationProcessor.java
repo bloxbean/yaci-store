@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.stringToNumeratorDenominator;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
 @Component
@@ -67,6 +69,14 @@ public class PoolRegistrationProcessor {
                         }
                     }
 
+                    var marginTuple = stringToNumeratorDenominator(poolRegistrationCert.getPoolParams().getMargin());
+                    var marginNumerator = marginTuple._1;
+                    var marginDenominator = marginTuple._2;
+
+                    //This value is just for display purpose.
+                    //For calc like reward calc, numerator and denominator are used to avoid rounding issue
+                    double margin = safeRatio(marginNumerator, marginDenominator).doubleValue();
+
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
                             .certIndex(index)
@@ -75,7 +85,9 @@ public class PoolRegistrationProcessor {
                             .vrfKeyHash(poolRegistrationCert.getPoolParams().getVrfKeyHash())
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
-                            .margin(poolMarginToDouble(poolRegistrationCert.getPoolParams().getMargin()))
+                            .margin(margin)
+                            .marginNumerator(marginNumerator)
+                            .marginDenominator(marginDenominator)
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolRegistrationCert.getPoolParams().getPoolOwners())
                             .relays(poolRegistrationCert.getPoolParams().getRelays())
@@ -121,21 +133,6 @@ public class PoolRegistrationProcessor {
 
             if (poolRetirements.size() > 0)
                 publisher.publishEvent(new PoolRetirementEvent(eventMetadata, poolRetirements));
-        }
-    }
-
-    private double poolMarginToDouble(String margin) {
-        String[] tokens = margin.split("/");
-        if(tokens.length == 2) {
-            //handle divide by zero
-            if(Double.parseDouble(tokens[1]) == 0) {
-                log.error("Invalid margin value: " + margin);
-                return 0.0;
-            }
-            return Double.parseDouble(tokens[0]) / Double.parseDouble(tokens[1]);
-        } else {
-            log.error("Invalid margin value: " + margin);
-            return 0.0;
         }
     }
 

@@ -117,7 +117,7 @@ public class PoolStateService {
                 poolState.setRewardAddress(rewardAccount);
 
                 poolState.setFixedCost(latestUpdate.getCost());
-                poolState.setMargin(latestUpdate.getMargin());
+                poolState.setMargin(latestUpdate.getMargin() != null? latestUpdate.getMargin().doubleValue() : 0);
                 poolState.setPledge(latestUpdate.getPledge());
                 poolState.setEpoch(epoch);
                 poolState.setPoolId(PoolUtil.getBech32PoolId(poolId)); //bech32
