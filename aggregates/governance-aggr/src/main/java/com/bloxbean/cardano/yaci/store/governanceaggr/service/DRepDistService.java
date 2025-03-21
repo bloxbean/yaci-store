@@ -72,7 +72,10 @@ public class DRepDistService {
                 select
                       drep_id,
                       drep_hash,
+                      tx_index,
+                      cert_index,
                       status,
+                      registration_slot,
                       slot,
                       row_number() over (
                         partition by drep_id
@@ -140,15 +143,6 @@ public class DRepDistService {
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
         String query1 = """
-                  WITH latest_drep_deregister AS (
-                          select
-                              drep_id,
-                              MAX(slot) AS last_deregistered_slot 
-                          from drep
-                          where status = 'RETIRED'
-                            and epoch <= :epoch
-                          group by drep_id
-                  )
                   INSERT INTO drep_dist               
                   select
                     rd.drep_hash,
@@ -167,7 +161,6 @@ public class DRepDistService {
                     ss_drep_ranked_delegations rd
                     left join ss_drep_status ds on rd.drep_id = ds.drep_id
                     and rd.rn = 1
-                    left join latest_drep_deregister ldd ON rd.drep_id = ldd.drep_id
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_insta_spendable_rewards ir on rd.address = ir.address
@@ -188,9 +181,11 @@ public class DRepDistService {
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
                     and sd.address IS NULL
-                    and (
-                      ldd.last_deregistered_slot IS NULL
-                      or rd.slot > ldd.last_deregistered_slot)
+                    and 
+                      (rd.slot > ds.registration_slot
+                           or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
+                           or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.cert_index > ds.cert_index)
+                      )
                   group by
                     rd.drep_hash,
                     rd.drep_id
