@@ -27,4 +27,6 @@ public interface VotingProcedureRepository extends JpaRepository<VotingProcedure
     Slice<VotingProcedureEntity> findBySlotGreaterThan(Long slot, Pageable pageable);
 
     List<VotingProcedureEntity> findByVoterTypeAndEpochIsGreaterThanEqual(VoterType voterType, int epoch);
+
+    List<VotingProcedureEntity> findByVoterTypeInAndEpochEquals(List<VoterType> voterTypes, int epoch);
 }
