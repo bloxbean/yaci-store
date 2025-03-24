@@ -29,12 +29,17 @@ public class TxSubmitController {
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody byte[] txBytes) {
-            return invokeSubmitApiUrl(txBytes);
+        if (log.isDebugEnabled())
+            log.debug("Submitting tx to : " + submitApiUrl);
+
+        return invokeSubmitApiUrl(txBytes);
 
     }
 
     @PostMapping(value = "submit", consumes = {MediaType.TEXT_PLAIN_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody String txBytesHex) {
+        if (log.isDebugEnabled())
+            log.debug("Submitting tx to : " + submitApiUrl);
         byte[] txBytes = HexUtil.decodeHexString(txBytesHex);
             return invokeSubmitApiUrl(txBytes);
     }
@@ -52,6 +57,7 @@ public class TxSubmitController {
 
             return responseEntity;
         } catch (Exception e) {
+            log.error("Error submit tx", e);
             return ResponseEntity.badRequest()
                     .body(e.getMessage());
         }
