@@ -1,7 +1,12 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -13,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -20,11 +26,29 @@ import java.util.Map;
 public class DRepDistService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final EraService eraService;
+    private final EpochParamStorage epochParamStorage;
+    private final GovernanceAggrProperties governanceAggrProperties;
+    private final StoreProperties storeProperties;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
         if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
             return;
+        }
+
+        boolean isInBootstrapPhase = true;
+
+        if (isPublicNetwork()) {
+            Optional<EpochParam> epochParamOpt = epochParamStorage.getProtocolParams(epoch);
+
+            if (epochParamOpt.isPresent()) {
+                var protocolParams = epochParamOpt.get().getParams();
+                if (protocolParams.getProtocolMajorVer() >= 10) {
+                    isInBootstrapPhase = false;
+                }
+            }
+        } else {
+            isInBootstrapPhase = governanceAggrProperties.isDevnetConwayBootstrapAvailable();
         }
 
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
@@ -142,6 +166,21 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
+        String excludeDelegationByRegistrationSlotCondition = isInBootstrapPhase
+                ? """
+            (
+                rd.slot > ds.registration_slot
+                or (rd.slot = ds.registration_slot and rd.tx_index >= ds.tx_index)
+            )
+          """
+                : """
+            (
+                rd.slot > ds.registration_slot
+                or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
+                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.cert_index > ds.cert_index)
+            )
+          """;
+
         String query1 = """
                   INSERT INTO drep_dist               
                   select
@@ -181,11 +220,7 @@ public class DRepDistService {
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
                     and sd.address IS NULL
-                    and 
-                      (rd.slot > ds.registration_slot
-                           or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
-                           or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.cert_index > ds.cert_index)
-                      )
+                    and  """ + excludeDelegationByRegistrationSlotCondition + """
                   group by
                     rd.drep_hash,
                     rd.drep_id
@@ -243,5 +278,11 @@ public class DRepDistService {
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
         log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", epoch, (t2 - t1));
 
+    }
+
+    private boolean isPublicNetwork() {
+        return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
     }
 }
