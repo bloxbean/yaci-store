@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.epoch.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.HardForkInitiationAction;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -118,12 +119,21 @@ public class EpochParamProcessor {
                     proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, newEpoch - 1);
 
             for (var proposal : ratifiedProposalsInPrevEpoch) {
-                if (proposal.getGovAction() != null && proposal.getGovAction().getType() == GovActionType.PARAMETER_CHANGE_ACTION) {
-                    ParameterChangeAction parameterChangeAction = (ParameterChangeAction) proposal.getGovAction();
-                    ProtocolParamUpdate protocolParamUpdate = parameterChangeAction.getProtocolParamUpdate();
+                if (proposal.getGovAction() != null) {
+                    if (proposal.getGovAction().getType() == GovActionType.PARAMETER_CHANGE_ACTION) {
+                        ParameterChangeAction parameterChangeAction = (ParameterChangeAction) proposal.getGovAction();
+                        ProtocolParamUpdate protocolParamUpdate = parameterChangeAction.getProtocolParamUpdate();
 
-                    if (protocolParamUpdate != null)
-                        protocolParams.merge(mapper.toProtocolParams(protocolParamUpdate));
+                        if (protocolParamUpdate != null)
+                            protocolParams.merge(mapper.toProtocolParams(protocolParamUpdate));
+                    } else if (proposal.getGovAction().getType() == GovActionType.HARD_FORK_INITIATION_ACTION) {
+                        HardForkInitiationAction hardForkInitiationAction = (HardForkInitiationAction) proposal.getGovAction();
+
+                        if (hardForkInitiationAction.getProtocolVersion() != null) {
+                            protocolParams.setProtocolMajorVer((int) hardForkInitiationAction.getProtocolVersion().get_1());
+                            protocolParams.setProtocolMinorVer((int) hardForkInitiationAction.getProtocolVersion().get_2());
+                        }
+                    }
                 }
             }
         }
