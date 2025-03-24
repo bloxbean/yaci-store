@@ -43,7 +43,9 @@ public class TxUtilController {
 
     @PostMapping(value = "evaluate/utxos",
             consumes = {MediaType.APPLICATION_JSON_VALUE})
-    @Operation(description = "Evaluate a CBOR encoded transaction. Returns the evaluation result")
+    @Operation(description = "Evaluate a CBOR encoded transaction. Returns the evaluation result. " +
+            "Though additional utxos can be provided, it is not currently used in the implementation. " +
+            "It is there for compatibility with the Blockfrost API")
     public ResponseEntity<String> evaluateTx(@RequestBody EvaluateRequest evaluateRequest,
                                              @RequestParam(value = "version",defaultValue = "5")
                                              @Parameter(description = "Optional parameter to specify the version of the Ogmios service to use. Default is 5. Set to 6 to use Ogmios version 6.")
