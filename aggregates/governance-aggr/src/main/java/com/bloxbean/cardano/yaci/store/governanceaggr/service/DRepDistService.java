@@ -2,13 +2,21 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,6 +24,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,8 +36,9 @@ public class DRepDistService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final EraService eraService;
     private final EpochParamStorage epochParamStorage;
-    private final GovernanceAggrProperties governanceAggrProperties;
+    private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final StoreProperties storeProperties;
+    private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
@@ -37,6 +47,7 @@ public class DRepDistService {
         }
 
         boolean isInBootstrapPhase = true;
+        int maxBootstrapPhaseEpoch = 0;
 
         if (isPublicNetwork()) {
             Optional<EpochParam> epochParamOpt = epochParamStorage.getProtocolParams(epoch);
@@ -45,10 +56,23 @@ public class DRepDistService {
                 var protocolParams = epochParamOpt.get().getParams();
                 if (protocolParams.getProtocolMajorVer() >= 10) {
                     isInBootstrapPhase = false;
+                    // find max epoch of the bootstrap phase
+                    maxBootstrapPhaseEpoch = govActionProposalStatusStorage.findByTypeAndStatusAndEpochLessThan(GovActionType.HARD_FORK_INITIATION_ACTION, GovActionStatus.RATIFIED, epoch)
+                            .stream()
+                            .sorted(Comparator.comparingInt(GovActionProposalStatus::getEpoch))
+                            .toList()
+                            .getFirst()
+                            .getEpoch();
                 }
             }
         } else {
-            isInBootstrapPhase = governanceAggrProperties.isDevnetConwayBootstrapAvailable();
+            ProtocolParams genesisProtocolParams = eraGenesisProtocolParamsUtil
+                    .getGenesisProtocolParameters(Era.Conway, null, storeProperties.getProtocolMagic())
+                    .orElse(null);
+
+            if (genesisProtocolParams != null && genesisProtocolParams.getProtocolMajorVer() >= 10) {
+                isInBootstrapPhase = false;
+            }
         }
 
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
@@ -166,20 +190,18 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
-        String excludeDelegationByRegistrationSlotCondition = isInBootstrapPhase
-                ? """
-            (
-                rd.slot > ds.registration_slot
-                or (rd.slot = ds.registration_slot and rd.tx_index >= ds.tx_index)
-            )
-          """
-                : """
-            (
+        String excludeDelegationByRegistrationSlotCondition = Strings.EMPTY;
+
+        if (!isInBootstrapPhase) {
+            excludeDelegationByRegistrationSlotCondition = """
+              AND  (
                 rd.slot > ds.registration_slot
                 or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
-                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.cert_index > ds.cert_index)
+                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
+                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch > :max_bootstrap_phase_epoch && rd.cert_index > ds.cert_index)
             )
           """;
+        }
 
         String query1 = """
                   INSERT INTO drep_dist               
@@ -220,7 +242,7 @@ public class DRepDistService {
                     ds.status = 'ACTIVE'
                     and ds.rn = 1
                     and sd.address IS NULL
-                    and  """ + excludeDelegationByRegistrationSlotCondition + """
+                    """ + excludeDelegationByRegistrationSlotCondition + """
                   group by
                     rd.drep_hash,
                     rd.drep_id
@@ -268,6 +290,9 @@ public class DRepDistService {
         var params = new MapSqlParameterSource();
         params.addValue("epoch", epoch);
         params.addValue("snapshot_epoch", epoch + 1);
+        if (!isInBootstrapPhase) {
+            params.addValue("max_bootstrap_phase_epoch", maxBootstrapPhaseEpoch);
+        }
 
         long t1 = System.currentTimeMillis();
         jdbcTemplate.update(query1, params);
