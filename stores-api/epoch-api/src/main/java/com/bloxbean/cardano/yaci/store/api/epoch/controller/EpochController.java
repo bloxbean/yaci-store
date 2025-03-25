@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 
-import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochNo;
+import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochDto;
 import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +49,7 @@ public class EpochController {
 
     @GetMapping("latest")
     @Operation(summary = "Latest Epoch", description = "Get latest epoch.")
-    public EpochNo getLatestEpoch() {
-        return epochParamService.getLatestEpoch();
+    public EpochDto getLatestEpoch() {
+        return epochParamService.getEpochDetails(epochParamService.getLatestEpoch());
     }
 }
