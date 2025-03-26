@@ -198,7 +198,7 @@ public class DRepDistService {
                 rd.slot > ds.registration_slot
                 or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
                 or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
-                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch > :max_bootstrap_phase_epoch && rd.cert_index > ds.cert_index)
+                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.cert_index)
             )
           """;
         }
