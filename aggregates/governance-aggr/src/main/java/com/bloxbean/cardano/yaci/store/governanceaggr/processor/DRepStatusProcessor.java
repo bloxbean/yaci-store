@@ -27,7 +27,6 @@ import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfi
 @RequiredArgsConstructor
 @EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
-// todo: 'inactive', 'active again' case
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;
 
@@ -65,20 +64,25 @@ public class DRepStatusProcessor {
                             .blockHash(metadata.getBlockHash());
 
                     if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
+                        dRepBuilder.registrationSlot(drepRegistrationEvent.getMetadata().getSlot());
                         dRepBuilder.status(DRepStatus.ACTIVE);
                     } else {
-                        var recentDRepOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
+                        var recentDRepRegistrationOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
 
-                        if (recentDRepOpt.isEmpty()) {
-                            var regisDRep = dReps.stream().filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId())).findFirst();
+                        if (recentDRepRegistrationOpt.isEmpty()) {
+                            var regisDRep = dReps.stream()
+                                    .filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId()))
+                                    .reduce((first, second) -> second);
 
                             if (regisDRep.isEmpty()) {
                                 log.error("Cannot find recent dRep registration");
                             } else {
+                                dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
                                 dRepBuilder.deposit(regisDRep.get().getDeposit());
                             }
                         } else {
-                            dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
+                            dRepBuilder.registrationSlot(recentDRepRegistrationOpt.get().getRegistrationSlot());
+                            dRepBuilder.deposit(recentDRepRegistrationOpt.get().getDeposit());
                         }
 
                         if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
