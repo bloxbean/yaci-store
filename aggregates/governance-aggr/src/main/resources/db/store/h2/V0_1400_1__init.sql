@@ -27,6 +27,7 @@ create table drep
     status            varchar(50),
     deposit           bigint,
     epoch             int,
+    registration_slot bigint,
     slot              bigint,
     block_hash        varchar(64),
     block             bigint,
