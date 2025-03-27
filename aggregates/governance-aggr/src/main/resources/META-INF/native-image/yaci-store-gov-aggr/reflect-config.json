@@ -16,5 +16,11 @@
     "allPublicConstructors": true,
     "allPublicFields": true,
     "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepExpiry ",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
   }
 ]

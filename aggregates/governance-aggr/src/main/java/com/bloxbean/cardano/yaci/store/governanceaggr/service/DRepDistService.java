@@ -10,8 +10,6 @@ import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import lombok.RequiredArgsConstructor;
@@ -239,7 +237,7 @@ public class DRepDistService {
                                                  (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
                                                  )
                   where
-                    ds.status = 'ACTIVE'
+                    (ds.status = 'REGISTERED' OR ds.status = 'UPDATED')
                     and ds.rn = 1
                     and sd.address IS NULL
                     """ + excludeDelegationByRegistrationSlotCondition + """
