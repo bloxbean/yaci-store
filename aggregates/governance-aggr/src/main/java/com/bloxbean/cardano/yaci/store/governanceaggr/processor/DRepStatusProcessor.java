@@ -65,7 +65,7 @@ public class DRepStatusProcessor {
 
                     if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
                         dRepBuilder.registrationSlot(drepRegistrationEvent.getMetadata().getSlot());
-                        dRepBuilder.status(DRepStatus.ACTIVE);
+                        dRepBuilder.status(DRepStatus.REGISTERED);
                     } else {
                         var recentDRepRegistrationOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
 
@@ -86,7 +86,7 @@ public class DRepStatusProcessor {
                         }
 
                         if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
-                            dRepBuilder.status(DRepStatus.ACTIVE);
+                            dRepBuilder.status(DRepStatus.UPDATED);
                         } else if (drepRegistration.getType() == CertificateType.UNREG_DREP_CERT) {
                             dRepBuilder.status(DRepStatus.RETIRED);
                         }
@@ -106,9 +106,6 @@ public class DRepStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         int count = dRepStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} drep records", count);
     }
