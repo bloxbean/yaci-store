@@ -4,6 +4,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.VotingProcedureMapper;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.VotingProcedureRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
@@ -13,6 +15,7 @@ import org.jooq.Row2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,6 +30,8 @@ import static org.jooq.impl.DSL.*;
 @RequiredArgsConstructor
 public class VotingAggrService {
     private final DSLContext dsl;
+    private final VotingProcedureRepository votingProcedureRepository;
+    private final VotingProcedureMapper votingProcedureMapper;
 
     @Transactional
     public List<VotingProcedure> getVotesBySPO(int epoch, List<GovActionId> govActionIds) {
@@ -188,6 +193,14 @@ public class VotingAggrService {
                 .fetch();
 
         return mapToVotingProcedures(result);
+    }
+
+    @Transactional(readOnly = true)
+    public List<VotingProcedure> getVotesByVoterTypesInEpoch(List<VoterType> voterTypes, int epoch) {
+        return votingProcedureRepository.findByVoterTypeInAndEpochEquals(voterTypes, epoch)
+                .stream()
+                .map(votingProcedureMapper::toVotingProcedure)
+                .toList();
     }
 
     private List<VotingProcedure> mapToVotingProcedures(Result<Record> result) {

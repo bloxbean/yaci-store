@@ -53,3 +53,4 @@ tables:
   - epoch_stake
   - drep_dist
   - gov_action_proposal_status
+  - drep_expiry

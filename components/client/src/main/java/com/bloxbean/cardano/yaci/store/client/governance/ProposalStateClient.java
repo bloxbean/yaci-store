@@ -11,4 +11,6 @@ public interface ProposalStateClient {
     List<GovActionProposal> getProposalsByStatusAndEpoch(GovActionStatus status, int epoch);
     List<GovActionProposal> getProposalsByStatusListAndEpoch(List<GovActionStatus> statusList, int epoch);
     Optional<GovActionProposal> getLastEnactedProposal(GovActionType govActionType,  int currentEpoch);
+    // todo: rename and add doc
+    Optional<Integer> getLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch);
 }

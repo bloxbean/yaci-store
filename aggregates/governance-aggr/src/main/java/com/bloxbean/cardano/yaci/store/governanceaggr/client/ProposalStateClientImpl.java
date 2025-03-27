@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovActionProposalStatusMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -28,7 +29,7 @@ public class ProposalStateClientImpl implements ProposalStateClient {
     private final GovActionProposalStorage govActionProposalStorage;
     private final ObjectMapper objectMapper;
 
-    public ProposalStateClientImpl(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage) {
+    public ProposalStateClientImpl(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage, GovActionProposalStatusMapper govActionProposalStatusMapper) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
 
@@ -109,6 +110,11 @@ public class ProposalStateClientImpl implements ProposalStateClient {
                     .govAction(govAction)
                     .build());
         }
+    }
+
+    @Override
+    public Optional<Integer> getLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch) {
+        return govActionProposalStatusStorage.findLatestEpochWithStatusBefore(statusList, epoch);
     }
 
     private Optional<GovAction> getGovAction(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal govActionProposal) {
