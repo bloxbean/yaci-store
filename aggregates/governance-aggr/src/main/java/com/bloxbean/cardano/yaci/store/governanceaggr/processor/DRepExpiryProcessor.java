@@ -4,13 +4,14 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepExpiry;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
@@ -28,8 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
+
 @Component
 @RequiredArgsConstructor
+@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
 public class DRepExpiryProcessor {
     private final DRepExpiryStorage dRepExpiryStorage;
@@ -40,15 +44,11 @@ public class DRepExpiryProcessor {
     private final EraService eraService;
     private final EpochParamStorage epochParamStorage;
     private final GovActionProposalStorage govActionProposalStorage;
-    private final GovernanceAggrProperties governanceAggrProperties;
 
     @EventListener
     @Transactional
     public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
         // Taking snapshot for DRep expiry
-        if (!governanceAggrProperties.isEnabled())
-            return;
-
         if (eraService.getEraForEpoch(event.getEpoch() - 1).getValue() < Era.Conway.getValue()) {
             return;
         }
@@ -86,10 +86,17 @@ public class DRepExpiryProcessor {
         Long firstProposalCreatedSlotInPrevEpoch = !govActionProposalsCreatedInPrevEpoch.isEmpty() ? govActionProposalsCreatedInPrevEpoch.get(0).getSlot() : null;
 
         // get last epoch (before the prev epoch) that had ratified or active proposals
-        Optional<Integer> lastEpochsHadRatifiedOrActiveProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
+        Optional<Integer> lastEpochHadRatifiedOrActiveProposalsOpt = proposalStateClient.getLatestEpochWithStatusBefore(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED), prevEpoch);
 
-        int dormantEpochsCount = lastEpochsHadRatifiedOrActiveProposalsOpt
-                .map(epochCount -> prevEpoch - epochCount - 1).orElseGet(() -> prevEpoch - 1);
+        Optional<CardanoEra> conwayEra = eraService.getEras()
+                .stream().filter(cardanoEra -> cardanoEra.getEra().equals(Era.Conway))
+                .findFirst();
+
+        int firstEpochNoInConway = conwayEra.map(cardanoEra ->
+                eraService.getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot())).orElse(0);
+
+        int dormantEpochsCount = lastEpochHadRatifiedOrActiveProposalsOpt
+                .map(e -> prevEpoch - 1).orElseGet(() ->  prevEpoch - firstEpochNoInConway - 1);
 
         final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
                 .stream()
