@@ -68,9 +68,10 @@ public class LocalDRepDistrService {
         }
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
-
-        log.info("Epoch change event received. Fetching and updating dRep stake distribution");
-        fetchAndSetDRepDistr();
+        if (era.getValue() >= Era.Conway.getValue()) {
+            log.info("Epoch change event received. Fetching and updating dRep stake distribution");
+            fetchAndSetDRepDistr();
+        }
     }
 
     public synchronized void fetchAndSetDRepDistr() {

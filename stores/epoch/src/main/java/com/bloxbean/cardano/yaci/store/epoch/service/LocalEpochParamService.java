@@ -57,7 +57,7 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Shelley.value
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Conway.value
                 &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
@@ -80,9 +80,10 @@ public class LocalEpochParamService {
             return;
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
-
-        log.info("Epoch change event received. Fetching protocol params ...");
-        fetchAndSetCurrentProtocolParams();
+        if (era.getValue() >= Era.Conway.value) {
+            log.info("Epoch change event received. Fetching protocol params ...");
+            fetchAndSetCurrentProtocolParams();
+        }
     }
 
     public synchronized void fetchAndSetCurrentProtocolParams() {

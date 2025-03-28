@@ -116,9 +116,10 @@ public class LocalGovStateService {
         }
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
-
-        log.info("Epoch change event received. Fetching and updating local gov state");
-        fetchAndSetGovState();
+        if (era.getValue() >= Era.Conway.getValue()) {
+            log.info("Epoch change event received. Fetching and updating local gov state");
+            fetchAndSetGovState();
+        }
     }
 
     public synchronized void fetchAndSetGovState() {

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class LocalEpochParamsScheduler {
             return;
         }
 
-        if (protocolParamService.getEra() != null) {
+        if (protocolParamService.getEra() != null && protocolParamService.getEra().value >= Era.Conway.value) {
             log.info("Fetching protocol params ....");
             protocolParamService.fetchAndSetCurrentProtocolParams();
         }
