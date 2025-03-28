@@ -104,8 +104,12 @@ public class LocalGovStateService {
                 && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
-            log.info("Fetching gov state ...");
-            fetchAndSetGovState();
+            try {
+                log.info("Fetching gov state ...");
+                fetchAndSetGovState();
+            } catch (Exception e) {
+                log.error("Fetching local gov state failed", e);
+            }
         }
     }
 
@@ -116,9 +120,14 @@ public class LocalGovStateService {
         }
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
-
-        log.info("Epoch change event received. Fetching and updating local gov state");
-        fetchAndSetGovState();
+        if (era.getValue() >= Era.Conway.getValue()) {
+            try {
+                log.info("Epoch change event received. Fetching and updating local gov state");
+                fetchAndSetGovState();
+            } catch (Exception e) {
+                log.error("Fetching local gov state failed", e);
+            }
+        }
     }
 
     public synchronized void fetchAndSetGovState() {

@@ -136,13 +136,18 @@ public class EraService {
      * This method can only be used when the node is in Shelley or post-Shelley era.
      * @return an Optional containing a Tuple with the current Tip and epoch number.
      */
-    public Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
-        var tip = tipFinderService.getTip().block(Duration.ofSeconds(5));
+    public synchronized Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
+        try {
+            var tip = tipFinderService.getTip().block(Duration.ofSeconds(5));
 
-        if (tip != null) {
-            int epoch = epochConfig.epochFromSlot(firstShelleySlot(), Era.Shelley, tip.getPoint().getSlot());
-            return Optional.of(new Tuple<>(tip, epoch));
-        } else {
+            if (tip != null) {
+                int epoch = epochConfig.epochFromSlot(firstShelleySlot(), Era.Shelley, tip.getPoint().getSlot());
+                return Optional.of(new Tuple<>(tip, epoch));
+            } else {
+                return Optional.empty();
+            }
+        } catch (Exception e) {
+            log.error("Unable to get the tip using TipFinderService", e);
             return Optional.empty();
         }
     }

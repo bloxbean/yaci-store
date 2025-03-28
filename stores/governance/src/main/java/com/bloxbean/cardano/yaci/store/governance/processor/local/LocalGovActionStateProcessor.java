@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor.local;
 
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -78,9 +79,13 @@ public class LocalGovActionStateProcessor {
             return;
         }
 
-        if (localGovStateService.getEra() != null) {
-            log.info("Fetching gov state by scheduler....");
-            localGovStateService.fetchAndSetGovState();
+        if (localGovStateService.getEra() != null && localGovStateService.getEra().getValue() >= Era.Conway.getValue()) {
+            try {
+                log.info("Fetching gov state by scheduler....");
+                localGovStateService.fetchAndSetGovState();
+            } catch (Exception e) {
+                log.error("Fetching gov state failed", e);
+            }
         }
     }
 }
