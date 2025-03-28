@@ -33,8 +33,12 @@ public class LocalEpochParamsScheduler {
         }
 
         if (protocolParamService.getEra() != null && protocolParamService.getEra().value >= Era.Conway.value) {
-            log.info("Fetching protocol params ....");
-            protocolParamService.fetchAndSetCurrentProtocolParams();
+            try {
+                log.info("Fetching protocol params ....");
+                protocolParamService.fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
         }
     }
 }

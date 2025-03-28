@@ -65,8 +65,12 @@ public class LocalEpochParamService {
             //Looks like era change, fetch protocol params
             //This is required for custom network directly starting from latest era like Conway era. So, after first block, when correct era is detected
             //fetch protocol params.
-            log.info("Fetching protocol params ...");
-            fetchAndSetCurrentProtocolParams();
+            try {
+                log.info("Fetching protocol params ...");
+                fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
         }
     }
 
@@ -81,8 +85,12 @@ public class LocalEpochParamService {
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
         if (era.getValue() >= Era.Conway.value) {
-            log.info("Epoch change event received. Fetching protocol params ...");
-            fetchAndSetCurrentProtocolParams();
+            try {
+                log.info("Epoch change event received. Fetching protocol params ...");
+                fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
         }
     }
 

@@ -56,8 +56,12 @@ public class LocalDRepDistrService {
                 && (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
-            log.info("Fetching dRep stake distribution ...");
-            fetchAndSetDRepDistr();
+            try {
+                log.info("Fetching dRep stake distribution ...");
+                fetchAndSetDRepDistr();
+            } catch (Exception e) {
+                log.error("Fetching dRep stake distribution failed", e);
+            }
         }
     }
 
@@ -69,8 +73,12 @@ public class LocalDRepDistrService {
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
         if (era.getValue() >= Era.Conway.getValue()) {
-            log.info("Epoch change event received. Fetching and updating dRep stake distribution");
-            fetchAndSetDRepDistr();
+            try {
+                log.info("Epoch change event received. Fetching and updating dRep stake distribution");
+                fetchAndSetDRepDistr();
+            } catch (Exception e) {
+                log.error("Fetching dRep stake distribution failed", e);
+            }
         }
     }
 

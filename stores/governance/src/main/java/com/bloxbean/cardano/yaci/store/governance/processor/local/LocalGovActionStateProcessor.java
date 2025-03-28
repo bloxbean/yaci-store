@@ -80,8 +80,12 @@ public class LocalGovActionStateProcessor {
         }
 
         if (localGovStateService.getEra() != null && localGovStateService.getEra().getValue() >= Era.Conway.getValue()) {
-            log.info("Fetching gov state by scheduler....");
-            localGovStateService.fetchAndSetGovState();
+            try {
+                log.info("Fetching gov state by scheduler....");
+                localGovStateService.fetchAndSetGovState();
+            } catch (Exception e) {
+                log.error("Fetching gov state failed", e);
+            }
         }
     }
 }
