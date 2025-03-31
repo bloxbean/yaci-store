@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamService;
@@ -35,9 +36,13 @@ public class LocalEpochParamsScheduler {
             return;
         }
 
-        if (protocolParamService.getEra() != null) {
-            log.info("Fetching protocol params ....");
-            protocolParamService.fetchAndSetCurrentProtocolParams();
+        if (protocolParamService.getEra() != null && protocolParamService.getEra().value >= Era.Conway.value) {
+            try {
+                log.info("Fetching protocol params ....");
+                protocolParamService.fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
         }
     }
 }
