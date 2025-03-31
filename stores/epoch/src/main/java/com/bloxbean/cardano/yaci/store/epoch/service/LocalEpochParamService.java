@@ -61,7 +61,7 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void blockEvent(BlockHeaderEvent blockHeaderEvent) {
-        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Shelley.value
+        if (blockHeaderEvent.getMetadata().getEra() != null && blockHeaderEvent.getMetadata().getEra().value >= com.bloxbean.cardano.yaci.core.model.Era.Conway.value
                 &&  (era == null || !blockHeaderEvent.getMetadata().getEra().name().equalsIgnoreCase(era.name()))) {
             era = Era.valueOf(blockHeaderEvent.getMetadata().getEra().name());
             log.info("Current era: {}", era.name());
@@ -69,8 +69,12 @@ public class LocalEpochParamService {
             //Looks like era change, fetch protocol params
             //This is required for custom network directly starting from latest era like Conway era. So, after first block, when correct era is detected
             //fetch protocol params.
-            log.info("Fetching protocol params ...");
-            fetchAndSetCurrentProtocolParams();
+            try {
+                log.info("Fetching protocol params ...");
+                fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
         }
     }
 
@@ -84,9 +88,14 @@ public class LocalEpochParamService {
             return;
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
-
-        log.info("Epoch change event received. Fetching protocol params ...");
-        fetchAndSetCurrentProtocolParams();
+        if (era.getValue() >= Era.Conway.value) {
+            try {
+                log.info("Epoch change event received. Fetching protocol params ...");
+                fetchAndSetCurrentProtocolParams();
+            } catch (Exception e) {
+                log.error("Fetching local protocol params failed", e);
+            }
+        }
     }
 
     public synchronized void fetchAndSetCurrentProtocolParams() {
