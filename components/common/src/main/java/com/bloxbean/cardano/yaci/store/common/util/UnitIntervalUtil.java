@@ -1,5 +1,10 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import com.bloxbean.cardano.yaci.core.types.NonNegativeInterval;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
@@ -32,6 +37,7 @@ import java.math.MathContext;
  * the actual definition is not used here, and the value is hardcoded to 1/2.</p>
  */
 public class UnitIntervalUtil {
+    private static final Logger log = LoggerFactory.getLogger(UnitIntervalUtil.class);
     private static MathContext mathContext = new MathContext(35);
 
     /**
@@ -60,6 +66,32 @@ public class UnitIntervalUtil {
         //Ideally, we should also check numerator <= denominator and throw exception
         //But, the caller is expected to pass the correct values to the safeRatio method
     }
+
+    /**
+     * Safely calculates the ratio of a UnitInterval object's numerator and denominator as a BigDecimal.
+     * If the UnitInterval is null or contains invalid values (e.g., null numerator or denominator, or denominator is zero),
+     * it returns a specific fallback value: null or BigDecimal.ZERO based on the condition.
+     *
+     * @param unitInterval the UnitInterval instance containing numerator and denominator values to calculate the ratio.
+     *                      It can be null.
+     * @return the calculated ratio as a BigDecimal, null if the input UnitInterval is null, or BigDecimal.ZERO if the
+     *         UnitInterval has invalid values.
+     */
+    public static BigDecimal safeRatio(UnitInterval unitInterval) {
+        if (unitInterval == null) {
+            return null;
+        }
+
+        if (isInvalidUnitInterval(unitInterval.getNumerator(), unitInterval.getDenominator())) {
+            return BigDecimal.ZERO;
+        }
+
+        var numeratorBD = new BigDecimal(unitInterval.getNumerator());
+        var denominatorBD = new BigDecimal(unitInterval.getDenominator());
+
+        return numeratorBD.divide(denominatorBD, mathContext);
+    }
+
 
     /**
      * Converts a string representation of a rational number into a tuple containing the numerator and denominator.
@@ -101,5 +133,51 @@ public class UnitIntervalUtil {
         BigInteger denominator = scaleFactor;
 
         return new Tuple<>(numerator, denominator);
+    }
+
+    /**
+     * Converts a given BigDecimal to a UnitInterval object, representing the decimal value as a ratio of numerator
+     * and denominator. If the input decimal is null, the method returns null.
+     *
+     * @param decimal the BigDecimal value to be converted to a UnitInterval. It can be a null value.
+     * @return a UnitInterval instance containing the numerator and denominator representation of the input decimal,
+     *         or null if the input decimal is null.
+     */
+    public static UnitInterval decimalToUnitInterval(BigDecimal decimal) {
+        if (decimal == null) {
+            return null;
+        }
+
+        BigInteger scaleFactor = BigInteger.TEN.pow(decimal.scale());
+        BigInteger numerator = decimal.unscaledValue();
+        BigInteger denominator = scaleFactor;
+
+        return new UnitInterval(numerator, denominator);
+    }
+
+    /**
+     * Converts the given BigDecimal to a NonNegativeInterval object by representing the decimal value as
+     * a ratio of a numerator and denominator. If the input decimal is null, the method returns null.
+     *
+     * @param decimal the BigDecimal value to be converted to a NonNegativeInterval. It may be null.
+     * @return a NonNegativeInterval instance containing the numerator and denominator representation
+     *         of the input decimal, or null if the input decimal is null.
+     */
+    public static NonNegativeInterval decimalToNonNegativeInterval(BigDecimal decimal) {
+        if (decimal == null) {
+            return null;
+        }
+
+        //check decimal is not negative
+        if (decimal.compareTo(BigDecimal.ZERO) < 0) {
+            log.warn("Decimal value cannot be negative");
+        }
+
+
+        BigInteger scaleFactor = BigInteger.TEN.pow(decimal.scale());
+        BigInteger numerator = decimal.unscaledValue();
+        BigInteger denominator = scaleFactor;
+
+        return new NonNegativeInterval(numerator, denominator);
     }
 }

@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.Relay;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRegistration;
 import com.bloxbean.cardano.yaci.core.model.certs.PoolRetirement;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -57,7 +58,7 @@ class PoolRegistrationProcessorTest {
                         .vrfKeyHash("40983f267a1571ef3a6e300b85b6dd1501af2dfa74e478c56bd366190149a598")
                         .pledge(BigInteger.ZERO)
                         .cost(BigInteger.valueOf(340000000))
-                        .margin("3/40")
+                        .margin(UnitInterval.fromString("3/40"))
                         .rewardAccount("e028bcf2cdaafbe7352a4f09cbc8c1277a7247d19355772edf4b89cae6")
                         .poolOwners(Set.of("28bcf2cdaafbe7352a4f09cbc8c1277a7247d19355772edf4b89cae6"))
                         .relays(List.of(

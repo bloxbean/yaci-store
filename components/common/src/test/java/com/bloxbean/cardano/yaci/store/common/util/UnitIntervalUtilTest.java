@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -141,5 +142,35 @@ class UnitIntervalUtilTest {
 
         assertEquals(new BigInteger("9876543210123456789"), result._1, "Numerator should be 9876543210123456789");
         assertEquals(new BigInteger("1000000000"), result._2, "Denominator should be 1000000000");
+    }
+
+    @Test
+    void testDecimalToUnitInterval_Zero() {
+        BigDecimal decimal = BigDecimal.ZERO;
+
+        UnitInterval result = UnitIntervalUtil.decimalToUnitInterval(decimal);
+
+        assertEquals(BigInteger.ZERO, result.getNumerator(), "Numerator should be 0");
+        assertEquals(BigInteger.ONE, result.getDenominator(), "Denominator should be 1");
+    }
+
+    @Test
+    void testDecimalToUnitInterval_LargeNumber() {
+        BigDecimal margin = new BigDecimal("9876543210.123456789");
+
+        UnitInterval result = UnitIntervalUtil.decimalToUnitInterval(margin);
+
+        assertEquals(new BigInteger("9876543210123456789"), result.getNumerator(), "Numerator should be 9876543210123456789");
+        assertEquals(new BigInteger("1000000000"), result.getDenominator(), "Denominator should be 1000000000");
+    }
+
+    @Test
+    void testDecimalToUnitInterval_HighPrecision() {
+        BigDecimal margin = new BigDecimal("0.000123456");
+
+        UnitInterval result = UnitIntervalUtil.decimalToUnitInterval(margin);
+
+        assertEquals(new BigInteger("123456"), result.getNumerator(), "Numerator should be 123456");
+        assertEquals(new BigInteger("1000000000"), result.getDenominator(), "Denominator should be 1000000000");
     }
 }

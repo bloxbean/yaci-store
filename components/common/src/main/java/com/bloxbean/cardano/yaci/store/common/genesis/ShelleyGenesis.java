@@ -8,6 +8,7 @@ import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.PoolParams;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +25,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.decimalToNonNegativeInterval;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.decimalToUnitInterval;
 
 @Data
 @ToString
@@ -162,10 +166,10 @@ public class ShelleyGenesis extends GenesisFile {
                 .poolDeposit(poolDeposit)
                 .maxEpoch(maxEpoch)
                 .nOpt(nOpt)
-                .poolPledgeInfluence(poolPledgeInfluence)
-                .expansionRate(monetaryExpansionRate)
-                .treasuryGrowthRate(treasuryGrowthRate)
-                .decentralisationParam(decentralisationParam)
+                .poolPledgeInfluence(decimalToNonNegativeInterval(poolPledgeInfluence))
+                .expansionRate(decimalToUnitInterval(monetaryExpansionRate))
+                .treasuryGrowthRate(decimalToUnitInterval(treasuryGrowthRate))
+                .decentralisationParam(decimalToUnitInterval(decentralisationParam))
                 //.extraEntropy(extraEntropy)
                 .protocolMajorVer(majorVersion)
                 .protocolMinorVer(minorVersion)
@@ -226,7 +230,7 @@ public class ShelleyGenesis extends GenesisFile {
 
                 PoolParams poolParams = PoolParams.builder()
                         .cost(cost)
-                        .margin(margin.toString())
+                        .margin(UnitIntervalUtil.decimalToUnitInterval(margin))
                         .pledge(pledge)
                         .operator(publicKey)
                         .rewardAccount(rewardAccountHash)

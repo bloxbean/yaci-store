@@ -11,7 +11,6 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
@@ -36,6 +35,7 @@ import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
 /**
  * This processor is only used for devnets. (e.g; YaciDevKit DevNet)
@@ -78,22 +78,7 @@ public class GenesisPoolProcessor {
                     Address rewardAddress = new Address(HexUtil.decodeHexString(poolParams.getRewardAccount()));
                     String rewardAddressBech32 = rewardAddress.toBech32();
 
-                    BigInteger numerator;
-                    BigInteger denominator;
-                    Double marginDbl;
-                    if (poolParams.getMargin() != null &&
-                            poolParams.getMargin().contains("/")) {
-                        var marginTuple = UnitIntervalUtil.stringToNumeratorDenominator(poolParams.getMargin());
-                        numerator = marginTuple._1;
-                        denominator = marginTuple._2;
-                        marginDbl = UnitIntervalUtil.safeRatio(numerator, denominator).doubleValue();
-                    } else {
-                        BigDecimal margin = new BigDecimal(poolParams.getMargin());
-                        var tuple = UnitIntervalUtil.marginToNumeratorDenominator(margin);
-                        numerator = tuple._1;
-                        denominator = tuple._2;
-                        marginDbl = margin.doubleValue();
-                    }
+                    BigDecimal marginDecimal = safeRatio(poolParams.getMargin());
 
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(genesisTxHash)
@@ -103,9 +88,9 @@ public class GenesisPoolProcessor {
                             .vrfKeyHash(poolParams.getVrfKeyHash())
                             .pledge(poolParams.getPledge())
                             .cost(poolParams.getCost())
-                            .margin(marginDbl)
-                            .marginNumerator(numerator)
-                            .marginDenominator(denominator)
+                            .margin(marginDecimal != null? marginDecimal.doubleValue(): 0.0)
+                            .marginNumerator(poolParams.getMargin().getNumerator())
+                            .marginDenominator(poolParams.getMargin().getDenominator())
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolParams.getPoolOwners())
                             .relays(poolParams.getRelays())

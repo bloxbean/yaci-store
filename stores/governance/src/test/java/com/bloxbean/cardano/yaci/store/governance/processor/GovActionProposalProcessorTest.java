@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.core.model.ProtocolVersion;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.core.model.governance.*;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
+import com.bloxbean.cardano.yaci.core.types.NonNegativeInterval;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GovernanceEvent;
@@ -21,7 +23,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -228,7 +229,7 @@ class GovActionProposalProcessorTest {
                                 .gov_action_index(0)
                                 .build())
                         .membersForRemoval(membersForRemoval)
-                        .quorumThreshold(BigDecimal.valueOf(0.4))
+                        .threshold(UnitInterval.fromString("40/100"))
                         .newMembersAndTerms(newMembersAndTerms)
                         .build();
             case NO_CONFIDENCE:
@@ -267,7 +268,7 @@ class GovActionProposalProcessorTest {
                 .maxEpoch(200)
                 .priceMem(null)
                 .maxTxSize(1000)
-                .priceStep(new BigDecimal("0.01"))
+                .priceStep(NonNegativeInterval.fromString("1/100"))
                 .costModels(Collections.singletonMap(1, "model1"))
                 .keyDeposit(new BigInteger("100000000"))
                 .maxTxExMem(new BigInteger("200000"))
@@ -278,7 +279,7 @@ class GovActionProposalProcessorTest {
                 .extraEntropy(new Tuple<>(42, "entropy"))
                 .maxBlockSize(2000)
                 .maxTxExSteps(new BigInteger("10000"))
-                .expansionRate(new BigDecimal("0.02"))
+                .expansionRate(UnitInterval.fromString("2/100"))
                 .maxBlockExMem(new BigInteger("300000"))
                 .adaPerUtxoByte(new BigInteger("2"))
                 .costModelsHash("hash123")
@@ -290,12 +291,12 @@ class GovActionProposalProcessorTest {
                 .committeeMaxTermLength(4)
                 .drepVotingThresholds(null)
                 .maxBlockHeaderSize(300)
-                .treasuryGrowthRate(new BigDecimal("0.05"))
+                .treasuryGrowthRate(UnitInterval.fromString("5/100"))
                 .maxCollateralInputs(50)
-                .poolPledgeInfluence(new BigDecimal("0.1"))
+                .poolPledgeInfluence(NonNegativeInterval.fromString("10/100"))
                 .drepActivity(30)
                 .poolVotingThresholds(null)
-                .decentralisationParam(new BigDecimal("0.3"))
+                .decentralisationParam(UnitInterval.fromString("30/100"))
                 .govActionDeposit(new BigInteger("1000000002"))
                 .govActionLifetime(14)
                 .build();

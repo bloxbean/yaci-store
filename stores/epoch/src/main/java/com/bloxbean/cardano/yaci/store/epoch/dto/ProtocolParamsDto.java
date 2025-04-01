@@ -67,6 +67,8 @@ public class ProtocolParamsDto {
     private BigDecimal pvtCommitteeNormal;
     private BigDecimal pvtCommitteeNoConfidence;
     private BigDecimal pvtHardForkInitiation;
+    @JsonProperty("pvt_p_p_security_group")
+    private BigDecimal pvtPPSecurityGroup;
 
     private BigDecimal dvtMotionNoConfidence;
     private BigDecimal dvtCommitteeNormal;
@@ -86,4 +88,10 @@ public class ProtocolParamsDto {
     private BigInteger drepDeposit;
     private Integer drepActivity;
     private BigDecimal minFeeRefScriptCostPerByte;
+
+    //To align with Blockfrost
+    @JsonProperty("pvtpp_security_group")
+    public BigDecimal getPvtppSecurityGroup() {
+        return pvtPPSecurityGroup;
+    }
 }

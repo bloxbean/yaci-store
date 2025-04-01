@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.domain;
 
+import com.bloxbean.cardano.yaci.core.types.NonNegativeInterval;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -29,10 +31,10 @@ public class ProtocolParams {
     private Integer maxEpoch; //7
     @JsonProperty("nopt")
     private Integer nOpt; //8
-    private BigDecimal poolPledgeInfluence; //rational //9
-    private BigDecimal expansionRate; //unit interval //10
-    private BigDecimal treasuryGrowthRate; //11
-    private BigDecimal decentralisationParam; //12
+    private NonNegativeInterval poolPledgeInfluence; //rational //9
+    private UnitInterval expansionRate; //unit interval //10
+    private UnitInterval treasuryGrowthRate; //11
+    private UnitInterval decentralisationParam; //12
     private String extraEntropy; //13
     private Integer protocolMajorVer; //14
     private Integer protocolMinorVer; //14
@@ -47,8 +49,8 @@ public class ProtocolParams {
     private String costModelsHash;
 
     //ex_unit_prices
-    private BigDecimal priceMem; //19
-    private BigDecimal priceStep; //19
+    private NonNegativeInterval priceMem; //19
+    private NonNegativeInterval priceStep; //19
 
     //max tx ex units
     private BigInteger maxTxExMem; //20
@@ -78,7 +80,8 @@ public class ProtocolParams {
     private BigInteger govActionDeposit; //30
     private BigInteger drepDeposit; //31
     private Integer drepActivity; //32
-    private BigDecimal minFeeRefScriptCostPerByte; //33
+    private NonNegativeInterval minFeeRefScriptCostPerByte; //33
+
     public void merge(ProtocolParams other) {
         if (other.minFeeA != null) {
             this.minFeeA = other.minFeeA;

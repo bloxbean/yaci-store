@@ -14,6 +14,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
+
 /**
  * EpochInfoService is a component that provides information about epochs
  * in the blockchain, including block counts, fees, and active stake.
@@ -58,9 +60,9 @@ public class EpochInfoService {
         var protocolParam = protocolParamService.getProtocolParam(epoch).orElse(null);
         if (protocolParam != null) {
             if (protocolParam.getDecentralisationParam() == null
-                    || protocolParam.getDecentralisationParam() == BigDecimal.ZERO) { // When decentralisation is 0. No OBFT blocks
+                    || safeRatio(protocolParam.getDecentralisationParam()) == BigDecimal.ZERO) { // When decentralisation is 0. No OBFT blocks
                 epochInfo.setNonOBFTBlockCount(epochInfo.getBlockCount());
-            } else if (protocolParam.getDecentralisationParam() == BigDecimal.ONE) { // When decentralisation is 1. All blocks are OBFT
+            } else if (safeRatio(protocolParam.getDecentralisationParam()) == BigDecimal.ONE) { // When decentralisation is 1. All blocks are OBFT
                 epochInfo.setNonOBFTBlockCount(0);
             } else { //When decentralisation is between 0 and 1, get the non-OBFT blocks
                 Integer nonObftBlocks = blockInfoService.getNonOBFTBlocksInEpoch(epoch);

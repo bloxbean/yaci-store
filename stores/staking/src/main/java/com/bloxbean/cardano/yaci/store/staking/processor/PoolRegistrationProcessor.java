@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
@@ -27,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.stringToNumeratorDenominator;
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
@@ -69,13 +69,10 @@ public class PoolRegistrationProcessor {
                         }
                     }
 
-                    var marginTuple = stringToNumeratorDenominator(poolRegistrationCert.getPoolParams().getMargin());
-                    var marginNumerator = marginTuple._1;
-                    var marginDenominator = marginTuple._2;
-
                     //This value is just for display purpose.
                     //For calc like reward calc, numerator and denominator are used to avoid rounding issue
-                    double margin = safeRatio(marginNumerator, marginDenominator).doubleValue();
+                    UnitInterval marginUnitInterval = poolRegistrationCert.getPoolParams().getMargin();
+                    double margin = safeRatio(marginUnitInterval).doubleValue();
 
                     PoolRegistration poolRegistration = PoolRegistration.builder()
                             .txHash(txHash)
@@ -86,8 +83,8 @@ public class PoolRegistrationProcessor {
                             .pledge(poolRegistrationCert.getPoolParams().getPledge())
                             .cost(poolRegistrationCert.getPoolParams().getCost())
                             .margin(margin)
-                            .marginNumerator(marginNumerator)
-                            .marginDenominator(marginDenominator)
+                            .marginNumerator(marginUnitInterval.getNumerator())
+                            .marginDenominator(marginUnitInterval.getDenominator())
                             .rewardAccount(rewardAddressBech32)
                             .poolOwners(poolRegistrationCert.getPoolParams().getPoolOwners())
                             .relays(poolRegistrationCert.getPoolParams().getRelays())
