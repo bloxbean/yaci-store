@@ -257,6 +257,7 @@ public class DRepDistService {
                           + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
                           + COALESCE(ir.insta_withdrawable_reward, 0) 
                           + coalesce(apd.deposit, 0)
+                          + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :epoch,
                     NOW()
