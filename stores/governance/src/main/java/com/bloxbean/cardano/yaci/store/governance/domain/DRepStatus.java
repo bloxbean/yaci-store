@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.governance.domain;
 
 import java.util.HashMap;
 import java.util.Map;

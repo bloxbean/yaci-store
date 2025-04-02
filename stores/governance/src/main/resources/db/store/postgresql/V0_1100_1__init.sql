@@ -182,3 +182,33 @@ create table committee
 
 CREATE INDEX idx_committee_slot
     ON committee (slot);
+
+drop table if exists drep;
+create table drep
+(
+    drep_id           varchar(255),
+    drep_hash         varchar(56),
+    tx_hash           varchar(64) not null,
+    cert_index        int         not null,
+    tx_index          int         not null,
+    cert_type         varchar(40),
+    status            varchar(50),
+    deposit           bigint,
+    epoch             int,
+    registration_slot bigint,
+    slot              bigint,
+    block_hash        varchar(64),
+    block             bigint,
+    block_time        bigint,
+    update_datetime   timestamp,
+    primary key (drep_hash, tx_hash, cert_index, slot)
+);
+
+CREATE INDEX idx_drep_slot
+    ON drep (slot);
+
+CREATE INDEX idx_drep_drep_id
+    ON drep (drep_id);
+
+CREATE INDEX idx_drep_epoch
+    ON drep (epoch);

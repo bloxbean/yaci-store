@@ -1,7 +1,8 @@
-package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
+package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.common.model.BlockAwareEntity;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,11 +20,11 @@ import java.math.BigInteger;
 @IdClass(DRepId.class)
 public class DRepEntity extends BlockAwareEntity {
     @Id
-    @Column(name = "drep_id")
-    private String drepId;
-
     @Column(name = "drep_hash")
     private String drepHash;
+
+    @Column(name = "drep_id")
+    private String drepId;
 
     @Id
     @Column(name = "tx_hash")
