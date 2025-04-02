@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -62,7 +64,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getTxHash()).isEqualTo(txHash);
         assertThat(savedDelegationVote.getAddress()).isEqualTo("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe");
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
-        assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
+        assertThat(savedDelegationVote.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8")));
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDelegationVote.getSlot()).isEqualTo(eventMetadata().getSlot());
@@ -99,7 +101,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getTxHash()).isEqualTo(txHash);
         assertThat(savedDelegationVote.getAddress()).isEqualTo("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe");
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
-        assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
+        assertThat(savedDelegationVote.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8")));
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
         assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
@@ -137,7 +139,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getTxHash()).isEqualTo(txHash);
         assertThat(savedDelegationVote.getAddress()).isEqualTo("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe");
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
-        assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
+        assertThat(savedDelegationVote.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8")));
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
         assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());
@@ -175,7 +177,7 @@ class DelegationVoteProcessorTest {
         assertThat(savedDelegationVote.getTxHash()).isEqualTo(txHash);
         assertThat(savedDelegationVote.getAddress()).isEqualTo("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe");
         assertThat(savedDelegationVote.getDrepHash()).isEqualTo("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8");
-        assertThat(savedDelegationVote.getDrepId()).isEqualTo("drep1685fyv6xrj3ppqvn9zuypmreajp9hy7ekpgpwjw758ktstncpw9");
+        assertThat(savedDelegationVote.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8")));
         assertThat(savedDelegationVote.getCertIndex()).isEqualTo(0);
         assertThat(savedDelegationVote.getCredential()).isEqualTo("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9");
         assertThat(savedDelegationVote.getEpoch()).isEqualTo(eventMetadata().getEpochNumber());

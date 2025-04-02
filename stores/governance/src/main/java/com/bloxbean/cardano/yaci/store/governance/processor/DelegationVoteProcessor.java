@@ -4,10 +4,11 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
-import com.bloxbean.cardano.client.governance.DRepId;
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -95,9 +96,9 @@ public class DelegationVoteProcessor {
 
         if (drep.getHash() != null) {
             if (drep.getType() == DrepType.ADDR_KEYHASH) {
-                delegationVote.setDrepId(DRepId.fromKeyHash(drep.getHash()));
+                delegationVote.setDrepId(GovId.drepFromKeyHash(HexUtil.decodeHexString(drep.getHash())));
             } else if (drep.getType() == DrepType.SCRIPTHASH) {
-                delegationVote.setDrepId(DRepId.fromScriptHash(drep.getHash()));
+                delegationVote.setDrepId(GovId.drepFromScriptHash(HexUtil.decodeHexString(drep.getHash())));
             }
         }
 
