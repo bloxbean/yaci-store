@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
 
 @Component
@@ -384,7 +385,7 @@ public class LocalGovStateService {
 
     private LocalCommittee buildLocalCommittee(Committee committee, Integer currentEpoch, Long slot) {
         return LocalCommittee.builder()
-                .threshold(committee.getThreshold().doubleValue())
+                .threshold(safeRatio(committee.getThreshold()).doubleValue())
                 .epoch(currentEpoch)
                 .slot(slot)
                 .build();

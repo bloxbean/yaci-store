@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -111,11 +113,11 @@ public class EpochRewardCalculationService {
 
         ProtocolParameters rewardProtocolParameters = ProtocolParameters.builder()
                 .decentralisation(protocolParams.getDecentralisationParam() != null?
-                        protocolParams.getDecentralisationParam() : BigDecimal.ZERO)
-                .treasuryGrowRate(protocolParams.getTreasuryGrowthRate())
-                .monetaryExpandRate(protocolParams.getExpansionRate())
+                        safeRatio(protocolParams.getDecentralisationParam()) : BigDecimal.ZERO)
+                .treasuryGrowRate(safeRatio(protocolParams.getTreasuryGrowthRate()))
+                .monetaryExpandRate(safeRatio(protocolParams.getExpansionRate()))
                 .optimalPoolCount(protocolParams.getNOpt())
-                .poolOwnerInfluence(protocolParams.getPoolPledgeInfluence())
+                .poolOwnerInfluence(safeRatio(protocolParams.getPoolPledgeInfluence()))
                 .build();
 
         //Get epoch info

@@ -15,6 +15,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ShelleyGenesisTest {
@@ -63,7 +64,7 @@ class ShelleyGenesisTest {
 
         assertThat(poolParams.getOperator()).isEqualTo("7301761068762f5900bde9eb7c1c15b09840285130f5b0f53606cc57");
         assertThat(poolParams.getCost()).isEqualTo(new BigInteger("340000000"));
-        assertThat(poolParams.getMargin()).isEqualTo("0");
+        assertThat(safeRatio(poolParams.getMargin())).isEqualTo(BigDecimal.ZERO);
         assertThat(poolParams.getPoolMetadataUrl()).isNull();
         assertThat(poolParams.getPoolOwners()).isEmpty();
         assertThat(poolParams.getPledge()).isEqualTo(BigInteger.ZERO);
@@ -89,7 +90,7 @@ class ShelleyGenesisTest {
         //protocol params
         assertThat(protocolParams.getProtocolMajorVer()).isEqualTo(2);
         assertThat(protocolParams.getProtocolMinorVer()).isEqualTo(0);
-        assertThat(protocolParams.getDecentralisationParam()).isEqualTo(BigDecimal.valueOf(1));
+        assertThat(safeRatio(protocolParams.getDecentralisationParam())).isEqualTo(BigDecimal.valueOf(1));
         assertThat(protocolParams.getMaxEpoch()).isEqualTo(18);
         assertThat(protocolParams.getMaxTxSize()).isEqualTo(16384);
         assertThat(protocolParams.getMaxBlockSize()).isEqualTo(65536);
@@ -101,9 +102,9 @@ class ShelleyGenesisTest {
         assertThat(protocolParams.getMinPoolCost()).isEqualTo(340000000);
         assertThat(protocolParams.getKeyDeposit()).isEqualTo(2000000);
         assertThat(protocolParams.getNOpt()).isEqualTo(150);
-        assertThat(protocolParams.getExpansionRate()).isEqualTo(BigDecimal.valueOf(0.003));
-        assertThat(protocolParams.getTreasuryGrowthRate()).isEqualTo(BigDecimal.valueOf(0.20));
-        assertThat(protocolParams.getPoolPledgeInfluence()).isEqualTo(BigDecimal.valueOf(0.3));
+        assertThat(safeRatio(protocolParams.getExpansionRate())).isEqualByComparingTo(BigDecimal.valueOf(0.003));
+        assertThat(safeRatio(protocolParams.getTreasuryGrowthRate())).isEqualByComparingTo(BigDecimal.valueOf(0.20));
+        assertThat(safeRatio(protocolParams.getPoolPledgeInfluence())).isEqualByComparingTo(BigDecimal.valueOf(0.3));
     }
 
     @Test
@@ -121,7 +122,7 @@ class ShelleyGenesisTest {
         //protocol params
         assertThat(protocolParams.getProtocolMajorVer()).isEqualTo(6);
         assertThat(protocolParams.getProtocolMinorVer()).isEqualTo(0);
-        assertThat(protocolParams.getDecentralisationParam()).isEqualTo(BigDecimal.valueOf(1.0));
+        assertThat(safeRatio(protocolParams.getDecentralisationParam())).isEqualByComparingTo(BigDecimal.valueOf(1.0));
         assertThat(protocolParams.getMaxEpoch()).isEqualTo(18);
         assertThat(protocolParams.getMaxTxSize()).isEqualTo(16384);
         assertThat(protocolParams.getMaxBlockSize()).isEqualTo(65536);
@@ -133,9 +134,9 @@ class ShelleyGenesisTest {
         assertThat(protocolParams.getMinPoolCost()).isEqualTo(340000000);
         assertThat(protocolParams.getKeyDeposit()).isEqualTo(2000000);
         assertThat(protocolParams.getNOpt()).isEqualTo(150);
-        assertThat(protocolParams.getExpansionRate()).isEqualTo(BigDecimal.valueOf(0.003));
-        assertThat(protocolParams.getTreasuryGrowthRate()).isEqualTo(BigDecimal.valueOf(0.20));
-        assertThat(protocolParams.getPoolPledgeInfluence()).isEqualTo(BigDecimal.valueOf(0.3));
+        assertThat(safeRatio(protocolParams.getExpansionRate())).isEqualByComparingTo(BigDecimal.valueOf(0.003));
+        assertThat(safeRatio(protocolParams.getTreasuryGrowthRate())).isEqualByComparingTo(BigDecimal.valueOf(0.20));
+        assertThat(safeRatio(protocolParams.getPoolPledgeInfluence())).isEqualByComparingTo(BigDecimal.valueOf(0.3));
     }
 
 }

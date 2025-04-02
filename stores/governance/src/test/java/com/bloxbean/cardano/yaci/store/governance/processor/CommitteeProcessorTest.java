@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -68,7 +69,7 @@ class CommitteeProcessorTest {
 
         UpdateCommittee updateCommittee = new UpdateCommittee(null, Set.of(removedMember1, removedMember2),
                 Map.of(newMember1, 50, newMember2, 60),
-                BigDecimal.valueOf(0.75));
+                UnitInterval.fromString("75/100"));
 
         GovActionProposal proposal = GovActionProposal
                 .builder()
