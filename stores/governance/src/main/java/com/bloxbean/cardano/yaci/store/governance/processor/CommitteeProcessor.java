@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
 
 @Component
@@ -74,17 +76,14 @@ public class CommitteeProcessor {
 
         for (var proposal : ratifiedProposalsInPrevEpoch) {
             if (proposal.getGovAction() instanceof UpdateCommittee updateCommittee) {
-                BigDecimal quorumThreshold = updateCommittee.getQuorumThreshold();
+                UnitInterval quorumThreshold = updateCommittee.getThreshold();
 
                 if (quorumThreshold != null) {
-                    BigInteger thresholdNumerator = null;
-                    BigInteger thresholdDenominator = null;
-
                     Committee committee = buildCommittee(proposal.getTxHash(),
                             proposal.getIndex(),
-                            thresholdNumerator,
-                            thresholdDenominator,
-                            quorumThreshold,
+                            quorumThreshold.getNumerator(),
+                            quorumThreshold.getDenominator(),
+                            safeRatio(quorumThreshold),
                             epoch,
                             slot);
 

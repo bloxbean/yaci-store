@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.common.domain;
 
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -17,9 +18,9 @@ import java.math.BigDecimal;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class PoolVotingThresholds {
-    private BigDecimal pvtMotionNoConfidence;
-    private BigDecimal pvtCommitteeNormal;
-    private BigDecimal pvtCommitteeNoConfidence;
-    private BigDecimal pvtHardForkInitiation;
-    private BigDecimal pvtPPSecurityGroup;
+    private UnitInterval pvtMotionNoConfidence;
+    private UnitInterval pvtCommitteeNormal;
+    private UnitInterval pvtCommitteeNoConfidence;
+    private UnitInterval pvtHardForkInitiation;
+    private UnitInterval pvtPPSecurityGroup;
 }

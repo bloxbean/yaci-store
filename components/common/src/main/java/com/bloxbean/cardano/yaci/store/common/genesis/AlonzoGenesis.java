@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.SortedMap;
 
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.*;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.decimalToNonNegativeInterval;
 
 @Data
 public class AlonzoGenesis extends GenesisFile {
@@ -110,8 +111,8 @@ public class AlonzoGenesis extends GenesisFile {
 
         protocolParams = ProtocolParams.builder()
                 .adaPerUtxoByte(lovelacePerUTxOWord)
-                .priceMem(priceMem)
-                .priceStep(priceSteps)
+                .priceMem(decimalToNonNegativeInterval(priceMem))
+                .priceStep(decimalToNonNegativeInterval(priceSteps))
                 .maxTxExMem(txExUnitsMem)
                 .maxTxExSteps(txExUnitsSteps)
                 .maxBlockExMem(blockExUnitsMem)

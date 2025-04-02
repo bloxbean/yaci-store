@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class AlonzoGenesisTest {
@@ -20,8 +21,8 @@ public class AlonzoGenesisTest {
 
         //protocol parameters
         assertThat(protocolParams.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482));
-        assertThat(protocolParams.getPriceStep()).isEqualTo(BigDecimal.valueOf(0.0000721));
-        assertThat(protocolParams.getPriceMem()).isEqualTo(BigDecimal.valueOf(.0577));
+        assertThat(safeRatio(protocolParams.getPriceStep())).isEqualTo(BigDecimal.valueOf(0.0000721));
+        assertThat(safeRatio(protocolParams.getPriceMem())).isEqualTo(BigDecimal.valueOf(.0577));
         assertThat(protocolParams.getMaxTxExMem()).isEqualTo(BigInteger.valueOf(10000000));
         assertThat(protocolParams.getMaxTxExSteps()).isEqualTo(BigInteger.valueOf(10000000000L));
         assertThat(protocolParams.getMaxBlockExMem()).isEqualTo(BigInteger.valueOf(50000000L));
@@ -40,8 +41,8 @@ public class AlonzoGenesisTest {
 
         //protocol parameters
         assertThat(protocolParams.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482));
-        assertThat(protocolParams.getPriceStep()).isEqualTo(BigDecimal.valueOf(0.0000721));
-        assertThat(protocolParams.getPriceMem()).isEqualTo(BigDecimal.valueOf(.0577));
+        assertThat(safeRatio(protocolParams.getPriceStep())).isEqualTo(BigDecimal.valueOf(0.0000721));
+        assertThat(safeRatio(protocolParams.getPriceMem())).isEqualTo(BigDecimal.valueOf(.0577));
         assertThat(protocolParams.getMaxTxExMem()).isEqualTo(BigInteger.valueOf(10000000));
         assertThat(protocolParams.getMaxTxExSteps()).isEqualTo(BigInteger.valueOf(10000000000L));
         assertThat(protocolParams.getMaxBlockExMem()).isEqualTo(BigInteger.valueOf(50000000L));
@@ -59,8 +60,8 @@ public class AlonzoGenesisTest {
 
         //protocol parameters
         assertThat(protocolParams.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482));
-        assertThat(protocolParams.getPriceStep()).isEqualTo(BigDecimal.valueOf(0.0000721));
-        assertThat(protocolParams.getPriceMem()).isEqualTo(BigDecimal.valueOf(.0577));
+        assertThat(safeRatio(protocolParams.getPriceStep())).isEqualTo(BigDecimal.valueOf(0.0000721));
+        assertThat(safeRatio(protocolParams.getPriceMem())).isEqualTo(BigDecimal.valueOf(.0577));
         assertThat(protocolParams.getMaxTxExMem()).isEqualTo(BigInteger.valueOf(10000000));
         assertThat(protocolParams.getMaxTxExSteps()).isEqualTo(BigInteger.valueOf(10000000000L));
         assertThat(protocolParams.getMaxBlockExMem()).isEqualTo(BigInteger.valueOf(50000000L));

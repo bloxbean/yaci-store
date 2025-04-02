@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class ConwayGenesisTest {
@@ -24,22 +25,22 @@ public class ConwayGenesisTest {
         BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
         BigDecimal committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup().doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal()).doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence()).doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation()).doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()).doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup()).doubleValue()).isEqualTo(0.51);
 
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.6);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution().doubleValue()).isEqualTo(0.75);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation().doubleValue()).isEqualTo(0.6);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup().doubleValue()).isEqualTo(0.75);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal().doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence()).doubleValue()).isEqualTo(0.6);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution()).doubleValue()).isEqualTo(0.75);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation()).doubleValue()).isEqualTo(0.6);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup()).doubleValue()).isEqualTo(0.75);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal()).doubleValue()).isEqualTo(0.67);
 
         assertThat(protocolParams.getCommitteeMinSize()).isEqualTo(7);
         assertThat(protocolParams.getCommitteeMaxTermLength()).isEqualTo(146);
@@ -74,22 +75,22 @@ public class ConwayGenesisTest {
         BigInteger committeeDenominator = conwayGenesis.getCommitteeDenominator();
         BigDecimal committeeThreshold = conwayGenesis.getCommitteeThreshold();
 
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal().doubleValue()).isEqualTo(0.65);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.65);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation().doubleValue()).isEqualTo(0.51);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence().doubleValue()).isEqualTo(0.60);
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup().doubleValue()).isEqualTo(0.60);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal()).doubleValue()).isEqualTo(0.65);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence()).doubleValue()).isEqualTo(0.65);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation()).doubleValue()).isEqualTo(0.51);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()).doubleValue()).isEqualTo(0.60);
+        assertThat(safeRatio(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup()).doubleValue()).isEqualTo(0.60);
 
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence().doubleValue()).isEqualTo(0.65);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution().doubleValue()).isEqualTo(0.75);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation().doubleValue()).isEqualTo(0.60);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup().doubleValue()).isEqualTo(0.67);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup().doubleValue()).isEqualTo(0.75);
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal().doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence()).doubleValue()).isEqualTo(0.65);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution()).doubleValue()).isEqualTo(0.75);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation()).doubleValue()).isEqualTo(0.60);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup()).doubleValue()).isEqualTo(0.67);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup()).doubleValue()).isEqualTo(0.75);
+        assertThat(safeRatio(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal()).doubleValue()).isEqualTo(0.67);
 
         assertThat(protocolParams.getCommitteeMinSize()).isEqualTo(5);
         assertThat(protocolParams.getCommitteeMaxTermLength()).isEqualTo(146);
@@ -97,7 +98,7 @@ public class ConwayGenesisTest {
         assertThat(protocolParams.getGovActionDeposit()).isEqualTo(BigInteger.valueOf(100000000000L));
         assertThat(protocolParams.getDrepDeposit()).isEqualTo(500000000);
         assertThat(protocolParams.getDrepActivity()).isEqualTo(20);
-        assertThat(protocolParams.getMinFeeRefScriptCostPerByte()).isEqualTo(BigDecimal.valueOf(15));
+        assertThat(safeRatio(protocolParams.getMinFeeRefScriptCostPerByte())).isEqualByComparingTo(BigDecimal.valueOf(15));
 
         assertThat(committeeMembers.stream().map(GenesisCommitteeMember::getHash))
                 .contains("7ceede7d6a89e006408e6b7c6acb3dd094b3f6817e43b4a36d01535b",

@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.governancerules.rule;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
+import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,9 +10,11 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 
-import static com.bloxbean.cardano.yaci.store.governancerules.util.NumericUtil.toDouble;
+import static com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils.isHigherOrEquals;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
 @Data
 @NoArgsConstructor
@@ -28,37 +31,38 @@ public class SPOVotingState extends VotingState {
     @Override
     public boolean isAccepted() {
         boolean result;
-        double acceptedStakeRatio;
+        BigDecimal acceptedStakeRatio;
 
         if (poolVotingThresholds == null || yesVoteStake == null || abstainVoteStake == null || totalStake == null || ccState == null) {
             return false;
         }
 
         if (totalStake.equals(BigInteger.ZERO) || abstainVoteStake.equals(totalStake)) {
-            acceptedStakeRatio = 0;
+            acceptedStakeRatio = BigDecimal.ZERO;
         } else {
-            acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(totalStake.add(abstainVoteStake.negate()));
+            BigInteger totalStakeMinusAbstainStake = totalStake.add(abstainVoteStake.negate());
+            acceptedStakeRatio = new BigDecimal(yesVoteStake).divide(new BigDecimal(totalStakeMinusAbstainStake), BigNumberUtils.mathContext);
         }
 
         final GovActionType govActionType = govAction.getType();
 
         switch (govActionType) {
             case NO_CONFIDENCE:
-                result = acceptedStakeRatio >= toDouble(poolVotingThresholds.getPvtMotionNoConfidence());
+                result = isHigherOrEquals(acceptedStakeRatio, safeRatio(poolVotingThresholds.getPvtMotionNoConfidence()));
                 break;
             case UPDATE_COMMITTEE:
-                if (ccState == ConstitutionCommitteeState.NORMAL) {
-                    result = acceptedStakeRatio >= toDouble(poolVotingThresholds.getPvtCommitteeNormal());
+                if (ccState == ConstitutionCommitteeState.NORMAL) {//
+                    result = isHigherOrEquals(acceptedStakeRatio, safeRatio(poolVotingThresholds.getPvtCommitteeNormal()));
                 } else {
-                    result = acceptedStakeRatio >= toDouble(poolVotingThresholds.getPvtCommitteeNoConfidence());
+                    result = isHigherOrEquals(acceptedStakeRatio, safeRatio(poolVotingThresholds.getPvtCommitteeNoConfidence()));
                 }
                 break;
             case HARD_FORK_INITIATION_ACTION:
-                result = acceptedStakeRatio >= toDouble(poolVotingThresholds.getPvtHardForkInitiation());
+                result = isHigherOrEquals(acceptedStakeRatio, safeRatio(poolVotingThresholds.getPvtHardForkInitiation()));
                 break;
             case PARAMETER_CHANGE_ACTION:
                 // security group
-                result = yesVoteStake.doubleValue() >= toDouble(poolVotingThresholds.getPvtPPSecurityGroup());
+                result = isHigherOrEquals(acceptedStakeRatio, safeRatio(poolVotingThresholds.getPvtPPSecurityGroup()));
                 break;
             default:
                 log.error("SPOs do not vote this action");

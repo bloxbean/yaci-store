@@ -12,6 +12,8 @@ import java.math.RoundingMode;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys.PLUTUS_V3;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.decimalToNonNegativeInterval;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.decimalToUnitInterval;
 
 public class ConwayGenesis extends GenesisFile {
     private final static String POOL_VOTING_THRESHOLDS = "poolVotingThresholds";
@@ -99,11 +101,11 @@ public class ConwayGenesis extends GenesisFile {
             BigDecimal pvtSecurityGroup = pvtPPSecurityGroup.decimalValue();
 
             poolVotingThresholds = PoolVotingThresholds.builder()
-                    .pvtCommitteeNormal(pvtCommitteNormal)
-                    .pvtCommitteeNoConfidence(pvtCommitteeNoConfidence)
-                    .pvtHardForkInitiation(pvtHardForkInitiation)
-                    .pvtMotionNoConfidence(pvtMotionNoConfidence)
-                    .pvtPPSecurityGroup(pvtSecurityGroup)
+                    .pvtCommitteeNormal(decimalToUnitInterval(pvtCommitteNormal))
+                    .pvtCommitteeNoConfidence(decimalToUnitInterval(pvtCommitteeNoConfidence))
+                    .pvtHardForkInitiation(decimalToUnitInterval(pvtHardForkInitiation))
+                    .pvtMotionNoConfidence(decimalToUnitInterval(pvtMotionNoConfidence))
+                    .pvtPPSecurityGroup(decimalToUnitInterval(pvtSecurityGroup))
                     .build();
         }
 
@@ -141,16 +143,16 @@ public class ConwayGenesis extends GenesisFile {
             BigDecimal dvtTreasuryWithdrawal = dvtTreasuryWithdrawalNode.decimalValue();
 
             drepVoteThresholds = DrepVoteThresholds.builder()
-                    .dvtMotionNoConfidence(dvtMotionNoConfidence)
-                    .dvtCommitteeNormal(dvtCommitteeNormal)
-                    .dvtCommitteeNoConfidence(dvtCommitteeNoConfidence)
-                    .dvtUpdateToConstitution(dvtUpdateToConstitution)
-                    .dvtHardForkInitiation(dvtHardForkInitiation)
-                    .dvtPPNetworkGroup(dvtPPNetworkGroup)
-                    .dvtPPEconomicGroup(dvtPPEconomicGroup)
-                    .dvtPPTechnicalGroup(dvtPPTechnicalGroup)
-                    .dvtPPGovGroup(dvtPPGovGroup)
-                    .dvtTreasuryWithdrawal(dvtTreasuryWithdrawal)
+                    .dvtMotionNoConfidence(decimalToUnitInterval(dvtMotionNoConfidence))
+                    .dvtCommitteeNormal(decimalToUnitInterval(dvtCommitteeNormal))
+                    .dvtCommitteeNoConfidence(decimalToUnitInterval(dvtCommitteeNoConfidence))
+                    .dvtUpdateToConstitution(decimalToUnitInterval(dvtUpdateToConstitution))
+                    .dvtHardForkInitiation(decimalToUnitInterval(dvtHardForkInitiation))
+                    .dvtPPNetworkGroup(decimalToUnitInterval(dvtPPNetworkGroup))
+                    .dvtPPEconomicGroup(decimalToUnitInterval(dvtPPEconomicGroup))
+                    .dvtPPTechnicalGroup(decimalToUnitInterval(dvtPPTechnicalGroup))
+                    .dvtPPGovGroup(decimalToUnitInterval(dvtPPGovGroup))
+                    .dvtTreasuryWithdrawal(decimalToUnitInterval(dvtTreasuryWithdrawal))
                     .build();
         }
 
@@ -184,7 +186,7 @@ public class ConwayGenesis extends GenesisFile {
                 .govActionDeposit(govActionDeposit)
                 .drepDeposit(dRepDeposit)
                 .drepActivity(dRepActivity)
-                .minFeeRefScriptCostPerByte(minFeeRefScriptCostPerByte)
+                .minFeeRefScriptCostPerByte(decimalToNonNegativeInterval(minFeeRefScriptCostPerByte))
                 .build();
         var committeeNode = genesisJson.get(COMMITTEE);
 

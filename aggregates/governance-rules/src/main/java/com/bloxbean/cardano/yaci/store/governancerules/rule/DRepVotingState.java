@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.governancerules.rule;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
 import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
+import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
@@ -11,10 +12,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
-import static com.bloxbean.cardano.yaci.store.governancerules.util.NumericUtil.toDouble;
+import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
 @Data
 @NoArgsConstructor
@@ -33,11 +35,11 @@ public class DRepVotingState extends VotingState {
         }
 
         BigInteger totalExcludingAbstainStake = yesVoteStake.add(noVoteStake);
-        double acceptedStakeRatio;
+        BigDecimal acceptedStakeRatio;
         if (totalExcludingAbstainStake.equals(BigInteger.ZERO)) {
-            acceptedStakeRatio = 0;
+            acceptedStakeRatio = BigDecimal.ZERO;
         } else {
-            acceptedStakeRatio = toDouble(yesVoteStake) / toDouble(totalExcludingAbstainStake);
+            acceptedStakeRatio = BigNumberUtils.divide(yesVoteStake, totalExcludingAbstainStake);
         }
 
         final GovActionType govActionType = govAction.getType();
@@ -48,22 +50,22 @@ public class DRepVotingState extends VotingState {
                 result = isAcceptedForParameterChangeAction(acceptedStakeRatio);
                 break;
             case TREASURY_WITHDRAWALS_ACTION:
-                result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtTreasuryWithdrawal());
+                result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtTreasuryWithdrawal()));
                 break;
             case HARD_FORK_INITIATION_ACTION:
-                result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtHardForkInitiation());
+                result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtHardForkInitiation()));
                 break;
             case NO_CONFIDENCE:
-                result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtMotionNoConfidence());
+                result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtMotionNoConfidence()));
                 break;
             case NEW_CONSTITUTION:
-                result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtUpdateToConstitution());
+                result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtUpdateToConstitution()));
                 break;
             case UPDATE_COMMITTEE:
                 if (ccState == ConstitutionCommitteeState.NORMAL) {
-                    result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtCommitteeNormal());
+                    result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtCommitteeNormal()));
                 } else {
-                    result = acceptedStakeRatio >= toDouble(dRepVotingThresholds.getDvtCommitteeNoConfidence());
+                    result = BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, safeRatio(dRepVotingThresholds.getDvtCommitteeNoConfidence()));
                 }
 
                 break;
@@ -74,25 +76,25 @@ public class DRepVotingState extends VotingState {
 
     // Since an individual update can contain multiple groups, the actual thresholds are then
     // given by taking the maximum of all those thresholds
-    private boolean isAcceptedForParameterChangeAction(double acceptedStakeRatio) {
+    private boolean isAcceptedForParameterChangeAction(BigDecimal acceptedStakeRatio) {
         List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(
                 ((ParameterChangeAction) govAction).getProtocolParamUpdate());
 
-        double maxThreshold = 0;
+        BigDecimal maxThreshold = BigDecimal.ZERO;
 
         for (var ppGroup : ppGroupChangeList) {
-            maxThreshold = Math.max(maxThreshold, getThresholdForParamGroup(ppGroup));
+            maxThreshold = maxThreshold.max(getThresholdForParamGroup(ppGroup));
         }
 
-        return acceptedStakeRatio >= maxThreshold;
+        return BigNumberUtils.isHigherOrEquals(acceptedStakeRatio, maxThreshold);
     }
 
-    private double getThresholdForParamGroup(ProtocolParamGroup ppGroup) {
+    private BigDecimal getThresholdForParamGroup(ProtocolParamGroup ppGroup) {
         return switch (ppGroup) {
-            case NETWORK -> toDouble(dRepVotingThresholds.getDvtPPNetworkGroup());
-            case ECONOMIC -> toDouble(dRepVotingThresholds.getDvtPPEconomicGroup());
-            case GOVERNANCE -> toDouble(dRepVotingThresholds.getDvtPPGovGroup());
-            case TECHNICAL -> toDouble(dRepVotingThresholds.getDvtPPTechnicalGroup());
+            case NETWORK -> safeRatio(dRepVotingThresholds.getDvtPPNetworkGroup());
+            case ECONOMIC -> safeRatio(dRepVotingThresholds.getDvtPPEconomicGroup());
+            case GOVERNANCE -> safeRatio(dRepVotingThresholds.getDvtPPGovGroup());
+            case TECHNICAL -> safeRatio(dRepVotingThresholds.getDvtPPTechnicalGroup());
             default -> throw new IllegalArgumentException("Unsupported protocol parameter group: " + ppGroup);
         };
     }
