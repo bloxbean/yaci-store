@@ -25,10 +25,10 @@ public class ProposalStateClientImpl implements ProposalStateClient {
 
     public ProposalStateClientImpl(GovActionProposalStatusStorage govActionProposalStatusStorage,
                                    GovActionProposalStorage govActionProposalStorage,
-                                   ProposalMapper proposalMapper1) {
+                                   ProposalMapper proposalMapper) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
-        this.proposalMapper = proposalMapper1;
+        this.proposalMapper = proposalMapper;
     }
 
     @Override
