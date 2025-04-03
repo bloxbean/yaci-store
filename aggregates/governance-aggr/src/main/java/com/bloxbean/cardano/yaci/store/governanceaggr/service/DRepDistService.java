@@ -81,7 +81,8 @@ public class DRepDistService {
         List<String> dropQueries = List.of(
             "DROP TABLE IF EXISTS ss_drep_ranked_delegations",
             "DROP TABLE IF EXISTS ss_drep_status",
-            "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits"
+            "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits",
+            "DROP TABLE IF EXISTS ss_earned_reward_rest"
         );
 
         for (String query : dropQueries) {
