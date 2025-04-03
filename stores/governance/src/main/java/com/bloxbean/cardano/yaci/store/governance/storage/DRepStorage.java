@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.governanceaggr.storage;
+package com.bloxbean.cardano.yaci.store.governance.storage;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.DRepStatus;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRep;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus;
 
 import java.util.List;
 import java.util.Optional;

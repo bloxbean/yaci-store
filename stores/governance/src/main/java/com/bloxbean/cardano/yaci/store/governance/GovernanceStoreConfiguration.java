@@ -155,4 +155,10 @@ public class GovernanceStoreConfiguration {
         return new CommitteeStorageReaderImpl(committeeRepository, committeeMapper);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepStorage dRepStorage(DRepRepository dRepRepository, DRepMapper dRepMapper, DSLContext dslContext) {
+        return new DRepStorageImpl(dRepRepository, dRepMapper, dslContext);
+    }
+
 }

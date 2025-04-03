@@ -1,11 +1,14 @@
 package com.bloxbean.cardano.yaci.store.api.governance.dto;
 
-import com.bloxbean.cardano.client.governance.DRepId;
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
+@Slf4j
 public class VotingProcedureDtoMapper {
     public VotingProcedureDto toVotingProcedureDto(VotingProcedure votingProcedure) {
 
@@ -27,13 +30,16 @@ public class VotingProcedureDtoMapper {
                 .build();
 
         String dRepId;
-        if (votingProcedure.getVoterType() == VoterType.DREP_KEY_HASH) {
-            dRepId = DRepId.fromKeyHash(votingProcedure.getVoterHash());
-            votingProcedureDto.setDRepId(dRepId);
-        } else if (votingProcedure.getVoterType() == VoterType.DREP_SCRIPT_HASH) {
-            dRepId = DRepId.fromScriptHash(votingProcedure.getVoterHash());
-            votingProcedureDto.setDRepId(dRepId);
-        }
+        if (votingProcedure.getVoterHash() != null) {
+            if (votingProcedure.getVoterType() == VoterType.DREP_KEY_HASH) {
+                dRepId = GovId.drepFromKeyHash(HexUtil.decodeHexString(votingProcedure.getVoterHash()));
+                votingProcedureDto.setDRepId(dRepId);
+            } else if (votingProcedure.getVoterType() == VoterType.DREP_SCRIPT_HASH) {
+                dRepId = GovId.drepFromScriptHash(HexUtil.decodeHexString(votingProcedure.getVoterHash()));
+                votingProcedureDto.setDRepId(dRepId);
+            }
+        } else
+            log.warn("Voter hash is null for voting procedure with id: {}", votingProcedure.getId());
 
         return votingProcedureDto;
     }
