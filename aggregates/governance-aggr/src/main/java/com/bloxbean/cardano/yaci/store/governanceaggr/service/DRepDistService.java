@@ -216,7 +216,7 @@ public class DRepDistService {
                           + coalesce(apd.deposit, 0) 
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
-                    :epoch,
+                    :snapshot_epoch,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd
