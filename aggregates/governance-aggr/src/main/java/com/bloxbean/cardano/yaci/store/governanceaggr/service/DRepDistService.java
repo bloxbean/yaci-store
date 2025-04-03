@@ -143,12 +143,14 @@ public class DRepDistService {
                       SUM(g.deposit) as deposit
                     from
                       gov_action_proposal g
-                      inner join gov_action_proposal_status s on g.tx_hash = s.gov_action_tx_hash
+                      left join gov_action_proposal_status s on g.tx_hash = s.gov_action_tx_hash
                       and g.idx = s.gov_action_index
                     where
-                      s.status = 'ACTIVE'
-                      and g.epoch <= :epoch
-                      and s.epoch = :epoch
+                     (s.status = 'ACTIVE'
+                     		and g.epoch < :epoch
+                     		and s.epoch = :epoch)
+                     	or (s.status is null
+                     		and g.epoch = :epoch)
                     group by
                       g.return_address
                 """;
