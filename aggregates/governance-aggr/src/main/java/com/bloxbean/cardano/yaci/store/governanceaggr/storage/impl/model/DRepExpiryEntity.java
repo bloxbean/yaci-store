@@ -17,11 +17,11 @@ import java.time.LocalDateTime;
 public class DRepExpiryEntity {
 
     @Id
-    @Column(name = "drep_id")
-    private String drepId;
-
     @Column(name = "drep_hash")
     private String drepHash;
+
+    @Column(name = "drep_id")
+    private String drepId;
 
     @Column(name = "active_until")
     private Integer activeUntil;

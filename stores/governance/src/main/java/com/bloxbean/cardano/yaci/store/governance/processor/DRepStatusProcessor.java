@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
+package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -7,9 +7,9 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.event.DRepRegistrationEvent;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRep;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.DRepStatus;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRep;
+import com.bloxbean.cardano.yaci.store.governance.storage.DRepStorage;
+import com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -21,11 +21,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
+import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration.STORE_GOVERNANCE_ENABLED;
 
 @Component
 @RequiredArgsConstructor
-@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
+@EnableIf(STORE_GOVERNANCE_ENABLED)
 @Slf4j
 public class DRepStatusProcessor {
     private final DRepStorage dRepStorage;

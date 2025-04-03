@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.certs.RegDrepCert;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
@@ -7,6 +8,7 @@ import com.bloxbean.cardano.yaci.core.model.certs.UnregDrepCert;
 import com.bloxbean.cardano.yaci.core.model.certs.UpdateDrepCert;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -72,7 +74,7 @@ class DRepRegistrationProcessorTest {
         assertThat(savedDRepRegistration.getTxHash()).isEqualTo(txHash);
         assertThat(savedDRepRegistration.getDeposit()).isEqualTo(2000000);
         assertThat(savedDRepRegistration.getDrepHash()).isEqualTo("d6d84c6a5b05cb8f89d24e9d46926975fa1dc08a58b3c26e96c06df7");
-        assertThat(savedDRepRegistration.getDrepId()).isEqualTo("drep16mvyc6jmqh9clzwjf6w5dynfwhapmsy2tzeuym5kcpklwp9myhm");
+        assertThat(savedDRepRegistration.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("d6d84c6a5b05cb8f89d24e9d46926975fa1dc08a58b3c26e96c06df7")));
         assertThat(savedDRepRegistration.getAnchorUrl()).isEqualTo("https://bit.ly/3zCH2HL");
         assertThat(savedDRepRegistration.getAnchorHash()).isEqualTo("1111111111111111111111111111111111111111111111111111111111111111");
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);
@@ -110,7 +112,7 @@ class DRepRegistrationProcessorTest {
         assertThat(savedDRepRegistration.getTxHash()).isEqualTo(txHash);
         assertThat(savedDRepRegistration.getDeposit()).isEqualTo(2000000);
         assertThat(savedDRepRegistration.getDrepHash()).isEqualTo("adae9fa43726611f1c2c29f798f223316a084a3f54f8c3bf4fb8d410");
-        assertThat(savedDRepRegistration.getDrepId()).isEqualTo("drep14khflfphyes378pv98me3u3rx94qsj3l2nuv8060hr2pqq74y8t");
+        assertThat(savedDRepRegistration.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("adae9fa43726611f1c2c29f798f223316a084a3f54f8c3bf4fb8d410")));
         assertThat(savedDRepRegistration.getAnchorUrl()).isNull();
         assertThat(savedDRepRegistration.getAnchorHash()).isNull();
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);
@@ -152,7 +154,7 @@ class DRepRegistrationProcessorTest {
         assertThat(savedDRepRegistration.getTxHash()).isEqualTo(txHash);
         assertThat(savedDRepRegistration.getDeposit()).isNull();
         assertThat(savedDRepRegistration.getDrepHash()).isEqualTo("b3b5ff08207450a2d7aab00f206c6d25078ccee35b9c407afd941e95");
-        assertThat(savedDRepRegistration.getDrepId()).isEqualTo("drep1kw6l7zpqw3g294a2kq8jqmrdy5rcenhrtwwyq7hajs0f2tycq5h");
+        assertThat(savedDRepRegistration.getDrepId()).isEqualTo(GovId.drepFromKeyHash(HexUtil.decodeHexString("b3b5ff08207450a2d7aab00f206c6d25078ccee35b9c407afd941e95")));
         assertThat(savedDRepRegistration.getAnchorUrl()).isEqualTo("https://bit.ly/3zCH2HL");
         assertThat(savedDRepRegistration.getAnchorHash()).isEqualTo("1111111111111111111111111111111111111111111111111111111111111111");
         assertThat(savedDRepRegistration.getCertIndex()).isEqualTo(0);

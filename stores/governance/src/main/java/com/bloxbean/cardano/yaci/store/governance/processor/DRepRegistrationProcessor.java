@@ -1,9 +1,10 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
-import com.bloxbean.cardano.client.governance.DRepId;
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -97,9 +98,9 @@ public class DRepRegistrationProcessor {
 
         if (drepCredential.getHash() != null) {
             if (drepCredential.getType() == StakeCredType.ADDR_KEYHASH) {
-                drepRegistration.setDrepId(DRepId.fromKeyHash(drepCredential.getHash()));
+                drepRegistration.setDrepId(GovId.drepFromKeyHash(HexUtil.decodeHexString(drepCredential.getHash())));
             } else if (drepCredential.getType() == StakeCredType.SCRIPTHASH) {
-                drepRegistration.setDrepId(DRepId.fromScriptHash(drepCredential.getHash()));
+                drepRegistration.setDrepId(GovId.drepFromScriptHash(HexUtil.decodeHexString(drepCredential.getHash())));
             }
         }
 

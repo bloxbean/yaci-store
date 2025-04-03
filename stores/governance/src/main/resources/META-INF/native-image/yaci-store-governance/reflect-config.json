@@ -151,7 +151,12 @@
     "allDeclaredMethods": true,
     "allDeclaredFields": true
   },
-
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance.jooq.tables.pojos.Drep",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
 
   {
     "name": "com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction",

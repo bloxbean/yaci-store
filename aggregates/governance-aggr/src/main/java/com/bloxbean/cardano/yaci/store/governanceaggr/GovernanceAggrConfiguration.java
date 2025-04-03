@@ -2,19 +2,15 @@ package com.bloxbean.cardano.yaci.store.governanceaggr;
 
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepExpiryStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepDistStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepExpiryStorageImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.GovActionProposalStatusStorageImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepDistMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepExpiryMapper;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovActionProposalStatusMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepDistRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepExpiryRepository;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -41,12 +37,6 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableScheduling
 public class GovernanceAggrConfiguration {
     public final static String STORE_GOVERNANCEAGGR_ENABLED = "store.governance-aggr.enabled";
-
-    @Bean
-    @ConditionalOnMissingBean
-    public DRepStorage dRepStorage(DRepRepository dRepRepository, DRepMapper dRepMapper, DSLContext dslContext) {
-        return new DRepStorageImpl(dRepRepository, dRepMapper, dslContext);
-    }
 
     @Bean
     @ConditionalOnMissingBean

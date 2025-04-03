@@ -7,7 +7,7 @@ import com.bloxbean.cardano.client.backend.blockfrost.common.Constants;
 import com.bloxbean.cardano.client.backend.blockfrost.service.BFBackendService;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.function.helper.SignerProviders;
-import com.bloxbean.cardano.client.governance.DRepId;
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.client.quicktx.QuickTxBuilder;
 import com.bloxbean.cardano.client.quicktx.Tx;
 import com.bloxbean.cardano.client.spec.UnitInterval;
@@ -351,7 +351,7 @@ class GovernanceTxIT extends QuickTxBaseIT {
 //        stakeAddressRegistration(sender2Addr);
         QuickTxBuilder quickTxBuilder = new QuickTxBuilder(backendService);
 
-        DRep drep = DRepId.toDrep(sender1.drepId(), DRepType.ADDR_KEYHASH);
+        DRep drep = GovId.toDrep(sender1.drepId());
         System.out.println("Drep : " + sender1.drepId());
 
         Tx tx = new Tx()
