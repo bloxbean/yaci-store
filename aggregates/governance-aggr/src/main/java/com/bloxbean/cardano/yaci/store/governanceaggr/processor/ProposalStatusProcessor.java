@@ -149,18 +149,6 @@ public class ProposalStatusProcessor {
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
-//        var newProposals = govActionProposalStorage.findByEpoch(epoch);
-        // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
-//        govActionProposalStatusStorage.saveAll(newProposals.stream().map(govActionProposal ->
-//                GovActionProposalStatus.builder()
-//                        .govActionTxHash(govActionProposal.getTxHash())
-//                        .govActionIndex((int) govActionProposal.getIndex())
-//                        .type(govActionProposal.getType())
-//                        .epoch(epoch)
-//                        .status(GovActionStatus.ACTIVE)
-//                        .build()
-//        ).toList());
-
         if (isInConwayBootstrapPhase) {
             // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
             var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
