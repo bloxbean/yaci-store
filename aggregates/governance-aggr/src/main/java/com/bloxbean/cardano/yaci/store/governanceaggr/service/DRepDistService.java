@@ -75,7 +75,7 @@ public class DRepDistService {
 
         log.info("Taking dRep stake snapshot for epoch : " + epoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
-        jdbcTemplate.update("delete from drep_dist where epoch = :snapshop_epoch", new MapSqlParameterSource().addValue("epoch", epoch + 1));
+        jdbcTemplate.update("delete from drep_dist where epoch = :snapshot_epoch", new MapSqlParameterSource().addValue("snapshot_epoch", epoch + 1));
 
         //Drop temp tables in parallel
         List<String> dropQueries = List.of(
