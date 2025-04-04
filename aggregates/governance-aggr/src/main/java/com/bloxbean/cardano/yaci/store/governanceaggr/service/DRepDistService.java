@@ -291,7 +291,7 @@ public class DRepDistService {
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
-                    left join ss_spendable_reward_rest rr ON rd.address = rr.address
+                    left join ss_earned_reward_rest rr ON rd.address = rr.address
                     left join stake_registration sd
                                           ON sd.address = rd.address
                                               AND sd.type = 'STAKE_DEREGISTRATION'
