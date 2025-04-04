@@ -149,19 +149,6 @@ public class ProposalStatusProcessor {
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
-        var newProposals = govActionProposalStorage.findByEpoch(epoch);
-
-        // get new active proposals in the recent epoch and save them into governance_action_proposal_status table
-        govActionProposalStatusStorage.saveAll(newProposals.stream().map(govActionProposal ->
-                GovActionProposalStatus.builder()
-                        .govActionTxHash(govActionProposal.getTxHash())
-                        .govActionIndex((int) govActionProposal.getIndex())
-                        .type(govActionProposal.getType())
-                        .epoch(epoch)
-                        .status(GovActionStatus.ACTIVE)
-                        .build()
-        ).toList());
-
         if (isInConwayBootstrapPhase) {
             // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
             var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
@@ -573,19 +560,26 @@ public class ProposalStatusProcessor {
      * @return
      */
     private List<GovActionProposal> getProposalsForStatusCalculation(int epoch) {
-        List<GovActionProposal> activeProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch - 1);
-        List<GovActionProposal> expiredProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch - 1);
-        List<GovActionProposal> ratifiedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+        List<GovActionProposal> newProposalsCreatedInPrevEpoch = govActionProposalStorage.findByEpoch(epoch - 1)
+                .stream()
+                .map(govActionProposal -> proposalMapper.toGovActionProposal(govActionProposal))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
 
-        List<Proposal> expiredProposals = expiredProposalsInPrevEpoch.stream()
+        List<GovActionProposal> activeProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch - 1);
+        List<GovActionProposal> expiredProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch - 1);
+        List<GovActionProposal> ratifiedProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+
+        List<Proposal> expiredProposals = expiredProposalsInPrevSnapshot.stream()
                 .map(proposalMapper::toProposal)
                 .toList();
 
-        List<Proposal> ratifiedProposals = ratifiedProposalsInPrevEpoch.stream()
+        List<Proposal> ratifiedProposals = ratifiedProposalsInPrevSnapshot.stream()
                 .map(proposalMapper::toProposal)
                 .toList();
 
-        List<Proposal> activeProposals = activeProposalsInPrevEpoch.stream()
+        List<Proposal> activeProposals = activeProposalsInPrevSnapshot.stream()
                 .map(proposalMapper::toProposal)
                 .toList();
 
@@ -602,12 +596,15 @@ public class ProposalStatusProcessor {
             proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
         }
 
-        return activeProposalsInPrevEpoch.stream()
+        List<GovActionProposal> filteredActiveProposals = activeProposalsInPrevSnapshot.stream()
                 .filter(govActionProposal -> !siblingsOrDescendantsBeDroppedInCurrentEpoch.containsKey(
                         GovActionId.builder()
                                 .gov_action_index(govActionProposal.getIndex())
                                 .transactionId(govActionProposal.getTxHash())
                                 .build()))
+                .toList();
+
+        return Stream.concat(filteredActiveProposals.stream(), newProposalsCreatedInPrevEpoch.stream())
                 .toList();
     }
 
