@@ -1,0 +1,15 @@
+dependencies {
+    api project(':components:core')
+    implementation libs.apache.commons.pool
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Core Spring'
+                description = 'Yaci Store Core Spring Module'
+            }
+        }
+    }
+}

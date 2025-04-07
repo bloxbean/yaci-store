@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -15,7 +16,6 @@ import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +34,7 @@ import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 @ReadOnly(false)
 @Slf4j
 public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
-    private final ApplicationEventPublisher publisher;
+    private final DomainEventPublisher publisher;
     private final CursorService cursorService;
     private final ExecutorService blockExecutor;
     private final ExecutorService eventExecutor;
@@ -42,7 +42,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     public ShelleyBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                       @Qualifier("blockEventExecutor") ExecutorService eventExecutor,
-                                      ApplicationEventPublisher publisher,
+                                      DomainEventPublisher publisher,
                                       CursorService cursorService,
                                       StoreProperties storeProperties) {
         this.blockExecutor = blockExecutor;
@@ -110,7 +110,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
 
         publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
-        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), new ArrayList<>(batchBlockList)));
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),

@@ -2,7 +2,6 @@ dependencies {
     api project(":components:common")
     api project(":components:events")
     api project(":components:client")
-    implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 
 publishing {

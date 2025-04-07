@@ -3,5 +3,7 @@ subprojects {
 
     dependencies {
         api(libs.hibernate.types)
+
+        testImplementation project(':components:core:core-spring')
     }
 }

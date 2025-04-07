@@ -24,21 +24,21 @@ class EpochConfigTest {
     void preprodSetup() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setProtocolMagic(NetworkType.PREPROD.getProtocolMagic());
-        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper(), resourceLoader);
+        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper());
         epochConfig = new EpochConfig(genesisConfig);
     }
 
     void mainnetSetup() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setProtocolMagic(NetworkType.MAINNET.getProtocolMagic());
-        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper(), resourceLoader);
+        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper());
         epochConfig = new EpochConfig(genesisConfig);
     }
 
     void previewSetup() {
         StoreProperties storeProperties = new StoreProperties();
         storeProperties.setProtocolMagic(NetworkType.PREVIEW.getProtocolMagic());
-        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper(), resourceLoader);
+        genesisConfig = new GenesisConfig(storeProperties, new ObjectMapper());
         epochConfig = new EpochConfig(genesisConfig);
     }
 

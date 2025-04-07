@@ -1,0 +1,14 @@
+dependencies {
+    api project(':components:common')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Common Quarkus'
+                description = 'Yaci Store Common Quarkus Module'
+            }
+        }
+    }
+}

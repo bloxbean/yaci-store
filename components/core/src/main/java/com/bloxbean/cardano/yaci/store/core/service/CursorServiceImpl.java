@@ -7,9 +7,9 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -97,7 +97,7 @@ public class CursorServiceImpl implements CursorService {
     @Override
     public void rollback(long slot) {
         log.info("Rollback cursor_ to slot : " + slot);
-        int count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
+        long count = cursorStorage.deleteBySlotGreaterThan(storeProperties.getEventPublisherId(), slot);
         log.info("Rollback -- {} cursor records", count);
 
         Cursor cursor

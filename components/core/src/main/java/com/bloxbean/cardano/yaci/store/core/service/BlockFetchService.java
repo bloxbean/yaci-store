@@ -19,14 +19,13 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
-import io.micrometer.core.instrument.MeterRegistry;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
+import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,8 +39,7 @@ import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.D
 @RequiredArgsConstructor
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {
-    private final ApplicationEventPublisher publisher;
-    private final MeterRegistry meterRegistry;
+    private final DomainEventPublisher publisher;
     private final BlockRangeSync blockRangeSync;
     private final BlockSync blockSync;
     private final CursorService cursorService;
@@ -308,6 +306,7 @@ public class BlockFetchService implements BlockChainDataListener {
         publisher.publishEvent(rollbackEvent);
     }
 
+    @Transactional
     @Override
     public void batchDone() {
 

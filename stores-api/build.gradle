@@ -2,6 +2,6 @@ subprojects {
     apply from : "../../publish-common.gradle"
 
     dependencies {
-
+        testImplementation project(':components:core:core-spring')
     }
 }

@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
+import com.bloxbean.cardano.yaci.store.common.util.ResourceUtils;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
@@ -14,10 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +39,6 @@ public class GenesisConfig {
 
     private final StoreProperties storeProperties;
     private final ObjectMapper objectMapper;
-    private final ResourceLoader resourceLoader;
 
     private long startTime;
     private String shelleyStartTime;
@@ -51,10 +51,9 @@ public class GenesisConfig {
     private int securityParam;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
-    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
+    public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper) {
         this.storeProperties = storeProperties;
         this.objectMapper = objectMapper;
-        this.resourceLoader = resourceLoader;
 
         downloadGenesisFilesIfDevkitNode();
         parseGenesisFiles();
@@ -243,7 +242,10 @@ public class GenesisConfig {
     private ByronGenesis getByronGenesis(String byronGenesisFile) {
         ByronGenesis byronGenesis;
         if (byronGenesisFile.startsWith("classpath:")) {
-            byronGenesis = new ByronGenesis(resourceLoader.getResource(byronGenesisFile).getInputStream());
+            try (InputStream inputStream = ResourceUtils.openInputStream(byronGenesisFile)) {
+                return new ByronGenesis(inputStream);
+            }
+
         } else {
             byronGenesis = new ByronGenesis(new File(byronGenesisFile));
         }
@@ -255,7 +257,9 @@ public class GenesisConfig {
     private ShelleyGenesis getShelleyGenesis(String shelleyGenesisFile) {
         ShelleyGenesis shelleyGenesis;
         if (shelleyGenesisFile.startsWith("classpath:")) {
-            shelleyGenesis = new ShelleyGenesis(resourceLoader.getResource(shelleyGenesisFile).getInputStream());
+            try (InputStream inputStream = ResourceUtils.openInputStream(shelleyGenesisFile)) {
+                shelleyGenesis = new ShelleyGenesis(inputStream);
+            }
         } else {
             shelleyGenesis = new ShelleyGenesis(new File(shelleyGenesisFile));
         }

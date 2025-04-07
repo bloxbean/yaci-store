@@ -12,11 +12,11 @@ import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -26,7 +26,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class StartService {
-    private final ApplicationEventPublisher publisher;
+    private final DomainEventPublisher publisher;
     private final BlockFetchService blockFetchService;
     private final TipFinderService tipFinderService;
     private final GenesisBlockFinder genesisBlockFinder;

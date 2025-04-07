@@ -1,0 +1,27 @@
+dependencies {
+    api project(':components:common')
+
+    api 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework.boot:spring-boot-starter-jooq'
+    api 'org.springframework:spring-context'
+
+    api libs.springdoc.openapi.starter.webmvc.ui
+
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    api 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+    runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Common Spring'
+                description = 'Yaci Store Common Spring Module'
+            }
+        }
+    }
+}

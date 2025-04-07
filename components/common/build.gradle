@@ -1,9 +1,6 @@
 dependencies {
-    implementation project(':components:events')
+    api project(':components:events')
 
-    api 'org.springframework.boot:spring-boot-starter-data-jpa'
-    api 'org.springframework.boot:spring-boot-starter-jooq'
-    api 'org.springframework:spring-context'
     api(libs.yaci) {
         exclude group: "io.netty", module: "netty-all"
         exclude group: "com.bloxbean.cardano", module: "cardano-client-core"
@@ -12,18 +9,29 @@ dependencies {
     api libs.cardano.client.backend
     api libs.springdoc.openapi.starter.webmvc.ui
 
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    api 'jakarta.annotation:jakarta.annotation-api'
+    api 'jakarta.inject:jakarta.inject-api'
+    api 'jakarta.persistence:jakarta.persistence-api'
+    api 'jakarta.enterprise:jakarta.enterprise.cdi-api:4.1.0'
+    api 'org.hibernate.orm:hibernate-core'
 
-    api 'org.springframework.boot:spring-boot-starter-actuator'
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    api 'org.aspectj:aspectjweaver'
+    api 'org.jooq:jooq'
 
-    runtimeOnly 'org.springframework.boot:spring-boot-properties-migrator'
+    api 'org.springframework:spring-context'
+    api 'org.springframework:spring-web'
+    api 'org.springframework.data:spring-data-jpa'
+
+    api 'io.micrometer:micrometer-registry-prometheus'
 
     api 'com.h2database:h2'
 
     implementation 'org.flywaydb:flyway-core'
     implementation "org.flywaydb:flyway-mysql"
     implementation "org.flywaydb:flyway-database-postgresql"
+
+    compileOnly project(":components:annotation-processor")
+    annotationProcessor project(':components:annotation-processor')
 }
 
 publishing {

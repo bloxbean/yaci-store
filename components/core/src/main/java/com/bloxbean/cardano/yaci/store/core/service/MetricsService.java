@@ -4,11 +4,10 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.CursorRepository;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.stereotype.Component;
 
 import java.util.function.Supplier;
 
-@Component
+//@Component
 public class MetricsService {
     private final CursorRepository cursorRepository;
     private final StoreProperties storeProperties;

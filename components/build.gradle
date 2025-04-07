@@ -1,3 +1,19 @@
 subprojects {
-    apply from: "../../publish-common.gradle"
+    // Apply if sub project name is not ends with quarkus or spring
+    if (project.name.endsWith("-spring") || project.name.endsWith("-quarkus")) {
+        apply from: "../../../publish-common.gradle"
+    } else {
+        apply from: "../../publish-common.gradle"
+    }
+
+    //dependencies
+    if (project.name.endsWith("-spring") && !project.name.equalsIgnoreCase("common-spring")) {
+        dependencies {
+            api project(':components:common:common-spring')
+        }
+    } else if (project.name.endsWith("-quarkus") && !project.name.equalsIgnoreCase("common-quarkus")) {
+        dependencies {
+            api project(':components:common:common-quarkus')
+        }
+    }
 }

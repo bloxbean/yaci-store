@@ -9,7 +9,7 @@ public interface CursorStorage {
     Optional<Cursor> getCurrentCursor(long eventPublisherId);
     Optional<Cursor> getPreviousCursor(long eventPublisherId, long slot);
     Optional<Cursor> findByBlockHash(long eventPublisherId, String blockHash);
-    int deleteBySlotGreaterThan(long eventPublisherId, long slot);
+    long deleteBySlotGreaterThan(long eventPublisherId, long slot);
 
-    int deleteCursorBefore(long eventPublisherId, long blockNumber);
+    long deleteCursorBefore(long eventPublisherId, long blockNumber);
 }

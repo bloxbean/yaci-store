@@ -3,12 +3,10 @@ package com.bloxbean.cardano.yaci.store.core.storage.impl;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
-@Service
 @RequiredArgsConstructor
 public class EraStorageImpl implements EraStorage {
     private final EraRepository eraRepository;

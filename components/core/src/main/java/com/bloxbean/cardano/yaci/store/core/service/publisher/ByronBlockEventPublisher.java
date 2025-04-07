@@ -8,12 +8,12 @@ import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchByronBlock;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 @ReadOnly(false)
 @Slf4j
 public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBlock> {
-    private final ApplicationEventPublisher publisher;
+    private final DomainEventPublisher publisher;
     private final CursorService cursorService;
     private final ExecutorService blockExecutor;
     private final StoreProperties storeProperties;
@@ -37,7 +37,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
 
     public ByronBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
-                                    ApplicationEventPublisher publisher,
+                                    DomainEventPublisher publisher,
                                     CursorService cursorService,
                                     StoreProperties storeProperties) {
         this.blockExecutor = blockExecutor;
@@ -57,7 +57,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
         publisher.publishEvent(byronMainBlockEvent);
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
-        publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
+        publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
@@ -97,7 +97,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
         publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));
-        publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), new ArrayList<>(byronBatchBlockList)));
 
         cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
                 lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),

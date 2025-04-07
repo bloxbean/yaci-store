@@ -15,8 +15,20 @@ include 'applications:admin'
 include 'applications:admin-cli'
 
 include 'components:core'
+include 'components:core:spring'
+include 'components:core:quarkus'
+project(':components:core:spring').name = 'core-spring'
+project(':components:core:quarkus').name = 'core-quarkus'
+
+include 'components:annotation-processor'
 include 'components:events'
+
 include 'components:common'
+include 'components:common:spring'
+include 'components:common:quarkus'
+project(':components:common:spring').name = 'common-spring'
+project(':components:common:quarkus').name = 'common-quarkus'
+
 include 'components:client'
 include 'components:submit'
 include 'components:remote'

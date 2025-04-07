@@ -3,7 +3,6 @@ dependencies {
     api project(":components:events")
     api project(":components:core")
     api project(":components:client")
-    implementation 'org.springframework.boot:spring-boot-starter-web'
 
     implementation libs.cardano.client.backend
 }
