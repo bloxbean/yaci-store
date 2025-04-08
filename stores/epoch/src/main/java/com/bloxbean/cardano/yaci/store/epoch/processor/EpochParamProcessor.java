@@ -7,10 +7,12 @@ import com.bloxbean.cardano.yaci.core.model.governance.actions.HardForkInitiatio
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.ProtocolParamsProposal;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
@@ -18,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +42,8 @@ public class EpochParamProcessor {
     private final ProtocolParamsProposalStorage protocolParamsProposalStorage;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
     private final ProposalStateClient proposalStateClient;
+    private final EraService eraService;
+    private final StoreProperties storeProperties;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
     private PPEraChangeRules ppEraChangeRules = new PPEraChangeRules();
 
@@ -92,8 +97,48 @@ public class EpochParamProcessor {
         Era newEra = epochChangeEvent.getEra();
 
         //Get genesis protocol params
+        long protocolMagic = epochChangeEvent.getMetadata().getProtocolMagic();
+
+        if (newEra.getValue() >= Era.Conway.value) {
+            log.info("Conway or post Conway era. Epoch param will be processed during adapot job");
+            return;
+        }
+
+        EpochParam epochParam = resolveEpochParam(protocolMagic, newEra, prevEra, newEpoch,
+                epochChangeEvent.getMetadata().getSlot(),
+                epochChangeEvent.getMetadata().getBlock(),
+                epochChangeEvent.getMetadata().getBlockTime());
+
+        epochParamStorage.save(epochParam);
+    }
+
+    @EventListener
+    @Transactional
+    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        log.info("Processing epoch param for epoch {} and slot {} during pre-adapot job processing >>>", event.getEpoch(), event.getSlot());
+        int epoch = event.getEpoch();
+        long slot = event.getSlot();
+
+        var dbEpochParam = epochParamStorage.getProtocolParams(epoch);
+        if (dbEpochParam.isPresent()) {
+            log.warn("Epoch param for epoch {} already exists. Ignoring it.", epoch);
+            return;
+        }
+
+        int prevEpoch = epoch - 1;
+        Era era = eraService.getEraForEpoch(epoch);
+        Era prevEra = eraService.getEraForEpoch(prevEpoch);
+
+        long blockTime = eraService.blockTime(era, slot);
+        long protocolMagic = storeProperties.getProtocolMagic();
+
+        EpochParam resolvedEpochParam = resolveEpochParam(protocolMagic, era, prevEra, epoch, slot,  null, blockTime);
+        epochParamStorage.save(resolvedEpochParam);
+    }
+
+    private EpochParam resolveEpochParam(long protocolMagic, Era newEra, Era prevEra, int newEpoch, Long slot, Long block, Long blockTime) {
         Optional<ProtocolParams> genesisProtocolParams = eraGenesisProtocolParamsUtil
-                .getGenesisProtocolParameters(newEra, prevEra, epochChangeEvent.getMetadata().getProtocolMagic());
+                .getGenesisProtocolParameters(newEra, prevEra, protocolMagic);
 
         ProtocolParams protocolParams = new ProtocolParams();
 
@@ -114,7 +159,7 @@ public class EpochParamProcessor {
         ppEraChangeRules.apply(newEra, prevEra, protocolParams);
 
         // handle parameter change from gov action proposal
-        if (epochChangeEvent.getEra().getValue() >= Era.Conway.getValue()) {
+        if (newEra.getValue() >= Era.Conway.getValue()) {
             List<GovActionProposal> ratifiedProposalsInPrevEpoch =
                     proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, newEpoch - 1);
 
@@ -145,12 +190,11 @@ public class EpochParamProcessor {
         EpochParam epochParam = EpochParam.builder()
                 .epoch(newEpoch)
                 .params(protocolParams)
-                .slot(epochChangeEvent.getMetadata().getSlot())
-                .blockNumber(epochChangeEvent.getMetadata().getBlock())
-                .blockTime(epochChangeEvent.getMetadata().getBlockTime())
+                .slot(slot)
+                .blockNumber(block)
+                .blockTime(blockTime)
                 .build();
-
-        epochParamStorage.save(epochParam);
+        return epochParam;
     }
 
     @EventListener
