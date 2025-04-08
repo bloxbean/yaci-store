@@ -119,7 +119,7 @@ public class DRepDistService {
                         epoch,
                         slot,
                         tx_index,
-                        cert_index,
+                        cert_index
                     FROM ranked
                     WHERE rn = 1
                 """;
@@ -128,12 +128,14 @@ public class DRepDistService {
                 WITH last_reg AS (
                     SELECT
                         dr.drep_id,
+                        dr.drep_hash,              
                         dr.slot  AS registration_slot,
                         dr.tx_index  AS registration_tx_index,
                         dr.cert_index AS registration_cert_index
                     FROM (
                         SELECT
                             drep_id,
+                            drep_hash,
                             slot,
                             tx_index,
                             cert_index,
@@ -143,7 +145,7 @@ public class DRepDistService {
                             ) AS rn
                         FROM drep_registration
                         WHERE epoch <= :epoch
-                          AND status = 'REGISTERED'
+                          AND type = 'REG_DREP_CERT'
                     ) dr
                     WHERE dr.rn = 1
                 )
@@ -167,7 +169,6 @@ public class DRepDistService {
                 LEFT JOIN last_reg lr
                        ON d.drep_hash = lr.drep_hash
                 WHERE d.epoch <= :epoch
-                ;
                 """;
 
         String activeProposalDepositsQuery = """
