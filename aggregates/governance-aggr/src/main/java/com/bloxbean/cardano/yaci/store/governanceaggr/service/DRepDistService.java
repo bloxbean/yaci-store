@@ -92,28 +92,37 @@ public class DRepDistService {
 
         String rankedDelegationsQuery = """
                 CREATE TABLE ss_drep_ranked_delegations AS
-                select
-                      address,
-                      drep_id,
-                      drep_hash,
-                      drep_type,
-                      epoch,
-                      slot,
-                      tx_index,
-                      cert_index,
-                      row_number() over (
-                        partition by address
-                        order by
-                          slot desc,
-                          tx_index desc,
-                          cert_index desc
-                      ) as rn
-                    from
-                      delegation_vote
-                    where
-                      epoch <= :epoch
+                    WITH ranked AS (
+                        SELECT
+                            address,
+                            drep_id,
+                            drep_hash,
+                            drep_type,
+                            epoch,
+                            slot,
+                            tx_index,
+                            cert_index,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY address
+                                ORDER BY slot DESC, tx_index DESC, cert_index DESC
+                            ) AS rn
+                        FROM
+                            delegation_vote
+                        WHERE
+                            epoch <= :epoch
+                    )
+                    SELECT
+                        address,
+                        drep_id,
+                        drep_hash,
+                        drep_type,
+                        epoch,
+                        slot,
+                        tx_index,
+                        cert_index,
+                    FROM ranked
+                    WHERE rn = 1
                 """;
-
         String drepStatusQuery = """
                 CREATE TABLE ss_drep_status AS
                 WITH last_reg AS (
@@ -306,8 +315,7 @@ public class DRepDistService {
                                                  (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
                                                  )
                   where
-                    and rd.rn = 1
-                    and sd.address IS NULL
+                    sd.address IS NULL
                     """ + excludeDelegationCondition + """
                   group by
                     rd.drep_hash,
@@ -348,7 +356,7 @@ public class DRepDistService {
                                                  (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
                                                  )
                   where
-                    rd.rn=1 AND (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
+                    (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
                     AND sd.address IS NULL              
                   group by
                     rd.drep_type
