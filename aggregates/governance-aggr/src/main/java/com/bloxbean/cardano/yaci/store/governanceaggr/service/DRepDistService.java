@@ -116,25 +116,49 @@ public class DRepDistService {
 
         String drepStatusQuery = """
                 CREATE TABLE ss_drep_status AS
-                select
-                      drep_id,
-                      drep_hash,
-                      tx_index,
-                      cert_index,
-                      status,
-                      registration_slot,
-                      slot,
-                      row_number() over (
-                        partition by drep_id
-                        order by
-                          slot desc,
-                          tx_index desc,
-                          cert_index desc
-                      ) as rn
-                    from
-                      drep
-                    where
-                      epoch <= :epoch
+                WITH last_reg AS (
+                    SELECT
+                        dr.drep_id,
+                        dr.slot  AS registration_slot,
+                        dr.tx_index  AS registration_tx_index,
+                        dr.cert_index AS registration_cert_index
+                    FROM (
+                        SELECT
+                            drep_id,
+                            slot,
+                            tx_index,
+                            cert_index,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY drep_hash
+                                ORDER BY slot DESC, tx_index DESC, cert_index DESC
+                            ) AS rn
+                        FROM drep_registration
+                        WHERE epoch <= :epoch
+                          AND status = 'REGISTERED'
+                    ) dr
+                    WHERE dr.rn = 1
+                )
+                SELECT
+                    d.drep_id,
+                    d.drep_hash,
+                    d.tx_index,
+                    d.cert_index,
+                    d.type,
+                    d.slot,
+                
+                    lr.registration_slot,
+                    lr.registration_tx_index,
+                    lr.registration_cert_index,
+                
+                    ROW_NUMBER() OVER (
+                        PARTITION BY d.drep_hash
+                        ORDER BY d.slot DESC, d.tx_index DESC, d.cert_index DESC
+                    ) AS rn
+                FROM drep_registration d
+                LEFT JOIN last_reg lr
+                       ON d.drep_hash = lr.drep_hash
+                WHERE d.epoch <= :epoch
+                ;
                 """;
 
         String activeProposalDepositsQuery = """
@@ -196,10 +220,11 @@ public class DRepDistService {
         // Create indexes in parallel (if required, otherwise skip this part)
         List<String> createIndexQueries = List.of(
                 "CREATE INDEX idx_ss_drep_ranked_delegations_address ON ss_drep_ranked_delegations(address)",
-                "CREATE INDEX idx_ss_drep_ranked_delegations_drep_id ON ss_drep_ranked_delegations(drep_id)",
+                "CREATE INDEX idx_ss_drep_ranked_delegations_drep_hash ON ss_drep_ranked_delegations(drep_hash)",
                 "CREATE INDEX idx_ss_drep_ranked_delegations_rn ON ss_ranked_delegations(rn)",
                 "CREATE INDEX idx_ss_earned_reward_rest_address ON ss_earned_reward_rest(address)",
-                "CREATE INDEX idx_ss_drep_status_drep_id ON ss_drep_status(drep_id)",
+                "CREATE INDEX idx_ss_drep_status_drep_hash ON ss_drep_status(drep_hash)",
+                "CREATE INDEX idx_ss_drep_status_drep_type ON ss_drep_status(type)",
                 "CREATE INDEX idx_ss_gov_active_proposal_deposits_ret_address ON ss_gov_active_proposal_deposits(return_address)"
         );
 
@@ -210,17 +235,41 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
-        String excludeDelegationByRegistrationSlotCondition = Strings.EMPTY;
+        String excludeDelegationCondition;
 
         if (!isInBootstrapPhase) {
-            excludeDelegationByRegistrationSlotCondition = """
-              AND  (
-                rd.slot > ds.registration_slot
-                or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
-                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
-                or (rd.slot = ds.registration_slot and rd.tx_index = ds.tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.cert_index)
-            )
-          """;
+
+           /*
+            After the bootstrap phase, while calculating DRep voting power for each DRep,
+            for delegations created in the bootstrap phase:
+            we need to exclude those delegations that were created after the DRep registration,
+            except for delegations and registrations made in the same transaction.
+            */
+
+            excludeDelegationCondition = """
+                and exists (
+                    select 1 from ss_drep_status ds
+                    where ds.drep_hash = rd.drep_hash 
+                    and ds.rn = 1 
+                    and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
+                    and ( 
+                        rd.slot > ds.registration_slot
+                        or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
+                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
+                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.registration_cert_index)
+                    )
+                )
+            """;
+
+        } else {
+            excludeDelegationCondition = """
+                and exists (
+                    select 1 from ss_drep_status ds
+                    where ds.drep_hash = rd.drep_hash 
+                    and ds.rn = 1 
+                    and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
+                )
+            """;
         }
 
         String query1 = """
@@ -240,8 +289,6 @@ public class DRepDistService {
                     NOW()
                   from
                     ss_drep_ranked_delegations rd
-                    left join ss_drep_status ds on rd.drep_id = ds.drep_id
-                    and rd.rn = 1
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_insta_spendable_rewards ir on rd.address = ir.address
@@ -259,10 +306,9 @@ public class DRepDistService {
                                                  (sd.slot = rd.slot AND sd.tx_index = rd.tx_index AND sd.cert_index > rd.cert_index)
                                                  )
                   where
-                    (ds.status = 'REGISTERED' OR ds.status = 'UPDATED')
-                    and ds.rn = 1
+                    and rd.rn = 1
                     and sd.address IS NULL
-                    """ + excludeDelegationByRegistrationSlotCondition + """
+                    """ + excludeDelegationCondition + """
                   group by
                     rd.drep_hash,
                     rd.drep_id

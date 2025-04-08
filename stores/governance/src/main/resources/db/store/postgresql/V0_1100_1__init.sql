@@ -135,6 +135,12 @@ CREATE INDEX idx_drep_registration_slot
 CREATE INDEX idx_drep_registration_type
     ON drep_registration (type);
 
+CREATE INDEX idx_drep_registration_epoch
+    ON drep_registration (epoch);
+
+CREATE INDEX idx_drep_registration_drep_hash
+    ON drep_registration (drep_hash);
+
 drop table if exists committee_member;
 create table committee_member
 (
