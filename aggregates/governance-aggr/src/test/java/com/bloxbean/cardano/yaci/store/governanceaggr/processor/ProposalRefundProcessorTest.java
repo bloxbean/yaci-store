@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestAmt;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestEvent;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;

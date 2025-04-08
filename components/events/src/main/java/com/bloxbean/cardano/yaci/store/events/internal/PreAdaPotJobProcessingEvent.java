@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.adapot.event.internal;
+package com.bloxbean.cardano.yaci.store.events.internal;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.job;
 
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
-import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;

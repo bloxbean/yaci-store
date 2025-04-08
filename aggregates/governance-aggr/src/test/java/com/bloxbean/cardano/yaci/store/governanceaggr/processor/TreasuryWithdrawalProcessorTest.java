@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
-import com.bloxbean.cardano.yaci.store.adapot.event.internal.PreAdaPotJobProcessingEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
