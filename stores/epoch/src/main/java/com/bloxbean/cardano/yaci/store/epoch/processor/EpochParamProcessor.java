@@ -119,15 +119,20 @@ public class EpochParamProcessor {
         int epoch = event.getEpoch();
         long slot = event.getSlot();
 
+        int prevEpoch = epoch - 1;
+        Era era = eraService.getEraForEpoch(epoch);
+        Era prevEra = eraService.getEraForEpoch(prevEpoch);
+
+        if (era.value < Era.Conway.value) {
+            log.info("Pre-conway era. Epoch param will be processed during epoch change event");
+            return;
+        }
+
         var dbEpochParam = epochParamStorage.getProtocolParams(epoch);
         if (dbEpochParam.isPresent()) {
             log.warn("Epoch param for epoch {} already exists. Ignoring it.", epoch);
             return;
         }
-
-        int prevEpoch = epoch - 1;
-        Era era = eraService.getEraForEpoch(epoch);
-        Era prevEra = eraService.getEraForEpoch(prevEpoch);
 
         long blockTime = eraService.blockTime(era, slot);
         long protocolMagic = storeProperties.getProtocolMagic();
