@@ -4,13 +4,16 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +42,12 @@ class EpochParamProcessorTest {
 
     @Mock
     private ProposalStateClient proposalStateClient;
+
+    @Mock
+    private EraService eraService;
+
+    @Mock
+    private StoreProperties storeProperties;
 
     @InjectMocks
     private EpochParamProcessor epochParamProcessor;
@@ -123,27 +132,23 @@ class EpochParamProcessorTest {
     }
 
     @Test
-    void givenEpochChangeEvent_whenEraIsConwayOrLater_ProtocolParamChangeActionEnacted_shouldUpdatePPram() {
-        PreEpochTransitionEvent epochChangeEvent = PreEpochTransitionEvent.builder()
-                .epoch(28)
-                .previousEpoch(27)
-                .era(Era.Conway)
-                .previousEra(Era.Babbage)
-                .metadata(EventMetadata.builder()
-                        .slot(1000000)
-                        .block(10000)
-                        .blockTime(1666342887)
-                        .protocolMagic(1)
-                        .build())
-                .build();
-
-        Mockito.when(epochParamStorage.getMaxEpoch()).thenReturn(27);
+    void givenPreAdaPotJobProcessingEvent_whenEraIsConwayOrLater_ProtocolParamChangeActionEnacted_shouldUpdatePPram() {
+        PreAdaPotJobProcessingEvent preAdaPotJobProcessingEvent = PreAdaPotJobProcessingEvent.builder().epoch(28).slot(100000).build();
 
         Map<String, long[]> oldCostModels = new HashMap<>();
         oldCostModels.put("PlutusV1", new long[] {0,1});
         oldCostModels.put("PlutusV3", new long[] {2,3});
 
-        Mockito.when(epochParamStorage.getProtocolParams(epochChangeEvent.getPreviousEpoch()))
+        Mockito.when(eraService.getEraForEpoch(28)).thenReturn(Era.Conway);
+        Mockito.when(eraService.getEraForEpoch(27)).thenReturn(Era.Babbage);
+
+        Mockito.when(eraService.blockTime(Era.Conway, 100000)).thenReturn(9999999L);
+        Mockito.when(storeProperties.getProtocolMagic()).thenReturn(1L);
+        Mockito.when(epochParamStorage.getProtocolParams(28))
+                .thenReturn(
+                        Optional.empty()
+                );
+        Mockito.when(epochParamStorage.getProtocolParams(27))
                 .thenReturn(
                         Optional.of(
                                 EpochParam.builder()
@@ -156,7 +161,7 @@ class EpochParamProcessorTest {
                                         .build()
                         )
                 );
-        Mockito.when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epochChangeEvent.getPreviousEpoch())).thenReturn(
+        Mockito.when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 27)).thenReturn(
                 List.of(
                         GovActionProposal.builder()
                                 .govAction(
@@ -179,11 +184,10 @@ class EpochParamProcessorTest {
                                 .build()
                         ));
 
-        epochParamProcessor.handleEpochChangeEvent(epochChangeEvent);
+        epochParamProcessor.handlePreAdaPotJobProcessingEvent(preAdaPotJobProcessingEvent);
 
         Mockito.verify(epochParamStorage, Mockito.times(1)).save(argCaptor.capture());
 
-        Mockito.verify(epochParamStorage).getProtocolParams(27);
         Mockito.verify(protocolParamsProposalStorage).getProtocolParamsProposalsByTargetEpoch(27);
 
         EpochParam epochParam = argCaptor.getValue();
