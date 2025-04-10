@@ -2,11 +2,12 @@ drop table if exists drep_dist;
 create table drep_dist
 (
     drep_hash       varchar(56),
+    drep_type       varchar(40),
     drep_id         varchar(255),
     amount          bigint,
     epoch           int,
     update_datetime timestamp,
-    primary key (drep_hash, epoch)
+    primary key (drep_hash, drep_type, epoch)
 );
 
 CREATE INDEX idx_drep_dist_drep_hash
