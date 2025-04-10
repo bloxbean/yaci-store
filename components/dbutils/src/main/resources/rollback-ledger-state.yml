@@ -1,0 +1,11 @@
+tables:
+  - adapot
+  - instant_reward
+  - reward
+  - reward_rest
+  - unclaimed_reward_rest
+  - adapot_jobs
+  - epoch_stake
+  - drep_dist
+  - gov_action_proposal_status
+  - drep_expiry

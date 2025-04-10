@@ -21,7 +21,10 @@ public class RollbackService {
     private final DatabaseUtils databaseUtils;
 
     @Transactional
-    public Pair<List<TableRollbackAction>, Boolean> executeRollback(List<String> tableNames, int epoch, long eventPublisherId) {
+    public Pair<List<TableRollbackAction>, Boolean> executeRollback(List<String> tableNames, RollbackContext context) {
+        int epoch = context.getEpoch();
+        long eventPublisherId = context.getEventPublisherId();
+
         RollbackBlock rollbackBlock = getRollbackBlockByEpoch(epoch);
 
         if (rollbackBlock == null) {
@@ -29,8 +32,10 @@ public class RollbackService {
             return Pair.of(new ArrayList<>(), false);
         }
 
-        rollbackCursor(rollbackBlock, eventPublisherId);
-        rollbackAccountConfig(rollbackBlock);
+        if (!context.isRollbackLedgerState()) {
+            rollbackCursor(rollbackBlock, eventPublisherId);
+            rollbackAccountConfig(rollbackBlock);
+        }
 
         var params = new MapSqlParameterSource();
         params.addValue("epoch", rollbackBlock.getEpoch());
@@ -41,7 +46,11 @@ public class RollbackService {
         // Execute DELETE statements for each table/condition
         for (String tableName : tableNames) {
             if (databaseUtils.tableExists(tableName)) {
-                String sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
+                String sql;
+                if (context.isRollbackLedgerState() && tableName.equals("adapot_jobs")) {
+                    sql = "UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch";
+                } else
+                    sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
                 log.info("Executing rollback on table '{}': {}", tableName, sql);
                 try {
                     jdbcTemplate.update(sql, params);
