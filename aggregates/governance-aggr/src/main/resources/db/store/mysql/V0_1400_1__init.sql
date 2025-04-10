@@ -2,6 +2,7 @@ drop table if exists drep_dist;
 create table drep_dist
 (
     drep_hash         varchar(56),
+    drep_type         varchar(40),
     drep_id           varchar(255),
     amount            bigint,
     epoch             int,

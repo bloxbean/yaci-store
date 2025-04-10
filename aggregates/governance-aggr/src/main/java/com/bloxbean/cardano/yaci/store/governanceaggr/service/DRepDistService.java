@@ -332,6 +332,7 @@ public class DRepDistService {
                   INSERT INTO drep_dist               
                   select
                     rd.drep_hash,
+                    rd.drep_type,
                     rd.drep_id,
                     sum(
                       COALESCE(sab.quantity, 0) 
@@ -366,12 +367,14 @@ public class DRepDistService {
                     """ + excludeDelegationCondition + """
                   group by
                     rd.drep_hash,
-                    rd.drep_id
+                    rd.drep_type,
+                    rd.drep_id,
                     """;
 
         String query2 = """
                   INSERT INTO drep_dist
                   select
+                    '00000000000000000000000000000000000000000000000000000000',
                     rd.drep_type,
                     null,
                     sum(
