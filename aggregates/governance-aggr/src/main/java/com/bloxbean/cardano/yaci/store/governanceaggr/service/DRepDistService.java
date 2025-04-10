@@ -368,7 +368,7 @@ public class DRepDistService {
                   group by
                     rd.drep_hash,
                     rd.drep_type,
-                    rd.drep_id,
+                    rd.drep_id
                     """;
 
         String query2 = """
