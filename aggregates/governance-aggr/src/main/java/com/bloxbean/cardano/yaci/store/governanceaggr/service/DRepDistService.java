@@ -14,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalSt
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.logging.log4j.util.Strings;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -128,7 +127,8 @@ public class DRepDistService {
                 WITH last_reg AS (
                     SELECT
                         dr.drep_id,
-                        dr.drep_hash,              
+                        dr.drep_hash,
+                        dr.epoch AS registration_epoch,
                         dr.slot  AS registration_slot,
                         dr.tx_index  AS registration_tx_index,
                         dr.cert_index AS registration_cert_index
@@ -136,6 +136,7 @@ public class DRepDistService {
                         SELECT
                             drep_id,
                             drep_hash,
+                            epoch,
                             slot,
                             tx_index,
                             cert_index,
@@ -148,6 +149,32 @@ public class DRepDistService {
                           AND type = 'REG_DREP_CERT'
                     ) dr
                     WHERE dr.rn = 1
+                ),
+                last_unreg AS (
+                    SELECT
+                        du.drep_id,
+                        du.drep_hash,
+                        du.epoch AS unregistration_epoch,
+                        du.slot  AS unregistration_slot,
+                        du.tx_index  AS unregistration_tx_index,
+                        du.cert_index AS unregistration_cert_index
+                    FROM (
+                        SELECT
+                            drep_id,
+                            drep_hash,
+                            epoch,
+                            slot,
+                            tx_index,
+                            cert_index,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY drep_hash
+                                ORDER BY slot DESC, tx_index DESC, cert_index DESC
+                            ) AS rn
+                        FROM drep_registration
+                        WHERE epoch <= :epoch
+                          AND type = 'UNREG_DREP_CERT'
+                    ) du
+                    WHERE du.rn = 1
                 )
                 SELECT
                     d.drep_id,
@@ -156,10 +183,15 @@ public class DRepDistService {
                     d.cert_index,
                     d.type,
                     d.slot,
-                
+                    
+                    lr.registration_epoch,
                     lr.registration_slot,
                     lr.registration_tx_index,
                     lr.registration_cert_index,
+                    
+                    lu.unregistration_slot,
+                    lu.unregistration_tx_index,
+                    lu.unregistration_cert_index,
                 
                     ROW_NUMBER() OVER (
                         PARTITION BY d.drep_hash
@@ -168,6 +200,8 @@ public class DRepDistService {
                 FROM drep_registration d
                 LEFT JOIN last_reg lr
                        ON d.drep_hash = lr.drep_hash
+                LEFT JOIN last_unreg lu 
+                        ON d.drep_hash = lu.drep_hash
                 WHERE d.epoch <= :epoch
                 """;
 
@@ -264,8 +298,20 @@ public class DRepDistService {
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                     and ( 
                         rd.slot > ds.registration_slot
-                        or (rd.slot = ds.registration_slot and rd.tx_index > ds.tx_index)
-                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
+                        or (rd.slot = ds.registration_slot and rd.tx_index > ds.registration_tx_index)
+                        or (rd.slot = ds.registration_slot and rd.tx_index <= ds.registration_tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
+                        or (
+                            rd.slot < ds.registration_slot 
+                            and (
+                                ds.unregistration_slot is null
+                                or
+                                ( rd.slot > ds.unregistration_slot 
+                                    or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
+                                    or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
+                                )
+                            )
+                            and rd.epoch <= :max_bootstrap_phase_epoch and ds.registration_epoch <= :max_bootstrap_phase_epoch
+                        )
                         or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.registration_cert_index)
                     )
                 )
