@@ -128,6 +128,7 @@ public class DRepDistService {
                     SELECT
                         dr.drep_id,
                         dr.drep_hash,
+                        dr.cred_type,
                         dr.epoch AS registration_epoch,
                         dr.slot  AS registration_slot,
                         dr.tx_index  AS registration_tx_index,
@@ -136,6 +137,7 @@ public class DRepDistService {
                         SELECT
                             drep_id,
                             drep_hash,
+                            cred_type,
                             epoch,
                             slot,
                             tx_index,
@@ -183,7 +185,7 @@ public class DRepDistService {
                     d.cert_index,
                     d.type,
                     d.slot,
-                    
+                    lr.cred_type,
                     lr.registration_epoch,
                     lr.registration_slot,
                     lr.registration_tx_index,
@@ -293,7 +295,8 @@ public class DRepDistService {
             excludeDelegationCondition = """
                 and exists (
                     select 1 from ss_drep_status ds
-                    where ds.drep_id = rd.drep_id
+                    where ds.drep_hash = rd.drep_hash
+                    and ds.cred_type = rd.drep_type
                     and ds.rn = 1
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                     and ( 
@@ -321,7 +324,8 @@ public class DRepDistService {
             excludeDelegationCondition = """
                 and exists (
                     select 1 from ss_drep_status ds
-                    where ds.drep_id = rd.drep_id 
+                    where ds.drep_hash = rd.drep_hash
+                    and ds.cred_type = rd.drep_type
                     and ds.rn = 1 
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                 )
