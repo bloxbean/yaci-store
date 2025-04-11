@@ -45,7 +45,7 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
     }
 
     @Override
-    public BigInteger findTotalInstanceRewardByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType) {
+    public BigInteger findTotalInstantRewardByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType) {
         return instantRewardRepository.findTotalAmountByEarnedEpoch(epoch, rewardType);
     }
 

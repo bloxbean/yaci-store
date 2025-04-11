@@ -14,7 +14,7 @@ public interface RewardStorageReader {
     //Instant Rewards
     List<InstantReward> findInstantRewardByEarnedEpoch(Integer epoch, int page, int count);
     List<InstantReward> findInstantRewardByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType, int page, int count);
-    BigInteger findTotalInstanceRewardByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType);
+    BigInteger findTotalInstantRewardByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType);
 
     //Pool Rewards
     List<Reward> findRewardsByEarnedEpoch(Integer epoch, int page, int count);
