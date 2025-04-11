@@ -293,8 +293,8 @@ public class DRepDistService {
             excludeDelegationCondition = """
                 and exists (
                     select 1 from ss_drep_status ds
-                    where ds.drep_hash = rd.drep_hash 
-                    and ds.rn = 1 
+                    where ds.drep_id = rd.drep_id
+                    and ds.rn = 1
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                     and ( 
                         rd.slot > ds.registration_slot
@@ -321,7 +321,7 @@ public class DRepDistService {
             excludeDelegationCondition = """
                 and exists (
                     select 1 from ss_drep_status ds
-                    where ds.drep_hash = rd.drep_hash 
+                    where ds.drep_id = rd.drep_id 
                     and ds.rn = 1 
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                 )
