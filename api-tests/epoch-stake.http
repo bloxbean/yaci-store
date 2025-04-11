@@ -1,0 +1,104 @@
+###
+### Get Total active stake for epoch
+GET {{base_url}}/api/v1/epochs/173/total-stake
+
+> {%
+    client.test("Get total active stake for epoch", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.epoch == 173, "Epoch should be 173");
+        client.assert(response.body.active_stake == 338215903160786, "Total active stake should be 338215903160786");
+    });
+
+%}
+
+###
+### Get epoch stakes for epoch
+GET {{base_url}}/api/v1/epochs/173/stake
+
+> {%
+    client.test("Get epoch stakes for epoch", function () {
+
+        const stakes = response.body;
+
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(stakes.length > 0, "Stakes should be greater than 0");
+
+        client.assert(stakes[0].epoch == 173, "Epoch should be 173");
+        client.assert(stakes[0].address == 'stake_test17p09knny0kzwdzy4ehat8fk7wfpy7wh80kl6f637ra8h0ucs6ud6q', "address should be stake_test17p09knny0kzwdzy4ehat8fk7wfpy7wh80kl6f637ra8h0ucs6ud6q");
+        client.assert(stakes[0].amount == 5171163516, "Amount should be 5171163516");
+        client.assert(stakes[0].pool_hash == '8ffb4c8e648c0662f2a91157c92feaa95f1a3d2728eaea8257b3d8d9', "Pool hash should be 8ffb4c8e648c0662f2a91157c92feaa95f1a3d2728eaea8257b3d8d9");
+        client.assert(stakes[0].pool_id == 'pool13la5erny3srx9u4fz9tujtl2490350f89r4w4qjhk0vdjmuv78v', "Pool id should be pool13la5erny3srx9u4fz9tujtl2490350f89r4w4qjhk0vdjmuv78v");
+        client.assert(stakes[0].delegation_epoch == 125, "Delegation epoch should be 125");
+
+        stakes.forEach(function (stake) {
+            client.assert(stake.epoch == 173, "Epoch should be 173");
+            client.assert(stake.address !== null, "address should not be null");
+            client.assert(stake.amount >= 0, "Amount should be greater than 0");
+            client.assert(stake.pool_hash !== null, "Pool is null");
+            client.assert(stake.pool_id !== null, "Pool is null");
+            client.assert(stake.delegation_epoch > 0, "Delegation epoch should be greater than 0");
+        });
+
+    });
+
+%}
+
+###
+### Get total active stakes for a pool for active epoch
+
+GET {{base_url}}/api/v1/epochs/154/pools/36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138/stake
+
+> {%
+    client.test("Get total active stakes for a pool for active epoch", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.epoch == 154, "Epoch should be 154");
+        client.assert(response.body.pool_hash == "36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138", "Pool hash should be 36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138");
+        client.assert(response.body.pool_id == "pool1xm90p8nl7kaqvsskrvtyq60z70rx4afdfj4xex89u9gns62t0er", "Pool id should be pool1xm90p8nl7kaqvsskrvtyq60z70rx4afdfj4xex89u9gns62t0er");
+        client.assert(response.body.active_stake == 52757813100, "Total stake should be 52757813100");
+    });
+
+%}
+
+###
+### Get Delegators and their stakes for a pool for active epoch
+
+GET {{base_url}}/api/v1/epochs/173/pools/36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138/delegators
+
+> {%
+    client.test("Get Delegators and their stakes for a pool for active epoch", function () {
+        const delegators = response.body;
+
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(delegators[0].address == 'stake_test1up05p7mn6epqv4pc44mm5unv94kxghmgeywew08jmlfxfuc64ml4j', "address should be stake_test1up05p7mn6epqv4pc44mm5unv94kxghmgeywew08jmlfxfuc64ml4j");
+        client.assert(delegators[0].amount == 1750000, "Amount should be 1750000");
+        client.assert(delegators[0].pool_hash == "36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138", "Pool hash should be 36caf09e7ff5ba0642161b164069e2f3c66af52d4caa6c98e5e15138");
+        client.assert(delegators[0].pool_id == "pool1xm90p8nl7kaqvsskrvtyq60z70rx4afdfj4xex89u9gns62t0er", "Pool id should be pool1xm90p8nl7kaqvsskrvtyq60z70rx4afdfj4xex89u9gns62t0er");
+        client.assert(delegators[0].delegation_epoch == 136, "Delegation epoch should be 136");
+
+        delegators.forEach(function (delegator) {
+            client.assert(delegator.address !== null, "address should not be null");
+            client.assert(delegator.amount >= 0, "Amount should be greater than 0");
+            client.assert(delegator.pool_hash !== null, "Pool hash should not be null");
+            client.assert(delegator.pool_id !== null, "Pool id should not be null");
+            client.assert(delegator.delegation_epoch > 0, "Delegation epoch should be greater than 0");
+        });
+
+    });
+
+%}
+
+###
+### Get delation details of an account for a pool for active epoch
+GET {{base_url}}/api/v1/epochs/171/accounts/stake_test1uzy46dy8v60k2alyxyeakaec54258dy92qyds2qjnn2q8nclyynkt/stake
+
+> {%
+    client.test("Get delation details of an account for a pool for active epoch", function () {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.epoch == 171, "Epoch should be 171");
+        client.assert(response.body.address == "stake_test1uzy46dy8v60k2alyxyeakaec54258dy92qyds2qjnn2q8nclyynkt", "Address should be stake_test1uzy46dy8v60k2alyxyeakaec54258dy92qyds2qjnn2q8nclyynkt");
+        client.assert(response.body.pool_hash == "209c6caf1fdabf53984cdcdce4e8d53f680165f33557a47c54b1dd6a", "Pool hash should be 209c6caf1fdabf53984cdcdce4e8d53f680165f33557a47c54b1dd6a");
+        client.assert(response.body.pool_id == "pool1yzwxetclm2l48xzvmnwwf6x48a5qze0nx4t6glz5k8wk50xl006", "Pool id should be pool1yzwxetclm2l48xzvmnwwf6x48a5qze0nx4t6glz5k8wk50xl006");
+        client.assert(response.body.amount == 1753905, "Amount should be 1753905");
+        client.assert(response.body.delegation_epoch == 163, "Delegation epoch should be 163");
+    });
+%}

@@ -1,0 +1,264 @@
+
+###
+### Get Pool rewards by epoch
+GET {{base_url}}/api/v1/pools/7facad662e180ce45e5c504957cd1341940c72a708728f7ecfc6e349/epochs/173/rewards
+
+> {%
+    client.test("Get Pool rewards by pool hash and epoch", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 10, "Rewards length should be 10");
+
+        client.assert(rewards[0].address == 'stake_test1up97ct2wt8jqlly2cnkhuwc7tvevmjpp7h6ts3rucpksy8c8cnspn', "Address should be stake_test1up97ct2wt8jqlly2cnkhuwc7tvevmjpp7h6ts3rucpksy8c8cnspn");
+        client.assert(rewards[0].reward == 838495542, "Reward should be 838495542");
+        client.assert(rewards[0].type == 'leader', "Type should be leader");
+        client.assert(rewards[0].earned_epoch == 171, "Earned epoch should be 171");
+
+        client.assert(rewards[1].address == 'stake_test1uz6fd0qe3udc6t7s2dsx0dsjm5c5zftqx930qdxvrt279zsllncju', "Address should be stake_test1uz6fd0qe3udc6t7s2dsx0dsjm5c5zftqx930qdxvrt279zsllncju");
+        client.assert(rewards[1].reward == 7248, "Reward should be 7248");
+        client.assert(rewards[1].type == 'member', "Type should be member");
+        client.assert(rewards[1].earned_epoch == 171, "Earned epoch should be 171");
+
+    });
+%}
+
+### TODO api test for unclaimed reward rest
+### Get unclaimed reward rest by epoch
+###GET {{base_url}}/api/v1/epoch/173/unclaimed_reward_rest
+
+
+###
+### Get Pool rewards by epoch (Bech32 poolId)
+
+GET {{base_url}}/api/v1/pools/pool107k26e3wrqxwghju2py40ngngx2qcu48ppeg7lk0cm35jl2aenx/epochs/173/rewards?page=1&count=5
+
+> {%
+    client.test("Get Pool rewards by pool hash and epoch", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 5, "Rewards length should be 5");
+
+        client.assert(rewards[0].address == 'stake_test1up97ct2wt8jqlly2cnkhuwc7tvevmjpp7h6ts3rucpksy8c8cnspn', "Address should be stake_test1up97ct2wt8jqlly2cnkhuwc7tvevmjpp7h6ts3rucpksy8c8cnspn");
+        client.assert(rewards[0].reward == 838495542, "Reward should be 838495542");
+        client.assert(rewards[0].type == 'leader', "Type should be leader");
+        client.assert(rewards[0].earned_epoch == 171, "Earned epoch should be 171");
+
+        client.assert(rewards[1].address == 'stake_test1uz6fd0qe3udc6t7s2dsx0dsjm5c5zftqx930qdxvrt279zsllncju', "Address should be stake_test1uz6fd0qe3udc6t7s2dsx0dsjm5c5zftqx930qdxvrt279zsllncju");
+        client.assert(rewards[1].reward == 7248, "Reward should be 7248");
+        client.assert(rewards[1].type == 'member', "Type should be member");
+        client.assert(rewards[1].earned_epoch == 171, "Earned epoch should be 171");
+
+    });
+%}
+
+###
+### Get Pool rewards by epoch (Bech32 poolId) - Page 2
+
+GET {{base_url}}/api/v1/pools/pool107k26e3wrqxwghju2py40ngngx2qcu48ppeg7lk0cm35jl2aenx/epochs/173/rewards?page=2&count=5
+
+> {%
+    client.test("Get Pool rewards by pool hash and epoch - Page2", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 5, "Rewards length should be 5");
+
+        client.assert(rewards[0].address == 'stake_test1uq0egztnavje24kpfrxrf33lgt9c3z8wyah744undatgntcse0rcq', "Address should be stake_test1uq0egztnavje24kpfrxrf33lgt9c3z8wyah744undatgntcse0rcq");
+        client.assert(rewards[0].reward == 27870416, "Reward should be 27870416");
+        client.assert(rewards[0].type == 'member', "Type should be member");
+        client.assert(rewards[0].earned_epoch == 171, "Earned epoch should be 171");
+
+    });
+%}
+
+
+###
+### Get Pool rewards by epoch (Bech32 poolId) - No values in Page n
+
+GET {{base_url}}/api/v1/pools/pool107k26e3wrqxwghju2py40ngngx2qcu48ppeg7lk0cm35jl2aenx/epochs/173/rewards?page=30&count=5
+
+> {%
+    client.test("Get Pool rewards by pool hash and epoch - No value in page", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 0, "Rewards length should be 0");
+
+    });
+%}
+
+###
+### Get Epoch Rewards
+
+GET {{base_url}}/api/v1/epochs/172/rewards
+
+> {%
+    client.test("Get Epoch Rewards", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 10, "Rewards length should be 10");
+
+        client.assert(rewards[0].address == 'stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs', "Address should be stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs");
+        client.assert(rewards[0].earned_epoch == 170, "Earned epoch should be 170");
+        client.assert(rewards[0].type == 'leader', "Type should be leader");
+        client.assert(rewards[0].pool_id == 'a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0', "Pool id should be a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0");
+        client.assert(rewards[0].amount == 371979037, "Amount should be 371979037");
+        client.assert(rewards[0].spendable_epoch == 172, "Spendable epoch should be 172");
+
+        client.assert(rewards[6].address == 'stake_test1upml2atyrs7je3s7ggks5zeclaj8tzxwt6xl62e7h04dxdqge4xf7', "Address should be stake_test1upml2atyrs7je3s7ggks5zeclaj8tzxwt6xl62e7h04dxdqge4xf7");
+        client.assert(rewards[6].earned_epoch == 170, "Earned epoch should be 170");
+        client.assert(rewards[6].type == 'member', "Type should be member");
+        client.assert(rewards[6].pool_id == 'a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0', "Pool id should be a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0");
+        client.assert(rewards[6].amount == 16328835, "Amount should be 16328835");
+        client.assert(rewards[6].spendable_epoch == 172, "Spendable epoch should be 172");
+    });
+%}
+
+###
+### Get Epoch Rewards pagination (Page 1)
+
+GET {{base_url}}/api/v1/epochs/172/rewards?page=1&count=7
+
+> {%
+    client.test("Get Epoch Rewards pagination - page1", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 7, "Rewards length should be 7");
+
+        client.assert(rewards[0].address == 'stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs', "Address should be stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs");
+        client.assert(rewards[0].earned_epoch == 170, "Earned epoch should be 170");
+        client.assert(rewards[0].type == 'leader', "Type should be leader");
+        client.assert(rewards[0].pool_id == 'a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0', "Pool id should be a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0");
+        client.assert(rewards[0].amount == 371979037, "Amount should be 371979037");
+        client.assert(rewards[0].spendable_epoch == 172, "Spendable epoch should be 172");
+
+        client.assert(rewards[6].address == 'stake_test1upml2atyrs7je3s7ggks5zeclaj8tzxwt6xl62e7h04dxdqge4xf7', "Address should be stake_test1upml2atyrs7je3s7ggks5zeclaj8tzxwt6xl62e7h04dxdqge4xf7");
+        client.assert(rewards[6].earned_epoch == 170, "Earned epoch should be 170");
+        client.assert(rewards[6].type == 'member', "Type should be member");
+        client.assert(rewards[6].pool_id == 'a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0', "Pool id should be a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0");
+        client.assert(rewards[6].amount == 16328835, "Amount should be 16328835");
+        client.assert(rewards[6].spendable_epoch == 172, "Spendable epoch should be 172");
+    });
+%}
+
+###
+### Get Epoch Rewards pagination (Page 3 Negative conditions)
+
+GET {{base_url}}/api/v1/epochs/172/rewards?page=3&count=8
+
+> {%
+    client.test("Get Epoch Rewards pagination - page3 (Negative Conditions)", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 8, "Rewards length should be 8");
+
+        client.assert(rewards[0].address != 'stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs', "Address should not be stake_test1uqthws0lx6pv5wasmgkksdam0tjsq8vr6uxc3w0tnp7sxxskswefs");
+        client.assert(rewards[0].earned_epoch == 170, "Earned epoch should be 170");
+        client.assert(rewards[0].type != 'leader', "Type should be leader");
+        client.assert(rewards[0].pool_id != 'a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0', "Pool id should not be a71a124e7504ab06afe9155efbe6b3e8f7d42efaa1662f98f11eedf0");
+        client.assert(rewards[0].amount != 371979037, "Amount should not be 371979037");
+        client.assert(rewards[0].spendable_epoch == 172, "Spendable epoch should be 172");
+
+
+    });
+%}
+
+
+###
+### Get Epoch Rewards pagination (Not found)
+
+GET {{base_url}}/api/v1/epochs/172/rewards?page=1000&count=100
+
+> {%
+    client.test("Get Epoch Rewards pagination - Not Found", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 0, "Rewards length should be 0");
+    });
+
+%}
+
+
+###
+#### //TODO -- Epoch Reward Rest Endpoint
+### GET {{base_url}}/api/v1/epoch/172/rewards_rest
+
+
+###
+### Account Rewards by Epoch
+GET {{base_url}}/api/v1/accounts/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he/rewards
+
+> {%
+    client.test("Get Account Reward", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 10, "Rewards length should be 10");
+
+        client.assert(rewards[0].epoch >= 173, "Epoch should be greater than 173"); //As Preprod current epch > 173
+        client.assert(rewards[0].pool_id != null, "Pool is set to null");
+        client.assert(rewards[0].amount > 0, "Reward amount is greater than 0");
+        client.assert(rewards[0].type == 'member' , "Type is member");
+    });
+%}
+
+###
+### Account Rewards by Epoch Pagination test
+GET {{base_url}}/api/v1/accounts/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he/rewards?page=3&count=6
+
+> {%
+    client.test("Get Account Reward", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 6, "Rewards length should be 6");
+
+        client.assert(rewards[0].epoch >= 10, "Epoch should be greater than 10"); //As Preprod current epch > 10
+        client.assert(rewards[0].pool_id != null, "Pool is set to null");
+        client.assert(rewards[0].amount > 0, "Reward amount is greater than 0");
+        client.assert(rewards[0].type == 'member' , "Type is member");
+    });
+%}
+
+### //TODO
+### Account Rewards Rest Endpoint
+### GET {{base_url}}/api/v1/account/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he/rewards_rest
+
+###
+### Account Rewards by Epoch
+GET {{base_url}}/api/v1/accounts/stake_test1ur5uc537jdf953she62atqeh44yrt2vrlx4yrrlsmggutqs896rz7/epochs/35/rewards
+
+> {%
+    client.test("Get Account Reward", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const rewards = response.body;
+
+        client.assert(rewards.length == 1, "Rewards length should be 1");
+
+        client.assert(rewards[0].epoch == 35, "Epoch should be 35");
+        client.assert(rewards[0].pool_id == 'pool1dzxc7pqsqfs7dru7xdrkvkdf9s3kd4y2tqsdv063d2lfcxw6zmg', "Pool should be pool1dzxc7pqsqfs7dru7xdrkvkdf9s3kd4y2tqsdv063d2lfcxw6zmg");
+        client.assert(rewards[0].amount == 413444885, "Reward amount should be 413444885");
+        client.assert(rewards[0].type == 'leader' , "Type is leader");
+    });
+%}
+
+### //TODO
+### Account Reward Rest by epoch
+### GET {{base_url}}/api/v1/account/stake_test1ur5uc537jdf953she62atqeh44yrt2vrlx4yrrlsmggutqs896rz7/epoch/35/rewards_rest

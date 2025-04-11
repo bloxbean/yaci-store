@@ -14,12 +14,12 @@ import java.util.UUID;
 @Repository
 public interface InstantRewardRepository extends JpaRepository<InstantRewardEntity, UUID> {
 
-    Slice<InstantRewardEntity> findByEarnedEpoch(Long epoch, Pageable pageable);
+    Slice<InstantRewardEntity> findByEarnedEpoch(Integer epoch, Pageable pageable);
 
-    Slice<InstantRewardEntity> findByEarnedEpochAndType(Long epoch, InstantRewardType rewardType, Pageable pageable);
+    Slice<InstantRewardEntity> findByEarnedEpochAndType(Integer epoch, InstantRewardType rewardType, Pageable pageable);
 
     @Query("SELECT SUM(m.amount) FROM InstantRewardEntity m WHERE m.earnedEpoch=:epoch and m.type=:type")
-    BigInteger findTotalAmountByEarnedEpoch(int epoch, InstantRewardType type);
+    BigInteger findTotalAmountByEarnedEpoch(Integer epoch, InstantRewardType type);
 
     int deleteBySlotGreaterThan(Long slot);
 }
