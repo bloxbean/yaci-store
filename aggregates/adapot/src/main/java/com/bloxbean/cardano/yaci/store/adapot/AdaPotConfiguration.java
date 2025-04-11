@@ -54,8 +54,10 @@ public class AdaPotConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public RewardStorageReader rewardStorageReader(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository,
+                                                   RewardRestRepository rewardRestRepository,
+                                                   UnclaimedRewardRestRepository unclaimedRewardRestRepository,
                                                    Mapper rewardMapper) {
-        return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardMapper);
+        return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardRestRepository, unclaimedRewardRestRepository, rewardMapper);
     }
 
     @Bean
