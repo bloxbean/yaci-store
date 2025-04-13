@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.CostModelRe
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.EpochParamRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
@@ -19,6 +20,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
     private final CostModelRepository costModelRepository;
     private final ProtocolParamsMapper mapper;
 
+    @Transactional
     @Override
     public void save(EpochParam epochParam) {
         if (epochParam == null) return;
@@ -78,6 +80,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
         return epochParamRepository.findMaxEpoch();
     }
 
+    @Transactional
     @Override
     public int deleteBySlotGreaterThan(long slot) {
         return epochParamRepository.deleteBySlotGreaterThan(slot);
