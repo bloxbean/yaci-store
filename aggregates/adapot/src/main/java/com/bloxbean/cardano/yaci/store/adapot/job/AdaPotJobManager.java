@@ -60,8 +60,8 @@ public class AdaPotJobManager {
      * @param epoch the epoch number for which the reward calculation job is to be triggered
      * @param slot  slot number
      */
-    public void triggerRewardCalcJob(int epoch, long slot) {
-        AdaPotJob job = new AdaPotJob(epoch, slot, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L, null);
+    public void triggerRewardCalcJob(int epoch, long slot, long block) {
+        AdaPotJob job = new AdaPotJob(epoch, slot, block, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L, null);
         adaPotJobStorage.save(job);
         jobQueue.add(job);
     }

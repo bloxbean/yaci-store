@@ -66,7 +66,7 @@ public class AdaPotJobProcessor {
                 var start = Instant.now();
 
                 //Fire pre-adapot job processing event
-                var preAdaPotJobProcessingEvent = new PreAdaPotJobProcessingEvent(job.getEpoch(), job.getSlot());
+                var preAdaPotJobProcessingEvent = new PreAdaPotJobProcessingEvent(job.getEpoch(), job.getSlot(), job.getBlock());
                 publisher.publishEvent(preAdaPotJobProcessingEvent);
 
                 //create AdaPot entry for the epoch
