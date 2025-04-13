@@ -14,4 +14,5 @@ import lombok.Getter;
 public class PreAdaPotJobProcessingEvent {
     private int epoch;
     private long slot;
+    private long block;
 }
