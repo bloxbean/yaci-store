@@ -141,13 +141,13 @@ public class EpochRewardCalculationService {
         }
 
         //Get MIR certificates totals by pot ..stability window ??
-        var totalRewardsTreasury = rewardStorageReader.findTotalInstanceRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.treasury);
+        var totalRewardsTreasury = rewardStorageReader.findTotalInstantRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.treasury);
         var mirTreasuryCertificate = MirCertificate.builder()
                 .pot(org.cardanofoundation.rewards.calculation.enums.MirPot.TREASURY)
                 .totalRewards(totalRewardsTreasury != null ? totalRewardsTreasury : BigInteger.ZERO)
                 .build();
 
-        var totalRewardsReserves = rewardStorageReader.findTotalInstanceRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.reserves);
+        var totalRewardsReserves = rewardStorageReader.findTotalInstantRewardByEarnedEpochAndType(epoch - 1, InstantRewardType.reserves);
         var mirCertificateReserves = MirCertificate.builder()
                 .pot(org.cardanofoundation.rewards.calculation.enums.MirPot.RESERVES)
                 .totalRewards(totalRewardsReserves != null ? totalRewardsReserves : BigInteger.ZERO)

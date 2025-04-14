@@ -1,0 +1,49 @@
+###
+### Get Latest Adapot
+
+GET {{base_url}}/api/v1/adapot
+
+> {%
+    client.test("Get latest adapot", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const adapot = response.body;
+
+        client.assert(adapot.epoch > 100, "Adapot epoch should be greater than 100");
+        client.assert(adapot.deposits_stake > 1000, "Adapot deposits_stake should be greater than 0");
+        client.assert(adapot.fees > 0, "Adapot fees should be greater than 0");
+        client.assert(adapot.treasury > 1000, "Adapot treasury should be greater than 1000");
+        client.assert(adapot.reserves > 1000, "Adapot reserves should be greater than 1000");
+        client.assert(adapot.circulation > 1000, "Adapot circulation should be greater than 1000");
+        client.assert(adapot.distributed_rewards > 1000, "Adapot distributed_rewards should be greater than 1000");
+        client.assert(adapot.undistributed_rewards > 10, "Adapot total_rewards should be greater than 10");
+        client.assert(adapot.rewards_pot > 1000, "Adapot rewards_pot should be greater than 0");
+        client.assert(adapot.pool_rewards_pot > 1000, "Adapot pool_rewards_pot should be greater than 0");
+
+    });
+%}
+
+###
+### Get Adapot by epoch
+
+GET {{base_url}}/api/v1/adapot/epochs/167
+
+> {%
+    client.test("Get adapot by epoch (167)", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const adapot = response.body;
+
+        client.assert(adapot.epoch == 167, "Adapot epoch should be greater than 167");
+        client.assert(adapot.deposits_stake == 240888000000, "Adapot deposits_stake should be greater than 240888000000");
+        client.assert(adapot.fees == 16678303880, "Adapot fees should be greater than 16678303880");
+        client.assert(adapot.treasury == 1082828070444600, "Adapot treasury should be greater than 1082828070444600");
+        client.assert(adapot.reserves == 13893619082940470, "Adapot reserves should be greater than 13893619082940470");
+        client.assert(adapot.circulation == 31099921460779229, "Adapot circulation should be greater than 31099921460779229");
+        client.assert(adapot.distributed_rewards == 205332456023, "Adapot distributed_rewards should be greater than 205332456023");
+        client.assert(adapot.undistributed_rewards == 24874055551383, "Adapot total_rewards should be greater than 24874055551383");
+        client.assert(adapot.rewards_pot == 31349235009257, "Adapot rewards_pot should be greater than 31349235009257");
+        client.assert(adapot.pool_rewards_pot == 25079388007406, "Adapot pool_rewards_pot should be greater than 25079388007406");
+
+    });
+%}
