@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,11 +30,13 @@ public class AdaPotJobStorageImpl implements AdaPotJobStorage {
                 .map(mapper::toDomain);
     }
 
+    @Transactional
     @Override
     public void save(AdaPotJob job) {
         adaPotJobRepository.save(mapper.toEntity(job));
     }
 
+    @Transactional
     @Override
     public int deleteBySlotGreaterThan(long slot) {
         return adaPotJobRepository.deleteBySlotGreaterThan(slot);

@@ -227,8 +227,14 @@ public class EpochRewardCalculationService {
 
         System.out.println(JsonUtil.getPrettyJson(registeredAccountsSinceLastEpoch));
 
-        long currentEpochStabilityWindowAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch, (int)stabilityWindow);
-        var registeredAccountsUntilNowList = stakeRegistrationService.getRegisteredAccountsUntilEpoch(epoch, poolRewardAddresses, currentEpochStabilityWindowAbsoluteSlot);
+        //TODO -- Remove this after verification with all public networks
+        // long currentEpochStabilityWindowAbsoluteSlot = eraService.getShelleyAbsoluteSlot(epoch, (int)stabilityWindow);
+        // var registeredAccountsUntilNowList = stakeRegistrationService.getRegisteredAccountsUntilEpoch(epoch, poolRewardAddresses, currentEpochStabilityWindowAbsoluteSlot);
+
+        //Until the beginning of the current epoch. Find registered accounts
+        var currentEpochStartSlot = eraService.getShelleyAbsoluteSlot(epoch, 0);
+        var registeredAccountsUntilNowList = stakeRegistrationService.getRegisteredAccountsUntilEpoch(epoch, poolRewardAddresses, currentEpochStartSlot);
+
         HashSet<String> registeredAccountsUntilNow = new HashSet<>(registeredAccountsUntilNowList);
         RewardsCalcInput rewardsCalcInput = RewardsCalcInput.builder()
                 .epoch(epoch)

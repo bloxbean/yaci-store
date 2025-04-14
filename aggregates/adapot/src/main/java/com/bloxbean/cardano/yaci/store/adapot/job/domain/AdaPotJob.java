@@ -17,6 +17,7 @@ import lombok.experimental.SuperBuilder;
 public class AdaPotJob {
     private Integer epoch;
     private Long slot;
+    private Long block;
     private AdaPotJobType type;
     private AdaPotJobStatus status;
     private Long totalTime;
