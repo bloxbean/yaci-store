@@ -56,7 +56,7 @@ class ProposalRefundProcessorTest {
 
     @Test
     void testHandleProposalStatusCapturedEvent() {
-        PreAdaPotJobProcessingEvent event = new PreAdaPotJobProcessingEvent(2, 100);
+        PreAdaPotJobProcessingEvent event = new PreAdaPotJobProcessingEvent(2, 100, 100);
 
         Proposal proposal1 = new Proposal(GovActionId.builder()
                 .gov_action_index(0)

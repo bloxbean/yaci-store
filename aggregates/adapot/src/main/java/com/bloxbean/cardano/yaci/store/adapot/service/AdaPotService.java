@@ -26,6 +26,7 @@ public class AdaPotService {
      * @param epoch
      * @return
      */
+    @Transactional
     public AdaPot createAdaPot(Integer epoch, Long slot) {
         var adaPot = AdaPot.builder()
                 .epoch(epoch)

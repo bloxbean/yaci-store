@@ -118,6 +118,7 @@ public class EpochParamProcessor {
         log.info("Processing epoch param for epoch {} and slot {} during pre-adapot job processing >>>", event.getEpoch(), event.getSlot());
         int epoch = event.getEpoch();
         long slot = event.getSlot();
+        long block = event.getBlock();
 
         int prevEpoch = epoch - 1;
         Era era = eraService.getEraForEpoch(epoch);
@@ -137,7 +138,7 @@ public class EpochParamProcessor {
         long blockTime = eraService.blockTime(era, slot);
         long protocolMagic = storeProperties.getProtocolMagic();
 
-        EpochParam resolvedEpochParam = resolveEpochParam(protocolMagic, era, prevEra, epoch, slot,  null, blockTime);
+        EpochParam resolvedEpochParam = resolveEpochParam(protocolMagic, era, prevEra, epoch, slot,  block, blockTime);
         epochParamStorage.save(resolvedEpochParam);
     }
 
