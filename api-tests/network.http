@@ -1,0 +1,39 @@
+###
+### Get Network latest network info
+
+GET {{base_url}}/api/v1/network
+
+> {%
+    client.test("Get latest network info", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const data = response.body;
+
+        client.assert(data.supply.max == 45000000000000000, "Max supply should be 45 billion");
+        client.assert(data.supply.circulating > 30410062068451000, "Cirtulating supply should be greater than 30410062068451000"); //just a random test value
+        client.assert(data.supply.treasury > 282501819644019, "Treasury supply should be greater than 282501819644019"); //just a random test value
+        client.assert(data.supply.reserves > 7011281492, "Reserves supply should be greater than 7011281492"); //just a random test value
+
+        client.assert(data.stake.active > 7626360795, "Active stake should be greater than 7626360795"); //just a random test value
+    });
+%}
+
+###
+### Get Network latest network info by epoch
+
+GET {{base_url}}/api/v1/network/epochs/168
+
+> {%
+    client.test("Get latest network info", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const data = response.body;
+
+        client.assert(data.supply.max == 45000000000000000, "Max supply should be 45 billion");
+        client.assert(data.supply.circulating == 31106380917059530, "Cirtulating supply should be greater than 31106380917059530");
+        client.assert(data.supply.treasury == 1089053500038405, "Treasury supply should be greater than 1089053500038405");
+        client.assert(data.supply.reserves == 13887206121913940, "Reserves supply should be greater than 13887206121913940");
+
+        client.assert(data.stake.active == 331872953241427, "Active stake should be greater than 331872953241427");
+    });
+%}
