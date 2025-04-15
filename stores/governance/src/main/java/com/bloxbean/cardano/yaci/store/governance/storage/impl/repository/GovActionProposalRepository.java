@@ -26,4 +26,6 @@ public interface GovActionProposalRepository extends JpaRepository<GovActionProp
     Optional<GovActionProposalEntity> findMostRecentGovActionByType(GovActionType type);
 
     List<GovActionProposalEntity> findByEpoch(Integer epoch);
+
+    Optional<GovActionProposalEntity> findByTxHashAndIndex(String txHash, long index);
 }
