@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.adapot.util;
+package com.bloxbean.cardano.yaci.store.common.util;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;

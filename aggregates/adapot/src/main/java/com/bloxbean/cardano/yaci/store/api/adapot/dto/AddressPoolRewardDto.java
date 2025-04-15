@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.adapot.dto;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
+import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;

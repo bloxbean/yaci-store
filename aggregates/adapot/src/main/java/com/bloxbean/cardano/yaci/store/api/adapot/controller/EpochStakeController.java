@@ -4,7 +4,7 @@ import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
-import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
+import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;

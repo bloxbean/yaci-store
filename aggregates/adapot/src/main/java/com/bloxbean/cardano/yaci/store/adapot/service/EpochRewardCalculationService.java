@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.adapot.service.model.RewardsCalcInput;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorageReader;
-import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
+import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
