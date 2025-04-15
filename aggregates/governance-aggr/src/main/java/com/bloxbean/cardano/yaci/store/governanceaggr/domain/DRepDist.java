@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.domain;
 
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +14,8 @@ import java.math.BigInteger;
 @Builder
 public class DRepDist {
     private String drepHash;
+
+    private DrepType drepType;
 
     private String drepId;
 

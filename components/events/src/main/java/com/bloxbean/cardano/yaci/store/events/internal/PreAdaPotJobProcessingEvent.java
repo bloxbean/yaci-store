@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.adapot.event.internal;
+package com.bloxbean.cardano.yaci.store.events.internal;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,4 +14,5 @@ import lombok.Getter;
 public class PreAdaPotJobProcessingEvent {
     private int epoch;
     private long slot;
+    private long block;
 }

@@ -14,6 +14,9 @@ public class AdaPotJobEntity {
     @Column(name = "slot")
     private Long slot;
 
+    @Column(name = "block")
+    private Long block;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
     private AdaPotJobType type;
@@ -56,6 +59,14 @@ public class AdaPotJobEntity {
 
     public void setSlot(Long slot) {
         this.slot = slot;
+    }
+
+    public Long getBlock() {
+        return block;
+    }
+
+    public void setBlock(Long block) {
+        this.block = block;
     }
 
     public AdaPotJobType getType() {

@@ -24,6 +24,7 @@ create table adapot_jobs
 (
     epoch  integer primary key ,
     slot   bigint,
+    block  bigint,
     type   varchar(30) not null,
     status varchar(30)   not null,
     total_time bigint,
