@@ -147,7 +147,7 @@ public class ProposalStatusProcessor {
 
         final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
 
-        takeDRepDistrSnapshot(epoch);
+        takeDRepDistrSnapshot(currentEpoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
@@ -533,7 +533,7 @@ public class ProposalStatusProcessor {
         dRepDistService.takeStakeSnapshot(epoch);
         var end = Instant.now();
 
-        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch + 1);
+        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch);
         if (adaPotJobOpt.isPresent()) {
             var job = adaPotJobOpt.get();
             job.setDrepDistrSnapshotTime(end.toEpochMilli() - start.toEpochMilli());

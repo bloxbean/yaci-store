@@ -38,7 +38,11 @@ public class DRepDistService {
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
-    public void takeStakeSnapshot(int epoch) {
+    public void takeStakeSnapshot(int currentEpoch) {
+        //TODO -- As this is prev epoch, we should rename it to prevEpoch later. But as we are referring it as `epoch` in
+        //queries, we are keeping it as it is for now.
+        int epoch = currentEpoch - 1;
+
         if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
             return;
         }
@@ -72,9 +76,9 @@ public class DRepDistService {
             }
         }
 
-        log.info("Taking dRep stake snapshot for epoch : " + epoch);
+        log.info("Taking dRep stake snapshot for epoch : " + currentEpoch);
         // Delete existing snapshot data if any for the epoch using jdbc template
-        jdbcTemplate.update("delete from drep_dist where epoch = :snapshot_epoch", new MapSqlParameterSource().addValue("snapshot_epoch", epoch + 1));
+        jdbcTemplate.update("delete from drep_dist where epoch = :snapshot_epoch", new MapSqlParameterSource().addValue("snapshot_epoch", currentEpoch));
 
         //Drop temp tables in parallel
         List<String> dropQueries = List.of(
@@ -240,7 +244,7 @@ public class DRepDistService {
                 where
                     (lw.max_slot is null
                         or r.slot > lw.max_slot)
-                    and r.spendable_epoch <= :snapshot_epoch
+                    and r.spendable_epoch <= :snapshot_epoch 
                 group by
                     r.address
                 """;
@@ -266,7 +270,7 @@ public class DRepDistService {
         long start = System.currentTimeMillis();
         var epochParam = new MapSqlParameterSource();
         epochParam.addValue("epoch", epoch);
-        epochParam.addValue("snapshot_epoch", epoch);
+        epochParam.addValue("snapshot_epoch", currentEpoch);
 
         for (String query : createTableQueries) {
             log.info("Executing query : " + query);
@@ -428,7 +432,7 @@ public class DRepDistService {
 
         var params = new MapSqlParameterSource();
         params.addValue("epoch", epoch);
-        params.addValue("snapshot_epoch", epoch + 1);
+        params.addValue("snapshot_epoch", currentEpoch);
         if (!isInBootstrapPhase) {
             params.addValue("max_bootstrap_phase_epoch", maxBootstrapPhaseEpoch);
         }
@@ -438,9 +442,9 @@ public class DRepDistService {
         jdbcTemplate.update(query2, params);
         long t2 = System.currentTimeMillis();
 
-        log.info("DRep Stake Distribution snapshot for epoch : {} is taken", epoch);
-        log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", epoch);
-        log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", epoch, (t2 - t1));
+        log.info("DRep Stake Distribution snapshot for epoch : {} is taken", currentEpoch);
+        log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", currentEpoch);
+        log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", currentEpoch, (t2 - t1));
 
     }
 

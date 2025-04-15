@@ -54,6 +54,8 @@ public class DrepDataComparator {
         Map<String, BigDecimal> dbSyncResults = new HashMap<>();
         Map<String, BigDecimal> indexerResults = new HashMap<>();
 
+        Map<String, String> drepHashToIdMap = new HashMap<>();
+
         BigDecimal dbSyncAbstainAmount = BigDecimal.ZERO;
         BigDecimal indexerAbstainAmount = BigDecimal.ZERO;
 
@@ -99,6 +101,7 @@ public class DrepDataComparator {
                 String hash = rs.getString("drep_hash");
                 String normalizedHash = normalizeHash(hash);
                 BigDecimal amount = rs.getBigDecimal("amount");
+                String drepId = rs.getString("drep_id");
 
                 String drepType = rs.getString("drep_type");
                 if (drepType.equals("ABSTAIN")) {
@@ -108,6 +111,9 @@ public class DrepDataComparator {
                 } else {
                     indexerResults.put(normalizedHash, amount);
                 }
+
+                if (drepId != null)
+                    drepHashToIdMap.put(hash, drepId);
 
             }
         } catch (SQLException e) {
@@ -130,9 +136,11 @@ public class DrepDataComparator {
                     mismatch = true;
                     System.out.println("Mismatch for hash: " + hash +
                             " - DB Sync Amount: " + amountDbSync + ", Indexer Amount: " + amountIndexer);
+                    System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
                 }
             } else {
                 System.out.println("Hash " + hash + " found in DB Sync but not in Indexer -- amount : " + amountDbSync);
+                System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
             }
         }
 
@@ -141,6 +149,7 @@ public class DrepDataComparator {
             if (!dbSyncResults.containsKey(hash)) {
                 mismatch = true;
                 System.out.println("Hash " + hash + " found in Indexer but not in DB Sync -- amount : " + indexerResults.get(hash));
+                System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
             }
         }
 
