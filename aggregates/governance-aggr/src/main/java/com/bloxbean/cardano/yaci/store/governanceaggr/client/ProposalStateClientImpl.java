@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalSt
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component("proposalStateClient")
+@Primary
 @Slf4j
 public class ProposalStateClientImpl implements ProposalStateClient {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;

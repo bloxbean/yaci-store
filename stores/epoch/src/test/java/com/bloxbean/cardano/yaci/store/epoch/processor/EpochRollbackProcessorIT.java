@@ -1,12 +1,14 @@
 package com.bloxbean.cardano.yaci.store.epoch.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.EpochParamRepository;
 import com.bloxbean.cardano.yaci.store.epoch.storage.impl.repository.ProtocolParamsProposalRepository;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.jdbc.SqlGroup;
 
@@ -26,6 +28,12 @@ class EpochRollbackProcessorIT {
 
     @Autowired
     private ProtocolParamsProposalRepository protocolParamsRepository;
+
+    @Autowired
+    private EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+
+    @MockBean
+    private EraService eraService;
 
     @Test
     @SqlGroup({

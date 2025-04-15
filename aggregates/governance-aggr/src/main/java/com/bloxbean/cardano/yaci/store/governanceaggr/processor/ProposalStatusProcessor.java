@@ -19,8 +19,10 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
@@ -89,9 +91,9 @@ public class ProposalStatusProcessor {
     private final AdaPotJobStorage adaPotJobStorage;
     private final ProposalMapper proposalMapper;
     private final ApplicationEventPublisher publisher;
-    private final GovernanceAggrProperties governanceAggrProperties;
     private final StoreProperties storeProperties;
-    private boolean isInConwayBootstrapPhase;
+    private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+//    private boolean isInConwayBootstrapPhase;
     private final ObjectMapper objectMapper;
     private final int QUERY_BATCH_SIZE = 500;
 
@@ -101,7 +103,7 @@ public class ProposalStatusProcessor {
                                    VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
                                    DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
                                    CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, EraService eraService, AdaPotJobStorage adaPotJobStorage, ProposalMapper proposalMapper,
-                                   ApplicationEventPublisher publisher, GovernanceAggrProperties governanceAggrProperties, StoreProperties storeProperties) {
+                                   ApplicationEventPublisher publisher, StoreProperties storeProperties, EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
         this.dRepDistService = dRepDistService;
@@ -120,19 +122,13 @@ public class ProposalStatusProcessor {
         this.adaPotJobStorage = adaPotJobStorage;
         this.proposalMapper = proposalMapper;
         this.publisher = publisher;
-        this.governanceAggrProperties = governanceAggrProperties;
         this.storeProperties = storeProperties;
+        this.eraGenesisProtocolParamsUtil = eraGenesisProtocolParamsUtil;
 
         this.objectMapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
         module.addKeyDeserializer(Credential.class, new CredentialDeserializer());
         this.objectMapper.registerModule(module);
-
-        if (isPublicNetwork()) {
-            this.isInConwayBootstrapPhase = true;
-        } else {
-            this.isInConwayBootstrapPhase = governanceAggrProperties.isDevnetConwayBootstrapAvailable();
-        }
     }
 
     @EventListener
@@ -149,16 +145,9 @@ public class ProposalStatusProcessor {
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
-        if (isInConwayBootstrapPhase) {
-            // check if there is any enacted hard fork initiation action in the past, if so, the bootstrap phase is over
-            var enactedProposal = proposalStateClient.getLastEnactedProposal(GovActionType.HARD_FORK_INITIATION_ACTION, currentEpoch);
-            if (enactedProposal.stream().anyMatch(govActionProposalStatus
-                    -> govActionProposalStatus.getGovAction().getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION))) {
-                isInConwayBootstrapPhase = false;
-            }
-        }
+        final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
 
-        takeDRepDistrSnapshot(epoch);
+        takeDRepDistrSnapshot(currentEpoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
@@ -544,7 +533,7 @@ public class ProposalStatusProcessor {
         dRepDistService.takeStakeSnapshot(epoch);
         var end = Instant.now();
 
-        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch + 1);
+        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch);
         if (adaPotJobOpt.isPresent()) {
             var job = adaPotJobOpt.get();
             job.setDrepDistrSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
@@ -606,6 +595,31 @@ public class ProposalStatusProcessor {
 
         return Stream.concat(filteredActiveProposals.stream(), newProposalsCreatedInPrevEpoch.stream())
                 .toList();
+    }
+
+    private boolean isEpochInConwayBootstrapPhase(int epoch) {
+        boolean result = true;
+
+        if (isPublicNetwork()) {
+            Optional<com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam> epochParamOpt = epochParamStorage.getProtocolParams(epoch);
+
+            if (epochParamOpt.isPresent()) {
+                var protocolParams = epochParamOpt.get().getParams();
+                if (protocolParams.getProtocolMajorVer() >= 10) {
+                    result = false;
+                }
+            }
+        } else {
+            ProtocolParams genesisProtocolParams = eraGenesisProtocolParamsUtil
+                    .getGenesisProtocolParameters(Era.Conway, null, storeProperties.getProtocolMagic())
+                    .orElse(null);
+
+            if (genesisProtocolParams != null && genesisProtocolParams.getProtocolMajorVer() >= 10) {
+                result = false;
+            }
+        }
+
+        return result;
     }
 
     private boolean isPublicNetwork() {

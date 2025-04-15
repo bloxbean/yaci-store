@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,12 +18,17 @@ import java.time.LocalDateTime;
 @IdClass(DRepDistId.class)
 public class DRepDistEntity {
 
-    @Column(name = "drep_id")
-    private String drepId;
-
     @Id
     @Column(name = "drep_hash")
     private String drepHash;
+
+    @Id
+    @Column(name = "drep_type")
+    @Enumerated(EnumType.STRING)
+    private DrepType drepType;
+
+    @Column(name = "drep_id")
+    private String drepId;
 
     @Column(name = "amount")
     private BigInteger amount;
