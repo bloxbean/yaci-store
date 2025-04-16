@@ -17,7 +17,7 @@ import java.util.List;
 import static com.bloxbean.cardano.yaci.store.common.util.ControllerPageUtil.adjustPage;
 
 @RestController("ProposalController")
-@RequestMapping("${apiPrefix}/gov-aggr")
+@RequestMapping("${apiPrefix}/governance-state")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Proposal API", description = "APIs for proposal related data.")

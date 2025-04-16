@@ -16,7 +16,7 @@ import java.util.List;
 import static com.bloxbean.cardano.yaci.store.common.util.ControllerPageUtil.adjustPage;
 
 @RestController("DRepInfoController")
-@RequestMapping("${apiPrefix}/gov-aggr")
+@RequestMapping("${apiPrefix}/governance-state")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "DRep API", description = "APIs for DRep related data.")
