@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.api.staking.controller;
 
+import com.bloxbean.cardano.yaci.store.api.staking.dto.PoolDetailsDto;
 import com.bloxbean.cardano.yaci.store.api.staking.service.PoolService;
-import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,12 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
+import static com.bloxbean.cardano.yaci.store.common.util.PoolUtil.POOL_ID_PREFIX;
 
 @Slf4j
 @RestController
@@ -26,6 +27,7 @@ import java.util.List;
 @RequestMapping("${apiPrefix}/pools")
 @ConditionalOnExpression("${store.staking.endpoints.pool.enabled:true}")
 public class PoolController {
+    private final StoreProperties storeProperties;
     private final PoolService poolService;
 
     @GetMapping("/registrations")
@@ -52,14 +54,21 @@ public class PoolController {
 
     @GetMapping("/retiring/{epoch}")
     @Operation(description = "Get retiring pool ids for the given epoch")
-    public List<PoolRetirement> getRetiringPoolIds(int epoch) {
+    public List<PoolRetirement> getRetiringPoolIds(@PathVariable int epoch) {
         return poolService.getRetiringPoolIds(epoch);
     }
 
-    @GetMapping("/pools/{poolId}/epoch/{epoch}")
-    @Operation(description = "Get pool details for the given pool id")
-    public ResponseEntity<PoolDetails> getPoolDetails(@RequestParam(name = "poolId") String poolId, @RequestParam(name = "epoch") int epoch) {
-        return poolService.getPoolDetails(poolId, epoch)
+    @GetMapping("/pools/{poolId}/epochs/{epoch}")
+    @Operation(description = "Get pool details for the given pool hash or bech32 pool id and active epoch")
+    public ResponseEntity<PoolDetailsDto> getPoolDetails(@PathVariable(name = "poolId") String poolId, @PathVariable(name = "epoch") int epoch) {
+
+        String poolHash = poolId;
+        if (poolId != null && poolId.startsWith(POOL_ID_PREFIX)) {
+            poolHash = PoolUtil.getPoolHash(poolId);
+        }
+
+        return poolService.getPoolDetails(poolHash, epoch)
+                .map(details -> PoolDetailsDto.toDto(details, storeProperties.isMainnet()))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

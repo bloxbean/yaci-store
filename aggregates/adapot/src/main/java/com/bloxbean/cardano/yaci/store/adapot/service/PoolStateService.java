@@ -7,7 +7,7 @@ import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
-import com.bloxbean.cardano.yaci.store.adapot.util.PoolUtil;
+import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
