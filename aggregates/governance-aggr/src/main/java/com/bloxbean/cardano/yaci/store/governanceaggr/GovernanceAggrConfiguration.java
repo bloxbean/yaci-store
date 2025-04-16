@@ -1,11 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepExpiryStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepDistStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepExpiryStorageImpl;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.GovActionProposalStatusStorageImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.*;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepDistMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepExpiryMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovActionProposalStatusMapper;
@@ -55,5 +51,17 @@ public class GovernanceAggrConfiguration {
     @ConditionalOnMissingBean
     public DRepExpiryStorage dRepExpiryStorage(DRepExpiryRepository dRepExpiryRepository, DRepExpiryMapper dRepExpiryMapper, DSLContext dslContext) {
         return new DRepExpiryStorageImpl(dRepExpiryRepository, dRepExpiryMapper, dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DRepStorageReader dRepStorageReader(DSLContext dslContext) {
+        return new DRepStorageReaderImpl(dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public GovActionProposalStatusStorageReader govActionProposalStatusStorageReader(DSLContext dslContext) {
+        return new GovActionProposalStatusStorageReaderImpl(dslContext);
     }
 }

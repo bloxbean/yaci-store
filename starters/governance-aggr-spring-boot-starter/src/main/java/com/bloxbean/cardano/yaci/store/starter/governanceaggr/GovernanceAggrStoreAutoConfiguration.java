@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.governanceaggr;
 
+import com.bloxbean.cardano.yaci.store.api.governanceaggr.GovernanceAggrApiConfiguration;
 import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration;
 import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(GovernanceAggrAutoConfigProperties.class)
-@Import({GovernanceAggrConfiguration.class, GovernanceAggrConfiguration.class})
+@Import({GovernanceAggrConfiguration.class, GovernanceAggrApiConfiguration.class})
 @Slf4j
 public class GovernanceAggrStoreAutoConfiguration {
 

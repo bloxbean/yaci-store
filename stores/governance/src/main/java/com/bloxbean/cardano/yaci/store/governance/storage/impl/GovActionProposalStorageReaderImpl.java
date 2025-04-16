@@ -60,4 +60,9 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
     public Optional<GovActionProposal> findMostRecentGovActionByType(GovActionType govActionType) {
         return govActionProposalRepository.findMostRecentGovActionByType(govActionType).map(govActionProposalMapper::toGovActionProposal);
     }
+
+    @Override
+    public Optional<GovActionProposal> findByGovActionTxHashAndGovActionIndex(String txHash, int index) {
+        return govActionProposalRepository.findByTxHashAndIndex(txHash, index).map(govActionProposalMapper::toGovActionProposal);
+    }
 }

@@ -18,4 +18,6 @@ public interface GovActionProposalStorageReader {
     List<GovActionProposal> findByReturnAddress(String address, int page, int count, Order order);
 
     Optional<GovActionProposal> findMostRecentGovActionByType(GovActionType govActionType);
+
+    Optional<GovActionProposal> findByGovActionTxHashAndGovActionIndex(String txHash, int index);
 }
