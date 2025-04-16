@@ -14,6 +14,7 @@ import java.util.Optional;
 public class CursorStorageImpl implements CursorStorage {
     private final CursorRepository cursorRepository;
 
+    @Transactional
     @Override
     public void saveCursor(long eventPublisherId, Cursor cursor) {
         CursorEntity cursorEntity = CursorEntity
@@ -53,6 +54,7 @@ public class CursorStorageImpl implements CursorStorage {
         return cursorRepository.deleteByIdAndSlotGreaterThan(eventPublisherId, slot);
     }
 
+    @Transactional
     @Override
     public int deleteCursorBefore(long eventPublisherId, long blockNumber) {
         return cursorRepository.deleteByIdAndBlockLessThan(eventPublisherId, blockNumber);
