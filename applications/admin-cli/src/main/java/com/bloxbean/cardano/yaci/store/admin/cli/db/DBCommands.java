@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.admin.cli.db;
 
 import com.bloxbean.cardano.yaci.store.admin.cli.Groups;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.IndexDefinition;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableIndex;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
 import com.bloxbean.cardano.yaci.store.dbutils.index.service.IndexService;
@@ -24,6 +25,7 @@ public class DBCommands {
     private static final String INDEX_FILE = "index.yml";
     private static final String EXTRA_INDEX_FILE = "extra-index.yml";
     private static final String ROLLBACK_FILE = "rollback.yml";
+    private static final String ROLLBACK_LEDGER_STATE_FILE = "rollback-ledger-state.yml";
 
     private final IndexService indexService;
     private final RollbackService rollbackService;
@@ -51,7 +53,27 @@ public class DBCommands {
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
             verifyRollback(ROLLBACK_FILE);
-            applyRollback(ROLLBACK_FILE, epoch, eventPublisherId);
+            RollbackContext rollbackContext = RollbackContext.builder()
+                    .epoch(epoch)
+                    .eventPublisherId(eventPublisherId)
+                    .build();
+
+            applyRollback(ROLLBACK_FILE, rollbackContext);
+        }
+    }
+
+    @Command(description = "Rollback ledger state data to a previous epoch")
+    public void rollbackLedgerStateData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch) {
+
+        writeLn(info("Start to rollback data ..."));
+        if (isRollbackEpochValid(epoch)) {
+            verifyRollback(ROLLBACK_LEDGER_STATE_FILE);
+            RollbackContext rollbackContext = RollbackContext.builder()
+                    .epoch(epoch)
+                    .rollbackLedgerState(true)
+                    .build();
+
+            applyRollback(ROLLBACK_LEDGER_STATE_FILE, rollbackContext);
         }
     }
 
@@ -99,7 +121,7 @@ public class DBCommands {
         }
     }
 
-    private void applyRollback(String rollbackFile, int epoch, long eventPublisherId) {
+    private void applyRollback(String rollbackFile, RollbackContext rollbackContext) {
         RollbackLoader rollbackLoader = new RollbackLoader();
 
         List<String> rollbackTableNames = rollbackLoader.loadRollbackTableNames(rollbackFile);
@@ -110,7 +132,7 @@ public class DBCommands {
             return;
         }
 
-        var result = rollbackService.executeRollback(rollbackTableNames, epoch, eventPublisherId);
+        var result = rollbackService.executeRollback(rollbackTableNames, rollbackContext);
 
         if (result.getSecond().equals(Boolean.FALSE)) {
             log.warn(">> Failed to rollback data");
@@ -120,7 +142,7 @@ public class DBCommands {
                 writeLn(warn("Failed to rollback table : %s, action : %s", tableRollbackAction.getTableName(), tableRollbackAction.getSql()));
             }
         } else {
-            writeLn(success("Data rollback is successful, data is rolled back to epoch : %d", epoch));
+            writeLn(success("Data rollback is successful, data is rolled back to epoch : %d", rollbackContext.getEpoch()));
         }
     }
 
