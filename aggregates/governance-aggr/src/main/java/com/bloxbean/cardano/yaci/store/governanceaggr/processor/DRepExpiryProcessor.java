@@ -57,9 +57,9 @@ public class DRepExpiryProcessor {
         int prevEpoch = epoch - 1;
 
         // delete if existed
-        jdbcTemplate.update("delete from drep_expiry where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", prevEpoch));
+        jdbcTemplate.update("delete from drep_expiry where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
-        var epochParamOpt = epochParamStorage.getProtocolParams(prevEpoch);
+        var epochParamOpt = epochParamStorage.getProtocolParams(epoch);
         if (epochParamOpt.isEmpty()) {
             return;
         }
@@ -69,7 +69,7 @@ public class DRepExpiryProcessor {
             return;
         }
 
-        log.info("Taking snapshot for DRep expiry for epoch : {}", prevEpoch);
+        log.info("Taking snapshot for DRep expiry for epoch : {}", epoch);
 
         // get ratified or active proposals in prev proposal status snapshot (the epoch = current epoch - 1)
         List<GovActionProposal> ratifiedOrActiveProposalsInPrevProposalStatusSnapshot =
@@ -116,7 +116,7 @@ public class DRepExpiryProcessor {
                 .map(VotingProcedure::getVoterHash)
                 .collect(Collectors.toList());
 
-        final List<DRepExpiry> dRepExpiryListInPrevSnapshot = dRepExpiryStorage.findByEpoch(prevEpoch - 1);
+        final List<DRepExpiry> dRepExpiryListInPrevSnapshot = dRepExpiryStorage.findByEpoch(epoch - 1);
 
         List<DRepExpiry> newDRepExpiryList = new ArrayList<>();
 
@@ -131,7 +131,7 @@ public class DRepExpiryProcessor {
             var newDRepExpiry = DRepExpiry.builder()
                     .drepId(dRepExpiry.getDrepId())
                     .drepHash(dRepExpiry.getDrepHash())
-                    .epoch(prevEpoch)
+                    .epoch(epoch)
                     .build();
 
             newDRepExpiry.setActiveUntil(oldActiveUntil);
@@ -157,7 +157,7 @@ public class DRepExpiryProcessor {
                     var dRepExpiry = DRepExpiry.builder()
                             .drepId(dRepInfo.getDRepId())
                             .drepHash(dRepInfo.getDRepHash())
-                            .epoch(prevEpoch)
+                            .epoch(epoch)
                             .build();
 
                     if (!ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty()) {
@@ -184,7 +184,7 @@ public class DRepExpiryProcessor {
                     var dRepExpiry = DRepExpiry.builder()
                             .drepId(dRepInfo.getDRepId())
                             .drepHash(dRepInfo.getDRepHash())
-                            .epoch(prevEpoch)
+                            .epoch(epoch)
                             .build();
 
                     if (!ratifiedOrActiveProposalsInPrevProposalStatusSnapshot.isEmpty()) {
