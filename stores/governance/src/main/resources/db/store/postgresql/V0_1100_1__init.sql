@@ -183,8 +183,8 @@ create table committee
     epoch                    int,
     slot                     bigint,
     update_datetime          timestamp,
-    primary key (epoch));
-)
+    primary key (epoch)
+);
 
 CREATE INDEX idx_committee_slot
     ON committee (slot);
