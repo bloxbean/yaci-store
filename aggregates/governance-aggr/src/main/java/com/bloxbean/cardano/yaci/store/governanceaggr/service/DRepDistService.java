@@ -303,13 +303,6 @@ public class DRepDistService {
 
         if (!isInBootstrapPhase) {
 
-           /*
-            After the bootstrap phase, while calculating DRep voting power for each DRep,
-            for delegations created in the bootstrap phase:
-            we need to exclude those delegations that were created after the DRep registration,
-            except for delegations and registrations made in the same transaction.
-            */
-
             excludeDelegationCondition = """
                 and exists (
                     select 1 from ss_drep_status ds
@@ -346,6 +339,14 @@ public class DRepDistService {
                     and ds.cred_type = rd.drep_type
                     and ds.rn = 1 
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
+                    and (
+                        ds.unregistration_slot is null
+                        or
+                        (rd.slot > ds.unregistration_slot 
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
+                        )
+                    )
                 )
             """;
         }
