@@ -30,18 +30,21 @@ public class CursorStorageImpl implements CursorStorage {
         cursorRepository.save(cursorEntity);
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> getCurrentCursor(long eventPublisherId) {
         return cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId)
                 .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> getPreviousCursor(long eventPublisherId, long slot) {
         return cursorRepository.findTopByIdAndSlotBeforeOrderBySlotDesc(eventPublisherId, slot)
                 .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> findByBlockHash(long eventPublisherId, String blockHash) {
         return cursorRepository.findByIdAndBlockHash(eventPublisherId, blockHash)
