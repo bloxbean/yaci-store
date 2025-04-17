@@ -165,6 +165,7 @@ task dockerZip(type: Zip) {
         include '*.yml'
         include '*.sh'
         include 'env'
+        include '.env'
     }
 
     from('./config') {
