@@ -18,8 +18,13 @@ jobs:
           distribution: 'liberica'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+      - name: 'Get Version Number'
+        run: |
+          ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
+          echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
+          echo "tag=${ARTIFACT_VERSION}" > docker/.env
       - name: Build with Gradle
-        run: ./gradlew clean build distZip
+        run: ./gradlew clean build distZip dockerZip
       - name: Decode GPG Key
         run: |
           mkdir -p ~/.gradle/
@@ -30,16 +35,13 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-      - name: 'Get Version Number'
-        run: |
-          ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
-          echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            applications/build/dist/yaci-store-${{env.VERSION}}.zip          
+            applications/build/dist/yaci-store-${{env.VERSION}}.zip
+            applications/build/dist/yaci-store-docker-${{env.VERSION}}.zip
             applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar            
             applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
           prerelease: true
@@ -112,3 +114,16 @@ jobs:
             TARGET=yaci-store-admin
             APP_VERSION=${{env.VERSION}}
           tags: bloxbean/yaci-store-admin:${{ env.VERSION }}
+
+      - name: Build and push yaci-store-admin-cli docker image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./Dockerfile
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          target: yaci-store-admin-cli
+          build-args: |
+            TARGET=yaci-store-admin-cli
+            APP_VERSION=${{env.VERSION}}
+          tags: bloxbean/yaci-store-admin-cli:${{ env.VERSION }}

@@ -3,7 +3,7 @@ name: Build and Release Yaci Store Native Zip
 on:
   push:
     tags:
-      - 'rel-graal-*'
+      - 'rel-native-*'
 
 jobs:
   buildAndUpload-mostly-static:
