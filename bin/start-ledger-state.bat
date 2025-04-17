@@ -21,7 +21,7 @@ SET SCRIPT_DIR=%~dp0
 SET JAR_PATH=%SCRIPT_DIR%\..\yaci-store-ledger-state.jar
 
 REM Start the Spring Boot application with the desired profile
-"%JAVA_HOME%\bin\java" -Dspring.profiles.active=ledger-state -jar "%JAR_PATH%"
+"%JAVA_HOME%\bin\java" %JAVA_OPTS% -Dspring.profiles.active=ledger-state -jar "%JAR_PATH%"
 
 REM Return to the original working directory
 CD /D %CURRENT_DIR%

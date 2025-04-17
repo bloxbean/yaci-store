@@ -17,7 +17,19 @@ fi
 SCRIPT_DIR=$(dirname "$0")
 JAR_PATH="$SCRIPT_DIR/../yaci-store.jar"
 
-"$JAVA_HOME/bin/java" -jar "$JAR_PATH"
+# Check for profile argument
+PROFILE="$1"
+
+if [ -n "$PROFILE" ]; then
+    echo "Starting yaci-store with Spring profile: $PROFILE"
+    "$JAVA_HOME/bin/java" $JAVA_OPTS \
+      -Dspring.profiles.active="$PROFILE" \
+      -jar "$JAR_PATH"
+else
+    echo "Starting yaci-store with default Spring profile (default)"
+    "$JAVA_HOME/bin/java" $JAVA_OPTS \
+      -jar "$JAR_PATH"
+fi
 
 # Return to the original working directory
 cd "$CURRENT_DIR" || exit 1
