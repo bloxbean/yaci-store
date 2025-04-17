@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.Anchor;
 import com.bloxbean.cardano.yaci.core.model.governance.Constitution;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
@@ -8,8 +7,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.governance.storage.ConstitutionStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.ConstitutionStorageReader;
 import org.junit.jupiter.api.Test;
@@ -44,18 +42,11 @@ class ConstitutionProcessorTest {
     ArgumentCaptor<com.bloxbean.cardano.yaci.store.governance.domain.Constitution> constitutionCaptor;
 
     @Test
-    void handleEpochChangeEvent_ShouldUpdateConstitution_WhenProposalEnacted() {
-        PreEpochTransitionEvent event = PreEpochTransitionEvent.builder()
-                .era(Era.Conway)
-                .previousEra(Era.Conway)
+    void handlePreAdaPotJobProcessingEvent_ShouldUpdateConstitution_WhenProposalEnacted() {
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
                 .epoch(101)
-                .previousEpoch(100)
-                .metadata(EventMetadata
-                        .builder()
-                        .era(Era.Conway)
-                        .slot(6000)
-                        .epochNumber(101)
-                        .build())
+                .slot(6000)
+                .block(500)
                 .build();
 
         NewConstitution newConstitution = NewConstitution.builder()
@@ -72,10 +63,10 @@ class ConstitutionProcessorTest {
                 .builder()
                 .govAction(newConstitution)
                 .build();
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, event.getPreviousEpoch()))
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(List.of(proposal));
 
-        constitutionProcessor.handleEpochChangeEvent(event);
+        constitutionProcessor.handlePreAdaPotJobProcessingEvent(event);
 
         Mockito.verify(constitutionStorage).save(constitutionCaptor.capture());
         com.bloxbean.cardano.yaci.store.governance.domain.Constitution savedConstitution = constitutionCaptor.getValue();

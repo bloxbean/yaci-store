@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.Constitution;
 import com.bloxbean.cardano.yaci.store.governance.storage.ConstitutionStorage;
@@ -63,25 +64,6 @@ public class ConstitutionProcessor {
                 constitutionStorage.save(constitutionToSave);
             }
         }
-
-        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
-
-        for (var proposal : ratifiedProposalsInPrevEpoch) {
-            if (proposal.getGovAction() instanceof NewConstitution newConstitution) {
-                Anchor anchor = newConstitution.getConstitution().getAnchor();
-
-                var constitutionToSave = Constitution.builder()
-                        .anchorUrl(anchor != null ? anchor.getAnchor_url() : null)
-                        .anchorHash(anchor != null ? anchor.getAnchor_data_hash() : null)
-                        .activeEpoch(epoch)
-                        .script(newConstitution.getConstitution().getScripthash())
-                        .slot(slot)
-                        .build();
-
-                constitutionStorage.save(constitutionToSave);
-            }
-        }
     }
 
     private GenesisConstitution getGenesisConstitution(long protocolMagic) {
@@ -101,6 +83,32 @@ public class ConstitutionProcessor {
                 .script(genesisConstitution.getScript())
                 .slot(slot)
                 .build();
+    }
+
+    @EventListener
+    @Transactional
+    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        int epoch = event.getEpoch();
+        long slot = event.getSlot();
+
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+
+        for (var proposal : ratifiedProposalsInPrevEpoch) {
+            if (proposal.getGovAction() instanceof NewConstitution newConstitution) {
+                Anchor anchor = newConstitution.getConstitution().getAnchor();
+
+                var constitutionToSave = Constitution.builder()
+                        .anchorUrl(anchor != null ? anchor.getAnchor_url() : null)
+                        .anchorHash(anchor != null ? anchor.getAnchor_data_hash() : null)
+                        .activeEpoch(epoch)
+                        .script(newConstitution.getConstitution().getScripthash())
+                        .slot(slot)
+                        .build();
+
+                constitutionStorage.save(constitutionToSave);
+            }
+        }
     }
 
     @EventListener

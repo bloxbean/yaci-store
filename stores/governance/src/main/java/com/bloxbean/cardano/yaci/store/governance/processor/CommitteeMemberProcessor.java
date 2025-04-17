@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMember;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
@@ -72,52 +73,6 @@ public class CommitteeMemberProcessor {
                 committeeMemberStorage.saveAll(committeeMembersToSave);
             }
         }
-
-        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
-        List<CommitteeMember> updatedCommitteeMembers = new ArrayList<>();
-
-        for (var proposal : ratifiedProposalsInPrevEpoch) {
-            if (!(proposal.getGovAction() instanceof UpdateCommittee updateCommittee)) {
-                continue;
-            }
-
-            var currentCommitteeMembers = committeeMemberStorage.getCommitteeMembersByEpoch(event.getPreviousEpoch());
-
-            Set<String> membersForRemovalHashes = updateCommittee.getMembersForRemoval()
-                    .stream().map(Credential::getHash).collect(Collectors.toSet());
-
-            // Remove members
-            currentCommitteeMembers.stream()
-                    .filter(member -> !membersForRemovalHashes.contains(member.getHash()))
-                    .map(member -> CommitteeMember.builder()
-                            .startEpoch(member.getStartEpoch())
-                            .expiredEpoch(member.getExpiredEpoch())
-                            .hash(member.getHash())
-                            .credType(member.getCredType())
-                            .epoch(epoch)
-                            .slot(slot)
-                            .build())
-                    .forEach(updatedCommitteeMembers::add);
-
-            // Add new members
-            updateCommittee.getNewMembersAndTerms().forEach((credential, term) ->
-                    updatedCommitteeMembers.add(CommitteeMember.builder()
-                            .hash(credential.getHash())
-                            .startEpoch(epoch)
-                            .expiredEpoch(epoch + term)
-                            .credType(credential.getType().equals(StakeCredType.ADDR_KEYHASH)
-                                    ? CredentialType.ADDR_KEYHASH
-                                    : CredentialType.SCRIPTHASH)
-                            .epoch(epoch)
-                            .slot(slot)
-                            .build())
-            );
-        }
-
-        if (!updatedCommitteeMembers.isEmpty()) {
-            committeeMemberStorage.saveAll(updatedCommitteeMembers);
-        }
     }
 
     private List<GenesisCommitteeMember> getGenesisCommitteeMembers(long protocolMagic) {
@@ -164,6 +119,59 @@ public class CommitteeMemberProcessor {
             committeeMemberStorage.saveAll(committeeMembersToSave);
         }
 
+    }
+
+    @EventListener
+    @Transactional
+    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        int epoch = event.getEpoch();
+        long slot = event.getSlot();
+
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+        List<CommitteeMember> updatedCommitteeMembers = new ArrayList<>();
+
+        for (var proposal : ratifiedProposalsInPrevEpoch) {
+            if (!(proposal.getGovAction() instanceof UpdateCommittee updateCommittee)) {
+                continue;
+            }
+
+            var currentCommitteeMembers = committeeMemberStorage.getCommitteeMembersByEpoch(epoch - 1);
+
+            Set<String> membersForRemovalHashes = updateCommittee.getMembersForRemoval()
+                    .stream().map(Credential::getHash).collect(Collectors.toSet());
+
+            // Remove members
+            currentCommitteeMembers.stream()
+                    .filter(member -> !membersForRemovalHashes.contains(member.getHash()))
+                    .map(member -> CommitteeMember.builder()
+                            .startEpoch(member.getStartEpoch())
+                            .expiredEpoch(member.getExpiredEpoch())
+                            .hash(member.getHash())
+                            .credType(member.getCredType())
+                            .epoch(epoch)
+                            .slot(slot)
+                            .build())
+                    .forEach(updatedCommitteeMembers::add);
+
+            // Add new members
+            updateCommittee.getNewMembersAndTerms().forEach((credential, term) ->
+                    updatedCommitteeMembers.add(CommitteeMember.builder()
+                            .hash(credential.getHash())
+                            .startEpoch(epoch)
+                            .expiredEpoch(epoch + term)
+                            .credType(credential.getType().equals(StakeCredType.ADDR_KEYHASH)
+                                    ? CredentialType.ADDR_KEYHASH
+                                    : CredentialType.SCRIPTHASH)
+                            .epoch(epoch)
+                            .slot(slot)
+                            .build())
+            );
+        }
+
+        if (!updatedCommitteeMembers.isEmpty()) {
+            committeeMemberStorage.saveAll(updatedCommitteeMembers);
+        }
     }
 
     @EventListener
