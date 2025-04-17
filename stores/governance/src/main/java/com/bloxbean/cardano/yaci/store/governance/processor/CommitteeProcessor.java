@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.common.genesis.ConwayGenesis;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.Committee;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
@@ -71,26 +72,6 @@ public class CommitteeProcessor {
             committeeStorage.save(committee);
         }
 
-        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
-
-        for (var proposal : ratifiedProposalsInPrevEpoch) {
-            if (proposal.getGovAction() instanceof UpdateCommittee updateCommittee) {
-                UnitInterval quorumThreshold = updateCommittee.getThreshold();
-
-                if (quorumThreshold != null) {
-                    Committee committee = buildCommittee(proposal.getTxHash(),
-                            proposal.getIndex(),
-                            quorumThreshold.getNumerator(),
-                            quorumThreshold.getDenominator(),
-                            safeRatio(quorumThreshold),
-                            epoch,
-                            slot);
-
-                    committeeStorage.save(committee);
-                }
-            }
-        }
     }
 
     private ConwayGenesis getConwayGenesis(long protocolMagic) {
@@ -140,5 +121,33 @@ public class CommitteeProcessor {
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         int count = committeeStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} committee records", count);
+    }
+
+    @EventListener
+    @Transactional
+    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        int epoch = event.getEpoch();
+        long slot = event.getSlot();
+
+        List<GovActionProposal> ratifiedProposalsInPrevEpoch =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+
+        for (var proposal : ratifiedProposalsInPrevEpoch) {
+            if (proposal.getGovAction() instanceof UpdateCommittee updateCommittee) {
+                UnitInterval quorumThreshold = updateCommittee.getThreshold();
+
+                if (quorumThreshold != null) {
+                    Committee committee = buildCommittee(proposal.getTxHash(),
+                            proposal.getIndex(),
+                            quorumThreshold.getNumerator(),
+                            quorumThreshold.getDenominator(),
+                            safeRatio(quorumThreshold),
+                            epoch,
+                            slot);
+
+                    committeeStorage.save(committee);
+                }
+            }
+        }
     }
 }
