@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Credential;
-import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
 import com.bloxbean.cardano.yaci.core.types.UnitInterval;
@@ -9,8 +8,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.Committee;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorageReader;
@@ -48,18 +46,11 @@ class CommitteeProcessorTest {
     ArgumentCaptor<Committee> committeeCaptor;
 
     @Test
-    void handleEpochChangeEvent_ShouldUpdateCommittee_WhenProposalEnacted() {
-        PreEpochTransitionEvent event = PreEpochTransitionEvent.builder()
-                .era(Era.Conway)
-                .previousEra(Era.Conway)
+    void handlePreAdaPotJobProcessingEvent_ShouldUpdateCommittee_WhenProposalEnacted() {
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
                 .epoch(101)
-                .previousEpoch(100)
-                .metadata(EventMetadata
-                        .builder()
-                        .era(Era.Conway)
-                        .epochNumber(101)
-                        .slot(6000)
-                        .build())
+                .slot(6000)
+                .block(500)
                 .build();
 
         Credential removedMember1 = new Credential(StakeCredType.ADDR_KEYHASH, "aaaaaa06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b");
@@ -78,10 +69,10 @@ class CommitteeProcessorTest {
                 .govAction(updateCommittee)
                 .build();
 
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, event.getPreviousEpoch()))
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(List.of(proposal));
 
-        committeeProcessor.handleEpochChangeEvent(event);
+        committeeProcessor.handlePreAdaPotJobProcessingEvent(event);
 
         Mockito.verify(committeeStorage).save(committeeCaptor.capture());
         Committee savedCommittee = committeeCaptor.getValue();
