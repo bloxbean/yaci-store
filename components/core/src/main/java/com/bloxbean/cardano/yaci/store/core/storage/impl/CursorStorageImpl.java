@@ -14,6 +14,7 @@ import java.util.Optional;
 public class CursorStorageImpl implements CursorStorage {
     private final CursorRepository cursorRepository;
 
+    @Transactional
     @Override
     public void saveCursor(long eventPublisherId, Cursor cursor) {
         CursorEntity cursorEntity = CursorEntity
@@ -29,18 +30,21 @@ public class CursorStorageImpl implements CursorStorage {
         cursorRepository.save(cursorEntity);
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> getCurrentCursor(long eventPublisherId) {
         return cursorRepository.findTopByIdOrderBySlotDesc(eventPublisherId)
                 .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> getPreviousCursor(long eventPublisherId, long slot) {
         return cursorRepository.findTopByIdAndSlotBeforeOrderBySlotDesc(eventPublisherId, slot)
                 .map(cursorEntity -> cursorEntityToCursor(cursorEntity));
     }
 
+    @Transactional
     @Override
     public Optional<Cursor> findByBlockHash(long eventPublisherId, String blockHash) {
         return cursorRepository.findByIdAndBlockHash(eventPublisherId, blockHash)
@@ -53,6 +57,7 @@ public class CursorStorageImpl implements CursorStorage {
         return cursorRepository.deleteByIdAndSlotGreaterThan(eventPublisherId, slot);
     }
 
+    @Transactional
     @Override
     public int deleteCursorBefore(long eventPublisherId, long blockNumber) {
         return cursorRepository.deleteByIdAndBlockLessThan(eventPublisherId, blockNumber);
