@@ -6,10 +6,9 @@ services:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=ledger_state}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
+      - SPRING_PROFILES_ACTIVE=ledger-state
     env_file:
       - env
-      - application.properties
-      - application-ledger-state.properties
     ports:
       - ${YAC_STORE_PORT:-8081}:8081
     volumes:
