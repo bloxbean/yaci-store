@@ -72,7 +72,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                         DRepType dRepType = GovId.toDrep(drepId).getType(); // TODO: a workaround, should add cred type to table 'drep' later
                         DRepStatus status;
                         if (com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.RETIRED.name().equalsIgnoreCase(drepStatusStr)) {
-                            status = DRepStatus.INACTIVE;
+                            status = DRepStatus.RETIRED;
                         } else {
                             status = DRepStatus.ACTIVE;
                         }
@@ -156,7 +156,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                     DRepStatus status;
 
                     if (com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.RETIRED.name().equalsIgnoreCase(drepStatusStr)) {
-                        status = DRepStatus.INACTIVE;
+                        status = DRepStatus.RETIRED;
                         votingPower = BigInteger.ZERO;
                     } else {
                         status = activeUntil == null || activeUntil >= epoch
@@ -239,13 +239,14 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
         }
 
         status = com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.RETIRED.name().equalsIgnoreCase(drepStatusStr)
-                ? DRepStatus.INACTIVE
+                ? DRepStatus.RETIRED
                 : (activeUntil == null || activeUntil >= epoch)
                 ? DRepStatus.ACTIVE
                 : DRepStatus.INACTIVE;
 
-        if (status == DRepStatus.INACTIVE)
+        if (status == DRepStatus.INACTIVE || status == DRepStatus.RETIRED) {
             votingPower = BigInteger.ZERO;
+        }
 
         return Optional.of(new DRepDetailsDto(
                 drepId,
