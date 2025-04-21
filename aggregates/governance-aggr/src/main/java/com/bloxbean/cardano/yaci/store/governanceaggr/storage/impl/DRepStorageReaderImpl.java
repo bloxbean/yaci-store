@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
+import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.client.transaction.spec.governance.DRepType;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepDetailsDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepStatus;
@@ -68,7 +69,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                         BigInteger deposit = r.get("deposit", BigInteger.class);
                         String drepStatusStr = r.get("status", String.class);
                         Long registrationSlot = r.get("registration_slot", Long.class);
-
+                        DRepType dRepType = GovId.toDrep(drepId).getType(); // TODO: a workaround, should add cred type to table 'drep' later
                         DRepStatus status;
                         if (com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.RETIRED.name().equalsIgnoreCase(drepStatusStr)) {
                             status = DRepStatus.INACTIVE;
@@ -79,7 +80,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                         return new DRepDetailsDto(
                                 drepId,
                                 drepHash,
-                                null, // todo: add cred type to table 'drep'
+                                dRepType,
                                 deposit,
                                 status,
                                 null,
@@ -112,8 +113,8 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                 .asTable("latest");
 
         var result = dsl.select(
-                        drepDist.DREP_ID,
-                        drepDist.DREP_HASH,
+                        latestStatus.field("drep_id", String.class),
+                        latestStatus.field("drep_hash", String.class),
                         drepDist.DREP_TYPE,
                         drepDist.AMOUNT.as("voting_power"),
                         latestStatus.field("deposit", BigInteger.class),
@@ -145,8 +146,13 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                     String drepStatusStr = r.get("status", String.class);
                     Integer activeUntil = r.get(drepExpiry.ACTIVE_UNTIL);
                     Long registrationSlot = r.get("registration_slot", Long.class);
+                    DRepType dRepType;
+                    if (drepTypeStr != null) {
+                        dRepType = DRepType.valueOf(drepTypeStr);
+                    } else {
+                        dRepType = GovId.toDrep(drepId).getType(); // a workaround, should add cred type to table 'drep' later
+                    }
 
-                    DRepType dRepType = drepTypeStr != null ? DRepType.valueOf(drepTypeStr) : null;
                     DRepStatus status;
 
                     if (com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.RETIRED.name().equalsIgnoreCase(drepStatusStr)) {
@@ -164,7 +170,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                             dRepType,
                             deposit,
                             status,
-                            votingPower,
+                            votingPower == null ? BigInteger.ZERO : votingPower,
                             registrationSlot
                     );
                 })
@@ -208,7 +214,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
         BigInteger votingPower = null;
         Integer activeUntil = null;
         DRepStatus status;
-        DRepType dRepType = null;  // todo: add cred type to table 'drep'
+        DRepType dRepType = GovId.toDrep(drepId).getType();  // todo: add cred type to table 'drep'
 
         if (maxEpochInGovCalc != null) {
             var distrAndExpiryRow = dsl.select(
@@ -247,7 +253,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                 dRepType,
                 deposit,
                 status,
-                votingPower,
+                votingPower == null ? BigInteger.ZERO : votingPower,
                 registrationSlot
         ));
     }
