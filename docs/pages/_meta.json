@@ -1,5 +1,6 @@
 {
   "index": "Overview",
+  "getting-started-0.2.x": "Getting Started 0.2.x",
   "design": "Design",
   "docker": "Docker",
   "build_run": "Build & Run",
