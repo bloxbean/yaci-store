@@ -8,7 +8,6 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
     env_file:
       - env
-      - application.properties
     ports:
       - ${YAC_STORE_PORT:-8080}:8080
     volumes:
