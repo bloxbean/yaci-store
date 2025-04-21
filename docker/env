@@ -2,3 +2,6 @@
 
 # Java Options
 # JDK_JAVA_OPTIONS=-Xms4G -Xmx12G
+
+## Enable Ledger State profile
+#SPRING_PROFILES_ACTIVE=ledger-state

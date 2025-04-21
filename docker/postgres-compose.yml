@@ -1,6 +1,7 @@
 services:
   yaci-store-postgres:
     image: postgres:17.4
+#    shm_size: 2g
     environment:
       - POSTGRES_USER=yaci
       - POSTGRES_PASSWORD=dbpass
