@@ -96,7 +96,7 @@ public class DRepExpiryProcessor {
                 eraService.getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot())).orElse(0);
 
         int dormantEpochsCount = lastEpochHadRatifiedOrActiveProposalsOpt
-                .map(e -> prevEpoch - 1).orElseGet(() ->  prevEpoch - firstEpochNoInConway - 1);
+                .map(e -> prevEpoch - e).orElseGet(() ->  prevEpoch - firstEpochNoInConway);
 
         final Map<DRepInfo, Long> deregisteredDRepsInPrevEpoch = dRepStorage.findDRepsByStatusAndEpoch(DRepStatus.RETIRED, prevEpoch)
                 .stream()
