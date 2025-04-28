@@ -193,19 +193,13 @@ You can choose between:
 
 #### Usage
 
-1. Edit `application.properties` to configure network and database settings.
+1. Edit `application.properties` to configure network settings.
 
 - Check the following properties and update them accordingly
 ```
 store.cardano.host=preview-node.world.dev.cardano.org
 store.cardano.port=30002
 store.cardano.protocol-magic=2
-```
-
-```
-spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_indexer?currentSchema=preview
-spring.datasource.username=user
-spring.datasource.password=password
 ```
 
 2. Start containers:
@@ -264,7 +258,7 @@ Block No: 4746  , Era: Shelley
 
 Use docker compose file like `yaci-store.yml` or `yaci-store-ledger-state.yml` instead of `*-monolith.yml` if you want to connect to an external PostgreSQL DB.
 
-- Edit `yaci-store.yml` or `yaci-store-ledger-state.yml` to comment the database configuration in docker compose yml.monolith
+- Edit `yaci-store.yml` or `yaci-store-ledger-state.yml` to comment the database configuration in docker compose yml.
 
 ```
 #    environment:
@@ -272,6 +266,17 @@ Use docker compose file like `yaci-store.yml` or `yaci-store-ledger-state.yml` i
 #      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
 #      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
 ```
+
+- Edit `application.properties` to set the database connection settings.
+  Make sure to use the **database host or IP address** instead of `localhost`, as the Docker container will not be able to connect to the host using `localhost`.
+  Also, ensure that only the **PostgreSQL** configuration section is uncommented.
+
+```
+spring.datasource.url=jdbc:postgresql://192.168.0.2:5432/yaci_indexer?currentSchema=preview
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
 
 ##### 2.1.1 Usage
 - **Yaci Store**:
