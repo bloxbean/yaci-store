@@ -1,5 +1,6 @@
 {
   "index": "Overview",
+  "getting-started-2.x.x": "Getting Started 2.x.x",
   "design": "Design",
   "docker": "Docker",
   "build_run": "Build & Run",
@@ -10,5 +11,7 @@
   "about": {
     "title": "About",
     "type": "page"
-  }
+  },
+  "other-configurations": "Other Configurations",
+  "ledger-state-mismatches": "Ledger State Mismatches"
 }
