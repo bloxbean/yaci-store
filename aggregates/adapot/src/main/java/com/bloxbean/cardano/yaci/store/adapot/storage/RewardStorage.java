@@ -17,6 +17,8 @@ public interface RewardStorage {
 
     void bulkSaveRewards(List<Reward> rewards, int batchSize);
 
+    void bulkSaveRewardsWithCopy(List<Reward> rewards);
+
     void saveUnclaimedRewardRest(List<UnclaimedRewardRest> rewards);
 
     List<UnclaimedRewardRest> findUnclaimedRewardRest(int spendableEpoch);

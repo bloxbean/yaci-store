@@ -18,6 +18,9 @@ public class AdaPotProperties {
 
     private boolean bulkUpdateReward = true;
 
+    private boolean bulkUpdateRewardWithCopy = true;
+
     @Builder.Default
     private boolean verifyAdapotCalcValues = true;
+
 }

@@ -7,6 +7,7 @@ dependencies {
     api project(":stores:blocks")
     api project(":stores:mir")
     api project(":aggregates:account")
+    api project(":components:dbutils")
 
     api(libs.cf.rewards) {
         exclude group: "org.projectlombok", module: "lombok"
@@ -16,6 +17,7 @@ dependencies {
     }
 
     implementation(libs.vavr)
+    implementation(libs.commons.csv)
 
     //Test dependencies
     testCompileOnly 'org.projectlombok:lombok'

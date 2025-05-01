@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
@@ -77,6 +78,16 @@ public class DRepDistService {
         }
 
         log.info("Taking dRep stake snapshot for epoch : " + currentEpoch);
+
+        String tableType = "";
+        //If postgres, set synchronous_commit to off for rest of the transaction
+        var dbType = DatabaseUtils.getDbType(jdbcTemplate.getJdbcTemplate().getDataSource()).orElse(null);
+        if (dbType == DatabaseUtils.DbType.postgres) {
+            jdbcTemplate.update("SET LOCAL synchronous_commit = off", Map.of());
+            tableType = "UNLOGGED";
+            log.info("Postgres detected. Using UNLOGGED table for temp tables");
+        }
+
         // Delete existing snapshot data if any for the epoch using jdbc template
         jdbcTemplate.update("delete from drep_dist where epoch = :snapshot_epoch", new MapSqlParameterSource().addValue("snapshot_epoch", currentEpoch));
 
@@ -94,8 +105,8 @@ public class DRepDistService {
         }
         log.info("Dropped existing temp tables for DRep distribution !!!");
 
-        String rankedDelegationsQuery = """
-                CREATE TABLE ss_drep_ranked_delegations AS
+        String rankedDelegationsQuery = String.format("""
+                CREATE %s TABLE ss_drep_ranked_delegations AS
                     WITH ranked AS (
                         SELECT
                             address,
@@ -126,9 +137,10 @@ public class DRepDistService {
                         cert_index
                     FROM ranked
                     WHERE rn = 1
-                """;
-        String drepStatusQuery = """
-                CREATE TABLE ss_drep_status AS
+                """, tableType);
+
+        String drepStatusQuery = String.format("""
+                CREATE %s TABLE ss_drep_status AS
                 WITH last_reg AS (
                     SELECT
                         dr.drep_id,
@@ -210,10 +222,10 @@ public class DRepDistService {
                 LEFT JOIN last_unreg lu 
                         ON d.drep_hash = lu.drep_hash
                 WHERE d.epoch <= :epoch
-                """;
+                """, tableType);
 
-        String activeProposalDepositsQuery = """
-                CREATE TABLE ss_gov_active_proposal_deposits AS
+        String activeProposalDepositsQuery = String.format("""
+                CREATE %s TABLE ss_gov_active_proposal_deposits AS
                 select
                       g.return_address,
                       SUM(g.deposit) as deposit
@@ -229,10 +241,10 @@ public class DRepDistService {
                      		and g.epoch = :epoch)
                     group by
                       g.return_address
-                """;
+                """, tableType);
 
-        String spendableRewardRestQuery = """
-                CREATE TABLE ss_gov_spendable_reward_rest AS
+        String spendableRewardRestQuery = String.format("""
+                CREATE %s TABLE ss_gov_spendable_reward_rest AS
                 select
                     r.address,
                     SUM(r.amount) as withdrawable_reward_rest,
@@ -247,17 +259,17 @@ public class DRepDistService {
                     and r.spendable_epoch <= :snapshot_epoch 
                 group by
                     r.address
-                """;
+                """, tableType);
 
-        String poolRefundRewardsQuery = """
-                CREATE TABLE ss_gov_pool_refund_rewards AS
+        String poolRefundRewardsQuery = String.format("""
+                CREATE %s TABLE ss_gov_pool_refund_rewards AS
                 SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward, :epoch as mark_epoch
                 FROM reward r
                          LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                 WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                   AND r.spendable_epoch <= :snapshot_epoch and r.type = 'refund'
                 GROUP BY r.address
-                """;
+                """, tableType);
 
         List<String> createTableQueries = List.of(
                 rankedDelegationsQuery,
