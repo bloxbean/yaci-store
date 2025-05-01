@@ -394,6 +394,7 @@ public class EpochRewardCalculationService {
         List<com.bloxbean.cardano.yaci.store.adapot.domain.Reward> batchedRewards = new ArrayList<>();
         int batchSize = adaPotProperties.getUpdateRewardDbBatchSize();
         boolean bulkUpdateRewards = adaPotProperties.isBulkUpdateReward();
+        boolean bulkUpdateRewardsWithCopy = adaPotProperties.isBulkUpdateRewardWithCopy();
 
         for(PoolRewardCalculationResult poolRewardCalculationResult: poolRewardCalculationResults) {
             String poolRewardAccount = poolRewardCalculationResult.getRewardAddress();
@@ -451,9 +452,15 @@ public class EpochRewardCalculationService {
             rewardStorage.saveRewards(batchedRewards);
             log.info("Final batch of rewards saved: " + batchedRewards.size());
         } else if (bulkUpdateRewards && !batchedRewards.isEmpty()) {
-            log.info(">> Bulk saving rewards for epoch " + epoch + " with rewards : " + batchedRewards.size());
-            rewardStorage.bulkSaveRewards(batchedRewards, batchSize);
-            log.info("Final batch of rewards saved with bulk update: " + batchedRewards.size());
+            if (bulkUpdateRewardsWithCopy) {
+                log.info(">> Bulk saving rewards with copy for epoch " + epoch + " with rewards : " + batchedRewards.size());
+                rewardStorage.bulkSaveRewardsWithCopy(batchedRewards);
+                log.info("Final batch of rewards saved with bulk copy: " + batchedRewards.size());
+            } else {
+                log.info(">> Bulk saving rewards for epoch " + epoch + " with rewards : " + batchedRewards.size());
+                rewardStorage.bulkSaveRewards(batchedRewards, batchSize);
+                log.info("Final batch of rewards saved with bulk update: " + batchedRewards.size());
+            }
         }
     }
 }
