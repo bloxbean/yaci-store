@@ -19,12 +19,12 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
 import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -248,7 +248,7 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void handleGenesisBlockEvent(GenesisBlockEvent genesisBlockEvent) {
         checkError();

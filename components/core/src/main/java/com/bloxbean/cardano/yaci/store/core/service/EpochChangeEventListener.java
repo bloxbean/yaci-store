@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
 import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Component;
 public class EpochChangeEventListener {
     private final DomainEventPublisher publisher;
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void onEpochChange(EpochChangeEvent epochChangeEvent) {
 

@@ -9,6 +9,8 @@ dependencies {
     implementation libs.cardano.client.lib
     implementation libs.apache.commons.pool
 
+    annotationProcessor project(':components:annotation-processor')
+
     testImplementation project(':components:core:core-spring')
     testImplementation libs.assertj.core
 }
