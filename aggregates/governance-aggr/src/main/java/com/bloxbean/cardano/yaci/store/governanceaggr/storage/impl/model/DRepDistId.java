@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
-import com.bloxbean.cardano.client.transaction.spec.governance.DRepType;
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,7 +15,7 @@ public class DRepDistId implements Serializable {
 
     @Column(name = "drep_type")
     @Enumerated(EnumType.STRING)
-    private DRepType drepType;
+    private DrepType drepType;
 
     @Column(name = "epoch")
     private Integer epoch;
