@@ -3,8 +3,6 @@ package com.bloxbean.cardano.yaci.store.ledgerstate.config;
 import com.bloxbean.cardano.yaci.store.ledgerstate.storage.DummyDBUtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -19,11 +17,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class DefaultConfig {
 
     @Bean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
-                                   TxInputRepository spentOutputRepository,
-                                   DSLContext dsl,
+    public UtxoStorage utxoStorage(DSLContext dsl,
                                    UtxoCache utxoCache,
                                    PlatformTransactionManager transactionManager) {
-        return new DummyDBUtxoStorage(utxoRepository, spentOutputRepository, dsl, utxoCache, transactionManager);
+        return new DummyDBUtxoStorage(dsl, utxoCache);
     }
 }

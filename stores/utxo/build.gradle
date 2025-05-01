@@ -5,6 +5,8 @@ dependencies {
 
     implementation(libs.guava)
 
+    annotationProcessor project(':components:annotation-processor')
+
     testImplementation project(':starters:spring-boot-starter')
 }
 

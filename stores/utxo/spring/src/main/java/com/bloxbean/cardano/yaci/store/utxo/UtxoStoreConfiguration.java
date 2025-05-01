@@ -8,8 +8,6 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,23 +33,19 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class UtxoStoreConfiguration {
-    public static final String STORE_UTXO_ENABLED = "store.utxo.enabled";
-    public static final String STORE_UTXO_PRUNING_ENABLED = "store.utxo.pruning-enabled";
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
-                                   TxInputRepository spentOutputRepository,
-                                   DSLContext dslContext,
+    public UtxoStorage utxoStorage(DSLContext dslContext,
                                    UtxoCache utxoCache,
                                    PlatformTransactionManager transactionManager) {
-        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager);
+        return new UtxoStorageImpl(dslContext, utxoCache);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository, dslContext);
+    public UtxoStorageReader utxoStorageReader(DSLContext dslContext) {
+        return new UtxoStorageReaderImpl(dslContext);
     }
 
     @Bean

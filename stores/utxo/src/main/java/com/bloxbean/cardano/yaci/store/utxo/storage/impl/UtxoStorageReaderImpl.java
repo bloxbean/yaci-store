@@ -7,8 +7,8 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AssetTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,36 +18,49 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.row;
 
 @Slf4j
 @RequiredArgsConstructor
 public class UtxoStorageReaderImpl implements UtxoStorageReader {
-
-    private final UtxoRepository utxoRepository;
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
-        return utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                .map(mapper::toAddressUtxo);
+        var id = new UtxoId(txHash, outputIndex);
+        return Optional.ofNullable(
+                dsl.selectFrom(ADDRESS_UTXO)
+                        .where(ADDRESS_UTXO.TX_HASH.eq(id.getTxHash())
+                                .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(id.getOutputIndex())))
+                        .fetchOneInto(AddressUtxoEntity.class)
+        ).map(mapper::toAddressUtxo);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByAddress(@NonNull String address, int page, int count, Order order) {
         Pageable pageable = getPageable(page, count, order);
 
-        return utxoRepository.findUnspentByOwnerAddr(address, pageable)
+        List<AddressUtxoEntity> result = dsl.select()
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH)
+                        .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
+                .where(ADDRESS_UTXO.OWNER_ADDR.eq(address))
+                .and(TX_INPUT.TX_HASH.isNull())
+                .offset((int) pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetchInto(AddressUtxoEntity.class);
+
+        return  result
                 .stream()
-                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
+                .map(mapper::toAddressUtxo)
                 .toList();
     }
 
@@ -102,9 +115,19 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     public List<AddressUtxo> findUtxoByPaymentCredential(@NonNull String paymentCredential, int page, int count, Order order) {
         Pageable pageable = getPageable(page, count, order);
 
-        return utxoRepository.findUnspentByOwnerPaymentCredential(paymentCredential, pageable)
-                .stream()
-                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
+        List<AddressUtxoEntity> result = dsl.select()
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH)
+                        .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
+                .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
+                .and(TX_INPUT.TX_HASH.isNull())
+                .offset((int) pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetchInto(AddressUtxoEntity.class);
+
+        return result.stream()
+                .map(mapper::toAddressUtxo)
                 .toList();
     }
 
@@ -136,9 +159,19 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     public List<AddressUtxo> findUtxoByStakeAddress(@NonNull String stakeAddress, int page, int count, Order order) {
         Pageable pageable = getPageable(page, count, order);
 
-        return utxoRepository.findUnspentByOwnerStakeAddr(stakeAddress, pageable)
-                .stream()
-                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
+        List<AddressUtxoEntity> result = dsl.select()
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH)
+                        .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX)))
+                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                .and(TX_INPUT.TX_HASH.isNull())
+                .offset((int) pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetchInto(AddressUtxoEntity.class);
+
+        return result.stream()
+                .map(mapper::toAddressUtxo)
                 .toList();
     }
 
@@ -174,7 +207,17 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .map(utxoKey -> new UtxoId(utxoKey.getTxHash(), utxoKey.getOutputIndex()))
                 .toList();
 
-        return utxoRepository.findAllById(utxoIds)
+        if (utxoIds.isEmpty()) return List.of();
+
+        List<Row2<String, Integer>> keyTuples = utxoIds.stream()
+                .map(id -> row(id.getTxHash(), id.getOutputIndex()))
+                .collect(Collectors.toList());
+
+        var result = dsl.selectFrom(ADDRESS_UTXO)
+                .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX).in(keyTuples))
+                .fetchInto(AddressUtxoEntity.class);
+
+        return result
                 .stream().map(mapper::toAddressUtxo)
                 .toList();
     }

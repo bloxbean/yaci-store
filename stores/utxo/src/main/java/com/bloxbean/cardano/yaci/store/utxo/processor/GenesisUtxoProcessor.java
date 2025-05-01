@@ -9,10 +9,10 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
-import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConstant.STORE_UTXO_ENABLED;
 
 @Component
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_
 public class GenesisUtxoProcessor {
     private final UtxoStorage utxoStorage;
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void processGenesisUtxos(GenesisBlockEvent genesisBlockEvent) {
         log.info("Processing genesis utxos ...");

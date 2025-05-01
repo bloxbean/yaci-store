@@ -18,6 +18,8 @@ import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.PtrAddress;
@@ -28,8 +30,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
-import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConstant.STORE_UTXO_ENABLED;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getPaymentKeyHash;
 import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 
@@ -54,14 +54,14 @@ import static com.bloxbean.cardano.yaci.store.utxo.util.Util.getStakeKeyHash;
 public class UtxoProcessor {
     private final UtxoStorage utxoStorage;
     private final AddressStorage addressStorage;
-    private final ApplicationEventPublisher publisher;
+    private final DomainEventPublisher publisher;
     private final StakingClient stakingClient;
     private final MeterRegistry meterRegistry;
 
     //List of utxos with pointer address. We need to fetch stake address for these in CommitEvent
     private List<Utxo> utxosWithPointerAddress = Collections.synchronizedList(new ArrayList<>());
 
-    @EventListener
+    @DomainEventListener
     @Order(2)
     @Transactional
     public void handleTransactionEvent(TransactionEvent event) {
@@ -259,7 +259,7 @@ public class UtxoProcessor {
      * Resolve pointer address and update AddressUtxo with stake address and stake key hash
      * @param commitEvent
      */
-    @EventListener
+    @DomainEventListener
     public void handleCommit(CommitEvent commitEvent) {
 
         try {

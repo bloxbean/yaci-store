@@ -39,6 +39,11 @@ include 'components:dbutils'
 
 include 'stores:blocks'
 include 'stores:utxo'
+include 'stores:utxo:spring'
+include 'stores:utxo:quarkus'
+project(':stores:utxo:spring').name = 'utxo-spring'
+project(':stores:utxo:quarkus').name = 'utxo-quarkus'
+
 include 'stores:transaction'
 include 'stores:script'
 include 'stores:metadata'

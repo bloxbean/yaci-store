@@ -1,0 +1,14 @@
+dependencies {
+    api project(':stores:utxo')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Utxo Spring'
+                description = 'Yaci Store Utxo Spring Module'
+            }
+        }
+    }
+}

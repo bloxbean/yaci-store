@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.cache.GuavaCache;
 import com.bloxbean.cardano.yaci.store.utxo.cache.NoCache;
@@ -20,14 +21,13 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConstant.STORE_UTXO_ENABLED;
 import static java.util.stream.Collectors.toList;
 
 @Component
@@ -57,7 +57,7 @@ public class AddressProcessor {
         }
     }
 
-    @EventListener
+    @DomainEventListener
     public void handleAddress(AddressUtxoEvent addressUtxoEvent) {
         if (!utxoStoreProperties.isSaveAddress()) {
             return;
@@ -90,7 +90,7 @@ public class AddressProcessor {
         slotAddressesCache.add(new SlotAddresses(addressUtxoEvent.getEventMetadata().getSlot(), addressesInBlock));
     }
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void handleCommit(CommitEvent commitEvent) {
         if (!utxoStoreProperties.isSaveAddress()) {
@@ -121,7 +121,7 @@ public class AddressProcessor {
         }
     }
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void handleGenesisBalances(GenesisBlockEvent genesisBlockEvent) {
         if (!utxoStoreProperties.isSaveAddress()) {
@@ -162,7 +162,7 @@ public class AddressProcessor {
         addressStorage.save(addresses);
     }
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void handleRollback(RollbackEvent rollbackEvent) {
         if (cache != null)

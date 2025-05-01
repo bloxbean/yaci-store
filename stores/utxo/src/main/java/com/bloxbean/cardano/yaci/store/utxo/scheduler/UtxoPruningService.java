@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_PRUNING_ENABLED;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConstant.STORE_UTXO_PRUNING_ENABLED;
 
 @Component
 @ConditionalOnProperty(

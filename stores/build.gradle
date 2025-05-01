@@ -1,5 +1,9 @@
 subprojects {
-    apply from : "../../publish-common.gradle"
+    if (project.name.endsWith("-spring") || project.name.endsWith("-quarkus")) {
+        apply from: "../../../publish-common.gradle"
+    } else {
+        apply from: "../../publish-common.gradle"
+    }
 
     dependencies {
         api(libs.hibernate.types)

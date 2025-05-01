@@ -9,54 +9,36 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Row2;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.row;
 
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
-
-    private final UtxoRepository utxoRepository;
-    private final TxInputRepository spentOutputRepository;
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
     private final UtxoCache utxoCache;
-    private final PlatformTransactionManager transactionManager;
-
-    private TransactionTemplate transactionTemplate;
 
     @Value("${store.utxo.pruning-batch-size:3000}")
     private int pruningBatchSize = 3000;
 
-    public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
-                           UtxoCache utxoCache, PlatformTransactionManager transactionManager) {
-        this.utxoRepository = utxoRepository;
-        this.spentOutputRepository = spentOutputRepository;
+    public UtxoStorageImpl(DSLContext dsl,
+                           UtxoCache utxoCache) {
         this.dsl = dsl;
         this.utxoCache = utxoCache;
-        this.transactionManager = transactionManager;
-
-        init();
-    }
-
-    public void init() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
@@ -65,8 +47,13 @@ public class UtxoStorageImpl implements UtxoStorage {
         if (cacheUtxo.isPresent())
             return cacheUtxo;
         else {
-            var savedUtxo = utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                    .map(mapper::toAddressUtxo);
+            UtxoId id = new UtxoId(txHash, outputIndex);
+            var savedUtxo = Optional.ofNullable(
+                    dsl.selectFrom(ADDRESS_UTXO)
+                            .where(ADDRESS_UTXO.TX_HASH.eq(id.getTxHash())
+                                    .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(id.getOutputIndex())))
+                            .fetchOneInto(AddressUtxoEntity.class)
+            ).map(mapper::toAddressUtxo);
             savedUtxo.ifPresent(utxoCache::add);
 
             return savedUtxo;
@@ -86,7 +73,15 @@ public class UtxoStorageImpl implements UtxoStorage {
                 .map(utxoKey -> new UtxoId(utxoKey.getTxHash(), utxoKey.getOutputIndex()))
                 .toList();
 
-        var savedUtxos = utxoRepository.findAllById(utxoIds)
+        List<Row2<String, Integer>> keyTuples = utxoIds.stream()
+                .map(id -> row(id.getTxHash(), id.getOutputIndex()))
+                .collect(Collectors.toList());
+
+        var queryResult = dsl.selectFrom(ADDRESS_UTXO)
+                .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX).in(keyTuples))
+                .fetchInto(AddressUtxoEntity.class);
+
+        var savedUtxos = queryResult
                 .stream().map(mapper::toAddressUtxo)
                 .toList();
 
@@ -104,17 +99,21 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
-        return utxoRepository.deleteBySlotGreaterThan(slot);
+        return dsl.deleteFrom(ADDRESS_UTXO)
+                .where(ADDRESS_UTXO.SLOT.gt(slot))
+                .execute();
     }
 
     @Override
     @Transactional
     public int deleteSpentBySlotGreaterThan(Long slot) {
-        return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
+        return dsl.deleteFrom(TX_INPUT)
+                .where(TX_INPUT.SPENT_AT_SLOT.gt(slot))
+                .execute();
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int deleteBySpentAndBlockLessThan(Long block) {
         int count = 0;
         int totalCount = 0;
@@ -122,7 +121,6 @@ public class UtxoStorageImpl implements UtxoStorage {
         int limit = pruningBatchSize;
 
         do {
-            count = transactionTemplate.execute(status ->  {
                 var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
                         .from(TX_INPUT)
                         .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
@@ -145,10 +143,7 @@ public class UtxoStorageImpl implements UtxoStorage {
                     log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
                             addressUtxoCount, txInputCount);
 
-                int delCount  = addressUtxoCount + txInputCount;
-                return delCount;
-            });
-
+                count  = addressUtxoCount + txInputCount;
             totalCount += count;
         } while(count > 0);
 

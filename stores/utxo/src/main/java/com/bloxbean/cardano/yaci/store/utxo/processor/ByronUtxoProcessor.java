@@ -11,14 +11,14 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.annotation.DomainEventListener;
+import com.bloxbean.cardano.yaci.store.events.api.DomainEventPublisher;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
-import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
+import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConstant.STORE_UTXO_ENABLED;
 
 @Component
 @RequiredArgsConstructor
@@ -36,9 +36,9 @@ import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_
 @Slf4j
 public class ByronUtxoProcessor {
     private final UtxoStorage utxoStorage;
-    private final ApplicationEventPublisher publisher;
+    private final DomainEventPublisher publisher;
 
-    @EventListener
+    @DomainEventListener
     @Transactional
     public void handleByronTransactionEvent(ByronMainBlockEvent event) {
         EventMetadata metadata = event.getMetadata();
