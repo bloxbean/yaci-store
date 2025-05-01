@@ -144,7 +144,7 @@ public class ProposalStatusProcessor {
 
         takeDRepDistrSnapshot(currentEpoch);
 
-        List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = evaluateProposalStatus(currentEpoch, epoch);
+        List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = evaluateProposalStatus(currentEpoch);
         if (govActionProposalStatusListNeedToSave == null) return;
 
         if (!govActionProposalStatusListNeedToSave.isEmpty()) {
@@ -156,7 +156,9 @@ public class ProposalStatusProcessor {
         publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
     }
 
-    public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch, int prevEpoch) {
+    public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch) {
+        int prevEpoch = currentEpoch - 1;
+
         final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
