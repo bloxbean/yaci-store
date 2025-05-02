@@ -3,10 +3,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.core.model.governance.*;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
@@ -32,7 +29,6 @@ import com.bloxbean.cardano.yaci.store.governance.jackson.CredentialDeserializer
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
@@ -42,6 +38,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepUtil;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
@@ -145,37 +142,52 @@ public class ProposalStatusProcessor {
         // delete records if exists for the epoch
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
 
-        final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
-
         takeDRepDistrSnapshot(currentEpoch);
+
+        List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = evaluateProposalStatus(currentEpoch);
+        if (govActionProposalStatusListNeedToSave == null) return;
+
+        if (!govActionProposalStatusListNeedToSave.isEmpty()) {
+            govActionProposalStatusStorage.saveAll(govActionProposalStatusListNeedToSave);
+        }
+
+        log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
+
+        publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
+    }
+
+    public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch) {
+        int prevEpoch = currentEpoch - 1;
+
+        final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
 
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = new ArrayList<>();
 
         List<GovActionProposal> proposalsForStatusCalculation = getProposalsForStatusCalculation(currentEpoch);
 
         if (proposalsForStatusCalculation.isEmpty()) {
-            return;
+            return Collections.emptyList();
         }
 
         // current epoch param
         var epochParamOpt = epochParamStorage.getProtocolParams(currentEpoch);
         if (epochParamOpt.isEmpty()) {
             log.error("Epoch param not found for epoch: {}", currentEpoch);
-            return;
+            return Collections.emptyList();
         }
         var currentEpochParam = epochParamOpt.get();
 
         // current committee
-        var committee = committeeStorage.getCommitteeByEpoch(epoch);
+        var committee = committeeStorage.getCommitteeByEpoch(prevEpoch);
 
         if (committee.isEmpty()) {
-            log.error("Committee not found for epoch: {}", epoch);
+            log.error("Committee not found for epoch: {}", prevEpoch);
         }
 
         // cc threshold
         var ccThreshold = committee.get().getThreshold() == null ? BigDecimal.ZERO : committee.get().getThreshold();
 
-        List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
+        List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(prevEpoch);
 
         // map (cold key, hot key)
         Map<String, String> coldKeyHotKeyMap = membersCanVote.stream()
@@ -187,7 +199,7 @@ public class ProposalStatusProcessor {
                         Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
 
         // get votes by committee member
-        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(epoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, proposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -196,7 +208,7 @@ public class ProposalStatusProcessor {
         );
 
         // get votes by SPO
-        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(epoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, proposalsForStatusCalculation.stream().map(
                 govActionProposal -> GovActionId.builder()
                         .transactionId(govActionProposal.getTxHash())
                         .gov_action_index(govActionProposal.getIndex())
@@ -206,7 +218,7 @@ public class ProposalStatusProcessor {
         List<VotingProcedure> votesByDRep = new ArrayList<>();
 
         if (!isInConwayBootstrapPhase) {
-            votesByDRep = votingAggrService.getVotesByDRep(epoch, proposalsForStatusCalculation.stream().map(
+            votesByDRep = votingAggrService.getVotesByDRep(prevEpoch, proposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
@@ -214,37 +226,37 @@ public class ProposalStatusProcessor {
         }
 
         // spo total stake
-        BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
+        BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(prevEpoch + 2)
                 .orElse(BigInteger.ZERO);
 
-        var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 2);
+        var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch - 2);
 
         boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
                 .anyMatch(govActionProposal -> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
 
         ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
 
-        List<String> activePools = poolStorage.findActivePools(epoch).stream()
+        List<String> activePools = poolStorage.findActivePools(prevEpoch).stream()
                 .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
                 .toList();
 
         // map (reward account, List of pools)
         var activePoolsBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
         Map<String, List<String>> rewardAccountPoolMap = activePoolsBatches.parallelStream()
-                .flatMap(batch -> poolStorageReader.getPoolDetails(batch, epoch).stream())
+                .flatMap(batch -> poolStorageReader.getPoolDetails(batch, prevEpoch).stream())
                 .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
 
         // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep
         List<String> poolsDelegatedToAlwaysAbstainDRep = new ArrayList<>();
         var poolBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.values()), QUERY_BATCH_SIZE);
         poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.ABSTAIN, epoch)
+                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.ABSTAIN, prevEpoch)
                 .parallelStream()
                 .forEach(delegationVote ->
                         poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
 
         BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToAlwaysAbstainDRep)
+                .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToAlwaysAbstainDRep)
                 .stream()
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
@@ -252,13 +264,13 @@ public class ProposalStatusProcessor {
         // Calculate the total stake of SPOs that delegated to NoConfidence DRep
         List<String> poolsDelegatedToNoConfidenceDRep = new ArrayList<>();
         poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.NO_CONFIDENCE, epoch)
+                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.NO_CONFIDENCE, prevEpoch)
                 .parallelStream()
                 .forEach(delegationVote ->
                         poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
 
         BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToNoConfidenceDRep)
+                .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToNoConfidenceDRep)
                 .stream()
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
@@ -267,9 +279,9 @@ public class ProposalStatusProcessor {
         BigInteger dRepAutoAbstainStake = BigInteger.ZERO;
 
         if (!isInConwayBootstrapPhase) {
-            totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(epoch)
+            totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(prevEpoch)
                     .orElse(BigInteger.ZERO);
-            dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.ABSTAIN.name(), epoch).orElse(BigInteger.ZERO);
+            dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, prevEpoch).orElse(BigInteger.ZERO);
         }
 
         // use gov rule and update proposal status
@@ -351,7 +363,7 @@ public class ProposalStatusProcessor {
                     .toList();
 
             if (!poolsVoteYes.isEmpty()) {
-                spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsVoteYes)
+                spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteYes)
                         .stream()
                         .map(EpochStake::getAmount)
                         .reduce(BigInteger.ZERO, BigInteger::add);
@@ -369,7 +381,7 @@ public class ProposalStatusProcessor {
                     .toList();
 
             if (!poolsVoteYes.isEmpty()) {
-                spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsVoteAbstain)
+                spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteAbstain)
                         .stream()
                         .map(EpochStake::getAmount)
                         .reduce(BigInteger.ZERO, BigInteger::add);
@@ -395,15 +407,16 @@ public class ProposalStatusProcessor {
 
                 List<String> dRepsVoteYes = votesForThisProposalByDRep.stream()
                         .filter(votingProcedure -> votingProcedure.getVote().equals(Vote.YES))
-                        .map(VotingProcedure::getVoterHash)
+                        .map(DRepUtil::getDRepId)
+                        .filter(Objects::nonNull)
                         .toList();
                 if (!dRepsVoteYes.isEmpty()) {
-                    dRepYesStake = dRepDistStorage.getAllByEpochAndDReps(epoch, dRepsVoteYes)
+                    dRepYesStake = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, dRepsVoteYes)
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
                 }
-                var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepAndEpoch(DrepType.NO_CONFIDENCE.name(), epoch);
+                var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, prevEpoch);
                 if (govActionDetail.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
                     dRepYesStake = dRepYesStake.add(dRepNoConfidenceStake.get());
                 }
@@ -419,17 +432,20 @@ public class ProposalStatusProcessor {
 
                 List<String> dRepsVoteNo = votesForThisProposalByDRep.stream()
                         .filter(votingProcedure -> votingProcedure.getVote().equals(Vote.NO))
-                        .map(VotingProcedure::getVoterHash)
+                        .map(DRepUtil::getDRepId)
+                        .filter(Objects::nonNull)
                         .toList();
                 if (!dRepsVoteNo.isEmpty()) {
-                    dRepNoStake = dRepDistStorage.getAllByEpochAndDReps(epoch, dRepsVoteNo)
+                    dRepNoStake = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, dRepsVoteNo)
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
                 }
                 // The total stake of dReps that voted for this action
-                BigInteger totalStakeDRepDoVote = dRepDistStorage.getAllByEpochAndDReps(epoch, votesForThisProposalByDRep.stream()
-                                .map(VotingProcedure::getVoterHash).toList())
+                BigInteger totalStakeDRepDoVote = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, votesForThisProposalByDRep.stream()
+                                .map(DRepUtil::getDRepId)
+                                .filter(Objects::nonNull)
+                                .toList())
                         .stream()
                         .map(DRepDist::getAmount)
                         .reduce(BigInteger.ZERO, BigInteger::add);
@@ -455,7 +471,7 @@ public class ProposalStatusProcessor {
                                             && votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
                                             && votingProcedure.getGovActionIndex() == proposal.getIndex()))
                             .toList();
-                    BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsDoNotVoteForThisAction)
+                    BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDoNotVoteForThisAction)
                             .stream()
                             .map(EpochStake::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
@@ -519,13 +535,7 @@ public class ProposalStatusProcessor {
 
         }
 
-        if (!govActionProposalStatusListNeedToSave.isEmpty()) {
-            govActionProposalStatusStorage.saveAll(govActionProposalStatusListNeedToSave);
-        }
-
-        log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
-
-        publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
+        return govActionProposalStatusListNeedToSave;
     }
 
     private void takeDRepDistrSnapshot(int epoch) {
