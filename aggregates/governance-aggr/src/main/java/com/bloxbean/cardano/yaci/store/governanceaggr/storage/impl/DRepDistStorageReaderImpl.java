@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepDistMapper;
@@ -21,8 +22,8 @@ public class DRepDistStorageReaderImpl implements DRepDistStorageReader {
     }
 
     @Override
-    public List<DRepDist> getAllByEpochAndDReps(Integer epoch, List<String> dRepIds) {
-        return dRepDistRepository.getAllByEpochAndDReps(epoch, dRepIds)
+    public List<DRepDist> getAllByEpochAndDRepIds(Integer epoch, List<String> dRepIds) {
+        return dRepDistRepository.getAllByEpochAndDRepIds(epoch, dRepIds)
                 .stream()
                 .map(dRepDistMapper::toDRepDist)
                 .toList();
@@ -30,6 +31,11 @@ public class DRepDistStorageReaderImpl implements DRepDistStorageReader {
 
     @Override
     public Optional<BigInteger> getStakeByDRepAndEpoch(String dRepId, Integer epoch) {
-        return dRepDistRepository.getStakeByDRepAndEpoch(epoch, dRepId);
+        return dRepDistRepository.getStakeByDRepIdAndEpoch(epoch, dRepId);
+    }
+
+    @Override
+    public Optional<BigInteger> getStakeByDRepTypeAndEpoch(DrepType drepType, Integer epoch) {
+        return dRepDistRepository.getStakeByDRepTypeAndEpoch(epoch, drepType);
     }
 }
