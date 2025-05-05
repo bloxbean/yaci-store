@@ -14,7 +14,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Configuration
 @ConditionalOnProperty(name = "store.extensions.utxo-storage-type",
         havingValue = "dummydb",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 public class DefaultConfig {
 

@@ -1,5 +1,6 @@
 networks:
   yaci-store-net:
+    name: yaci-store-net
 
 services:
   yaci-store-postgres:
