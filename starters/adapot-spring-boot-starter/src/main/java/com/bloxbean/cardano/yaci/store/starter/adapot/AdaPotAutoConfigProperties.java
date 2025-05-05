@@ -20,6 +20,7 @@ public class AdaPotAutoConfigProperties {
         //Batch size for updating rewards in the db
         private int updateRewardDbBatchSize = 200;
         private boolean bulkUpdateReward = true;
+        private boolean bulkUpdateRewardWithCopy = true;
 
         //Verify adapot calculation values with known values (db sync)
         private boolean verifyAdapotCalcValues = true;

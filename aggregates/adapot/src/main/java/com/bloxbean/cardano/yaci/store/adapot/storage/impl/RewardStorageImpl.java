@@ -12,9 +12,12 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRest
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.jooq.DSLContext;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -89,6 +92,59 @@ public class RewardStorageImpl implements RewardStorage {
                     .execute();
         } catch (IOException e) {
             throw new RuntimeException("Reward data could not be loaded", e);
+        }
+    }
+
+    public void bulkSaveRewardsWithCopy(List<Reward> rewards) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        LocalDateTime now = LocalDateTime.now();
+        try (CSVPrinter csv = new CSVPrinter(
+                new OutputStreamWriter(baos, StandardCharsets.UTF_8),
+                CSVFormat.DEFAULT
+                        .withHeader(
+                                "address",
+                                "earned_epoch",
+                                "type",
+                                "pool_id",
+                                "amount",
+                                "spendable_epoch",
+                                "slot",
+                                "update_datetime"
+                        )
+                        .withTrim()
+        )) {
+            for (Reward r : rewards) {
+                csv.printRecord(
+                        r.getAddress(),
+                        r.getEarnedEpoch(),
+                        r.getType().toString(),
+                        r.getPoolId(),
+                        r.getAmount(),
+                        r.getSpendableEpoch(),
+                        r.getSlot(),
+                        now
+                );
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to write CSV for rewards", e);
+        }
+
+        try (var in = new ByteArrayInputStream(baos.toByteArray())) {
+            dsl.loadInto(REWARD)
+                    .loadCSV(in)              // <— triggers COPY FROM STDIN on Postgres
+                    .fields(
+                            REWARD.ADDRESS,
+                            REWARD.EARNED_EPOCH,
+                            REWARD.TYPE,
+                            REWARD.POOL_ID,
+                            REWARD.AMOUNT,
+                            REWARD.SPENDABLE_EPOCH,
+                            REWARD.SLOT,
+                            REWARD.UPDATE_DATETIME
+                    )
+                    .execute();
+        } catch (IOException e) {
+            throw new RuntimeException("Reward data could not be loaded via COPY", e);
         }
     }
 
