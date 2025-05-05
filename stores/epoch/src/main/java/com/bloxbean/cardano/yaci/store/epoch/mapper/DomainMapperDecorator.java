@@ -95,7 +95,7 @@ public class DomainMapperDecorator implements DomainMapper {
                 List<String> ops = switch (key) {
                     case PlutusKeys.PLUTUS_V1 -> PlutusOps.getOperations(1);
                     case PlutusKeys.PLUTUS_V2 -> PlutusOps.getOperations(2);
-                    case PlutusKeys.PLUTUS_V3 -> Collections.emptyList(); //TODO
+                    case PlutusKeys.PLUTUS_V3 -> PlutusOps.getOperations(3);
                     default -> Collections.emptyList();
                 };
 
@@ -123,6 +123,8 @@ public class DomainMapperDecorator implements DomainMapper {
         protocolParamsDto.setRho(safeRatio(protocolParams.getExpansionRate()));
         protocolParamsDto.setTau(safeRatio(protocolParams.getTreasuryGrowthRate()));
         protocolParamsDto.setDecentralisationParam(safeRatio(protocolParams.getDecentralisationParam()));
+        protocolParamsDto.setPriceMem(safeRatio(protocolParams.getPriceMem()));
+        protocolParamsDto.setPriceStep(safeRatio(protocolParams.getPriceStep()));
 
         //pvt
         protocolParamsDto.setPvtMotionNoConfidence(safeRatio(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()));

@@ -31,7 +31,7 @@ public class TxUtilController {
 
     @PostMapping(value = "evaluate", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     @Operation(description = "Evaluate a CBOR encoded transaction. Returns the evaluation result")
-    public ResponseEntity<String> evaluateTx(@RequestBody String cborTx,
+    public ResponseEntity<?> evaluateTx(@RequestBody String cborTx,
                                              @RequestParam(value = "version",defaultValue = "5")
                                              @Parameter(description = "Optional parameter to specify the version of the Ogmios service to use. Default is 5. Set to 6 to use Ogmios version 6.")
                                              int version) {
@@ -46,14 +46,14 @@ public class TxUtilController {
     @Operation(description = "Evaluate a CBOR encoded transaction. Returns the evaluation result. " +
             "Though additional utxos can be provided, it is not currently used in the implementation. " +
             "It is there for compatibility with the Blockfrost API")
-    public ResponseEntity<String> evaluateTx(@RequestBody EvaluateRequest evaluateRequest,
+    public ResponseEntity<?> evaluateTx(@RequestBody EvaluateRequest evaluateRequest,
                                              @RequestParam(value = "version",defaultValue = "5")
                                              @Parameter(description = "Optional parameter to specify the version of the Ogmios service to use. Default is 5. Set to 6 to use Ogmios version 6.")
                                              int version) {
         return doEvaluateTx(evaluateRequest, version);
     }
 
-    private ResponseEntity<String> doEvaluateTx(EvaluateRequest evaluateRequest, int version) {
+    private ResponseEntity<?> doEvaluateTx(EvaluateRequest evaluateRequest, int version) {
         try {
             if (log.isDebugEnabled())
                 log.debug("Evaluating tx : " + evaluateRequest);
@@ -84,9 +84,8 @@ public class TxUtilController {
                     failureRes = response.getLeft();
                 }
 
-                return ResponseEntity.badRequest()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(JsonUtil.getPrettyJson(failureRes));
+                TxErrorResponse errorResponse = new TxErrorResponse(400, "Bad Request", JsonUtil.getPrettyJson(failureRes));
+                return ResponseEntity.badRequest().body(errorResponse);
             } else {
                 return ResponseEntity.badRequest()
                         .body("Error evaluating tx");
@@ -96,9 +95,17 @@ public class TxUtilController {
             if (log.isDebugEnabled()) {
                 log.error("Error evaluating tx: ", e);
             }
-            return ResponseEntity.badRequest()
-                    .body(e.getMessage());
+            TxErrorResponse errorResponse = new TxErrorResponse(500, "Internal Server Error", e.getMessage());
+            return ResponseEntity.status(500).body(errorResponse);
         }
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<TxErrorResponse> handleException(Exception e) {
+        if (log.isDebugEnabled())
+            log.error("Unhandled exception", e);
+        TxErrorResponse errorResponse = new TxErrorResponse(500, "Internal Server Error", e.getMessage());
+        return ResponseEntity.status(500).body(errorResponse);
     }
 
     @Data
