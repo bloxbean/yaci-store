@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.snapshot;
 
+import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -22,6 +23,15 @@ public class StakeSnapshotService {
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking stake snapshot for epoch : " + epoch);
 
+        String tableType = "";
+        //If postgres, set synchronous_commit to off for rest of the transaction
+        var dbType = DatabaseUtils.getDbType(jdbcTemplate.getJdbcTemplate().getDataSource()).orElse(null);
+        if (dbType == DatabaseUtils.DbType.postgres) {
+            jdbcTemplate.update("SET LOCAL synchronous_commit = off", Map.of());
+            tableType = "UNLOGGED";
+            log.info("Postgres detected. Using UNLOGGED table for temp tables");
+        }
+
         jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));
 
         // Drop temp tables in parallel
@@ -42,13 +52,13 @@ public class StakeSnapshotService {
         }
         log.info("Dropped existing temp tables");
 
-        String lastWithdrawalQuery = """
-                    CREATE TABLE ss_last_withdrawal  AS
+        String lastWithdrawalQuery = String.format("""
+                    CREATE %s TABLE ss_last_withdrawal  AS
                         SELECT address, MAX(slot) AS max_slot, :epoch as mark_epoch
                         FROM withdrawal
                         WHERE epoch <= :epoch
                         GROUP BY address;
-                """;
+                """, tableType);
 
         var epochParam = new MapSqlParameterSource();
         epochParam.addValue("epoch", epoch);
@@ -62,8 +72,8 @@ public class StakeSnapshotService {
         log.info(">> ss_last_withdrawal temp table created");
 
 
-        String maxSlotBalancesQuery = """
-                    CREATE TABLE ss_max_slot_balances  AS
+        String maxSlotBalancesQuery = String.format("""
+                    CREATE %s TABLE ss_max_slot_balances  AS
                          SELECT
                                          address,
                                          MAX(slot) AS max_slot,
@@ -74,10 +84,10 @@ public class StakeSnapshotService {
                                              epoch <= :epoch
                                      GROUP BY
                                          address
-                """;
+                """, tableType);
 
-        String rankedDelegationQuery = """
-                CREATE TABLE  ss_ranked_delegations AS
+        String rankedDelegationQuery = String.format("""
+                CREATE %s TABLE  ss_ranked_delegations AS
                 SELECT
                     address,
                     pool_id,
@@ -94,20 +104,20 @@ public class StakeSnapshotService {
                     delegation
                 WHERE
                     epoch <= :epoch
-                """;
+                """, tableType);
 
-        String poolRefundRewardsQuery = """
-                        CREATE TABLE ss_pool_refund_rewards AS
+        String poolRefundRewardsQuery = String.format("""
+                        CREATE %s TABLE ss_pool_refund_rewards AS
                         SELECT r.address, SUM(r.amount) AS pool_refund_withdrawable_reward, :epoch as mark_epoch
                         FROM reward r
                                  LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                         WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                           AND r.spendable_epoch <= :epoch and r.type = 'refund'
                         GROUP BY r.address
-                """;
+                """, tableType);
 
-        String poolRewardsQuery = """
-                        CREATE TABLE ss_pool_rewards AS
+        String poolRewardsQuery = String.format("""
+                        CREATE %s TABLE ss_pool_rewards AS
                                 SELECT r.address, SUM(r.amount) AS withdrawable_reward, :epoch as mark_epoch
                                 FROM reward r
                                          LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
@@ -115,30 +125,30 @@ public class StakeSnapshotService {
                                   AND  r.earned_epoch <= :epoch
                                   AND  r.spendable_epoch <= :snapshot_epoch and r.type IN ('member', 'leader')
                                 GROUP BY r.address
-                """;
+                """, tableType);
 
-        String instaSpendableRewardsQuery = """
-                        CREATE TABLE ss_insta_spendable_rewards AS
+        String instaSpendableRewardsQuery = String.format("""
+                        CREATE %s TABLE ss_insta_spendable_rewards AS
                                                   SELECT r.address, SUM(r.amount) AS insta_withdrawable_reward, :epoch as mark_epoch
                                                   FROM instant_reward r
                                                            LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                   WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                                     AND r.spendable_epoch <= :snapshot_epoch
                                                   GROUP BY r.address
-                """;
+                """, tableType);
 
-        String spendableRewardRestQuery = """
-                        CREATE TABLE ss_spendable_reward_rest AS
+        String spendableRewardRestQuery = String.format("""
+                        CREATE %s TABLE ss_spendable_reward_rest AS
                                                                      SELECT r.address, SUM(r.amount) AS withdrawable_reward_rest, :epoch as mark_epoch
                                                                             FROM reward_rest r
                                                                                      LEFT JOIN ss_last_withdrawal lw ON r.address = lw.address
                                                                             WHERE (lw.max_slot IS NULL OR r.slot > lw.max_slot)
                                                                               AND r.spendable_epoch <= :epoch
                                                                             GROUP BY r.address
-                """;
+                """, tableType);
 
-        String poolStatusQuery = """
-                        CREATE TABLE ss_pool_status AS
+        String poolStatusQuery = String.format("""
+                        CREATE %s TABLE ss_pool_status AS
                                  SELECT
                                      pool_id,
                                      status,
@@ -153,7 +163,7 @@ public class StakeSnapshotService {
                                      pool
                                  WHERE
                                      epoch <= :epoch
-                """;
+                """, tableType);
 
 
         List<String> createTableQueries = List.of(
