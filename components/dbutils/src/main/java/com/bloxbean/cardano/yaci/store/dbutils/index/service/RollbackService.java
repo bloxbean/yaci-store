@@ -47,8 +47,13 @@ public class RollbackService {
         for (String tableName : tableNames) {
             if (databaseUtils.tableExists(tableName)) {
                 String sql;
-                if (context.isRollbackLedgerState() && tableName.equals("adapot_jobs")) {
-                    sql = "UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch";
+                if (context.isRollbackLedgerState()) {
+                    if (tableName.equals("adapot_jobs"))
+                        sql = "UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= " + rollbackBlock.getEpoch();
+                    else if (tableName.equals("reward"))
+                        sql = "DELETE FROM reward WHERE (type = 'member' or type = 'leader') and slot > " + rollbackBlock.getSlot();
+                    else
+                        sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
                 } else
                     sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
                 log.info("Executing rollback on table '{}': {}", tableName, sql);
