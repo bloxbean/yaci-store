@@ -3,14 +3,11 @@ services:
     image: bloxbean/yaci-store-ledger-state:${tag}
     container_name: yaci-store-ledger-state
     environment:
-      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=ledger_state}
-      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
-      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
       - SPRING_PROFILES_ACTIVE=ledger-state
     env_file:
       - env
     ports:
-      - ${YAC_STORE_PORT:-8081}:8081
+      - ${YAC_STORE_PORT:-8080}:8080
     volumes:
       - $PWD/logs:/app/logs/
       - ./application.properties:/app/config/application.properties

@@ -2,14 +2,10 @@ services:
   yaci-store:
     image: bloxbean/yaci-store:${tag}
     container_name: yaci-store
-    environment:
-      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store}
-      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
-      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
     env_file:
       - env
     ports:
-      - ${YAC_STORE_PORT:-8080}:8080
+      - ${YACI_STORE_PORT:-8080}:8080
     volumes:
       - $PWD/logs:/app/logs/
       - ./application.properties:/app/config/application.properties
