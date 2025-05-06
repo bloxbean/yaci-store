@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.job;
 
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
@@ -61,7 +62,8 @@ public class AdaPotJobManager {
      * @param slot  slot number
      */
     public void triggerRewardCalcJob(int epoch, long slot, long block) {
-        AdaPotJob job = new AdaPotJob(epoch, slot, block, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L, null);
+        AdaPotJob job = new AdaPotJob(epoch, slot, block, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L,
+                AdaPotJobExtraInfo.builder().drepExpiryCalcTime(0L).govActionStatusCalcTime(0L).build(), null);
         adaPotJobStorage.save(job);
         jobQueue.add(job);
     }

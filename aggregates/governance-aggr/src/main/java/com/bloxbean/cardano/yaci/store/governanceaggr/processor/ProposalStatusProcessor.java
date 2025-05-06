@@ -7,6 +7,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.*;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
@@ -144,6 +146,8 @@ public class ProposalStatusProcessor {
 
         takeDRepDistrSnapshot(currentEpoch);
 
+        var start = Instant.now();
+
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = evaluateProposalStatus(currentEpoch);
         if (govActionProposalStatusListNeedToSave == null) return;
 
@@ -152,8 +156,26 @@ public class ProposalStatusProcessor {
         }
 
         log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
-
         publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
+
+        var end = Instant.now();
+
+        adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, currentEpoch)
+                .ifPresent(adaPotJob -> {
+                    AdaPotJobExtraInfo extraInfo = adaPotJob.getExtraInfo();
+
+                    if (extraInfo == null) {
+                        extraInfo = AdaPotJobExtraInfo.builder()
+                                .drepExpiryCalcTime(0L)
+                                .govActionStatusCalcTime(0L)
+                                .build();
+                    }
+
+                    extraInfo.setGovActionStatusCalcTime(end.toEpochMilli() - start.toEpochMilli());
+                    adaPotJob.setExtraInfo(extraInfo);
+
+                    adaPotJobStorage.save(adaPotJob);
+                });
     }
 
     public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch) {

@@ -1,8 +1,11 @@
 package com.bloxbean.cardano.yaci.store.adapot.job.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "adapot_jobs")
@@ -39,6 +42,10 @@ public class AdaPotJobEntity {
 
     @Column(name = "drep_distr_snapshot_time")
     private Long drepDistrSnapshotTime;
+
+    @Type(JsonType.class)
+    @Column(name = "extra_info")
+    private AdaPotJobExtraInfo extraInfo;
 
     @Column(name = "error_message")
     private String errorMessage;
@@ -123,6 +130,14 @@ public class AdaPotJobEntity {
 
     public void setDrepDistrSnapshotTime(Long dRepDistrSnapshotTime) {
         this.drepDistrSnapshotTime = dRepDistrSnapshotTime;
+    }
+
+    public AdaPotJobExtraInfo getExtraInfo() {
+        return extraInfo;
+    }
+
+    public void setExtraInfo(AdaPotJobExtraInfo extraInfo) {
+        this.extraInfo = extraInfo;
     }
 
     public String getErrorMessage() {
