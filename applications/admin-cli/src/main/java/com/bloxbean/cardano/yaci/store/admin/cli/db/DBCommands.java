@@ -62,7 +62,7 @@ public class DBCommands {
         }
     }
 
-    @Command(description = "Rollback ledger state data to a previous epoch")
+//    @Command(description = "Rollback ledger state data to a previous epoch")
     public void rollbackLedgerStateData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch) {
 
         writeLn(info("Start to rollback data ..."));
