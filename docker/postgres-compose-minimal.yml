@@ -1,9 +1,7 @@
-## For this postgres profile, you need at least 4GB of RAM.
-## If you have less than 4GB of RAM, you can use the minimal profile. Rename postgres-compose-minimal.yml to postgres-compose.yml.
 services:
   yaci-store-postgres:
     image: postgres:17.4
-    shm_size: 2g
+#    shm_size: 2g
     environment:
       - POSTGRES_USER=yaci
       - POSTGRES_PASSWORD=dbpass
@@ -13,16 +11,6 @@ services:
       - "54333:5432"
     volumes:
       - $PWD/db-data/yaci-store/:/var/lib/postgresql/data
-    command: [
-      "postgres",
-#      "-c", "synchronous_commit=off",
-      "-c", "wal_level=minimal",
-      "-c", "max_wal_senders=0",
-      "-c", "work_mem=256MB",
-      "-c", "maintenance_work_mem=1GB"
-      # optionally:
-      # "-c", "shared_buffers=1GB"
-    ]
     healthcheck:
       test: [ "CMD-SHELL", "sh -c 'pg_isready -U yaci -d yaci_store'" ]
       interval: 10s
