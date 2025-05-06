@@ -2,6 +2,9 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -26,6 +29,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,10 +48,13 @@ public class DRepExpiryProcessor {
     private final EraService eraService;
     private final EpochParamStorage epochParamStorage;
     private final GovActionProposalStorage govActionProposalStorage;
+    private final AdaPotJobStorage adaPotJobStorage;
 
     @EventListener
     @Transactional
     public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        var start = Instant.now();
+
         // Taking snapshot for DRep expiry
         if (eraService.getEraForEpoch(event.getEpoch() - 1).getValue() < Era.Conway.getValue()) {
             return;
@@ -205,6 +212,26 @@ public class DRepExpiryProcessor {
         if (!newDRepExpiryList.isEmpty()) {
             dRepExpiryStorage.save(newDRepExpiryList);
         }
+
+        var end = Instant.now();
+
+        adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch)
+                .ifPresent(adaPotJob -> {
+                    AdaPotJobExtraInfo extraInfo = adaPotJob.getExtraInfo();
+
+                    if (extraInfo == null) {
+                        extraInfo = AdaPotJobExtraInfo.builder()
+                                .drepExpiryCalcTime(0L)
+                                .govActionStatusCalcTime(0L)
+                                .build();
+                    }
+
+                    extraInfo.setDrepExpiryCalcTime(end.toEpochMilli() - start.toEpochMilli());
+                    adaPotJob.setExtraInfo(extraInfo);
+
+                    adaPotJobStorage.save(adaPotJob);
+                });
+
     }
 
     @Getter
