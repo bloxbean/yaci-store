@@ -104,7 +104,7 @@ public class EraService {
         firstShelleySlot();
 
         long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
-        _shelleyStartTime = startTime + firstShelleySlot() * (long)genesisConfig.slotDuration(Era.Byron);
+        _shelleyStartTime = startTime + Math.round(firstShelleySlot() * genesisConfig.slotDuration(Era.Byron));
 
         return _shelleyStartTime;
     }
@@ -148,7 +148,7 @@ public class EraService {
             return byronBlockTime(slot);
         } else {
             long slotsFromShelleyStart = slot - firstShelleySlot();
-            return (shelleyEraStartTime() + slotsFromShelleyStart * (long) genesisConfig.slotDuration(Era.Shelley));
+            return (shelleyEraStartTime() + Math.round(slotsFromShelleyStart * genesisConfig.slotDuration(Era.Shelley)));
         }
     }
 
@@ -224,6 +224,6 @@ public class EraService {
      */
     private long byronBlockTime(long slot) {
         long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
-        return startTime + slot * (long)genesisConfig.slotDuration(Era.Byron);
+        return startTime + Math.round(slot * genesisConfig.slotDuration(Era.Byron));
     }
 }
