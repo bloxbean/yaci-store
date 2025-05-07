@@ -80,7 +80,7 @@ public class VotingAggrService {
                         selectOne()
                                 .from(EPOCH_STAKE)
                                 .where(EPOCH_STAKE.POOL_ID.eq(VOTING_PROCEDURE.VOTER_HASH))
-                                .and(EPOCH_STAKE.EPOCH.eq(epoch))
+                                .and(EPOCH_STAKE.ACTIVE_EPOCH.eq(epoch + 2))
                 )
                 .fetch();
 

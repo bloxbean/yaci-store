@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
-import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
@@ -185,7 +184,6 @@ public class ProposalStatusProcessor {
     }
 
     public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch) {
-        long start = System.currentTimeMillis();
         int prevEpoch = currentEpoch - 1;
 
         final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
@@ -215,8 +213,11 @@ public class ProposalStatusProcessor {
 
         // cc threshold
         var ccThreshold = committee.get().getThreshold() == null ? BigDecimal.ZERO : committee.get().getThreshold();
+        long start = System.currentTimeMillis();
 
         List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(prevEpoch);
+        long end = System.currentTimeMillis();
+        log.debug("GetMembersCanVote time: {} ms", end - start);
 
         // map (cold key, hot key)
         Map<String, String> coldKeyHotKeyMap = membersCanVote.stream()
@@ -226,7 +227,7 @@ public class ProposalStatusProcessor {
         Map<String, List<String>> hotKeyColdKeysMap = membersCanVote.stream()
                 .collect(Collectors.groupingBy(CommitteeMemberDetails::getHotKey,
                         Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
-
+        start = System.currentTimeMillis();
         // get votes by committee member
         List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, proposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
@@ -235,15 +236,21 @@ public class ProposalStatusProcessor {
                                 .build()).toList(),
                 coldKeyHotKeyMap.values().stream().toList()
         );
+        end = System.currentTimeMillis();
 
+        log.debug("GetVotesByCommittee time: {} ms", end - start);
         // get votes by SPO
+        start = System.currentTimeMillis();
         List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, proposalsForStatusCalculation.stream().map(
                 govActionProposal -> GovActionId.builder()
                         .transactionId(govActionProposal.getTxHash())
                         .gov_action_index(govActionProposal.getIndex())
                         .build()).toList());
+        end = System.currentTimeMillis();
+        log.debug("GetVotesBySPO time: {} ms", end - start);
 
         // get votes by DRep
+        start = System.currentTimeMillis();
         List<VotingProcedure> votesByDRep = new ArrayList<>();
 
         if (!isInConwayBootstrapPhase) {
@@ -253,9 +260,8 @@ public class ProposalStatusProcessor {
                             .gov_action_index(govActionProposal.getIndex())
                             .build()).toList());
         }
-
-        long end = System.currentTimeMillis();
-        log.debug("1. Get votes by committee, SPO and DRep time: {} ms", end - start);
+        end = System.currentTimeMillis();
+        log.debug("GetVotesByDRep time: {} ms", end - start);
 
         start = System.currentTimeMillis();
         // spo total stake
