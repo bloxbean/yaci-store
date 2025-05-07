@@ -38,6 +38,7 @@ public class ByronGenesis extends GenesisFile {
     private long startTime;
     private long byronSlotLength;
     private long protocolMagic;
+    private long k;
 
     public ByronGenesis(File byronGenesisFile) {
         super(byronGenesisFile);
@@ -58,10 +59,15 @@ public class ByronGenesis extends GenesisFile {
             return byronSlotLength / 1000;
     }
 
+    public long getEpochLength() {
+        return k * 10; //Hardcoded 10. Need to check why?
+    }
+
     protected void readGenesisData(JsonNode byronJsonNode) {
         startTime = byronJsonNode.get(ATTR_START_TIME).asLong();
         byronSlotLength = byronJsonNode.get(ATTR_BLOCK_VERSION_DATA).get(ATTR_SLOT_DURATION).asLong() / 1000; //in second
         protocolMagic = byronJsonNode.get(ATTR_PROTOCOL_CONSTS).get(ATTR_PROTOCOL_MAGIC).asLong();
+        k = byronJsonNode.get(ATTR_PROTOCOL_CONSTS).get("k").asLong();
 
         JsonNode avvmDistrMap = byronJsonNode.get(ATTR_AVVM_DISTR);
         if (avvmDistrMap != null && avvmDistrMap.fields().hasNext()) {
