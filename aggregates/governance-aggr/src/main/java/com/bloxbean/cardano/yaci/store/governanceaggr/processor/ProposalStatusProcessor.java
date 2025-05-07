@@ -185,6 +185,7 @@ public class ProposalStatusProcessor {
     }
 
     public List<GovActionProposalStatus> evaluateProposalStatus(int currentEpoch) {
+        long start = System.currentTimeMillis();
         int prevEpoch = currentEpoch - 1;
 
         final boolean isInConwayBootstrapPhase = isEpochInConwayBootstrapPhase(currentEpoch);
@@ -253,11 +254,14 @@ public class ProposalStatusProcessor {
                             .build()).toList());
         }
 
-        long start = System.currentTimeMillis();
+        long end = System.currentTimeMillis();
+        log.debug("1. Get votes by committee, SPO and DRep time: {} ms", end - start);
+
+        start = System.currentTimeMillis();
         // spo total stake
         BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(prevEpoch + 2)
                 .orElse(BigInteger.ZERO);
-        long end = System.currentTimeMillis();
+        end = System.currentTimeMillis();
         log.debug("GetTotalActiveStakeByEpoch time: {} ms", end - start);
 
         start = System.currentTimeMillis();
