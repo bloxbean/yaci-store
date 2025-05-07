@@ -43,6 +43,7 @@ public class GenesisConfig {
     private long startTime;
     private String shelleyStartTime;
     private long epochLength;
+    private long byronEpochLength;
 
     private long byronSlotLength;
     private double shelleySlotLength;
@@ -106,7 +107,10 @@ public class GenesisConfig {
     }
 
     public long slotsPerEpoch(Era era) {
-        return  (long)(getEpochLength() / slotDuration(era));
+        if (era == Era.Byron)
+            return byronEpochLength;
+        else
+            return getEpochLength();
     }
 
     public long getEpochLength() {
@@ -164,6 +168,7 @@ public class GenesisConfig {
 
         startTime = byronGenesis.getStartTime();
         byronSlotLength = byronGenesis.getByronSlotLength(); //in second
+        byronEpochLength = byronGenesis.getEpochLength();
         long protocolMagic = byronGenesis.getProtocolMagic();
 
         if (protocolMagic != storeProperties.getProtocolMagic())
