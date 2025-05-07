@@ -148,12 +148,18 @@ public class ProposalStatusProcessor {
 
         var start = Instant.now();
 
+        var startTime = Instant.now();
         List<GovActionProposalStatus> govActionProposalStatusListNeedToSave = evaluateProposalStatus(currentEpoch);
+        var endTime = Instant.now();
+        log.info("Evaluate proposal status time: {} ms", endTime.toEpochMilli() - startTime.toEpochMilli());
+
         if (govActionProposalStatusListNeedToSave == null) return;
 
         if (!govActionProposalStatusListNeedToSave.isEmpty()) {
             govActionProposalStatusStorage.saveAll(govActionProposalStatusListNeedToSave);
         }
+        endTime = Instant.now();
+        log.info("Processing and Save proposal status time: {} ms", endTime.toEpochMilli() - startTime.toEpochMilli());
 
         log.info("Finish handling proposal status, current epoch :{}", currentEpoch);
         publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
@@ -247,27 +253,40 @@ public class ProposalStatusProcessor {
                             .build()).toList());
         }
 
+        long start = System.currentTimeMillis();
         // spo total stake
         BigInteger totalPoolStake = epochStakeStorage.getTotalActiveStakeByEpoch(prevEpoch + 2)
                 .orElse(BigInteger.ZERO);
+        long end = System.currentTimeMillis();
+        log.debug("GetTotalActiveStakeByEpoch time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch - 2);
+        end = System.currentTimeMillis();
+        log.debug("GetProposalsByStatusAndEpoch time: {} ms", end - start);
 
         boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
                 .anyMatch(govActionProposal -> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
 
         ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
 
+        start = System.currentTimeMillis();
         List<String> activePools = poolStorage.findActivePools(prevEpoch).stream()
                 .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
                 .toList();
+        end = System.currentTimeMillis();
+        log.debug("GetActivePools time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         // map (reward account, List of pools)
         var activePoolsBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
         Map<String, List<String>> rewardAccountPoolMap = activePoolsBatches.parallelStream()
                 .flatMap(batch -> poolStorageReader.getPoolDetails(batch, prevEpoch).stream())
                 .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
+        end = System.currentTimeMillis();
+        log.debug("GetPoolDetails time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep
         List<String> poolsDelegatedToAlwaysAbstainDRep = new ArrayList<>();
         var poolBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.values()), QUERY_BATCH_SIZE);
@@ -276,13 +295,19 @@ public class ProposalStatusProcessor {
                 .parallelStream()
                 .forEach(delegationVote ->
                         poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        end = System.currentTimeMillis();
+        log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
                 .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToAlwaysAbstainDRep)
                 .stream()
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
+        end = System.currentTimeMillis();
+        log.debug("GetAllActiveStakesByEpochAndPools time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         // Calculate the total stake of SPOs that delegated to NoConfidence DRep
         List<String> poolsDelegatedToNoConfidenceDRep = new ArrayList<>();
         poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
@@ -290,22 +315,31 @@ public class ProposalStatusProcessor {
                 .parallelStream()
                 .forEach(delegationVote ->
                         poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        end = System.currentTimeMillis();
+        log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
 
+        start = System.currentTimeMillis();
         BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
                 .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToNoConfidenceDRep)
                 .stream()
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
+        end = System.currentTimeMillis();
+        log.debug("GetAllActiveStakesByEpochAndPools time: {} ms", end - start);
 
         BigInteger totalDRepStake = BigInteger.ZERO;
         BigInteger dRepAutoAbstainStake = BigInteger.ZERO;
 
+        start = System.currentTimeMillis();
         if (!isInConwayBootstrapPhase) {
             totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(prevEpoch)
                     .orElse(BigInteger.ZERO);
             dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, prevEpoch).orElse(BigInteger.ZERO);
         }
+        end = System.currentTimeMillis();
+        log.debug("GetTotalStakeForEpoch & getSTakeByDRepTypeAndEpoch time: {} ms", end - start);
 
+        long loopStart = System.currentTimeMillis();
         // use gov rule and update proposal status
         for (var proposal : proposalsForStatusCalculation) {
             var govActionDetail = proposal.getGovAction();
@@ -384,12 +418,15 @@ public class ProposalStatusProcessor {
                     .map(VotingProcedure::getVoterHash)
                     .toList();
 
+            start = System.currentTimeMillis();
             if (!poolsVoteYes.isEmpty()) {
                 spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteYes)
                         .stream()
                         .map(EpochStake::getAmount)
                         .reduce(BigInteger.ZERO, BigInteger::add);
             }
+            end = System.currentTimeMillis();
+            log.debug("GetAllActiveStakesByEpochAndPools (in loop) time: {} ms", end - start);
 
             // calculate the total delegated stake from SPO that voted 'Abstain'
             BigInteger spoAbstainStake = BigInteger.ZERO;
@@ -402,12 +439,15 @@ public class ProposalStatusProcessor {
                     .map(VotingProcedure::getVoterHash)
                     .toList();
 
+            start = System.currentTimeMillis();
             if (!poolsVoteYes.isEmpty()) {
                 spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteAbstain)
                         .stream()
                         .map(EpochStake::getAmount)
                         .reduce(BigInteger.ZERO, BigInteger::add);
             }
+            end = System.currentTimeMillis();
+            log.debug("GetAllActiveStakesByEpochAndPools (in loop -- poolsVoteAbstain) time: {} ms", end - start);
 
             // dRep 'yes' stake
             BigInteger dRepYesStake = null;
@@ -432,16 +472,24 @@ public class ProposalStatusProcessor {
                         .map(DRepUtil::getDRepId)
                         .filter(Objects::nonNull)
                         .toList();
+
+                start = System.currentTimeMillis();
                 if (!dRepsVoteYes.isEmpty()) {
                     dRepYesStake = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, dRepsVoteYes)
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
                 }
+                end = System.currentTimeMillis();
+                log.debug("GetAllByEpochAndDRepIds (drep vote yes) time: {} ms", end - start);
+
+                start = System.currentTimeMillis();
                 var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, prevEpoch);
                 if (govActionDetail.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
                     dRepYesStake = dRepYesStake.add(dRepNoConfidenceStake.get());
                 }
+                end = System.currentTimeMillis();
+                log.debug("GetStakeByDRepTypeAndEpoch (no confidence) time: {} ms", end - start);
 
                 /* Calculate dRep 'no' stake */
                     /*
@@ -452,6 +500,7 @@ public class ProposalStatusProcessor {
                      */
                 dRepNoStake = BigInteger.ZERO;
 
+                start = System.currentTimeMillis();
                 List<String> dRepsVoteNo = votesForThisProposalByDRep.stream()
                         .filter(votingProcedure -> votingProcedure.getVote().equals(Vote.NO))
                         .map(DRepUtil::getDRepId)
@@ -481,11 +530,14 @@ public class ProposalStatusProcessor {
                 if (dRepNoConfidenceStake.isPresent()) {
                     dRepNoStake = dRepNoStake.add(dRepNoConfidenceStake.get());
                 }
+                end = System.currentTimeMillis();
+                log.debug("GetAllByEpochAndDRepIds (others) time: {} ms", end - start);
             } else {
                     /*
                         During bootstrap phase, For `HardForkInitiation` all SPOs that didn't vote are considered as `No` votes.
                         Whereas, for all other `GovAction`s, SPOs that didn't vote are considered as `Abstain` votes.
                     */
+                start = System.currentTimeMillis();
                 if (!govActionDetail.getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION)) {
                     List<String> poolsDoNotVoteForThisAction = activePools.stream()
                             .filter(poolId -> votesBySPO.stream()
@@ -499,8 +551,11 @@ public class ProposalStatusProcessor {
                             .reduce(BigInteger.ZERO, BigInteger::add);
                     spoAbstainStake = spoAbstainStake.add(totalStakeSPODoNotVote);
                 }
+                end = System.currentTimeMillis();
+                log.debug("GetAllActiveStakesByEpochAndPools (in loop --Bootstrap phase-1) time: {} ms", end - start);
             }
 
+            start = System.currentTimeMillis();
                 /*
                     Cases: a pool delegated to an `AlwaysNoConfidence` or an `AlwaysAbstain` DRep.
                     In those cases, behaviour is as expected: vote `Yes` on `NoConfidence` proposals in case of the former
@@ -554,8 +609,12 @@ public class ProposalStatusProcessor {
                     .status(govActionStatus)
                     .build();
             govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
+            end = System.currentTimeMillis();
+            log.debug("GovActionProposalStatus: Others --, time: {} ms", end - start);
 
         }
+        long loopEnd = System.currentTimeMillis();
+        log.debug("GovActionProposalStatus: loop time: {} ms", loopEnd - loopStart);
 
         return govActionProposalStatusListNeedToSave;
     }
