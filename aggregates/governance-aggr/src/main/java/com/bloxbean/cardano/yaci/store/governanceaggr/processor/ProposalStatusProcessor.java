@@ -33,6 +33,7 @@ import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStora
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DRepDistService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DelegationVoteDataService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
@@ -346,6 +347,7 @@ public class ProposalStatusProcessor {
                     .orElse(BigInteger.ZERO);
             dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, prevEpoch).orElse(BigInteger.ZERO);
         }
+
         end = System.currentTimeMillis();
         log.debug("GetTotalStakeForEpoch & getSTakeByDRepTypeAndEpoch time: {} ms", end - start);
 
@@ -353,6 +355,10 @@ public class ProposalStatusProcessor {
         // use gov rule and update proposal status
         for (var proposal : proposalsForStatusCalculation) {
             var govActionDetail = proposal.getGovAction();
+
+            ProposalVotingStats votingStats = initProposalVotingStats();
+
+            votingStats.setDrepTotalAbstainStake(dRepAutoAbstainStake);
 
             var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch()).get().getParams().getGovActionLifetime();
 
@@ -389,6 +395,7 @@ public class ProposalStatusProcessor {
             int ccYesVote = validYesVotesByCommittee.stream()
                     .mapToInt(vote -> hotKeyColdKeysMap.get(vote.getVoterHash()).size())
                     .sum();
+            votingStats.setCcYes(ccYesVote);
 
             // calculate cc no vote
             List<CommitteeMemberDetails> committeeMembersDoNotVote = membersCanVote.stream()
@@ -416,6 +423,24 @@ public class ProposalStatusProcessor {
                     .mapToInt(vote -> hotKeyColdKeysMap.get(vote.getVoterHash()).size())
                     .sum()
                     + committeeMembersDoNotVote.size();
+            votingStats.setCcNo(ccNoVote - committeeMembersDoNotVote.size());
+            votingStats.setCcDoNotVote(committeeMembersDoNotVote.size());
+
+                /*
+                    ccAbstainVote – The total number of committee members that voted 'Abstain' .
+                 */
+            var validAbstainVotesByCommittee = votesByCommittee.stream()
+                    .filter(votingProcedure ->
+                            votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
+                                    && votingProcedure.getGovActionIndex() == proposal.getIndex()
+                                    && votingProcedure.getVote().equals(Vote.ABSTAIN)
+                                    && hotKeyColdKeysMap.containsKey(votingProcedure.getVoterHash())
+                    )
+                    .toList();
+            int ccAbstainVote = validAbstainVotesByCommittee.stream()
+                    .mapToInt(vote -> hotKeyColdKeysMap.get(vote.getVoterHash()).size())
+                    .sum();
+            votingStats.setCcAbstain(ccAbstainVote);
 
             // calculate The total delegated stake from SPO that voted 'Yes'
             BigInteger spoYesStake = BigInteger.ZERO;
@@ -494,10 +519,15 @@ public class ProposalStatusProcessor {
                 log.debug("GetAllByEpochAndDRepIds (drep vote yes) time: {} ms", end - start);
 
                 start = System.currentTimeMillis();
+                // The total stake of No Confidence DRep
                 var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, prevEpoch);
+                votingStats.setDrepNoConfidenceStake(dRepNoConfidenceStake.orElse(BigInteger.ZERO));
+
                 if (govActionDetail.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
                     dRepYesStake = dRepYesStake.add(dRepNoConfidenceStake.get());
                 }
+                votingStats.setDrepTotalYesStake(dRepYesStake);
+
                 end = System.currentTimeMillis();
                 log.debug("GetStakeByDRepTypeAndEpoch (no confidence) time: {} ms", end - start);
 
@@ -522,6 +552,8 @@ public class ProposalStatusProcessor {
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
                 }
+                votingStats.setDrepNoVoteStake(dRepNoStake);
+
                 // The total stake of dReps that voted for this action
                 BigInteger totalStakeDRepDoVote = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, votesForThisProposalByDRep.stream()
                                 .map(DRepUtil::getDRepId)
@@ -534,12 +566,16 @@ public class ProposalStatusProcessor {
                 // The total stake of active dReps that did not vote for this action = totalDRepStake - totalStakeDRepDoVote - dRepAutoAbstainStake - dRepNoConfidenceStake
                 BigInteger totalStakeDRepDoNotVote = totalDRepStake.subtract(totalStakeDRepDoVote).subtract(dRepAutoAbstainStake)
                         .subtract(dRepNoConfidenceStake.orElse(BigInteger.ZERO));
+                votingStats.setDrepNotVotedStake(totalStakeDRepDoNotVote);
 
                 dRepNoStake = dRepNoStake.add(totalStakeDRepDoNotVote);
 
                 if (dRepNoConfidenceStake.isPresent()) {
                     dRepNoStake = dRepNoStake.add(dRepNoConfidenceStake.get());
                 }
+
+                votingStats.setDrepTotalNoStake(dRepNoStake);
+
                 end = System.currentTimeMillis();
                 log.debug("GetAllByEpochAndDRepIds (others) time: {} ms", end - start);
             } else {
@@ -574,7 +610,13 @@ public class ProposalStatusProcessor {
             if (govActionDetail.getType() == GovActionType.NO_CONFIDENCE) {
                 spoYesStake = spoYesStake.add(totalStakeSPODelegatedToNoConfidenceDRep);
             }
+            votingStats.setSpoTotalYesStake(spoYesStake);
+
             spoAbstainStake = spoAbstainStake.add(totalStakeSPODelegatedToAbstainDRep);
+            votingStats.setSpoTotalAbstainStake(spoAbstainStake);
+
+            BigInteger spoNoStake = totalPoolStake.subtract(spoYesStake).subtract(spoAbstainStake);
+            votingStats.setSpoTotalNoStake(spoNoStake);
 
             // Get the last enacted proposal with the same purpose
             GovActionId lastEnactedGovActionIdWithSamePurpose = proposalStateClient.getLastEnactedProposal(govActionDetail.getType(), currentEpoch)
@@ -615,9 +657,11 @@ public class ProposalStatusProcessor {
                     .type(govActionDetail.getType())
                     .govActionTxHash(proposal.getTxHash())
                     .govActionIndex(proposal.getIndex())
+                    .votingStats(votingStats)
                     .epoch(currentEpoch)
                     .status(govActionStatus)
                     .build();
+
             govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
             end = System.currentTimeMillis();
             log.debug("GovActionProposalStatus: Others --, time: {} ms", end - start);
@@ -721,6 +765,18 @@ public class ProposalStatusProcessor {
         }
 
         return result;
+    }
+
+    private ProposalVotingStats initProposalVotingStats() {
+        return ProposalVotingStats.builder()
+            .drepTotalAbstainStake(BigInteger.ZERO)
+            .drepTotalYesStake(BigInteger.ZERO)
+            .drepTotalNoStake(BigInteger.ZERO)
+            .drepNoConfidenceStake(BigInteger.ZERO)
+            .spoTotalYesStake(BigInteger.ZERO)
+            .spoTotalNoStake(BigInteger.ZERO)
+            .spoTotalAbstainStake(BigInteger.ZERO)
+            .build();
     }
 
     private boolean isPublicNetwork() {
