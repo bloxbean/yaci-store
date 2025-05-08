@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.dto;
 
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -33,6 +34,8 @@ public class ProposalDto {
     private String anchorHash;
 
     private ProposalStatus status;
+
+    private ProposalVotingStats votingStats;
 
     private Integer epoch;
 
