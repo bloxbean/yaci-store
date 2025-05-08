@@ -25,5 +25,7 @@ public class GovActionProposalStatus {
 
     private GovActionStatus status;
 
+    private ProposalVotingStats votingStats;
+
     private Integer epoch;
 }
