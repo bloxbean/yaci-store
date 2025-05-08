@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.service;
 
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepDetailsDto;
+import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorageReader;
@@ -26,5 +27,11 @@ public class DRepApiService {
         Integer maxEpoch = epochParamStorage.getMaxEpoch();
 
         return dRepStorageReader.getDRepDetailsByDRepId(drepId, maxEpoch);
+    }
+
+    public List<SpecialDRepDto> getAutoAbstainAndNoConfidenceDRepDetail() {
+        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+
+        return dRepStorageReader.getSpecialDRepDetail(maxEpoch);
     }
 }

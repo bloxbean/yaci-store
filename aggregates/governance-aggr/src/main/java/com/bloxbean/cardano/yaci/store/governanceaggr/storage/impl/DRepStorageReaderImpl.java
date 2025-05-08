@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.client.transaction.spec.governance.DRepType;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepDetailsDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepStatus;
+import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -257,5 +258,35 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                 votingPower == null ? BigInteger.ZERO : votingPower,
                 registrationSlot
         ));
+    }
+
+    @Override
+    public List<SpecialDRepDto> getSpecialDRepDetail(int epoch) {
+        var dist = DREP_DIST;
+
+        Integer maxEpochInGovCalc = dsl
+                .select(DSL.max(dist.EPOCH))
+                .from(dist)
+                .where(dist.EPOCH.le(epoch))
+                .fetchOneInto(Integer.class);
+
+        if (maxEpochInGovCalc == null) {
+            return List.of();
+        }
+
+        return dsl.select(
+                        dist.DREP_TYPE,
+                        dist.AMOUNT.as("voting_power")
+                )
+                .from(dist)
+                .where(dist.EPOCH.eq(maxEpochInGovCalc))
+                .and(dist.DREP_TYPE.in(
+                        DRepType.ABSTAIN.name(),
+                        DRepType.NO_CONFIDENCE.name()
+                ))
+                .fetch(record -> new SpecialDRepDto(
+                        DRepType.valueOf(record.get(dist.DREP_TYPE)),
+                        record.get("voting_power", BigInteger.class)
+                ));
     }
 }

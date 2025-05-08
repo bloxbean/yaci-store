@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.controller;
 
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepDetailsDto;
+import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.DRepApiService;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,5 +39,11 @@ public class DRepInfoController {
         return dRepApiService.getDRepDetailsByDRepId(drepId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/dreps/special")
+    public ResponseEntity<List<SpecialDRepDto>> getSpecialDReps() {
+        List<SpecialDRepDto> specialDReps = dRepApiService.getAutoAbstainAndNoConfidenceDRepDetail();
+        return ResponseEntity.ok(specialDReps);
     }
 }
