@@ -3,12 +3,14 @@ package com.bloxbean.cardano.yaci.store.api.governanceaggr.service;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
+import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorageReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,11 +49,14 @@ public class ProposalApiService {
                     String key = p.getTxHash() + "#" + p.getIndex();
                     GovActionProposalStatus status = statusMap.get(key);
                     ProposalStatus proposalStatus;
+                    ProposalVotingStats votingStats;
 
                     if (status == null) {
                         proposalStatus = ProposalStatus.LIVE;
+                        votingStats = new ProposalVotingStats();
                     } else {
                         proposalStatus = toProposalStatus(status, maxEpoch);
+                        votingStats = status.getVotingStats();
                     }
 
                     return new ProposalDto(
@@ -64,6 +69,7 @@ public class ProposalApiService {
                             p.getAnchorUrl(),
                             p.getAnchorHash(),
                             proposalStatus,
+                            votingStats,
                             p.getEpoch(),
                             p.getBlockNumber(),
                             p.getBlockTime()
@@ -87,6 +93,7 @@ public class ProposalApiService {
         GovActionProposalStatus status = statusList.isEmpty() ? null : statusList.get(0);
 
         ProposalStatus proposalStatus = status == null ? ProposalStatus.LIVE : toProposalStatus(status, maxEpoch);
+        ProposalVotingStats votingStats = status == null ? new ProposalVotingStats() : status.getVotingStats();
 
         ProposalDto dto = new ProposalDto(
                 proposal.getTxHash(),
@@ -98,6 +105,7 @@ public class ProposalApiService {
                 proposal.getAnchorUrl(),
                 proposal.getAnchorHash(),
                 proposalStatus,
+                votingStats,
                 proposal.getEpoch(),
                 proposal.getBlockNumber(),
                 proposal.getBlockTime()

@@ -3,11 +3,14 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Type;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -19,7 +22,6 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "gov_action_proposal_status")
 @IdClass(GovActionProposalStatusId.class)
-//todo: should add prev gov action id?
 public class GovActionProposalStatusEntity {
     @Id
     @Column(name = "gov_action_tx_hash")
@@ -36,6 +38,10 @@ public class GovActionProposalStatusEntity {
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private GovActionStatus status;
+
+    @Type(JsonType.class)
+    @Column(name = "voting_stats")
+    private ProposalVotingStats votingStats;
 
     @Id
     @Column(name = "epoch")
