@@ -285,6 +285,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                         DRepType.NO_CONFIDENCE.name()
                 ))
                 .fetch(record -> new SpecialDRepDto(
+                        maxEpochInGovCalc,
                         DRepType.valueOf(record.get(dist.DREP_TYPE)),
                         record.get("voting_power", BigInteger.class)
                 ));

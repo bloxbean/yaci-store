@@ -17,6 +17,7 @@ import java.math.BigInteger;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 // Auto-Abstain and No-Confidence DRep
 public class SpecialDRepDto {
+    private Integer epoch;
     private DRepType dRepType;
     private BigInteger votingPower;
 }
