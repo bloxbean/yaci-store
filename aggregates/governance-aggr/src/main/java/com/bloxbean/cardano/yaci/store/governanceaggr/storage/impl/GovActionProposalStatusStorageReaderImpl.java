@@ -4,7 +4,9 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorageReader;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -34,6 +36,7 @@ public class GovActionProposalStatusStorageReaderImpl implements GovActionPropos
         Field<String> statusField = g.field(GOV_ACTION_PROPOSAL_STATUS.STATUS);
         Field<Integer> epochField = g.field(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
         Field<?> updateDatetimeField = g.field(GOV_ACTION_PROPOSAL_STATUS.UPDATE_DATETIME);
+        Field<?> votingStatsField = g.field(GOV_ACTION_PROPOSAL_STATUS.VOTING_STATS);
 
         Field<Integer> rowNumber = DSL.rowNumber().over()
                 .partitionBy(txHashField, indexField)
@@ -41,7 +44,7 @@ public class GovActionProposalStatusStorageReaderImpl implements GovActionPropos
                 .as("rn");
 
         Table<?> subquery = dsl
-                .select(txHashField, indexField, typeField, statusField, epochField, updateDatetimeField, rowNumber)
+                .select(txHashField, indexField, typeField, statusField, epochField, updateDatetimeField, votingStatsField, rowNumber)
                 .from(g)
                 .asTable("t");
 
@@ -59,13 +62,26 @@ public class GovActionProposalStatusStorageReaderImpl implements GovActionPropos
                 .fetch();
 
         return result.stream()
-                .map(r -> GovActionProposalStatus.builder()
+                .map(r ->
+                {
+                    ProposalVotingStats votingStats = null;
+                    try {
+                        String jsonStr = r.get(votingStatsField, String.class);
+                        if (jsonStr != null) {
+                            votingStats = new ObjectMapper().readValue(jsonStr, ProposalVotingStats.class);
+                        }
+                    } catch (Exception e) {
+                        votingStats = null;
+                    }
+                    return GovActionProposalStatus.builder()
                         .govActionTxHash(r.get(txHashField))
                         .govActionIndex(r.get(indexField))
                         .type(GovActionType.valueOf(r.get(typeField)))
                         .status(GovActionStatus.valueOf(r.get(statusField)))
                         .epoch(r.get(epochField))
-                        .build())
+                        .votingStats(votingStats)
+                        .build();
+                })
                 .toList();
     }
 }
