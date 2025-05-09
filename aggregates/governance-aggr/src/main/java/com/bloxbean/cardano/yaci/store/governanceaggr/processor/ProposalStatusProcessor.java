@@ -772,6 +772,8 @@ public class ProposalStatusProcessor {
             .drepTotalAbstainStake(BigInteger.ZERO)
             .drepTotalYesStake(BigInteger.ZERO)
             .drepTotalNoStake(BigInteger.ZERO)
+            .drepNoVoteStake(BigInteger.ZERO)
+            .drepNotVotedStake(BigInteger.ZERO)
             .drepNoConfidenceStake(BigInteger.ZERO)
             .spoTotalYesStake(BigInteger.ZERO)
             .spoTotalNoStake(BigInteger.ZERO)
