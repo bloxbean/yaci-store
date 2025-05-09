@@ -1,8 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.dto;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
+import com.bloxbean.cardano.client.transaction.spec.governance.DRepType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -16,30 +15,9 @@ import java.math.BigInteger;
 @EqualsAndHashCode
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class ProposalDto {
-    private String txHash;
-
-    private int index;
-
-    private Long slot;
-
-    private BigInteger deposit;
-
-    private String returnAddress;
-
-    private JsonNode govAction;
-
-    private String anchorUrl;
-
-    private String anchorHash;
-
-    private ProposalStatus status;
-
-    private ProposalVotingStats votingStats;
-
+// Auto-Abstain and No-Confidence DRep
+public class SpecialDRepDto {
     private Integer epoch;
-
-    private Long blockNumber;
-
-    private Long blockTime;
+    private DRepType dRepType;
+    private BigInteger votingPower;
 }
