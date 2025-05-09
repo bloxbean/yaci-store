@@ -53,36 +53,13 @@ public class GovActionProposalStatusStorageReaderImpl implements GovActionPropos
                 .map(id -> DSL.row(id.getTransactionId(), id.getGov_action_index()))
                 .collect(Collectors.toSet());
 
-        var result = dsl.selectFrom(subquery)
+        return dsl.selectFrom(subquery)
                 .where(DSL.field("rn", Integer.class).eq(1))
                 .and(DSL.row(
                                 DSL.field(txHashField.getUnqualifiedName(), String.class),
                                 DSL.field(indexField.getUnqualifiedName(), Integer.class))
                         .in(idSet)
                 )
-                .fetch();
-
-        return result.stream()
-                .map(r ->
-                {
-                    ProposalVotingStats votingStats = null;
-                    try {
-                        String jsonStr = r.get(votingStatsField, String.class);
-                        if (jsonStr != null) {
-                            votingStats = JsonUtil.getMapper().readValue(jsonStr, ProposalVotingStats.class);
-                        }
-                    } catch (Exception e) {
-                        votingStats = null;
-                    }
-                    return GovActionProposalStatus.builder()
-                        .govActionTxHash(r.get(txHashField))
-                        .govActionIndex(r.get(indexField))
-                        .type(GovActionType.valueOf(r.get(typeField)))
-                        .status(GovActionStatus.valueOf(r.get(statusField)))
-                        .epoch(r.get(epochField))
-                        .votingStats(votingStats)
-                        .build();
-                })
-                .toList();
+                .fetchInto(GovActionProposalStatus.class);
     }
 }
