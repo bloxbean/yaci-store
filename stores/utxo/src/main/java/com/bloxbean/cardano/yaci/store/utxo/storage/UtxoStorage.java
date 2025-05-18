@@ -19,4 +19,7 @@ public interface UtxoStorage {
     int deleteBySpentAndBlockLessThan(Long block);
 
     void handleCommit(CommitEvent commitEvent);
+
+    List<AddressUtxo> getUnspentBySlotGreaterThan(Long slot);
+    List<TxInput> getSpentBySlotGreaterThan(Long slot);
 }

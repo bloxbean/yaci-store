@@ -33,6 +33,11 @@ public class UtxoStoreAutoConfigProperties {
          * No of safe blocks to keep before pruning the UTXO
          */
         private int pruningSafeBlocks = 2160;
+
+        /**
+         * Enable content aware rollback
+         */
+        private boolean contentAwareRollback = false;
     }
 
     @Getter
