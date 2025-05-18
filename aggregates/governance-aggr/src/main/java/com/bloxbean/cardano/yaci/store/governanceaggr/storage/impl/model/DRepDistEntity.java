@@ -37,6 +37,9 @@ public class DRepDistEntity {
     @Column(name = "epoch")
     private Integer epoch;
 
+    @Column(name = "active_until")
+    private Integer activeUntil;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDatetime;
