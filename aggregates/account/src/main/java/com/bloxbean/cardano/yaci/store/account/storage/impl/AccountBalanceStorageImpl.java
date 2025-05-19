@@ -162,6 +162,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                     addressBalanceRec.setUnit(addrBalance.getUnit());
                     addressBalanceRec.setQuantity(addrBalance.getQuantity());
                     addressBalanceRec.setAddrFull(addrBalance.getAddrFull());
+                    addressBalanceRec.setSlot(addrBalance.getSlot());
                     addressBalanceRec.setBlock(addrBalance.getBlockNumber());
                     addressBalanceRec.setBlockTime(addrBalance.getBlockTime());
                     addressBalanceRec.setEpoch(addrBalance.getEpoch());
@@ -180,6 +181,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                             ADDRESS_BALANCE_CURRENT.UNIT,
                             ADDRESS_BALANCE_CURRENT.QUANTITY,
                             ADDRESS_BALANCE_CURRENT.ADDR_FULL,
+                            ADDRESS_BALANCE_CURRENT.SLOT,
                             ADDRESS_BALANCE_CURRENT.BLOCK,
                             ADDRESS_BALANCE_CURRENT.BLOCK_TIME,
                             ADDRESS_BALANCE_CURRENT.EPOCH,
@@ -309,6 +311,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                     var stakeAddressBalanceRec = dsl.newRecord(STAKE_ADDRESS_BALANCE_CURRENT);
                     stakeAddressBalanceRec.setAddress(stakeAddrBalance.getAddress());
                     stakeAddressBalanceRec.setQuantity(stakeAddrBalance.getQuantity());
+                    stakeAddressBalanceRec.setSlot(stakeAddrBalance.getSlot());
                     stakeAddressBalanceRec.setBlock(stakeAddrBalance.getBlockNumber());
                     stakeAddressBalanceRec.setBlockTime(stakeAddrBalance.getBlockTime());
                     stakeAddressBalanceRec.setEpoch(stakeAddrBalance.getEpoch());
@@ -325,6 +328,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                     .loadRecords(stakeAddressBalanceRecords)
                     .fields(STAKE_ADDRESS_BALANCE_CURRENT.ADDRESS,
                             STAKE_ADDRESS_BALANCE_CURRENT.QUANTITY,
+                            STAKE_ADDRESS_BALANCE_CURRENT.SLOT,
                             STAKE_ADDRESS_BALANCE_CURRENT.BLOCK,
                             STAKE_ADDRESS_BALANCE_CURRENT.BLOCK_TIME,
                             STAKE_ADDRESS_BALANCE_CURRENT.EPOCH,
@@ -476,6 +480,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         abc.UNIT,
                         abc.QUANTITY,
                         abc.ADDR_FULL,
+                        abc.SLOT,
                         abc.BLOCK,
                         abc.BLOCK_TIME,
                         abc.EPOCH,
@@ -487,6 +492,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                                 latestTable.field("unit", String.class),
                                 latestTable.field("quantity", BigInteger.class),
                                 latestTable.field("addr_full", String.class),
+                                latestTable.field("slot", Long.class),
                                 latestTable.field("block", Long.class),
                                 latestTable.field("block_time", Long.class),
                                 latestTable.field("epoch", Integer.class),
@@ -546,6 +552,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .columns(
                         sabc.ADDRESS,
                         sabc.QUANTITY,
+                        sabc.SLOT,
                         sabc.BLOCK,
                         sabc.BLOCK_TIME,
                         sabc.EPOCH,
@@ -555,6 +562,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         select(
                                 latestTable.field("address", String.class),
                                 latestTable.field("quantity", BigInteger.class),
+                                latestTable.field("slot", Long.class),
                                 latestTable.field("block", Long.class),
                                 latestTable.field("block_time", Long.class),
                                 latestTable.field("epoch", Integer.class),

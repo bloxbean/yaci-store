@@ -709,6 +709,7 @@ public class AccountBalanceProcessor {
                     return addressBalance;
                 }).toList();
         accountBalanceStorage.saveAddressBalances(addressBalances);
+        accountBalanceStorage.saveCurrentAddressBalances(addressBalances);
 
         List<StakeAddressBalance> stakeAddrBalances = genesisBalanceList.stream()
                 .filter(genesisBalance -> {
@@ -734,6 +735,7 @@ public class AccountBalanceProcessor {
                     return stakeAddrBalance;
                 }).toList();
         accountBalanceStorage.saveStakeAddressBalances(stakeAddrBalances);
+        accountBalanceStorage.saveCurrentStakeAddressBalances(stakeAddrBalances);
     }
 
     @EventListener
