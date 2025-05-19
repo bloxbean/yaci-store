@@ -6,6 +6,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class GovEpochActivityService {
@@ -14,12 +16,18 @@ public class GovEpochActivityService {
     @Transactional
     public void saveGovEpochActivity(
             Integer epoch,
-            Boolean dormant) {
+            Boolean dormant,
+            Integer dormantEpochCount) {
         GovEpochActivityEntity entity = new GovEpochActivityEntity();
 
         entity.setEpoch(epoch);
         entity.setDormant(dormant);
+        entity.setDormantEpochCount(dormantEpochCount);
 
         govEpochActivityRepository.save(entity);
+    }
+
+    public Optional<GovEpochActivityEntity> getGovEpochActivity(Integer epoch) {
+        return govEpochActivityRepository.findById(epoch);
     }
 }

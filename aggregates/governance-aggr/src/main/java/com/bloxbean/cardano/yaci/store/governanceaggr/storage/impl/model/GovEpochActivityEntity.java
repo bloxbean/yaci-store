@@ -25,6 +25,9 @@ public class GovEpochActivityEntity {
     @Column(name = "dormant")
     private Boolean dormant;
 
+    @Column(name = "dormant_epoch_count")
+    private Integer dormantEpochCount;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDatetime;
