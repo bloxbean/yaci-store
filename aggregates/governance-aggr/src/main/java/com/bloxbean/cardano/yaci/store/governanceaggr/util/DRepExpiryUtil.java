@@ -53,7 +53,7 @@ public class DRepExpiryUtil {
             return baseExpiry;
         }
 
-        if (lastInteractionEpoch >= registrationInfo.epoch()) {
+        if (lastDRepInteraction != null) {
             return baseExpiry;
         }
 
