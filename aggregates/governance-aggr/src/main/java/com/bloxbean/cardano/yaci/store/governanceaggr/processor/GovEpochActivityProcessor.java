@@ -39,14 +39,20 @@ public class GovEpochActivityProcessor {
         int epoch = event.getEpoch();
         int prevEpoch = event.getEpoch() - 1;
 
-        if (eraService.getEraForEpoch(prevEpoch).getValue() < Era.Conway.getValue()) {
+        if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
+            return;
+        }
+
+        if (eraService.getEraForEpoch(prevEpoch).getValue() == Era.Babbage.getValue()
+                && eraService.getEraForEpoch(epoch).getValue() == Era.Conway.getValue()) {
+            govEpochActivityService.saveGovEpochActivity(epoch, Boolean.TRUE);
             return;
         }
 
         jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
-                new MapSqlParameterSource().addValue("epoch", prevEpoch));
+                new MapSqlParameterSource().addValue("epoch", epoch));
 
-        // get ratified or active proposals in prev proposal status snapshot (the epoch = current epoch - 1)
+        // get active proposals in prev proposal status snapshot (the epoch = current epoch - 1)
         List<GovActionProposal> activeProposalsInPrevProposalStatusSnapshot =
                 proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, prevEpoch);
 
@@ -56,7 +62,7 @@ public class GovEpochActivityProcessor {
                                 .thenComparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getIndex))
                         .toList();
 
-        Boolean dormant = activeProposalsInPrevProposalStatusSnapshot.isEmpty();
+        Boolean dormant = activeProposalsInPrevProposalStatusSnapshot.isEmpty() && newProposalsCreatedInPrevEpoch.isEmpty();
 
         govEpochActivityService.saveGovEpochActivity(epoch, dormant);
     }
