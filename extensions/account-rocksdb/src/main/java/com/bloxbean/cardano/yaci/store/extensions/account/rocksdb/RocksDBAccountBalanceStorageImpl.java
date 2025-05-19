@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
@@ -106,6 +107,11 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         } else {
             ListUtil.partitionAndApply(addressBalances, batchSize, this::saveAddressBalancesToDB);
         }
+    }
+
+    @Override
+    public void saveCurrentAddressBalances(List<AddressBalance> addressBalances) {
+        //TODO
     }
 
     @SneakyThrows
@@ -209,6 +215,12 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
         }
     }
 
+    @Override
+    public void saveCurrentStakeAddressBalances(List<StakeAddressBalance> stakeBalances) {
+        //TODO
+    }
+
+
     @SneakyThrows
     private void saveStakeAddressBalancesToDB(List<StakeAddressBalance> stakeBalances) {
         try (var writeBatch = new WriteBatch();
@@ -275,6 +287,41 @@ public class RocksDBAccountBalanceStorageImpl implements AccountBalanceStorage {
     public List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
+
+    @Override
+    public List<AddressBalance> getAddressBalanceBySlotGreaterThan(Long slot) {
+        //TODO
+        return List.of();
+    }
+
+    @Override
+    public List<StakeAddressBalance> getStakeAddressBalanceBySlotGreaterThan(Long slot) {
+        //TODO
+        return List.of();
+    }
+
+    @Override
+    public void refreshCurrentAddressBalance(String address, Set<String> units, Long slot) {
+        //TODO
+    }
+
+    @Override
+    public void refreshCurrentStakeAddressBalance(List<String> address, Long slot) {
+        //TODO
+    }
+
+    @Override
+    public List<AddressBalance> getCurrentAddressBalance(String address) {
+        //TODO
+        return List.of();
+    }
+
+    @Override
+    public Optional<StakeAddressBalance> getCurrentStakeAddressBalance(String address) {
+        //TODO
+        return Optional.empty();
+    }
+
 
     private byte[] getAddressAssetKey(String address, String unit) {
         return (address + "_" + unit).getBytes(StandardCharsets.UTF_8);

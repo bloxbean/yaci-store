@@ -22,6 +22,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
+import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
@@ -236,7 +237,10 @@ public class AccountBalanceProcessor {
             CompletableFuture<Void> addressBalFuture = null;
             if (accountStoreProperties.isAddressBalanceEnabled()) {
                 addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
-                        .thenAcceptAsync(addressBalances -> {
+                        .thenAcceptAsync(tuple -> {
+                            var addressBalances = tuple._1;
+                            var topAddressBalances = tuple._2;
+
                             transactionTemplate.execute(status -> {
                                 //Save address balances (AddressBalance)
                                 long t2 = System.currentTimeMillis();
@@ -254,6 +258,14 @@ public class AccountBalanceProcessor {
                                 long t5 = System.currentTimeMillis();
                                 log.info("\tTime taken to delete address balance history: {}", (t5 - t4));
 
+                                //Save address balance snapshot if currentBalanceEnabled = true and contentAwareRollback = true
+                                if (accountStoreProperties.isCurrentBalanceEnabled() &&
+                                        accountStoreProperties.isContentAwareRollback() &&
+                                        topAddressBalances.size() > 0) {
+                                    accountBalanceStorage.saveCurrentAddressBalances(topAddressBalances);
+                                    log.info("Total Current Address Balance snapshot records {}, Time taken to save: {}", topAddressBalances.size(), (System.currentTimeMillis() - t5));
+                                }
+
                                 return null;
                             });
                         }, parallelExecutor.getVirtualThreadExecutor());
@@ -264,7 +276,10 @@ public class AccountBalanceProcessor {
             CompletableFuture<Void> stakeAddrBalFuture = null;
             if (accountStoreProperties.isStakeAddressBalanceEnabled()) {
                 stakeAddrBalFuture = CompletableFuture.supplyAsync(() -> getStakeAddressBalances(firstBlockInBatchMetadata, stakeAddrAmtMap))
-                        .thenAcceptAsync(stakeAddressBalances -> {
+                        .thenAcceptAsync(tuple -> {
+                            var stakeAddressBalances = tuple._1;
+                            var topStakeAddressBalances = tuple._2;
+
                             transactionTemplate.execute(status -> {
                                 //Save stake address balances (StakeAddressBalance)
                                 long t2 = System.currentTimeMillis();
@@ -281,6 +296,14 @@ public class AccountBalanceProcessor {
                                 }
                                 long t5 = System.currentTimeMillis();
                                 log.info("\tTime taken to delete stake address balance history: {}", (t5 - t4));
+
+                                //Save stake address balance snapshot if currentBalanceEnabled and contentAwareRollback = true
+                                if (accountStoreProperties.isCurrentBalanceEnabled()
+                                        && accountStoreProperties.isContentAwareRollback()
+                                        && topStakeAddressBalances.size() > 0) {
+                                    accountBalanceStorage.saveCurrentStakeAddressBalances(topStakeAddressBalances);
+                                    log.info("Total Current Stake Address Balance snapshot records {}, Time taken to save: {}", topStakeAddressBalances.size(), (System.currentTimeMillis() - t5));
+                                }
 
                                 return null;
                             });
@@ -469,7 +492,10 @@ public class AccountBalanceProcessor {
 
     }
 
-    public List<AddressBalance> getAddressBalances(EventMetadata firstBlockMetadata, Map<AddressUnitInfo, List<SlotAmount>> addressAmtMap) {
+    public Tuple<List<AddressBalance>, List<AddressBalance>> getAddressBalances(EventMetadata firstBlockMetadata, Map<AddressUnitInfo, List<SlotAmount>> addressAmtMap) {
+        //Balance of addresses at highest slot
+        List<AddressBalance> topAddressBalances = Collections.synchronizedList(new ArrayList<>());
+
         var addressBalances = addressAmtMap.entrySet()
                 //.parallelStream()
                 .stream()
@@ -539,6 +565,11 @@ public class AccountBalanceProcessor {
                         }
                     }
 
+                    if (addressSlotBalances.size() > 0) {
+                        var topAddressBalance = addressSlotBalances.get(addressSlotBalances.size() - 1);
+                        topAddressBalances.add(topAddressBalance);
+                    }
+
                     if (nAddrBalanceRecordToKeep > 0 && addressSlotBalances.size() >= nAddrBalanceRecordToKeep) {
                         return addressSlotBalances.subList(addressSlotBalances.size() - nAddrBalanceRecordToKeep, addressSlotBalances.size());
                     } else {
@@ -548,10 +579,13 @@ public class AccountBalanceProcessor {
                 .join()
                 .flatMap(addressBalances1 -> addressBalances1.stream())
                 .toList();
-        return addressBalances;
+        return new Tuple<>(addressBalances, topAddressBalances);
     }
 
-    public List<StakeAddressBalance> getStakeAddressBalances(EventMetadata firstBlockMetadata, Map<StakeAddressInfo, List<SlotAmount>> stakeAddrAmtMap) {
+    public Tuple<List<StakeAddressBalance>, List<StakeAddressBalance>> getStakeAddressBalances(EventMetadata firstBlockMetadata, Map<StakeAddressInfo, List<SlotAmount>> stakeAddrAmtMap) {
+        //Balance of stake addresses at highest slot
+        List<StakeAddressBalance> topStakeAddressBalances = Collections.synchronizedList(new ArrayList<>());
+
         var stakeAddrBalances = stakeAddrAmtMap.entrySet()
                 //.parallelStream()
                 .stream()
@@ -615,6 +649,11 @@ public class AccountBalanceProcessor {
                         }
                     }
 
+                    if (stakeAddressBalances.size() > 0) {
+                        var topStakeAddressBalance = stakeAddressBalances.get(stakeAddressBalances.size() - 1);
+                        topStakeAddressBalances.add(topStakeAddressBalance);
+                    }
+
                     if (nAddrBalanceRecordToKeep > 0 && stakeAddressBalances.size() >= nAddrBalanceRecordToKeep) {
                         return stakeAddressBalances.subList(stakeAddressBalances.size() - nAddrBalanceRecordToKeep, stakeAddressBalances.size());
                     } else {
@@ -626,7 +665,7 @@ public class AccountBalanceProcessor {
                 .flatMap(stakeAddrBalance -> stakeAddrBalance.stream())
                 .toList();
 
-        return stakeAddrBalances;
+        return new Tuple(stakeAddrBalances, topStakeAddressBalances);
     }
 
     @EventListener

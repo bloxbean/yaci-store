@@ -4,6 +4,12 @@ dependencies {
     implementation(libs.parallel.collector)
 
     api("org.springframework.boot:spring-boot-starter-batch")
+
+    testImplementation project(':starters:spring-boot-starter')
+    testImplementation project(':starters:account-spring-boot-starter')
+    testImplementation("org.springframework.boot:spring-boot-starter-jooq")
+
+    testImplementation("org.flywaydb:flyway-core")
 }
 
 publishing {

@@ -30,6 +30,26 @@
     "unsafeAllocated": true
   },
   {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalanceCurrent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.StakeAddressBalanceCurrent;",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalanceCurrent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "[Lcom.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AddressBalanceCurrent;",
+    "unsafeAllocated": true
+  },
+  {
     "name": "com.bloxbean.cardano.yaci.store.account.jooq.tables.pojos.AccountConfig",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,
