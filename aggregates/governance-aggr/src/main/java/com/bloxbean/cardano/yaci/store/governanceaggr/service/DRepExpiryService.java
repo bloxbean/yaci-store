@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovEpochActivityEntity;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovEpochActivityRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
 import jakarta.transaction.Transactional;
@@ -33,6 +34,7 @@ public class DRepExpiryService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final EraService eraService;
     private final GovEpochActivityRepository govEpochActivityRepository;
+    private final GovEpochActivityService govEpochActivityService;
     private final DSLContext dsl;
 
     @Transactional
@@ -63,6 +65,13 @@ public class DRepExpiryService {
 
         List<MapSqlParameterSource> batch = new ArrayList<>();
 
+        var govEpochActivityOpt = govEpochActivityService.getGovEpochActivity(epoch);
+
+        if (govEpochActivityOpt.isEmpty()) {
+            log.error("GovEpochActivityEntity not found for epoch {}", epoch);
+            return;
+        }
+
         for (Tuple<String, DrepType> dRep : targetDReps) {
             var dRepRegistration = registrationMap.get(dRep);
 
@@ -82,14 +91,18 @@ public class DRepExpiryService {
                     epoch
             );
 
+            boolean isDormantEpoch = dormantEpochs.contains(epoch);
+            int dormantEpochCount = govEpochActivityOpt.get().getDormantEpochCount();
+            int activeUntil = isDormantEpoch ? expiry - dormantEpochCount : expiry;
+
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
                     .addValue("drep_type", dRep._2.name())
-                    .addValue("expiry", expiry)
+                    .addValue("active_until", activeUntil)
                     .addValue("epoch", epoch));
         }
 
-        String updateSql = "UPDATE drep_dist SET active_until = :expiry " +
+        String updateSql = "UPDATE drep_dist SET active_until = :active_until " +
                 "WHERE drep_hash = :drep_hash and drep_type = :drep_type AND epoch = :epoch";
 
         jdbcTemplate.batchUpdate(updateSql, batch.toArray(new MapSqlParameterSource[0]));
