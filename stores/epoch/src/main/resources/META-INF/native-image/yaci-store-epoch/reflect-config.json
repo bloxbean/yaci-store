@@ -10,5 +10,29 @@
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.epoch.jooq.tables.pojos.CostModel",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.epoch.jooq.tables.pojos.EpochParam",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.epoch.jooq.tables.pojos.LocalEpochParam",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name":"com.bloxbean.cardano.yaci.store.epoch.jooq.tables.pojos.ProtocolParamsProposal",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
   }
 ]
