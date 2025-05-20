@@ -151,6 +151,17 @@ public class DRepExpiryUtil {
         return null;
     }
 
+
+    public static boolean isEpochRangeDormant(int fromEpoch, int toEpoch, Set<Integer> dormantEpochs) {
+        for (int i = fromEpoch; i <= toEpoch; i++) {
+            if (!dormantEpochs.contains(i)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public record DRepRegistrationInfo(long slot, int epoch, int dRepActivity, int protocolMajorVersion) {
     }
 
