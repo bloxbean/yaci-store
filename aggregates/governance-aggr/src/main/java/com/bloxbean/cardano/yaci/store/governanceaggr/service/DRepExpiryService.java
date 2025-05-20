@@ -89,11 +89,16 @@ public class DRepExpiryService {
 
             var dRepLastInteraction = lastInteractionMap.get(dRep);
 
+            List<DRepExpiryUtil.ProposalSubmissionInfo> proposalsUpToRegistration =
+                    proposalSubmissionInfos.stream()
+                            .filter(p -> p.epoch() <= dRepRegistration.epoch())
+                            .toList();
+
             int expiry = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
                     dormantEpochsUntilLeftBoundaryEpoch,
-                    proposalSubmissionInfos,
+                    proposalsUpToRegistration,
                     firstEpochNoInConway,
                     leftBoundaryEpoch
             );
