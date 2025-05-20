@@ -6,8 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
-import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
-import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.GovEpochActivityService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovEpochActivityEntity;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,17 +31,19 @@ public class GovEpochActivityProcessor {
     private final ProposalStateClient proposalStateClient;
     private final EraService eraService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
-    private final GovActionProposalStorage govActionProposalStorage;
 
     @EventListener
     @Transactional
-    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+    public void handleProposalStatusCapturedEvent(ProposalStatusCapturedEvent event) {
         int epoch = event.getEpoch();
         int prevEpoch = event.getEpoch() - 1;
 
         if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
             return;
         }
+
+        jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
+                new MapSqlParameterSource().addValue("epoch", epoch));
 
         // first epoch in Conway era
         if (eraService.getEraForEpoch(prevEpoch).getValue() == Era.Babbage.getValue()
@@ -52,30 +52,21 @@ public class GovEpochActivityProcessor {
             return;
         }
 
-        jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
-                new MapSqlParameterSource().addValue("epoch", epoch));
+        // get active proposals in proposal status snapshot
+        List<GovActionProposal> activeProposalsInProposalStatusSnapshot =
+                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
 
-        // get active proposals in prev proposal status snapshot (the epoch = current epoch - 1)
-        List<GovActionProposal> activeProposalsInPrevProposalStatusSnapshot =
-                proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, prevEpoch);
-
-        List<com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal> newProposalsCreatedInPrevEpoch =
-                govActionProposalStorage.findByEpoch(prevEpoch)
-                        .stream().sorted(Comparator.comparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getSlot)
-                                .thenComparingLong(com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal::getIndex))
-                        .toList();
-
-        boolean isDormantEpoch = activeProposalsInPrevProposalStatusSnapshot.isEmpty() && newProposalsCreatedInPrevEpoch.isEmpty();
+        final boolean isCurrentEpochDormantEpoch = activeProposalsInProposalStatusSnapshot.isEmpty();
 
         Optional<GovEpochActivityEntity> prevGovEpochActivityEntity =
                 govEpochActivityService.getGovEpochActivity(prevEpoch);
 
-        Integer dormantEpochCount = prevGovEpochActivityEntity
-                .map(prevGovEpochActivity -> (prevGovEpochActivity.getDormant().equals(Boolean.TRUE) && isDormantEpoch)
+        Integer currentDormantEpochCount = prevGovEpochActivityEntity
+                .map(prevGovEpochActivity -> (prevGovEpochActivity.getDormant().equals(Boolean.TRUE) && isCurrentEpochDormantEpoch)
                         ? prevGovEpochActivity.getDormantEpochCount() + 1
-                        : (isDormantEpoch ? 1 : 0))
-                .orElse(isDormantEpoch ? 1 : 0);
+                        : (isCurrentEpochDormantEpoch ? 1 : 0))
+                .orElse(isCurrentEpochDormantEpoch ? 1 : 0);
 
-        govEpochActivityService.saveGovEpochActivity(epoch, isDormantEpoch, dormantEpochCount);
+        govEpochActivityService.saveGovEpochActivity(epoch, isCurrentEpochDormantEpoch, currentDormantEpochCount);
     }
 }

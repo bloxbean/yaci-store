@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovEpochActivityEntity;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovEpochActivityRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
 import jakarta.transaction.Transactional;
@@ -26,6 +25,7 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
+import static com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil.isEpochRangeDormant;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +41,8 @@ public class DRepExpiryService {
     public void calculateAndUpdateExpiryForEpoch(int epoch) {
         log.info("Calculate and update DRep expiry, epoch {}", epoch);
         long t1 = System.currentTimeMillis();
+        int leftBoundaryEpoch = epoch - 1;
+
         Optional<CardanoEra> conwayEra = eraService.getEras()
                 .stream().filter(cardanoEra -> cardanoEra.getEra().equals(Era.Conway))
                 .findFirst();
@@ -54,21 +56,26 @@ public class DRepExpiryService {
             return;
         }
 
-        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = findRegistrationInfos(targetDReps);
-        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = findLastInteractions(targetDReps);
-        Set<Integer> dormantEpochs = govEpochActivityRepository.findDormantEpochsByEpochBetween(firstEpochNoInConway, epoch);
+        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = findRegistrationInfos(targetDReps, leftBoundaryEpoch);
+        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = findLastInteractions(targetDReps, leftBoundaryEpoch);
+        Set<Integer> dormantEpochsUntilLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsByEpochBetween(firstEpochNoInConway, leftBoundaryEpoch);
 
         Integer maxDRepRegistrationEpoch = registrationMap.values().stream().map(DRepExpiryUtil.DRepRegistrationInfo::epoch)
                 .sorted(Integer::compareTo).toList().getLast();
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(maxDRepRegistrationEpoch);
 
+        DRepExpiryUtil.ProposalSubmissionInfo mostRecentProposal = proposalSubmissionInfos.stream()
+                .max(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch)
+                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot))
+                .orElse(null);
+
         List<MapSqlParameterSource> batch = new ArrayList<>();
 
-        var govEpochActivityOpt = govEpochActivityService.getGovEpochActivity(epoch);
+        var recentGovEpochActivityOpt = govEpochActivityService.getGovEpochActivity(leftBoundaryEpoch);
 
-        if (govEpochActivityOpt.isEmpty()) {
-            log.error("GovEpochActivityEntity not found for epoch {}", epoch);
+        if (recentGovEpochActivityOpt.isEmpty()) {
+            log.error("GovEpochActivityEntity not found for epoch {}", leftBoundaryEpoch);
             return;
         }
 
@@ -85,15 +92,34 @@ public class DRepExpiryService {
             int expiry = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
-                    dormantEpochs,
+                    dormantEpochsUntilLeftBoundaryEpoch,
                     proposalSubmissionInfos,
                     firstEpochNoInConway,
-                    epoch
+                    leftBoundaryEpoch
             );
 
-            boolean isDormantEpoch = dormantEpochs.contains(epoch);
-            int dormantEpochCount = govEpochActivityOpt.get().getDormantEpochCount();
-            int activeUntil = isDormantEpoch ? expiry - dormantEpochCount : expiry;
+            boolean isLeftBoundaryEpochDormant = dormantEpochsUntilLeftBoundaryEpoch.contains(leftBoundaryEpoch);
+            int dormantEpochCount = recentGovEpochActivityOpt.get().getDormantEpochCount();
+            boolean leftBoundaryEpochHadNewProposal = false;
+
+            // check if the left boundary epoch had a proposal
+            if (isLeftBoundaryEpochDormant && mostRecentProposal != null) {
+                int mostRecentProposalEpoch = mostRecentProposal.epoch();
+                if (mostRecentProposalEpoch == leftBoundaryEpoch) {
+                    leftBoundaryEpochHadNewProposal = true;
+                }
+            }
+
+            int activeUntil = (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal) ? expiry - dormantEpochCount : expiry;
+
+            if (dRepLastInteraction == null) {
+                int dRepRegistrationEpoch = dRepRegistration.epoch();
+                // check left boundary epoch is in a dormant period and drep was registered in this dormant period
+                if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsUntilLeftBoundaryEpoch)
+                        && !leftBoundaryEpochHadNewProposal) {
+                    activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
+                }
+            }
 
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
@@ -123,7 +149,7 @@ public class DRepExpiryService {
                 ));
     }
 
-    private Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> findRegistrationInfos(Set<Tuple<String, DrepType>> drepHashAndTypes) {
+    private Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> findRegistrationInfos(Set<Tuple<String, DrepType>> drepHashAndTypes, int epoch) {
         if (drepHashAndTypes.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -146,7 +172,9 @@ public class DRepExpiryService {
                                 .as("rn")
                 )
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name()).and(DSL.or(conditions)))
+                .where(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name())
+                        .and(DSL.or(conditions))
+                        .and(DREP_REGISTRATION.EPOCH.le(epoch)))
                 .asTable("ranked");
 
         var result = dsl.select(
@@ -166,18 +194,18 @@ public class DRepExpiryService {
         for (var record : result) {
             String hash = record.get(DREP_REGISTRATION.DREP_HASH);
             DrepType type = DrepType.valueOf(record.get(DREP_REGISTRATION.CRED_TYPE));
-            long slot = record.get(DREP_REGISTRATION.SLOT);
-            int epoch = record.get(DREP_REGISTRATION.EPOCH);
-            int activity = record.get("drep_activity", Integer.class);
+            long registrationSlot = record.get(DREP_REGISTRATION.SLOT);
+            int registrationEpoch = record.get(DREP_REGISTRATION.EPOCH);
+            int drepActivity = record.get("drep_activity", Integer.class);
             int protocolMajorVer = record.get("protocol_major_ver", Integer.class);
 
-            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepRegistrationInfo(slot, epoch, activity, protocolMajorVer));
+            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepRegistrationInfo(registrationSlot, registrationEpoch, drepActivity, protocolMajorVer));
         }
 
         return map;
     }
 
-    private Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> findLastInteractions(Set<Tuple<String, DrepType>> drepHashAndTypes) {
+    private Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> findLastInteractions(Set<Tuple<String, DrepType>> drepHashAndTypes, int epoch) {
         if (drepHashAndTypes.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -192,6 +220,7 @@ public class DRepExpiryService {
                         DREP_REGISTRATION.EPOCH.as("epoch"))
                 .from(DREP_REGISTRATION)
                 .where(DREP_REGISTRATION.TYPE.eq(CertificateType.UPDATE_DREP_CERT.name())
+                        .and(DREP_REGISTRATION.EPOCH.le(epoch))
                         .and(DSL.or(dRepRegConditions)));
 
         Set<Tuple<String, VoterType>> drepAndVoterTypes = drepHashAndTypes.stream()
@@ -211,7 +240,7 @@ public class DRepExpiryService {
                                 .as("drep_type"),
                         VOTING_PROCEDURE.EPOCH.as("epoch"))
                 .from(VOTING_PROCEDURE)
-                .where(DSL.or(voteConditions));
+                .where(VOTING_PROCEDURE.EPOCH.le(epoch)).and(DSL.or(voteConditions));
 
         var interactionSubquery = updates.unionAll(votes).asTable("sub");
 
@@ -239,11 +268,11 @@ public class DRepExpiryService {
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> map = new HashMap<>();
         for (var record : result) {
             String hash = record.get("drep_hash", String.class);
-            int epoch = record.get("epoch", Integer.class);
-            int activity = record.get("drep_activity", Integer.class);
+            int interactionEpoch = record.get("epoch", Integer.class);
+            int drepActivity = record.get("drep_activity", Integer.class);
             DrepType type = DrepType.valueOf(record.get("drep_type", String.class));
 
-            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepInteractionInfo(epoch, activity));
+            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepInteractionInfo(interactionEpoch, drepActivity));
         }
 
         return map;
@@ -264,5 +293,4 @@ public class DRepExpiryService {
                         record.get("gov_action_lifetime", Integer.class)
                 ));
     }
-
 }
