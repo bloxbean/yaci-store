@@ -106,8 +106,9 @@ public class DRepExpiryUtil {
 
         List<ProposalSubmissionInfo> sortedProposals = proposalsUpToRegistration.stream()
                 .sorted(Comparator
-                        .comparingInt(ProposalSubmissionInfo::epoch).reversed()
-                        .thenComparingLong(ProposalSubmissionInfo::slot).reversed())
+                        .comparingInt(ProposalSubmissionInfo::epoch)
+                        .thenComparingLong(ProposalSubmissionInfo::slot)
+                        .reversed())
                 .toList();
 
         DormantPeriod dormantPeriod = findLastDormantPeriod(sortedProposals, registeredEpoch);
