@@ -94,7 +94,7 @@ public class DRepExpiryService {
                             .filter(p -> p.epoch() <= dRepRegistration.epoch())
                             .toList();
 
-            int expiry = DRepExpiryUtil.calculateDRepExpiry(
+            DRepExpiryUtil.DRepExpiryResult dRepExpiryResult = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
                     dormantEpochsUntilLeftBoundaryEpoch,
@@ -115,7 +115,13 @@ public class DRepExpiryService {
                 }
             }
 
-            int activeUntil = (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal) ? expiry - dormantEpochCount : expiry;
+            int expiry = dRepExpiryResult.expiry();
+            int activeUntil = expiry;
+
+            // if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), then set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal) {
+                activeUntil = expiry - dormantEpochCount;
+            }
 
             if (dRepLastInteraction == null) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
@@ -124,6 +130,17 @@ public class DRepExpiryService {
                         && !leftBoundaryEpochHadNewProposal) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
                 }
+            }
+
+            if (activeUntil < epoch) {
+                // the DRep is being inactive, so we recalculate activeUntil
+                activeUntil = recalculateInactiveDRepActiveUntil(
+                        dRepExpiryResult.lastInteractionEpoch(),
+                        dRepExpiryResult.activityWindow(),
+                        dRepExpiryResult.v9bonus(),
+                        leftBoundaryEpoch,
+                        dormantEpochsUntilLeftBoundaryEpoch
+                );
             }
 
             batch.add(new MapSqlParameterSource()
@@ -298,4 +315,28 @@ public class DRepExpiryService {
                         record.get("gov_action_lifetime", Integer.class)
                 ));
     }
+
+    private int recalculateInactiveDRepActiveUntil(
+            int lastInteractionEpoch,
+            int activityWindow,
+            int v9Bonus,
+            int upperBoundEpoch,
+            Set<Integer> dormantEpochs) {
+
+        int activeEpochCnt = 0; // count non-dormant epochs
+        int targetCount = activityWindow + v9Bonus;
+
+        for (int i = lastInteractionEpoch + 1; i <= upperBoundEpoch; i++) {
+            if (!dormantEpochs.contains(i)) {
+                activeEpochCnt++;
+            }
+
+            if (activeEpochCnt == targetCount) {
+                return i;
+            }
+        }
+
+        return upperBoundEpoch;
+    }
+
 }

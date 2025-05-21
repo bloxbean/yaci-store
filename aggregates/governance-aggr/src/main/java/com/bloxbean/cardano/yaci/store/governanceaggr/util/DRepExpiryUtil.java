@@ -28,7 +28,7 @@ public class DRepExpiryUtil {
      * @param currentEpoch              The current epoch.
      * @return The computed expiry epoch.
      */
-    public static int calculateDRepExpiry(
+    public static DRepExpiryResult calculateDRepExpiry(
             DRepRegistrationInfo registrationInfo,
             @Nullable DRepInteractionInfo lastDRepInteraction,
             Set<Integer> dormantEpochs,
@@ -49,16 +49,12 @@ public class DRepExpiryUtil {
                 : registrationInfo.dRepActivity();
         int baseExpiry = lastInteractionEpoch + activityWindow + dormantCount;
 
-        if (registrationInfo.protocolMajorVersion() >= 10) {
-            return baseExpiry;
+        if (registrationInfo.protocolMajorVersion() >= 10 || lastDRepInteraction != null) {
+            return new DRepExpiryResult(baseExpiry, lastInteractionEpoch, activityWindow, dormantCount, 0);
         }
 
-        if (lastDRepInteraction != null) {
-            return baseExpiry;
-        }
-
-        int bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
-        return baseExpiry + bonus;
+        int v9bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
+        return new DRepExpiryResult(baseExpiry + v9bonus, lastInteractionEpoch, activityWindow, dormantCount, v9bonus);
     }
 
     /**
@@ -175,4 +171,11 @@ public class DRepExpiryUtil {
     private record DormantPeriod(Optional<Long> endingSlot, int length) {
     }
 
+    public record DRepExpiryResult(
+            int expiry,
+            int lastInteractionEpoch,
+            int activityWindow,
+            int dormantCount,
+            int v9bonus) {
+    }
 }
