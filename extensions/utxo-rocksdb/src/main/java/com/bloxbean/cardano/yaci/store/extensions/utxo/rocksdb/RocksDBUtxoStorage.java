@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.event.EventListener;
 
 import java.util.*;
 
@@ -202,6 +201,18 @@ public class RocksDBUtxoStorage implements UtxoStorage {
             utxoCache.clear();
             spentUtxoCache.clear();
         }
+    }
+
+    @Override
+    public List<AddressUtxo> getUnspentBySlotGreaterThan(Long slot) {
+        //TODO
+        return List.of();
+    }
+
+    @Override
+    public List<TxInput> getSpentBySlotGreaterThan(Long slot) {
+        //TODO
+        return List.of();
     }
 
     private void handleCommitForSpentUtxos() {

@@ -54,4 +54,10 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private int pruningInterval = 86400;
+
+    @Builder.Default
+    private boolean contentAwareRollback = false;
+
+    @Builder.Default
+    private boolean currentBalanceEnabled = false;
 }

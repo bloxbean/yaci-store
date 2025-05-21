@@ -49,6 +49,17 @@ public class AccountStoreAutoConfigProperties {
          * Pruning interval in seconds
          */
         private int pruningInterval = 86400;
+
+        /**
+         * Enable content aware rollback
+         */
+        private boolean contentAwareRollback = false;
+
+        /**
+         * Enable current address balance and stake address balance in the current balance table.
+         * This should be enabled with contentAwareRollback option to calculate the current balance correctly during rollback.
+         */
+        private boolean currentBalanceEnabled = false;
     }
 
 }

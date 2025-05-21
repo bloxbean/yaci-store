@@ -45,6 +45,9 @@ public class AccountStoreAutoConfiguration {
         accountStoreProperties.setPruningBatchSize(properties.getAccount().getPruningBatchSize());
         accountStoreProperties.setPruningInterval(properties.getAccount().getPruningInterval());
 
+        accountStoreProperties.setContentAwareRollback(properties.getAccount().isContentAwareRollback());
+        accountStoreProperties.setCurrentBalanceEnabled(properties.getAccount().isCurrentBalanceEnabled());
+
         return accountStoreProperties;
     }
 }
