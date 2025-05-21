@@ -297,6 +297,16 @@ public class BlockFetchService implements BlockChainDataListener {
 
         cursorService.rollback(point.getSlot());
 
+        //Publish Pre-rollback event
+        PreRollbackEvent preRollbackEvent = PreRollbackEvent
+                .builder()
+                .rollbackTo(point)
+                .currentPoint(currentPoint)
+                .currentBlock(currentBlockNum)
+                .build();
+        log.info("Publishing pre-rollback event : " + preRollbackEvent);
+        publisher.publishEvent(preRollbackEvent);
+
         //Publish rollback event
         RollbackEvent rollbackEvent = RollbackEvent
                 .builder()

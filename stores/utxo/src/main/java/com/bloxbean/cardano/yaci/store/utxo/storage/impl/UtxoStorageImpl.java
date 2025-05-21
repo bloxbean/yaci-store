@@ -236,6 +236,28 @@ public class UtxoStorageImpl implements UtxoStorage {
         utxoCache.clear();
     }
 
+    @Override
+    public List<AddressUtxo> getUnspentBySlotGreaterThan(Long slot) {
+        var query = dsl
+                .select()
+                .from(ADDRESS_UTXO)
+                .where(ADDRESS_UTXO.SLOT.gt(slot))
+                .orderBy(ADDRESS_UTXO.SLOT.asc());
+
+        return query.fetch().into(AddressUtxo.class);
+    }
+
+    @Override
+    public List<TxInput> getSpentBySlotGreaterThan(Long slot) {
+        var query = dsl
+                .select()
+                .from(TX_INPUT)
+                .where(TX_INPUT.SPENT_AT_SLOT.gt(slot))
+                .orderBy(TX_INPUT.SPENT_AT_SLOT.asc());
+
+        return query.fetch().into(TxInput.class);
+    }
+
 /**   Remove this method after testing
     @EventListener
     @Transactional

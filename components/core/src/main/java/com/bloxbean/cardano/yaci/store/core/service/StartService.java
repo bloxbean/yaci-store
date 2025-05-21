@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
+import com.bloxbean.cardano.yaci.store.events.PreRollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreSyncEvent;
 import lombok.RequiredArgsConstructor;
@@ -124,6 +125,16 @@ public class StartService {
         //Send a rollback event to rollback data at and after this slot.
         //This is because, during start up the from block will be processed again (For BlockFetch).
         if (from.getSlot() > 0) {
+            //Publish pre-rollback event to clean data
+            PreRollbackEvent preRollbackEvent = PreRollbackEvent.builder()
+                    .rollbackTo(new Point(from.getSlot(), from.getHash()))
+                    .currentBlock(tip.getBlock())
+                    .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                    .build();
+            log.info("Publishing pre-rollback event to clean data after restart >>> " + preRollbackEvent);
+            publisher.publishEvent(preRollbackEvent);
+
+            //Publish rollback event to clean data
             RollbackEvent rollbackEvent = RollbackEvent.builder()
                     .rollbackTo(new Point(from.getSlot(), from.getHash()))
                     .currentBlock(tip.getBlock())

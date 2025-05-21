@@ -7,6 +7,7 @@ import org.springframework.data.util.Pair;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Storage for address balance and stake address balance
@@ -42,6 +43,14 @@ public interface AccountBalanceStorage {
      * @param addressBalances
      */
     void saveAddressBalances(List<AddressBalance> addressBalances);
+
+    /**
+     * Saves the current address balances to current address balance table.
+     *
+     * @param addressBalances a list of AddressBalance objects representing the current balances
+     *                        for various addresses and units.
+     */
+    void saveCurrentAddressBalances(List<AddressBalance> addressBalances);
 
     /**
      * Delete all address balances before the slot except the top one
@@ -122,6 +131,12 @@ public interface AccountBalanceStorage {
     void saveStakeAddressBalances(List<StakeAddressBalance> stakeBalances);
 
     /**
+     * Save current stake address balances to the current balance table
+     * @param stakeBalances
+     */
+    void saveCurrentStakeAddressBalances(List<StakeAddressBalance> stakeBalances);
+
+    /**
      * Delete all stake address balances before the slot except the top one
      * This is called to clean history data
      * <p></p>
@@ -162,4 +177,56 @@ public interface AccountBalanceStorage {
      */
     List<AddressBalance> getAddressesByAsset(String unit, int page, int count, Order sort);
 
+    /*******************************************************************************************
+     * The following methods are used for current address balance table refresh during rollback
+     *******************************************************************************************/
+
+    /**
+     * Retrieves a list of address balances where the slot is greater than the specified value. This is typically used
+     * to identify records that need to be deleted during a rollback operation.
+     *
+     * @param slot the slot value
+     * @return a list of AddressBalance objects that match the specified slot criteria.
+     */
+    List<AddressBalance> getAddressBalanceBySlotGreaterThan(Long slot);
+
+    /**
+     * Retrieves a list of stake address balances where the slot is greater than the specified value. This is typically used
+     * to identify records that need to be deleted during a rollback operation.
+     *
+     * @param slot the slot value
+     * @return a list of StakeAddressBalance objects that match the specified slot criteria.
+     */
+    List<StakeAddressBalance> getStakeAddressBalanceBySlotGreaterThan(Long slot);
+
+    /**
+     * Refreshes the current address balance for a given address and set of units at a specified slot.
+     * This is typically used during a rollback operation to ensure that the current balance is accurate.
+     * @param address
+     * @param units
+     * @param slot rollback slot
+     */
+    void refreshCurrentAddressBalance(String address, Set<String> units, Long slot);
+
+    /**
+     * Refreshes the current stake address balance for a given list of addresses at a specified slot.
+     * This is typically used during a rollback operation to ensure that the current balance is accurate.
+     * @param address
+     * @param slot rollback slot
+     */
+    void refreshCurrentStakeAddressBalance(List<String> address, Long slot);
+
+    /**
+     * Get current address balances for the given address from current balance table
+     * @param address
+     * @return List of AddressBalance
+     */
+    List<AddressBalance> getCurrentAddressBalance(String address);
+
+    /**
+     * Get current stake address balance for the given address from current balance table
+     * @param address
+     * @return StakeAddressBalance
+     */
+    Optional<StakeAddressBalance> getCurrentStakeAddressBalance(String address);
 }

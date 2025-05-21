@@ -15,7 +15,8 @@ import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.DSLContext;
+import org.jooq.*;
+import org.jooq.Record;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
@@ -24,16 +25,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.util.Pair;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.math.BigInteger;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
+import static org.jooq.impl.DSL.*;
 
 @Slf4j
 public class AccountBalanceStorageImpl implements AccountBalanceStorage {
@@ -146,6 +147,53 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     @Transactional
     @Override
+    public void saveCurrentAddressBalances(List<AddressBalance> addressBalances) {
+        LocalDateTime localDateTime = LocalDateTime.now();
+
+        List<AddressBalanceEntity> entities = addressBalances.stream().map(mapper::toAddressBalanceEntity)
+                .toList();
+
+        int batchSize = storeProperties.getWriteThreadDefaultBatchSize();
+
+        var addressBalanceRecords = entities.stream()
+                .map(addrBalance -> {
+                    var addressBalanceRec = dsl.newRecord(ADDRESS_BALANCE_CURRENT);
+                    addressBalanceRec.setAddress(addrBalance.getAddress());
+                    addressBalanceRec.setUnit(addrBalance.getUnit());
+                    addressBalanceRec.setQuantity(addrBalance.getQuantity());
+                    addressBalanceRec.setAddrFull(addrBalance.getAddrFull());
+                    addressBalanceRec.setSlot(addrBalance.getSlot());
+                    addressBalanceRec.setBlock(addrBalance.getBlockNumber());
+                    addressBalanceRec.setBlockTime(addrBalance.getBlockTime());
+                    addressBalanceRec.setEpoch(addrBalance.getEpoch());
+                    addressBalanceRec.setUpdateDatetime(localDateTime);
+                    return addressBalanceRec;
+                });
+
+        try {
+            dsl.loadInto(ADDRESS_BALANCE_CURRENT)
+                    .onDuplicateKeyUpdate()
+                    //.bulkAfter(batchSize)
+                    .batchAfter(batchSize)
+                    .commitAfter(batchSize)
+                    .loadRecords(addressBalanceRecords)
+                    .fields(ADDRESS_BALANCE_CURRENT.ADDRESS,
+                            ADDRESS_BALANCE_CURRENT.UNIT,
+                            ADDRESS_BALANCE_CURRENT.QUANTITY,
+                            ADDRESS_BALANCE_CURRENT.ADDR_FULL,
+                            ADDRESS_BALANCE_CURRENT.SLOT,
+                            ADDRESS_BALANCE_CURRENT.BLOCK,
+                            ADDRESS_BALANCE_CURRENT.BLOCK_TIME,
+                            ADDRESS_BALANCE_CURRENT.EPOCH,
+                            ADDRESS_BALANCE_CURRENT.UPDATE_DATETIME)
+                    .execute();
+        } catch (IOException e) {
+            log.error("Error while inserting address balance current records", e);
+        }
+    }
+
+    @Transactional
+    @Override
     public int deleteAddressBalanceBeforeSlotExceptTop(String address, String unit, long slot) {
         //Find the latest address balance before the slot and delete all address balances before that
         return addressBalanceRepository.findTopByAddressAndUnitAndSlotIsLessThanEqualOrderBySlotDesc(address, unit, slot)
@@ -231,7 +279,6 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
 
     private void saveStakeBalanceBatchJOOQ(List<StakeAddressBalanceEntity> stakeAddressBalances) {
         LocalDateTime localDateTime = LocalDateTime.now();
-
         var inserts = stakeAddressBalances.stream()
                         .map(stakeAddrBalance -> dsl.insertInto(STAKE_ADDRESS_BALANCE)
                                 .set(STAKE_ADDRESS_BALANCE.ADDRESS, stakeAddrBalance.getAddress())
@@ -250,6 +297,46 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                         ).toList();
 
         dsl.batch(inserts).execute();
+    }
+
+    @Transactional
+    @Override
+    public void saveCurrentStakeAddressBalances(List<StakeAddressBalance> stakeBalances) {
+        LocalDateTime localDateTime = LocalDateTime.now();
+
+        int batchSize = storeProperties.getWriteThreadDefaultBatchSize();
+
+        var stakeAddressBalanceRecords = stakeBalances.stream()
+                .map(stakeAddrBalance -> {
+                    var stakeAddressBalanceRec = dsl.newRecord(STAKE_ADDRESS_BALANCE_CURRENT);
+                    stakeAddressBalanceRec.setAddress(stakeAddrBalance.getAddress());
+                    stakeAddressBalanceRec.setQuantity(stakeAddrBalance.getQuantity());
+                    stakeAddressBalanceRec.setSlot(stakeAddrBalance.getSlot());
+                    stakeAddressBalanceRec.setBlock(stakeAddrBalance.getBlockNumber());
+                    stakeAddressBalanceRec.setBlockTime(stakeAddrBalance.getBlockTime());
+                    stakeAddressBalanceRec.setEpoch(stakeAddrBalance.getEpoch());
+                    stakeAddressBalanceRec.setUpdateDatetime(localDateTime);
+                    return stakeAddressBalanceRec;
+                });
+
+        try {
+            dsl.loadInto(STAKE_ADDRESS_BALANCE_CURRENT)
+                    .onDuplicateKeyUpdate()
+                    //.bulkAfter(batchSize)
+                    .batchAfter(batchSize)
+                    .commitAfter(batchSize)
+                    .loadRecords(stakeAddressBalanceRecords)
+                    .fields(STAKE_ADDRESS_BALANCE_CURRENT.ADDRESS,
+                            STAKE_ADDRESS_BALANCE_CURRENT.QUANTITY,
+                            STAKE_ADDRESS_BALANCE_CURRENT.SLOT,
+                            STAKE_ADDRESS_BALANCE_CURRENT.BLOCK,
+                            STAKE_ADDRESS_BALANCE_CURRENT.BLOCK_TIME,
+                            STAKE_ADDRESS_BALANCE_CURRENT.EPOCH,
+                            STAKE_ADDRESS_BALANCE_CURRENT.UPDATE_DATETIME)
+                    .execute();
+        } catch (IOException e) {
+            log.error("Error while inserting stake address balance current records", e);
+        }
     }
 
     @Transactional
@@ -331,6 +418,192 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
         stakeBalanceKeysToDeleteCache.clear();
 
         return totalCount;
+    }
+
+    @Transactional
+    @Override
+    public void refreshCurrentAddressBalance(String address, Set<String> units, Long slot) {
+        if (units == null || units.isEmpty()) {
+            log.warn("No units found for address: {}", address);
+            return;
+        }
+
+        List<String> unitList = new ArrayList<>(units);
+
+        List<List<String>> unitChunks = partition(unitList, 20);
+
+        for (List<String> unitChunk : unitChunks) {
+            rollbackForAddressUnits(address, unitChunk, slot);
+        }
+
+    }
+
+    private void rollbackForAddressUnits(String address, List<String> units, Long slot) {
+        // Table aliases
+        var ab = ADDRESS_BALANCE.as("ab");
+        var abc = ADDRESS_BALANCE_CURRENT;
+        var ranked = name("ranked");
+        var latest = name("latest_balances");
+
+        // Step 1: CTE for latest balances with row_number()
+        var latestBalancesQuery = dsl
+                .select()
+                .from(
+                        select(ab.fields())
+                                .select(rowNumber().over()
+                                        .partitionBy(ab.ADDRESS, ab.UNIT)
+                                        .orderBy(ab.SLOT.desc())
+                                        .as("rn"))
+                                .from(ab)
+                                .where(ab.ADDRESS.eq(address))
+                                .and(ab.UNIT.in(units))
+                                .and(ab.SLOT.le(slot))
+                                .asTable(ranked)
+                )
+                .where(field("rn", Integer.class).eq(1));
+                //.asTable(latest);
+
+        Table<Record> latestTable = latestBalancesQuery.asTable(latest);
+        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
+
+        // Step 2: Delete existing entries
+        dsl.deleteFrom(abc)
+                .where(abc.ADDRESS.eq(address))
+                .and(abc.UNIT.in(units))
+                .execute();
+
+        // Step 3: Upsert back into current balance table
+        dsl.with(latestBalancesCte)
+                .insertInto(abc)
+                .columns(
+                        abc.ADDRESS,
+                        abc.UNIT,
+                        abc.QUANTITY,
+                        abc.ADDR_FULL,
+                        abc.SLOT,
+                        abc.BLOCK,
+                        abc.BLOCK_TIME,
+                        abc.EPOCH,
+                        abc.UPDATE_DATETIME
+                )
+                .select(
+                        select(
+                                latestTable.field("address", String.class),
+                                latestTable.field("unit", String.class),
+                                latestTable.field("quantity", BigInteger.class),
+                                latestTable.field("addr_full", String.class),
+                                latestTable.field("slot", Long.class),
+                                latestTable.field("block", Long.class),
+                                latestTable.field("block_time", Long.class),
+                                latestTable.field("epoch", Integer.class),
+                                latestTable.field("update_datetime", LocalDateTime.class)
+                        ).from(latest)
+                )
+                .execute();
+    }
+
+    @Transactional
+    @Override
+    public void refreshCurrentStakeAddressBalance(List<String> stakeAddresses, Long slot) {
+        List<List<String>> addressChunks = partition(stakeAddresses, 20);
+
+        for (List<String> chunk : addressChunks) {
+            rollbackForStakeAddresses(chunk, slot);
+        }
+    }
+
+    private void rollbackForStakeAddresses(List<String> addresses, Long slot) {
+        var sab = STAKE_ADDRESS_BALANCE.as("sab");
+        var sabc = STAKE_ADDRESS_BALANCE_CURRENT;
+        var ranked = name("ranked");
+        var latest = name("latest_balances");
+
+        // Step 1: Build CTE for latest balances
+        var latestBalancesQuery = dsl
+                .select()
+                .from(
+                        select(sab.fields())
+                                .select(
+                                        rowNumber().over()
+                                                .partitionBy(sab.ADDRESS)
+                                                .orderBy(sab.SLOT.desc())
+                                                .as("rn")
+                                )
+                                .from(sab)
+                                .where(sab.ADDRESS.in(addresses))
+                                .and(sab.SLOT.le(slot))
+                                .asTable(ranked)
+                )
+                .where(field("rn", Integer.class).eq(1));
+                //.asTable(latest);
+
+        Table<Record> latestTable = latestBalancesQuery.asTable(latest);
+        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
+
+
+        // Step 2: Delete old current records for addresses
+        dsl.deleteFrom(sabc)
+                .where(sabc.ADDRESS.in(addresses))
+                .execute();
+
+        // Step 3: Insert or update latest balance
+        dsl.with(latestBalancesCte)
+                .insertInto(sabc)
+                .columns(
+                        sabc.ADDRESS,
+                        sabc.QUANTITY,
+                        sabc.SLOT,
+                        sabc.BLOCK,
+                        sabc.BLOCK_TIME,
+                        sabc.EPOCH,
+                        sabc.UPDATE_DATETIME
+                )
+                .select(
+                        select(
+                                latestTable.field("address", String.class),
+                                latestTable.field("quantity", BigInteger.class),
+                                latestTable.field("slot", Long.class),
+                                latestTable.field("block", Long.class),
+                                latestTable.field("block_time", Long.class),
+                                latestTable.field("epoch", Integer.class),
+                                latestTable.field("update_datetime", LocalDateTime.class)
+                        ).from(latest)
+                )
+                .execute();
+    }
+
+    @Override
+    public List<AddressBalance> getAddressBalanceBySlotGreaterThan(Long slot) {
+        return dsl.select()
+                .from(ADDRESS_BALANCE)
+                .where(ADDRESS_BALANCE.SLOT.gt(slot))
+                .orderBy(ADDRESS_BALANCE.SLOT.asc())
+                .fetchInto(AddressBalance.class);
+    }
+
+    @Override
+    public List<StakeAddressBalance> getStakeAddressBalanceBySlotGreaterThan(Long slot) {
+        return dsl.select()
+                .from(STAKE_ADDRESS_BALANCE)
+                .where(STAKE_ADDRESS_BALANCE.SLOT.gt(slot))
+                .orderBy(STAKE_ADDRESS_BALANCE.SLOT.asc())
+                .fetchInto(StakeAddressBalance.class);
+    }
+
+    @Override
+    public List<AddressBalance> getCurrentAddressBalance(String address) {
+        return dsl.select()
+                .from(ADDRESS_BALANCE_CURRENT)
+                .where(ADDRESS_BALANCE_CURRENT.ADDRESS.eq(address))
+                .fetchInto(AddressBalance.class);
+    }
+
+    @Override
+    public Optional<StakeAddressBalance> getCurrentStakeAddressBalance(String address) {
+        return dsl.select()
+                .from(STAKE_ADDRESS_BALANCE_CURRENT)
+                .where(STAKE_ADDRESS_BALANCE_CURRENT.ADDRESS.eq(address))
+                .fetchOptionalInto(StakeAddressBalance.class);
     }
 
     private int getPartitionSize(int totalSize) {

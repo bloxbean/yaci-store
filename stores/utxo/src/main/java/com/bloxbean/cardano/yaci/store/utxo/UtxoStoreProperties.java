@@ -30,4 +30,7 @@ public class UtxoStoreProperties {
 
     @Builder.Default
     private int pruningSafeBlocks = 2160;
+
+    @Builder.Default
+    private boolean contentAwareRollback = false;
 }
