@@ -10,5 +10,5 @@ import java.util.Set;
 @Repository
 public interface GovEpochActivityRepository extends JpaRepository<GovEpochActivityEntity, Integer>  {
     @Query("SELECT epoch FROM GovEpochActivityEntity WHERE dormant = true AND epoch >= :from AND epoch <= :to")
-    Set<Integer> findDormantEpochsByEpochBetween(Integer from, Integer to);
+    Set<Integer> findDormantEpochsInEpochRange(Integer from, Integer to);
 }

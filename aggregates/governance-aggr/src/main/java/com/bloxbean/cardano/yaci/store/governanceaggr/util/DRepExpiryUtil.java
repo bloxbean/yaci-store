@@ -10,23 +10,31 @@ import java.util.Set;
 public class DRepExpiryUtil {
 
     /**
-     * Calculates the expiry epoch for a DRep.
+     * Calculates the expiry epoch for a DRep in epoch boundary based on registration and activity history.
      *
-     * <p>The expiry epoch is computed using:</p>
+     * <p>This method determines when a DRep's registration should expire, according to
+     * Conway-era governance rules. The expiry calculation takes into account:</p>
+     *
      * <ul>
-     *   <li>The latest interaction or registration epoch.</li>
-     *   <li>The activity window (dRepActivity) from registration or interaction.</li>
-     *   <li>The number of dormant epochs since the last interaction.</li>
-     *   <li>And a bonus period if protocol version is 9 and the DRep hasn't interacted since registration.</li>
+     *   <li><b>Epoch of last relevant activity</b> — either the last interaction (vote/update) or registration epoch if no interaction has occurred.</li>
+     *   <li><b>Activity window (dRepActivity)</b> — the number of active epochs granted after each interaction or registration.</li>
+     *   <li><b>Number of dormant epochs</b> — epochs with no active proposals, counted from the last activity to the current epoch.</li>
+     *   <li><b>Protocol version bonus</b> — for protocol version 9, an additional bonus period may be granted.</li>
      * </ul>
      *
-     * @param registrationInfo          The DRep registration details.
-     * @param lastDRepInteraction       The last interaction info, or {@code null} if none.
-     * @param dormantEpochs             Set of dormant epochs (no active proposals).
-     * @param proposalsUpToRegistration All proposals up to DRep registration epoch.
+     * <p>The final expiry epoch is computed as:</p>
+     * <pre>
+     *     expiry = baseEpoch + dRepActivity + dormantCount [+ v9Bonus]
+     * </pre>
+     * Where <code>baseEpoch</code> is the last interaction epoch or registration epoch.
+     *
+     * @param registrationInfo          Information about the DRep registration, including epoch, slot, and drepActivity.
+     * @param lastDRepInteraction       Information about the last DRep interaction (vote or update), or {@code null} if none occurred.
+     * @param dormantEpochs             A set of dormant epochs (epochs with no active proposals).
+     * @param proposalsUpToRegistration List of all proposal submissions from the start of Conway era up to the DRep's registration epoch.
      * @param eraFirstEpoch             The first epoch of the Conway era.
-     * @param currentEpoch              The current epoch.
-     * @return The computed expiry epoch.
+     * @param evaluatedEpoch            The epoch that just ended
+     * @return A {@link DRepExpiryResult} containing the calculated expiry epoch and contributing factors.
      */
     public static DRepExpiryResult calculateDRepExpiry(
             DRepRegistrationInfo registrationInfo,
@@ -34,42 +42,49 @@ public class DRepExpiryUtil {
             Set<Integer> dormantEpochs,
             List<ProposalSubmissionInfo> proposalsUpToRegistration,
             int eraFirstEpoch,
-            int currentEpoch
+            int evaluatedEpoch
     ) {
-        int lastInteractionEpoch = lastDRepInteraction != null
+        boolean hasPostRegistrationInteraction = lastDRepInteraction != null;
+
+        // Choose the epoch to be used as the base for expiry calculation
+        int expiryBaseEpoch = hasPostRegistrationInteraction
                 ? lastDRepInteraction.epoch()
                 : registrationInfo.epoch();
 
         int dormantCount = (int) dormantEpochs.stream()
-                .filter(e -> e > lastInteractionEpoch && e <= currentEpoch)
+                .filter(e -> e > expiryBaseEpoch && e <= evaluatedEpoch)
                 .count();
 
-        int activityWindow = lastDRepInteraction != null
-                ? lastDRepInteraction.dRepActivity()
-                : registrationInfo.dRepActivity();
-        int baseExpiry = lastInteractionEpoch + activityWindow + dormantCount;
+        int activityWindow = lastDRepInteraction != null ? lastDRepInteraction.dRepActivity() : registrationInfo.dRepActivity();
 
+        // Calculate the base expiry without applying protocol v9 bonus
+        int baseExpiry = expiryBaseEpoch + activityWindow + dormantCount;
+
+        // For registration with protocol version >= 10, or if the DRep has interacted after registration, no v9 bonus is applied
         if (registrationInfo.protocolMajorVersion() >= 10 || lastDRepInteraction != null) {
-            return new DRepExpiryResult(baseExpiry, lastInteractionEpoch, activityWindow, dormantCount, 0);
+            return new DRepExpiryResult(baseExpiry, expiryBaseEpoch, activityWindow, dormantCount, 0);
         }
 
+        // For protocol version 9 and no post-registration interaction, calculate the bonus expiry window
         int v9bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
-        return new DRepExpiryResult(baseExpiry + v9bonus, lastInteractionEpoch, activityWindow, dormantCount, v9bonus);
+
+        return new DRepExpiryResult(baseExpiry + v9bonus, expiryBaseEpoch, activityWindow, dormantCount, v9bonus);
     }
 
     /**
-     * Computes the bonus epochs for DReps in protocol version 9
+     * Computes the additional bonus epochs added to the expiry calculation
+     * for DReps registered under protocol version 9.
      *
-     * <p>The bonus is granted only if:</p>
+     * <p>This bonus only applies if:</p>
      * <ul>
-     *   <li>The DRep has not interacted after registration.</li>
-     *   <li>And a dormant period can be identified prior to or during registration.</li>
+     *   <li>The DRep has not performed any interaction (e.g., vote or update) after registration.</li>
+     *   <li>A dormant period (no active proposals) can be identified before or during registration.</li>
      * </ul>
      *
-     * <p>The bonus can either be:</p>
+     * <p>The bonus is determined based on the registration timing:</p>
      * <ul>
-     *   <li>Full bonus: {@code registeredEpoch - eraFirstEpoch + 1} if registered before any proposal.</li>
-     *   <li>Partial bonus: Length of last dormant period if registered within or before it ended.</li>
+     *   <li>If the DRep registered before any proposal was submitted, the bonus equals {@code registeredEpoch - eraFirstEpoch + 1}.</li>
+     *   <li>If the DRep registered during or before the end of a dormant period, the bonus equals the length of that dormant period.</li>
      * </ul>
      *
      * @param registrationInfo          The DRep registration info.
@@ -85,6 +100,7 @@ public class DRepExpiryUtil {
         int registeredEpoch = registrationInfo.epoch();
         long registeredSlot = registrationInfo.slot();
 
+        // Case 1: No proposals at all → grant bonus equal to all epochs since start of Conway era
         if (proposalsUpToRegistration.isEmpty()) {
             return registeredEpoch - eraFirstEpoch + 1;
         }
@@ -94,12 +110,14 @@ public class DRepExpiryUtil {
                         .thenComparingLong(ProposalSubmissionInfo::slot))
                 .get();
 
+        // Case 2: Registered before the first proposal → grant full bonus
         if (registeredEpoch < firstProposal.epoch()
                 || (registeredEpoch == firstProposal.epoch()
                 && registeredSlot <= firstProposal.slot())) {
             return registeredEpoch - eraFirstEpoch + 1;
         }
 
+        // Otherwise, try to find a dormant period prior to or overlapping registration
         List<ProposalSubmissionInfo> sortedProposals = proposalsUpToRegistration.stream()
                 .sorted(Comparator
                         .comparingInt(ProposalSubmissionInfo::epoch)
@@ -107,48 +125,59 @@ public class DRepExpiryUtil {
                         .reversed())
                 .toList();
 
+        // Try to find the last dormant period before or overlapping registration
         DormantPeriod dormantPeriod = findLastDormantPeriod(sortedProposals, registeredEpoch);
 
+        // If no dormant period found → no bonus applies
         if (dormantPeriod == null) return 0;
 
+        // If the dormant period has no defined ending slot → it's considered ongoing at the time of registration
         if (dormantPeriod.endingSlot().isEmpty()) {
             return dormantPeriod.length();
-        } else {
-            return registeredSlot <= dormantPeriod.endingSlot().get() ? dormantPeriod.length() : 0;
         }
+
+        // Otherwise, only apply the bonus if the DRep registered before or at the end of the dormant period
+        return registeredSlot <= dormantPeriod.endingSlot().get() ? dormantPeriod.length() : 0;
     }
 
     /**
-     * Finds the last dormant period before or at the registration epoch.
+     * Finds the most recent dormant period that occurred before or overlapped
+     * with the DRep's registration epoch.
      *
-     * @param sortedProposalsDesc Proposals sorted descending by epoch and slot.
-     * @param registeredEpoch     The epoch of registration.
+     * @param proposals List of proposals
+     * @param registrationEpoch   The epoch of registration.
      * @return The last dormant period or {@code null} if none.
      */
-    private static DormantPeriod findLastDormantPeriod(
-            List<ProposalSubmissionInfo> sortedProposalsDesc,
-            int registeredEpoch) {
+    private static DormantPeriod findLastDormantPeriod(List<ProposalSubmissionInfo> proposals, int registrationEpoch) {
+        int epoch = registrationEpoch;
+        Long slot = null;
 
-        int previousEpoch = registeredEpoch;
-        Long previousSlot = null;
-
-        for (ProposalSubmissionInfo proposal : sortedProposalsDesc) {
-            int gap = previousEpoch - proposal.epoch() - proposal.govActionLifeTime();
+        for (ProposalSubmissionInfo proposal : proposals) {
+            // If the gap between proposal expiry and current epoch > 0 → dormant period detected
+            int gap = epoch - proposal.epoch() - proposal.govActionLifeTime();
             if (gap > 0) {
-                if (previousSlot == null) {
+                if (slot == null) {
                     return new DormantPeriod(Optional.empty(), gap);
                 } else {
-                    return new DormantPeriod(Optional.of(previousSlot), gap);
+                    return new DormantPeriod(Optional.of(slot), gap);
                 }
             }
-            previousEpoch = proposal.epoch();
-            previousSlot = proposal.slot();
+
+            epoch = proposal.epoch();
+            slot = proposal.slot();
         }
 
         return null;
     }
 
-
+    /**
+     * Checks whether all epochs in a given range are dormant.
+     *
+     * @param fromEpoch     The starting epoch (inclusive).
+     * @param toEpoch       The ending epoch (inclusive).
+     * @param dormantEpochs A set of epochs considered dormant (no active proposals).
+     * @return {@code true} if all epochs in the range are dormant; {@code false} otherwise.
+     */
     public static boolean isEpochRangeDormant(int fromEpoch, int toEpoch, Set<Integer> dormantEpochs) {
         for (int i = fromEpoch; i <= toEpoch; i++) {
             if (!dormantEpochs.contains(i)) {
@@ -159,23 +188,49 @@ public class DRepExpiryUtil {
         return true;
     }
 
+    /**
+     * Contains metadata about a DRep's registration on the Cardano blockchain.
+     *
+     * @param slot                  The slot at which the registration transaction was included.
+     * @param epoch                 The epoch corresponding to the registration slot.
+     * @param dRepActivity          The {@code dRepActivity} value from protocol parameters at the time of registration.
+     * @param protocolMajorVersion  The major protocol version at the time of registration.
+     */
     public record DRepRegistrationInfo(long slot, int epoch, int dRepActivity, int protocolMajorVersion) {
     }
 
+    /**
+     * Represents the interaction performed by a DRep
+     * (voting or update).
+     *
+     * @param epoch         The epoch in which the interaction occurred.
+     * @param dRepActivity  The {@code dRepActivity} value from protocol parameters at the time of registration.
+     */
     public record DRepInteractionInfo(int epoch, int dRepActivity) {
     }
-
+    /**
+     * Represents a governance proposal submission
+     *
+     * @param slot               The slot at which the proposal was submitted.
+     * @param epoch              The epoch in which the proposal was submitted.
+     * @param govActionLifeTime  The {@code govActionLifeTime} value from protocol parameters, the number of epochs the proposal is considered active.
+     */
     public record ProposalSubmissionInfo(long slot, int epoch, int govActionLifeTime) {
     }
 
     private record DormantPeriod(Optional<Long> endingSlot, int length) {
     }
 
-    public record DRepExpiryResult(
-            int expiry,
-            int lastInteractionEpoch,
-            int activityWindow,
-            int dormantCount,
-            int v9bonus) {
+    /**
+     * The result of calculating a DRep's expiry epoch
+     *
+     * @param expiry               The final computed expiry epoch — the epoch at which the DRep becomes inactive.
+     @param lastDRepActionEpoch    The last dRep action epoch
+      *                            This is either the epoch of the last interaction or the registration epoch if no interaction occurred.
+     * @param activityWindow       The {@code dRepActivity} value from protocol parameters in the last drep action epoch
+     * @param dormantCount         The number of dormant epochs between the last drep action epoch and the evaluated epoch.
+     * @param v9bonus              Extra epochs added to expiry for DReps registered under protocol version 9,
+     */
+    public record DRepExpiryResult(int expiry, int lastDRepActionEpoch, int activityWindow, int dormantCount, int v9bonus) {
     }
 }
