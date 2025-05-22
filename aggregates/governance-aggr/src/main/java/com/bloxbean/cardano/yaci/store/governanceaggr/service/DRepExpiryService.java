@@ -58,7 +58,7 @@ public class DRepExpiryService {
 
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = findRegistrationInfos(targetDReps, leftBoundaryEpoch);
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = findLastInteractions(targetDReps, leftBoundaryEpoch);
-        Set<Integer> dormantEpochsUntilLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsByEpochBetween(firstEpochNoInConway, leftBoundaryEpoch);
+        Set<Integer> dormantEpochsUntilLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConway, leftBoundaryEpoch);
 
         Integer maxDRepRegistrationEpoch = registrationMap.values().stream().map(DRepExpiryUtil.DRepRegistrationInfo::epoch)
                 .sorted(Integer::compareTo).toList().getLast();
@@ -118,7 +118,8 @@ public class DRepExpiryService {
             int expiry = dRepExpiryResult.expiry();
             int activeUntil = expiry;
 
-            // if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), then set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+            /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), then set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+             the active_until value is only updated after the dormant period ends. */
             if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal) {
                 activeUntil = expiry - dormantEpochCount;
             }
@@ -133,9 +134,10 @@ public class DRepExpiryService {
             }
 
             if (activeUntil < epoch) {
-                // the DRep is being inactive, so we recalculate activeUntil
+                // the DRep is being inactive, dormant epochs do not affect the active_until value when a DRep is in an inactive state. we need recalculate activeUntil
+                // TODO: should we update for this case in DRepExpiryUtil
                 activeUntil = recalculateInactiveDRepActiveUntil(
-                        dRepExpiryResult.lastInteractionEpoch(),
+                        dRepExpiryResult.lastDRepActionEpoch(),
                         dRepExpiryResult.activityWindow(),
                         dRepExpiryResult.v9bonus(),
                         leftBoundaryEpoch,
@@ -316,23 +318,24 @@ public class DRepExpiryService {
                 ));
     }
 
+    /* Recalculate the final active_until value of the DRep before it transitions to the inactive state. */
     private int recalculateInactiveDRepActiveUntil(
-            int lastInteractionEpoch,
+            int lastDRepActionEpoch, // registration, updating or voting
             int activityWindow,
             int v9Bonus,
             int upperBoundEpoch,
             Set<Integer> dormantEpochs) {
 
-        int activeEpochCnt = 0; // count non-dormant epochs
+        int nonDormantEpochCnt = 0; // count non-dormant epochs
         int targetCount = activityWindow + v9Bonus;
 
-        for (int i = lastInteractionEpoch + 1; i <= upperBoundEpoch; i++) {
-            if (!dormantEpochs.contains(i)) {
-                activeEpochCnt++;
+        for (int epoch = lastDRepActionEpoch + 1; epoch <= upperBoundEpoch; epoch++) {
+            if (!dormantEpochs.contains(epoch)) {
+                nonDormantEpochCnt++;
             }
 
-            if (activeEpochCnt == targetCount) {
-                return i;
+            if (nonDormantEpochCnt == targetCount) {
+                return epoch;
             }
         }
 

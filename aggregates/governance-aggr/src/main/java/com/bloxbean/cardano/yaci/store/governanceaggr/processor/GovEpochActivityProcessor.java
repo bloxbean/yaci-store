@@ -35,6 +35,7 @@ public class GovEpochActivityProcessor {
     @EventListener
     @Transactional
     public void handleProposalStatusCapturedEvent(ProposalStatusCapturedEvent event) {
+        // Handle the logic after the proposal status evaluation is completed
         int epoch = event.getEpoch();
         int prevEpoch = event.getEpoch() - 1;
 
@@ -45,7 +46,7 @@ public class GovEpochActivityProcessor {
         jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
                 new MapSqlParameterSource().addValue("epoch", epoch));
 
-        // first epoch in Conway era
+        // first epoch in Conway era, it will be a dormant epoch
         if (eraService.getEraForEpoch(prevEpoch).getValue() == Era.Babbage.getValue()
                 && eraService.getEraForEpoch(epoch).getValue() == Era.Conway.getValue()) {
             govEpochActivityService.saveGovEpochActivity(epoch, Boolean.TRUE, 1);
@@ -61,11 +62,20 @@ public class GovEpochActivityProcessor {
         Optional<GovEpochActivityEntity> prevGovEpochActivityEntity =
                 govEpochActivityService.getGovEpochActivity(prevEpoch);
 
-        Integer currentDormantEpochCount = prevGovEpochActivityEntity
-                .map(prevGovEpochActivity -> (prevGovEpochActivity.getDormant().equals(Boolean.TRUE) && isCurrentEpochDormantEpoch)
-                        ? prevGovEpochActivity.getDormantEpochCount() + 1
-                        : (isCurrentEpochDormantEpoch ? 1 : 0))
-                .orElse(isCurrentEpochDormantEpoch ? 1 : 0);
+        int currentDormantEpochCount;
+
+        if (isCurrentEpochDormantEpoch) {
+            if (prevGovEpochActivityEntity.isPresent() && prevGovEpochActivityEntity.get().getDormant()) {
+                // Both previous and current epochs are dormant → increment the count
+                currentDormantEpochCount = prevGovEpochActivityEntity.get().getDormantEpochCount() + 1;
+            } else {
+                // Current epoch is dormant, but previous wasn't (or no data) → start from 1
+                currentDormantEpochCount = 1;
+            }
+        } else {
+            // Current epoch is not dormant → reset count to 0
+            currentDormantEpochCount = 0;
+        }
 
         govEpochActivityService.saveGovEpochActivity(epoch, isCurrentEpochDormantEpoch, currentDormantEpochCount);
     }
