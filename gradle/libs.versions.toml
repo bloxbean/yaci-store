@@ -32,3 +32,6 @@ commons-csv="org.apache.commons:commons-csv:1.14.0"
 assertj-core="org.assertj:assertj-core:3.25.1"
 rest-assured="io.rest-assured:rest-assured:5.5.1"
 awaitility="org.awaitility:awaitility:4.3.0"
+
+mvel="org.mvel:mvel2:2.5.2.Final"
+xstream="com.thoughtworks.xstream:xstream:1.4.21"

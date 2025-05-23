@@ -1,9 +1,14 @@
 package com.bloxbean.cardano.yaci.store.common.config;
 
+import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -111,4 +116,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int n2cPoolMaxIdle = 5;
     @Builder.Default
     private int n2cPoolMaxWaitInMillis = 10000;
+
+    private boolean pluginsEnabled = true;
+    private Map<String, List<PluginDef>> filters = new HashMap<>();
+    private Map<String, List<PluginDef>> preActions = new HashMap<>();
+    private Map<String, List<PluginDef>> postActions = new HashMap<>();
+    private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
 }

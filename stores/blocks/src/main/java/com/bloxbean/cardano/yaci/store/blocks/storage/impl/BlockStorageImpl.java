@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class BlockStorageImpl implements BlockStorage {
+    private final static String FILTER_BLOCK_SAVE = "block.save";
     private final BlockRepository blockRepository;
     private final BlockMapper blockDetailsMapper;
 
@@ -36,6 +38,7 @@ public class BlockStorageImpl implements BlockStorage {
     }
 
     @Override
+    @Plugin(key = FILTER_BLOCK_SAVE)
     public void save(Block block) {
         BlockEntity blockEntity = blockDetailsMapper.toBlockEntity(block);
         blockRepository.save(blockEntity);

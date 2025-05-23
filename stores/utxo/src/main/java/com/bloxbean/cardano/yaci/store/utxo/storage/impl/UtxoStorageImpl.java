@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
@@ -30,6 +31,8 @@ import static org.jooq.impl.DSL.row;
 
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
+    private static final String FILTER_UNSPENT = "utxo.unspent.save";
+    private static final String FILTER_SPENT = "utxo.spent.save";
 
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
@@ -157,6 +160,7 @@ public class UtxoStorageImpl implements UtxoStorage {
 
     @Override
     @Transactional
+    @Plugin(key = FILTER_UNSPENT)
     public void saveUnspent(List<AddressUtxo> addressUtxoList) {
         List<AddressUtxoEntity> addressUtxoEntities = addressUtxoList.stream()
                 .map(mapper::toAddressUtxoEntity)
@@ -212,6 +216,7 @@ public class UtxoStorageImpl implements UtxoStorage {
 
     @Override
     @Transactional
+    @Plugin(key = FILTER_SPENT)
     public void saveSpent(List<TxInput> txInputs) {
         if (txInputs == null || txInputs.isEmpty())
             return;

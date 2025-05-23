@@ -1,0 +1,51 @@
+store:
+  plugins:
+    enabled: true
+#    filters:
+#      metadata.save:
+#        - name: Specific Metadata
+#          type: mvel
+#          expression: |
+#            label == '721' || label =='674'
+#      block.save:
+#        - name: Block size > 16384
+#          type: spel
+#          expression: |
+#            blockBodySize > 16384
+
+#    pre-actions:
+#      utxo.unspent.save:
+#        - name: Specific Address
+#          type: mvel
+#          script:
+#            file: ./config/scripts/utxo.mvel
+#            function: update_addr
+
+#    post-actions:
+#      utxo.unspent.save:
+#        - name: Specific Address2
+#          type: mvel
+#          inline-script: |
+#            for (item : items) {
+#
+#            }
+
+#    event-handlers:
+#      AddressUtxoEvent:
+#        - name: Handle AddressUtxoEvent
+#          type: mvel
+#          script:
+#            file: ./config/scripts/utxo.mvel
+#            function: handle_event
+#      TxMetadataEvent:
+#        - name: Handle MetadataEvent
+#          type: mvel
+#          script:
+#            file: ./config/scripts/metadata.mvel
+#            function: handle_metadata
+#      RollbackEvent:
+#        - name: Handle RollbackEvent
+#          type: mvel
+#          script:
+#            file: ./config/scripts/utxo.mvel
+#            function: handle_rollback

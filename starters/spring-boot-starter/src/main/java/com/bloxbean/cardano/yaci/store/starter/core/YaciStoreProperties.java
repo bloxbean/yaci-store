@@ -1,8 +1,13 @@
 package com.bloxbean.cardano.yaci.store.starter.core;
 
+import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -18,6 +23,8 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+
+    private Plugins plugins = new Plugins();
 
     @Getter
     @Setter
@@ -101,5 +108,15 @@ public class YaciStoreProperties {
         private int writeThreadDefaultBatchSize = 1000;
         private int jooqWriteBatchSize = 3000;
         private int writeThreadCount = 5;
+    }
+
+    @Getter
+    @Setter
+    public static final class Plugins {
+        private boolean enabled = true;
+        private Map<String, List<PluginDef>> filters = new HashMap<>();
+        private Map<String, List<PluginDef>> preActions = new HashMap<>();
+        private Map<String, List<PluginDef>> postActions = new HashMap<>();
+        private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
     }
 }

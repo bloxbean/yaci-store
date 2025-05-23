@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
@@ -17,11 +18,14 @@ import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTIO
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionWitnessStorageImpl implements TransactionWitnessStorage {
+    private final static String FILTER_TRANSACTION_WITNESS_SAVE = "transaction.witness.save";
+
     private final TxnWitnessRepository txnWitnessRepository;
     private final TxnMapper mapper;
     private final DSLContext dsl;
 
     @Override
+    @Plugin(key = FILTER_TRANSACTION_WITNESS_SAVE)
     public void saveAll(List<TxnWitness> txnWitnesses) {
         List<TxnWitnessEntity> txnWitnessEntities = txnWitnesses.stream().map(mapper::toTxnWitnessEntity).toList();
         txnWitnessRepository.saveAll(txnWitnessEntities);

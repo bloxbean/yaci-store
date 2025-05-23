@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRetirement;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorage;
@@ -15,11 +16,15 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class PoolCertificateStorageImpl implements PoolCertificateStorage {
+    private final static String FILTER_POOL_REGISTRATION_SAVE = "staking.pool_registration.save";
+    private final static String FILTER_POOL_RETIREMENT_SAVE = "staking.pool_retirement.save";
+
     private final PoolRegistrationRepository poolRegistrationRepository;
     private final PoolRetirementRepository poolRetirementRepository;
     private final PoolMapper mapper;
 
     @Override
+    @Plugin(key = FILTER_POOL_REGISTRATION_SAVE)
     public void savePoolRegistrations(List<PoolRegistration> poolRegistrations) {
         List<PoolRegistrationEnity> poolRegistrationEnities = poolRegistrations.stream()
                 .map(mapper::toPoolRegistrationEntity)
@@ -29,6 +34,7 @@ public class PoolCertificateStorageImpl implements PoolCertificateStorage {
     }
 
     @Override
+    @Plugin(key = FILTER_POOL_RETIREMENT_SAVE)
     public void savePoolRetirements(List<PoolRetirement> poolRetirements) {
         List<PoolRetirementEntity> poolRetirementEntities = poolRetirements.stream()
                 .map(mapper::toPoolRetirementEntity)

@@ -3,6 +3,7 @@ dependencies {
     api project(":components:events")
     api project(":components:core")
     api project(":components:client")
+    api project(":components:plugin")
 }
 
 publishing {
