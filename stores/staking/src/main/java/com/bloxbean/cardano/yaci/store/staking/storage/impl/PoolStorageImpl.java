@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
@@ -13,11 +14,13 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class PoolStorageImpl implements PoolStorage {
+    private final static String FILTER_POOL_SAVE = "staking.pool.save";
 
     private final PoolStatusRepository poolStatusRepository;
     private final PoolMapper poolMapper;
 
     @Override
+    @Plugin(key = FILTER_POOL_SAVE)
     public void save(List<Pool> poolStatuses) {
         if (poolStatuses == null || poolStatuses.isEmpty())
             return;

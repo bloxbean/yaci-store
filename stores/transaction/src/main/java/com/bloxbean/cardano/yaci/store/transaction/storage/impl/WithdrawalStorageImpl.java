@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Withdrawal;
 import com.bloxbean.cardano.yaci.store.transaction.storage.WithdrawalStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
@@ -11,10 +12,13 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class WithdrawalStorageImpl implements WithdrawalStorage {
+    private final static String FILTER_TRANSACTION_WITHDRAWAL_SAVE = "transaction.withdrawal.save";
+
     private final WithdrawalRepository withdrawalRepository;
     private final TxnMapper mapper;
 
     @Override
+    @Plugin(key = FILTER_TRANSACTION_WITHDRAWAL_SAVE)
     public void save(List<Withdrawal> withdrawals) {
         withdrawalRepository.saveAll(withdrawals.stream()
                 .map(mapper::toWithdrawalEntity).collect(Collectors.toList()));
