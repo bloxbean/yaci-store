@@ -94,7 +94,7 @@ public class DRepExpiryService {
                             .filter(p -> p.epoch() <= dRepRegistration.epoch())
                             .toList();
 
-            DRepExpiryUtil.DRepExpiryResult dRepExpiryResult = DRepExpiryUtil.calculateDRepExpiry(
+            int expiry = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
                     dormantEpochsUntilLeftBoundaryEpoch,
@@ -115,7 +115,6 @@ public class DRepExpiryService {
                 }
             }
 
-            int expiry = dRepExpiryResult.expiry();
             int activeUntil = expiry;
 
             /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), then set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
@@ -136,10 +135,14 @@ public class DRepExpiryService {
             if (activeUntil < epoch) {
                 // the DRep is being inactive, dormant epochs do not affect the active_until value when a DRep is in an inactive state. we need recalculate activeUntil
                 // TODO: should we update for this case in DRepExpiryUtil
+                int lastDRepActionEpoch = dRepLastInteraction == null ? dRepRegistration.epoch() : dRepLastInteraction.epoch();
+                int dRepActivity = dRepLastInteraction == null ? dRepRegistration.dRepActivity() : dRepLastInteraction.dRepActivity();
+                int v9Bonus = dRepLastInteraction == null ? DRepExpiryUtil.computeV9Bonus(dRepRegistration, proposalsUpToRegistration, firstEpochNoInConway) : 0;
+
                 activeUntil = recalculateInactiveDRepActiveUntil(
-                        dRepExpiryResult.lastDRepActionEpoch(),
-                        dRepExpiryResult.activityWindow(),
-                        dRepExpiryResult.v9bonus(),
+                        lastDRepActionEpoch,
+                        dRepActivity,
+                        v9Bonus,
                         leftBoundaryEpoch,
                         dormantEpochsUntilLeftBoundaryEpoch
                 );

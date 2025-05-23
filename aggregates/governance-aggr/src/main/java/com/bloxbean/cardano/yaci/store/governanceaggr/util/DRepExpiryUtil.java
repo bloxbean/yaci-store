@@ -34,9 +34,9 @@ public class DRepExpiryUtil {
      * @param proposalsUpToRegistration List of all proposal submissions from the start of Conway era up to the DRep's registration epoch.
      * @param eraFirstEpoch             The first epoch of the Conway era.
      * @param evaluatedEpoch            The epoch that just ended
-     * @return A {@link DRepExpiryResult} containing the calculated expiry epoch and contributing factors.
+     * @return the expiry epoch.
      */
-    public static DRepExpiryResult calculateDRepExpiry(
+    public static int calculateDRepExpiry(
             DRepRegistrationInfo registrationInfo,
             @Nullable DRepInteractionInfo lastDRepInteraction,
             Set<Integer> dormantEpochs,
@@ -62,13 +62,13 @@ public class DRepExpiryUtil {
 
         // For registration with protocol version >= 10, or if the DRep has interacted after registration, no v9 bonus is applied
         if (registrationInfo.protocolMajorVersion() >= 10 || lastDRepInteraction != null) {
-            return new DRepExpiryResult(baseExpiry, expiryBaseEpoch, activityWindow, dormantCount, 0);
+            return baseExpiry;
         }
 
         // For protocol version 9 and no post-registration interaction, calculate the bonus expiry window
         int v9bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
 
-        return new DRepExpiryResult(baseExpiry + v9bonus, expiryBaseEpoch, activityWindow, dormantCount, v9bonus);
+        return baseExpiry + v9bonus;
     }
 
     /**
@@ -219,18 +219,5 @@ public class DRepExpiryUtil {
     }
 
     private record DormantPeriod(Optional<Long> endingSlot, int length) {
-    }
-
-    /**
-     * The result of calculating a DRep's expiry epoch
-     *
-     * @param expiry               The final computed expiry epoch — the epoch at which the DRep becomes inactive.
-     @param lastDRepActionEpoch    The last dRep action epoch
-      *                            This is either the epoch of the last interaction or the registration epoch if no interaction occurred.
-     * @param activityWindow       The {@code dRepActivity} value from protocol parameters in the last drep action epoch
-     * @param dormantCount         The number of dormant epochs between the last drep action epoch and the evaluated epoch.
-     * @param v9bonus              Extra epochs added to expiry for DReps registered under protocol version 9,
-     */
-    public record DRepExpiryResult(int expiry, int lastDRepActionEpoch, int activityWindow, int dormantCount, int v9bonus) {
     }
 }
