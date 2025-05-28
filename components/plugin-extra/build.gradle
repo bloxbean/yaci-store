@@ -1,0 +1,32 @@
+dependencies {
+    compileOnly project(":components:plugin")
+
+    api libs.graalvm.polyglot
+    api libs.graalvm.js
+    api libs.graalvm.python
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation project(":components:plugin")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Plugin Extra Module'
+                description = 'Yaci Store - Plugin Extra Module'
+            }
+        }
+    }
+}
+
+
+task copyDeps(type: Copy) {
+    into("$buildDir/libs/plugin-libs")
+    from(configurations.runtimeClasspath) {
+        include { file -> file.name.toLowerCase().endsWith('.jar') }
+    }
+}
+
+build.dependsOn(copyDeps)
+

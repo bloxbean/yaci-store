@@ -35,3 +35,7 @@ awaitility="org.awaitility:awaitility:4.3.0"
 
 mvel="org.mvel:mvel2:2.5.2.Final"
 xstream="com.thoughtworks.xstream:xstream:1.4.21"
+
+graalvm-polyglot="org.graalvm.polyglot:polyglot:24.2.0"
+graalvm-js="org.graalvm.polyglot:js:24.2.0"
+graalvm-python="org.graalvm.polyglot:python:24.2.0"

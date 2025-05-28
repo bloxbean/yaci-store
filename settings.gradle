@@ -25,6 +25,7 @@ include 'components:job'
 include 'components:admin'
 include 'components:dbutils'
 include 'components:plugin'
+include 'components:plugin-extra'
 
 include 'stores:blocks'
 include 'stores:utxo'

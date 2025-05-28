@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Uncomment the following line to enable polyglot (Python, JS) plugins support.
+#JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib"
+
 # Save the current working directory
 CURRENT_DIR=$(pwd)
 

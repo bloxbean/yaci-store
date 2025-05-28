@@ -96,7 +96,7 @@ if (project.version.endsWith("-SNAPSHOT")) {
 }
 
 task distZip(type: Zip) {
-    dependsOn ':applications:all:bootJar', ':applications:ledger-state:bootJar', ':applications:admin-cli:bootJar'
+    dependsOn ':components:plugin-extra:build', ':applications:all:bootJar', ':applications:ledger-state:bootJar', ':applications:admin-cli:bootJar'
 
     if (gradle.taskGraph.hasTask(distZip)) {
         dependsOn build
@@ -126,6 +126,17 @@ task distZip(type: Zip) {
         rename "yaci-store-admin-cli-${final_version}.jar", "yaci-store-admin-cli.jar"
     }
 
+    from('components/plugin-extra/build/libs') {
+        include "yaci-store-plugin-extra-${final_version}.jar"
+        into(zipDirName + "/" + 'plugins')
+        rename "yaci-store-plugin-extra-${final_version}.jar", "yaci-store-plugin-extra.jar"
+    }
+
+    from('components/plugin-extra/build/libs/plugin-libs') {
+        include "*.jar"
+        into(zipDirName + "/" + 'plugins/lib')
+    }
+
     from('./') {
         into(zipDirName)
         include 'LICENSE'
@@ -134,6 +145,7 @@ task distZip(type: Zip) {
     from('./config') {
         include 'application.properties'
         include 'application-ledger-state.properties'
+        include 'application-plugins.yml'
         into zipDirName + '/' + configDir
     }
 
@@ -171,6 +183,7 @@ task dockerZip(type: Zip) {
     from('./config') {
         include 'application.properties'
         include 'application-ledger-state.properties'
+        include 'application-plugins.yml'
         into zipDirName
     }
 
