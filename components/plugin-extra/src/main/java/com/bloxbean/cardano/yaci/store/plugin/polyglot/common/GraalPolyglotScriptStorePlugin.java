@@ -1,0 +1,208 @@
+package com.bloxbean.cardano.yaci.store.plugin.polyglot.common;
+
+import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.*;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
+import org.graalvm.polyglot.*;
+import org.graalvm.polyglot.io.IOAccess;
+
+import java.util.ArrayList;
+import java.util.Collection;
+
+public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
+    public static final String INIT_VALUE_CACHE_KEY = "__init_plugin__init_value";
+    private final String name;
+    private final PluginDef pluginDef;
+    private final Engine engine;
+    private final PluginContextUtil pluginContextUtil;
+    private final PluginCacheService cacheService;
+
+    private String functionName;
+    private Source source;
+
+    public GraalPolyglotScriptStorePlugin(Engine engine, PluginDef pluginDef,
+                                          PluginContextUtil pluginContextUtil,
+                                          PluginCacheService pluginCacheService,
+                                          boolean isInitPlugin) {
+        this.engine = engine;
+        this.name = pluginDef.getName();
+        this.pluginDef = pluginDef;
+        this.pluginContextUtil = pluginContextUtil;
+        this.cacheService = pluginCacheService;
+
+        if (pluginDef.getExpression() != null) {
+            throw new IllegalArgumentException(String.format("Expression is not supported in %s plugin. Use script or inline-script", language()));
+        }
+
+        if (pluginDef.getInlineScript() == null && (pluginDef.getScript() == null || pluginDef.getScript().getFile() == null || pluginDef.getScript().getFile().isEmpty())) {
+            throw new IllegalArgumentException("Inline script or script file cannot be null or empty " + pluginDef);
+        }
+
+        if (pluginDef.getInlineScript() != null) {
+            if (!isInitPlugin) { //wrap in a function only if it's not an init plugin
+                String wrapped = wrapInFunction(pluginDef.getInlineScript(), "__filter");
+                this.functionName = "__filter";
+
+                source = Source.newBuilder(language(), wrapped, "<script>").buildLiteral();
+            } else {
+                source = Source.newBuilder(language(), pluginDef.getInlineScript(), "<init_script>").buildLiteral();
+            }
+
+        } else if (pluginDef.getScript() != null && pluginDef.getScript().getFile() != null) {
+            this.functionName = pluginDef.getScript().getFunction();
+
+            String file = pluginDef.getScript().getFile();
+            if (file == null || file.isEmpty()) {
+                throw new IllegalArgumentException("Script file cannot be null or empty " + pluginDef);
+            }
+
+            String code;
+            try {
+                code = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file)));
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("Failed to load script from file: " + file, e);
+            }
+
+            if (this.functionName == null && !isInitPlugin) {
+                this.functionName = "__filter";
+                code = wrapInFunction(code, this.functionName);
+            }
+
+            source = Source.newBuilder(language(), code, "<script>").buildLiteral();
+        }
+    }
+
+    @Override
+    public void init() {
+        var ctx = createContext();
+        setCommonVariables(ctx);
+
+        ctx.eval(source);
+
+        Value __init = ctx.getBindings(language()).getMember("__init");
+
+        Value initValue = null;
+        if (__init != null) {
+            initValue = __init.execute();
+        }
+
+        //TODO check if we need to close the context
+        if (initValue != null) {
+
+            var global = cacheService.global();
+            if (global != null) {
+                global.put(language() + INIT_VALUE_CACHE_KEY, initValue);
+            }
+        }
+    }
+
+    @Override
+    public Collection<T> filter(Collection<T> items) {
+        try (var ctx = createContext()) {
+            ctx.eval(source);
+            Value filterFn = ctx.getBindings(language()).getMember(functionName);
+
+            if (filterFn == null || !filterFn.canExecute()) {
+                throw new IllegalArgumentException("Function not found" + functionName);
+            }
+
+            ctx.getBindings(language()).putMember("items", items);
+            setCommonVariables(ctx);
+
+            Value result = filterFn.execute(items);
+
+            var resultProxy = result.as(Collection.class);
+
+            if (resultProxy == null) {
+                throw new IllegalArgumentException("Filter function must return a collection of items");
+            }
+
+            Collection<T> resultList = new ArrayList<>(resultProxy);
+
+            return resultList;
+        }
+    }
+
+
+    @Override
+    public void postAction(Collection<T> items) {
+        try (var ctx = createContext()) {
+            ctx.eval(source);
+            Value filterFn = ctx.getBindings(language()).getMember(functionName);
+
+            ctx.getBindings(language()).putMember("items", items);
+            setCommonVariables(ctx);
+
+            filterFn.execute(items);
+        }
+    }
+
+    @Override
+    public void preAction(Collection<T> items) {
+        try (var ctx = createContext()) {
+            ctx.eval(source);
+            Value filterFn = ctx.getBindings(language()).getMember(functionName);
+
+            ctx.getBindings(language()).putMember("items", items);
+            setCommonVariables(ctx);
+
+            filterFn.execute(items);
+        }
+    }
+
+    @Override
+    public void handleEvent(Object event) {
+        try (var ctx = createContext()) {
+            ctx.eval(source);
+            Value filterFn = ctx.getBindings(language()).getMember(functionName);
+
+            ctx.getBindings(language()).putMember("event", event);
+            setCommonVariables(ctx);
+
+            filterFn.execute(event);
+        }
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public PluginDef getPluginDef() {
+        return pluginDef;
+    }
+
+    private Context createContext() {
+        var cb = Context.newBuilder(language())
+                .allowAllAccess(true)
+                .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build())
+                .allowHostAccess(HostAccess.ALL)
+                .engine(engine);
+
+        preCreateContext(cb);
+
+        return cb.build();
+    }
+
+    private void setCommonVariables(Context ctx) {
+        ctx.getBindings(language()).putMember("util", pluginContextUtil);
+        ctx.getBindings(language()).putMember("global_cache", cacheService.global());
+        ctx.getBindings(language()).putMember("cache", cacheService.forPlugin(name));
+
+        var globalCache = cacheService.global();
+        //TODO -- review if we need this or any perfomance issue
+        if (globalCache != null) {
+            Value __initVal = (Value)globalCache.get(language() + INIT_VALUE_CACHE_KEY);
+            if (__initVal != null) {
+                ctx.getBindings(language()).putMember("__init", __initVal);
+            }
+        }
+
+    }
+
+    public abstract String language();
+    protected abstract void preCreateContext(Context.Builder cb);
+    protected abstract String wrapInFunction(String script, String fnName);
+}

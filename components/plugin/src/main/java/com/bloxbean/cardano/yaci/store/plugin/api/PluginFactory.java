@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 public interface PluginFactory {
     String getType();
 
+    <T> InitPlugin createInitPlugin(PluginDef def);
+
     <T> FilterPlugin<T> createFilterPlugin(PluginDef def);
 
     <T> PostActionPlugin<T> createPostActionPlugin(PluginDef def);

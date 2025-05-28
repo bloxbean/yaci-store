@@ -118,6 +118,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int n2cPoolMaxWaitInMillis = 10000;
 
     private boolean pluginsEnabled = true;
+    private boolean pluginExitOnError;
+
+    private Map<String, PluginDef> pluginInitializers = new HashMap<>();
     private Map<String, List<PluginDef>> filters = new HashMap<>();
     private Map<String, List<PluginDef>> preActions = new HashMap<>();
     private Map<String, List<PluginDef>> postActions = new HashMap<>();

@@ -13,6 +13,7 @@ public class PluginDef {
     private String expression; //nullable
     private String inlineScript; //nullable
     private Script script; //nullable
+    private boolean exitOnError = false;
 
     @Data
     @AllArgsConstructor

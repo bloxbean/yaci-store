@@ -18,6 +18,7 @@ public class PluginRegistry {
 
     // filterKey -> List of filter instances
     // filterKey is the <store_name>.<target>.<action> (e.g. "utxo.unspent.save" or "utxo.spent.save")
+    private final Map<String, InitPlugin> initPlugins = new ConcurrentHashMap<>();
     private final Map<String, List<FilterPlugin<?>>> filters = new ConcurrentHashMap<>();
     private final Map<String, List<PreActionPlugin<?>>> preActions = new ConcurrentHashMap<>();
     private final Map<String, List<PostActionPlugin<?>>> postActions = new ConcurrentHashMap<>();
@@ -27,6 +28,8 @@ public class PluginRegistry {
                           List<PluginFactory> factories) {
         this.storeProperties = storeProperties;
         this.factories      = factories;
+
+        log.info("PluginRegistry created with {} factories", factories);
     }
 
     @PostConstruct
@@ -36,10 +39,31 @@ public class PluginRegistry {
             return;
         }
         log.info("Initializing PluginRegistry...");
+        initPluginInitializers();
         initFilterplugins();
         initPreActionPlugins();
         initPostActionPlugins();
         initEventHandlersPlugins();
+    }
+
+    private void initPluginInitializers() {
+        Map<String, PluginDef> initMap  = storeProperties.getPluginInitializers();
+
+        if (initMap == null || initMap.isEmpty()) {
+            log.info("No plugin initializers found in configuration.");
+            return;
+        }
+
+        for (PluginFactory factory : factories) {
+            var plugiDef = initMap.get(factory.getType());
+            if (plugiDef == null)
+                continue;
+
+            var initPlugin = factory.createInitPlugin(plugiDef);
+            initPlugin.init();
+
+            initPlugins.put(factory.getType(), initPlugin);
+        }
     }
 
     private void initFilterplugins() {

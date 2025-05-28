@@ -60,7 +60,13 @@ public class PluginAspect {
 
         for (FilterPlugin<?> f : filters) {
             FilterPlugin<Object> sf = (FilterPlugin<Object>) f;
-            items = sf.filter(items);
+            try {
+                items = sf.filter(items);
+            } catch (Exception e) {
+                if (storeProperties.isPluginExitOnError() || f.getPluginDef().isExitOnError()) {
+                    throw e;
+                }
+            }
         }
 
         if (log.isTraceEnabled()) {
@@ -82,6 +88,9 @@ public class PluginAspect {
                 } catch (Exception e) {
                     //TODO : Should we throw exception or just log it?
                     log.error("Error executing pre-filter {}: {}", preStoreFilter.getName(), e.getMessage());
+                    if (storeProperties.isPluginExitOnError() || preStoreFilter.getPluginDef().isExitOnError()) {
+                        throw e;
+                    }
                 }
             }
         }
@@ -104,6 +113,9 @@ public class PluginAspect {
                 } catch (Exception e) {
                     //TODO : Should we throw exception or just log it?
                     log.error("Error executing post-filter {}: {}", postStoreFilter.getName(), e.getMessage());
+                    if (storeProperties.isPluginExitOnError() || postStoreFilter.getPluginDef().isExitOnError()) {
+                        throw e;
+                    }
                 }
             }
         }

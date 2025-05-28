@@ -1,0 +1,77 @@
+package com.bloxbean.cardano.yaci.store.plugin.polyglot.js;
+
+import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.*;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
+import lombok.extern.slf4j.Slf4j;
+import org.graalvm.polyglot.Engine;
+
+@Slf4j
+public class JsPolyglotPluginFactory implements PluginFactory {
+    private PluginContextUtil pluginContextUtil;
+    private PluginCacheService pluginCacheService;
+    private Engine engine;
+
+    public JsPolyglotPluginFactory(PluginContextUtil pluginContextUtil, PluginCacheService pluginCacheService) {
+        this.pluginContextUtil = pluginContextUtil;
+        this.pluginCacheService = pluginCacheService;
+        this.engine = Engine.create();
+        log.info("JavaScript Polyglot Plugin Factory created with GraalVM engine >>");
+    }
+
+    @Override
+    public String getType() {
+        return "js";
+    }
+
+    @Override
+    public <T> InitPlugin createInitPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService, true);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService, true);
+        else
+            throw new IllegalArgumentException("No expression or script found in init definition for js plugin: " + def);
+    }
+
+    @Override
+    public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService);
+        else
+            throw new IllegalArgumentException("No expression or script found in filter definition for js plugin: " + def);
+    }
+
+    @Override
+    public <T> PostActionPlugin<T> createPostActionPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService);
+        else
+            throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
+    }
+
+    @Override
+    public <T> PreActionPlugin<T> createPreActionPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService);
+        else
+            throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
+    }
+
+    @Override
+    public <T> EventHandlerPlugin<T> createEventHandlerPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, pluginContextUtil, pluginCacheService);
+        else
+            throw new IllegalArgumentException("No script or inline-script found in event-handler definition for js plugin: " + def);
+    }
+}

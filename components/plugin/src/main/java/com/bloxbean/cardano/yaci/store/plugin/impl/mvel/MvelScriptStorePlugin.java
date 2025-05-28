@@ -1,10 +1,8 @@
-package com.bloxbean.cardano.yaci.store.plugin.filter.mvel;
+package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.api.EventHandlerPlugin;
-import com.bloxbean.cardano.yaci.store.plugin.api.PostActionPlugin;
-import com.bloxbean.cardano.yaci.store.plugin.api.PreActionPlugin;
-import com.bloxbean.cardano.yaci.store.plugin.api.FilterPlugin;
+import com.bloxbean.cardano.yaci.store.plugin.api.*;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.mvel2.MVEL;
@@ -16,20 +14,25 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
+public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
     private final String name;
+    private final PluginDef pluginDef;
     private final Serializable compiledExpr;
     private final String functionName;
     private final PluginContextUtil pluginContextUtil;
+    private final PluginCacheService cacheService;
 
-    public MvelScriptStorePlugin(String name, PluginDef.Script script, PluginContextUtil pluginContextUtil) {
-        this.name = name;
-        String file = script.getFile();
-        this.functionName = script.getFunction();
+    public MvelScriptStorePlugin(PluginDef pluginDef,
+                                 PluginContextUtil pluginContextUtil, PluginCacheService cacheService) {
+        this.name = pluginDef.getName();
+        this.pluginDef = pluginDef;
+        String file = pluginDef.getScript().getFile();
+        this.functionName = pluginDef.getScript().getFunction();
         this.pluginContextUtil = pluginContextUtil;
+        this.cacheService = cacheService;
 
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Script file cannot be null or empty " + script);
+            throw new IllegalArgumentException("Script file cannot be null or empty " + pluginDef.getScript());
         }
 
         String code;
@@ -44,10 +47,15 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
 
     }
 
-    public MvelScriptStorePlugin(String name, String inlineScript, String function, PluginContextUtil pluginContextUtil) {
-        this.name = name;
+    public MvelScriptStorePlugin(PluginDef pluginDef, String function,
+                                 PluginContextUtil pluginContextUtil, PluginCacheService cacheService) {
+        this.name = pluginDef.getName();
+        this.pluginDef = pluginDef;
         this.functionName = function;
         this.pluginContextUtil = pluginContextUtil;
+        this.cacheService = cacheService;
+
+        String inlineScript = pluginDef.getInlineScript();
 
         if (inlineScript == null || inlineScript.isEmpty()) {
             throw new IllegalArgumentException("Inline Script cannot be null or empty");
@@ -64,6 +72,11 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
     }
 
     @Override
+    public PluginDef getPluginDef() {
+        return pluginDef;
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public Collection<T> filter(Collection<T> items) {
         if(log.isTraceEnabled())
@@ -75,7 +88,7 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
 
         Map<String,Object> vars = new HashMap<>();
         vars.put("items", items);
-        vars.put("util", pluginContextUtil);
+        setCommonVariables(vars);
 
         // 2) wrap it in a VariableResolverFactory
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
@@ -90,7 +103,7 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
 
         Map<String,Object> vars = new HashMap<>();
         vars.put("items", items);
-        vars.put("util", pluginContextUtil);
+        setCommonVariables(vars);
 
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
@@ -111,7 +124,7 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
 
         Map<String,Object> vars = new HashMap<>();
         vars.put("items", items);
-        vars.put("util", pluginContextUtil);
+        setCommonVariables(vars);
 
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
@@ -131,7 +144,7 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
 
         Map<String,Object> vars = new HashMap<>();
         vars.put("event", event);
-        vars.put("util", pluginContextUtil);
+        setCommonVariables(vars);
 
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
@@ -142,5 +155,24 @@ public class MvelScriptStorePlugin<T> implements FilterPlugin<T>, PreActionPlugi
             MVEL.executeExpression(
                     MVEL.compileExpression(invokeExpr), null, vrf);
         }
+    }
+
+    @Override
+    public void init() {
+        if (log.isTraceEnabled())
+            log.trace("Init plugin {} - MVEL", name);
+
+        Map<String,Object> vars = new HashMap<>();
+        setCommonVariables(vars);
+
+        MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
+
+        MVEL.executeExpression(compiledExpr, null, vrf);
+    }
+
+    private void setCommonVariables(Map<String,Object> vars) {
+        vars.put("util", pluginContextUtil);
+        vars.put("global_cache", cacheService.global());
+        vars.put("cache", cacheService.forPlugin(name));
     }
 }

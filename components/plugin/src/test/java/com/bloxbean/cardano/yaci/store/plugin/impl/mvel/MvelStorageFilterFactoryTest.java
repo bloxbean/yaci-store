@@ -1,20 +1,31 @@
-package com.bloxbean.cardano.yaci.store.plugin.filter.mvel;
+package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheConfig;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class MvelStorageFilterFactoryTest {
+    static PluginCacheConfig pluginCacheConfig;
+    static PluginCacheService pluginCacheService;
+
+    @BeforeAll
+    static void setup() {
+        pluginCacheConfig = new PluginCacheConfig();
+        pluginCacheService = new PluginCacheService(pluginCacheConfig.globalCache(),
+                pluginCacheConfig.pluginCaches());
+    }
 
     @Test
     void filterListByExpression() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -38,7 +49,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_arrayField() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -81,7 +92,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -134,7 +145,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript_noResult() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -187,7 +198,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void preActionListByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -236,7 +247,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void postActionByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");

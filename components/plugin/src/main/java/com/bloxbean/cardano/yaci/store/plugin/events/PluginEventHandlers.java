@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.events;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
@@ -12,8 +13,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class PluginEventHandlers extends PluginBaseEventHandler {
 
-    public PluginEventHandlers(PluginRegistry pluginRegistry) {
+    public PluginEventHandlers(PluginRegistry pluginRegistry, StoreProperties storeProperties) {
         this.pluginRegistry = pluginRegistry;
+        this.storeProperties = storeProperties;
     }
 
     @EventListener

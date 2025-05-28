@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.plugin.filter.spel;
+package com.bloxbean.cardano.yaci.store.plugin.impl.spel;
 
+import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.FilterPlugin;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.expression.Expression;
@@ -12,13 +13,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SpelExpressionStorePlugin<T> implements FilterPlugin<T> {
     private final String name;
+    private final PluginDef pluginDef;
     private final Expression predicate;
     private final SpelExpressionParser parser = new SpelExpressionParser();
 
-    public SpelExpressionStorePlugin(String name, String expr) {
-        this.name = name;
-        this.predicate = parser.parseExpression(expr);
-        log.info("Created filter {} with expression {}", name, expr);
+    public SpelExpressionStorePlugin(PluginDef pluginDef) {
+        this.name = pluginDef.getName();
+        this.pluginDef = pluginDef;
+        this.predicate = parser.parseExpression(pluginDef.getExpression());
+        log.info("Created filter {} with expression {}", name, pluginDef.getExpression());
     }
 
     @Override
@@ -35,6 +38,11 @@ public class SpelExpressionStorePlugin<T> implements FilterPlugin<T> {
     @Override
     public String getName() {
         return name;
+    }
+
+    @Override
+    public PluginDef getPluginDef() {
+        return pluginDef;
     }
 }
 
