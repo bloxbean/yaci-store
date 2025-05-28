@@ -114,6 +114,10 @@ public class YaciStoreProperties {
     @Setter
     public static final class Plugins {
         private boolean enabled = true;
+        private boolean exitOnError = true;
+
+        private Map<String, PluginDef> init = new HashMap<>();
+
         private Map<String, List<PluginDef>> filters = new HashMap<>();
         private Map<String, List<PluginDef>> preActions = new HashMap<>();
         private Map<String, List<PluginDef>> postActions = new HashMap<>();
