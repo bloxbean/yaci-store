@@ -11,7 +11,7 @@ create table address_balance_current
     epoch              integer,
     update_datetime    timestamp,
     primary key (address, unit)
-);
+) PARTITION BY HASH (address);
 
 -- stake_balance
 drop table if exists stake_address_balance_current;
@@ -25,4 +25,4 @@ create table stake_address_balance_current
     epoch            integer,
     update_datetime  timestamp,
     primary key (address)
-);
+) PARTITION BY HASH (address);

@@ -14,7 +14,8 @@ create table address_balance
     epoch              integer,
     update_datetime    timestamp,
     primary key (address, unit, slot)
-);
+)
+PARTITION BY HASH (address);
 
 CREATE INDEX idx_address_balance_slot
     ON address_balance (slot);
@@ -42,7 +43,8 @@ create table stake_address_balance
     epoch            integer,
     update_datetime  timestamp,
     primary key (address, slot)
-);
+)
+PARTITION BY HASH (address);
 
 CREATE INDEX idx_stake_addr_balance_slot
     ON stake_address_balance (slot);
