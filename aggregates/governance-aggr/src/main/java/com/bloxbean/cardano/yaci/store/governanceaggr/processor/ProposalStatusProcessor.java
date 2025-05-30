@@ -676,6 +676,9 @@ public class ProposalStatusProcessor {
             govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
 
             if (govActionStatus.equals(GovActionStatus.RATIFIED) && GovernanceActionUtil.isDelayingAction(govActionDetail.getType())) {
+                // A successful motion of no-confidence, update of the constitutional committee,
+                // a constitutional change, or a hard-fork,
+                // delays ratification of all other governance actions until the first epoch after their enactment
                 isActionRatificationDelayed = true;
             }
 
