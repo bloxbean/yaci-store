@@ -48,7 +48,7 @@ public class GovernanceActionUtil {
      * @param updateCommittee The update committee action
      * @param currentEpoch The current epoch
      * @param committeeMaxTermLength The maximum term length allowed for a committee member
-     * @return {@code true} if the term length of all new committee members is less than or equal to the maximum term length,
+     * @return {@code true} if the expiration of all new committee members is less than or equal to the maximum term.
      *         {@code false} otherwise.
      */
     public static boolean isValidCommitteeTerm(UpdateCommittee updateCommittee, Integer committeeMaxTermLength, Integer currentEpoch) {
@@ -57,8 +57,7 @@ public class GovernanceActionUtil {
         }
         final Map<Credential, Integer> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
         if (newMembersAndTerms != null) {
-            var memberWithInvalidTerm = newMembersAndTerms.values().stream().filter(term -> term != null && term > currentEpoch + committeeMaxTermLength).findFirst();
-            return memberWithInvalidTerm.isEmpty();
+            return newMembersAndTerms.values().stream().allMatch(term -> term != null && term <= currentEpoch + committeeMaxTermLength);
         }
 
         return false;
