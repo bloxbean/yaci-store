@@ -20,7 +20,7 @@ public class PoolStorageReaderImpl implements PoolStorageReader {
     @Override
     public List<PoolDetails> getPoolDetails(List<String> poolIds, Integer epoch) {
         Field<Integer> rn = rowNumber()
-                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.CERT_INDEX.desc()))
+                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
                 .as("rn");
 
         Table<?> subquery = dsl.select(POOL.EPOCH,
@@ -60,7 +60,7 @@ public class PoolStorageReaderImpl implements PoolStorageReader {
     @Override
     public List<PoolDetails> getLatestPoolUpdateDetails(List<String> poolIds, Integer txSubmissionEpoch) {
         Field<Integer> rn = rowNumber()
-                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.CERT_INDEX.desc()))
+                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
                 .as("rn");
 
         Table<?> subquery = dsl.select(POOL.EPOCH,
