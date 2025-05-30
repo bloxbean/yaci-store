@@ -46,17 +46,18 @@ public class GovernanceActionUtil {
      * Checks if the committee term specified in a governance action is valid.
      *
      * @param updateCommittee The update committee action
+     * @param currentEpoch The current epoch
      * @param committeeMaxTermLength The maximum term length allowed for a committee member
      * @return {@code true} if the term length of all new committee members is less than or equal to the maximum term length,
      *         {@code false} otherwise.
      */
-    public static boolean isValidCommitteeTerm(UpdateCommittee updateCommittee, Integer committeeMaxTermLength) {
+    public static boolean isValidCommitteeTerm(UpdateCommittee updateCommittee, Integer committeeMaxTermLength, Integer currentEpoch) {
         if (committeeMaxTermLength == null) {
             return true;
         }
         final Map<Credential, Integer> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
         if (newMembersAndTerms != null) {
-            var memberWithInvalidTerm = newMembersAndTerms.values().stream().filter(term -> term != null && term > committeeMaxTermLength).findFirst();
+            var memberWithInvalidTerm = newMembersAndTerms.values().stream().filter(term -> term != null && term > currentEpoch + committeeMaxTermLength).findFirst();
             return memberWithInvalidTerm.isEmpty();
         }
 
@@ -90,5 +91,17 @@ public class GovernanceActionUtil {
                 || govActionType == GovActionType.NEW_CONSTITUTION
                 || govActionType == GovActionType.UPDATE_COMMITTEE
                 || govActionType == GovActionType.NO_CONFIDENCE;
+    }
+
+    public static int getActionPriority(GovActionType govActionType) {
+        return switch (govActionType) {
+            case NO_CONFIDENCE -> 0;
+            case UPDATE_COMMITTEE -> 1;
+            case NEW_CONSTITUTION -> 2;
+            case HARD_FORK_INITIATION_ACTION -> 3;
+            case PARAMETER_CHANGE_ACTION -> 4;
+            case TREASURY_WITHDRAWALS_ACTION -> 5;
+            case INFO_ACTION -> 6;
+        };
     }
 }

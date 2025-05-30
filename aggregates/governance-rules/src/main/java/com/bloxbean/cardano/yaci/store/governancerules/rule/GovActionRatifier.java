@@ -66,10 +66,6 @@ public class GovActionRatifier {
             return RatificationResult.REJECT;
         }
 
-        if (isActionRatificationDelayed) {
-            return RatificationResult.CONTINUE;
-        }
-
         final int currentEpoch = currentEpochParam.getEpoch();
 
         DRepVotingState dRepVotingState;
@@ -86,16 +82,19 @@ public class GovActionRatifier {
                 dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
                 isAccepted = dRepVotingState.isAccepted() && spoVotingState.isAccepted();
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, noConfidence.getGovActionId(), lastEnactedGovActionId);
+                isNotDelayed = !isActionRatificationDelayed
+                        && ccState.equals(ConstitutionCommitteeState.NORMAL)
+                        && GovernanceActionUtil.isPrevActionAsExpected(govActionType, noConfidence.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case UPDATE_COMMITTEE:
                 UpdateCommittee updateCommittee = (UpdateCommittee) govAction;
-                isValidCommitteeTerm = GovernanceActionUtil.isValidCommitteeTerm(updateCommittee, currentEpochParam.getParams().getCommitteeMaxTermLength());
+                isValidCommitteeTerm = GovernanceActionUtil.isValidCommitteeTerm(updateCommittee, currentEpochParam.getParams().getCommitteeMaxTermLength(), currentEpoch);
                 dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 spoVotingState = buildSPOVotingState(govAction, spoYesVoteStake, spoAbstainVoteStake, spoTotalStake, ccState, currentEpochParam);
                 isAccepted = dRepVotingState.isAccepted() && spoVotingState.isAccepted();
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, updateCommittee.getGovActionId(), lastEnactedGovActionId);
+                isNotDelayed = !isActionRatificationDelayed
+                        && GovernanceActionUtil.isPrevActionAsExpected(govActionType, updateCommittee.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case HARD_FORK_INITIATION_ACTION:
@@ -109,7 +108,9 @@ public class GovActionRatifier {
                 } else
                     isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted() && spoVotingState.isAccepted();
 
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
+                isNotDelayed = !isActionRatificationDelayed
+                        && ccState.equals(ConstitutionCommitteeState.NORMAL)
+                        && GovernanceActionUtil.isPrevActionAsExpected(govActionType, hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case NEW_CONSTITUTION:
@@ -117,7 +118,9 @@ public class GovActionRatifier {
                 dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
                 isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, newConstitution.getGovActionId(), lastEnactedGovActionId);
+                isNotDelayed = !isActionRatificationDelayed
+                        && ccState.equals(ConstitutionCommitteeState.NORMAL)
+                        && GovernanceActionUtil.isPrevActionAsExpected(govActionType, newConstitution.getGovActionId(), lastEnactedGovActionId);
 
                 break;
             case TREASURY_WITHDRAWALS_ACTION:
@@ -126,14 +129,16 @@ public class GovActionRatifier {
                 dRepVotingState = buildDRepVotingState(govAction, dRepYesVoteStake, dRepNoVoteStake, ccState, currentEpochParam);
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
                 isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
-                isNotDelayed = true;
+                isNotDelayed = !isActionRatificationDelayed && ccState.equals(ConstitutionCommitteeState.NORMAL);
 
                 break;
             case PARAMETER_CHANGE_ACTION:
                 ParameterChangeAction parameterChangeAction = (ParameterChangeAction) govAction;
                 committeeVotingState = buildCommitteeVotingState(govAction, ccYesVote, ccNoVote, ccThreshold);
 
-                isNotDelayed = GovernanceActionUtil.isPrevActionAsExpected(govActionType, parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
+                isNotDelayed = !isActionRatificationDelayed
+                        && ccState.equals(ConstitutionCommitteeState.NORMAL)
+                        && GovernanceActionUtil.isPrevActionAsExpected(govActionType, parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
 
                 if (isBootstrapPhase) {
                     isAccepted = committeeVotingState.isAccepted();
