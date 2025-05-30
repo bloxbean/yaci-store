@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.governancerules.rule;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
-import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
@@ -54,6 +53,19 @@ public class GovActionRatifier {
      * @param treasury               The current treasury amount.
      * @param currentEpochParam      The current epoch parameters.
      * @return The ratification result.
+     */
+
+    /*
+      NOTE:
+      During a state of no-confidence, only two types of actions can be ratified:
+       - NoConfidence actions
+       - UpdateCommittee actions
+
+      A successful motion of no-confidence, update of the constitutional committee,
+      a constitutional change, or a hard-fork,
+      delays ratification of all other governance actions until the first epoch after their enactment
+
+      Proposals to update the committee get delayed if the expiration exceeds the max term
      */
     public static RatificationResult getRatificationResult(GovAction govAction, boolean isBootstrapPhase, Integer maxAllowedVotingEpoch, Integer ccYesVote, Integer ccNoVote, BigDecimal ccThreshold,
                                                            BigInteger spoYesVoteStake, BigInteger spoAbstainVoteStake, BigInteger spoTotalStake,
