@@ -201,13 +201,12 @@ public class ProposalStatusProcessor {
             return Collections.emptyList();
         }
 
-        List<GovActionProposal> sortedProposalsForStatusCalculation = List.copyOf(
-                proposalsForStatusCalculation.stream()
-                        .sorted(Comparator.comparingInt(proposal ->
-                                GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType())
-                        ))
-                        .toList()
-        );
+        // TODO: add tx_index in governance_action proposal and sort
+        List<GovActionProposal> sortedProposalsForStatusCalculation = proposalsForStatusCalculation.stream()
+                .sorted(Comparator.comparingInt((GovActionProposal proposal) -> GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType()))
+                        .thenComparingInt(GovActionProposal::getEpoch)
+                        .thenComparingLong(GovActionProposal::getSlot))
+                .toList();
 
         // current epoch param
         var epochParamOpt = epochParamStorage.getProtocolParams(currentEpoch);
@@ -749,8 +748,11 @@ public class ProposalStatusProcessor {
         }
 
         for (Proposal proposal : ratifiedProposals) {
-            List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
-            proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+            // TODO: just a workaround, need to check ledger rule carefully.
+            if (!GovernanceActionUtil.isDelayingAction(proposal.getType())) {
+                List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
+                proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+            }
         }
 
         List<GovActionProposal> filteredActiveProposals = activeProposalsInPrevSnapshot.stream()
