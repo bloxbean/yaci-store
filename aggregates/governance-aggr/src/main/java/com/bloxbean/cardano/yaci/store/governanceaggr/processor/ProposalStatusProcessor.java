@@ -201,9 +201,13 @@ public class ProposalStatusProcessor {
             return Collections.emptyList();
         }
 
-        proposalsForStatusCalculation.sort(Comparator.comparingInt(proposal ->
-                GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType())
-        ));
+        List<GovActionProposal> sortedProposalsForStatusCalculation = List.copyOf(
+                proposalsForStatusCalculation.stream()
+                        .sorted(Comparator.comparingInt(proposal ->
+                                GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType())
+                        ))
+                        .toList()
+        );
 
         // current epoch param
         var epochParamOpt = epochParamStorage.getProtocolParams(currentEpoch);
@@ -238,7 +242,7 @@ public class ProposalStatusProcessor {
                         Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
         start = System.currentTimeMillis();
         // get votes by committee member
-        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -250,7 +254,7 @@ public class ProposalStatusProcessor {
         log.debug("GetVotesByCommittee time: {} ms", end - start);
         // get votes by SPO
         start = System.currentTimeMillis();
-        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                 govActionProposal -> GovActionId.builder()
                         .transactionId(govActionProposal.getTxHash())
                         .gov_action_index(govActionProposal.getIndex())
@@ -263,7 +267,7 @@ public class ProposalStatusProcessor {
         List<VotingProcedure> votesByDRep = new ArrayList<>();
 
         if (!isInConwayBootstrapPhase) {
-            votesByDRep = votingAggrService.getVotesByDRep(prevEpoch, proposalsForStatusCalculation.stream().map(
+            votesByDRep = votingAggrService.getVotesByDRep(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
@@ -364,7 +368,7 @@ public class ProposalStatusProcessor {
 
         long loopStart = System.currentTimeMillis();
         // use gov rule and update proposal status
-        for (var proposal : proposalsForStatusCalculation) {
+        for (var proposal : sortedProposalsForStatusCalculation) {
             var govActionDetail = proposal.getGovAction();
 
             ProposalVotingStats votingStats = initProposalVotingStats();
