@@ -1,13 +1,17 @@
 package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
+import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -16,6 +20,7 @@ public class MvelStorePluginFactory implements PluginFactory {
 
     private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService pluginCacheService;
+    private final VariableProviderFactory variableProviderFactory;
 
     @PostConstruct
     public void init() {
@@ -23,8 +28,13 @@ public class MvelStorePluginFactory implements PluginFactory {
     }
 
     @Override
-    public String getType() {
+    public String getLang() {
         return "mvel";
+    }
+
+    @Override
+    public void initGlobalScripts(List<ScriptRef> scriptRef) {
+        //do nothing
     }
 
     @Override
@@ -32,7 +42,7 @@ public class MvelStorePluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for init plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return createFromScript(def);
+            return createFromScript(def, PluginType.INIT);
         else
             throw new IllegalArgumentException("No inline-script or script found in init definition for mvel plugin: " + def);
     }
@@ -40,9 +50,9 @@ public class MvelStorePluginFactory implements PluginFactory {
     @Override
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new MvelExpressionStorePlugin<>(def);
+            return new MvelExpressionStorePlugin<>(def, PluginType.FILTER);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return createFromScript(def);
+            return createFromScript(def, PluginType.FILTER);
         else
             throw new IllegalArgumentException("No expression or script found in filter definition for mvel plugin: " + def);
     }
@@ -52,7 +62,7 @@ public class MvelStorePluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return createFromScript(def);
+            return createFromScript(def, PluginType.POST_ACTION);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for mvel plugin: " + def);
     }
@@ -62,7 +72,7 @@ public class MvelStorePluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return createFromScript(def);
+            return createFromScript(def, PluginType.PRE_ACTION);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for mvel plugin: " + def);
     }
@@ -72,19 +82,19 @@ public class MvelStorePluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return createFromScript(def);
+            return createFromScript(def, PluginType.EVENT_HANDLER);
         else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for mvel plugin: " + def);
     }
 
-    private <T> MvelScriptStorePlugin<T> createFromScript(PluginDef def) {
+    private <T> MvelScriptStorePlugin<T> createFromScript(PluginDef def, PluginType pluginType) {
         if (def.getScript() != null) {
             var script = def.getScript();
             if (script.getFile() == null)
                 throw new IllegalArgumentException("Script file is not defined in plugin def: " + def);
-            return new MvelScriptStorePlugin<>(def, pluginContextUtil, pluginCacheService);
+            return new MvelScriptStorePlugin<>(def, pluginType, pluginContextUtil, pluginCacheService, variableProviderFactory);
         } else if (def.getInlineScript() != null) {
-            return new MvelScriptStorePlugin<>(def, null, pluginContextUtil, pluginCacheService);
+            return new MvelScriptStorePlugin<>(def, pluginType, null, pluginContextUtil, pluginCacheService, variableProviderFactory);
         } else {
             throw new IllegalArgumentException("No script or inline-script found in filter definition for mvel plugin: " + def);
         }

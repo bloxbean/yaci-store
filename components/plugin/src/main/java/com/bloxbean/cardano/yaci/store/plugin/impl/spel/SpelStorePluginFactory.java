@@ -1,11 +1,14 @@
 package com.bloxbean.cardano.yaci.store.plugin.impl.spel;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.expression.Expression;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @Slf4j
@@ -16,7 +19,12 @@ public class SpelStorePluginFactory implements PluginFactory {
         log.info("SpEL Plugin Factory created >>");
     }
 
-    @Override public String getType() { return "spel"; }
+    @Override public String getLang() { return "spel"; }
+
+    @Override
+    public void initGlobalScripts(List<ScriptRef> scriptRef) {
+        //do nothing
+    }
 
     @Override
     public <T> InitPlugin createInitPlugin(PluginDef def) {
@@ -29,7 +37,7 @@ public class SpelStorePluginFactory implements PluginFactory {
             throw new IllegalArgumentException("No expression found in filter definition for spel filter: " + def);
         }
         Expression expr = parser.parseExpression(def.getExpression());
-        return new SpelExpressionStorePlugin<>(def);
+        return new SpelExpressionStorePlugin<>(def, PluginType.FILTER);
     }
 
     @Override

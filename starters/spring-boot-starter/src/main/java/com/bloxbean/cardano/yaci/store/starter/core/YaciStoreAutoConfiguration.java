@@ -245,11 +245,15 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setPluginsEnabled(properties.getPlugins().isEnabled());
         storeProperties.setPluginExitOnError(properties.getPlugins().isExitOnError());
+        storeProperties.setPluginVariableProviders(properties.getPlugins().getVariableProviders());
         storeProperties.setPluginInitializers(properties.getPlugins().getInit());
         storeProperties.setFilters(properties.getPlugins().getFilters());
         storeProperties.setPreActions(properties.getPlugins().getPreActions());
         storeProperties.setPostActions(properties.getPlugins().getPostActions());
         storeProperties.setEventHandlers(properties.getPlugins().getEventHandlers());
+
+        storeProperties.setPythonVenv(properties.getPlugins().getPython().getVenv());
+        storeProperties.setPluginGlobalScripts(properties.getPlugins().getScripts());
 
         return storeProperties;
     }

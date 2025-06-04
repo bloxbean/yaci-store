@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.plugin;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.events.PluginBaseEventHandler;
 import com.bloxbean.cardano.yaci.store.script.domain.DatumEvent;
@@ -9,8 +10,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ScriptPluginEventHandlers extends PluginBaseEventHandler {
-    public ScriptPluginEventHandlers(PluginRegistry pluginRegistry) {
+    public ScriptPluginEventHandlers(PluginRegistry pluginRegistry, StoreProperties storeProperties) {
         this.pluginRegistry = pluginRegistry;
+        this.storeProperties = storeProperties;
     }
 
     @EventListener

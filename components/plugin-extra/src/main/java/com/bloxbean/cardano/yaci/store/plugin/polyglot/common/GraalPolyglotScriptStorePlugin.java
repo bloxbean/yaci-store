@@ -1,52 +1,72 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.common;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
+import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.*;
 import org.graalvm.polyglot.io.IOAccess;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
-public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
+@Slf4j
+public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
     public static final String INIT_VALUE_CACHE_KEY = "__init_plugin__init_value";
     private final String name;
     private final PluginDef pluginDef;
+    private final PluginType pluginType;
     private final Engine engine;
     private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService cacheService;
+    private final VariableProviderFactory variableProviderFactory;
+    private final GlobalScriptContextRegistry globalScriptContextRegistry;
+    private final ContextProvider contextProvider;
 
     private String functionName;
-    private Source source;
+    protected Source source;
 
-    public GraalPolyglotScriptStorePlugin(Engine engine, PluginDef pluginDef,
+    protected ScriptRef scriptRef;
+
+    public GraalPolyglotScriptStorePlugin(Engine engine,
+                                          PluginDef pluginDef,
+                                          PluginType pluginType,
                                           PluginContextUtil pluginContextUtil,
                                           PluginCacheService pluginCacheService,
-                                          boolean isInitPlugin) {
+                                          VariableProviderFactory variableProviderFactory,
+                                          GlobalScriptContextRegistry globalScriptContextRegistry,
+                                          ContextProvider contextProvider) {
         this.engine = engine;
         this.name = pluginDef.getName();
         this.pluginDef = pluginDef;
+        this.pluginType = pluginType;
         this.pluginContextUtil = pluginContextUtil;
         this.cacheService = pluginCacheService;
+        this.variableProviderFactory = variableProviderFactory;
+        this.contextProvider = contextProvider;
+        this.globalScriptContextRegistry = globalScriptContextRegistry;
 
         if (pluginDef.getExpression() != null) {
             throw new IllegalArgumentException(String.format("Expression is not supported in %s plugin. Use script or inline-script", language()));
         }
 
-        if (pluginDef.getInlineScript() == null && (pluginDef.getScript() == null || pluginDef.getScript().getFile() == null || pluginDef.getScript().getFile().isEmpty())) {
+        if (pluginDef.getInlineScript() == null
+                && (pluginDef.getScript() == null || (pluginDef.getScript().getFile() == null && pluginDef.getScript().getId() == null))) {
             throw new IllegalArgumentException("Inline script or script file cannot be null or empty " + pluginDef);
         }
 
         if (pluginDef.getInlineScript() != null) {
-            if (!isInitPlugin) { //wrap in a function only if it's not an init plugin
+            if (pluginType != PluginType.INIT) { //wrap in a function only if it's not an init plugin
                 String wrapped = wrapInFunction(pluginDef.getInlineScript(), "__filter");
                 this.functionName = "__filter";
 
-                source = Source.newBuilder(language(), wrapped, "<script>").buildLiteral();
+                source = Source.newBuilder(language(), wrapped, pluginDef.getName()).buildLiteral();
             } else {
-                source = Source.newBuilder(language(), pluginDef.getInlineScript(), "<init_script>").buildLiteral();
+                source = Source.newBuilder(language(), pluginDef.getInlineScript(), pluginDef.getName() + "_init").buildLiteral();
             }
 
         } else if (pluginDef.getScript() != null && pluginDef.getScript().getFile() != null) {
@@ -64,17 +84,27 @@ public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>
                 throw new RuntimeException("Failed to load script from file: " + file, e);
             }
 
-            if (this.functionName == null && !isInitPlugin) {
+            if (this.functionName == null && pluginType != PluginType.INIT) {
                 this.functionName = "__filter";
                 code = wrapInFunction(code, this.functionName);
             }
 
-            source = Source.newBuilder(language(), code, "<script>").buildLiteral();
+            source = Source.newBuilder(language(), code, file).buildLiteral();
+        } else if (pluginDef.getScript() != null && pluginDef.getScript().getId() != null) { //Pointing to global ref script
+            this.functionName = pluginDef.getScript().getFunction();
+            scriptRef = this.globalScriptContextRegistry.getScriptRef(pluginDef.getScript().getId());
+            if (scriptRef == null) {
+                throw new IllegalArgumentException("No script found with id: " + pluginDef.getScript().getId());
+            }
+
+            log.info("Setting global script context for plugin: {} with id: {}", name, pluginDef.getScript().getId());
+        } else {
+            throw new IllegalArgumentException("No inline-script or script file/id found in plugin definition: " + pluginDef);
         }
     }
 
     @Override
-    public void init() {
+    public void initPlugin() {
         var ctx = createContext();
         setCommonVariables(ctx);
 
@@ -99,69 +129,109 @@ public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>
 
     @Override
     public Collection<T> filter(Collection<T> items) {
-        try (var ctx = createContext()) {
-            ctx.eval(source);
-            Value filterFn = ctx.getBindings(language()).getMember(functionName);
-
-            if (filterFn == null || !filterFn.canExecute()) {
-                throw new IllegalArgumentException("Function not found" + functionName);
+        Context ctx = null;
+        try {
+            if (scriptRef == null) {
+                ctx = createContext();
+                ctx.eval(source);
+                setCommonVariables(ctx);
+            } else {
+                if (scriptRef.isEnablePool()) {
+                    ctx = contextProvider.getPool().borrowObject(scriptRef.getId());
+                } else {
+                    ctx = globalScriptContextRegistry.getScriptContext(language(), scriptRef.getId());
+                }
             }
 
-            ctx.getBindings(language()).putMember("items", items);
-            setCommonVariables(ctx);
+            synchronized (ctx) {
+                ctx.enter();
+                try {
+                    Value filterFn = ctx.getBindings(language()).getMember(functionName);
+                    if (filterFn == null || !filterFn.canExecute()) {
+                        throw new IllegalArgumentException("Function not found: " + functionName);
+                    }
+                    filterFn.execute(items);
+                    Value result = filterFn.execute(items);
 
-            Value result = filterFn.execute(items);
+                    var resultProxy = result.as(Collection.class);
 
-            var resultProxy = result.as(Collection.class);
+                    if (resultProxy == null) {
+                        throw new IllegalArgumentException("Filter function must return a collection of items");
+                    }
 
-            if (resultProxy == null) {
-                throw new IllegalArgumentException("Filter function must return a collection of items");
+                    Collection<T> resultList = new ArrayList<>(resultProxy);
+                    return resultList;
+                } finally {
+                    ctx.leave();
+                    if (scriptRef == null && ctx != null) {
+                        ctx.close(); //close only if we created a new context
+                    }
+                }
             }
-
-            Collection<T> resultList = new ArrayList<>(resultProxy);
-
-            return resultList;
+        } catch (Exception e) {
+            log.error("Error executing filter function: {}", functionName, e);
+            throw new RuntimeException("Error executing filter function: " + functionName, e);
+        } finally {
+            if (scriptRef != null && scriptRef.isEnablePool()) {
+                contextProvider.getPool().returnObject(scriptRef.getId(), ctx);
+            }
         }
     }
 
 
     @Override
     public void postAction(Collection<T> items) {
-        try (var ctx = createContext()) {
-            ctx.eval(source);
-            Value filterFn = ctx.getBindings(language()).getMember(functionName);
+        invoke(items);
+    }
 
-            ctx.getBindings(language()).putMember("items", items);
-            setCommonVariables(ctx);
+    private void invoke(Object arg) {
+        Context ctx = null;
+        try {
+            if (scriptRef == null) {
+                ctx = createContext();
+                ctx.eval(source);
+                setCommonVariables(ctx);
+            } else {
+                if (scriptRef.isEnablePool()) {
+                    ctx = contextProvider.getPool().borrowObject(scriptRef.getId());
+                } else {
+                    ctx = globalScriptContextRegistry.getScriptContext(language(), scriptRef.getId());
+                }
+            }
 
-            filterFn.execute(items);
+            synchronized (ctx) {
+                ctx.enter();
+                try {
+                    Value fn = ctx.getBindings(language()).getMember(functionName);
+                    if (fn == null || !fn.canExecute()) {
+                        throw new IllegalArgumentException("Function not found: " + functionName);
+                    }
+                    fn.execute(arg);
+                } finally {
+                    ctx.leave();
+                    if (scriptRef == null && ctx != null) {
+                        ctx.close(); //close only if we created a new context
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error executing action function: {}", functionName, e);
+            throw new RuntimeException("Error executing action function: " + functionName, e);
+        } finally {
+            if (scriptRef != null && scriptRef.isEnablePool()) {
+                contextProvider.getPool().returnObject(scriptRef.getId(), ctx);
+            }
         }
     }
 
     @Override
     public void preAction(Collection<T> items) {
-        try (var ctx = createContext()) {
-            ctx.eval(source);
-            Value filterFn = ctx.getBindings(language()).getMember(functionName);
-
-            ctx.getBindings(language()).putMember("items", items);
-            setCommonVariables(ctx);
-
-            filterFn.execute(items);
-        }
+       invoke(items);
     }
 
     @Override
     public void handleEvent(Object event) {
-        try (var ctx = createContext()) {
-            ctx.eval(source);
-            Value filterFn = ctx.getBindings(language()).getMember(functionName);
-
-            ctx.getBindings(language()).putMember("event", event);
-            setCommonVariables(ctx);
-
-            filterFn.execute(event);
-        }
+       invoke(event);
     }
 
     @Override
@@ -174,7 +244,12 @@ public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>
         return pluginDef;
     }
 
-    private Context createContext() {
+    @Override
+    public PluginType getPluginType() {
+        return pluginType;
+    }
+
+    protected Context createContext() {
         var cb = Context.newBuilder(language())
                 .allowAllAccess(true)
                 .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build())
@@ -187,16 +262,31 @@ public abstract class GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>
     }
 
     private void setCommonVariables(Context ctx) {
-        ctx.getBindings(language()).putMember("util", pluginContextUtil);
-        ctx.getBindings(language()).putMember("global_cache", cacheService.global());
-        ctx.getBindings(language()).putMember("cache", cacheService.forPlugin(name));
+        var binding = ctx.getBindings(language());
+
+        var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
+        if (variables != null) {
+            variables.entrySet()
+                    .stream()
+                    .forEach(entry -> {
+                        String key = entry.getKey();
+                        Object value = entry.getValue();
+
+                        log.info("Setting variable {} = {}", key, value);
+
+                        if (!binding.hasMember(key))
+                            binding.putMember(key, value);
+                    });
+        }
+
+        binding.putMember("cache", cacheService.forPlugin(name));
 
         var globalCache = cacheService.global();
         //TODO -- review if we need this or any perfomance issue
         if (globalCache != null) {
             Value __initVal = (Value)globalCache.get(language() + INIT_VALUE_CACHE_KEY);
             if (__initVal != null) {
-                ctx.getBindings(language()).putMember("__init", __initVal);
+                binding.putMember("__init", __initVal);
             }
         }
 

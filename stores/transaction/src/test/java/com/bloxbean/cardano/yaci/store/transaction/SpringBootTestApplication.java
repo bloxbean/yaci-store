@@ -24,6 +24,6 @@ public class SpringBootTestApplication {
 
     @Bean
     public PluginRegistry pluginRegistry(StoreProperties storeProperties) {
-        return new PluginRegistry(storeProperties, List.of());
+        return new PluginRegistry(storeProperties, List.of(), null);
     }
 }

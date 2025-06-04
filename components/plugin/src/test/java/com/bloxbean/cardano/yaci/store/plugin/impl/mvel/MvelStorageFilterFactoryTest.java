@@ -25,11 +25,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("expression");
+        filterDef.setLang("expression");
         filterDef.setExpression("ownerAddr == 'addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j'");
 
         var filter = filterFactory.<AddressUtxo>createFilterPlugin(filterDef);
@@ -49,11 +49,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_arrayField() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("mvel");
+        filterDef.setLang("mvel");
         filterDef.setExpression("(policyId in amounts).contains('policyId1')");
         var filter = filterFactory.<AddressUtxo>createFilterPlugin(filterDef);
 
@@ -92,11 +92,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("mvel");
+        filterDef.setLang("mvel");
         filterDef.setInlineScript("""
                             result = [];
                             for (item : items) {
@@ -145,11 +145,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript_noResult() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("mvel");
+        filterDef.setLang("mvel");
         filterDef.setInlineScript("""
                             result = [];
                             for (item : items) {
@@ -198,11 +198,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void preActionListByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("mvel");
+        filterDef.setLang("mvel");
         filterDef.setInlineScript("""                        
                             for (item : items) {
                                 if (item.ownerAddr == 'addrabc')
@@ -247,11 +247,11 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void postActionByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("mvel");
+        filterDef.setLang("mvel");
         filterDef.setInlineScript("""                        
                             for (item : items) {
                                 if (item.ownerAddr == "addrabc") {

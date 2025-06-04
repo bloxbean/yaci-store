@@ -8,8 +8,6 @@ import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderMan
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.*;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginFactory;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericObjectPool;
@@ -25,8 +23,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
-
-import java.util.List;
 
 @Configuration
 @ConditionalOnProperty(
@@ -75,12 +71,6 @@ public class StoreConfiguration {
         } else {
             return null;
         }
-    }
-
-    @Bean
-    public PluginRegistry pluginRegistry(StoreProperties storeProperties,
-                                         List<PluginFactory> factories) {
-        return new PluginRegistry(storeProperties, factories);
     }
 
 }

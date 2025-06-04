@@ -2,19 +2,26 @@ package com.bloxbean.cardano.yaci.store.plugin.api;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProvider;
+import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+@Component
 @Slf4j
 public class PluginRegistry {
     private final StoreProperties storeProperties;
     private final List<PluginFactory> factories;
+    private final VariableProviderFactory variableProviderFactory;
 
     // filterKey -> List of filter instances
     // filterKey is the <store_name>.<target>.<action> (e.g. "utxo.unspent.save" or "utxo.spent.save")
@@ -25,9 +32,11 @@ public class PluginRegistry {
     private final Map<String, List<EventHandlerPlugin<?>>> eventHandlers = new ConcurrentHashMap<>();
 
     public PluginRegistry(StoreProperties storeProperties,
-                          List<PluginFactory> factories) {
+                          List<PluginFactory> factories,
+                          VariableProviderFactory variableProviderFactory) {
         this.storeProperties = storeProperties;
         this.factories      = factories;
+        this.variableProviderFactory = variableProviderFactory;
 
         log.info("PluginRegistry created with {} factories", factories);
     }
@@ -39,11 +48,54 @@ public class PluginRegistry {
             return;
         }
         log.info("Initializing PluginRegistry...");
+        initVariableProviders();
+        initGlobalScripts();
         initPluginInitializers();
         initFilterplugins();
         initPreActionPlugins();
         initPostActionPlugins();
         initEventHandlersPlugins();
+    }
+
+   private void initVariableProviders() {
+        List<Class> variableProviderClasses = storeProperties.getPluginVariableProviders();
+        if (variableProviderClasses == null || variableProviderClasses.isEmpty()) {
+            return;
+        }
+
+        log.info("Initializing variable providers: {}", variableProviderClasses);
+
+        List<VariableProvider> pluginVariableProviders = new ArrayList<>();
+        for (Class<?> providerClass : variableProviderClasses) {
+            try {
+                VariableProvider provider = (VariableProvider) providerClass.getDeclaredConstructor().newInstance();
+                pluginVariableProviders.add(provider);
+            } catch (Exception e) {
+                log.error("Failed to initialize variable provider: " + providerClass.getName(), e);
+            }
+        }
+
+        log.info("Registered variable providers: {}", pluginVariableProviders);
+        variableProviderFactory.setConfiguredVariableProviders(pluginVariableProviders);
+   }
+
+    private void initGlobalScripts() {
+        List<ScriptRef> scriptRefs = storeProperties.getPluginGlobalScripts();
+        if (scriptRefs == null || scriptRefs.isEmpty()) {
+            log.info("No global Python script references found in configuration.");
+            return;
+        }
+
+        for (PluginFactory factory : factories) {
+            var langScriptRefs = scriptRefs.stream()
+                    .filter(scriptRef -> factory.getLang().equals(scriptRef.getLang()))
+                    .toList();
+
+            if (!langScriptRefs.isEmpty()) {
+                factory.initGlobalScripts(langScriptRefs);
+            }
+        }
+
     }
 
     private void initPluginInitializers() {
@@ -55,14 +107,14 @@ public class PluginRegistry {
         }
 
         for (PluginFactory factory : factories) {
-            var plugiDef = initMap.get(factory.getType());
+            var plugiDef = initMap.get(factory.getLang());
             if (plugiDef == null)
                 continue;
 
             var initPlugin = factory.createInitPlugin(plugiDef);
-            initPlugin.init();
+            initPlugin.initPlugin();
 
-            initPlugins.put(factory.getType(), initPlugin);
+            initPlugins.put(factory.getLang(), initPlugin);
         }
     }
 
@@ -77,10 +129,10 @@ public class PluginRegistry {
             List<FilterPlugin<?>> instances = defs.stream()
                     .map(def -> {
                         var factory = factories.stream()
-                                .filter(f -> f.getType().equals(def.getType()))
+                                .filter(f -> f.getLang().equals(def.getLang()))
                                 .findFirst()
                                 .orElseThrow(() ->
-                                        new IllegalArgumentException("Unknown filter type: " + def.getType() + ", filter: " + def));
+                                        new IllegalArgumentException("Unknown filter type: " + def.getLang() + ", filter: " + def));
                         FilterPlugin<?> filter = factory.createFilterPlugin(def);
                         log.info("Registered filter {} for filter key '{}'", def.getName(), storeKey);
                         return filter;
@@ -102,10 +154,10 @@ public class PluginRegistry {
             List<PreActionPlugin<?>> instances = defs.stream()
                     .map(def -> {
                         var factory = factories.stream()
-                                .filter(f -> f.getType().equals(def.getType()))
+                                .filter(f -> f.getLang().equals(def.getLang()))
                                 .findFirst()
                                 .orElseThrow(() ->
-                                        new IllegalArgumentException("Unknown pre-action type: " + def.getType() + ", pre-action: " + def));
+                                        new IllegalArgumentException("Unknown pre-action type: " + def.getLang() + ", pre-action: " + def));
                         PreActionPlugin<?> filter = (PreActionPlugin<?>) factory.createPreActionPlugin(def);
                         log.info("Registered pre-action {} for pre-action key '{}'", def.getName(), storeKey);
                         return filter;
@@ -127,10 +179,10 @@ public class PluginRegistry {
             List<PostActionPlugin<?>> instances = defs.stream()
                     .map(def -> {
                         var factory = factories.stream()
-                                .filter(f -> f.getType().equals(def.getType()))
+                                .filter(f -> f.getLang().equals(def.getLang()))
                                 .findFirst()
                                 .orElseThrow(() ->
-                                        new IllegalArgumentException("Unknown post-action type: " + def.getType() + ", post-action: " + def));
+                                        new IllegalArgumentException("Unknown post-action type: " + def.getLang() + ", post-action: " + def));
                         PostActionPlugin<?> filter = (PostActionPlugin<?>) factory.createPostActionPlugin(def);
                         log.info("Registered post-action {} for post-action key '{}'", def.getName(), storeKey);
                         return filter;
@@ -152,10 +204,10 @@ public class PluginRegistry {
             List<EventHandlerPlugin<?>> instances = defs.stream()
                     .map(def -> {
                         var factory = factories.stream()
-                                .filter(f -> f.getType().equals(def.getType()))
+                                .filter(f -> f.getLang().equals(def.getLang()))
                                 .findFirst()
                                 .orElseThrow(() ->
-                                        new IllegalArgumentException("Unknown event-handler type: " + def.getType() + ", event-handler: " + def));
+                                        new IllegalArgumentException("Unknown event-handler type: " + def.getLang() + ", event-handler: " + def));
                         EventHandlerPlugin<?> filter = (EventHandlerPlugin<?>) factory.createEventHandlerPlugin(def);
                         log.info("Registered event-handler {} for key '{}'", def.getName(), key);
                         return filter;

@@ -3,9 +3,8 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot.js;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheConfig;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import org.junit.jupiter.api.BeforeAll;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptDef;
+import com.bloxbean.cardano.yaci.store.plugin.polyglot.BasePluginTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -14,25 +13,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class JsPluginFilterTest {
-
-    static PluginCacheConfig pluginCacheConfig;
-    static PluginCacheService pluginCacheService;
-
-    @BeforeAll
-    static void setup() {
-        pluginCacheConfig = new PluginCacheConfig();
-        pluginCacheService = new PluginCacheService(pluginCacheConfig.globalCache(),
-                pluginCacheConfig.pluginCaches());
-    }
+class JsPluginFilterTest extends BasePluginTest {
 
     @Test
     void filterListByExpression_inlineScript() {
-        JsPolyglotPluginFactory filterFactory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory filterFactory = getPluginFactory();
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("js");
+        filterDef.setLang("js");
         filterDef.setInlineScript("""
             var result = []
                 for (var i=0; i < items.length; i++) {
@@ -78,9 +67,14 @@ class JsPluginFilterTest {
         assertThat(result).hasSize(1);
     }
 
+    private JsPolyglotPluginFactory getPluginFactory() {
+        JsPolyglotPluginFactory filterFactory = new JsPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
+        return filterFactory;
+    }
+
     @Test
     void filterListByExpression_withScript_noFunction() throws Exception {
-        JsPolyglotPluginFactory filterFactory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory filterFactory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent = """
@@ -101,9 +95,9 @@ class JsPluginFilterTest {
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("js");
+        filterDef.setLang("js");
         filterDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var filter = filterFactory.createFilterPlugin(filterDef);
 
@@ -142,7 +136,7 @@ class JsPluginFilterTest {
 
     @Test
     void filterListByExpression_withScript_withFunction() throws Exception {
-        JsPolyglotPluginFactory filterFactory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory filterFactory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent = """
@@ -165,9 +159,9 @@ function myfilter(items) {
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("js");
+        filterDef.setLang("js");
         filterDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), "myfilter")
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), "myfilter")
         );
         var filter = filterFactory.createFilterPlugin(filterDef);
 

@@ -26,6 +26,7 @@ include 'components:admin'
 include 'components:dbutils'
 include 'components:plugin'
 include 'components:plugin-extra'
+include 'components:plugin-model-types'
 
 include 'stores:blocks'
 include 'stores:utxo'

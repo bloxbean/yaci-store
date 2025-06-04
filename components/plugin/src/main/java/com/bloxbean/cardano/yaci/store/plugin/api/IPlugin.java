@@ -10,4 +10,5 @@ import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 public interface IPlugin<T> {
     String getName();
     PluginDef getPluginDef();
+    PluginType getPluginType();
 }

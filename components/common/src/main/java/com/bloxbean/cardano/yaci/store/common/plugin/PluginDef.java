@@ -9,17 +9,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PluginDef {
     private String name;
-    private String type;
+    private String lang;
     private String expression; //nullable
     private String inlineScript; //nullable
-    private Script script; //nullable
+    private ScriptDef script; //nullable
     private boolean exitOnError = false;
-
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class Script {
-        private String file;
-        private String function; //nullable
-    }
 }

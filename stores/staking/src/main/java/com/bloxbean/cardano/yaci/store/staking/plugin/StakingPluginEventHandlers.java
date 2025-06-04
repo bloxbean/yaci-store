@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.staking.plugin;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.events.PluginBaseEventHandler;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.*;
@@ -8,8 +9,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class StakingPluginEventHandlers extends PluginBaseEventHandler {
-    public StakingPluginEventHandlers(PluginRegistry pluginRegistry) {
+    public StakingPluginEventHandlers(PluginRegistry pluginRegistry, StoreProperties storeProperties) {
         this.pluginRegistry = pluginRegistry;
+        this.storeProperties = storeProperties;
     }
 
     @EventListener

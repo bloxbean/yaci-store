@@ -3,9 +3,8 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot.js;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheConfig;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import org.junit.jupiter.api.BeforeAll;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptDef;
+import com.bloxbean.cardano.yaci.store.plugin.polyglot.BasePluginTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -15,25 +14,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class JsPluginActionEventTest {
-
-    static PluginCacheConfig pluginCacheConfig;
-    static PluginCacheService pluginCacheService;
-
-    @BeforeAll
-    static void setup() {
-        pluginCacheConfig = new PluginCacheConfig();
-        pluginCacheService = new PluginCacheService(pluginCacheConfig.globalCache(),
-                pluginCacheConfig.pluginCaches());
-    }
+class JsPluginActionEventTest extends BasePluginTest {
 
     @Test
     void preActionByExpression_inlineScript() {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setInlineScript(
 """
     result = []
@@ -79,7 +68,7 @@ print(items[0])
 
     @Test
     void preActionByExpression_script() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -95,9 +84,9 @@ print(items[0])
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var preAction = factory.createPreActionPlugin(pluginDef);
 
@@ -137,11 +126,11 @@ print(items[0])
 
     @Test
     void postActionByExpression_inlineScript() {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setInlineScript(
                 """
                 result = []
@@ -187,7 +176,7 @@ print(items[0])
 
     @Test
     void postActionByExpression_script() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -203,9 +192,9 @@ print(items[0])
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var postAction = factory.createPostActionPlugin(pluginDef);
 
@@ -245,7 +234,7 @@ print(items[0])
 
     @Test
     void eventHandler_script() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -260,9 +249,9 @@ print("Inside event handler");
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -288,7 +277,7 @@ print("Inside event handler");
 
     @Test
     void eventHandler_script_withInitScript() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         String initScriptContent = """
         function __init() {
@@ -301,10 +290,10 @@ print("Inside event handler");
 
         PluginDef initDef = new PluginDef();
         initDef.setName("js_init");
-        initDef.setType("js");
-        initDef.setScript(new PluginDef.Script(initScriptFile.toFile().getAbsolutePath(), null));
+        initDef.setLang("js");
+        initDef.setScript(new ScriptDef(null, initScriptFile.toFile().getAbsolutePath(), null));
 
-        factory.createInitPlugin(initDef).init();
+        factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
@@ -320,9 +309,9 @@ print("Inside event handler");
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -348,11 +337,11 @@ print("Inside event handler");
 
     @Test
     void eventHandler_script_withInitInlineScript() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef initDef = new PluginDef();
         initDef.setName("js_init");
-        initDef.setType("js");
+        initDef.setLang("js");
         initDef.setInlineScript("""
         function __init() {
             print("This is a method in init script");
@@ -360,7 +349,7 @@ print("Inside event handler");
         }
                 """);
 
-        factory.createInitPlugin(initDef).init();
+        factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
@@ -376,9 +365,9 @@ print("Inside event handler");
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("js");
+        pluginDef.setLang("js");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -404,11 +393,11 @@ print("Inside event handler");
 
     @Test
     void eventHandler_script_withInitInlineScript_multithread() throws Exception {
-        JsPolyglotPluginFactory factory = new JsPolyglotPluginFactory(null, pluginCacheService);
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef initDef = new PluginDef();
         initDef.setName("js_init");
-        initDef.setType("js");
+        initDef.setLang("js");
         initDef.setInlineScript("""
         function __init() {
             print("This is a method in init script");
@@ -416,7 +405,7 @@ print("Inside event handler");
         }
                 """);
 
-        factory.createInitPlugin(initDef).init();
+        factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
@@ -438,9 +427,9 @@ print("Inside event handler");
                 public void run() {
                     PluginDef pluginDef = new PluginDef();
                     pluginDef.setName("test");
-                    pluginDef.setType("js");
+                    pluginDef.setLang("js");
                     pluginDef.setScript(
-                            new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                            new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
                     );
                     var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -473,4 +462,7 @@ print("Inside event handler");
             thread.join();
     }
 
+    private JsPolyglotPluginFactory getPluginFactory() {
+        return new JsPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
+    }
 }

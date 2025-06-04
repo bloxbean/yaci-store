@@ -7,5 +7,5 @@ package com.bloxbean.cardano.yaci.store.plugin.api;
  * @param <T> The type of the plugin.
  */
 public interface InitPlugin<T> extends IPlugin<T>{
-    void init();
+    void initPlugin();
 }

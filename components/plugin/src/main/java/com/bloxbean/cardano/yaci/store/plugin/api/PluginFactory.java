@@ -1,9 +1,14 @@
 package com.bloxbean.cardano.yaci.store.plugin.api;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+
+import java.util.List;
 
 public interface PluginFactory {
-    String getType();
+    String getLang();
+
+    void initGlobalScripts(List<ScriptRef> scriptRef);
 
     <T> InitPlugin createInitPlugin(PluginDef def);
 

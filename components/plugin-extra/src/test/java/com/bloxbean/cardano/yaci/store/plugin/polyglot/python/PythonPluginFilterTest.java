@@ -3,9 +3,8 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheConfig;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import org.junit.jupiter.api.BeforeAll;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptDef;
+import com.bloxbean.cardano.yaci.store.plugin.polyglot.BasePluginTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -14,25 +13,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class PythonPluginFilterTest {
-
-    static PluginCacheConfig pluginCacheConfig;
-    static PluginCacheService pluginCacheService;
-
-    @BeforeAll
-    static void setup() {
-        pluginCacheConfig = new PluginCacheConfig();
-        pluginCacheService = new PluginCacheService(pluginCacheConfig.globalCache(),
-                pluginCacheConfig.pluginCaches());
-    }
+class PythonPluginFilterTest extends BasePluginTest {
 
     @Test
     void filterListByExpression_inlineScript() {
-        PythonPolyglotPluginFactory filterFactory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory filterFactory = getPluginFactory();
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("python");
+        filterDef.setLang("python");
         filterDef.setInlineScript("""
 result = []
 for item in items:
@@ -77,9 +66,14 @@ return result
         assertThat(result).hasSize(1);
     }
 
+    private PythonPolyglotPluginFactory getPluginFactory() {
+        PythonPolyglotPluginFactory filterFactory = new PythonPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
+        return filterFactory;
+    }
+
     @Test
     void filterListByExpression_withScript_noFunction() throws Exception {
-        PythonPolyglotPluginFactory filterFactory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory filterFactory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent = """
@@ -98,9 +92,9 @@ return result
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("python");
+        filterDef.setLang("python");
         filterDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var filter = filterFactory.createFilterPlugin(filterDef);
 
@@ -139,12 +133,9 @@ return result
 
     @Test
     void filterListByExpression_withScript_withFunction() throws Exception {
-        PythonPolyglotPluginFactory filterFactory = new PythonPolyglotPluginFactory(null, pluginCacheService);
-//        filterFactory.setVirtualEnvPath("/Users/satya/work/myvenv");
-
-        // Create a template file with script content
+        PythonPolyglotPluginFactory filterFactory = getPluginFactory();
         String scriptContent = """
-def myfilter(iterms):
+def myfilter(items):
     result = []
     for item in items:
         if item.getOwnerAddr() == 'addrabcd':            
@@ -160,9 +151,9 @@ def myfilter(iterms):
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("python");
+        filterDef.setLang("python");
         filterDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), "myfilter")
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), "myfilter")
         );
         var filter = filterFactory.createFilterPlugin(filterDef);
 

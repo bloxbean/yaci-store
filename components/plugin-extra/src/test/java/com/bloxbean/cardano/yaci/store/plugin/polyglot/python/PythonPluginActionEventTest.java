@@ -3,9 +3,8 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheConfig;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import org.junit.jupiter.api.BeforeAll;
+import com.bloxbean.cardano.yaci.store.common.plugin.ScriptDef;
+import com.bloxbean.cardano.yaci.store.plugin.polyglot.BasePluginTest;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -15,25 +14,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class PythonPluginActionEventTest {
-
-    static PluginCacheConfig pluginCacheConfig;
-    static PluginCacheService pluginCacheService;
-
-    @BeforeAll
-    static void setup() {
-        pluginCacheConfig = new PluginCacheConfig();
-        pluginCacheService = new PluginCacheService(pluginCacheConfig.globalCache(),
-                pluginCacheConfig.pluginCaches());
-    }
+class PythonPluginActionEventTest extends BasePluginTest {
 
     @Test
     void preActionByExpression_inlineScript() {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("python");
+        pluginDef.setLang("python");
         pluginDef.setInlineScript(
 """
 result = []
@@ -77,9 +66,14 @@ print(items[0])
         assertThat(addressUtxo2.getOwnerAddr()).isEqualTo("addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j");
     }
 
+    private PythonPolyglotPluginFactory getPluginFactory() {
+        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
+        return factory;
+    }
+
     @Test
     void preActionByExpression_script() throws Exception {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -95,9 +89,9 @@ print(items[0])
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("python");
+        pluginDef.setLang("python");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var preAction = factory.createPreActionPlugin(pluginDef);
 
@@ -137,11 +131,11 @@ print(items[0])
 
     @Test
     void postActionByExpression_inlineScript() {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("python");
+        pluginDef.setLang("python");
         pluginDef.setInlineScript(
                 """
                 result = []
@@ -187,7 +181,7 @@ print(items[0])
 
     @Test
     void postActionByExpression_script() throws Exception {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -203,9 +197,9 @@ print(items[0])
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("python");
+        pluginDef.setLang("python");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var postAction = factory.createPostActionPlugin(pluginDef);
 
@@ -245,7 +239,7 @@ print(items[0])
 
     @Test
     void eventHandler_script() throws Exception {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         String initScriptContent = """
 def __init():
@@ -257,10 +251,10 @@ def __init():
 
         PluginDef initDef = new PluginDef();
         initDef.setName("py_init");
-        initDef.setType("python");
-        initDef.setScript(new PluginDef.Script(initScriptFile.toFile().getAbsolutePath(), null));
+        initDef.setLang("python");
+        initDef.setScript(new ScriptDef(null, initScriptFile.toFile().getAbsolutePath(), null));
 
-        factory.createInitPlugin(initDef).init();
+        factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
@@ -276,9 +270,9 @@ print("Init value: ", __init)
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setType("python");
+        pluginDef.setLang("python");
         pluginDef.setScript(
-                new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
         var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -305,11 +299,11 @@ print("Init value: ", __init)
 
     @Test
     void eventHandler_script_withInlineInitScript() throws Exception {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService);
+        PythonPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef initDef = new PluginDef();
         initDef.setName("test");
-        initDef.setType("python");
+        initDef.setLang("python");
         initDef.setInlineScript("""
 greet = "Hello from inline init script"
 def __init():
@@ -317,7 +311,7 @@ def __init():
     return "init_value"                   
                 """);
 
-        factory.createInitPlugin(initDef).init();
+        factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
@@ -340,9 +334,9 @@ def __init():
                     System.out.println("Running event handler in thread: " + Thread.currentThread());
                     PluginDef pluginDef = new PluginDef();
                     pluginDef.setName("test");
-                    pluginDef.setType("python");
+                    pluginDef.setLang("python");
                     pluginDef.setScript(
-                            new PluginDef.Script(tempScriptFile.toFile().getAbsolutePath(), null)
+                            new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
                     );
                     var eventHandler = factory.createEventHandlerPlugin(pluginDef);
 
@@ -374,8 +368,6 @@ def __init():
         for (Thread t : threads) {
             t.join();
         }
-
-
     }
 
 }

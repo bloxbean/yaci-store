@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
+import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.mvel2.MVEL;
 import org.mvel2.integration.impl.MapVariableResolverFactory;
@@ -17,19 +18,26 @@ import java.util.Map;
 public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
     private final String name;
     private final PluginDef pluginDef;
+    private final PluginType pluginType;
     private final Serializable compiledExpr;
     private final String functionName;
     private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService cacheService;
+    private final VariableProviderFactory variableProviderFactory;
 
     public MvelScriptStorePlugin(PluginDef pluginDef,
-                                 PluginContextUtil pluginContextUtil, PluginCacheService cacheService) {
+                                 PluginType pluginType,
+                                 PluginContextUtil pluginContextUtil,
+                                 PluginCacheService cacheService,
+                                 VariableProviderFactory variableProviderFactory) {
         this.name = pluginDef.getName();
         this.pluginDef = pluginDef;
+        this.pluginType = pluginType;
         String file = pluginDef.getScript().getFile();
         this.functionName = pluginDef.getScript().getFunction();
         this.pluginContextUtil = pluginContextUtil;
         this.cacheService = cacheService;
+        this.variableProviderFactory = variableProviderFactory;
 
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Script file cannot be null or empty " + pluginDef.getScript());
@@ -47,13 +55,20 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
 
     }
 
-    public MvelScriptStorePlugin(PluginDef pluginDef, String function,
-                                 PluginContextUtil pluginContextUtil, PluginCacheService cacheService) {
+    public MvelScriptStorePlugin(PluginDef pluginDef,
+                                 PluginType pluginType,
+                                 String function,
+                                 PluginContextUtil pluginContextUtil,
+                                 PluginCacheService cacheService,
+                                 VariableProviderFactory variableProviderFactory
+                                 ) {
         this.name = pluginDef.getName();
         this.pluginDef = pluginDef;
+        this.pluginType = pluginType;
         this.functionName = function;
         this.pluginContextUtil = pluginContextUtil;
         this.cacheService = cacheService;
+        this.variableProviderFactory = variableProviderFactory;
 
         String inlineScript = pluginDef.getInlineScript();
 
@@ -62,7 +77,6 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
         }
 
         this.compiledExpr = MVEL.compileExpression(inlineScript);
-
         log.info("Created MVEL plugin {} with inline script:\n{}", name, inlineScript);
     }
 
@@ -74,6 +88,11 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     @Override
     public PluginDef getPluginDef() {
         return pluginDef;
+    }
+
+    @Override
+    public PluginType getPluginType() {
+        return pluginType;
     }
 
     @Override
@@ -158,7 +177,7 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     }
 
     @Override
-    public void init() {
+    public void initPlugin() {
         if (log.isTraceEnabled())
             log.trace("Init plugin {} - MVEL", name);
 
@@ -171,8 +190,10 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     }
 
     private void setCommonVariables(Map<String,Object> vars) {
-        vars.put("util", pluginContextUtil);
-        vars.put("global_cache", cacheService.global());
+        var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
+        if (variables != null)
+            vars.putAll(variables);
+
         vars.put("cache", cacheService.forPlugin(name));
     }
 }

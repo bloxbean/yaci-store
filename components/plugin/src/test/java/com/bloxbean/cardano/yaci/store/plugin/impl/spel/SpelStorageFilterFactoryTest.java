@@ -17,7 +17,7 @@ public class  SpelStorageFilterFactoryTest {
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("expression");
+        filterDef.setLang("expression");
         filterDef.setExpression("ownerAddr == 'addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j'");
 
         var filter = filterFactory.createFilterPlugin(filterDef);
@@ -41,7 +41,7 @@ public class  SpelStorageFilterFactoryTest {
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("expression");
+        filterDef.setLang("expression");
         filterDef.setExpression("slot > 10");
 
         var filter = filterFactory.createFilterPlugin(filterDef);
@@ -61,7 +61,7 @@ public class  SpelStorageFilterFactoryTest {
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
-        filterDef.setType("expression");
+        filterDef.setLang("expression");
         filterDef.setExpression("slot >= 5");
 
         var filter = filterFactory.createFilterPlugin(filterDef);
