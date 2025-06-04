@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Factory class to manage variable providers.
+ * It allows both automatic registration of variable providers and configuration via plugin YAML.
+ */
 @Component
 @Slf4j
 public class VariableProviderFactory {

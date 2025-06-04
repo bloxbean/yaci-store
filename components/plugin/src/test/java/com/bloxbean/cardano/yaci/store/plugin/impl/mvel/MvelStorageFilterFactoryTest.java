@@ -25,7 +25,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -49,7 +49,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_arrayField() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -92,7 +92,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -145,7 +145,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void filterListByExpression_withScript_noResult() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -198,7 +198,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void preActionListByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");
@@ -247,7 +247,7 @@ public class MvelStorageFilterFactoryTest {
 
     @Test
     void postActionByScript_updateAttribute() {
-        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(null, pluginCacheService, null);
+        MvelStorePluginFactory filterFactory = new MvelStorePluginFactory(pluginCacheService, null);
 
         PluginDef filterDef = new PluginDef();
         filterDef.setName("test");

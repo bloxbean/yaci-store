@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GraalPolyglotScriptStorePlugin;
-import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
@@ -22,12 +21,11 @@ public class PythonScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T
                                    PluginDef pluginDef,
                                    PluginType pluginType,
                                    String venvPath,
-                                   PluginContextUtil pluginContextUtil,
                                    PluginCacheService pluginCacheService,
                                    VariableProviderFactory variableProviderFactory,
                                    ContextProvider contextProvider,
                                    GlobalScriptContextRegistry globalScriptContextRegistry) {
-        super(engine, pluginDef, pluginType, pluginContextUtil, pluginCacheService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
+        super(engine, pluginDef, pluginType, pluginCacheService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
         this.venvPath = venvPath;
     }
 

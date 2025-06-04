@@ -116,10 +116,10 @@ public class JsPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> InitPlugin createInitPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No expression or script found in init definition for js plugin: " + def);
@@ -128,10 +128,10 @@ public class JsPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER,  pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No expression or script found in filter definition for js plugin: " + def);
@@ -142,7 +142,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
@@ -153,7 +153,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
@@ -164,7 +164,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, pluginContextUtil, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, pluginCacheService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for js plugin: " + def);

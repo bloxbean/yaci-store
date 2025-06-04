@@ -5,7 +5,6 @@ import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
-import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.*;
@@ -21,7 +20,6 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
     private final PluginDef pluginDef;
     private final PluginType pluginType;
     private final Engine engine;
-    private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService cacheService;
     private final VariableProviderFactory variableProviderFactory;
     private final GlobalScriptContextRegistry globalScriptContextRegistry;
@@ -35,7 +33,6 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
     public GraalPolyglotScriptStorePlugin(Engine engine,
                                           PluginDef pluginDef,
                                           PluginType pluginType,
-                                          PluginContextUtil pluginContextUtil,
                                           PluginCacheService pluginCacheService,
                                           VariableProviderFactory variableProviderFactory,
                                           GlobalScriptContextRegistry globalScriptContextRegistry,
@@ -44,7 +41,6 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
         this.name = pluginDef.getName();
         this.pluginDef = pluginDef;
         this.pluginType = pluginType;
-        this.pluginContextUtil = pluginContextUtil;
         this.cacheService = pluginCacheService;
         this.variableProviderFactory = variableProviderFactory;
         this.contextProvider = contextProvider;

@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.mvel2.MVEL;
@@ -21,13 +20,11 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     private final PluginType pluginType;
     private final Serializable compiledExpr;
     private final String functionName;
-    private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService cacheService;
     private final VariableProviderFactory variableProviderFactory;
 
     public MvelScriptStorePlugin(PluginDef pluginDef,
                                  PluginType pluginType,
-                                 PluginContextUtil pluginContextUtil,
                                  PluginCacheService cacheService,
                                  VariableProviderFactory variableProviderFactory) {
         this.name = pluginDef.getName();
@@ -35,7 +32,6 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
         this.pluginType = pluginType;
         String file = pluginDef.getScript().getFile();
         this.functionName = pluginDef.getScript().getFunction();
-        this.pluginContextUtil = pluginContextUtil;
         this.cacheService = cacheService;
         this.variableProviderFactory = variableProviderFactory;
 
@@ -58,7 +54,6 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     public MvelScriptStorePlugin(PluginDef pluginDef,
                                  PluginType pluginType,
                                  String function,
-                                 PluginContextUtil pluginContextUtil,
                                  PluginCacheService cacheService,
                                  VariableProviderFactory variableProviderFactory
                                  ) {
@@ -66,7 +61,6 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
         this.pluginDef = pluginDef;
         this.pluginType = pluginType;
         this.functionName = function;
-        this.pluginContextUtil = pluginContextUtil;
         this.cacheService = cacheService;
         this.variableProviderFactory = variableProviderFactory;
 

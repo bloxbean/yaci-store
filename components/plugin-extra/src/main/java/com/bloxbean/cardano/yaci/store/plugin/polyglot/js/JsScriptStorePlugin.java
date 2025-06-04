@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GraalPolyglotScriptStorePlugin;
-import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -17,12 +16,11 @@ public class JsScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T> {
     public JsScriptStorePlugin(Engine engine,
                                PluginDef pluginDef,
                                PluginType pluginType,
-                               PluginContextUtil pluginContextUtil,
                                PluginCacheService pluginCacheService,
                                VariableProviderFactory variableProviderFactory,
                                ContextProvider contextProvider,
                                GlobalScriptContextRegistry globalScriptContextRegistry) {
-        super(engine, pluginDef, pluginType, pluginContextUtil, pluginCacheService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
+        super(engine, pluginDef, pluginType, pluginCacheService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
     }
 
     @Override

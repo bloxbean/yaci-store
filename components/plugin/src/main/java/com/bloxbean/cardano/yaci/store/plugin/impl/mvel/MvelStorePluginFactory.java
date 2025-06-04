@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
-import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import java.util.List;
 @Slf4j
 public class MvelStorePluginFactory implements PluginFactory {
 
-    private final PluginContextUtil pluginContextUtil;
     private final PluginCacheService pluginCacheService;
     private final VariableProviderFactory variableProviderFactory;
 
@@ -92,9 +90,9 @@ public class MvelStorePluginFactory implements PluginFactory {
             var script = def.getScript();
             if (script.getFile() == null)
                 throw new IllegalArgumentException("Script file is not defined in plugin def: " + def);
-            return new MvelScriptStorePlugin<>(def, pluginType, pluginContextUtil, pluginCacheService, variableProviderFactory);
+            return new MvelScriptStorePlugin<>(def, pluginType, pluginCacheService, variableProviderFactory);
         } else if (def.getInlineScript() != null) {
-            return new MvelScriptStorePlugin<>(def, pluginType, null, pluginContextUtil, pluginCacheService, variableProviderFactory);
+            return new MvelScriptStorePlugin<>(def, pluginType, null, pluginCacheService, variableProviderFactory);
         } else {
             throw new IllegalArgumentException("No script or inline-script found in filter definition for mvel plugin: " + def);
         }

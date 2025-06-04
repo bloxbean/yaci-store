@@ -132,7 +132,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for init plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.INIT, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.INIT, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in init python plugin: " + def);
@@ -141,10 +141,10 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No expression or script found in filter definition for python plugin: " + def);
@@ -155,7 +155,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider,  globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for python plugin: " + def);
@@ -166,7 +166,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for python plugin: " + def);
@@ -177,7 +177,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, venvPath, pluginContextUtil, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, venvPath, pluginCacheService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for python plugin: " + def);
