@@ -34,6 +34,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
+import com.bloxbean.cardano.yaci.store.governanceaggr.service.CommitteeStateService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DRepDistService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DelegationVoteDataService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingAggrService;
@@ -79,6 +80,7 @@ public class ProposalStatusProcessor {
     private final EpochParamStorage epochParamStorage;
     private final CommitteeStorage committeeStorage;
     private final VotingAggrService votingAggrService;
+    private final CommitteeStateService committeeStateService;
     private final EpochStakeStorageReader epochStakeStorage;
     private final DRepDistStorageReader dRepDistStorage;
     private final AdaPotStorage adaPotStorage;
@@ -99,9 +101,10 @@ public class ProposalStatusProcessor {
     public ProposalStatusProcessor(GovActionProposalStatusStorage govActionProposalStatusStorage, GovActionProposalStorage govActionProposalStorage,
                                    DRepDistService dRepDistService, ProposalStateClient proposalStateClient,
                                    EpochParamStorage epochParamStorage, CommitteeStorage committeeStorage,
-                                   VotingAggrService votingAggrService, EpochStakeStorageReader epochStakeStorage,
-                                   DRepDistStorageReader dRepDistStorage, AdaPotStorage adaPotStorage,
-                                   CommitteeMemberStorage committeeMemberStorage, PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, EraService eraService, AdaPotJobStorage adaPotJobStorage, ProposalMapper proposalMapper,
+                                   VotingAggrService votingAggrService, CommitteeStateService committeeStateService,
+                                   EpochStakeStorageReader epochStakeStorage, DRepDistStorageReader dRepDistStorage,
+                                   AdaPotStorage adaPotStorage, CommitteeMemberStorage committeeMemberStorage,
+                                   PoolStorage poolStorage, PoolStorageReader poolStorageReader, DelegationVoteDataService delegationVoteDataService, EraService eraService, AdaPotJobStorage adaPotJobStorage, ProposalMapper proposalMapper,
                                    ApplicationEventPublisher publisher, StoreProperties storeProperties, EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil) {
         this.govActionProposalStatusStorage = govActionProposalStatusStorage;
         this.govActionProposalStorage = govActionProposalStorage;
@@ -110,6 +113,7 @@ public class ProposalStatusProcessor {
         this.epochParamStorage = epochParamStorage;
         this.committeeStorage = committeeStorage;
         this.votingAggrService = votingAggrService;
+        this.committeeStateService = committeeStateService;
         this.epochStakeStorage = epochStakeStorage;
         this.dRepDistStorage = dRepDistStorage;
         this.adaPotStorage = adaPotStorage;
@@ -197,6 +201,13 @@ public class ProposalStatusProcessor {
             return Collections.emptyList();
         }
 
+        // TODO: add tx_index in governance_action proposal and sort
+        List<GovActionProposal> sortedProposalsForStatusCalculation = proposalsForStatusCalculation.stream()
+                .sorted(Comparator.comparingInt((GovActionProposal proposal) -> GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType()))
+                        .thenComparingInt(GovActionProposal::getEpoch)
+                        .thenComparingLong(GovActionProposal::getSlot))
+                .toList();
+
         // current epoch param
         var epochParamOpt = epochParamStorage.getProtocolParams(currentEpoch);
         if (epochParamOpt.isEmpty()) {
@@ -230,7 +241,7 @@ public class ProposalStatusProcessor {
                         Collectors.mapping(CommitteeMemberDetails::getColdKey, Collectors.toList())));
         start = System.currentTimeMillis();
         // get votes by committee member
-        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesByCommittee = votingAggrService.getVotesByCommittee(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                         govActionProposal -> GovActionId.builder()
                                 .transactionId(govActionProposal.getTxHash())
                                 .gov_action_index(govActionProposal.getIndex())
@@ -242,7 +253,7 @@ public class ProposalStatusProcessor {
         log.debug("GetVotesByCommittee time: {} ms", end - start);
         // get votes by SPO
         start = System.currentTimeMillis();
-        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, proposalsForStatusCalculation.stream().map(
+        List<VotingProcedure> votesBySPO = votingAggrService.getVotesBySPO(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                 govActionProposal -> GovActionId.builder()
                         .transactionId(govActionProposal.getTxHash())
                         .gov_action_index(govActionProposal.getIndex())
@@ -255,7 +266,7 @@ public class ProposalStatusProcessor {
         List<VotingProcedure> votesByDRep = new ArrayList<>();
 
         if (!isInConwayBootstrapPhase) {
-            votesByDRep = votingAggrService.getVotesByDRep(prevEpoch, proposalsForStatusCalculation.stream().map(
+            votesByDRep = votingAggrService.getVotesByDRep(prevEpoch, sortedProposalsForStatusCalculation.stream().map(
                     govActionProposal -> GovActionId.builder()
                             .transactionId(govActionProposal.getTxHash())
                             .gov_action_index(govActionProposal.getIndex())
@@ -276,10 +287,11 @@ public class ProposalStatusProcessor {
         end = System.currentTimeMillis();
         log.debug("GetProposalsByStatusAndEpoch time: {} ms", end - start);
 
-        boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
-                .anyMatch(govActionProposal -> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
+//        boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
+//                .anyMatch(govActionProposal -> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
 
-        ConstitutionCommitteeState ccState = ConstitutionCommitteeState.NORMAL; //TODO: handle later
+
+        ConstitutionCommitteeState ccState = committeeStateService.getCurrentCommitteeState(); //TODO: handle later
 
         start = System.currentTimeMillis();
         List<String> activePools = poolStorage.findActivePools(prevEpoch).stream()
@@ -351,9 +363,11 @@ public class ProposalStatusProcessor {
         end = System.currentTimeMillis();
         log.debug("GetTotalStakeForEpoch & getSTakeByDRepTypeAndEpoch time: {} ms", end - start);
 
+        boolean isActionRatificationDelayed = false;
+
         long loopStart = System.currentTimeMillis();
         // use gov rule and update proposal status
-        for (var proposal : proposalsForStatusCalculation) {
+        for (var proposal : sortedProposalsForStatusCalculation) {
             var govActionDetail = proposal.getGovAction();
 
             ProposalVotingStats votingStats = initProposalVotingStats();
@@ -663,6 +677,14 @@ public class ProposalStatusProcessor {
                     .build();
 
             govActionProposalStatusListNeedToSave.add(govActionProposalStatus);
+
+            if (govActionStatus.equals(GovActionStatus.RATIFIED) && GovernanceActionUtil.isDelayingAction(govActionDetail.getType())) {
+                // A successful motion of no-confidence, update of the constitutional committee,
+                // a constitutional change, or a hard-fork,
+                // delays ratification of all other governance actions until the first epoch after their enactment
+                isActionRatificationDelayed = true;
+            }
+
             end = System.currentTimeMillis();
             log.debug("GovActionProposalStatus: Others --, time: {} ms", end - start);
 
@@ -726,8 +748,11 @@ public class ProposalStatusProcessor {
         }
 
         for (Proposal proposal : ratifiedProposals) {
-            List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
-            proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+            // TODO: just a workaround, need to check ledger rule carefully.
+            if (!GovernanceActionUtil.isDelayingAction(proposal.getType())) {
+                List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
+                proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+            }
         }
 
         List<GovActionProposal> filteredActiveProposals = activeProposalsInPrevSnapshot.stream()

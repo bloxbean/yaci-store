@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.test.e2e.common.BaseE2ETest;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.TransactionHelper;
 import groovy.util.logging.Slf4j;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,8 +97,8 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
         waitTillAdaPotJobDone(adaPotJobRepository, expectdExpiryEpoch);
 
         //Find proposal entry at different epochs
-        var govActionCreateEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, createEpoch);
-        var govActionCreateEpochPlusOne = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, createEpoch + 1);
+        var govActionCreateEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, createEpoch + 1);
+        var govActionCreateEpochPlusOne = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, createEpoch + 2);
 
         assertThat(govActionCreateEpoch).hasSize(1);
         assertThat(govActionCreateEpochPlusOne).hasSize(1);
@@ -125,7 +126,5 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
 
         assertThat(proposalRefund).isNotNull();
     }
-
-
 
 }
