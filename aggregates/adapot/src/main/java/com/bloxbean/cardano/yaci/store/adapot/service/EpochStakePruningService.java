@@ -53,6 +53,10 @@ public class EpochStakePruningService {
 
     @Scheduled(fixedRateString = "${store.adapot.epoch-stake-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 300)
     public void handleScheduledPruning() {
+        if (!adaPotProperties.isEpochStakePruningEnabled()) {
+            return;
+        }
+
         if (isPruning.get()) {
             log.debug("Epoch stake pruning is already in progress. Skipping this run !!!");
             return;
@@ -71,7 +75,7 @@ public class EpochStakePruningService {
         }
 
         Thread.startVirtualThread(this::pruneOldEpochStakes);
-        System.out.println("Epoch stake pruning triggered by pre adapot job processing event");
+        log.info("Epoch stake pruning triggered by pre adapot job processing event");
     }
 
     private void pruneOldEpochStakes() {

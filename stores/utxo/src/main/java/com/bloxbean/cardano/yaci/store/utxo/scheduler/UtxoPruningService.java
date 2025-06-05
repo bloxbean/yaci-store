@@ -42,6 +42,10 @@ public class UtxoPruningService {
 
     @Scheduled(fixedRateString = "${store.utxo.pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 120)
     public void handleUtxoPruning() {
+        if (!utxoStoreProperties.isPruningEnabled()) {
+            return;
+        }
+
         if (isPruning.get()) {
             log.info("Utxo pruning is already in progress. Skipping this run !!!");
             return;
