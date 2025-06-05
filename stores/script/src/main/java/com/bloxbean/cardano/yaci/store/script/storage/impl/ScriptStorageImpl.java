@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.script.storage.impl;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.mapper.ScriptMapper;
@@ -25,6 +26,8 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.SCRIPT;
 
 @Slf4j
 public class ScriptStorageImpl implements ScriptStorage {
+    private final static String FILTER_SCRIPT_SAVE = "script.save";
+
     private final ScriptRepository scriptRepository;
     private final ScriptMapper scriptMapper;
     private final DSLContext dsl;
@@ -55,6 +58,7 @@ public class ScriptStorageImpl implements ScriptStorage {
     }
 
     @Override
+    @Plugin(key = FILTER_SCRIPT_SAVE)
     public List<Script> saveScripts(List<Script> scripts) {
         if (scripts != null && !scripts.isEmpty())
             scriptCache.addAll(scripts);

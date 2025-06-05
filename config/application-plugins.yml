@@ -1,0 +1,3 @@
+store:
+  plugins:
+    enabled: false

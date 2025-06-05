@@ -3,6 +3,9 @@
 REM Save the current working directory
 SET CURRENT_DIR=%CD%
 
+REM Uncomment the following line to enable polyglot (Python, JS) plugins support.
+:: set "JAVA_OPTS=%JAVA_OPTS% -Dloader.path=plugins,plugins/lib"
+
 REM Change to the top-level directory (parent of the bin folder)
 CD /D %~dp0..
 IF %ERRORLEVEL% NEQ 0 (

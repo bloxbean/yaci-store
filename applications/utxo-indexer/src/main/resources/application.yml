@@ -5,6 +5,8 @@ spring:
     location: classpath:/banner.txt
   application:
     name: Yaci Store - Utxo Indexer
+  profiles:
+    include: plugins
   boot:
     admin:
       client:
@@ -18,6 +20,6 @@ apiPrefix: /api/v1
 
 logging:
   file:
-    name: ./logs/yaci-store.log
+    name: ./logs/utxo-indexer.log
 
 

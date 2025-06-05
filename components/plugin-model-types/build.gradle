@@ -1,0 +1,68 @@
+dependencies {
+    api project(":components:core")
+    api project(":stores:assets")
+    api project(":stores:blocks")
+    api project(":stores:epoch")
+    api project(":stores:governance")
+    api project(":stores:metadata")
+    api project(":stores:mir")
+    api project(":stores:staking")
+    api project(":stores:transaction")
+    api project(":stores:script")
+    api project(":stores:utxo")
+
+    implementation libs.victools.jsonschema.generator
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Plugin Model Types Module'
+                description = 'Yaci Store - Plugin Model Types Module'
+            }
+        }
+    }
+}
+
+task generateSchemas(type: JavaExec) {
+    group = 'codegen'
+    description = 'Generate JSON schemas for all model classes'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.bloxbean.cardano.yaci.store.plugin.codegen.JsonSchemaGenerator'
+    args = [
+            "$buildDir/generated/schemas"
+    ]
+    doFirst { file("$buildDir/generated/schemas").mkdirs() }
+}
+
+generateSchemas.doLast {
+    println "Generated schemas in $buildDir/generated/schemas"
+}
+
+def commit_id=getCheckedOutGitCommitHash()
+def final_version = project.version
+if (project.version.endsWith("-SNAPSHOT")) {
+    final_version = "${project.version}".replace("-SNAPSHOT", "-${commit_id}-SNAPSHOT")
+}
+
+task createPluginTypesZip(type: Zip) {
+    dependsOn generateSchemas
+
+    group = 'distribution'
+    description = 'Create a zip file with all generated schemas for plugin model types'
+
+    def zipDirName ="plugin-types-${final_version}"
+
+    from("$buildDir/generated/schemas") {
+        include '**/*.json'
+        into(zipDirName + "/" + "schemas")
+    }
+
+    archiveFileName = "plugin-types-${final_version}.zip"
+    destinationDirectory = file("$buildDir/dist")
+
+    doLast {
+        println "Created plugin model types zip at $buildDir/distributions/plugin-model-types.zip"
+    }
+}

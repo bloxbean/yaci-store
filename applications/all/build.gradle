@@ -121,3 +121,9 @@ distNativeZip.dependsOn nativeCompile
 gitProperties {
     failOnNoGitDirectory = false
 }
+
+tasks.named("bootJar") {
+    manifest {
+        attributes 'Main-Class': 'org.springframework.boot.loader.launch.PropertiesLauncher'
+    }
+}
