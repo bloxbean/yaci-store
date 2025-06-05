@@ -9,6 +9,8 @@ services:
     volumes:
       - $PWD/logs:/app/logs/
       - ./application.properties:/app/config/application.properties
+      - ./application-plugins.yml:/app/config/application-plugins.yml
+      - ./plugin-scripts:/app/plugin-scripts/
     logging:
       driver: "json-file"
       options:

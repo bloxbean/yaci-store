@@ -1,0 +1,23 @@
+dependencies {
+    api project(":components:common")
+    api project(':components:events')
+
+    api(libs.mvel) {
+        exclude group: "com.thoughtworks.xstream", module: "xstream"
+    }
+    implementation libs.xstream
+    implementation libs.unirest
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store - Plugin Module'
+                description = 'Yaci Store - Plugin Module'
+            }
+        }
+    }
+}

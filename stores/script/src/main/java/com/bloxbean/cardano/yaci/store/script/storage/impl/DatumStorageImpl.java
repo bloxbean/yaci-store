@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.script.domain.Datum;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.DatumRepository;
@@ -25,6 +26,8 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.DATUM;
 
 @Slf4j
 public class DatumStorageImpl implements DatumStorage {
+    private final static String FILTER_SCRIPT_DATUM_SAVE = "script.datum.save";
+
     private final DatumRepository datumRepository;
     private final DSLContext dsl;
     private final ParallelExecutor executorHelper;
@@ -54,6 +57,7 @@ public class DatumStorageImpl implements DatumStorage {
 
     @Override
     @Transactional
+    @Plugin(key = FILTER_SCRIPT_DATUM_SAVE)
     public void saveAll(Collection<Datum> datumList) {
         if (datumList == null || datumList.isEmpty()) return;
 

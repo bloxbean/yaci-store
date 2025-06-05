@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.common.cache;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 
+import java.util.function.Function;
+
 public class MVMapCache<K, V> implements Cache<K, V> {
 
     private MVMap<K, V> map;
@@ -18,6 +20,11 @@ public class MVMapCache<K, V> implements Cache<K, V> {
     @Override
     public void putIfAbsent(K key, V value) {
         map.putIfAbsent(key, value);
+    }
+
+    @Override
+    public V computeIfAbsent(K key, Function<K, V> mappingFunction) {
+        return map.computeIfAbsent(key, mappingFunction);
     }
 
     @Override

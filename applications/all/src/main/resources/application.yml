@@ -5,6 +5,8 @@ spring:
     location: classpath:/banner.txt
   application:
     name: Yaci Store App
+  profiles:
+    include: plugins
 
   boot:
     admin:

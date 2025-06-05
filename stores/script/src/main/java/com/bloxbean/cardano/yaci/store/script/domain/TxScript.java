@@ -12,7 +12,7 @@ import java.math.BigInteger;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@SuperBuilder
+@SuperBuilder(toBuilder = true)
 public class TxScript extends BlockAwareDomain {
     private String txHash;
     private String scriptHash;
