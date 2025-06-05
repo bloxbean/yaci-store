@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.util;
 
+import kong.unirest.core.Unirest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +25,10 @@ public class PluginContextUtil {
 
     public Environment getEnv() {
         return environment;
+    }
+
+    public Class getHttp() {
+        return Unirest.class;
     }
 
 }

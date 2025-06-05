@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
+package com.bloxbean.cardano.yaci.store.plugin.polyglot.js;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
@@ -14,20 +14,25 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class PythonPluginActionEventTest extends BasePluginTest {
+class JsPluginActionEventTest extends BasePluginTest {
 
     @Test
     void preActionByExpression_inlineScript() {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setLang("python");
+        pluginDef.setLang("js");
         pluginDef.setInlineScript(
 """
-result = []
+    result = []
 items[0].setOwnerAddr('xyz')
 print(items[0])
+
+result.push(items[0])
+result.push(items[1])
+
+return result
 """
         );
         var action = factory.createPreActionPlugin(pluginDef);
@@ -66,30 +71,30 @@ print(items[0])
         assertThat(addressUtxo2.getOwnerAddr()).isEqualTo("addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j");
     }
 
-    private PythonPolyglotPluginFactory getPluginFactory() {
-        PythonPolyglotPluginFactory factory = new PythonPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
-        return factory;
-    }
-
     @Test
     void preActionByExpression_script() throws Exception {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
 """
-result = []
+let result = []
 items[0].setOwnerAddr('xyz')
-print(items[0])           
+print(items[0])
+result.push(items[0])
+result.push(items[1])
+
+return result
+           
 """;
 
         // Create a temporary file with script content
-        Path tempScriptFile = Files.createTempFile("python_script", ".py");
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
         Files.writeString(tempScriptFile, scriptContent);
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setLang("python");
+        pluginDef.setLang("js");
         pluginDef.setScript(
                 new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
@@ -123,19 +128,23 @@ print(items[0])
                         .build()
         ));
 
-        preAction.preAction(List.of(addressUtxo1, addressUtxo2));
+        var result = preAction.preAction(List.of(addressUtxo1, addressUtxo2));
+        var iterator = result.iterator();
+        AddressUtxo fistObject = (AddressUtxo) iterator.next();
+        AddressUtxo secondObject = (AddressUtxo) iterator.next();
 
-        assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("xyz");
-        assertThat(addressUtxo2.getOwnerAddr()).isEqualTo("addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j");
+
+        assertThat(fistObject.getOwnerAddr()).isEqualTo("xyz");
+        assertThat(secondObject.getOwnerAddr()).isEqualTo("addr_test1qrelw0xltnssmf3fv2wvv4z4zdu4lyndt7n4tf2khv6w3sfnarzvgpra35g3xw5qksknguv5qs0n8hsjqw243gave4fqqlrp9j");
     }
 
     @Test
     void postActionByExpression_inlineScript() {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setLang("python");
+        pluginDef.setLang("js");
         pluginDef.setInlineScript(
                 """
                 result = []
@@ -181,7 +190,7 @@ print(items[0])
 
     @Test
     void postActionByExpression_script() throws Exception {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
@@ -192,12 +201,12 @@ print(items[0])
                 """;
 
         // Create a temporary file with script content
-        Path tempScriptFile = Files.createTempFile("python_script", ".py");
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
         Files.writeString(tempScriptFile, scriptContent);
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setLang("python");
+        pluginDef.setLang("js");
         pluginDef.setScript(
                 new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
@@ -239,38 +248,22 @@ print(items[0])
 
     @Test
     void eventHandler_script() throws Exception {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
-
-        String initScriptContent = """
-def __init():
-    print("This is a method in init script")
-    return "some_value"
-                """;
-        Path initScriptFile = Files.createTempFile("boot_strap_python_script", ".py");
-        Files.writeString(initScriptFile, initScriptContent);
-
-        PluginDef initDef = new PluginDef();
-        initDef.setName("py_init");
-        initDef.setLang("python");
-        initDef.setScript(new ScriptDef(null, initScriptFile.toFile().getAbsolutePath(), null));
-
-        factory.createInitPlugin(initDef).initPlugin();
+        JsPolyglotPluginFactory factory = getPluginFactory();
 
         // Create a template file with script content
         String scriptContent =
 """
 event.setOwnerAddr('xyz')
-print("Inside event handler");  
-print("Init value: ", __init)
+print("Inside event handler");        
 """;
 
         // Create a temporary file with script content
-        Path tempScriptFile = Files.createTempFile("python_script", ".py");
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
         Files.writeString(tempScriptFile, scriptContent);
 
         PluginDef pluginDef = new PluginDef();
         pluginDef.setName("test");
-        pluginDef.setLang("python");
+        pluginDef.setLang("js");
         pluginDef.setScript(
                 new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
         );
@@ -296,45 +289,159 @@ print("Init value: ", __init)
         assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("xyz");
     }
 
-
     @Test
-    void eventHandler_script_withInlineInitScript() throws Exception {
-        PythonPolyglotPluginFactory factory = getPluginFactory();
+    void eventHandler_script_withInitScript() throws Exception {
+        JsPolyglotPluginFactory factory = getPluginFactory();
+
+        String initScriptContent = """
+        function __init() {
+            print("This is a method in init script");
+            return "some_init_value_";
+        }
+                """;
+        Path initScriptFile = Files.createTempFile("boot_strap_js_script", ".js");
+        Files.writeString(initScriptFile, initScriptContent);
 
         PluginDef initDef = new PluginDef();
-        initDef.setName("test");
-        initDef.setLang("python");
+        initDef.setName("js_init");
+        initDef.setLang("js");
+        initDef.setScript(new ScriptDef(null, initScriptFile.toFile().getAbsolutePath(), null));
+
+        factory.createInitPlugin(initDef).initPlugin();
+
+        // Create a template file with script content
+        String scriptContent =
+                """
+                event.setOwnerAddr(__init)
+                print("Inside event handler");  
+                print("Init value: ", __init)
+                """;
+
+        // Create a temporary file with script content
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
+        Files.writeString(tempScriptFile, scriptContent);
+
+        PluginDef pluginDef = new PluginDef();
+        pluginDef.setName("test");
+        pluginDef.setLang("js");
+        pluginDef.setScript(
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
+        );
+        var eventHandler = factory.createEventHandlerPlugin(pluginDef);
+
+        //Workaround: Instead of using event, we are using single AddressUtxo object
+        AddressUtxo addressUtxo1 = new AddressUtxo();
+        addressUtxo1.setOwnerAddr("addrabcd");
+        addressUtxo1.setTxHash("txHash1");
+        addressUtxo1.setAmounts(List.of(
+                Amt.builder()
+                        .policyId("policyId1")
+                        .assetName("assetName1")
+                        .build(),
+                Amt.builder()
+                        .policyId("policyId2")
+                        .assetName("assetName2")
+                        .build()
+        ));
+
+        eventHandler.handleEvent(addressUtxo1);
+
+        assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("some_init_value_");
+    }
+
+    @Test
+    void eventHandler_script_withInitInlineScript() throws Exception {
+        JsPolyglotPluginFactory factory = getPluginFactory();
+
+        PluginDef initDef = new PluginDef();
+        initDef.setName("js_init");
+        initDef.setLang("js");
         initDef.setInlineScript("""
-greet = "Hello from inline init script"
-def __init():
-    print("Python           plugin initialized")
-    return "init_value"                   
+        function __init() {
+            print("This is a method in init script");
+            return "some_init_value_";
+        }
                 """);
 
         factory.createInitPlugin(initDef).initPlugin();
 
         // Create a template file with script content
         String scriptContent =
-                """              
+                """
+                event.setOwnerAddr(__init)
                 print("Inside event handler");  
-                val = __init
-                print("Init value: ", val)
-                event.setOwnerAddr(val)
+                print("Init value: ", __init)
                 """;
 
         // Create a temporary file with script content
-        Path tempScriptFile = Files.createTempFile("python_script", ".py");
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
+        Files.writeString(tempScriptFile, scriptContent);
+
+        PluginDef pluginDef = new PluginDef();
+        pluginDef.setName("test");
+        pluginDef.setLang("js");
+        pluginDef.setScript(
+                new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
+        );
+        var eventHandler = factory.createEventHandlerPlugin(pluginDef);
+
+        //Workaround: Instead of using event, we are using single AddressUtxo object
+        AddressUtxo addressUtxo1 = new AddressUtxo();
+        addressUtxo1.setOwnerAddr("addrabcd");
+        addressUtxo1.setTxHash("txHash1");
+        addressUtxo1.setAmounts(List.of(
+                Amt.builder()
+                        .policyId("policyId1")
+                        .assetName("assetName1")
+                        .build(),
+                Amt.builder()
+                        .policyId("policyId2")
+                        .assetName("assetName2")
+                        .build()
+        ));
+
+        eventHandler.handleEvent(addressUtxo1);
+
+        assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("some_init_value_");
+    }
+
+    @Test
+    void eventHandler_script_withInitInlineScript_multithread() throws Exception {
+        JsPolyglotPluginFactory factory = getPluginFactory();
+
+        PluginDef initDef = new PluginDef();
+        initDef.setName("js_init");
+        initDef.setLang("js");
+        initDef.setInlineScript("""
+        function __init() {
+            print("This is a method in init script");
+            return "some_init_value_";
+        }
+                """);
+
+        factory.createInitPlugin(initDef).initPlugin();
+
+        // Create a template file with script content
+        String scriptContent =
+                """
+                event.setOwnerAddr(__init)
+                print("Inside event handler");  
+                print("Init value: ", __init)
+                """;
+
+        // Create a temporary file with script content
+        Path tempScriptFile = Files.createTempFile("js_script", ".js");
         Files.writeString(tempScriptFile, scriptContent);
 
         List<Thread> threads = new ArrayList<>();
-        for (int i=0; i<10; i++) {
-            var t = Thread.startVirtualThread(new Runnable() {
+        for (int i=0; i < 10; i++) {
+
+            var thread = Thread.startVirtualThread(new Runnable() {
                 @Override
                 public void run() {
-                    System.out.println("Running event handler in thread: " + Thread.currentThread());
                     PluginDef pluginDef = new PluginDef();
                     pluginDef.setName("test");
-                    pluginDef.setLang("python");
+                    pluginDef.setLang("js");
                     pluginDef.setScript(
                             new ScriptDef(null, tempScriptFile.toFile().getAbsolutePath(), null)
                     );
@@ -356,18 +463,20 @@ def __init():
                     ));
 
                     eventHandler.handleEvent(addressUtxo1);
-                    System.out.println(addressUtxo1.getOwnerAddr());
 
-                    assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("init_value");
+                    assertThat(addressUtxo1.getOwnerAddr()).isEqualTo("some_init_value_");
                 }
             });
 
-            threads.add(t);
+            threads.add(thread);
         }
 
-        for (Thread t : threads) {
-            t.join();
-        }
+        // Wait for a while to let all threads complete
+        for (var thread: threads)
+            thread.join();
     }
 
+    private JsPolyglotPluginFactory getPluginFactory() {
+        return new JsPolyglotPluginFactory(null, pluginCacheService, variableProviderFactory, contextProvider, globalScriptContextRegistry);
+    }
 }

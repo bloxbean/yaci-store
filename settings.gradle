@@ -25,7 +25,7 @@ include 'components:job'
 include 'components:admin'
 include 'components:dbutils'
 include 'components:plugin'
-include 'components:plugin-extra'
+include 'components:plugin-polyglot'
 include 'components:plugin-model-types'
 
 include 'stores:blocks'

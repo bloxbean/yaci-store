@@ -8,5 +8,5 @@ import java.util.Collection;
  * @param <T> The type of the plugin.
  */
 public interface PreActionPlugin<T> extends IPlugin<T> {
-    void preAction(Collection<T> item);
+    Collection<T> preAction(Collection<T> item);
 }

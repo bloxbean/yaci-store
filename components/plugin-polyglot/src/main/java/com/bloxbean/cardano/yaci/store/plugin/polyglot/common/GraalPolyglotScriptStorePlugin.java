@@ -57,8 +57,8 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
 
         if (pluginDef.getInlineScript() != null) {
             if (pluginType != PluginType.INIT) { //wrap in a function only if it's not an init plugin
-                String wrapped = wrapInFunction(pluginDef.getInlineScript(), "__filter");
-                this.functionName = "__filter";
+                String wrapped = wrapInFunction(pluginDef.getInlineScript(), getDefaultFunctionName(pluginType));
+                this.functionName = getDefaultFunctionName(pluginType);
 
                 source = Source.newBuilder(language(), wrapped, pluginDef.getName()).buildLiteral();
             } else {
@@ -81,7 +81,7 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
             }
 
             if (this.functionName == null && pluginType != PluginType.INIT) {
-                this.functionName = "__filter";
+                this.functionName = getDefaultFunctionName(pluginType);
                 code = wrapInFunction(code, this.functionName);
             }
 
@@ -125,6 +125,15 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
 
     @Override
     public Collection<T> filter(Collection<T> items) {
+        return invokeWithReturn(items, PluginType.FILTER);
+    }
+
+    @Override
+    public Collection<T> preAction(Collection<T> items) {
+        return invokeWithReturn(items, PluginType.PRE_ACTION);
+    }
+
+    private Collection<T> invokeWithReturn(Collection<T> items, PluginType pluginType) {
         Context ctx = null;
         try {
             if (scriptRef == null) {
@@ -142,17 +151,17 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
             synchronized (ctx) {
                 ctx.enter();
                 try {
-                    Value filterFn = ctx.getBindings(language()).getMember(functionName);
-                    if (filterFn == null || !filterFn.canExecute()) {
-                        throw new IllegalArgumentException("Function not found: " + functionName);
+                    Value targetFn = ctx.getBindings(language()).getMember(functionName);
+                    if (targetFn == null || !targetFn.canExecute()) {
+                        throw new IllegalArgumentException(pluginType.name() + " Function not found: " + functionName);
                     }
-                    filterFn.execute(items);
-                    Value result = filterFn.execute(items);
+                    targetFn.execute(items);
+                    Value result = targetFn.execute(items);
 
                     var resultProxy = result.as(Collection.class);
 
                     if (resultProxy == null) {
-                        throw new IllegalArgumentException("Filter function must return a collection of items");
+                        throw new IllegalArgumentException(pluginType.name() + " function must return a collection of items");
                     }
 
                     Collection<T> resultList = new ArrayList<>(resultProxy);
@@ -165,8 +174,8 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                 }
             }
         } catch (Exception e) {
-            log.error("Error executing filter function: {}", functionName, e);
-            throw new RuntimeException("Error executing filter function: " + functionName, e);
+            log.error("Error executing function: {}", functionName, e);
+            throw new RuntimeException("Error executing " + pluginType.name() + " function: " + functionName, e);
         } finally {
             if (scriptRef != null && scriptRef.isEnablePool()) {
                 contextProvider.getPool().returnObject(scriptRef.getId(), ctx);
@@ -177,10 +186,15 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
 
     @Override
     public void postAction(Collection<T> items) {
-        invoke(items);
+        invoke(items, PluginType.POST_ACTION);
     }
 
-    private void invoke(Object arg) {
+    @Override
+    public void handleEvent(Object event) {
+        invoke(event, PluginType.EVENT_HANDLER);
+    }
+
+    private void invoke(Object arg, PluginType pluginType) {
         Context ctx = null;
         try {
             if (scriptRef == null) {
@@ -200,7 +214,7 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                 try {
                     Value fn = ctx.getBindings(language()).getMember(functionName);
                     if (fn == null || !fn.canExecute()) {
-                        throw new IllegalArgumentException("Function not found: " + functionName);
+                        throw new IllegalArgumentException(pluginType.name() + " function not found: " + functionName);
                     }
                     fn.execute(arg);
                 } finally {
@@ -211,23 +225,13 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                 }
             }
         } catch (Exception e) {
-            log.error("Error executing action function: {}", functionName, e);
-            throw new RuntimeException("Error executing action function: " + functionName, e);
+            log.error("Error executing function: {}", functionName, e);
+            throw new RuntimeException("Error executing " + pluginType.name() + " function: " + functionName, e);
         } finally {
             if (scriptRef != null && scriptRef.isEnablePool()) {
                 contextProvider.getPool().returnObject(scriptRef.getId(), ctx);
             }
         }
-    }
-
-    @Override
-    public void preAction(Collection<T> items) {
-       invoke(items);
-    }
-
-    @Override
-    public void handleEvent(Object event) {
-       invoke(event);
     }
 
     @Override
@@ -286,6 +290,21 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
             }
         }
 
+    }
+
+    private String getDefaultFunctionName(PluginType pluginType) {
+        if (pluginType == PluginType.INIT)
+            return "__init__";
+        else if (pluginType == PluginType.FILTER)
+            return "__filter__";
+        else if (pluginType == PluginType.PRE_ACTION)
+            return "__preAction__";
+        else if (pluginType == PluginType.POST_ACTION)
+            return "__postAction__";
+        else if (pluginType == PluginType.EVENT_HANDLER)
+            return "__eventHandler__";
+        else
+            return "__defaultFunction__";
     }
 
     public abstract String language();

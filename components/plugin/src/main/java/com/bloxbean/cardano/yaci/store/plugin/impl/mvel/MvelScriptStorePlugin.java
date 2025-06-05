@@ -93,41 +93,53 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
     @SuppressWarnings("unchecked")
     public Collection<T> filter(Collection<T> items) {
         if(log.isTraceEnabled())
-            log.trace("Filtering {} items with MVEL filter {}", items.size(), name);
+            log.trace("Filter {} items with MVEL filter {}", items.size(), name);
 
         if (items == null || items.isEmpty()) {
             return items;
         }
 
         Map<String,Object> vars = new HashMap<>();
-        vars.put("items", items);
         setCommonVariables(vars);
+        vars.put("items", items);
 
-        // 2) wrap it in a VariableResolverFactory
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
-        return (Collection<T>) MVEL.executeExpression(compiledExpr, null, vrf);
+        if (functionName != null) {
+            MVEL.executeExpression(compiledExpr, null, vrf);
+
+            String invokeExpr = functionName + "(items)";
+            return (Collection<T>) MVEL.executeExpression(
+                    MVEL.compileExpression(invokeExpr), null, vrf);
+        } else {
+            return (Collection<T>) MVEL.executeExpression(compiledExpr, null, vrf);
+        }
     }
 
     @Override
-    public void preAction(Collection<T> items) {
-        if (log.isTraceEnabled())
-            log.trace("PreAction {} items with MVEL pre-action plugin {}", items.size(), name);
+    public Collection<T> preAction(Collection<T> items) {
+        if(log.isTraceEnabled())
+            log.trace("PreAction {} items with MVEL pre-action {}", items.size(), name);
+
+        if (items == null || items.isEmpty()) {
+            return items;
+        }
 
         Map<String,Object> vars = new HashMap<>();
-        vars.put("items", items);
         setCommonVariables(vars);
+        vars.put("items", items);
 
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
-        MVEL.executeExpression(compiledExpr, null, vrf);
-
         if (functionName != null) {
-            String invokeExpr = functionName + "(items)";
-            MVEL.executeExpression(
-                    MVEL.compileExpression(invokeExpr), null, vrf);
-        }
+            MVEL.executeExpression(compiledExpr, null, vrf);
 
+            String invokeExpr = functionName + "(items)";
+            return (Collection<T>) MVEL.executeExpression(
+                    MVEL.compileExpression(invokeExpr), null, vrf);
+        } else {
+            return (Collection<T>) MVEL.executeExpression(compiledExpr, null, vrf);
+        }
     }
 
     @Override
