@@ -44,6 +44,10 @@ public class TransactionPruningService {
 
     @Scheduled(fixedRateString = "${store.transaction.pruning-interval:86400}", timeUnit = TimeUnit.SECONDS)
     public void handleTransactionPruning() {
+        if (!transactionStoreProperties.isPruningEnabled()) {
+            return;
+        }
+
         if (isPruning.get()) {
             log.info("Transaction pruning is already in progress. Skipping this run !!!");
             return;

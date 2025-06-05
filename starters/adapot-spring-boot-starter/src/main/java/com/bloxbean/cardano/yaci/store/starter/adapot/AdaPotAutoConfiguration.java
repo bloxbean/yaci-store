@@ -28,6 +28,12 @@ public class AdaPotAutoConfiguration {
         adaPotProperties.setBulkUpdateRewardWithCopy(properties.getAdaPot().isBulkUpdateRewardWithCopy());
         adaPotProperties.setVerifyAdapotCalcValues(properties.getAdaPot().isVerifyAdapotCalcValues());
 
+        // Set epoch stake pruning properties
+        adaPotProperties.setEpochStakePruningEnabled(properties.getAdaPot().isEpochStakePruningEnabled());
+        adaPotProperties.setEpochStakePruningInterval(properties.getAdaPot().getEpochStakePruningInterval());
+        adaPotProperties.setEpochStakePruningSafeEpochs(properties.getAdaPot().getEpochStakeSafeEpochs());
+        adaPotProperties.setEpochStakePruningBatchSize(properties.getAdaPot().getEpochStakePruningBatchSize());
+
         return adaPotProperties;
     }
 }
