@@ -31,7 +31,7 @@ public class AdaPotProperties {
     private int epochStakePruningInterval = 86400; // 24 hours in seconds
 
     @Builder.Default
-    private int epochStakePruningSafeEpochs = 4; // Keep last 4 epochs
+    private int epochStakePruningSafeEpochs = 8; // Keep last 8 epochs
 
     @Builder.Default
     private int epochStakePruningBatchSize = 3000;
