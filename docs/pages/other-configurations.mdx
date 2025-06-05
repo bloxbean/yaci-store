@@ -41,7 +41,18 @@ store.transaction.pruning-enabled=true
 store.transaction.pruning.interval=86400
 ```
 
+#### Epoch Stake Pruning
+To enable epoch stake pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.adapot.epoch-stake-pruning-enabled=true
+store.adapot.epoch-stake-pruning-interval=86400
+```
+
 The above configuration will run transaction pruning every 86400 seconds or 1 day.
+
+There is also another configuration, `store.adapot.epoch-stake-safe-epochs`, which can be used to specify the number of safe epochs to keep in the store.
+By default, this is set to 4 epochs.
 
 ## Auto Sync off
 

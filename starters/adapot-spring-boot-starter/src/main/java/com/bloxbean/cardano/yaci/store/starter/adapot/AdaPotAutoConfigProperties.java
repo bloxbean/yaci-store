@@ -24,6 +24,12 @@ public class AdaPotAutoConfigProperties {
 
         //Verify adapot calculation values with known values (db sync)
         private boolean verifyAdapotCalcValues = true;
+
+        // Epoch Stake Pruning Configuration
+        private boolean epochStakePruningEnabled = false;
+        private int epochStakePruningInterval = 86400;
+        private int epochStakeSafeEpochs = 8;
+        private int epochStakePruningBatchSize = 3000;
     }
 
 }
