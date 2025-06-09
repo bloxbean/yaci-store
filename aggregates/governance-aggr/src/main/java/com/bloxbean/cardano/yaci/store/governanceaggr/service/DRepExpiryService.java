@@ -43,11 +43,12 @@ public class DRepExpiryService {
         long t1 = System.currentTimeMillis();
         int leftBoundaryEpoch = epoch - 1;
 
-        Optional<CardanoEra> conwayEra = eraService.getEras()
-                .stream().filter(cardanoEra -> cardanoEra.getEra().equals(Era.Conway))
+        // in devnet, conway or later era can start from epoch 0
+        Optional<CardanoEra> conwayEraOrLater = eraService.getEras()
+                .stream().filter(cardanoEra -> cardanoEra.getEra().getValue() >= Era.Conway.getValue())
                 .findFirst();
 
-        int firstEpochNoInConway = conwayEra.map(cardanoEra ->
+        int firstEpochNoInConwayOrLater = conwayEraOrLater.map(cardanoEra ->
                 eraService.getEpochNo(cardanoEra.getEra(), cardanoEra.getStartSlot())).orElse(0);
 
         Set<Tuple<String, DrepType>> targetDReps = findDRepHashAndTypeTuples(epoch);
@@ -58,7 +59,7 @@ public class DRepExpiryService {
 
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = findRegistrationInfos(targetDReps, leftBoundaryEpoch);
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = findLastInteractions(targetDReps, leftBoundaryEpoch);
-        Set<Integer> dormantEpochsUntilLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConway, leftBoundaryEpoch);
+        Set<Integer> dormantEpochsToLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
 
         Integer maxDRepRegistrationEpoch = registrationMap.values().stream().map(DRepExpiryUtil.DRepRegistrationInfo::epoch)
                 .sorted(Integer::compareTo).toList().getLast();
@@ -97,13 +98,14 @@ public class DRepExpiryService {
             int expiry = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
-                    dormantEpochsUntilLeftBoundaryEpoch,
+                    dormantEpochsToLeftBoundaryEpoch,
                     proposalsUpToRegistration,
-                    firstEpochNoInConway,
+                    firstEpochNoInConwayOrLater,
                     leftBoundaryEpoch
             );
 
-            boolean isLeftBoundaryEpochDormant = dormantEpochsUntilLeftBoundaryEpoch.contains(leftBoundaryEpoch);
+            /* Calculate active_until value, now keep it for testing, should drop active_until column later */
+            boolean isLeftBoundaryEpochDormant = dormantEpochsToLeftBoundaryEpoch.contains(leftBoundaryEpoch);
             int dormantEpochCount = recentGovEpochActivityOpt.get().getDormantEpochCount();
             boolean leftBoundaryEpochHadNewProposal = false;
 
@@ -126,36 +128,38 @@ public class DRepExpiryService {
             if (dRepLastInteraction == null) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
                 // check left boundary epoch is in a dormant period and drep was registered in this dormant period
-                if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsUntilLeftBoundaryEpoch)
+                if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
                         && !leftBoundaryEpochHadNewProposal) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
                 }
             }
 
-            if (activeUntil < epoch) {
-                // the DRep is being inactive, dormant epochs do not affect the active_until value when a DRep is in an inactive state. we need recalculate activeUntil
-                // TODO: should we update for this case in DRepExpiryUtil
-                int lastDRepActionEpoch = dRepLastInteraction == null ? dRepRegistration.epoch() : dRepLastInteraction.epoch();
-                int dRepActivity = dRepLastInteraction == null ? dRepRegistration.dRepActivity() : dRepLastInteraction.dRepActivity();
-                int v9Bonus = dRepLastInteraction == null ? DRepExpiryUtil.computeV9Bonus(dRepRegistration, proposalsUpToRegistration, firstEpochNoInConway) : 0;
+//            if (activeUntil < epoch) {
+//                // the DRep is being inactive, dormant epochs do not affect the active_until value when a DRep is in an inactive state. we need recalculate activeUntil
+//                int lastDRepActionEpoch = dRepLastInteraction == null ? dRepRegistration.epoch() : dRepLastInteraction.epoch();
+//                int dRepActivity = dRepLastInteraction == null ? dRepRegistration.dRepActivity() : dRepLastInteraction.dRepActivity();
+//                int v9Bonus = dRepLastInteraction == null ? DRepExpiryUtil.computeV9Bonus(dRepRegistration, proposalsUpToRegistration, firstEpochNoInConwayOrLater) : 0;
+//
+//                activeUntil = recalculateInactiveDRepActiveUntil(
+//                        lastDRepActionEpoch,
+//                        dRepActivity,
+//                        v9Bonus,
+//                        leftBoundaryEpoch,
+//                        dormantEpochsUntilLeftBoundaryEpoch
+//                );
+//            }
 
-                activeUntil = recalculateInactiveDRepActiveUntil(
-                        lastDRepActionEpoch,
-                        dRepActivity,
-                        v9Bonus,
-                        leftBoundaryEpoch,
-                        dormantEpochsUntilLeftBoundaryEpoch
-                );
-            }
+            /* active_until calculation ends */
 
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
                     .addValue("drep_type", dRep._2.name())
                     .addValue("active_until", activeUntil)
+                    .addValue("expiry", expiry)
                     .addValue("epoch", epoch));
         }
 
-        String updateSql = "UPDATE drep_dist SET active_until = :active_until " +
+        String updateSql = "UPDATE drep_dist SET active_until = :active_until , expiry = :expiry " +
                 "WHERE drep_hash = :drep_hash and drep_type = :drep_type AND epoch = :epoch";
 
         jdbcTemplate.batchUpdate(updateSql, batch.toArray(new MapSqlParameterSource[0]));
@@ -320,29 +324,4 @@ public class DRepExpiryService {
                         record.get("gov_action_lifetime", Integer.class)
                 ));
     }
-
-    /* Recalculate the final active_until value of the DRep before it transitions to the inactive state. */
-    private int recalculateInactiveDRepActiveUntil(
-            int lastDRepActionEpoch, // registration, updating or voting
-            int activityWindow,
-            int v9Bonus,
-            int upperBoundEpoch,
-            Set<Integer> dormantEpochs) {
-
-        int nonDormantEpochCnt = 0; // count non-dormant epochs
-        int targetCount = activityWindow + v9Bonus;
-
-        for (int epoch = lastDRepActionEpoch + 1; epoch <= upperBoundEpoch; epoch++) {
-            if (!dormantEpochs.contains(epoch)) {
-                nonDormantEpochCnt++;
-            }
-
-            if (nonDormantEpochCnt == targetCount) {
-                return epoch;
-            }
-        }
-
-        return upperBoundEpoch;
-    }
-
 }

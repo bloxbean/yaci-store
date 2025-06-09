@@ -44,31 +44,39 @@ public class DRepExpiryUtil {
             int eraFirstEpoch,
             int evaluatedEpoch
     ) {
+        int result;
         boolean hasPostRegistrationInteraction = lastDRepInteraction != null;
 
         // Choose the epoch to be used as the base for expiry calculation
-        int expiryBaseEpoch = hasPostRegistrationInteraction
+        int lastActivityEpoch = hasPostRegistrationInteraction
                 ? lastDRepInteraction.epoch()
                 : registrationInfo.epoch();
 
         int dormantCount = (int) dormantEpochs.stream()
-                .filter(e -> e > expiryBaseEpoch && e <= evaluatedEpoch)
+                .filter(e -> e > lastActivityEpoch && e <= evaluatedEpoch)
                 .count();
 
         int activityWindow = lastDRepInteraction != null ? lastDRepInteraction.dRepActivity() : registrationInfo.dRepActivity();
 
         // Calculate the base expiry without applying protocol v9 bonus
-        int baseExpiry = expiryBaseEpoch + activityWindow + dormantCount;
+        int baseExpiry = lastActivityEpoch + activityWindow + dormantCount;
+        int v9bonus = 0;
 
         // For registration with protocol version >= 10, or if the DRep has interacted after registration, no v9 bonus is applied
         if (registrationInfo.protocolMajorVersion() >= 10 || lastDRepInteraction != null) {
-            return baseExpiry;
+            result = baseExpiry;
+        } else {
+            // For protocol version 9 and no post-registration interaction, calculate the bonus expiry window
+            v9bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
+            result = baseExpiry + v9bonus;
         }
 
-        // For protocol version 9 and no post-registration interaction, calculate the bonus expiry window
-        int v9bonus = computeV9Bonus(registrationInfo, proposalsUpToRegistration, eraFirstEpoch);
+        if (result <= evaluatedEpoch) {
+            // the DRep is being inactive, dormant epochs do not affect the expiry value when a DRep is in an inactive state.
+            result = calculateInactiveDRepExpiry(lastActivityEpoch, activityWindow, v9bonus, evaluatedEpoch, dormantEpochs);
+        }
 
-        return baseExpiry + v9bonus;
+        return result;
     }
 
     /**
@@ -168,6 +176,48 @@ public class DRepExpiryUtil {
         }
 
         return null;
+    }
+
+    /**
+     * Recalculates the expiry epoch for a DRep that has become inactive.
+     *
+     * When a DRep becomes inactive (expiry value at epoch X is less than epoch X), dormant epochs
+     * no longer affect the expiry calculation. This method determines the exact epoch
+     * just before the DRep became inactive, equivalent to the expiry value before the epoch became inactive
+     *
+     * @param lastActionEpoch The epoch of the last DRep action (registration, update, or vote)
+     * @param activityWindow The number of active epochs granted after each interaction
+     * @param v9Bonus Additional epochs granted for protocol version 9 (if applicable)
+     * @param evaluatedEpoch The epoch that just ended
+     * @param dormantEpochs Set of epochs considered dormant (no active proposals)
+     * @return The exact epoch when the DRep's activity period ended
+     */
+    private static int calculateInactiveDRepExpiry(
+            int lastActionEpoch,
+            int activityWindow,
+            int v9Bonus,
+            int evaluatedEpoch,
+            Set<Integer> dormantEpochs) {
+
+        /*
+        dRep expiry = lastActionEpoch + dormant epoch count + (activityWindow + v9Bonus(if applicable));
+        with each dormant epoch, the expiry value is increased by 1.
+        Starting from (the last action epoch + 1),
+        if the number of non-dormant epochs exceeds (activityWindow + v9Bonus), then the drep becomes inactive.
+        */
+        int nonDormantEpochCount = 0;
+
+        for (int _epoch = lastActionEpoch + 1; _epoch <= evaluatedEpoch; _epoch++) {
+            if (!dormantEpochs.contains(_epoch)) {
+                nonDormantEpochCount++;
+            }
+
+            if (nonDormantEpochCount == activityWindow + v9Bonus) {
+                return _epoch;
+            }
+        }
+
+        return evaluatedEpoch;
     }
 
     /**
