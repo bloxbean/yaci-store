@@ -40,6 +40,9 @@ public class DRepDistEntity {
     @Column(name = "active_until")
     private Integer activeUntil;
 
+    @Column(name = "expiry")
+    private Integer expiry;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDatetime;
