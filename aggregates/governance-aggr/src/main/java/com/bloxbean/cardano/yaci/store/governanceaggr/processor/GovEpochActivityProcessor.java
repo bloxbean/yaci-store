@@ -36,6 +36,12 @@ public class GovEpochActivityProcessor {
     @Transactional
     public void handleProposalStatusCapturedEvent(ProposalStatusCapturedEvent event) {
         // Handle the logic after the proposal status evaluation is completed
+
+        /*
+         We assess dormant epochs at the epoch boundary, after ratifying and/or expirying proposals. In
+         case where there are no proposals left at the epoch boundary, then the next epoch is considered
+         dormant.
+         */
         int epoch = event.getEpoch();
         int prevEpoch = event.getEpoch() - 1;
 
