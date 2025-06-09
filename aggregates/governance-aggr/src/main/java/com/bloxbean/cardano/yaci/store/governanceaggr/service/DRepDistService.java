@@ -378,6 +378,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null,
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd
@@ -419,6 +421,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null, 
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd                      
