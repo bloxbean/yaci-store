@@ -207,6 +207,9 @@ public class AdaPotMetricService {
                             lastUnsuccessfulAdaPotJob = Optional.ofNullable(lastStartedAdaPotJob);
                             inProgressAdaPotJob = Optional.empty();
                         }
+                    } else { //No jobs with status STARTED
+                        lastUnsuccessfulAdaPotJob = Optional.empty();
+                        inProgressAdaPotJob = Optional.empty();
                     }
 
                     // Fetch last 20 successful jobs
