@@ -66,6 +66,11 @@ public class DRepExpiryService {
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(maxDRepRegistrationEpoch);
 
+        List<DRepExpiryUtil.ProposalSubmissionInfo> sortedProposals = proposalSubmissionInfos.stream()
+                .sorted(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch).reversed()
+                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot).reversed())
+                .toList();
+
         DRepExpiryUtil.ProposalSubmissionInfo mostRecentProposal = proposalSubmissionInfos.stream()
                 .max(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch)
                         .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot))
@@ -90,16 +95,25 @@ public class DRepExpiryService {
 
             var dRepLastInteraction = lastInteractionMap.get(dRep);
 
-            List<DRepExpiryUtil.ProposalSubmissionInfo> proposalsUpToRegistration =
-                    proposalSubmissionInfos.stream()
-                            .filter(p -> p.epoch() <= dRepRegistration.epoch())
-                            .toList();
+            // Find the latest proposal up to this DRep's registration
+            DRepExpiryUtil.ProposalSubmissionInfo latestProposalUpToRegistration = null;
+            if (dRepRegistration.protocolMajorVersion() == 9 && dRepLastInteraction == null) {
+                int regEpoch = dRepRegistration.epoch();
+                long regSlot = dRepRegistration.slot();
+
+                // Find the latest proposal that was submitted up to this DRep's registration
+                latestProposalUpToRegistration = sortedProposals.stream()
+                        .filter(p -> p.epoch() < regEpoch ||
+                                (p.epoch() == regEpoch && p.slot() <= regSlot))
+                        .findFirst()
+                        .orElse(null);
+            }
 
             int expiry = DRepExpiryUtil.calculateDRepExpiry(
                     dRepRegistration,
                     dRepLastInteraction,
                     dormantEpochsToLeftBoundaryEpoch,
-                    proposalsUpToRegistration,
+                    latestProposalUpToRegistration,
                     firstEpochNoInConwayOrLater,
                     leftBoundaryEpoch
             );
@@ -134,21 +148,6 @@ public class DRepExpiryService {
                 }
             }
 
-//            if (activeUntil < epoch) {
-//                // the DRep is being inactive, dormant epochs do not affect the active_until value when a DRep is in an inactive state. we need recalculate activeUntil
-//                int lastDRepActionEpoch = dRepLastInteraction == null ? dRepRegistration.epoch() : dRepLastInteraction.epoch();
-//                int dRepActivity = dRepLastInteraction == null ? dRepRegistration.dRepActivity() : dRepLastInteraction.dRepActivity();
-//                int v9Bonus = dRepLastInteraction == null ? DRepExpiryUtil.computeV9Bonus(dRepRegistration, proposalsUpToRegistration, firstEpochNoInConwayOrLater) : 0;
-//
-//                activeUntil = recalculateInactiveDRepActiveUntil(
-//                        lastDRepActionEpoch,
-//                        dRepActivity,
-//                        v9Bonus,
-//                        leftBoundaryEpoch,
-//                        dormantEpochsUntilLeftBoundaryEpoch
-//                );
-//            }
-
             /* active_until calculation ends */
 
             batch.add(new MapSqlParameterSource()
@@ -159,7 +158,7 @@ public class DRepExpiryService {
                     .addValue("epoch", epoch));
         }
 
-        String updateSql = "UPDATE drep_dist SET active_until = :active_until , expiry = :expiry " +
+        String updateSql = "UPDATE drep_dist SET active_until = :active_until, expiry = :expiry " +
                 "WHERE drep_hash = :drep_hash and drep_type = :drep_type AND epoch = :epoch";
 
         jdbcTemplate.batchUpdate(updateSql, batch.toArray(new MapSqlParameterSource[0]));
