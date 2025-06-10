@@ -34,6 +34,8 @@ public class AdaPotAutoConfiguration {
         adaPotProperties.setEpochStakePruningSafeEpochs(properties.getAdaPot().getEpochStakeSafeEpochs());
         adaPotProperties.setEpochStakePruningBatchSize(properties.getAdaPot().getEpochStakePruningBatchSize());
 
+        adaPotProperties.setMetricsEnabled(properties.getAdaPot().getMetrics().isEnabled());
+
         return adaPotProperties;
     }
 }

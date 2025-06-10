@@ -35,4 +35,10 @@ public class AdaPotProperties {
 
     @Builder.Default
     private int epochStakePruningBatchSize = 3000;
+
+    @Builder.Default
+    private boolean metricsEnabled = true;
+
+    @Builder.Default
+    private long metricsUpdateInterval = 120000; // 120 seconds
 }
