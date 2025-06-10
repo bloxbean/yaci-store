@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.GovEpochActivityService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovEpochActivityEntity;
 import lombok.RequiredArgsConstructor;
@@ -84,5 +85,23 @@ public class GovEpochActivityProcessor {
         }
 
         govEpochActivityService.saveGovEpochActivity(epoch, isCurrentEpochDormantEpoch, currentDormantEpochCount);
+    }
+
+    @EventListener
+    @Transactional
+    public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
+        int epoch = event.getEpoch();
+        int prevEpoch = event.getEpoch() - 1;
+
+        // first epoch in Conway era, it will be a dormant epoch,
+        // we need to handle this here because ProposalStatusCapturedEvent is only published
+        // after the first epoch of the Conway era.
+        if (eraService.getEraForEpoch(prevEpoch).getValue() == Era.Babbage.getValue()
+                && eraService.getEraForEpoch(epoch).getValue() == Era.Conway.getValue()) {
+            jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
+                    new MapSqlParameterSource().addValue("epoch", epoch));
+
+            govEpochActivityService.saveGovEpochActivity(epoch, Boolean.TRUE, 1);
+        }
     }
 }
