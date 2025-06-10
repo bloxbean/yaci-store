@@ -97,7 +97,7 @@ public class DRepExpiryService {
 
             // Find the latest proposal up to this DRep's registration
             DRepExpiryUtil.ProposalSubmissionInfo latestProposalUpToRegistration = null;
-            if (dRepRegistration.protocolMajorVersion() == 9 && dRepLastInteraction == null) {
+            if (dRepRegistration.protocolMajorVersion() == 9) {
                 int regEpoch = dRepRegistration.epoch();
                 long regSlot = dRepRegistration.slot();
 
@@ -133,9 +133,10 @@ public class DRepExpiryService {
 
             int activeUntil = expiry;
 
-            /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), then set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+            /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), drep is not inactive,
+             we should set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
              the active_until value is only updated after the dormant period ends. */
-            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal) {
+            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry > leftBoundaryEpoch) {
                 activeUntil = expiry - dormantEpochCount;
             }
 
