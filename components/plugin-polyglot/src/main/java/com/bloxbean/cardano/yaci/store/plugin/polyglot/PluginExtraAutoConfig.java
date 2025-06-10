@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.plugin.polyglot.js.JsPolyglotPluginFactor
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.python.PythonPolyglotPluginFactory;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 import org.graalvm.polyglot.Context;
@@ -17,15 +18,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
+@EnableConfigurationProperties(PolyglotProperties.class)
 @ConditionalOnClass(Context.class)
 @ConditionalOnProperty(
         prefix = "store.plugins",
         name = "enabled",
         havingValue = "true"
 )
+@Slf4j
 public class PluginExtraAutoConfig {
 
     @Value("${store.plugins.python.venv:#{null}}")
@@ -62,15 +66,16 @@ public class PluginExtraAutoConfig {
 
     @Bean
     @Qualifier("polyglotContextPool")
-    public GenericKeyedObjectPool<String, Context> polyglotContextPool() {
+    public GenericKeyedObjectPool<String, Context> polyglotContextPool(PolyglotProperties polyglotProperties) {
         PolyglotContextPoolFactory factory = new PolyglotContextPoolFactory();
 
+        log.info("PolyglotContextPool configuration : " + polyglotProperties);
         GenericKeyedObjectPoolConfig<Context> config = new GenericKeyedObjectPoolConfig<>();
-        config.setMaxTotalPerKey(30);
-        config.setMaxIdlePerKey(20);
-        config.setMinIdlePerKey(20);
-        config.setTestOnBorrow(true);
-        config.setTestOnReturn(true);
+        config.setMaxTotalPerKey(polyglotProperties.getPoolMaxTotalPerKey());
+        config.setMaxIdlePerKey(polyglotProperties.getPoolMaxIdlePerKey());
+        config.setMinIdlePerKey(polyglotProperties.getPoolMinIdlePerKey());
+        config.setTestOnBorrow(polyglotProperties.isPoolTestOnBorrow());
+        config.setTestOnReturn(polyglotProperties.isPoolTestOnReturn());
 
         return new GenericKeyedObjectPool<>(factory, config);
     }
