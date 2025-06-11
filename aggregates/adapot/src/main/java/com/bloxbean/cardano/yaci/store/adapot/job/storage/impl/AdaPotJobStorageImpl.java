@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -40,5 +41,19 @@ public class AdaPotJobStorageImpl implements AdaPotJobStorage {
     @Override
     public int deleteBySlotGreaterThan(long slot) {
         return adaPotJobRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    @Override
+    public Optional<AdaPotJob> getLatestJobByTypeAndStatus(AdaPotJobType type, AdaPotJobStatus status) {
+        return adaPotJobRepository.findTopByTypeAndStatusOrderByEpochDesc(type, status)
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public List<AdaPotJob> getRecentCompletedJobs(int limit) {
+        return adaPotJobRepository.findRecentJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED, Pageable.ofSize(limit))
+                .stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 }

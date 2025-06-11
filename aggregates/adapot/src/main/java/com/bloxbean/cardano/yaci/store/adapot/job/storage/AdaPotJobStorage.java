@@ -16,4 +16,8 @@ public interface AdaPotJobStorage {
     void save(AdaPotJob job);
 
     int deleteBySlotGreaterThan(long slot);
+
+    //Optional
+    Optional<AdaPotJob> getLatestJobByTypeAndStatus(AdaPotJobType type, AdaPotJobStatus status);
+    List<AdaPotJob> getRecentCompletedJobs(int limit);
 }
