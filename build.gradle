@@ -178,13 +178,23 @@ task dockerZip(type: Zip) {
         include '*.sh'
         include 'env'
         include '.env'
-    }
-
-    from('./config') {
         include 'application.properties'
         include 'application-ledger-state.properties'
-        include 'application-plugins.yml'
-        into zipDirName
+    }
+
+    from('./docker/plugin-scripts') {
+        include 'placeholder.txt'
+        into zipDirName + '/plugin-scripts'
+    }
+
+    from('./docker/grafana') {
+        exclude('data')
+        into zipDirName + '/grafana'
+    }
+
+    from('./docker/prometheus') {
+        include 'prometheus.yml'
+        into zipDirName + '/prometheus'
     }
 
     archiveFileName = "yaci-store-docker-${final_version}.zip"
