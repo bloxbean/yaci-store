@@ -132,4 +132,6 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private String pythonVenv;
     private List<ScriptRef> pluginGlobalScripts;
+
+    private boolean metricsEnabled = true;
 }

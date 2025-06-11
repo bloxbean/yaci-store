@@ -255,6 +255,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setPythonVenv(properties.getPlugins().getPython().getVenv());
         storeProperties.setPluginGlobalScripts(properties.getPlugins().getScripts());
 
+        storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
+
         return storeProperties;
     }
 

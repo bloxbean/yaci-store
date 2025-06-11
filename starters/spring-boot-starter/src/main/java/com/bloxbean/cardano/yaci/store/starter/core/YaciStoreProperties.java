@@ -27,6 +27,7 @@ public class YaciStoreProperties {
     private String mvstorePath = "./.mvstore";
 
     private Plugins plugins = new Plugins();
+    private Metrics metrics = new Metrics();
 
     @Getter
     @Setter
@@ -134,5 +135,11 @@ public class YaciStoreProperties {
     @Setter
     public static final class PythonSettings {
         private String venv;
+    }
+
+    @Getter
+    @Setter
+    public static final class Metrics {
+        boolean enabled = true;
     }
 }

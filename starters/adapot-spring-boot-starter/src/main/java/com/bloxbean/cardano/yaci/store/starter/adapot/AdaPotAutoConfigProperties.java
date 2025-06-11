@@ -30,6 +30,15 @@ public class AdaPotAutoConfigProperties {
         private int epochStakePruningInterval = 86400;
         private int epochStakeSafeEpochs = 8;
         private int epochStakePruningBatchSize = 3000;
+
+        private Metrics metrics = new Metrics();
+    }
+
+    @Getter
+    @Setter
+    public static final class Metrics {
+        private boolean enabled = true;
+        private long updateInterval = 120000; // 120 seconds
     }
 
 }
