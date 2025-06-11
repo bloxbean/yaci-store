@@ -18,11 +18,11 @@ import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
-import io.micrometer.core.instrument.MeterRegistry;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +44,7 @@ import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.D
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {
     private final ApplicationEventPublisher publisher;
-    private final MeterRegistry meterRegistry;
+    private final MetricsService metricsService;
     private final BlockRangeSync blockRangeSync;
     private final BlockSync blockSync;
     private final CursorService cursorService;
@@ -139,6 +139,13 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
             stopSyncOnError();
             throw new RuntimeException(e);
+        }
+
+        //Update metrics
+        try {
+            metricsService.updateMetrics(eventMetadata);
+        } catch (Exception e) {
+            log.warn("Error updating metrics for block: " + block.getHeader().getHeaderBody().getBlockNumber(), e);
         }
     }
 

@@ -254,6 +254,8 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
 
+        storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
+
         return storeProperties;
     }
 
