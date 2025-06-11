@@ -86,7 +86,7 @@ public class DRepExpiryUtil {
         // Calculate the expiry
         int result = lastActivityEpoch + activityWindow + dormantCount;
 
-        if (result <= evaluatedEpoch) {
+        if (result < evaluatedEpoch) {
             // The DRep is inactive, recalculate expiry
             result = calculateInactiveDRepExpiry(lastActivityEpoch, activityWindow, 0, evaluatedEpoch, dormantEpochs);
         }
