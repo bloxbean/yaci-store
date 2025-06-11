@@ -67,14 +67,13 @@ public class DRepExpiryService {
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(maxDRepRegistrationEpoch);
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> sortedProposals = proposalSubmissionInfos.stream()
-                .sorted(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch)
-                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
+                .sorted(Comparator.comparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
+//                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
                         .reversed())
                 .toList();
 
         DRepExpiryUtil.ProposalSubmissionInfo mostRecentProposal = proposalSubmissionInfos.stream()
-                .max(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch)
-                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot))
+                .max(Comparator.comparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot))
                 .orElse(null);
 
         List<MapSqlParameterSource> batch = new ArrayList<>();
@@ -137,16 +136,23 @@ public class DRepExpiryService {
             /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), drep is not inactive,
              we should set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
              the active_until value is only updated after the dormant period ends. */
-            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry > leftBoundaryEpoch) {
+            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry >= leftBoundaryEpoch) { // TODO: expiry >= leftBoundaryEpoch or expiry > leftBoundaryEpoch?
                 activeUntil = expiry - dormantEpochCount;
             }
 
+            // continue adjusting the active_until value, if the drep was registered or last interacted in a dormant period
             if (dRepLastInteraction == null) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
                 // check left boundary epoch is in a dormant period and drep was registered in this dormant period
                 if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
                         && !leftBoundaryEpochHadNewProposal) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
+                }
+            } else {
+                // case: drep is updated in dormant period
+                if (isEpochRangeDormant(dRepLastInteraction.epoch(), leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
+                        && !leftBoundaryEpochHadNewProposal) {
+                    activeUntil = dRepLastInteraction.epoch() + dRepLastInteraction.dRepActivity();
                 }
             }
 

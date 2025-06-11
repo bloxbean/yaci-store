@@ -130,7 +130,7 @@ public class DRepExpiryUtil {
 
         int result = baseExpiry + v9Bonus;
 
-        if (result <= evaluatedEpoch) {
+        if (result < evaluatedEpoch) { //TODO: "<" or "<="
             // The DRep is inactive, recalculate expiry
             result = calculateInactiveDRepExpiry(lastActivityEpoch, activityWindow, v9Bonus, evaluatedEpoch, dormantEpochs);
         }
@@ -215,17 +215,17 @@ public class DRepExpiryUtil {
         */
         int nonDormantEpochCount = 0;
 
-        for (int _epoch = lastActionEpoch + 1; _epoch <= evaluatedEpoch; _epoch++) {
+        for (int _epoch = lastActionEpoch + 1; _epoch < evaluatedEpoch; _epoch++) {
             if (!dormantEpochs.contains(_epoch)) {
                 nonDormantEpochCount++;
             }
 
-            if (nonDormantEpochCount == activityWindow + v9Bonus) {
-                return _epoch;
+            if (nonDormantEpochCount > activityWindow + v9Bonus) {
+                return _epoch - 1;
             }
         }
 
-        return evaluatedEpoch;
+        return evaluatedEpoch - 1;
     }
 
     /**
