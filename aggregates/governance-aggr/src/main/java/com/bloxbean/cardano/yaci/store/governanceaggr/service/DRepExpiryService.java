@@ -67,8 +67,9 @@ public class DRepExpiryService {
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(maxDRepRegistrationEpoch);
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> sortedProposals = proposalSubmissionInfos.stream()
-                .sorted(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch).reversed()
-                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot).reversed())
+                .sorted(Comparator.comparingInt(DRepExpiryUtil.ProposalSubmissionInfo::epoch)
+                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
+                        .reversed())
                 .toList();
 
         DRepExpiryUtil.ProposalSubmissionInfo mostRecentProposal = proposalSubmissionInfos.stream()
