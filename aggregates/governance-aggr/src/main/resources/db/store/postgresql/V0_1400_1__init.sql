@@ -6,6 +6,8 @@ create table drep_dist
     drep_id         varchar(255),
     amount          bigint,
     epoch           int,
+    active_until    int,
+    expiry          int,
     update_datetime timestamp,
     primary key (drep_hash, drep_type, epoch)
 );
@@ -24,6 +26,7 @@ create table gov_action_proposal_status
     gov_action_index   int,
     type               varchar(50),
     status             varchar(20),
+    voting_stats       jsonb,
     epoch              int,
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index, epoch)
@@ -42,3 +45,22 @@ create table drep_expiry
 
 CREATE INDEX idx_drep_expiry_epoch
     ON drep_expiry (epoch);
+
+drop table if exists gov_epoch_activity;
+create table gov_epoch_activity
+(
+    epoch               int,
+    dormant             boolean,
+    dormant_epoch_count int,
+    update_datetime     timestamp,
+    primary key (epoch)
+);
+
+drop table if exists committee_state;
+create table committee_state
+(
+    epoch int,
+    state varchar(20),
+    update_datetime timestamp,
+    primary key (epoch)
+);
