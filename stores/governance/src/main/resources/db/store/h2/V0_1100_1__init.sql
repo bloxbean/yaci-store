@@ -38,11 +38,14 @@ create table voting_procedure
     block              bigint,
     block_time         bigint,
     update_datetime    timestamp,
-    primary key (tx_hash, voter_hash, gov_action_tx_hash, gov_action_index)
+    primary key (tx_hash, voter_hash, voter_type, gov_action_tx_hash, gov_action_index)
 );
 
 CREATE INDEX idx_voting_procedure_slot
     ON voting_procedure (slot);
+
+CREATE INDEX idx_voting_procedure_voter_hash_voter_type
+    ON voting_procedure (voter_hash, voter_type);
 
 drop table if exists committee_registration;
 create table committee_registration
