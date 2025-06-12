@@ -71,17 +71,23 @@ public class DRepExpiryUtil {
             int evaluatedEpoch
     ) {
         // Choose the epoch to be used as the base for expiry calculation
-        int lastActivityEpoch = lastDRepInteraction != null
-                ? lastDRepInteraction.epoch()
-                : registrationInfo.epoch();
+        int lastActivityEpoch;
+        int activityWindow;
+
+        if (lastDRepInteraction == null) {
+            lastActivityEpoch = registrationInfo.epoch();
+            activityWindow = registrationInfo.dRepActivity();
+        } else if (registrationInfo.epoch() > lastDRepInteraction.epoch()) {
+            lastActivityEpoch = registrationInfo.epoch();
+            activityWindow = registrationInfo.dRepActivity();
+        } else {
+            lastActivityEpoch = lastDRepInteraction.epoch();
+            activityWindow = lastDRepInteraction.dRepActivity();
+        }
 
         int dormantCount = (int) dormantEpochs.stream()
                 .filter(e -> e > lastActivityEpoch && e <= evaluatedEpoch)
                 .count();
-
-        int activityWindow = lastDRepInteraction != null
-                ? lastDRepInteraction.dRepActivity()
-                : registrationInfo.dRepActivity();
 
         // Calculate the expiry
         int result = lastActivityEpoch + activityWindow + dormantCount;
@@ -103,17 +109,23 @@ public class DRepExpiryUtil {
             int evaluatedEpoch
     ) {
         // Choose the epoch to be used as the base for expiry calculation
-        int lastActivityEpoch = lastDRepInteraction != null
-                ? lastDRepInteraction.epoch()
-                : registrationInfo.epoch();
+        int lastActivityEpoch;
+        int activityWindow;
+
+        if (lastDRepInteraction == null) {
+            lastActivityEpoch = registrationInfo.epoch();
+            activityWindow = registrationInfo.dRepActivity();
+        } else if (registrationInfo.epoch() > lastDRepInteraction.epoch()) {
+            lastActivityEpoch = registrationInfo.epoch();
+            activityWindow = registrationInfo.dRepActivity();
+        } else {
+            lastActivityEpoch = lastDRepInteraction.epoch();
+            activityWindow = lastDRepInteraction.dRepActivity();
+        }
 
         int dormantCount = (int) dormantEpochs.stream()
                 .filter(e -> e > lastActivityEpoch && e <= evaluatedEpoch)
                 .count();
-
-        int activityWindow = lastDRepInteraction != null
-                ? lastDRepInteraction.dRepActivity()
-                : registrationInfo.dRepActivity();
 
         // Calculate the base expiry without v9 bonus
         int baseExpiry = lastActivityEpoch + activityWindow + dormantCount;
@@ -318,7 +330,4 @@ public class DRepExpiryUtil {
      */
     public record ProposalSubmissionInfo(long slot, int epoch, int govActionLifeTime) {
     }
-
-//    private record DormantPeriod(Optional<Long> endingSlot, int length) {
-//    }
 }
