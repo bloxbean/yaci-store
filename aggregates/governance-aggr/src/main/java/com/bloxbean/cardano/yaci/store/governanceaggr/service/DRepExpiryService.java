@@ -68,7 +68,6 @@ public class DRepExpiryService {
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> sortedProposals = proposalSubmissionInfos.stream()
                 .sorted(Comparator.comparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
-//                        .thenComparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
                         .reversed())
                 .toList();
 
@@ -206,7 +205,7 @@ public class DRepExpiryService {
                         DSL.rowNumber()
                                 .over()
                                 .partitionBy(DREP_REGISTRATION.DREP_HASH, DREP_REGISTRATION.CRED_TYPE)
-                                .orderBy(DREP_REGISTRATION.EPOCH.desc(), DREP_REGISTRATION.SLOT.desc())
+                                .orderBy(DREP_REGISTRATION.SLOT.desc())
                                 .as("rn")
                 )
                 .from(DREP_REGISTRATION)
