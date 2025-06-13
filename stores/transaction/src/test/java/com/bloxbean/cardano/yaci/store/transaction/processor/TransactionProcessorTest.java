@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,7 +63,10 @@ class TransactionProcessorTest {
     @BeforeEach
     public void setup() {
         feeResolver = new FeeResolver(new DummyUtxoClient());
-        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher);
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .witnessPersistenceEnabled(true)
+                .build();
+        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher, properties);
     }
 
     @Test
@@ -173,6 +178,41 @@ class TransactionProcessorTest {
                 assertThat(txWitness.getAdditionalData().get("attributes").asText()).isEqualTo("a1024101");
             }
         }
+    }
+
+    @Test
+    void givenTransactionEvent_whenWitnessPersistenceDisabled_shouldNotSaveWitnesses() {
+        // Setup processor with witness persistence disabled
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .witnessPersistenceEnabled(false)
+                .build();
+        TransactionProcessor processorWithDisabledWitnesses = new TransactionProcessor(
+                transactionStorage, transactionWitnessStorage, invalidTransactionStorage,
+                new ObjectMapper(), feeResolver, publisher, properties);
+
+        List<VkeyWitness> vkeyWitnesses = List.of(VkeyWitness.builder()
+                .signature("5ce8776d3b749e7b096f5dbd388029db57a0c9fc87662b93cf31da4ad1748b3d5d92a7d65454043ae10dbfa4ac34929311526323a7ab3a7436f02e16abdbdb08")
+                .key("9691ed9d98a5b79d5bc46c4496a6dba7e103f668f525c8349b6b92676cb3eae4")
+                .build());
+
+        List<Transaction> transactions = List.of(Transaction.builder()
+                .witnesses(Witnesses.builder()
+                        .vkeyWitnesses(vkeyWitnesses)
+                        .build())
+                .txHash("a3d6f2627a56fe7921eeda546abfe164321881d41549b7f2fbf09ea0b718d758")
+                .build());
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(EventMetadata.builder()
+                        .slot(10608917)
+                        .build())
+                .build();
+
+        processorWithDisabledWitnesses.handleTransactionWitnesses(transactionEvent);
+
+        // Verify that no witnesses were saved
+        verify(transactionWitnessStorage, Mockito.never()).saveAll(any());
     }
 
     @Test
