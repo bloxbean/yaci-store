@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
@@ -56,6 +57,7 @@ public class TransactionProcessor {
     private final ObjectMapper objectMapper;
     private final FeeResolver feeResolver;
     private final ApplicationEventPublisher publisher;
+    private final TransactionStoreProperties transactionStoreProperties;
 
     //To keep invalid transactions in a batch if any to resolve fee
     private List<Tuple<Txn, Transaction>> invalidUnresolvedFeeTxns = Collections.synchronizedList(new ArrayList<>());
@@ -185,6 +187,10 @@ public class TransactionProcessor {
     @EventListener
     @Transactional
     public void handleTransactionWitnesses(TransactionEvent event) {
+        if (!transactionStoreProperties.isWitnessPersistenceEnabled()) {
+            return;
+        }
+
         List<Transaction> transactions = event.getTransactions();
         List<TxnWitness> txnWitnesses = new ArrayList<>();
 

@@ -26,6 +26,7 @@ public class TransactionStoreAutoConfiguration {
         transactionStoreProperties.setPruningEnabled(properties.getTransaction().isPruningEnabled());
         transactionStoreProperties.setPruningInterval(properties.getTransaction().getPruningInterval());
         transactionStoreProperties.setPruningSafeSlot(properties.getTransaction().getPruningSafeSlot());
+        transactionStoreProperties.setWitnessPersistenceEnabled(properties.getTransaction().isWitnessPersistenceEnabled());
 
         return transactionStoreProperties;
     }

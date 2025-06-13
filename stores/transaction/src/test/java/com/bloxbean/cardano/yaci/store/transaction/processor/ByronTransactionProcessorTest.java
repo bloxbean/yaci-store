@@ -12,6 +12,8 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -42,7 +44,6 @@ class ByronTransactionProcessorTest {
     @Mock
     private ApplicationEventPublisher publisher;
 
-    @InjectMocks
     private ByronTransactionProcessor byronTransactionProcessor;
 
     @Captor
@@ -50,6 +51,14 @@ class ByronTransactionProcessorTest {
 
     @Captor
     private ArgumentCaptor<List<TxnWitness>> txnWitnessesArgCaptor;
+
+    @BeforeEach
+    public void setup() {
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .witnessPersistenceEnabled(true)
+                .build();
+        byronTransactionProcessor = new ByronTransactionProcessor(transactionStorage, transactionWitnessStorage, utxoClient, publisher, properties);
+    }
 
     @Test
     void givenByronMainBlockEvent_WhenTxNotExists_ShouldNotSaveAnything() {
@@ -188,6 +197,43 @@ class ByronTransactionProcessorTest {
                 assertThat(txnWitness.getSignature()).isEqualTo("6cc41635a9794234966629ccfa2a5b089a20ae392f0e92154ff97eda30ff7a082a65fc4b362c24cf58c27f30103b1f1345e15479cf4b80cd4134c0f9dca83109");
             }
         }
+    }
+
+    @Test
+    void givenByronMainBlockEvent_whenWitnessPersistenceDisabled_shouldNotSaveWitnesses() {
+        // Setup processor with witness persistence disabled
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .witnessPersistenceEnabled(false)
+                .build();
+        ByronTransactionProcessor processorWithDisabledWitnesses = new ByronTransactionProcessor(
+                transactionStorage, transactionWitnessStorage, utxoClient, publisher, properties);
+
+        List<ByronTxIn> inputs = byronTxInputs();
+        List<ByronTxOut> outputs = byronTxOutputs();
+        List<ByronTxWitnesses> witnesses = List.of(byronTxWitness(ByronPkWitness.TYPE));
+
+        List<ByronTxPayload> txPayloads = List.of(ByronTxPayload.builder()
+                .transaction(ByronTx.builder()
+                        .inputs(inputs)
+                        .outputs(outputs)
+                        .txHash("6497b33b10fa2619c6efbd9f874ecd1c91badb10bf70850732aab45b90524d9e")
+                        .build())
+                .witnesses(witnesses)
+                .build());
+
+        ByronMainBlockEvent event = ByronMainBlockEvent.builder()
+                .byronMainBlock(ByronMainBlock.builder()
+                        .body(ByronBlockBody.builder()
+                                .txPayload(txPayloads)
+                                .build())
+                        .build())
+                .metadata(eventMetadata())
+                .build();
+
+        processorWithDisabledWitnesses.handleByronTransactionWitnesses(event);
+
+        // Verify that no witnesses were saved
+        Mockito.verify(transactionWitnessStorage, Mockito.never()).saveAll(any());
     }
 
     private EventMetadata eventMetadata() {
