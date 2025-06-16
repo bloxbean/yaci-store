@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
@@ -45,6 +46,7 @@ public class ByronTransactionProcessor {
     private final TransactionWitnessStorage transactionWitnessStorage;
     private final UtxoClient utxoClient;
     private final ApplicationEventPublisher publisher;
+    private final TransactionStoreProperties transactionStoreProperties;
 
     //To keep invalid transactions in a batch if any to resolve fee
     private List<Tuple<Txn, ByronTx>> unresolvedFeeTxns = Collections.synchronizedList(new ArrayList<>());
@@ -166,6 +168,10 @@ public class ByronTransactionProcessor {
     @EventListener
     @Transactional
     public void handleByronTransactionWitnesses(ByronMainBlockEvent event) {
+        if (!transactionStoreProperties.isWitnessPersistenceEnabled()) {
+            return;
+        }
+
         var byronTxPayloadsList = event.getByronMainBlock().getBody().getTxPayload()
                 .stream()
                 .toList();

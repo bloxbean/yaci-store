@@ -54,6 +54,14 @@ The above configuration will run transaction pruning every 86400 seconds or 1 da
 There is also another configuration, `store.adapot.epoch-stake-safe-epochs`, which can be used to specify the number of safe epochs to keep in the store.
 By default, this is set to 4 epochs.
 
+### Transaction Witness Persistence
+
+The transaction store supports configurable witness persistence. This feature allows you to enable or disable the persistence of transaction witnesses in the database, which can help reduce storage requirements if witness data is not needed for your use case.
+By default, transaction witness persistence is enabled.
+
+```properties
+store.transaction.witness-persistence-enabled=true
+```
 ## Auto Sync off
 
 Ideally, you should only have one write instance of yaci-store. However, if you want to set up multiple read-only yaci-store instances alongside one write instance,
