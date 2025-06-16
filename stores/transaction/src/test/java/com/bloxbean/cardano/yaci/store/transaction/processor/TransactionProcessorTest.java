@@ -64,7 +64,7 @@ class TransactionProcessorTest {
     public void setup() {
         feeResolver = new FeeResolver(new DummyUtxoClient());
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .witnessPersistenceEnabled(true)
+                .saveWitness(true)
                 .build();
         transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher, properties);
     }
@@ -181,12 +181,12 @@ class TransactionProcessorTest {
     }
 
     @Test
-    void givenTransactionEvent_whenWitnessPersistenceDisabled_shouldNotSaveWitnesses() {
-        // Setup processor with witness persistence disabled
+    void givenTransactionEvent_whenWitnessStorageDisabled_shouldNotStoreWitnesses() {
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .witnessPersistenceEnabled(false)
+                .saveWitness(false)
                 .build();
-        TransactionProcessor processorWithDisabledWitnesses = new TransactionProcessor(
+
+        TransactionProcessor processorWithDisabledWitnessSaving = new TransactionProcessor(
                 transactionStorage, transactionWitnessStorage, invalidTransactionStorage,
                 new ObjectMapper(), feeResolver, publisher, properties);
 
@@ -209,7 +209,7 @@ class TransactionProcessorTest {
                         .build())
                 .build();
 
-        processorWithDisabledWitnesses.handleTransactionWitnesses(transactionEvent);
+        processorWithDisabledWitnessSaving.handleTransactionWitnesses(transactionEvent);
 
         // Verify that no witnesses were saved
         verify(transactionWitnessStorage, Mockito.never()).saveAll(any());

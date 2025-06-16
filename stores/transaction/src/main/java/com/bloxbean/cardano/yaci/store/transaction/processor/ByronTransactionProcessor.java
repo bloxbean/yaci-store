@@ -168,7 +168,7 @@ public class ByronTransactionProcessor {
     @EventListener
     @Transactional
     public void handleByronTransactionWitnesses(ByronMainBlockEvent event) {
-        if (!transactionStoreProperties.isWitnessPersistenceEnabled()) {
+        if (!transactionStoreProperties.isSaveWitness()) {
             return;
         }
 

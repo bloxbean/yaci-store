@@ -55,7 +55,7 @@ class ByronTransactionProcessorTest {
     @BeforeEach
     public void setup() {
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .witnessPersistenceEnabled(true)
+                .saveWitness(true)
                 .build();
         byronTransactionProcessor = new ByronTransactionProcessor(transactionStorage, transactionWitnessStorage, utxoClient, publisher, properties);
     }
@@ -200,10 +200,9 @@ class ByronTransactionProcessorTest {
     }
 
     @Test
-    void givenByronMainBlockEvent_whenWitnessPersistenceDisabled_shouldNotSaveWitnesses() {
-        // Setup processor with witness persistence disabled
+    void givenByronMainBlockEvent_whenWitnessSaveDisabled_shouldNotSaveWitnesses() {
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .witnessPersistenceEnabled(false)
+                .saveWitness(false)
                 .build();
         ByronTransactionProcessor processorWithDisabledWitnesses = new ByronTransactionProcessor(
                 transactionStorage, transactionWitnessStorage, utxoClient, publisher, properties);

@@ -187,7 +187,7 @@ public class TransactionProcessor {
     @EventListener
     @Transactional
     public void handleTransactionWitnesses(TransactionEvent event) {
-        if (!transactionStoreProperties.isWitnessPersistenceEnabled()) {
+        if (!transactionStoreProperties.isSaveWitness()) {
             return;
         }
 
