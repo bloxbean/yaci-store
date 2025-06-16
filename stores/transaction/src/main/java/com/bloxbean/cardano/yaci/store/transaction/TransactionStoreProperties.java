@@ -19,4 +19,12 @@ public class TransactionStoreProperties {
 
     @Builder.Default
     private int pruningSafeSlot = 43200; // 2160 blocks
+
+    /**
+     * Enable/disable saving of transaction witnesses.
+     * When disabled, transaction witnesses will not be stored in the database.
+     * This can help reduce storage requirements if witness data is not needed.
+     */
+    @Builder.Default
+    private boolean saveWitness = false;
 }
