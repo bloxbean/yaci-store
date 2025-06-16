@@ -37,6 +37,7 @@ public class DRepDistService {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final StoreProperties storeProperties;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+    private final DRepExpiryService dRepExpiryService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -377,6 +378,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null,
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd
@@ -418,6 +421,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null, 
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd                      
@@ -455,10 +460,12 @@ public class DRepDistService {
         jdbcTemplate.update(query2, params);
         long t2 = System.currentTimeMillis();
 
+        // update drep expiry
+        dRepExpiryService.calculateAndUpdateExpiryForEpoch(currentEpoch);
+
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", currentEpoch);
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", currentEpoch);
         log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", currentEpoch, (t2 - t1));
-
     }
 
     private boolean isPublicNetwork() {

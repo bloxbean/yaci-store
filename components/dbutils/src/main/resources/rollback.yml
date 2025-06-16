@@ -54,4 +54,5 @@ tables:
   - drep_dist
   - gov_action_proposal_status
   - drep_expiry
+  - gov_epoch_activity
   - committee_state
