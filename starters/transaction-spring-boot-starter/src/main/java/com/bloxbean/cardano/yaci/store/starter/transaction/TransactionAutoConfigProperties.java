@@ -28,6 +28,12 @@ public class TransactionAutoConfigProperties {
          * safe slot count to keep before pruning the Transaction
          */
         private int pruningSafeSlot = 43200; // 2160 blocks
+        /**
+         * Enable/disable saving of transaction witnesses.
+         * When disabled, transaction witnesses will not be stored in the database.
+         * This can help reduce storage requirements if witness data is not needed.
+         */
+        private boolean saveWitness = false;
     }
 
     @Getter
