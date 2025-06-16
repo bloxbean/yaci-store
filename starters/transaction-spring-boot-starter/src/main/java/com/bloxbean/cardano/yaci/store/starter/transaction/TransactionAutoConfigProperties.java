@@ -29,11 +29,11 @@ public class TransactionAutoConfigProperties {
          */
         private int pruningSafeSlot = 43200; // 2160 blocks
         /**
-         * Enable/disable persistence of transaction witnesses.
-         * When disabled, transaction witnesses will not be persisted to the database.
+         * Enable/disable saving of transaction witnesses.
+         * When disabled, transaction witnesses will not be stored in the database.
          * This can help reduce storage requirements if witness data is not needed.
          */
-        private boolean witnessPersistenceEnabled = true;
+        private boolean saveWitness = false;
     }
 
     @Getter
