@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
@@ -28,6 +29,9 @@ class TransactionRollbackProcessorIT {
 
     @Autowired
     private TransactionRollbackProcessor transactionRollbackProcessor;
+
+    @Autowired
+    private TransactionStoreProperties transactionStoreProperties;
 
     @Test
     @SqlGroup({
