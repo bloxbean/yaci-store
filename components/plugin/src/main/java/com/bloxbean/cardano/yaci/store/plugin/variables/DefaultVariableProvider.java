@@ -17,6 +17,7 @@ public class DefaultVariableProvider implements VariableProvider {
     public Map<String, Object> getVariables() {
         return Map.of(
                 "jdbc", pluginContextUtil.getJdbc(),
+                "named_jdbc", pluginContextUtil.getNamedJdbc(),
                 "rest", pluginContextUtil.getRest(),
                 "env", pluginContextUtil.getEnv(),
                 "http", pluginContextUtil.getHttp(),

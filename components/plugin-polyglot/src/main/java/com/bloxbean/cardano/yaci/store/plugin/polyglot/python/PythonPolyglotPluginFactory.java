@@ -105,8 +105,6 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
 
                 var ctx = cb.build();
 
-                ctx.eval(source);
-
                 var binding = ctx.getBindings(getLang());
                 var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
                 if (variables != null) {
@@ -124,6 +122,8 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
                             });
                 }
                 binding.putMember("global_state", pluginStateService.global());
+
+                ctx.eval(source);
 
                 return ctx;
             };
