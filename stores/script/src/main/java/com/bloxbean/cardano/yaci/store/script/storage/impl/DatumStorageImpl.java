@@ -26,7 +26,7 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.DATUM;
 
 @Slf4j
 public class DatumStorageImpl implements DatumStorage {
-    private final static String FILTER_SCRIPT_DATUM_SAVE = "script.datum.save";
+    private final static String PLUGIN_SCRIPT_DATUM_SAVE = "script.datum.save";
 
     private final DatumRepository datumRepository;
     private final DSLContext dsl;
@@ -57,7 +57,7 @@ public class DatumStorageImpl implements DatumStorage {
 
     @Override
     @Transactional
-    @Plugin(key = FILTER_SCRIPT_DATUM_SAVE)
+    @Plugin(key = PLUGIN_SCRIPT_DATUM_SAVE)
     public void saveAll(Collection<Datum> datumList) {
         if (datumList == null || datumList.isEmpty()) return;
 

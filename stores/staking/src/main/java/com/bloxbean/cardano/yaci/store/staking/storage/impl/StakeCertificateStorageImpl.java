@@ -16,15 +16,15 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class StakeCertificateStorageImpl implements StakingCertificateStorage {
-    private final static String FILTER_STAKE_KEYREGISTRATION_SAVE = "staking.key_registration.save";
-    private final static String FILTER_DELEGATION_SAVE = "staking.key_delegation.save";
+    private final static String PLUGIN_STAKE_KEYREGISTRATION_SAVE = "staking.key_registration.save";
+    private final static String PLUGIN_DELEGATION_SAVE = "staking.key_delegation.save";
 
     private final StakeRegistrationRepository registrationRepository;
     private final DelegationRepository delegationRepository;
     private final StakingMapper mapper;
 
     @Override
-    @Plugin(key = FILTER_STAKE_KEYREGISTRATION_SAVE)
+    @Plugin(key = PLUGIN_STAKE_KEYREGISTRATION_SAVE)
     public void saveRegistrations(List<StakeRegistrationDetail> stakeRegistration) {
         List<StakeRegistrationEntity> stakeRegistrationEntities = stakeRegistration.stream()
                         .map(stakeRegistrationDetail -> mapper.toStakeResistrationEntity(stakeRegistrationDetail))
@@ -33,7 +33,7 @@ public class StakeCertificateStorageImpl implements StakingCertificateStorage {
     }
 
     @Override
-    @Plugin(key = FILTER_DELEGATION_SAVE)
+    @Plugin(key = PLUGIN_DELEGATION_SAVE)
     public void saveDelegations(List<Delegation> delegations) {
         List<DelegationEntity> delegationEntities = delegations.stream()
                 .map(delegation -> mapper.toDelegationEntity(delegation))

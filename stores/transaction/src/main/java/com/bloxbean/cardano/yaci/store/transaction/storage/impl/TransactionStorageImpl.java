@@ -19,14 +19,14 @@ import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTIO
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionStorageImpl implements TransactionStorage {
-    private final static String FILTER_TRANSACTION_SAVE = "transaction.save";
+    private final static String PLUGIN_TRANSACTION_SAVE = "transaction.save";
 
     private final TxnEntityRepository txnEntityRepository;
     private final TxnMapper mapper;
     private final DSLContext dsl;
 
     @Override
-    @Plugin(key = FILTER_TRANSACTION_SAVE)
+    @Plugin(key = PLUGIN_TRANSACTION_SAVE)
     public void saveAll(List<Txn> txnList) {
         List<TxnEntity> txnEntities = txnList.stream().map(mapper::toTxnEntity).collect(Collectors.toList());
         txnEntityRepository.saveAll(txnEntities);
