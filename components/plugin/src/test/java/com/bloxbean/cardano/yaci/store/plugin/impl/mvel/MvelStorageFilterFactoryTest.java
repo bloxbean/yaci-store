@@ -2,8 +2,8 @@ package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptDef;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateConfig;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import org.junit.jupiter.api.Assertions;

@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.impl.spel;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.FilterPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
 import lombok.extern.slf4j.Slf4j;

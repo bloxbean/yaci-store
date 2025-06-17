@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.plugin.aspect;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.api.PostActionPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.PreActionPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.FilterPlugin;

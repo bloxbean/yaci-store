@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.common.plugin;
+package com.bloxbean.cardano.yaci.store.plugin.api.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

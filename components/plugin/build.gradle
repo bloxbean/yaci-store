@@ -1,6 +1,7 @@
 dependencies {
     api project(":components:common")
     api project(':components:events')
+    api project(':components:plugin-api')
 
     api(libs.mvel) {
         exclude group: "com.thoughtworks.xstream", module: "xstream"
