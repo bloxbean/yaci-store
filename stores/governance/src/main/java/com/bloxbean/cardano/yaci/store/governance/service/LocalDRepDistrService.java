@@ -71,7 +71,7 @@ public class LocalDRepDistrService {
 
     @EventListener
     public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode()) {
+        if (!epochChangeEvent.getMetadata().isSyncMode()) {
             return;
         }
 

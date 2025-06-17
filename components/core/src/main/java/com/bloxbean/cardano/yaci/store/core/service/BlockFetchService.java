@@ -500,7 +500,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private void publishEpochChangeEvent(EventMetadata eventMetadata) {
         EpochChangeEvent epochChangeEvent = EpochChangeEvent.builder()
-                .eventMetadata(eventMetadata)
+                .metadata(eventMetadata)
                 .previousEpoch(previousEpoch)
                 .epoch(eventMetadata.getEpochNumber())
                 .previousEra(previousEra)

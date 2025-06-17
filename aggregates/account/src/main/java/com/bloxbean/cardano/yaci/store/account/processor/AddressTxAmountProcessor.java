@@ -59,7 +59,7 @@ public class AddressTxAmountProcessor {
             return;
 
         //Ignore Genesis Txs as it's handled by GEnesisBlockAddressTxAmtProcessor
-        if (addressUtxoEvent.getEventMetadata().getSlot() == -1)
+        if (addressUtxoEvent.getMetadata().getSlot() == -1)
             return;
 
         var txInputOutputList = addressUtxoEvent.getTxInputOutputs();
@@ -69,7 +69,7 @@ public class AddressTxAmountProcessor {
         List<AddressTxAmount> addressTxAmountList = new ArrayList<>();
 
         for (var txInputOutput : txInputOutputList) {
-            var txAddressTxAmountEntities = processAddressAmountForTx(addressUtxoEvent.getEventMetadata(), txInputOutput, false);
+            var txAddressTxAmountEntities = processAddressAmountForTx(addressUtxoEvent.getMetadata(), txInputOutput, false);
             if (txAddressTxAmountEntities == null || txAddressTxAmountEntities.isEmpty()) continue;
 
             addressTxAmountList.addAll(txAddressTxAmountEntities);
@@ -77,7 +77,7 @@ public class AddressTxAmountProcessor {
 
         if (addressTxAmountList.size() > BLOCK_ADDRESS_TX_AMT_THRESHOLD) {
             if (log.isDebugEnabled())
-                log.debug("Saving address_tx_amounts records : {} -- {}", addressTxAmountList.size(), addressUtxoEvent.getEventMetadata().getBlock());
+                log.debug("Saving address_tx_amounts records : {} -- {}", addressTxAmountList.size(), addressUtxoEvent.getMetadata().getBlock());
             addressTxAmountStorage.save(addressTxAmountList); //Save
         } else if (addressTxAmountList.size() > 0) {
             addressTxAmountListCache.addAll(addressTxAmountList);
