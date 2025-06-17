@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.variables;
 
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -11,11 +11,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DefaultVariableProvider implements VariableProvider {
     private final PluginContextUtil pluginContextUtil;
-    private final PluginCacheService cacheService;
+    private final PluginStateService stateService;
 
     @Override
     public Map<String, Object> getVariables() {
-        return Map.of("util", pluginContextUtil,
-                "global_cache", cacheService);
+        return Map.of(
+                "jdbc", pluginContextUtil.getJdbc(),
+                "rest", pluginContextUtil.getRest(),
+                "env", pluginContextUtil.getEnv(),
+                "http", pluginContextUtil.getHttp(),
+                "locker", pluginContextUtil.getLocker(),
+                "global_state", stateService
+        );
     }
 }

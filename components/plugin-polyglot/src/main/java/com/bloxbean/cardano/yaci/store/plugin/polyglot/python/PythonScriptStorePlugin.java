@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GraalPolyglotScriptStorePlugin;
@@ -21,11 +21,11 @@ public class PythonScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T
                                    PluginDef pluginDef,
                                    PluginType pluginType,
                                    String venvPath,
-                                   PluginCacheService pluginCacheService,
+                                   PluginStateService pluginStateService,
                                    VariableProviderFactory variableProviderFactory,
                                    ContextProvider contextProvider,
                                    GlobalScriptContextRegistry globalScriptContextRegistry) {
-        super(engine, pluginDef, pluginType, pluginCacheService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
+        super(engine, pluginDef, pluginType, pluginStateService, variableProviderFactory, globalScriptContextRegistry, contextProvider);
         this.venvPath = venvPath;
     }
 
@@ -44,7 +44,7 @@ public class PythonScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T
             log.info("No Python virtual environment specified >>>>>>>>>>>>");
         }
 
-        cb.option("python.IsolateNativeModules", "true");
+//        cb.option("python.IsolateNativeModules", "true");
 
         cb.allowExperimentalOptions(true); //TODO
     }
