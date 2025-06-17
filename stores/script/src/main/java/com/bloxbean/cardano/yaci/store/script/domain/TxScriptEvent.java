@@ -20,6 +20,6 @@ import java.util.List;
  * and can be consumed by external store implementations.
  */
 public class TxScriptEvent {
-    private EventMetadata eventMetadata;
+    private EventMetadata metadata;
     private List<TxScript> txScriptList;
 }

@@ -12,13 +12,13 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class WithdrawalStorageImpl implements WithdrawalStorage {
-    private final static String FILTER_TRANSACTION_WITHDRAWAL_SAVE = "transaction.withdrawal.save";
+    private final static String PLUGIN_TRANSACTION_WITHDRAWAL_SAVE = "transaction.withdrawal.save";
 
     private final WithdrawalRepository withdrawalRepository;
     private final TxnMapper mapper;
 
     @Override
-    @Plugin(key = FILTER_TRANSACTION_WITHDRAWAL_SAVE)
+    @Plugin(key = PLUGIN_TRANSACTION_WITHDRAWAL_SAVE)
     public void save(List<Withdrawal> withdrawals) {
         withdrawalRepository.saveAll(withdrawals.stream()
                 .map(mapper::toWithdrawalEntity).collect(Collectors.toList()));

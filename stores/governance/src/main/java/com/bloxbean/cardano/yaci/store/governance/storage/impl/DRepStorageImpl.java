@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.governance.jooq.Tables;
 import com.bloxbean.cardano.yaci.store.governance.storage.DRepStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.DRepMapper;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.DRepRepository;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
@@ -19,11 +20,13 @@ import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
 public class DRepStorageImpl implements DRepStorage {
+    private static final String PLUGIN_DREP_SAVE = "governance.drep.save";
     private final DRepRepository dRepRepository;
     private final DRepMapper dRepMapper;
     private final DSLContext dslContext;
 
     @Override
+    @Plugin(key = PLUGIN_DREP_SAVE)
     public void saveAll(List<DRep> dReps) {
         dRepRepository.saveAll(dReps.stream()
                 .map(dRepMapper::toDRepEntity)

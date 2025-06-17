@@ -87,7 +87,7 @@ public class AddressProcessor {
                     }
                 });
 
-        slotAddressesCache.add(new SlotAddresses(addressUtxoEvent.getEventMetadata().getSlot(), addressesInBlock));
+        slotAddressesCache.add(new SlotAddresses(addressUtxoEvent.getMetadata().getSlot(), addressesInBlock));
     }
 
     @EventListener

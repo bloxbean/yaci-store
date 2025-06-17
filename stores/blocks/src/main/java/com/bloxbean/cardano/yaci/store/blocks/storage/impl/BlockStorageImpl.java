@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class BlockStorageImpl implements BlockStorage {
-    private final static String FILTER_BLOCK_SAVE = "block.save";
+    private final static String PLUGIN_BLOCK_SAVE = "block.save";
     private final BlockRepository blockRepository;
     private final BlockMapper blockDetailsMapper;
 
@@ -38,7 +38,7 @@ public class BlockStorageImpl implements BlockStorage {
     }
 
     @Override
-    @Plugin(key = FILTER_BLOCK_SAVE)
+    @Plugin(key = PLUGIN_BLOCK_SAVE)
     public void save(Block block) {
         BlockEntity blockEntity = blockDetailsMapper.toBlockEntity(block);
         blockRepository.save(blockEntity);

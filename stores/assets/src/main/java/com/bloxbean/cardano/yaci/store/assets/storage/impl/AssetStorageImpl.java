@@ -12,13 +12,13 @@ import java.util.List;
 
 @RequiredArgsConstructor
 public class AssetStorageImpl implements AssetStorage {
-    private final static String FILTER_ASSET_SAVE = "asset.save";
+    private final static String PLUGIN_ASSET_SAVE = "asset.save";
 
     private final TxAssetRepository txAssetRepository;
     private final AssetMapper assetMapper;
 
     @Override
-    @Plugin(key = FILTER_ASSET_SAVE)
+    @Plugin(key = PLUGIN_ASSET_SAVE)
     public void saveAll(List<TxAsset> txAssetList) {
         List<TxAssetEntity> txAssetEntities = txAssetList.stream().map(assetMapper::toTxAssetEntity).toList();
         txAssetRepository.saveAll(txAssetEntities);

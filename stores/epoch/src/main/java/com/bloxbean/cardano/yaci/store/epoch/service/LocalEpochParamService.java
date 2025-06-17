@@ -84,7 +84,7 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void epochEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode())
+        if (!epochChangeEvent.getMetadata().isSyncMode())
             return;
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
