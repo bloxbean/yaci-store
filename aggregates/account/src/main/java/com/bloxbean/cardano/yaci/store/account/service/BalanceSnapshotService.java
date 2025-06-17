@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.SneakyThrows;
@@ -22,6 +23,7 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANC
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 
 @Service
+@ReadOnly(false)
 @Slf4j
 public class BalanceSnapshotService {
     private final static String UTXO_BATCH_MODE = "utxo";
