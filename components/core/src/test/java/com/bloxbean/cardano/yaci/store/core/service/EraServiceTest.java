@@ -46,7 +46,7 @@ class EraServiceTest {
     @BeforeEach
     void setup() {
         this.epochConfig = new EpochConfig(genesisConfig);
-        eraService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties, tipFinderService);
+        eraService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties);
     }
 
     @Test
