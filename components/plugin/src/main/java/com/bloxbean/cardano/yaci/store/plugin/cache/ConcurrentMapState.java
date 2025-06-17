@@ -1,53 +1,52 @@
 package com.bloxbean.cardano.yaci.store.plugin.cache;
 
-import com.bloxbean.cardano.yaci.store.common.cache.Cache;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-public class ConcurrentMapCache<K, V> implements Cache<K, V> {
-    private final ConcurrentHashMap<K, V> cache;
+public class ConcurrentMapState<K, V> implements State<K, V> {
+    private final ConcurrentHashMap<K, V> state;
 
-    public ConcurrentMapCache() {
-        this.cache = new ConcurrentHashMap<>();
+    public ConcurrentMapState() {
+        this.state = new ConcurrentHashMap<>();
     }
 
     @Override
     public void put(K key, V value) {
-        cache.put(key, value);
+        state.put(key, value);
     }
 
     @Override
     public void putIfAbsent(K key, V value) {
-        cache.putIfAbsent(key, value);
+        state.putIfAbsent(key, value);
     }
 
     @Override
     public V computeIfAbsent(K key, Function<K, V> mappingFunction) {
-        return cache.computeIfAbsent(key, mappingFunction);
+        return state.computeIfAbsent(key, mappingFunction);
     }
 
     @Override
     public V get(K key) {
-        return cache.get(key);
+        return state.get(key);
     }
 
     @Override
     public boolean containsKey(K key) {
-        return cache.containsKey(key);
+        return state.containsKey(key);
     }
 
     @Override
     public void remove(K key) {
-        cache.remove(key);
+        state.remove(key);
     }
 
     @Override
     public long size() {
-        return cache.size();
+        return state.size();
     }
 
     @Override
     public void clear() {
-        cache.clear();
+        state.clear();
     }
 }

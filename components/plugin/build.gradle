@@ -6,9 +6,9 @@ dependencies {
         exclude group: "com.thoughtworks.xstream", module: "xstream"
     }
     implementation libs.xstream
-    implementation libs.unirest
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 publishing {

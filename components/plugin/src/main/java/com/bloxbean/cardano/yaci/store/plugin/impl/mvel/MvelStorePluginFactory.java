@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
 import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 public class MvelStorePluginFactory implements PluginFactory {
 
-    private final PluginCacheService pluginCacheService;
+    private final PluginStateService pluginCacheService;
     private final VariableProviderFactory variableProviderFactory;
 
     @PostConstruct
