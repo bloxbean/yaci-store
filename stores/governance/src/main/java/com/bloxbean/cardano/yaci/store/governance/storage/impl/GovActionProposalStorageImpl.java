@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStora
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.GovActionProposalMapper;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.GovActionProposalId;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.GovActionProposalRepository;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -14,10 +15,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GovActionProposalStorageImpl implements GovActionProposalStorage {
 
+    private static final String PLUGIN_GOV_ACTION_PROPOSAL_SAVE = "governance.gov_action_proposal.save";
     private final GovActionProposalRepository govActionProposalRepository;
     private final GovActionProposalMapper govActionProposalMapper;
 
     @Override
+    @Plugin(key=PLUGIN_GOV_ACTION_PROPOSAL_SAVE)
     public void saveAll(List<GovActionProposal> govActionProposals) {
         govActionProposalRepository.saveAll(govActionProposals.stream()
                 .map(govActionProposalMapper::toGovActionProposalEntity)

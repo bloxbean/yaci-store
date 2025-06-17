@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.mapper.CommitteeMemberMapper;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.repository.CommitteeMemberRepository;
+import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 
@@ -17,11 +18,13 @@ import static org.jooq.impl.DSL.*;
 
 @RequiredArgsConstructor
 public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
+    private static final String PLUGIN_COMMITTEE_MEMBER_SAVE = "governance.committee_member.save";
     private final CommitteeMemberRepository committeeMemberRepository;
     private final CommitteeMemberMapper committeeMemberMapper;
     private final DSLContext dsl;
 
     @Override
+    @Plugin(key = PLUGIN_COMMITTEE_MEMBER_SAVE)
     public void saveAll(List<CommitteeMember> committeeMembers) {
         committeeMemberRepository.saveAll(committeeMembers.stream()
                 .map(committeeMemberMapper::toCommitteeMemberEntity)
