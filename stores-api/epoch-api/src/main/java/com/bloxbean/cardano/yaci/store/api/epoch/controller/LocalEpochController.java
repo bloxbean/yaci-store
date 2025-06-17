@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.epoch.controller;
 
 import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochDto;
 import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamServiceReader;

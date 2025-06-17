@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.admin.api;
 
 import com.bloxbean.cardano.yaci.store.account.service.AddressBalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 @RestController("AdminController")
 @RequestMapping("${apiPrefix}")
 @Slf4j
+@ReadOnly(false)
 @ConditionalOnExpression("${store.admin.api-enabled:false}")
 @Tag(name = "Admin API", description = "Admin API for managing the store")
 public class AdminController {
