@@ -114,7 +114,7 @@ public class AccountBalanceProcessor {
     public void handleAddressUtxoEvent(AddressUtxoEvent addressUtxoEvent) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             return;
-        addressUtxoEventsMap.put(addressUtxoEvent.getEventMetadata().getBlock(), addressUtxoEvent);
+        addressUtxoEventsMap.put(addressUtxoEvent.getMetadata().getBlock(), addressUtxoEvent);
 
     }
 
@@ -137,7 +137,7 @@ public class AccountBalanceProcessor {
                     .orElse(0L);
 
             List<AddressUtxoEvent> sortedAddressEventUtxo = addressUtxoEvents.stream()
-                    .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getEventMetadata().getBlock()))
+                    .sorted(Comparator.comparingLong(addUtxoEvent -> addUtxoEvent.getMetadata().getBlock()))
                     .collect(toList());
 
             //Try to resolve pointer address if era < Conway
@@ -178,14 +178,14 @@ public class AccountBalanceProcessor {
 
             //If the last block is at balance snapshot and most probably a rollback event for first block, ignore the balance calculation for the last block
             if (isLastBlockAtBalanceSnapshot && lastProcessedBlock != 0
-                    && lastProcessedBlock == sortedAddressEventUtxo.get(0).getEventMetadata().getBlock()) {
-                log.info("Last block is at balance snapshot. Ignoring the balance calculation for block {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
+                    && lastProcessedBlock == sortedAddressEventUtxo.get(0).getMetadata().getBlock()) {
+                log.info("Last block is at balance snapshot. Ignoring the balance calculation for block {}", sortedAddressEventUtxo.get(0).getMetadata().getBlock());
                 sortedAddressEventUtxo.remove(0);
             }
 
                 //Create final address balance records for saving
             //Required to get balance before the slot mention in the metadata
-            EventMetadata firstBlockInBatchMetadata = sortedAddressEventUtxo.get(0).getEventMetadata();
+            EventMetadata firstBlockInBatchMetadata = sortedAddressEventUtxo.get(0).getMetadata();
 
             if (lastProcessedBlock != null
                     && !((firstBlockInBatchMetadata.getBlock() - lastProcessedBlock) <= 1)) { // 1 block diff or same block
@@ -193,7 +193,7 @@ public class AccountBalanceProcessor {
                         "Please run the aggregation app to calculate the account balance for pending blocks.");
                 log.warn("The last processed block for account balance calculation is not the same as the expected last block.");
                 log.warn("Last processed block for account balance: {}", lastProcessedBlock);
-                log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getEventMetadata().getBlock());
+                log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getMetadata().getBlock());
 
                 if (accountStoreProperties.getInitialBalanceSnapshotBlock() > 0) {
                     balanceSnapshotService.scheduleBalanceSnapshot();
@@ -357,7 +357,7 @@ public class AccountBalanceProcessor {
                 .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
                 .toList();
 
-        return getAddressAmountMapForBlock(addressUtxoEvent.getEventMetadata(), inputAddressUtxos, outputAddressUtxos);
+        return getAddressAmountMapForBlock(addressUtxoEvent.getMetadata(), inputAddressUtxos, outputAddressUtxos);
     }
 
     /**

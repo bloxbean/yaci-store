@@ -13,13 +13,13 @@ import java.util.List;
 
 @RequiredArgsConstructor
 public class TxMetadataStorageImpl implements TxMetadataStorage {
-    private final static String FILTER_METADATA_SAVE = "metadata.save";
+    private final static String PLUGIN_METADATA_SAVE = "metadata.save";
 
     private final TxMetadataLabelRepository metadataLabelRepository;
     private final MetadataMapper metadataMapper;
 
     @Override
-    @Plugin(key = FILTER_METADATA_SAVE)
+    @Plugin(key = PLUGIN_METADATA_SAVE)
     public List<TxMetadataLabel> saveAll(@NonNull List<TxMetadataLabel> txMetadataLabelList) {
         List<TxMetadataLabelEntity> txMetadataLabelEntities = txMetadataLabelList.stream()
                 .map(metadataMapper::toTxMetadataLabelEntity)

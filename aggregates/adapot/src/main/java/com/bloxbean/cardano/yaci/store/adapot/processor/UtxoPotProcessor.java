@@ -53,7 +53,7 @@ public class UtxoPotProcessor {
    @EventListener
     public void calculateNetUtxoAmtInBatach(PreCommitEvent preCommitEvent) {
 
-        Collections.sort(addressUtxoEvents, Comparator.comparingLong(addressUtxoEvent -> addressUtxoEvent.getEventMetadata().getSlot()));
+        Collections.sort(addressUtxoEvents, Comparator.comparingLong(addressUtxoEvent -> addressUtxoEvent.getMetadata().getSlot()));
 
         for (AddressUtxoEvent addressUtxoEvent : addressUtxoEvents) {
             var txInputOutputs = addressUtxoEvent.getTxInputOutputs();

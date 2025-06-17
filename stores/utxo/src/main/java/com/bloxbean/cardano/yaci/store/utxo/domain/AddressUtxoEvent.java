@@ -16,6 +16,6 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class AddressUtxoEvent {
-    private EventMetadata eventMetadata;
+    private EventMetadata metadata;
     private List<TxInputOutput> txInputOutputs;
 }

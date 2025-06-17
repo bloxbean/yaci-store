@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
+import com.bloxbean.cardano.yaci.store.governance.domain.*;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataEvent;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.script.domain.*;
@@ -66,6 +67,15 @@ public class PojoClassList {
             TxnWitness.class,
             Withdrawal.class,
             AddressUtxo.class,
-            TxInput.class
+            TxInput.class,
+            //governance
+            CommitteeDeRegistration.class,
+            CommitteeMember.class,
+            CommitteeRegistration.class,
+            DelegationVote.class,
+            DRepRegistration.class,
+            DRep.class,
+            GovActionProposal.class,
+            VotingProcedure.class
     );
 }

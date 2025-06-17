@@ -20,6 +20,6 @@ import java.util.List;
  * and can be consumed by custom store implementations.
  */
 public class TxMetadataEvent {
-    private EventMetadata eventMetadata;
+    private EventMetadata metadata;
     private List<TxMetadataLabel> txMetadataList;
 }

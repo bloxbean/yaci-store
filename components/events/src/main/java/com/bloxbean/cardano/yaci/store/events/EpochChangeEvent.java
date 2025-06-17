@@ -9,7 +9,7 @@ import lombok.*;
 @Builder
 @ToString
 public class EpochChangeEvent {
-    private EventMetadata eventMetadata;
+    private EventMetadata metadata;
     private Integer previousEpoch;
     private Integer epoch;
     private Era previousEra;
