@@ -11,7 +11,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.core.service.ChainTipService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
@@ -42,13 +42,13 @@ import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfigur
 public class LocalDRepDistrService {
     private final LocalClientProviderManager localClientProviderManager;
     private final LocalDRepDistrStorage localDRepDistrStorage;
-    private final EraService eraService;
+    private final ChainTipService chainTipService;
 
     public LocalDRepDistrService(LocalClientProviderManager localClientProviderManager, LocalDRepDistrStorage localDRepDistrStorage,
-                                 EraService eraService) {
+                                 ChainTipService chainTipService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localDRepDistrStorage = localDRepDistrStorage;
-        this.eraService = eraService;
+        this.chainTipService = chainTipService;
     }
 
     @Getter
@@ -87,7 +87,7 @@ public class LocalDRepDistrService {
     }
 
     public synchronized void fetchAndSetDRepDistr() {
-        Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        Optional<Tuple<Tip, Integer>> epochAndTip = chainTipService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
             log.error("Epoch is null. Cannot fetch dRep stake distribution");
             return;
