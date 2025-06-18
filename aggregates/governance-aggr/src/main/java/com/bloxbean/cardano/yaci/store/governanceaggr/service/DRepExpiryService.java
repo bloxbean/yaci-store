@@ -14,7 +14,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
+import org.jooq.impl.SQLDataType;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -191,6 +194,22 @@ public class DRepExpiryService {
             return Collections.emptyMap();
         }
 
+        Field<String> drepActivityField;
+        Field<String> protocolMajorVerField;
+
+        SQLDialect dialect = dsl.dialect();
+
+        if (dialect.family() == SQLDialect.POSTGRES) {
+            drepActivityField = DSL.field("params->>'drep_activity'", String.class);
+            protocolMajorVerField = DSL.field("params->>'protocol_major_ver'", String.class);
+        } else if (dialect.family() == SQLDialect.MYSQL) {
+            drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
+            protocolMajorVerField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.protocol_major_ver"));
+        } else {
+            drepActivityField = DSL.field("JSON_VALUE(params, '$.drep_activity')", String.class);
+            protocolMajorVerField = DSL.field("JSON_VALUE(params, '$.protocol_major_ver')", String.class);
+        }
+
         List<Condition> conditions = drepHashAndTypes
                 .stream()
                 .map(t -> DREP_REGISTRATION.DREP_HASH.eq(t._1).and(DREP_REGISTRATION.CRED_TYPE.eq(t._2.name())))
@@ -219,8 +238,8 @@ public class DRepExpiryService {
                         ranked.field(DREP_REGISTRATION.CRED_TYPE),
                         ranked.field(DREP_REGISTRATION.SLOT),
                         ranked.field(DREP_REGISTRATION.EPOCH),
-                        DSL.field("params->>'drep_activity'", String.class).cast(Integer.class).as("drep_activity"),
-                        DSL.field("params->>'protocol_major_ver'", String.class).cast(Integer.class).as("protocol_major_ver")
+                        drepActivityField.cast(Integer.class).as("drep_activity"),
+                        protocolMajorVerField.cast(Integer.class).as("protocol_major_ver")
                 )
                 .from(ranked)
                 .join(EPOCH_PARAM).on(ranked.field(DREP_REGISTRATION.EPOCH).eq(EPOCH_PARAM.EPOCH))
@@ -245,6 +264,17 @@ public class DRepExpiryService {
     private Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> findLastInteractions(Set<Tuple<String, DrepType>> drepHashAndTypes, int epoch) {
         if (drepHashAndTypes.isEmpty()) {
             return Collections.emptyMap();
+        }
+
+        Field<String> drepActivityField;
+        SQLDialect dialect = dsl.dialect();
+
+        if (dialect.family() == SQLDialect.POSTGRES) {
+            drepActivityField = DSL.field("params->>'drep_activity'", String.class);
+        } else if (dialect.family() == SQLDialect.MYSQL) {
+            drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
+        } else {
+            drepActivityField = DSL.field("JSON_VALUE(params, '$.drep_activity')", String.class);
         }
 
         List<Condition> dRepRegConditions = drepHashAndTypes
@@ -296,8 +326,8 @@ public class DRepExpiryService {
                         li.field("drep_hash", String.class),
                         li.field("drep_type", String.class),
                         li.field("epoch", Integer.class),
-                        DSL.field("params->>'drep_activity'", String.class).cast(Integer.class).as("drep_activity")
-                )
+                        drepActivityField.cast(Integer.class).as("drep_activity")
+                        )
                 .from(li)
                 .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(li.field("epoch", Integer.class)))
                 .fetch();
@@ -316,10 +346,21 @@ public class DRepExpiryService {
     }
 
     private List<DRepExpiryUtil.ProposalSubmissionInfo> findProposalWithEpochLessThanOrEqualTo(int epoch) {
+        Field<String> govActionLifetimeField;
+        SQLDialect dialect = dsl.dialect();
+
+        if (dialect.family() == SQLDialect.POSTGRES) {
+            govActionLifetimeField = DSL.field("params->>'gov_action_lifetime'", String.class);
+        } else if (dialect.family() == SQLDialect.MYSQL) {
+            govActionLifetimeField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.gov_action_lifetime"));
+        } else {
+            govActionLifetimeField = DSL.field("JSON_VALUE(params, '$.gov_action_lifetime')", String.class);
+        }
+
         return dsl.select(
                         GOV_ACTION_PROPOSAL.SLOT,
                         GOV_ACTION_PROPOSAL.EPOCH,
-                        DSL.field("params->>'gov_action_lifetime'", String.class).cast(Integer.class).as("gov_action_lifetime")
+                        govActionLifetimeField.cast(Integer.class).as("gov_action_lifetime")
                 )
                 .from(GOV_ACTION_PROPOSAL)
                 .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
