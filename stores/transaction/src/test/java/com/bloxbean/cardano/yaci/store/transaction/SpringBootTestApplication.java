@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 

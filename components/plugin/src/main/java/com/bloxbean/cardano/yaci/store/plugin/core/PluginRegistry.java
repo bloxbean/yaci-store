@@ -1,9 +1,9 @@
-package com.bloxbean.cardano.yaci.store.plugin.api;
+package com.bloxbean.cardano.yaci.store.plugin.core;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
-import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProvider;
+import com.bloxbean.cardano.yaci.store.plugin.api.*;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;

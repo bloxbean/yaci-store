@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.plugin.events;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.plugin.api.EventHandlerPlugin;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;

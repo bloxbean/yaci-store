@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.plugin.impl.spel;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
@@ -105,8 +105,6 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
 
                 var ctx = cb.build();
 
-                ctx.eval(source);
-
                 var binding = ctx.getBindings(getLang());
                 var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
                 if (variables != null) {
@@ -124,6 +122,8 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
                             });
                 }
                 binding.putMember("global_state", pluginStateService.global());
+
+                ctx.eval(source);
 
                 return ctx;
             };
