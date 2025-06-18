@@ -4,11 +4,14 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovEpochActivityRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,11 +21,13 @@ import org.jooq.Field;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
+import org.mvel2.ast.Proto;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
@@ -39,6 +44,7 @@ public class DRepExpiryService {
     private final GovEpochActivityRepository govEpochActivityRepository;
     private final GovEpochActivityService govEpochActivityService;
     private final DSLContext dsl;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public void calculateAndUpdateExpiryForEpoch(int epoch) {
@@ -60,8 +66,23 @@ public class DRepExpiryService {
             return;
         }
 
-        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = findRegistrationInfos(targetDReps, leftBoundaryEpoch);
-        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = findLastInteractions(targetDReps, leftBoundaryEpoch);
+        int batchSize = 200;
+
+        List<Set<Tuple<String, DrepType>>> targetDRepsBatches = partitionSet(targetDReps, batchSize);
+
+        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = new ConcurrentHashMap<>();
+        Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = new ConcurrentHashMap<>();
+
+        targetDRepsBatches.parallelStream().forEach(batch -> {
+            Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> batchRegistrationMap =
+                    findRegistrationInfos(batch, leftBoundaryEpoch);
+            Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> batchInteractionMap =
+                    findLastInteractions(batch, leftBoundaryEpoch);
+
+            registrationMap.putAll(batchRegistrationMap);
+            lastInteractionMap.putAll(batchInteractionMap);
+        });
+
         Set<Integer> dormantEpochsToLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
 
         Integer maxDRepRegistrationEpoch = registrationMap.values().stream().map(DRepExpiryUtil.DRepRegistrationInfo::epoch)
@@ -194,8 +215,8 @@ public class DRepExpiryService {
             return Collections.emptyMap();
         }
 
-        Field<String> drepActivityField;
-        Field<String> protocolMajorVerField;
+        Field<String> drepActivityField = null;
+        Field<String> protocolMajorVerField = null;
 
         SQLDialect dialect = dsl.dialect();
 
@@ -205,9 +226,6 @@ public class DRepExpiryService {
         } else if (dialect.family() == SQLDialect.MYSQL) {
             drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
             protocolMajorVerField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.protocol_major_ver"));
-        } else {
-            drepActivityField = DSL.field("JSON_VALUE(params, '$.drep_activity')", String.class);
-            protocolMajorVerField = DSL.field("JSON_VALUE(params, '$.protocol_major_ver')", String.class);
         }
 
         List<Condition> conditions = drepHashAndTypes
@@ -233,14 +251,20 @@ public class DRepExpiryService {
                         .and(DREP_REGISTRATION.EPOCH.le(epoch)))
                 .asTable("ranked");
 
-        var result = dsl.select(
-                        ranked.field(DREP_REGISTRATION.DREP_HASH),
-                        ranked.field(DREP_REGISTRATION.CRED_TYPE),
-                        ranked.field(DREP_REGISTRATION.SLOT),
-                        ranked.field(DREP_REGISTRATION.EPOCH),
-                        drepActivityField.cast(Integer.class).as("drep_activity"),
-                        protocolMajorVerField.cast(Integer.class).as("protocol_major_ver")
-                )
+        var selectFields = dsl.select(ranked.field(DREP_REGISTRATION.DREP_HASH),
+                ranked.field(DREP_REGISTRATION.CRED_TYPE),
+                ranked.field(DREP_REGISTRATION.SLOT),
+                ranked.field(DREP_REGISTRATION.EPOCH));
+
+        if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
+            selectFields.select(
+                    drepActivityField.cast(Integer.class).as("drep_activity"),
+                    protocolMajorVerField.cast(Integer.class).as("protocol_major_ver"));
+        } else {
+            selectFields.select(EPOCH_PARAM.PARAMS);
+        }
+
+        var result = selectFields
                 .from(ranked)
                 .join(EPOCH_PARAM).on(ranked.field(DREP_REGISTRATION.EPOCH).eq(EPOCH_PARAM.EPOCH))
                 .where(ranked.field("rn", Integer.class).eq(1))
@@ -252,8 +276,18 @@ public class DRepExpiryService {
             DrepType type = DrepType.valueOf(record.get(DREP_REGISTRATION.CRED_TYPE));
             long registrationSlot = record.get(DREP_REGISTRATION.SLOT);
             int registrationEpoch = record.get(DREP_REGISTRATION.EPOCH);
-            int drepActivity = record.get("drep_activity", Integer.class);
-            int protocolMajorVer = record.get("protocol_major_ver", Integer.class);
+            int drepActivity;
+            int protocolMajorVer;
+
+            if (dialect.family() == SQLDialect.H2) {
+                var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
+                var protocolParam = objectMapper.convertValue(paramsJson, ProtocolParams.class);
+                drepActivity = protocolParam.getDrepActivity();
+                protocolMajorVer = protocolParam.getProtocolMajorVer();
+            } else {
+                drepActivity = record.get("drep_activity", Integer.class);
+                protocolMajorVer = record.get("protocol_major_ver", Integer.class);
+            }
 
             map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepRegistrationInfo(registrationSlot, registrationEpoch, drepActivity, protocolMajorVer));
         }
@@ -370,5 +404,18 @@ public class DRepExpiryService {
                         record.get(GOV_ACTION_PROPOSAL.EPOCH),
                         record.get("gov_action_lifetime", Integer.class)
                 ));
+    }
+
+    private List<Set<Tuple<String, DrepType>>> partitionSet(Set<Tuple<String, DrepType>> drepSet, int batchSize) {
+        List<Set<Tuple<String, DrepType>>> batches = new ArrayList<>();
+        List<Tuple<String, DrepType>> list = new ArrayList<>(drepSet);
+
+        for (int i = 0; i < list.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, list.size());
+            Set<Tuple<String, DrepType>> batch = new HashSet<>(list.subList(i, end));
+            batches.add(batch);
+        }
+
+        return batches;
     }
 }
