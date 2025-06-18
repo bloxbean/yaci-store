@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Bean;
 @SpringBootApplication
 @EnableBatchProcessing
 @Slf4j
-public class YaciStoreApplication {
+public class ava YaciStoreApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(YaciStoreApplication.class, args);
