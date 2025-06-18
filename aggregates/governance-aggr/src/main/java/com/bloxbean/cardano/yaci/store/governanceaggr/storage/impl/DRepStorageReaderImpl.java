@@ -17,7 +17,7 @@ import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DREP;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
-import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_EXPIRY;
+
 
 @RequiredArgsConstructor
 public class DRepStorageReaderImpl implements DRepStorageReader {
@@ -27,12 +27,11 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
     public List<DRepDetailsDto> getDReps(int epoch, int page, int count, Order order) {
         var d = DREP;
         var drepDist = DREP_DIST;
-        var drepExpiry = DREP_EXPIRY;
 
         Integer maxEpochInGovDRepCalc = dsl
-                .select(DSL.max(drepExpiry.EPOCH))
-                .from(drepExpiry)
-                .where(drepExpiry.EPOCH.le(epoch))
+                .select(DSL.max(DREP_DIST.EPOCH))
+                .from(DREP_DIST)
+                .where(DREP_DIST.EPOCH.le(epoch))
                 .fetchOneInto(Integer.class);
 
         if (maxEpochInGovDRepCalc == null) {
@@ -121,15 +120,12 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                         latestStatus.field("deposit", BigInteger.class),
                         latestStatus.field("status", String.class),
                         latestStatus.field("registration_slot", Long.class),
-                        drepExpiry.ACTIVE_UNTIL
+                        drepDist.ACTIVE_UNTIL
                 )
                 .from(latestStatus)
                 .leftJoin(drepDist).on(drepDist.DREP_HASH.eq(latestStatus.field("drep_hash", String.class))
                         .and(drepDist.DREP_ID.eq(latestStatus.field("drep_id", String.class)))
                         .and(drepDist.EPOCH.eq(maxEpochInGovDRepCalc)))
-                .leftJoin(drepExpiry).on(drepExpiry.DREP_HASH.eq(drepDist.DREP_HASH)
-                        .and(drepExpiry.DREP_ID.eq(drepDist.DREP_ID))
-                        .and(drepExpiry.EPOCH.eq(maxEpochInGovDRepCalc)))
                 .orderBy(order == Order.desc ?
                         DSL.field("registration_slot", Long.class).desc() :
                         DSL.field("registration_slot", Long.class).asc())
@@ -145,7 +141,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                     BigInteger votingPower = r.get("voting_power", BigInteger.class);
                     BigInteger deposit = r.get("deposit", BigInteger.class);
                     String drepStatusStr = r.get("status", String.class);
-                    Integer activeUntil = r.get(drepExpiry.ACTIVE_UNTIL);
+                    Integer activeUntil = r.get(drepDist.ACTIVE_UNTIL);
                     Long registrationSlot = r.get("registration_slot", Long.class);
                     DRepType dRepType;
                     if (drepTypeStr != null) {
@@ -182,7 +178,6 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
     public Optional<DRepDetailsDto> getDRepDetailsByDRepId(String drepId, int epoch) {
         var d = DREP;
         var dist = DREP_DIST;
-        var expiry = DREP_EXPIRY;
 
         Integer maxEpochInGovCalc = dsl
                 .select(DSL.max(dist.EPOCH))
@@ -218,24 +213,22 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
         DRepType dRepType = GovId.toDrep(drepId).getType();  // todo: add cred type to table 'drep'
 
         if (maxEpochInGovCalc != null) {
-            var distrAndExpiryRow = dsl.select(
+            var distrRow = dsl.select(
                             dist.DREP_ID,
                             dist.DREP_TYPE,
                             dist.AMOUNT.as("voting_power"),
-                            expiry.ACTIVE_UNTIL
+                            dist.ACTIVE_UNTIL
                     )
                     .from(dist)
-                    .leftJoin(expiry).on(expiry.DREP_ID.eq(dist.DREP_ID)
-                            .and(expiry.EPOCH.eq(maxEpochInGovCalc)))
                     .where(dist.DREP_ID.eq(drepId)
                             .and(dist.EPOCH.eq(maxEpochInGovCalc)))
                     .fetchOne();
 
-            if (distrAndExpiryRow != null) {
-                votingPower = distrAndExpiryRow.get("voting_power", BigInteger.class);
-                activeUntil = distrAndExpiryRow.get(expiry.ACTIVE_UNTIL);
-                drepId = distrAndExpiryRow.get(dist.DREP_ID);
-                dRepType = DRepType.valueOf(distrAndExpiryRow.get(dist.DREP_TYPE));
+            if (distrRow != null) {
+                votingPower = distrRow.get("voting_power", BigInteger.class);
+                activeUntil = distrRow.get(dist.ACTIVE_UNTIL);
+                drepId = distrRow.get(dist.DREP_ID);
+                dRepType = DRepType.valueOf(distrRow.get(dist.DREP_TYPE));
             }
         }
 
