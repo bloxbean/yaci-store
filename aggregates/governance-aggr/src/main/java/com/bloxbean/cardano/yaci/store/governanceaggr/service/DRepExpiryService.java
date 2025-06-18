@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovEpochActivityRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
+import org.jooq.Record;
+import org.jooq.Result;
 import org.jooq.SQLDialect;
+import org.jooq.SelectSelectStep;
 import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
 import org.mvel2.ast.Proto;
@@ -251,39 +255,53 @@ public class DRepExpiryService {
                         .and(DREP_REGISTRATION.EPOCH.le(epoch)))
                 .asTable("ranked");
 
-        var selectFields = dsl.select(ranked.field(DREP_REGISTRATION.DREP_HASH),
-                ranked.field(DREP_REGISTRATION.CRED_TYPE),
-                ranked.field(DREP_REGISTRATION.SLOT),
-                ranked.field(DREP_REGISTRATION.EPOCH));
-
+        Result<?> result;
         if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
-            selectFields.select(
+            result = dsl.select(
+                    ranked.field(DREP_REGISTRATION.DREP_HASH),
+                    ranked.field(DREP_REGISTRATION.CRED_TYPE),
+                    ranked.field(DREP_REGISTRATION.SLOT),
+                    ranked.field(DREP_REGISTRATION.EPOCH),
                     drepActivityField.cast(Integer.class).as("drep_activity"),
-                    protocolMajorVerField.cast(Integer.class).as("protocol_major_ver"));
+                    protocolMajorVerField.cast(Integer.class).as("protocol_major_ver")
+            )
+            .from(ranked)
+            .join(EPOCH_PARAM).on(ranked.field(DREP_REGISTRATION.EPOCH).eq(EPOCH_PARAM.EPOCH))
+            .where(ranked.field("rn", Integer.class).eq(1))
+            .fetch();
         } else {
-            selectFields.select(EPOCH_PARAM.PARAMS);
+            result = dsl.select(
+                    ranked.field(DREP_REGISTRATION.DREP_HASH),
+                    ranked.field(DREP_REGISTRATION.CRED_TYPE),
+                    ranked.field(DREP_REGISTRATION.SLOT),
+                    ranked.field(DREP_REGISTRATION.EPOCH),
+                    EPOCH_PARAM.PARAMS
+            )
+            .from(ranked)
+            .join(EPOCH_PARAM).on(ranked.field(DREP_REGISTRATION.EPOCH).eq(EPOCH_PARAM.EPOCH))
+            .where(ranked.field("rn", Integer.class).eq(1))
+            .fetch();
         }
 
-        var result = selectFields
-                .from(ranked)
-                .join(EPOCH_PARAM).on(ranked.field(DREP_REGISTRATION.EPOCH).eq(EPOCH_PARAM.EPOCH))
-                .where(ranked.field("rn", Integer.class).eq(1))
-                .fetch();
-
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> map = new HashMap<>();
-        for (var record : result) {
+        for (Record record : result) {
             String hash = record.get(DREP_REGISTRATION.DREP_HASH);
             DrepType type = DrepType.valueOf(record.get(DREP_REGISTRATION.CRED_TYPE));
             long registrationSlot = record.get(DREP_REGISTRATION.SLOT);
             int registrationEpoch = record.get(DREP_REGISTRATION.EPOCH);
-            int drepActivity;
-            int protocolMajorVer;
+            int drepActivity = 0;
+            int protocolMajorVer = 0;
 
             if (dialect.family() == SQLDialect.H2) {
                 var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
-                var protocolParam = objectMapper.convertValue(paramsJson, ProtocolParams.class);
-                drepActivity = protocolParam.getDrepActivity();
-                protocolMajorVer = protocolParam.getProtocolMajorVer();
+                ProtocolParams protocolParam;
+                try {
+                    protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
+                    drepActivity = protocolParam.getDrepActivity();
+                    protocolMajorVer = protocolParam.getProtocolMajorVer();
+                } catch (JsonProcessingException e) {
+                    log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
+                }
             } else {
                 drepActivity = record.get("drep_activity", Integer.class);
                 protocolMajorVer = record.get("protocol_major_ver", Integer.class);
@@ -300,15 +318,13 @@ public class DRepExpiryService {
             return Collections.emptyMap();
         }
 
-        Field<String> drepActivityField;
+        Field<String> drepActivityField = null;
         SQLDialect dialect = dsl.dialect();
 
         if (dialect.family() == SQLDialect.POSTGRES) {
             drepActivityField = DSL.field("params->>'drep_activity'", String.class);
         } else if (dialect.family() == SQLDialect.MYSQL) {
             drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
-        } else {
-            drepActivityField = DSL.field("JSON_VALUE(params, '$.drep_activity')", String.class);
         }
 
         List<Condition> dRepRegConditions = drepHashAndTypes
@@ -356,22 +372,48 @@ public class DRepExpiryService {
                         interactionSubquery.field("drep_type", String.class))
                 .asTable("li");
 
-        var result = dsl.select(
-                        li.field("drep_hash", String.class),
-                        li.field("drep_type", String.class),
-                        li.field("epoch", Integer.class),
-                        drepActivityField.cast(Integer.class).as("drep_activity")
-                        )
-                .from(li)
-                .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(li.field("epoch", Integer.class)))
-                .fetch();
+        Result<?> result;
+        if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
+            result = dsl.select(
+                    li.field("drep_hash", String.class),
+                    li.field("drep_type", String.class),
+                    li.field("epoch", Integer.class),
+                    drepActivityField.cast(Integer.class).as("drep_activity")
+            )
+            .from(li)
+            .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(li.field("epoch", Integer.class)))
+            .fetch();
+        } else {
+            result = dsl.select(
+                    li.field("drep_hash", String.class),
+                    li.field("drep_type", String.class),
+                    li.field("epoch", Integer.class),
+                    EPOCH_PARAM.PARAMS
+            )
+            .from(li)
+            .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(li.field("epoch", Integer.class)))
+            .fetch();
+        }
 
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> map = new HashMap<>();
-        for (var record : result) {
+        for (Record record : result) {
             String hash = record.get("drep_hash", String.class);
             int interactionEpoch = record.get("epoch", Integer.class);
-            int drepActivity = record.get("drep_activity", Integer.class);
             DrepType type = DrepType.valueOf(record.get("drep_type", String.class));
+            int drepActivity = 0;
+
+            if (dialect.family() == SQLDialect.H2) {
+                var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
+                ProtocolParams protocolParam;
+                try {
+                    protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
+                    drepActivity = protocolParam.getDrepActivity();
+                } catch (JsonProcessingException e) {
+                    log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
+                }
+            } else {
+                drepActivity = record.get("drep_activity", Integer.class);
+            }
 
             map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepInteractionInfo(interactionEpoch, drepActivity));
         }
@@ -380,30 +422,61 @@ public class DRepExpiryService {
     }
 
     private List<DRepExpiryUtil.ProposalSubmissionInfo> findProposalWithEpochLessThanOrEqualTo(int epoch) {
-        Field<String> govActionLifetimeField;
+        Field<String> govActionLifetimeField = null;
         SQLDialect dialect = dsl.dialect();
 
         if (dialect.family() == SQLDialect.POSTGRES) {
             govActionLifetimeField = DSL.field("params->>'gov_action_lifetime'", String.class);
         } else if (dialect.family() == SQLDialect.MYSQL) {
             govActionLifetimeField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.gov_action_lifetime"));
-        } else {
-            govActionLifetimeField = DSL.field("JSON_VALUE(params, '$.gov_action_lifetime')", String.class);
         }
 
-        return dsl.select(
-                        GOV_ACTION_PROPOSAL.SLOT,
-                        GOV_ACTION_PROPOSAL.EPOCH,
-                        govActionLifetimeField.cast(Integer.class).as("gov_action_lifetime")
-                )
-                .from(GOV_ACTION_PROPOSAL)
-                .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
-                .where(GOV_ACTION_PROPOSAL.EPOCH.le(epoch))
-                .fetch(record -> new DRepExpiryUtil.ProposalSubmissionInfo(
-                        record.get(GOV_ACTION_PROPOSAL.SLOT),
-                        record.get(GOV_ACTION_PROPOSAL.EPOCH),
-                        record.get("gov_action_lifetime", Integer.class)
-                ));
+        Result<?> result;
+        if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
+            result = dsl.select(
+                    GOV_ACTION_PROPOSAL.SLOT,
+                    GOV_ACTION_PROPOSAL.EPOCH,
+                    govActionLifetimeField.cast(Integer.class).as("gov_action_lifetime")
+            )
+            .from(GOV_ACTION_PROPOSAL)
+            .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
+            .where(GOV_ACTION_PROPOSAL.EPOCH.le(epoch))
+            .fetch();
+        } else {
+            result = dsl.select(
+                    GOV_ACTION_PROPOSAL.SLOT,
+                    GOV_ACTION_PROPOSAL.EPOCH,
+                    EPOCH_PARAM.PARAMS
+            )
+            .from(GOV_ACTION_PROPOSAL)
+            .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
+            .where(GOV_ACTION_PROPOSAL.EPOCH.le(epoch))
+            .fetch();
+        }
+
+        List<DRepExpiryUtil.ProposalSubmissionInfo> proposalInfos = new ArrayList<>();
+        for (Record record : result) {
+            long slot = record.get(GOV_ACTION_PROPOSAL.SLOT);
+            int proposalEpoch = record.get(GOV_ACTION_PROPOSAL.EPOCH);
+            int govActionLifetime = 0;
+
+            if (dialect.family() == SQLDialect.H2) {
+                var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
+                ProtocolParams protocolParam;
+                try {
+                    protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
+                    govActionLifetime = protocolParam.getGovActionLifetime();
+                } catch (JsonProcessingException e) {
+                    log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
+                }
+            } else {
+                govActionLifetime = record.get("gov_action_lifetime", Integer.class);
+            }
+
+            proposalInfos.add(new DRepExpiryUtil.ProposalSubmissionInfo(slot, proposalEpoch, govActionLifetime));
+        }
+
+        return proposalInfos;
     }
 
     private List<Set<Tuple<String, DrepType>>> partitionSet(Set<Tuple<String, DrepType>> drepSet, int batchSize) {
