@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
@@ -39,9 +39,11 @@ public class PythonScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T
         if (venvPath != null && !venvPath.isEmpty()) {
             cb.option("python.Executable", venvPath + "/bin/python")
                     .option("python.ForceImportSite", "true");
-            log.info("Using Python virtual environment at: {}", venvPath);
+            if (log.isTraceEnabled())
+                log.trace("Using Python virtual environment at: {}", venvPath);
         } else {
-            log.info("No Python virtual environment specified >>>>>>>>>>>>");
+            if (log.isTraceEnabled())
+                log.trace("No Python virtual environment specified >>>>>>>>>>>>");
         }
 
 //        cb.option("python.IsolateNativeModules", "true");

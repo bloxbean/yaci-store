@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.variables;
 
+import com.bloxbean.cardano.yaci.store.plugin.api.VariableProvider;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.util.PluginContextUtil;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class DefaultVariableProvider implements VariableProvider {
     public Map<String, Object> getVariables() {
         return Map.of(
                 "jdbc", pluginContextUtil.getJdbc(),
+                "named_jdbc", pluginContextUtil.getNamedJdbc(),
                 "rest", pluginContextUtil.getRest(),
                 "env", pluginContextUtil.getEnv(),
                 "http", pluginContextUtil.getHttp(),

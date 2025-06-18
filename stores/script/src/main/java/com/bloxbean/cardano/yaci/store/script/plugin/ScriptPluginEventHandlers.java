@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.plugin;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.events.PluginBaseEventHandler;
 import com.bloxbean.cardano.yaci.store.script.domain.DatumEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.TxScriptEvent;

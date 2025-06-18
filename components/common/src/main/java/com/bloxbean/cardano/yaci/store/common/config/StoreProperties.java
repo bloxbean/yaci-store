@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.config;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
