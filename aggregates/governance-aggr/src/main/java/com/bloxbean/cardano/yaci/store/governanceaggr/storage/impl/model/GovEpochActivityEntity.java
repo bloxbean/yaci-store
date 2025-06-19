@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,23 +15,18 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "drep_expiry")
-@IdClass(DRepExpiryId.class)
-public class DRepExpiryEntity {
-
-    @Id
-    @Column(name = "drep_hash")
-    private String drepHash;
-
-    @Column(name = "drep_id")
-    private String drepId;
-
-    @Column(name = "active_until")
-    private Integer activeUntil;
+@Table(name = "gov_epoch_activity")
+public class GovEpochActivityEntity {
 
     @Id
     @Column(name = "epoch")
     private Integer epoch;
+
+    @Column(name = "dormant")
+    private Boolean dormant;
+
+    @Column(name = "dormant_epoch_count")
+    private Integer dormantEpochCount;
 
     @UpdateTimestamp
     @Column(name = "update_datetime")

@@ -3,7 +3,9 @@ package com.bloxbean.cardano.yaci.store.common.util;
 import lombok.SneakyThrows;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -90,5 +92,22 @@ public class ListUtil {
                 future.get();
             }
         }
+    }
+
+    public static <T> List<Set<T>> partitionSet(Set<T> set, int batchSize) {
+        List<Set<T>> partitions = new ArrayList<>();
+        if (set == null || set.isEmpty() || batchSize <= 0) {
+            return partitions;
+        }
+
+        List<T> elements = new ArrayList<>(set);
+        int length = elements.size();
+        int numOfPartitions = length / batchSize + ((length % batchSize == 0) ? 0 : 1);
+        for (int i = 0; i < numOfPartitions; i++) {
+            int from = i * batchSize;
+            int to = Math.min((i * batchSize + batchSize), length);
+            partitions.add(new HashSet<>(elements.subList(from, to)));
+        }
+        return partitions;
     }
 }

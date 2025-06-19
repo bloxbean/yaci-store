@@ -141,7 +141,6 @@ public class ProposalStatusProcessor {
         if (eraService.getEraForEpoch(stakeSnapshotTakenEvent.getEpoch()).getValue() < Era.Conway.getValue()) {
             return;
         }
-
         int epoch = stakeSnapshotTakenEvent.getEpoch();
         int currentEpoch = epoch + 1;
 

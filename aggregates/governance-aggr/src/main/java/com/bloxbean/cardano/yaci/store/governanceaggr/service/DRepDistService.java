@@ -3,6 +3,9 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
@@ -22,6 +25,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +41,8 @@ public class DRepDistService {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final StoreProperties storeProperties;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
+    private final DRepExpiryService dRepExpiryService;
+    private final AdaPotJobStorage adaPotJobStorage;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -377,6 +383,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null,
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd
@@ -418,6 +426,8 @@ public class DRepDistService {
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
+                    null, 
+                    null,
                     NOW()
                   from
                     ss_drep_ranked_delegations rd                      
@@ -453,12 +463,34 @@ public class DRepDistService {
         long t1 = System.currentTimeMillis();
         jdbcTemplate.update(query1, params);
         jdbcTemplate.update(query2, params);
+
+        // update drep expiry
+        var startDRepExpiryCalcTime = Instant.now();
+        dRepExpiryService.calculateAndUpdateExpiryForEpoch(currentEpoch);
+        var endDRepExpiryCalcTime = Instant.now();
+
+        adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, currentEpoch)
+                .ifPresent(adaPotJob -> {
+                    AdaPotJobExtraInfo extraInfo = adaPotJob.getExtraInfo();
+
+                    if (extraInfo == null) {
+                        extraInfo = AdaPotJobExtraInfo.builder()
+                                .drepExpiryCalcTime(0L)
+                                .govActionStatusCalcTime(0L)
+                                .build();
+                    }
+
+                    extraInfo.setDrepExpiryCalcTime(endDRepExpiryCalcTime.toEpochMilli() - startDRepExpiryCalcTime.toEpochMilli());
+                    adaPotJob.setExtraInfo(extraInfo);
+
+                    adaPotJobStorage.save(adaPotJob);
+                });
+
         long t2 = System.currentTimeMillis();
 
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", currentEpoch);
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", currentEpoch);
         log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", currentEpoch, (t2 - t1));
-
     }
 
     private boolean isPublicNetwork() {
