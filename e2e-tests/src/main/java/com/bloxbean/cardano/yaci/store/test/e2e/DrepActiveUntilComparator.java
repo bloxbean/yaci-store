@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.test.e2e;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -8,6 +10,7 @@ import java.util.Map;
  * The DrepActiveUntilComparator class is responsible for comparing active_until value (drep)
   between two database systems: DB Sync and Yaci Store database.
  */
+@Slf4j
 public class DrepActiveUntilComparator {
     static int startEpoch = 740;
     static int endEpoch = 902;
@@ -60,7 +63,7 @@ public class DrepActiveUntilComparator {
                     dbSyncMap.put(hash, activeUntil);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("Error while fetching data from DB Sync for epoch {}" , epoch, e);
         }
 
         // Fetch from Yaci Store
@@ -78,7 +81,7 @@ public class DrepActiveUntilComparator {
                     indexerMap.put(hash, activeUntil);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("Error while fetching data from Yaci Store for epoch {}", epoch, e);
         }
 
         // Compare results
