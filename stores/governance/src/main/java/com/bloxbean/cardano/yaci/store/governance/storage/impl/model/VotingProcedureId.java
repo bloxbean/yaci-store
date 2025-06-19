@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
@@ -12,6 +15,10 @@ public class VotingProcedureId implements Serializable {
 
     @Column(name = "voter_hash")
     private String voterHash;
+
+    @Column(name = "voter_type")
+    @Enumerated(EnumType.STRING)
+    private VoterType voterType;
 
     @Column(name = "gov_action_tx_hash")
     private String govActionTxHash;

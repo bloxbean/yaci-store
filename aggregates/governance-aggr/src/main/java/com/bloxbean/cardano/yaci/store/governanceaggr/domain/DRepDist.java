@@ -22,4 +22,8 @@ public class DRepDist {
     private BigInteger amount;
 
     private Integer epoch;
+
+    private Integer activeUntil;
+
+    private Integer expiry;
 }
