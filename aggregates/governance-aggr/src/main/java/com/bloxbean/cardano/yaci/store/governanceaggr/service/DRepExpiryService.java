@@ -22,10 +22,8 @@ import org.jooq.Field;
 import org.jooq.Record;
 import org.jooq.Result;
 import org.jooq.SQLDialect;
-import org.jooq.SelectSelectStep;
 import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
-import org.mvel2.ast.Proto;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -72,7 +70,7 @@ public class DRepExpiryService {
 
         int batchSize = 200;
 
-        List<Set<Tuple<String, DrepType>>> targetDRepsBatches = partitionSet(targetDReps, batchSize);
+        List<Set<Tuple<String, DrepType>>> targetDRepsBatches = ListUtil.partitionSet(targetDReps, batchSize);
 
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = new ConcurrentHashMap<>();
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = new ConcurrentHashMap<>();
@@ -477,18 +475,5 @@ public class DRepExpiryService {
         }
 
         return proposalInfos;
-    }
-
-    private List<Set<Tuple<String, DrepType>>> partitionSet(Set<Tuple<String, DrepType>> drepSet, int batchSize) {
-        List<Set<Tuple<String, DrepType>>> batches = new ArrayList<>();
-        List<Tuple<String, DrepType>> list = new ArrayList<>(drepSet);
-
-        for (int i = 0; i < list.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, list.size());
-            Set<Tuple<String, DrepType>> batch = new HashSet<>(list.subList(i, end));
-            batches.add(batch);
-        }
-
-        return batches;
     }
 }
