@@ -108,4 +108,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int n2cPoolMaxIdle = 5;
     @Builder.Default
     private int n2cPoolMaxWaitInMillis = 10000;
+
+    @Builder.Default
+    private boolean continueOnParseError = false;
 }

@@ -3,8 +3,10 @@ package com.bloxbean.cardano.yaci.store.core;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
+import com.bloxbean.cardano.yaci.store.core.storage.ErrorStorageImpl;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -52,5 +54,10 @@ public class StoreConfiguration {
         log.info("CursorCleanupScheduler will run every {} sec", storeProperties.getCursorCleanupInterval());
         log.info("CursorCleanupScheduler will keep {} blocks in cursor", storeProperties.getCursorNoOfBlocksToKeep());
         return new CursorCleanupScheduler(cursorStorage, storeProperties);
+    }
+
+    @Bean
+    public ErrorStorage errorStorage(ErrorRepository errorRepository) {
+        return new ErrorStorageImpl(errorRepository);
     }
 }

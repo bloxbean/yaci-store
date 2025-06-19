@@ -1,12 +1,9 @@
 package com.bloxbean.cardano.yaci.store;
 
-import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-//@SpringBootTest
-class YaciIndexerApplicationTests {
+@SpringBootApplication
+public class YaciIndexerApplicationTests {
 
-    @Test
-    void contextLoads() {
-    }
 
 }
