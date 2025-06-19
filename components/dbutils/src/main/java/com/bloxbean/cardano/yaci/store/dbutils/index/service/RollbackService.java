@@ -126,8 +126,7 @@ public class RollbackService {
         if (tableName.equals("epoch_stake")) {
             return "epoch >= " + (epoch - 1);
         } else if (tableName.equals("drep_dist") || tableName.equals("gov_action_proposal_status")
-                || tableName.equals("drep_expiry") || tableName.equals("gov_epoch_activity")
-                || tableName.equals("committee_state")) {
+                || tableName.equals("gov_epoch_activity") || tableName.equals("committee_state")) {
             return "epoch >= " + epoch;
         } else if (tableName.equals("tx_input")) {
             return "spent_at_slot > " + slot;
