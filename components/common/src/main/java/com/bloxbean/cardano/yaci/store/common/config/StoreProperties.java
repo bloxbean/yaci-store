@@ -134,4 +134,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private List<ScriptRef> pluginGlobalScripts;
 
     private boolean metricsEnabled = true;
+
+    @Builder.Default
+    private boolean continueOnParseError = false;
 }
