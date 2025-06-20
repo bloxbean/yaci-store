@@ -5,8 +5,10 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
+import com.bloxbean.cardano.yaci.store.core.storage.ErrorStorageImpl;
 import com.bloxbean.cardano.yaci.store.core.storage.api.CursorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.*;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -73,4 +75,9 @@ public class StoreConfiguration {
         }
     }
 
+
+    @Bean
+    public ErrorStorage errorStorage(ErrorRepository errorRepository) {
+        return new ErrorStorageImpl(errorRepository);
+    }
 }

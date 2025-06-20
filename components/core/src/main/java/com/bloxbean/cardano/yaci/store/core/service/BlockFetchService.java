@@ -1,11 +1,13 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
+import com.bloxbean.cardano.yaci.core.exception.BlockParseRuntimeException;
 import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
@@ -13,6 +15,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
@@ -350,10 +353,29 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     @Override
-    public void onParsingError(Exception e) {
+    public void onParsingError(BlockParseRuntimeException e) {
         log.error("Block parsing error", e);
-        stopSyncOnError();
-        throw new RuntimeException(e);
+        if (storeProperties.isContinueOnParseError()) {
+            log.info("Continue on parse error is enabled. Continuing sync ...");
+            String cbor = null;
+            if (e.getBlockCbor() != null) {
+                try {
+                    cbor = HexUtil.encodeHexString(e.getBlockCbor());
+                } catch (Exception ex) {
+                    log.error("Error encoding block cbor to hex string", ex);
+                }
+            }
+            ErrorEvent errorEvent = ErrorEvent.builder()
+                    .block(e.getBlockNumber())
+                    .errorCode(ErrorCode.BLOCK_PARSE_ERROR.name())
+                    .reason(e.getMessage())
+                    .details(cbor)
+                    .build();
+            publisher.publishEvent(errorEvent);
+        } else {
+            stopSyncOnError();
+            throw new RuntimeException(e);
+        }
     }
 
     public synchronized void startFetch(Point from, Point to) {
