@@ -18,6 +18,7 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+    private boolean continueOnParseError = false;
 
     @Getter
     @Setter

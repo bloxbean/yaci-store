@@ -252,6 +252,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setN2cPoolMaxIdle(properties.getCardano().getN2cPoolMaxIdle());
         storeProperties.setN2cPoolMaxWaitInMillis(properties.getCardano().getN2cPoolMaxWaitInMillis());
 
+        storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
+
         return storeProperties;
     }
 
