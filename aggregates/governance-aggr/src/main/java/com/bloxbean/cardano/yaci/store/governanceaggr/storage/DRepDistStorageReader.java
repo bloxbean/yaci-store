@@ -9,7 +9,9 @@ import java.util.Optional;
 
 public interface DRepDistStorageReader {
     Optional<BigInteger> getTotalStakeForEpoch(Integer epoch);
+    Optional<BigInteger> getTotalStakeExcludeInactiveDRepForEpoch(Integer epoch);
     List<DRepDist> getAllByEpochAndDRepIds(Integer epoch, List<String> dRepIds);
+    List<DRepDist> getAllByEpochAndDRepIdsExcludeInactiveDReps(Integer epoch, List<String> dRepIds);
 
     Optional<BigInteger> getStakeByDRepAndEpoch(String drepId, Integer epoch);
     Optional<BigInteger> getStakeByDRepTypeAndEpoch(DrepType drepType, Integer epoch);

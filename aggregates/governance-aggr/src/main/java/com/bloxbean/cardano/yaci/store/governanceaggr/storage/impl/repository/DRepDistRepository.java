@@ -15,8 +15,14 @@ public interface DRepDistRepository extends JpaRepository<DRepDistEntity, String
     @Query("select sum(d.amount) from DRepDistEntity d where d.epoch = :epoch")
     Optional<BigInteger> getTotalStakeForEpoch(Integer epoch);
 
+    @Query("select sum(d.amount) from DRepDistEntity d where d.epoch = :epoch and ((d.activeUntil is null) or (d.activeUntil is not null and d.activeUntil >= d.epoch))")
+    Optional<BigInteger> getTotalStakeExcludeInactiveDRepForEpoch(Integer epoch);
+
     @Query("select d from DRepDistEntity d where d.epoch = :epoch and d.drepId in :dRepIds")
     List<DRepDistEntity> getAllByEpochAndDRepIds(Integer epoch, List<String> dRepIds);
+
+    @Query("select d from DRepDistEntity d where d.epoch = :epoch and d.drepId in :dRepIds and ((d.activeUntil is null) or (d.activeUntil is not null and d.activeUntil >= d.epoch))")
+    List<DRepDistEntity> getAllByEpochAndDRepIdsExcludeInactiveDReps(Integer epoch, List<String> dRepIds);
 
     @Query("select sum(d.amount) from DRepDistEntity d where d.epoch = :epoch and d.drepId= :dRepId")
     Optional<BigInteger> getStakeByDRepIdAndEpoch(Integer epoch, String dRepId);

@@ -94,7 +94,6 @@ public class ProposalStatusProcessor {
     private final ApplicationEventPublisher publisher;
     private final StoreProperties storeProperties;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
-    //    private boolean isInConwayBootstrapPhase;
     private final ObjectMapper objectMapper;
     private final int QUERY_BATCH_SIZE = 500;
 
@@ -281,15 +280,6 @@ public class ProposalStatusProcessor {
         end = System.currentTimeMillis();
         log.debug("GetTotalActiveStakeByEpoch time: {} ms", end - start);
 
-        start = System.currentTimeMillis();
-        var enactedProposalsInPrevEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch - 2);
-        end = System.currentTimeMillis();
-        log.debug("GetProposalsByStatusAndEpoch time: {} ms", end - start);
-
-//        boolean isActionRatificationDelayed = enactedProposalsInPrevEpoch == null || enactedProposalsInPrevEpoch.stream()
-//                .anyMatch(govActionProposal -> GovernanceActionUtil.isDelayingAction(govActionProposal.getGovAction().getType()));
-
-
         ConstitutionCommitteeState ccState = committeeStateService.getCurrentCommitteeState(); //TODO: handle later
 
         start = System.currentTimeMillis();
@@ -354,9 +344,9 @@ public class ProposalStatusProcessor {
 
         start = System.currentTimeMillis();
         if (!isInConwayBootstrapPhase) {
-            totalDRepStake = dRepDistStorage.getTotalStakeForEpoch(prevEpoch)
+            totalDRepStake = dRepDistStorage.getTotalStakeExcludeInactiveDRepForEpoch(currentEpoch)
                     .orElse(BigInteger.ZERO);
-            dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, prevEpoch).orElse(BigInteger.ZERO);
+            dRepAutoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, currentEpoch).orElse(BigInteger.ZERO);
         }
 
         end = System.currentTimeMillis();
@@ -523,7 +513,7 @@ public class ProposalStatusProcessor {
 
                 start = System.currentTimeMillis();
                 if (!dRepsVoteYes.isEmpty()) {
-                    dRepYesStake = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, dRepsVoteYes)
+                    dRepYesStake = dRepDistStorage.getAllByEpochAndDRepIdsExcludeInactiveDReps(currentEpoch, dRepsVoteYes)
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
@@ -533,7 +523,7 @@ public class ProposalStatusProcessor {
 
                 start = System.currentTimeMillis();
                 // The total stake of No Confidence DRep
-                var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, prevEpoch);
+                var dRepNoConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, currentEpoch);
                 votingStats.setDrepNoConfidenceStake(dRepNoConfidenceStake.orElse(BigInteger.ZERO));
 
                 if (govActionDetail.getType().equals(GovActionType.NO_CONFIDENCE) && dRepNoConfidenceStake.isPresent()) {
@@ -560,7 +550,7 @@ public class ProposalStatusProcessor {
                         .filter(Objects::nonNull)
                         .toList();
                 if (!dRepsVoteNo.isEmpty()) {
-                    dRepNoStake = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, dRepsVoteNo)
+                    dRepNoStake = dRepDistStorage.getAllByEpochAndDRepIdsExcludeInactiveDReps(currentEpoch, dRepsVoteNo)
                             .stream()
                             .map(DRepDist::getAmount)
                             .reduce(BigInteger.ZERO, BigInteger::add);
@@ -568,7 +558,7 @@ public class ProposalStatusProcessor {
                 votingStats.setDrepNoVoteStake(dRepNoStake);
 
                 // The total stake of dReps that voted for this action
-                BigInteger totalStakeDRepDoVote = dRepDistStorage.getAllByEpochAndDRepIds(prevEpoch, votesForThisProposalByDRep.stream()
+                BigInteger totalStakeDRepDoVote = dRepDistStorage.getAllByEpochAndDRepIdsExcludeInactiveDReps(currentEpoch, votesForThisProposalByDRep.stream()
                                 .map(DRepUtil::getDRepId)
                                 .filter(Objects::nonNull)
                                 .toList())

@@ -22,8 +22,21 @@ public class DRepDistStorageReaderImpl implements DRepDistStorageReader {
     }
 
     @Override
+    public Optional<BigInteger> getTotalStakeExcludeInactiveDRepForEpoch(Integer epoch) {
+        return dRepDistRepository.getTotalStakeExcludeInactiveDRepForEpoch(epoch);
+    }
+
+    @Override
     public List<DRepDist> getAllByEpochAndDRepIds(Integer epoch, List<String> dRepIds) {
         return dRepDistRepository.getAllByEpochAndDRepIds(epoch, dRepIds)
+                .stream()
+                .map(dRepDistMapper::toDRepDist)
+                .toList();
+    }
+
+    @Override
+    public List<DRepDist> getAllByEpochAndDRepIdsExcludeInactiveDReps(Integer epoch, List<String> dRepIds) {
+        return dRepDistRepository.getAllByEpochAndDRepIdsExcludeInactiveDReps(epoch, dRepIds)
                 .stream()
                 .map(dRepDistMapper::toDRepDist)
                 .toList();
