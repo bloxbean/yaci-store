@@ -6,6 +6,8 @@
 [![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
 </div>
 
+## - This branch is maintained for the 0.1.x release series -
+
 Yaci Store is a modular Java library for developers who are keen on constructing their custom indexer solutions.
 Its architecture ensures that every component within Yaci Store is accessible both as a standalone Java library and a
 corresponding Spring Boot starter.
