@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -185,10 +186,20 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Governance
         var governanceEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
-                            transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
-                    .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
-                            transaction.getBody().getProposalProcedures()))
+            List<TxGovernance> txGovernanceList = IntStream.range(0, transactions.size())
+                    .mapToObj(i -> {
+                        var transaction = transactions.get(i);
+                        if (transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null) {
+                            return TxGovernance.builder()
+                                    .txHash(transaction.getTxHash())
+                                    .txIndex(i)
+                                    .proposalProcedures(transaction.getBody().getProposalProcedures())
+                                    .votingProcedures(transaction.getBody().getVotingProcedures())
+                                    .build();
+                        }
+                        return null;
+                    })
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
             if (txGovernanceList.size() > 0)
@@ -253,10 +264,20 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
 
         //Governance
-        List<TxGovernance> txGovernanceList = transactions.stream().filter(transaction ->
-                        transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null)
-                .map(transaction -> new TxGovernance(transaction.getTxHash(), transaction.getBody().getVotingProcedures(),
-                        transaction.getBody().getProposalProcedures()))
+        List<TxGovernance> txGovernanceList = IntStream.range(0, transactions.size())
+                .mapToObj(i -> {
+                    var transaction = transactions.get(i);
+                    if (transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null) {
+                        return TxGovernance.builder()
+                                .txHash(transaction.getTxHash())
+                                .txIndex(i)
+                                .proposalProcedures(transaction.getBody().getProposalProcedures())
+                                .votingProcedures(transaction.getBody().getVotingProcedures())
+                                .build();
+                    }
+                    return null;
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         if (txGovernanceList.size() > 0)

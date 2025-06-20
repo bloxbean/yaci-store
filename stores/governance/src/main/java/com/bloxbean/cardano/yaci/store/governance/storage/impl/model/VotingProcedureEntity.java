@@ -30,6 +30,9 @@ public class VotingProcedureEntity extends BlockAwareEntity {
     @Column(name = "idx")
     private long index;
 
+    @Column(name = "tx_index")
+    private int txIndex;
+
     @Column(name = "slot")
     private Long slot;
 

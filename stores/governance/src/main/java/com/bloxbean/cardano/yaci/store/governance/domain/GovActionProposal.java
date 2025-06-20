@@ -25,6 +25,8 @@ public class GovActionProposal extends BlockAwareDomain {
 
     private long index;
 
+    private int txIndex;
+
     private Long slot;
 
     private BigInteger deposit;

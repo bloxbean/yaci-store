@@ -45,6 +45,7 @@ public class VotingProcedureProcessor {
             if (txGovernance.getVotingProcedures() == null) {
                 continue;
             }
+            int txIndex = txGovernance.getTxIndex();
 
             Map<Voter, Map<GovActionId, com.bloxbean.cardano.yaci.core.model.governance.VotingProcedure>>
                     voting = txGovernance.getVotingProcedures().getVoting();
@@ -65,6 +66,7 @@ public class VotingProcedureProcessor {
                     votingProcedure.setIndex(index++);
                     votingProcedure.setVote(votingInfo.getVote());
                     votingProcedure.setTxHash(txGovernance.getTxHash());
+                    votingProcedure.setTxIndex(txIndex);
                     votingProcedure.setGovActionTxHash(govActionId.getTransactionId());
                     votingProcedure.setGovActionIndex(govActionId.getGov_action_index());
 
