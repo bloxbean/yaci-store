@@ -57,6 +57,7 @@ public class GovActionProposalProcessor {
         List<GovActionProposal> govActionProposals = new ArrayList<>();
         for (TxGovernance txGovernance : governanceEvent.getTxGovernanceList()) {
             String txHash = txGovernance.getTxHash();
+            int txIndex = txGovernance.getTxIndex();
 
             List<ProposalProcedure> proposalProcedures = txGovernance.getProposalProcedures();
 
@@ -70,6 +71,7 @@ public class GovActionProposalProcessor {
 
                 govActionProposal.setTxHash(txHash);
                 govActionProposal.setIndex(index++);
+                govActionProposal.setTxIndex(txIndex);
                 govActionProposal.setType(proposalProcedure.getGovAction().getType());
 
                 if (proposalProcedure.getGovAction() instanceof ParameterChangeAction action) {

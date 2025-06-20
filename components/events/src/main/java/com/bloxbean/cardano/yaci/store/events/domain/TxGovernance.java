@@ -15,6 +15,7 @@ import java.util.List;
 @Builder
 public class TxGovernance {
     String txHash;
+    private int txIndex;
     private VotingProcedures votingProcedures;
     private List<ProposalProcedure> proposalProcedures;
 }
