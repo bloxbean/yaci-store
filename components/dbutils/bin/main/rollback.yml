@@ -1,0 +1,57 @@
+tables:
+  # asset store
+  - asset
+  # block store
+  - block
+  # epoch store
+  - protocol_params_proposal
+  - epoch_param
+  - cost_model
+  # governance store
+  - gov_action_proposal
+  - delegation_vote
+  - drep_registration
+  - committee
+  - committee_deregistration
+  - committee_member
+  - committee_registration
+  - constitution
+  - voting_procedure
+  # metadata store
+  - transaction_metadata
+  # mir store
+  - mir
+  # script store
+  ##- script
+  - transaction_scripts
+  # staking store
+  - stake_registration
+  - delegation
+  - pool_registration
+  - pool_retirement
+  - pool
+  # transaction store
+  - transaction
+  - transaction_witness
+  - withdrawal
+  - invalid_transaction
+  # utxo store
+  - address_utxo
+  - tx_input
+  # other tables from account, adapot, governance-aggr module
+  - adapot
+  - address_balance
+  - address_tx_amount
+  - cost_model
+  - instant_reward
+  - reward
+  - reward_rest
+  - unclaimed_reward_rest
+  - stake_address_balance
+  - adapot_jobs
+  - drep
+  - epoch_stake
+  - drep_dist
+  - gov_action_proposal_status
+  - gov_epoch_activity
+  - committee_state

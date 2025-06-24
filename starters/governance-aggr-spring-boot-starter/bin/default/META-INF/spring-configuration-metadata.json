@@ -1,0 +1,50 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties"
+    },
+    {
+      "name": "store.governance-aggr",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$GovernanceAggr",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties.GovernanceAggr getGovernanceAggr() "
+    },
+    {
+      "name": "store.governance-aggr.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$GovernanceAggr",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.governance-aggr.endpoints.governance",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties.Endpoint getGovernance() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.governance-aggr.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$GovernanceAggr"
+    },
+    {
+      "name": "store.governance-aggr.devnet-conway-bootstrap-available",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$GovernanceAggr"
+    },
+    {
+      "name": "store.governance-aggr.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$GovernanceAggr"
+    },
+    {
+      "name": "store.governance-aggr.endpoints.governance.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}

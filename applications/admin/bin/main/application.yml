@@ -1,0 +1,13 @@
+server:
+  port: 8888
+
+spring:
+  banner:
+    location: classpath:/banner.txt
+  application:
+    name: Yaci Store Admin
+  boot:
+    admin:
+      ui:
+        title: Yaci Store Admin
+        brand: "<img src=\"assets/img/icon-spring-boot-admin.svg\"><span>Yaci Store Admin</span>"

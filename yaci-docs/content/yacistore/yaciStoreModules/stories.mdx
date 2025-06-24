@@ -1,0 +1,31 @@
+##  🏬 Stores
+
+A “store” in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:
+
+- **Event Listening**: Listen to events published by the core module  
+- **Data Processing**: Processes event data  
+- **Data Persistence**: Saves processed data to a dedicated persistence store  
+- **REST Endpoints**: Optionally provides REST endpoints for data retrieval
+
+Each of the mentioned stores is available as a Spring Boot starter. This means that integrating a specific store into your application is as straightforward as adding its Spring Boot starter as a dependency.
+
+### 📦 Available Store Implementations
+
+| Store         | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| `utxo`        | Focuses on UTxOs, extracting them from transaction data.                    |
+| `block`       | Dedicated to handling and storing block data.                               |
+| `transaction` | Takes care of transaction data.                                             |
+| `assets`      | Manages data related to asset minting and burning.                          |
+| `metadata`    | Retrieves and processes metadata events.                                    |
+| `script`      | Deals with the `ScriptEvent`, gets datums and redeemers.                    |
+| `staking`     | Handles from stake address registration to pool registration and more.      |
+| `mir`         | All about Mir data.                                                         |
+| `epoch`       | Stores protocol params proposals and epoch protocol params. Fetches protocol parameters from nodes via n2c. |
+| `governance`  | Manages governance on-chain data.                                           |
+
+### ➕ Additional Modules
+
+- `submit`: Enables transaction submissions to nodes, either through `n2c` or the `submit` API.
+
+---

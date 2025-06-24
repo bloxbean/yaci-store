@@ -1,0 +1,45 @@
+spring:
+  config:
+    import: classpath:/git.properties
+  banner:
+    location: classpath:/banner.txt
+  application:
+    name: Yaci Store Ledger State App
+  profiles:
+    include: plugins
+  boot:
+    admin:
+      client:
+        enabled: false
+  batch:
+    job:
+      enabled: false
+
+  flyway:
+    locations: classpath:db/store/{vendor}
+    out-of-order: true
+
+apiPrefix: /api/v1
+
+store:
+  account:
+    enabled: true
+    api-enabled: true
+    balance-aggregation-enabled: true
+    history-cleanup-enabled: false
+    address-balance-enabled: false
+    stake-address-balance-enabled: true
+
+  ada-pot:
+    enabled: true
+    api-enabled: true
+    update-reward-db-batch-size: 200
+  governance-aggr:
+    enabled: true
+    api-enabled: true
+
+logging:
+  file:
+    name: ./logs/ledger-state.log
+
+

@@ -1,0 +1,56 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties"
+    },
+    {
+      "name": "store.staking",
+      "type": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Staking",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties.Staking getStaking() "
+    },
+    {
+      "name": "store.staking.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Staking",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.staking.endpoints.account",
+      "type": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties.Endpoint getAccount() "
+    },
+    {
+      "name": "store.staking.endpoints.pool",
+      "type": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties.Endpoint getPool() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.staking.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Staking"
+    },
+    {
+      "name": "store.staking.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Staking"
+    },
+    {
+      "name": "store.staking.endpoints.account.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.staking.endpoints.pool.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}

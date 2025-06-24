@@ -1,0 +1,55 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties"
+    },
+    {
+      "name": "store.epoch-aggr",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties.EpochAggr getEpochAggr() "
+    },
+    {
+      "name": "store.epoch-aggr.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.epoch-aggr.endpoints.epoch",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties.Endpoint getEpoch() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.epoch-aggr.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr"
+    },
+    {
+      "name": "store.epoch-aggr.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr"
+    },
+    {
+      "name": "store.epoch-aggr.endpoints.epoch.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.epoch-aggr.epoch-calculation-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr"
+    },
+    {
+      "name": "store.epoch-aggr.epoch-calculation-interval",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties$EpochAggr"
+    }
+  ],
+  "hints": []
+}

@@ -1,0 +1,45 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties"
+    },
+    {
+      "name": "store.mir",
+      "type": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$MIR",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties.MIR getMir() "
+    },
+    {
+      "name": "store.mir.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$MIR",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.mir.endpoints.mir",
+      "type": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties.Endpoint getMir() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.mir.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$MIR"
+    },
+    {
+      "name": "store.mir.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$MIR"
+    },
+    {
+      "name": "store.mir.endpoints.mir.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}

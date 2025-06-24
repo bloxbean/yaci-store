@@ -1,0 +1,10 @@
+{
+  "resources":{
+  "includes":[
+    {"pattern": "extra-index.yml$"},
+    {"pattern":  "index.yml$"},
+    {"pattern":  "rollback.yml$"},
+    {"pattern":  "rollback-ledger-state.yml$"}
+    ]},
+  "bundles":[]
+}

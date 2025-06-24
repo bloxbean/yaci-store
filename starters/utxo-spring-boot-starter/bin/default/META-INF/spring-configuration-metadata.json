@@ -1,0 +1,111 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties"
+    },
+    {
+      "name": "store.utxo",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties.Utxo getUtxo() "
+    },
+    {
+      "name": "store.utxo.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.utxo.endpoints.address",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties.Endpoint getAddress() "
+    },
+    {
+      "name": "store.utxo.endpoints.asset",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties.Endpoint getAsset() "
+    },
+    {
+      "name": "store.utxo.endpoints.transaction",
+      "type": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties.Endpoint getTransaction() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.utxo.address-cache-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.address-cache-expiry-after-access",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.address-cache-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.content-aware-rollback",
+      "type": "java.lang.Boolean",
+      "description": "Enable content aware rollback",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.endpoints.address.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.utxo.endpoints.asset.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.utxo.endpoints.transaction.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.utxo.pruning-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable pruning of UTXO",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.pruning-interval",
+      "type": "java.lang.Integer",
+      "description": "Utxo Pruning interval in seconds",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.pruning-safe-blocks",
+      "type": "java.lang.Integer",
+      "description": "No of safe blocks to keep before pruning the UTXO",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    },
+    {
+      "name": "store.utxo.save-address",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties$Utxo"
+    }
+  ],
+  "hints": []
+}

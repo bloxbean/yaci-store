@@ -1,0 +1,66 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties"
+    },
+    {
+      "name": "store.epoch",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties.Epoch getEpoch() "
+    },
+    {
+      "name": "store.epoch.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.epoch.endpoints.epoch",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties.Endpoint getEpoch() "
+    },
+    {
+      "name": "store.epoch.endpoints.network",
+      "type": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties.Endpoint getNetwork() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.epoch.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch"
+    },
+    {
+      "name": "store.epoch.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch"
+    },
+    {
+      "name": "store.epoch.endpoints.epoch.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.epoch.endpoints.network.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.epoch.n2c-epoch-param-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch"
+    },
+    {
+      "name": "store.epoch.n2c-protocol-param-fetching-interval-in-minutes",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties$Epoch"
+    }
+  ],
+  "hints": []
+}

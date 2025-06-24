@@ -1,0 +1,36 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties"
+    },
+    {
+      "name": "store.admin",
+      "type": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties$Admin",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties.Admin getAdmin() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.admin.api-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable admin api",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties$Admin"
+    },
+    {
+      "name": "store.admin.auto-recovery-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable auto recovery",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties$Admin"
+    },
+    {
+      "name": "store.admin.health-check-interval",
+      "type": "java.lang.Long",
+      "description": "Health check interval in seconds for auto recovery",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.admin.AdminStoreProperties$Admin"
+    }
+  ],
+  "hints": []
+}

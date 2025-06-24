@@ -1,0 +1,148 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties"
+    },
+    {
+      "name": "store.governance",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Governance getGovernance() "
+    },
+    {
+      "name": "store.governance.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.governance.endpoints.committee",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.EnhancedEndpoint getCommittee() "
+    },
+    {
+      "name": "store.governance.endpoints.committee.live",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Live getLive() "
+    },
+    {
+      "name": "store.governance.endpoints.constitution",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.EnhancedEndpoint getConstitution() "
+    },
+    {
+      "name": "store.governance.endpoints.constitution.live",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Live getLive() "
+    },
+    {
+      "name": "store.governance.endpoints.delegation-vote",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Endpoint getDelegationVote() "
+    },
+    {
+      "name": "store.governance.endpoints.drep",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.EnhancedEndpoint getDrep() "
+    },
+    {
+      "name": "store.governance.endpoints.drep.live",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Live getLive() "
+    },
+    {
+      "name": "store.governance.endpoints.proposal",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Endpoint getProposal() "
+    },
+    {
+      "name": "store.governance.endpoints.vote",
+      "type": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties.Endpoint getVote() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.governance.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance"
+    },
+    {
+      "name": "store.governance.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance"
+    },
+    {
+      "name": "store.governance.endpoints.committee.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint"
+    },
+    {
+      "name": "store.governance.endpoints.committee.live.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live"
+    },
+    {
+      "name": "store.governance.endpoints.constitution.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint"
+    },
+    {
+      "name": "store.governance.endpoints.constitution.live.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live"
+    },
+    {
+      "name": "store.governance.endpoints.delegation-vote.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.governance.endpoints.drep.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$EnhancedEndpoint"
+    },
+    {
+      "name": "store.governance.endpoints.drep.live.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Live"
+    },
+    {
+      "name": "store.governance.endpoints.proposal.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.governance.endpoints.vote.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Endpoint"
+    },
+    {
+      "name": "store.governance.n2c-drep-stake-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance"
+    },
+    {
+      "name": "store.governance.n2c-gov-state-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance"
+    },
+    {
+      "name": "store.governance.n2c-gov-state-fetching-interval-in-minutes",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties$Governance"
+    }
+  ],
+  "hints": []
+}

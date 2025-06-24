@@ -1,0 +1,28 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties"
+    },
+    {
+      "name": "store.live",
+      "type": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties$Live",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties.Live getLive() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.live.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties$Live"
+    },
+    {
+      "name": "store.live.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties$Live"
+    }
+  ],
+  "hints": []
+}

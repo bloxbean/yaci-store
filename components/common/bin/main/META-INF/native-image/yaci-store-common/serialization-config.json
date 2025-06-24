@@ -1,0 +1,44 @@
+{
+  "types":[
+    {
+      "name":"byte[]"
+    },
+    {
+      "name":"com.bloxbean.cardano.yaci.store.common.domain.Amt"
+    },
+    {
+      "name":"com.bloxbean.cardano.yaci.store.common.domain.UtxoKey"
+    },
+    {
+      "name": "com.bloxbean.cardano.yaci.store.common.domain.TxOuput"
+    },
+    {
+      "name":"java.lang.Integer"
+    },
+    {
+      "name":"java.lang.Number"
+    },
+    {
+      "name":"java.lang.String"
+    },
+    {
+      "name":"java.math.BigInteger"
+    },
+    {
+      "name":"java.util.ArrayList"
+    },
+    {
+      "name":"java.util.HashMap"
+    },
+    {
+      "name": "java.util.LinkedHashMap"
+    },
+    {
+      "name":"long[]"
+    }
+  ],
+  "lambdaCapturingTypes":[
+  ],
+  "proxies":[
+  ]
+}

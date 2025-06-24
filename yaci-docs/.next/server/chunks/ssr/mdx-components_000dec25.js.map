@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/yaci-docs/mdx-components.js"],"sourcesContent":["import { useMDXComponents as getThemeComponents } from 'nextra-theme-docs' // nextra-theme-blog or your custom theme\n \n// Get the default MDX components\nconst themeComponents = getThemeComponents()\n \n// Merge components\nexport function useMDXComponents(components) {\n  return {\n    ...themeComponents,\n    ...components\n  }\n}\n"],"names":[],"mappings":";;;AAAA,6SAA2E,yCAAyC;;AAEpH,iCAAiC;AACjC,MAAM,kBAAkB,CAAA,GAAA,6KAAA,CAAA,mBAAkB,AAAD;AAGlC,SAAS,iBAAiB,UAAU;IACzC,OAAO;QACL,GAAG,eAAe;QAClB,GAAG,UAAU;IACf;AACF","debugId":null}}]
+}

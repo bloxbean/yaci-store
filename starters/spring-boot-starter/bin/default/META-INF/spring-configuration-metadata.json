@@ -1,0 +1,375 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.cardano",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Cardano getCardano() "
+    },
+    {
+      "name": "store.core",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Core",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Core getCore() "
+    },
+    {
+      "name": "store.db",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Db getDb() "
+    },
+    {
+      "name": "store.executor",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Executor getExecutor() "
+    },
+    {
+      "name": "store.metrics",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Metrics",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Metrics getMetrics() "
+    },
+    {
+      "name": "store.plugins",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.Plugins getPlugins() "
+    },
+    {
+      "name": "store.plugins.python",
+      "type": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$PythonSettings",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties.PythonSettings getPython() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.cardano.alonzo-genesis-file",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.block-diff-to-start-sync-protocol",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.byron-genesis-file",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.conway-genesis-file",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.cursor-cleanup-interval",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.cursor-no-of-blocks-to-keep",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.default-genesis-hash",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.devkit-node",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.host",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.keep-alive-interval",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.mempool-monitoring-enabled",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-host",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-node-socket-path",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-pool-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-pool-max-idle",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-pool-max-total",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-pool-max-wait-in-millis",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-pool-min-idle",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.n2c-port",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.ogmios-url",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.port",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.protocol-magic",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.shelley-genesis-file",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.shelley-start-block",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.shelley-start-blockhash",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.shelley-start-slot",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.submit-api-url",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.sync-start-blockhash",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.sync-start-byron-block-number",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.sync-start-slot",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.sync-stop-blockhash",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.cardano.sync-stop-slot",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Cardano"
+    },
+    {
+      "name": "store.core.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Core"
+    },
+    {
+      "name": "store.db.batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.db.jooq-write-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.db.parallel-insert",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.db.parallel-write",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.db.write-thread-count",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.db.write-thread-default-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Db"
+    },
+    {
+      "name": "store.event-publisher-id",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.executor.block-processing-threads",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.blocks-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.blocks-partition-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.enable-parallel-processing",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.event-processing-threads",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.processing-threads-timeout",
+      "type": "java.lang.Integer",
+      "description": "Timeout in seconds for processing threads",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.use-virtual-thread-for-batch-processing",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.executor.use-virtual-thread-for-event-processing",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Executor"
+    },
+    {
+      "name": "store.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Metrics"
+    },
+    {
+      "name": "store.mvstore-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.mvstore-path",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.plugins.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.event-handlers",
+      "type": "java.util.Map<java.lang.String,java.util.List<com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef>>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.exit-on-error",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.filters",
+      "type": "java.util.Map<java.lang.String,java.util.List<com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef>>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.init",
+      "type": "java.util.Map<java.lang.String,com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.post-actions",
+      "type": "java.util.Map<java.lang.String,java.util.List<com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef>>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.pre-actions",
+      "type": "java.util.Map<java.lang.String,java.util.List<com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef>>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.python.venv",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$PythonSettings"
+    },
+    {
+      "name": "store.plugins.scripts",
+      "type": "java.util.List<com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.plugins.variable-providers",
+      "type": "java.util.List<java.lang.Class>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties$Plugins"
+    },
+    {
+      "name": "store.read-only-mode",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.sync-auto-start",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    },
+    {
+      "name": "store.utxo-client-url",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.core.YaciStoreProperties"
+    }
+  ],
+  "hints": []
+}

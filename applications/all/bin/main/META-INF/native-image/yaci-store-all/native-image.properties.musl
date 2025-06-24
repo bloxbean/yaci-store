@@ -1,0 +1,1 @@
+Args = --static --libc=musl -march=compatibility

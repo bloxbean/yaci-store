@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:mydb
+    username: sa
+    password: password
+
+  flyway:
+    locations: classpath:db/store/{vendor}
+    out-of-order: true
+
+apiPrefix: /api/v1
+
+#LOGGING CONFIGURATION
+logging:
+  level:
+    org:
+      hibernate:
+        sql: info
+
+store:
+  cardano:
+    protocol-magic: 764824073
+
+

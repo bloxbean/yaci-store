@@ -1,0 +1,45 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties"
+    },
+    {
+      "name": "store.assets",
+      "type": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Assets",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties.Assets getAssets() "
+    },
+    {
+      "name": "store.assets.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Assets",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.assets.endpoints.asset",
+      "type": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties.Endpoint getAsset() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.assets.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Assets"
+    },
+    {
+      "name": "store.assets.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Assets"
+    },
+    {
+      "name": "store.assets.endpoints.asset.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}

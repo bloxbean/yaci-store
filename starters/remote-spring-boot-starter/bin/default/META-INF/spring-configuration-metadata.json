@@ -1,0 +1,33 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties"
+    },
+    {
+      "name": "store.remote",
+      "type": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties$Remote",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties.Remote getRemote() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.remote.consumer-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties$Remote"
+    },
+    {
+      "name": "store.remote.publisher-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties$Remote"
+    },
+    {
+      "name": "store.remote.publisher-events",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties$Remote"
+    }
+  ],
+  "hints": []
+}

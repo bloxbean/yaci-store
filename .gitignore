@@ -40,3 +40,4 @@ out/
 
 logs
 _rocksdb
+_pagefind/  

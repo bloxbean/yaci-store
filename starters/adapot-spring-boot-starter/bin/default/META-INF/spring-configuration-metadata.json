@@ -1,0 +1,84 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties"
+    },
+    {
+      "name": "store.ada-pot",
+      "type": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties.Adapot getAdaPot() "
+    },
+    {
+      "name": "store.ada-pot.metrics",
+      "type": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Metrics",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties.Metrics getMetrics() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.ada-pot.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.bulk-update-reward",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.bulk-update-reward-with-copy",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.epoch-stake-pruning-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.epoch-stake-pruning-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.epoch-stake-pruning-interval",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.epoch-stake-safe-epochs",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Metrics"
+    },
+    {
+      "name": "store.ada-pot.metrics.update-interval",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Metrics"
+    },
+    {
+      "name": "store.ada-pot.update-reward-db-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    },
+    {
+      "name": "store.ada-pot.verify-adapot-calc-values",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties$Adapot"
+    }
+  ],
+  "hints": []
+}

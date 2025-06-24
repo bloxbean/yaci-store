@@ -1,0 +1,61 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties"
+    },
+    {
+      "name": "store.blocks",
+      "type": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Blocks",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties.Blocks getBlocks() "
+    },
+    {
+      "name": "store.blocks.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Blocks",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.blocks.endpoints.block",
+      "type": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties.Endpoint getBlock() "
+    },
+    {
+      "name": "store.blocks.metrics",
+      "type": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Metrics",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Blocks",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties.Metrics getMetrics() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.blocks.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Blocks"
+    },
+    {
+      "name": "store.blocks.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Blocks"
+    },
+    {
+      "name": "store.blocks.endpoints.block.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.blocks.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Metrics"
+    },
+    {
+      "name": "store.blocks.metrics.update-interval",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties$Metrics"
+    }
+  ],
+  "hints": []
+}

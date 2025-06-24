@@ -1,0 +1,45 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties"
+    },
+    {
+      "name": "store.script",
+      "type": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Script",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties.Script getScript() "
+    },
+    {
+      "name": "store.script.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Script",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.script.endpoints.script",
+      "type": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties.Endpoint getScript() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.script.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Script"
+    },
+    {
+      "name": "store.script.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Script"
+    },
+    {
+      "name": "store.script.endpoints.script.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}

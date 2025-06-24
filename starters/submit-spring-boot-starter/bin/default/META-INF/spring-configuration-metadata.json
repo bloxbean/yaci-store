@@ -1,0 +1,23 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties"
+    },
+    {
+      "name": "store.submit",
+      "type": "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties$Submit",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties.Submit getSubmit() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.submit.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties$Submit"
+    }
+  ],
+  "hints": []
+}

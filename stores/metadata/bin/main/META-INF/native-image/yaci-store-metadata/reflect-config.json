@@ -1,0 +1,14 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.api.metadata.dto.MetadataDtoMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.metadata.storage.impl.mapper.MetadataMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]

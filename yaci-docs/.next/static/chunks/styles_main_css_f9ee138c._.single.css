@@ -1,0 +1,25 @@
+/* [project]/styles/main.css [app-client] (css) */
+video {
+  width: 70%;
+  margin: 0 auto;
+  padding: 1.5rem 0;
+  display: block;
+}
+
+.wide-asset {
+  width: 90%;
+  margin: 0 auto;
+}
+
+@media (width >= 1024px) {
+  video {
+    width: 50%;
+  }
+}
+
+footer {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/*# sourceMappingURL=styles_main_css_f9ee138c._.single.css.map*/

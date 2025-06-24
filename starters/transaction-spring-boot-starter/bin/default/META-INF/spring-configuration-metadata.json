@@ -1,0 +1,80 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties"
+    },
+    {
+      "name": "store.transaction",
+      "type": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties.Transaction getTransaction() "
+    },
+    {
+      "name": "store.transaction.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.transaction.endpoints.block",
+      "type": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties.Endpoint getBlock() "
+    },
+    {
+      "name": "store.transaction.endpoints.transaction",
+      "type": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties.Endpoint getTransaction() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.transaction.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    },
+    {
+      "name": "store.transaction.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    },
+    {
+      "name": "store.transaction.endpoints.block.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.transaction.endpoints.transaction.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Endpoint"
+    },
+    {
+      "name": "store.transaction.pruning-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable pruning of Transaction",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    },
+    {
+      "name": "store.transaction.pruning-interval",
+      "type": "java.lang.Integer",
+      "description": "Transaction Pruning interval in seconds",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    },
+    {
+      "name": "store.transaction.pruning-safe-slot",
+      "type": "java.lang.Integer",
+      "description": "safe slot count to keep before pruning the Transaction",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    },
+    {
+      "name": "store.transaction.save-witness",
+      "type": "java.lang.Boolean",
+      "description": "Enable\/disable saving of transaction witnesses. When disabled, transaction witnesses will not be stored in the database. This can help reduce storage requirements if witness data is not needed.",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties$Transaction"
+    }
+  ],
+  "hints": []
+}

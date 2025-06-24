@@ -1,0 +1,25 @@
+spring:
+  config:
+    import: classpath:/git.properties
+  banner:
+    location: classpath:/banner.txt
+  application:
+    name: Yaci Store - Utxo Indexer
+  profiles:
+    include: plugins
+  boot:
+    admin:
+      client:
+        enabled: false
+
+  flyway:
+    locations: classpath:db/store/{vendor}
+    out-of-order: true
+
+apiPrefix: /api/v1
+
+logging:
+  file:
+    name: ./logs/utxo-indexer.log
+
+

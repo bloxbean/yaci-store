@@ -1,0 +1,133 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties"
+    },
+    {
+      "name": "store.account",
+      "type": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties.Account getAccount() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.account.address-balance-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.address-tx-amount-exclude-zero-token-amount",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.address-tx-amount-include-zero-amount",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-aggregation-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-calc-batch-mode",
+      "type": "java.lang.String",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-calc-job-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-calc-job-partition-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-cleanup-batch-threshold",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-cleanup-slot-count",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.balance-history-cleanup-interval",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.content-aware-rollback",
+      "type": "java.lang.Boolean",
+      "description": "Enable content aware rollback",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.current-balance-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable current address balance and stake address balance in the current balance table. This should be enabled with contentAwareRollback option to calculate the current balance correctly during rollback.",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.history-cleanup-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.initial-balance-snapshot-block",
+      "type": "java.lang.Long",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.max-balance-records-per-address-per-batch",
+      "type": "java.lang.Integer",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.pruning-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Pruning batch size",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.pruning-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable Address Balance and Stake Address Balance Pruning (History records)",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.pruning-interval",
+      "type": "java.lang.Integer",
+      "description": "Pruning interval in seconds",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.save-address-tx-amount",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    },
+    {
+      "name": "store.account.stake-address-balance-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties$Account"
+    }
+  ],
+  "hints": []
+}

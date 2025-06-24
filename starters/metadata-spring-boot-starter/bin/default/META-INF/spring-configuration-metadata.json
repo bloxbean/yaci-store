@@ -1,0 +1,45 @@
+{
+  "groups": [
+    {
+      "name": "store",
+      "type": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties"
+    },
+    {
+      "name": "store.metadata",
+      "type": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Metadata",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties.Metadata getMetadata() "
+    },
+    {
+      "name": "store.metadata.endpoints",
+      "type": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Endpoints",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Metadata",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties.Endpoints getEndpoints() "
+    },
+    {
+      "name": "store.metadata.endpoints.transaction",
+      "type": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Endpoint",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Endpoints",
+      "sourceMethod": "public com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties.Endpoint getTransaction() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "store.metadata.api-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Metadata"
+    },
+    {
+      "name": "store.metadata.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Metadata"
+    },
+    {
+      "name": "store.metadata.endpoints.transaction.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties$Endpoint"
+    }
+  ],
+  "hints": []
+}
