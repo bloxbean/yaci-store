@@ -174,7 +174,7 @@ task dockerZip(type: Zip) {
 
     from('./docker') {
         into(zipDirName)
-        include '*.yml'
+        include 'README.md'
         include '*.sh'
     }
 

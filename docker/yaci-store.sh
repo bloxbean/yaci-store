@@ -27,7 +27,7 @@ fi
 ACTION=$1
 
 if [ -z "$ACTION" ]; then
-  echo "Usage: $0 [start|stop|logs|logs:yaci-store|logs:db]"
+  echo "Usage: $0 [start|stop|stop:yaci-store|logs|logs:yaci-store|logs:db]"
   exit 1
 fi
 
@@ -82,6 +82,19 @@ elif [ "$ACTION" = "stop" ]; then
 
   exit $STATUS
 
+elif [ "$ACTION" = "stop:yaci-store" ]; then
+  echo "🛑 Stopping only the Yaci Store container (PostgreSQL will keep running)..."
+  docker compose -f "$COMPOSE_FILE" stop yaci-store
+  STATUS=$?
+
+  if [ $STATUS -eq 0 ]; then
+    echo "✅ Yaci Store container stopped. PostgreSQL is still running."
+  else
+    echo "❌ Failed to stop Yaci Store. Exit code: $STATUS"
+  fi
+
+  exit $STATUS
+
 elif [ "$ACTION" = "logs" ]; then
   echo "📋 Showing logs for Yaci Store and PostgreSQL (press Ctrl+C to exit)"
   docker compose -f "$COMPOSE_FILE" logs -f
@@ -99,6 +112,6 @@ elif [ "$ACTION" = "logs:db" ]; then
 
 else
   echo "❌ Invalid action: $ACTION"
-  echo "Usage: $0 [start|stop|logs|logs:yaci-store|logs:db]"
+  echo "Usage: $0 [start|stop|stop:yaci-store|logs|logs:yaci-store|logs:db]"
   exit 1
 fi
