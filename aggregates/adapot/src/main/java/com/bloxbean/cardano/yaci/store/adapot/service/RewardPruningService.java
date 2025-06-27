@@ -2,6 +2,9 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 
 
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
@@ -15,6 +18,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -33,6 +38,7 @@ public class RewardPruningService {
     private final AdaPotProperties adaPotProperties;
     private final RewardService rewardService;
     private final CursorService cursorService;
+    private final AdaPotJobStorage adaPotJobStorage;
     private final AtomicBoolean isPruning = new AtomicBoolean(false);
 
     @PostConstruct
@@ -69,21 +75,28 @@ public class RewardPruningService {
         isPruning.set(true);
 
         try {
-            cursorService.getCursor().ifPresent(cursor -> {
-                log.info("Current cursor: {}", cursor.getBlock());
+            List<AdaPotJob> completedJobs = adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED)
+                    .stream()
+                    .sorted(Comparator.comparingInt(AdaPotJob::getEpoch))
+                    .toList();
 
-                long slot = cursor.getSlot() - adaPotProperties.getRewardPruningSafeSlots();
+            if (completedJobs.isEmpty()) {
+                return;
+            }
 
-                if (slot > 0) {
-                    log.info(">> Pruning withdrawn reward before slot: {}", slot);
-                    long t1 = System.currentTimeMillis();
-                    int deleteCount = rewardService.deleteWithdrawnRewards(slot);
-                    long t2 = System.currentTimeMillis();
+            long maxCompletedAdaPotJobsSlot = completedJobs.getLast().getSlot();
 
-                    log.info(">> Deleted {} reward records before slot {}, Time taken: {} ms",
-                            deleteCount, slot, (t2 - t1));
-                }
-            });
+            long slot = maxCompletedAdaPotJobsSlot - adaPotProperties.getRewardPruningSafeSlots();
+
+            if (slot > 0) {
+                log.info(">> Pruning withdrawn reward before slot: {}", slot);
+                long t1 = System.currentTimeMillis();
+                int deleteCount = rewardService.deleteWithdrawnRewards(slot);
+                long t2 = System.currentTimeMillis();
+
+                log.info(">> Deleted {} reward records before slot {}, Time taken: {} ms",
+                        deleteCount, slot, (t2 - t1));
+            }
         } finally {
             isPruning.set(false);
         }

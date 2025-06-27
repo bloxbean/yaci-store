@@ -63,7 +63,7 @@ store.adapot.reward-pruning-enabled=true
 store.adapot.reward-pruning-interval=86400
 ```
 
-The above configuration will run reward pruning every 86400 seconds (1 day)
+The above configuration will run reward pruning every 86400 seconds (1 day).
 
 You can also specify how many safe slots to keep in the reward table using:
 
@@ -71,8 +71,11 @@ You can also specify how many safe slots to keep in the reward table using:
 store.adapot.reward-pruning-safe-slots=43200
 ```
 
-By default, this is set to 43200 slots. Reward records are eligible for pruning if their corresponding withdrawal occurred at a slot less than or equal to the latest slot minus this safe slot threshold.
-Rewards that have not been withdrawn will never be pruned.
+By default, this is set to 43200 slots. Reward records are only eligible for pruning if:
+- The reward's slot is less than or equal to the latest completed reward calculation job slot minus this safe slot threshold.
+- There exists a withdrawal for the same address, where the withdrawal's slot is **greater than** the reward's slot and **less than** the current pruning slot.
+
+Rewards that have not been withdrawn (i.e., do not have a matching withdrawal after their slot) will never be pruned.
 
 <Callout>
 Reward pruning will only remove reward records that have already been withdrawn (i.e., there is a withdrawal after the reward's slot for the same address). Rewards that have not been withdrawn will never be pruned.
