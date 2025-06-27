@@ -1,0 +1,20 @@
+services:
+  yaci-store:
+    image: bloxbean/yaci-store:${tag}
+    container_name: yaci-store
+    env_file:
+      - ../config/env
+    ports:
+      - ${YACI_STORE_PORT:-8080}:8080
+    volumes:
+      - $PWD/logs:/app/logs/
+      - ../config/application.properties:/app/config/application.properties
+      - ../config/application-ledger-state.properties:/app/config/application-ledger-state.properties
+      - ../config/application-plugins.yml:/app/config/application-plugins.yml
+      - ../plugin-scripts:/app/plugin-scripts/
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "50"
+

@@ -176,10 +176,20 @@ task dockerZip(type: Zip) {
         into(zipDirName)
         include '*.yml'
         include '*.sh'
-        include 'env'
+    }
+
+    from('./docker/compose') {
+        into(zipDirName + '/compose')
+        include '*.yml'
         include '.env'
+    }
+
+    from('./docker/config') {
+        into(zipDirName + '/config')
+        include 'env'
         include 'application.properties'
         include 'application-ledger-state.properties'
+        include 'application-plugins.yml'
     }
 
     from('./docker/plugin-scripts') {

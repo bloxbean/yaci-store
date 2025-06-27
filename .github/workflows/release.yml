@@ -22,7 +22,7 @@ jobs:
         run: |
           ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
           echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
-          echo "tag=${ARTIFACT_VERSION}" > docker/.env
+          echo "tag=${ARTIFACT_VERSION}" > docker/compose/.env
       - name: Build with Gradle
         run: ./gradlew clean build distZip dockerZip
       - name: Decode GPG Key

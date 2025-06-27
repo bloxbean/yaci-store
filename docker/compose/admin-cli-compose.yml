@@ -2,9 +2,9 @@ services:
   admin-cli:
     image: bloxbean/yaci-store-admin-cli:${tag}
     env_file:
-      - env
+      - ../config/env
     volumes:
-      - ./application.properties:/app/config/application.properties
+      - ../config/application.properties:/app/config/application.properties
     stdin_open: true
     tty: true
     networks:
