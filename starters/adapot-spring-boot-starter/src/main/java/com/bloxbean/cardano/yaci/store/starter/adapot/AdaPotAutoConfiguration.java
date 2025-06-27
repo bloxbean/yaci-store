@@ -34,6 +34,12 @@ public class AdaPotAutoConfiguration {
         adaPotProperties.setEpochStakePruningSafeEpochs(properties.getAdaPot().getEpochStakeSafeEpochs());
         adaPotProperties.setEpochStakePruningBatchSize(properties.getAdaPot().getEpochStakePruningBatchSize());
 
+        // Set reward pruning properties
+        adaPotProperties.setRewardPruningEnabled(properties.getAdaPot().isRewardPruningEnabled());
+        adaPotProperties.setRewardPruningInterval(properties.getAdaPot().getRewardPruningInterval());
+        adaPotProperties.setRewardPruningSafeSlots(properties.getAdaPot().getRewardPruningSafeSlots());
+        adaPotProperties.setRewardPruningBatchSize(properties.getAdaPot().getRewardPruningBatchSize());
+
         adaPotProperties.setMetricsEnabled(properties.getAdaPot().getMetrics().isEnabled());
         adaPotProperties.setMetricsUpdateInterval(properties.getAdaPot().getMetrics().getUpdateInterval());
 
