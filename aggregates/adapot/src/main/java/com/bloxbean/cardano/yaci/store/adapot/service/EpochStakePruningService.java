@@ -15,10 +15,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Comparator;
 import java.util.List;
@@ -39,16 +36,12 @@ import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_A
 public class EpochStakePruningService {
     private final EpochStakeService epochStakeService;
     private final AdaPotProperties adaPotProperties;
-    private final PlatformTransactionManager transactionManager;
     private final AdaPotJobStorage adaPotJobStorage;
-    private TransactionTemplate transactionTemplate;
     private AtomicBoolean isPruning = new AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
         log.info("<< Epoch Stake Pruning Service Enabled >>");
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Scheduled(fixedRateString = "${store.adapot.epoch-stake-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 300)

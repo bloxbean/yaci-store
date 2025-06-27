@@ -2,9 +2,6 @@ package com.bloxbean.cardano.yaci.store.adapot.service;
 
 
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
-import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
-import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
-import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
@@ -18,8 +15,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -36,7 +31,6 @@ import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_A
 @Slf4j
 public class RewardPruningService {
     private final AdaPotProperties adaPotProperties;
-    private final AdaPotJobStorage adaPotJobStorage;
     private final RewardService rewardService;
     private final CursorService cursorService;
     private final AtomicBoolean isPruning = new AtomicBoolean(false);
