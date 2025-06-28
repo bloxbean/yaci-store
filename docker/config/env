@@ -7,5 +7,5 @@
 #SPRING_PROFILES_ACTIVE=ledger-state
 
 ## Enable polyglot plugins (Python, JS) support.
-# JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib
+# JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
 

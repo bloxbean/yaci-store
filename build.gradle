@@ -192,9 +192,8 @@ task dockerZip(type: Zip) {
         include 'application-plugins.yml'
     }
 
-    from('./docker/plugin-scripts') {
-        include 'placeholder.txt'
-        into zipDirName + '/plugin-scripts'
+    from('./docker/plugins') {
+        into zipDirName + '/plugins'
     }
 
     from('./docker/grafana') {
