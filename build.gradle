@@ -137,6 +137,14 @@ task distZip(type: Zip) {
         into(zipDirName + "/" + 'plugins/lib')
     }
 
+    from('./docker/plugins/scripts') {
+        into zipDirName + '/plugins/scripts'
+    }
+
+    from('./docker/plugins/ext-jars') {
+        into zipDirName + '/plugins/ext-jars'
+    }
+
     from('./') {
         into(zipDirName)
         include 'LICENSE'
