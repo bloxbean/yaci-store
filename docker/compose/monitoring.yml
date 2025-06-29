@@ -9,6 +9,8 @@ services:
       - "9090:9090"
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "9090" ]
+    networks:
+      - yaci-store-net
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -34,3 +36,9 @@ services:
       - prometheus
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "3000" ]
+    networks:
+      - yaci-store-net
+
+networks:
+  yaci-store-net:
+    external: true
