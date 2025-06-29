@@ -5,15 +5,16 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=ledger-state
     env_file:
-      - env
+      - ../config/env
     ports:
       - ${YACI_STORE_PORT:-8080}:8080
     volumes:
       - $PWD/logs:/app/logs/
-      - ./application.properties:/app/config/application.properties
-      - ./application-ledger-state.properties:/app/config/application-ledger-state.properties
-      - ./application-plugins.yml:/app/config/application-plugins.yml
-      - ./plugin-scripts:/app/plugin-scripts/
+      - ../config/application.properties:/app/config/application.properties
+      - ../config/application-ledger-state.properties:/app/config/application-ledger-state.properties
+      - ../config/application-plugins.yml:/app/config/application-plugins.yml
+      - ../plugins/scripts:/app/plugins/scripts/
+      - ../plugins/ext-jars:/app/plugins/ext-jars/
     logging:
       driver: "json-file"
       options:

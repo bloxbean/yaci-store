@@ -137,6 +137,14 @@ task distZip(type: Zip) {
         into(zipDirName + "/" + 'plugins/lib')
     }
 
+    from('./docker/plugins/scripts') {
+        into zipDirName + '/plugins/scripts'
+    }
+
+    from('./docker/plugins/ext-jars') {
+        into zipDirName + '/plugins/ext-jars'
+    }
+
     from('./') {
         into(zipDirName)
         include 'LICENSE'
@@ -174,17 +182,26 @@ task dockerZip(type: Zip) {
 
     from('./docker') {
         into(zipDirName)
-        include '*.yml'
+        include 'README.md'
         include '*.sh'
-        include 'env'
-        include '.env'
-        include 'application.properties'
-        include 'application-ledger-state.properties'
     }
 
-    from('./docker/plugin-scripts') {
-        include 'placeholder.txt'
-        into zipDirName + '/plugin-scripts'
+    from('./docker/compose') {
+        into(zipDirName + '/compose')
+        include '*.yml'
+        include '.env'
+    }
+
+    from('./docker/config') {
+        into(zipDirName + '/config')
+        include 'env'
+        include 'application.properties'
+        include 'application-ledger-state.properties'
+        include 'application-plugins.yml'
+    }
+
+    from('./docker/plugins') {
+        into zipDirName + '/plugins'
     }
 
     from('./docker/grafana') {

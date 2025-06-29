@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Uncomment the following line to enable polyglot (Python, JS) plugins support.
-#JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib"
+#JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib,plugins/ext-jars"
 
 # Ensure JAVA_HOME is set
 if [ -z "$JAVA_HOME" ]; then
