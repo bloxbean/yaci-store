@@ -9,7 +9,7 @@ jobs:
   buildAndUpload-mostly-static:
     strategy:
       matrix:
-        os: [ "ubuntu-22.04", "macOS", "macos-13" ]
+        os: [ "ubuntu-22.04", "macos-15", "macos-13" ]
         profile: [ "n2c", "all" ]
     runs-on: ${{ matrix.os }}
     env:
