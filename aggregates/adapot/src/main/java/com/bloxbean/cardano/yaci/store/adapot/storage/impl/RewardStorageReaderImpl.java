@@ -1,24 +1,29 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
-import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
+import com.bloxbean.cardano.yaci.store.adapot.domain.*;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorageReader;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
+import com.bloxbean.cardano.yaci.store.api.adapot.dto.RewardInfoType;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
 import lombok.RequiredArgsConstructor;
+import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.math.BigInteger;
 import java.util.List;
+
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
 
 @RequiredArgsConstructor
 public class RewardStorageReaderImpl implements RewardStorageReader {
@@ -27,6 +32,7 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
     private final RewardRestRepository rewardRestRepository;
     private final UnclaimedRewardRestRepository unclaimedRewardRestRepository;
     private final Mapper mapper;
+    private final DSLContext dsl;
 
     @Override
     public List<InstantReward> findInstantRewardByEarnedEpoch(Integer epoch, int page, int count) {
@@ -179,6 +185,134 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                 .toList();
     }
 
+    @Override
+    public List<RewardInfo> findUnwithdrawnRewardsByAddresses(List<String> addresses, int page, int count) {
+        int offset = page * count;
+
+        var poolRewardQuery = dsl.select(
+                REWARD.ADDRESS.as("address"),
+                REWARD.EARNED_EPOCH.as("earned_epoch"),
+                REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
+                REWARD.AMOUNT.as("amount"),
+                REWARD.POOL_ID.as("pool_id"),
+                REWARD.SLOT.as("slot"),
+                DSL.val("pool_reward").as("reward_category"),
+                REWARD.TYPE.cast(String.class).as("reward_type")
+        ).from(REWARD)
+        .where(REWARD.ADDRESS.in(addresses)
+            .and(REWARD.SLOT.gt(
+                DSL.coalesce(
+                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
+                        .from(WITHDRAWAL)
+                        .where(WITHDRAWAL.ADDRESS.eq(REWARD.ADDRESS))
+                        .asField().cast(Long.class),
+                    DSL.val(0L)
+                )
+            ))
+        );
+
+        var rewardRestQuery = dsl.select(
+                REWARD_REST.ADDRESS.as("address"),
+                REWARD_REST.EARNED_EPOCH.as("earned_epoch"),
+                REWARD_REST.SPENDABLE_EPOCH.as("spendable_epoch"),
+                REWARD_REST.AMOUNT.as("amount"),
+                DSL.val((String) null).as("pool_id"),
+                REWARD_REST.SLOT.as("slot"),
+                DSL.val("reward_rest").as("reward_category"),
+                REWARD_REST.TYPE.cast(String.class).as("reward_type")
+        ).from(REWARD_REST)
+        .where(REWARD_REST.ADDRESS.in(addresses)
+            .and(REWARD_REST.SLOT.gt(
+                DSL.coalesce(
+                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
+                        .from(WITHDRAWAL)
+                        .where(WITHDRAWAL.ADDRESS.eq(REWARD_REST.ADDRESS))
+                        .asField()
+                        .cast(Long.class),
+                    DSL.val(0L)
+                )
+            ))
+        );
+
+        var instantQuery = dsl.select(
+                INSTANT_REWARD.ADDRESS.as("address"),
+                INSTANT_REWARD.EARNED_EPOCH.as("earned_epoch"),
+                INSTANT_REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
+                INSTANT_REWARD.AMOUNT.as("amount"),
+                DSL.val((String) null).as("pool_id"),
+                INSTANT_REWARD.SLOT.as("slot"),
+                DSL.val("instant_reward").as("reward_category"),
+                INSTANT_REWARD.TYPE.cast(String.class).as("reward_type")
+        ).from(INSTANT_REWARD)
+        .where(INSTANT_REWARD.ADDRESS.in(addresses)
+            .and(INSTANT_REWARD.SLOT.gt(
+                DSL.coalesce(
+                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
+                        .from(WITHDRAWAL)
+                        .where(WITHDRAWAL.ADDRESS.eq(INSTANT_REWARD.ADDRESS))
+                        .asField()
+                        .cast(Long.class),
+                    DSL.val(0L)
+                )
+            ))
+        );
+
+        var union = dsl.selectFrom(
+                poolRewardQuery.unionAll(rewardRestQuery).unionAll(instantQuery)
+        )
+        .orderBy(DSL.field("slot").desc())
+        .limit(count)
+        .offset(offset);
+
+        return union.fetch()
+                .stream()
+                .map(record -> {
+                    String address = record.get("address", String.class);
+                    Integer earnedEpoch = record.get("earned_epoch", Integer.class);
+                    Integer spendableEpoch = record.get("spendable_epoch", Integer.class);
+                    java.math.BigInteger amount = record.get("amount", java.math.BigInteger.class);
+                    String poolId = record.get("pool_id", String.class);
+                    Long slot = record.get("slot", Long.class);
+                    String rewardTypeStr = record.get("reward_type", String.class);
+                    String rewardCategory = record.get("reward_category", String.class);
+
+                    RewardInfoType rewardType = getRewardInfoType(rewardCategory, rewardTypeStr);
+                    return new RewardInfo(address, earnedEpoch, spendableEpoch, amount, poolId, slot, rewardType);
+                })
+                .toList();
+    }
+
+    private static RewardInfoType getRewardInfoType(String rewardCategory, String rewardTypeStr) {
+        RewardInfoType rewardType = null;
+
+        switch (rewardCategory) {
+            case "pool_reward" -> {
+                if (RewardType.member.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.pool_member;
+                } else if (RewardType.leader.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.pool_leader;
+                } else if (RewardType.refund.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.pool_deposit_refund;
+                }
+            }
+            case "reward_rest" -> {
+                if (RewardRestType.treasury.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.treasury_withdrawal;
+                } else if (RewardRestType.proposal_refund.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.proposal_deposit_refund;
+                }
+            }
+            case "instant_reward" -> {
+                if (InstantRewardType.treasury.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.treasury;
+                } else if (InstantRewardType.reserves.name().equals(rewardTypeStr)) {
+                    rewardType = RewardInfoType.reserves;
+                }
+            }
+        }
+
+        return rewardType;
+    }
 
     private static Pageable getPagableBySlotOrder(int page, int count, Order order) {
         Pageable sortedBySlot =

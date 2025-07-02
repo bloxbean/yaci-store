@@ -83,4 +83,9 @@ public class RewardApiService {
                 .toList();
     }
 
+    public List<RewardInfoDto> getUnwithdrawnRewardsByAddresses(List<String> addresses, int page, int count) {
+        return rewardStorageReader.findUnwithdrawnRewardsByAddresses(addresses, page, count)
+                .stream().map(RewardInfoDto::toDto).toList();
+    }
+
 }
