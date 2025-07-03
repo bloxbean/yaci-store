@@ -9,7 +9,7 @@ create table drep_dist
     active_until      int,
     expiry            int,
     update_datetime   timestamp,
-    primary key (drep_hash, epoch)
+    primary key (drep_hash, drep_type, epoch)
 );
 
 CREATE INDEX idx_drep_dist_drep_hash
