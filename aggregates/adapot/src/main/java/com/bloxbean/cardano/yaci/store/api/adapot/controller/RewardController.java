@@ -88,16 +88,16 @@ public class RewardController {
         return ResponseEntity.ok(accountRewardApiService.getPoolRewardsByPoolHashAndSpendableEpoch(poolHash, epoch, p, count));
     }
 
-    @Operation(summary = "Get unwithdrawn rewards for an address", description = "Retrieve unwithdrawn rewards for a specific address with pagination.")
-    @GetMapping("/accounts/{address}/rewards/unwithdrawn")
+    @Operation(summary = "Get available rewards for an address", description = "Retrieve unwithdrawn rewards for a specific address with pagination.")
+    @GetMapping("/accounts/{address}/rewards/available")
     public ResponseEntity<List<RewardInfoDto>> getUnwithdrawnRewardsByAddress(@PathVariable String address, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
                                                                               @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
         int p = adjustPage(page);
         return ResponseEntity.ok(accountRewardApiService.getUnwithdrawnRewardsByAddresses(List.of(address), p, count));
     }
 
-    @Operation(summary = "Get unwithdrawn rewards for addresses", description = "Retrieve unwithdrawn rewards for a list of addresses with pagination.")
-    @PostMapping("/rewards/unwithdrawn")
+    @Operation(summary = "Get available rewards for addresses", description = "Retrieve unwithdrawn rewards for a list of addresses with pagination.")
+    @PostMapping("/rewards/available")
     public ResponseEntity<List<RewardInfoDto>> getUnwithdrawnRewards(@RequestBody List<String> addresses, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,
                                                                       @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
         int p = adjustPage(page);
