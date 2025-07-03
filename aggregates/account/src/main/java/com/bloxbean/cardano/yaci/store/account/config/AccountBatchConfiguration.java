@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.account.config;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.account.job.*;
 import com.bloxbean.cardano.yaci.store.account.service.AccountConfigService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @ConditionalOnProperty(name = "store.account.balance-calc-batch-mode", havingValue = "tx-amount", matchIfMissing = true)
+@ReadOnly(false)
 @RequiredArgsConstructor
 @Slf4j
 public class AccountBatchConfiguration {
