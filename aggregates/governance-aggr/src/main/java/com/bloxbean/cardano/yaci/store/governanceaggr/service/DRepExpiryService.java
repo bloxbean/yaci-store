@@ -87,10 +87,7 @@ public class DRepExpiryService {
 
         Set<Integer> dormantEpochsToLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
 
-        Integer maxDRepRegistrationEpoch = registrationMap.values().stream().map(DRepExpiryUtil.DRepRegistrationInfo::epoch)
-                .sorted(Integer::compareTo).toList().getLast();
-
-        List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(maxDRepRegistrationEpoch);
+        List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(leftBoundaryEpoch);
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> sortedProposals = proposalSubmissionInfos.stream()
                 .sorted(Comparator.comparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot)
