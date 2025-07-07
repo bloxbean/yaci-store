@@ -39,7 +39,7 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 else
   echo "⚠️  .env file not found at: $ENV_FILE"
-  echo "👉 Please create a .env file at the root with content like: tag=<version>"
+  echo "👉 Please create a .env file in compose folder with content like: tag=<version>"
   exit 1
 fi
 
