@@ -21,7 +21,6 @@ public record RewardInfoDto(
     Integer spendableEpoch,
     BigInteger amount,
     String poolId,
-    Long slot,
     RewardInfoType rewardType
 ) {
 
@@ -32,7 +31,6 @@ public record RewardInfoDto(
             rewardInfo.getSpendableEpoch(),
             rewardInfo.getAmount(),
             rewardInfo.getPoolId(),
-            rewardInfo.getSlot(),
             rewardInfo.getRewardType()
         );
     }
@@ -48,7 +46,6 @@ public record RewardInfoDto(
             reward.getSpendableEpoch(),
             reward.getAmount(),
             reward.getPoolId(),
-            reward.getSlot(),
             type
         );
     }
@@ -63,7 +60,6 @@ public record RewardInfoDto(
             rewardRest.getSpendableEpoch(),
             rewardRest.getAmount(),
             null,
-            rewardRest.getSlot(),
             type
         );
     }
@@ -79,7 +75,6 @@ public record RewardInfoDto(
             instantReward.getSpendableEpoch(),
             instantReward.getAmount(),
             null,
-            instantReward.getSlot(),
             type
         );
     }

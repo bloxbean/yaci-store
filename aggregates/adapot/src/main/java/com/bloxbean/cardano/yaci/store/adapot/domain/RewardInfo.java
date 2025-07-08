@@ -23,6 +23,5 @@ public class RewardInfo {
     Integer spendableEpoch;
     BigInteger amount;
     String poolId;
-    Long slot;
     RewardInfoType rewardType;
 }

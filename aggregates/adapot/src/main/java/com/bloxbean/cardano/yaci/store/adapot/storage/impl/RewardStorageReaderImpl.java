@@ -189,82 +189,95 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
     public List<RewardInfo> findUnwithdrawnRewardsByAddresses(List<String> addresses, int page, int count) {
         int offset = page * count;
 
-        var poolRewardQuery = dsl.select(
-                REWARD.ADDRESS.as("address"),
-                REWARD.EARNED_EPOCH.as("earned_epoch"),
-                REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
-                REWARD.AMOUNT.as("amount"),
-                REWARD.POOL_ID.as("pool_id"),
-                REWARD.SLOT.as("slot"),
-                DSL.val("pool_reward").as("reward_category"),
-                REWARD.TYPE.cast(String.class).as("reward_type")
-        ).from(REWARD)
-        .where(REWARD.ADDRESS.in(addresses)
-            .and(REWARD.SLOT.gt(
-                DSL.coalesce(
-                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
-                        .from(WITHDRAWAL)
-                        .where(WITHDRAWAL.ADDRESS.eq(REWARD.ADDRESS))
-                        .asField().cast(Long.class),
-                    DSL.val(0L)
+        var query = dsl.with("max_withdrawals").as(
+                        dsl.select(
+                                        WITHDRAWAL.ADDRESS,
+                                        DSL.max(WITHDRAWAL.SLOT).as("max_withdrawal_slot")
+                                )
+                                .from(WITHDRAWAL)
+                                .where(WITHDRAWAL.ADDRESS.in(addresses))
+                                .groupBy(WITHDRAWAL.ADDRESS)
                 )
-            ))
-        );
-
-        var rewardRestQuery = dsl.select(
-                REWARD_REST.ADDRESS.as("address"),
-                REWARD_REST.EARNED_EPOCH.as("earned_epoch"),
-                REWARD_REST.SPENDABLE_EPOCH.as("spendable_epoch"),
-                REWARD_REST.AMOUNT.as("amount"),
-                DSL.val((String) null).as("pool_id"),
-                REWARD_REST.SLOT.as("slot"),
-                DSL.val("reward_rest").as("reward_category"),
-                REWARD_REST.TYPE.cast(String.class).as("reward_type")
-        ).from(REWARD_REST)
-        .where(REWARD_REST.ADDRESS.in(addresses)
-            .and(REWARD_REST.SLOT.gt(
-                DSL.coalesce(
-                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
-                        .from(WITHDRAWAL)
-                        .where(WITHDRAWAL.ADDRESS.eq(REWARD_REST.ADDRESS))
-                        .asField()
-                        .cast(Long.class),
-                    DSL.val(0L)
+                .with("pool_rewards").as(
+                        dsl.select(
+                                        REWARD.ADDRESS.as("address"),
+                                        REWARD.EARNED_EPOCH.as("earned_epoch"),
+                                        REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
+                                        REWARD.AMOUNT.as("amount"),
+                                        REWARD.POOL_ID.as("pool_id"),
+                                        REWARD.SLOT.as("slot"),
+                                        DSL.val("pool_reward").as("reward_category"),
+                                        REWARD.TYPE.cast(String.class).as("reward_type")
+                                )
+                                .from(REWARD)
+                                .leftJoin(DSL.table("max_withdrawals"))
+                                .on(REWARD.ADDRESS.eq(DSL.field("max_withdrawals.address", String.class)))
+                                .where(REWARD.ADDRESS.in(addresses)
+                                        .and(REWARD.SLOT.gt(
+                                                DSL.coalesce(
+                                                        DSL.field("max_withdrawals.max_withdrawal_slot", Long.class),
+                                                        DSL.val(0L)
+                                                )
+                                        ))
+                                )
                 )
-            ))
-        );
-
-        var instantQuery = dsl.select(
-                INSTANT_REWARD.ADDRESS.as("address"),
-                INSTANT_REWARD.EARNED_EPOCH.as("earned_epoch"),
-                INSTANT_REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
-                INSTANT_REWARD.AMOUNT.as("amount"),
-                DSL.val((String) null).as("pool_id"),
-                INSTANT_REWARD.SLOT.as("slot"),
-                DSL.val("instant_reward").as("reward_category"),
-                INSTANT_REWARD.TYPE.cast(String.class).as("reward_type")
-        ).from(INSTANT_REWARD)
-        .where(INSTANT_REWARD.ADDRESS.in(addresses)
-            .and(INSTANT_REWARD.SLOT.gt(
-                DSL.coalesce(
-                    DSL.select(DSL.max(WITHDRAWAL.SLOT))
-                        .from(WITHDRAWAL)
-                        .where(WITHDRAWAL.ADDRESS.eq(INSTANT_REWARD.ADDRESS))
-                        .asField()
-                        .cast(Long.class),
-                    DSL.val(0L)
+                .with("reward_rests").as(
+                        dsl.select(
+                                        REWARD_REST.ADDRESS.as("address"),
+                                        REWARD_REST.EARNED_EPOCH.as("earned_epoch"),
+                                        REWARD_REST.SPENDABLE_EPOCH.as("spendable_epoch"),
+                                        REWARD_REST.AMOUNT.as("amount"),
+                                        DSL.val((String) null).as("pool_id"),
+                                        REWARD_REST.SLOT.as("slot"),
+                                        DSL.val("reward_rest").as("reward_category"),
+                                        REWARD_REST.TYPE.cast(String.class).as("reward_type")
+                                )
+                                .from(REWARD_REST)
+                                .leftJoin(DSL.table("max_withdrawals"))
+                                .on(REWARD_REST.ADDRESS.eq(DSL.field("max_withdrawals.address", String.class)))
+                                .where(REWARD_REST.ADDRESS.in(addresses)
+                                        .and(REWARD_REST.SLOT.gt(
+                                                DSL.coalesce(
+                                                        DSL.field("max_withdrawals.max_withdrawal_slot", Long.class),
+                                                        DSL.val(0L)
+                                                )
+                                        ))
+                                )
                 )
-            ))
-        );
+                .with("instant_rewards").as(
+                        dsl.select(
+                                        INSTANT_REWARD.ADDRESS.as("address"),
+                                        INSTANT_REWARD.EARNED_EPOCH.as("earned_epoch"),
+                                        INSTANT_REWARD.SPENDABLE_EPOCH.as("spendable_epoch"),
+                                        INSTANT_REWARD.AMOUNT.as("amount"),
+                                        DSL.val((String) null).as("pool_id"),
+                                        INSTANT_REWARD.SLOT.as("slot"),
+                                        DSL.val("instant_reward").as("reward_category"),
+                                        INSTANT_REWARD.TYPE.cast(String.class).as("reward_type")
+                                )
+                                .from(INSTANT_REWARD)
+                                .leftJoin(DSL.table("max_withdrawals"))
+                                .on(INSTANT_REWARD.ADDRESS.eq(DSL.field("max_withdrawals.address", String.class)))
+                                .where(INSTANT_REWARD.ADDRESS.in(addresses)
+                                        .and(INSTANT_REWARD.SLOT.gt(
+                                                DSL.coalesce(
+                                                        DSL.field("max_withdrawals.max_withdrawal_slot", Long.class),
+                                                        DSL.val(0L)
+                                                )
+                                        ))
+                                )
+                )
+                .selectFrom(
+                        dsl.selectFrom(DSL.table("pool_rewards"))
+                                .unionAll(dsl.selectFrom(DSL.table("reward_rests")))
+                                .unionAll(dsl.selectFrom(DSL.table("instant_rewards")))
+                                .asTable("combined")
+                )
+                .orderBy(DSL.field("slot").desc())
+                .limit(count)
+                .offset(offset);
 
-        var union = dsl.selectFrom(
-                poolRewardQuery.unionAll(rewardRestQuery).unionAll(instantQuery)
-        )
-        .orderBy(DSL.field("slot").desc())
-        .limit(count)
-        .offset(offset);
-
-        return union.fetch()
+        return query.fetch()
                 .stream()
                 .map(record -> {
                     String address = record.get("address", String.class);
@@ -272,12 +285,12 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                     Integer spendableEpoch = record.get("spendable_epoch", Integer.class);
                     java.math.BigInteger amount = record.get("amount", java.math.BigInteger.class);
                     String poolId = record.get("pool_id", String.class);
-                    Long slot = record.get("slot", Long.class);
+
                     String rewardTypeStr = record.get("reward_type", String.class);
                     String rewardCategory = record.get("reward_category", String.class);
 
                     RewardInfoType rewardType = getRewardInfoType(rewardCategory, rewardTypeStr);
-                    return new RewardInfo(address, earnedEpoch, spendableEpoch, amount, poolId, slot, rewardType);
+                    return new RewardInfo(address, earnedEpoch, spendableEpoch, amount, poolId, rewardType);
                 })
                 .toList();
     }
