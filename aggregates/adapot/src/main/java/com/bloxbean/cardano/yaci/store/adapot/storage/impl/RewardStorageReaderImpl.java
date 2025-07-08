@@ -322,6 +322,7 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                     rewardType = RewardInfoType.reserves;
                 }
             }
+            default -> throw new IllegalArgumentException("Unknown reward category: " + rewardCategory);
         }
 
         return rewardType;
