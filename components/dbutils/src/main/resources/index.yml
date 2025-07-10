@@ -148,14 +148,6 @@
         - drep_id
 
 # adapot
-
-- table: reward
-  indexes:
-    - name: idx_reward_address_slot
-      columns:
-        - address
-        - slot
-
 - table: reward_rest
   indexes:
     - name: idx_reward_rest_address_slot
