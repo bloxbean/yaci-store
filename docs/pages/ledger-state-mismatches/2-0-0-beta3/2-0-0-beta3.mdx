@@ -1,6 +1,6 @@
 # Ledger state mismatch Summary
 
-_Last updated: 2025-07-10_
+_Last updated: 2025-07-11_
 
 This document summarizes known mismatches identified in the Ledger state calculations of Yaci Store.
 
@@ -8,7 +8,7 @@ This document summarizes known mismatches identified in the Ledger state calcula
 
 ## Preview
 
-### DRep Distribution Mismatches
+### DRep distribution mismatches
 
 | Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note            |
 |:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:----------------|
@@ -41,7 +41,24 @@ This document summarizes known mismatches identified in the Ledger state calcula
 
 ## Mainnet
 
-### DRep Distribution Mismatches
-- [TODO] (No specific mismatch file yet.)
+### DRep distribution mismatches
+
+**📊 Comprehensive Analysis Available**
+
+We have conducted an extensive analysis of DRep stake distribution across epochs 506-569 on Cardano mainnet. The comprehensive monitoring has successfully identified specific areas for improvement.
+
+**Key Findings:**
+- **Only 143 unique DReps** show discrepancies
+- **Detailed classification completed** with 90.9% being minor low-severity cases
+
+**📋 Raw Data Source:**
+- [📄 **Raw Mismatch Data**](https://gist.github.com/satran004/06eac89cffebe9aca856aeda810c0a2c) - Complete raw data file used for the analysis (10,036 lines)
+
+**📋 Detailed Analysis:**
+- [🔴 **Summary**](./mainnet/drep-distribution/summary) - Overview with key statistics and Top 10 critical DReps
+- [📊 **Full Analysis**](./mainnet/drep-distribution/drep-distribution-analysis) - Complete technical analysis with formulas and examples  
+- [📝 **Complete DRep List**](./mainnet/drep-distribution/drep-details) - All 143 DReps with detailed breakdown
 
 ### DRep active_until mismatches
+
+For detail, check the [DRep active_until mismatches](./mainnet/drep-active-until/detail.mdx) page.
