@@ -1,12 +1,18 @@
-# What’s New in `2.0.0-beta1`
+---
+navigation: false
+---
 
-This is the **first beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+# Getting Started with Yaci Store 2.0.0-beta1
+
+> **Note**: This documentation is for the **2.0.0-beta1** release. For the latest 2.x.x version, see the [main Getting Started guide](./getting-started-2.x.x.mdx).
+
+This was the **first beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
 
 Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
 
 ---
 
-## Status of Ledger State Data Accuracy
+## Status of Ledger State Data Accuracy (Beta1)
 
 Ledger State calculations include:
 - Epoch Stake and Rewards
@@ -180,7 +186,9 @@ yaci-store> apply-indexes
 
 ---
 
-### 2. Yaci Store Docker Distribution
+### 2. Yaci Store Docker Distribution (Beta1 Method)
+
+> **Note**: This is the **legacy Docker distribution method** for beta1. For the latest simplified Docker distribution, see the [main Getting Started guide](./getting-started-2.x.x.mdx).
 
 This ZIP includes Docker Compose files for:
 - PostgreSQL
@@ -254,7 +262,7 @@ Block No: 4746  , Era: Shelley
 ### Total balance processing and saving time 1 ###
 ```
 
-#### 2. 1 Connects to an external PostgreSQL DB
+#### 2.1 Connects to an external PostgreSQL DB
 
 Use docker compose file like `yaci-store.yml` or `yaci-store-ledger-state.yml` instead of `*-monolith.yml` if you want to connect to an external PostgreSQL DB.
 
@@ -276,7 +284,6 @@ spring.datasource.url=jdbc:postgresql://192.168.0.2:5432/yaci_indexer?currentSch
 spring.datasource.username=user
 spring.datasource.password=password
 ```
-
 
 ##### 2.1.1 Usage
 - **Yaci Store**:
@@ -303,7 +310,6 @@ spring.datasource.password=password
   docker compose -f yaci-store-ledger-state.yml up
   ```
 
-
 #### 2.2 Apply Indexes After Sync
 
 - Open `admin-cli.sh` and replace `${tag}` with the actual version number and correct image name.
@@ -314,7 +320,6 @@ Example:
 ```
 docker run -it --volume ./application.properties:/app/config/application.properties bloxbean/yaci-store-admin-cli:2.0.0-beta1
 ```
-
 
 - Edit `application.properties` to set the database connection settings.
   Make sure to use the **database host or IP address** instead of `localhost`, as the `admin-cli` Docker container will not be able to connect to the host using `localhost`.
@@ -343,7 +348,7 @@ yaci-store> apply-indexes
 ### 3. Yaci Store Native (GraalVM) Distribution *(Preview)*
 
 Native binaries are available under a separate release tag:
-`<version>-native` (e.g., `0.2.0-beta-native`)
+`<version>-native` (e.g., `2.0.0-beta1-native`)
 
 #### Download Format
 
@@ -356,7 +361,7 @@ yaci-store-<version>-<os>-<arch>-all.zip
 Example:
 
 ```text
-yaci-store-0.2.0-preview2-linux-x64-all.zip
+yaci-store-2.0.0-beta1-linux-x64-all.zip
 ```
 
 > ⚠️ Only use the ZIP files ending with `-all`.
