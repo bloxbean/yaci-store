@@ -147,6 +147,27 @@
       columns:
         - drep_id
 
+# adapot
+- table: reward_rest
+  indexes:
+    - name: idx_reward_rest_address_slot
+      columns:
+        - address
+        - slot
 
+- table: instant_reward
+  indexes:
+    - name: idx_instant_reward_address_slot
+      columns:
+        - address
+        - slot
 
+# transaction
+
+- table: withdrawal
+  indexes:
+    - name: idx_withdrawal_address_slot
+      columns:
+        - address
+        - slot
 
