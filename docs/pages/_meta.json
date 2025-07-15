@@ -10,6 +10,9 @@
     "title": "Usage"
   },
   "stores": "Stores",
+  "plugins": {
+    "title": "Plugin Framework"
+  },
   "about": {
     "title": "About",
     "type": "page"

@@ -1,0 +1,557 @@
+# Plugin Configuration Reference
+
+**Complete Configuration Guide for Yaci-Store Plugins**
+
+## Table of Contents
+1. [Configuration Overview](#configuration-overview)
+2. [Global Plugin Settings](#global-plugin-settings)
+3. [Plugin Type Configurations](#plugin-type-configurations)
+4. [Extension Points Reference](#extension-points-reference)
+5. [Language-Specific Configuration](#language-specific-configuration)
+
+---
+
+## Configuration Overview
+
+Plugin configuration in yaci-store is managed through YAML files, primarily `application-plugins.yml`. The configuration follows a hierarchical structure that allows fine-grained control over plugin behavior.
+
+### Configuration File Structure
+
+```yaml
+store:
+  plugins:
+    # Global settings
+    enabled: true
+    exit-on-error: false
+
+    # Plugin variable providers
+    variable-providers:
+      - com.example.CustomVariableProvider
+
+    # Global scripts
+    scripts:
+      - id: utilities
+        lang: python
+        file: /app/plugins/scripts/utilities.py
+        enable-pool: true
+      - id: utxo_utilities2
+        lang: python
+        file: /app/plugins/scripts/utxo.py
+        enable-pool: false
+
+    # Plugin initializers
+    init:
+      mvel:
+        name: "System Initialization"
+        script:
+          file: /app/plugins/scripts/init.mvel
+          function: initialize
+      python:
+        name: "System Initialization"
+        script:
+          file: /app/plugins/scripts/init.py
+          function: initialize
+
+    # Filter plugins
+    filters:
+      extension.point:
+        - name: "Filter Name"
+          lang: mvel
+          expression: "condition"
+
+    # Pre-action plugins
+    pre-actions:
+      extension.point:
+        - name: "Pre Action Name"
+          lang: python
+          script:
+            file: /path/to/script.py
+            function: function_name
+
+    # Post-action plugins
+    post-actions:
+      extension.point:
+        - name: "Post Action Name"
+          lang: js
+          inline-script: |
+            // JavaScript code
+
+    # Event handler plugins
+    event-handlers:
+      EventType:
+        - name: "Event Handler Name"
+          lang: mvel
+          script:
+            file: /path/to/handler.mvel
+            function: handleEvent
+```
+
+---
+
+## Global Plugin Settings
+
+### Basic Settings
+
+```yaml
+store:
+  plugins:
+    enabled: true                    # Enable/disable plugin system
+    exit-on-error: false            # Continue on plugin errors
+```
+
+#### `enabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Master switch for the plugin system
+
+#### `exit-on-error`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Whether to stop processing on plugin errors
+- **Values**:
+  - `true`: Stop processing and exit application on plugin errors
+  - `false`: Log errors and continue processing
+
+### Variable Providers
+
+Through variable providers, any custom variables can be exposed to plugin contexts. This is a powerful feature that can be used to inject additional functionality or data into plugin execution contexts.
+
+```yaml
+store:
+  plugins:
+    variable-providers:
+      - com.example.DatabaseVariableProvider
+      - com.example.ConfigVariableProvider
+      - com.example.HttpClientVariableProvider
+```
+
+Custom variable providers inject additional functionality into plugin contexts:
+
+```java
+public class DatabaseVariableProvider implements VariableProvider {
+
+    @Override
+    public Object getValue() {
+        return Map.of(
+                        "custom_db", new CustomDBService(),
+                        "telegram_client", new TelegramClient()
+                );
+    }
+}
+```
+
+Custom variable providers can be bundled in a JAR file and placed in the `plugins/ext-jars` directory. They can then be referenced in the configuration.
+
+### Global Scripts
+
+```yaml
+store:
+  plugins:
+    scripts:
+      - id: utilities
+        lang: python
+        file: /app/plugins/scripts/utilities.py
+        enable-pool: true
+      - id: utxo_utilities2
+        lang: python
+        file: /app/plugins/scripts/utxo.py
+        enable-pool: false
+    filters:
+      utxo.unspent.save:
+        - name: Filter UTXO
+          lang: python
+          script:
+            id: utxo_utilities2
+            function: highvalue_utxos
+```
+
+Global scripts are defined once and can be referenced through ID in plugin configurations. They can be used across multiple plugins.
+
+**Note**: `enable-pool` is only applicable for Python and JavaScript scripts to allow parallel execution.
+
+---
+
+## Plugin Type Configurations
+
+### Filter Plugins
+
+Filter plugins control which data gets stored in the database.
+
+```yaml
+store:
+  plugins:
+    filters:
+      # Extension point format: {store}.{target}.{action}
+      utxo.unspent.save:
+        - name: "High Value UTXO Filter"
+          lang: mvel
+          expression: "lovelaceAmount > 1000000000"
+          exit-on-error: false
+
+        - name: "Policy ID Filter"
+          lang: spel
+          expression: "amounts.?[policyId == 'abc123'].size() > 0"
+
+        - name: "Complex Filter"
+          lang: python
+          script:
+            file: /app/plugins/scripts/filters/complex_filter.py
+            function: filter_utxos
+```
+
+#### Filter Configuration Options
+
+- **`name`**: Human-readable plugin name
+- **`lang`**: Plugin language (`mvel`, `spel`, `js`, `python`)
+- **`expression`**: Simple boolean expression (MVEL/SpEL only)
+- **`inline-script`**: Script code embedded in configuration
+- **`script`**: External script file reference
+- **`exit-on-error`**: Plugin-specific error handling override
+
+### Pre-Action Plugins
+
+Pre-action plugins modify data before it's stored.
+
+```yaml
+store:
+  plugins:
+    pre-actions:
+      metadata.save:
+        - name: "Metadata Enrichment"
+          lang: python
+          script:
+            file: /app/plugins/scripts/actions/enrich_metadata.py
+            function: enrich
+
+        - name: "Field Normalization"
+          lang: mvel
+          inline-script: |
+            modified_list = [];
+            for (item : items) {
+              if (item.label != null) {
+                ...
+              }
+              modified_list.add(item);
+            }
+            return modified_list;
+```
+
+### Post-Action Plugins
+
+Post-action plugins execute after data is successfully stored.
+
+```yaml
+store:
+  plugins:
+    post-actions:
+      transaction.save:
+        - name: "Webhook Notification"
+          lang: js
+          inline-script: |
+            if (items.length > 0) {
+              const payload = {
+                count: items.length,
+                timestamp: new Date().toISOString()
+              };
+              http.postJson(webhookUrl, payload);
+            }
+
+        - name: "Cache Update"
+          lang: python
+          script:
+            file: /app/plugins/scripts/actions/update_cache.py
+            function: update_transaction_cache
+```
+
+### Event Handler Plugins
+
+Event handler plugins react to blockchain events.
+
+```yaml
+store:
+  plugins:
+    event-handlers:
+      BlockEvent:
+        - name: "Block Statistics"
+          lang: mvel
+          script:
+            file: /app/plugins/scripts/handlers/block_stats.mvel
+            function: processBlock
+
+      TransactionEvent:
+        - name: "Transaction Monitor"
+          lang: python
+          script:
+            file: /app/plugins/scripts/handlers/tx_monitor.py
+            function: handle_transaction_event
+
+      AddressUtxoEvent:
+        - name: "Address Tracker"
+          lang: js
+          inline-script: |
+            console.log(`Address UTXO event: ${event.tx_input_outputs.length} changes`);
+            // Process address changes
+```
+
+### Initializer Plugins
+
+Initializer plugins run once during application startup.
+
+```yaml
+store:
+  plugins:
+    initializers:
+      python:
+        name: "Database Setup"
+        script:
+          file: /app/plugins/scripts/init/db_setup.py
+          function: initialize_database
+        exit-on-error: true
+
+      mvel:
+        name: "Configuration Validation"
+        inline-script: |
+          System.out.println("Validating plugin configuration...");
+          // Validation logic
+```
+
+---
+
+## Extension Points Reference
+
+### Storage Extension Points
+
+Storage extension points follow the pattern: `{store}.{target}.{action}`
+
+#### UTXO Store
+```yaml
+# UTXO-related extension points
+utxo.unspent.save          # New unspent UTXOs
+utxo.spent.save            # Newly spent UTXOs
+```
+
+#### Transaction Store
+```yaml
+# Transaction-related extension points
+transaction.save           # Transaction data
+transaction.witness.save   # Transaction witnesses
+transaction.withdrawal.save # Stake withdrawals
+```
+
+#### Metadata Store
+```yaml
+# Metadata extension points
+metadata.save              # Transaction metadata
+```
+
+#### Asset Store
+```yaml
+# Asset-related extension points
+asset.save                 # Asset mint/burn operations
+```
+
+#### Block Store
+```yaml
+# Block extension points
+block.save                 # Block data
+```
+
+#### Script Store
+```yaml
+# Script-related extension points
+script.save                # Script definitions
+script.datum.save          # Datum storage
+script.tx_script.save      # Transaction script executions
+```
+
+#### Staking Store
+```yaml
+# Staking extension points
+staking.key_registration.save    # Stake key registrations
+staking.key_delegation.save      # Stake delegations
+staking.pool_registration.save   # Pool registrations
+staking.pool_retirement.save     # Pool retirements
+staking.pool.save               # Pool status updates
+```
+
+#### Governance Store (Conway Era)
+```yaml
+# Governance extension points
+governance.gov_action_proposal.save   # Governance proposals
+governance.voting_procedure.save      # Voting procedures
+governance.drep_registration.save     # DRep registrations
+governance.drep.save                  # DRep status updates
+governance.delegation_vote.save       # Vote delegations
+governance.committee_registration.save # Committee registrations
+governance.committee_member.save      # Committee member updates
+governance.committee_deregistration.save # Committee deregistrations
+```
+
+### Event Types
+
+Event handler plugins can listen to these event types:
+
+#### System Events
+```yaml
+event-handlers:
+  RollbackEvent:            # Blockchain rollback
+  EpochChangeEvent:         # Epoch transitions
+  CommitEvent:              # Block commit events
+```
+
+#### Blockchain Data Events
+```yaml
+event-handlers:
+  BlockEvent:               # New blocks
+  TransactionEvent:         # Transaction data
+  MintBurnEvent:            # Asset mint/burn operations
+  AuxDataEvent:             # Auxiliary data (metadata)
+  ScriptEvent:              # Smart contract data
+  CertificateEvent:         # Certificates
+  GovernanceEvent:          # Governance actions
+```
+
+#### Store-Specific Events
+```yaml
+event-handlers:
+  TxnEvent:                 # Processed transactions
+  AddressUtxoEvent:         # Address UTXO changes
+  TxMetadataEvent:          # Processed metadata
+  DatumEvent:               # Datum data
+  TxScriptEvent:            # Script execution data
+  PoolRegistrationEvent:    # Pool registrations
+  StakeRegDeregEvent:       # Stake registration/deregistration
+```
+
+---
+
+## Language-Specific Configuration
+
+### MVEL Configuration
+
+```yaml
+store:
+  plugins:
+    filters:
+      utxo.unspent.save:
+        - name: "MVEL Expression Filter"
+          lang: mvel
+          expression: |
+            lovelaceAmount > 1000000 &&
+            amounts.any { it.policy == "target_policy" }
+
+        - name: "MVEL Script Filter"
+          lang: mvel
+          script:
+            file: /app/plugins/scripts/complex_filter.mvel
+            function: filterFunction
+
+        - name: "MVEL Inline Script"
+          lang: mvel
+          inline-script: |
+            filtered = [];
+            for (item : items) {
+              if (item.lovelaceAmount > threshold) {
+                filtered.add(item);
+              }
+            }
+            return filtered;
+```
+
+#### MVEL Features
+- Direct Java object access
+- Lambda expressions
+- Collection operations
+- Regex support
+- Mathematical operations
+
+### SpEL Configuration
+
+```yaml
+store:
+  plugins:
+    filters:
+      metadata.save:
+        - name: "SpEL Expression Filter"
+          lang: spel
+          expression: "label == '721' or label == '1967'"
+
+        - name: "SpEL Collection Filter"
+          lang: spel
+          expression: "body.contains('image') and body.length() > 100"
+```
+
+#### SpEL Limitations
+- Expression-only (no script files)
+- Limited to filter plugins
+- Spring ecosystem integration
+
+### JavaScript Configuration
+
+```yaml
+store:
+  plugins:
+    event-handlers:
+      TransactionEvent:
+        - name: "JavaScript Handler"
+          lang: js
+          script:
+            file: /app/plugins/scripts/tx_handler.js
+            function: handleTransaction
+
+        - name: "JavaScript Inline"
+          lang: js
+          inline-script: |
+            function processTransactions(event, context) {
+              const transactions = event.transactions;
+              console.log(`Processing ${transactions.length} transactions`);
+
+              for (const tx of transactions) {
+                analyzeTransaction(tx, context);
+              }
+            }
+
+            processTransactions(event, context);
+```
+
+#### JavaScript Features
+- ES6+ syntax via GraalVM Polyglot support
+- JSON processing
+
+### Python Configuration
+
+```yaml
+store:
+  plugins:
+    pre-actions:
+      utxo.unspent.save:
+        - name: "Python Data Enrichment"
+          lang: python
+          script:
+            file: /app/plugins/scripts/enrich_utxos.py
+            function: enrich_with_external_data
+
+        - name: "Python Inline"
+          lang: python
+          inline-script: |
+            import json
+
+            def process_items(items, context):
+                logger = context.logger
+                enriched = []
+
+                for item in items:
+                    # Enrich item data
+                    item.processed_at = time.time()
+                    enriched.append(item)
+
+                logger.info(f"Processed {len(enriched)} items")
+                return enriched
+
+            # Process the items
+            result = process_items(items, context)
+```
+
+#### Python Features
+- Python 3.x syntax via GraalVM Polyglot support
+- Rich data structures
