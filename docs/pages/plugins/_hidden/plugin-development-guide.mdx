@@ -1,0 +1,1291 @@
+# Plugin Development Guide
+
+**Complete Guide to Building Yaci-Store Plugins**
+
+## Table of Contents
+1. [Development Environment Setup](#development-environment-setup)
+2. [Plugin Development Workflow](#plugin-development-workflow)
+3. [Language-Specific Guides](#language-specific-guides)
+4. [Testing and Debugging](#testing-and-debugging)
+5. [Best Practices](#best-practices)
+6. [Real-World Examples](#real-world-examples)
+7. [Deployment Strategies](#deployment-strategies)
+
+---
+
+## Development Environment Setup
+
+### Prerequisites
+
+1. **Yaci-Store Installation**
+   - Docker distribution (recommended for development)
+   - Or built from source
+
+2. **Development Tools**
+   - Text editor with syntax highlighting
+   - Database client (for data inspection)
+   - HTTP client (for webhook testing)
+
+### Directory Structure
+
+```
+yaci-store/
+├── plugins/
+│   ├── scripts/              # Plugin script files
+│   │   ├── filters/         # Filter plugins
+│   │   ├── actions/         # Pre/post action plugins
+│   │   ├── handlers/        # Event handler plugins
+│   │   └── utils/           # Shared utilities
+│   ├── ext-jars/           # External JAR files
+│   └── lib/                # Additional libraries
+├── config/
+│   ├── application-plugins.yml  # Plugin configuration
+│   └── application.properties   # Main configuration
+└── logs/                    # Log files
+```
+
+### Enable Plugin Development Mode
+
+1. **Enable plugin support in configuration:**
+
+```yaml
+# config/application-plugins.yml
+store:
+  plugins:
+    enabled: true
+    exit-on-error: false  # Continue on plugin errors during development
+```
+
+2. **Enable debug logging:**
+
+```properties
+# config/application.properties
+logging.level.com.bloxbean.cardano.yaci.store.plugin=DEBUG
+```
+
+3. **Set development mode:**
+
+```properties
+# Faster startup for development
+store.cardano.sync-start-slot=<recent-slot>
+store.cardano.sync-start-blockhash=<recent-block-hash>
+```
+
+---
+
+## Plugin Development Workflow
+
+### 1. Design Phase
+
+#### Identify Requirements
+- **What data do you need to process?**
+- **When should processing occur?**
+- **What external systems to integrate?**
+- **Performance requirements?**
+
+#### Choose Plugin Type
+- **Filter**: Simple yes/no decisions
+- **Pre-Action**: Data transformation before storage
+- **Post-Action**: External notifications after storage
+- **Event Handler**: Complex event processing
+- **Init**: One-time setup tasks
+
+#### Select Language
+- **MVEL**: Java familiarity, complex logic
+- **SpEL**: Simple expressions, Spring integration
+- **JavaScript**: JSON processing, async operations
+- **Python**: Data science, external APIs
+
+### 2. Development Phase
+
+#### Start with Inline Scripts
+
+For rapid prototyping, use inline scripts:
+
+```yaml
+store:
+  plugins:
+    filters:
+      utxo.unspent.save:
+        - name: "Development Filter"
+          lang: mvel
+          inline-script: |
+            System.out.println("Processing " + items.size() + " items");
+            return items;
+```
+
+#### Move to External Files
+
+Once stable, create external script files:
+
+```yaml
+store:
+  plugins:
+    filters:
+      utxo.unspent.save:
+        - name: "High Value Filter"
+          lang: python
+          script:
+            file: /app/plugins/scripts/filters/high_value_filter.py
+            function: filter_high_value
+```
+
+### 3. Testing Phase
+
+#### Unit Testing
+- Test individual functions with sample data
+- Mock external dependencies
+- Verify edge cases
+
+#### Integration Testing
+- Test with real blockchain data
+- Verify plugin interactions
+- Check performance under load
+
+### 4. Production Deployment
+
+#### Performance Optimization
+- Profile plugin execution
+- Optimize database queries
+- Implement caching where appropriate
+
+#### Monitoring Setup
+- Add comprehensive logging
+- Set up alerts for failures
+- Monitor execution times
+
+---
+
+## Language-Specific Guides
+
+### MVEL Development
+
+MVEL is excellent for Java developers and provides direct access to Java objects.
+
+#### Basic Syntax
+
+```mvel
+// Variable declaration
+items_to_process = [];
+
+// Loops
+for (item : items) {
+    if (item.amount > 1000000) {
+        items_to_process.add(item);
+    }
+}
+
+// Method calls
+System.out.println("Found " + items_to_process.size() + " high-value items");
+
+// Return value
+return items_to_process;
+```
+
+#### Advanced Features
+
+```mvel
+// Collections and maps
+policy_counts = new HashMap();
+for (utxo : items) {
+    for (amount : utxo.amounts) {
+        policy = amount.policy;
+        policy_counts[policy] = (policy_counts[policy] ?: 0) + 1;
+    }
+}
+
+// Lambda expressions
+high_value = items.select(i| i.lovelaceAmount > 1000000000);
+
+// Regular expressions
+metadata_721 = items.select(m| m.label ==~ /^721$/);
+```
+
+#### File Structure Example
+
+```mvel
+// scripts/filters/utxo_filter.mvel
+
+def filterHighValueUtxos(items) {
+    threshold = 1000000000; // 1000 ADA in lovelace
+    filtered = [];
+    
+    for (utxo : items) {
+        if (utxo.lovelaceAmount >= threshold) {
+            filtered.add(utxo);
+        }
+    }
+    
+    System.out.println("Filtered " + filtered.size() + " high-value UTXOs");
+    return filtered;
+}
+```
+
+### Python Development
+
+Python plugins provide rich data processing capabilities and external library support.
+
+#### Basic Structure
+
+```python
+# scripts/handlers/block_analyzer.py
+
+import json
+import logging
+from datetime import datetime
+
+def handle_block_event(event, context):
+    """Handle block events and perform analysis"""
+    block = event.block
+    metadata = event.metadata
+    
+    logger = context.logger
+    state = context.state
+    
+    logger.info(f"Processing block {block.number} at slot {block.slot}")
+    
+    # Update statistics
+    total_blocks = state.get("total_blocks", 0) + 1
+    state.put("total_blocks", total_blocks)
+    
+    # Analyze block
+    analyze_block_activity(block, logger)
+    
+    # Send notifications if needed
+    if block.no_of_txs > 500:
+        notify_high_activity(block, context)
+
+def analyze_block_activity(block, logger):
+    """Analyze block activity patterns"""
+    ada_moved = block.total_output / 1_000_000
+    avg_fee = block.total_fees / block.no_of_txs if block.no_of_txs > 0 else 0
+    
+    logger.info(f"Block stats: {ada_moved:.2f} ADA moved, "
+               f"avg fee: {avg_fee / 1_000_000:.6f} ADA")
+
+def notify_high_activity(block, context):
+    """Send notification for high activity blocks"""
+    http_client = context.http_client
+    webhook_url = context.get_variable("webhook_url")
+    
+    if webhook_url:
+        payload = {
+            "type": "high_activity_block",
+            "block_number": block.number,
+            "block_hash": block.hash,
+            "transaction_count": block.no_of_txs,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        try:
+            response = http_client.post(webhook_url, payload)
+            context.logger.info(f"Webhook sent: {response.status}")
+        except Exception as e:
+            context.logger.error(f"Webhook failed: {e}")
+```
+
+#### Data Processing Patterns
+
+```python
+# scripts/filters/nft_filter.py
+
+def filter_nft_transactions(items, context):
+    """Filter transactions that include NFT operations"""
+    nft_transactions = []
+    
+    for tx in items:
+        if has_nft_activity(tx):
+            # Enrich with additional data
+            tx.nft_analysis = analyze_nft_content(tx)
+            nft_transactions.append(tx)
+    
+    context.logger.info(f"Found {len(nft_transactions)} NFT transactions")
+    return nft_transactions
+
+def has_nft_activity(transaction):
+    """Check if transaction involves NFT activity"""
+    # Look for minting/burning of single assets
+    if hasattr(transaction, 'mint_burns'):
+        for mint_burn in transaction.mint_burns:
+            if abs(mint_burn.quantity) == 1:  # Likely NFT
+                return True
+    
+    # Look for metadata label 721
+    if hasattr(transaction, 'metadata'):
+        for metadata in transaction.metadata:
+            if metadata.label == "721":
+                return True
+    
+    return False
+
+def analyze_nft_content(transaction):
+    """Analyze NFT content in transaction"""
+    analysis = {
+        "nft_count": 0,
+        "policies": set(),
+        "has_metadata": False
+    }
+    
+    # Count NFTs and policies
+    if hasattr(transaction, 'mint_burns'):
+        for mint_burn in transaction.mint_burns:
+            if abs(mint_burn.quantity) == 1:
+                analysis["nft_count"] += 1
+                analysis["policies"].add(mint_burn.policy)
+    
+    # Check for metadata
+    if hasattr(transaction, 'metadata'):
+        for metadata in transaction.metadata:
+            if metadata.label == "721":
+                analysis["has_metadata"] = True
+                break
+    
+    analysis["policies"] = list(analysis["policies"])
+    return analysis
+```
+
+#### Database Integration
+
+```python
+# scripts/actions/database_enrichment.py
+
+def enrich_with_historical_data(items, context):
+    """Enrich items with historical data from database"""
+    enriched_items = []
+    
+    # Get database access through Spring beans
+    address_repo = context.beans.get("addressUtxoRepository")
+    
+    for item in items:
+        # Clone item to avoid modifying original
+        enriched_item = item.copy() if hasattr(item, 'copy') else item
+        
+        # Get historical data for address
+        if hasattr(item, 'owner_addr'):
+            historical_count = address_repo.countByOwnerAddr(item.owner_addr)
+            enriched_item.historical_utxo_count = historical_count
+        
+        enriched_items.append(enriched_item)
+    
+    return enriched_items
+```
+
+### JavaScript Development
+
+JavaScript plugins excel at JSON processing and async operations.
+
+#### Basic Structure
+
+```javascript
+// scripts/handlers/transaction_monitor.js
+
+function handleTransactionEvent(event, context) {
+    const transactions = event.transactions;
+    const metadata = event.metadata;
+    
+    console.log(`Processing ${transactions.length} transactions in epoch ${metadata.epoch_number}`);
+    
+    for (const tx of transactions) {
+        analyzeTransaction(tx, context);
+    }
+}
+
+function analyzeTransaction(tx, context) {
+    const txAnalysis = {
+        hash: tx.hash,
+        inputCount: tx.inputs.length,
+        outputCount: tx.outputs.length,
+        fee: tx.fee,
+        hasSmartContract: !!tx.script_data_hash,
+        hasMetadata: !!tx.auxiliary_data_hash
+    };
+    
+    // Categorize transaction
+    const category = categorizeTransaction(txAnalysis);
+    console.log(`Transaction ${tx.hash}: ${category}`);
+    
+    // Store analysis
+    if (context.state) {
+        const key = `tx_analysis_${tx.hash}`;
+        context.state.put(key, JSON.stringify(txAnalysis));
+    }
+    
+    // Send to external system if needed
+    if (category === 'high_value' && context.httpClient) {
+        notifyHighValueTransaction(txAnalysis, context);
+    }
+}
+
+function categorizeTransaction(analysis) {
+    if (analysis.hasSmartContract) {
+        return 'smart_contract';
+    }
+    
+    if (analysis.fee > 10000000) { // > 10 ADA
+        return 'high_fee';
+    }
+    
+    if (analysis.outputCount > 20) {
+        return 'batch_transaction';
+    }
+    
+    if (analysis.hasMetadata) {
+        return 'metadata_transaction';
+    }
+    
+    return 'simple_payment';
+}
+
+function notifyHighValueTransaction(analysis, context) {
+    const webhookUrl = context.getVariable('transaction_webhook_url');
+    
+    if (webhookUrl) {
+        const payload = {
+            type: 'high_value_transaction',
+            transaction: analysis,
+            timestamp: new Date().toISOString()
+        };
+        
+        try {
+            const response = context.httpClient.post(webhookUrl, payload);
+            console.log(`Webhook sent for ${analysis.hash}: ${response.status}`);
+        } catch (error) {
+            console.error(`Failed to send webhook: ${error.message}`);
+        }
+    }
+}
+```
+
+#### Asset Processing
+
+```javascript
+// scripts/filters/asset_filter.js
+
+function filterAssetTransactions(items, context) {
+    const assetTransactions = [];
+    const targetPolicies = context.getVariable('target_policies') || [];
+    
+    for (const item of items) {
+        if (containsTargetAssets(item, targetPolicies)) {
+            // Enhance with asset analysis
+            item.asset_analysis = analyzeAssets(item);
+            assetTransactions.push(item);
+        }
+    }
+    
+    console.log(`Filtered ${assetTransactions.length} asset transactions`);
+    return assetTransactions;
+}
+
+function containsTargetAssets(transaction, targetPolicies) {
+    if (!transaction.outputs) return false;
+    
+    for (const output of transaction.outputs) {
+        if (output.multi_asset) {
+            for (const policy of targetPolicies) {
+                if (output.multi_asset[policy]) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
+function analyzeAssets(transaction) {
+    const analysis = {
+        policies: new Set(),
+        assets: new Map(),
+        totalValue: 0
+    };
+    
+    if (transaction.outputs) {
+        for (const output of transaction.outputs) {
+            if (output.multi_asset) {
+                for (const [policy, assets] of Object.entries(output.multi_asset)) {
+                    analysis.policies.add(policy);
+                    
+                    for (const [assetName, amount] of Object.entries(assets)) {
+                        const key = `${policy}.${assetName}`;
+                        const current = analysis.assets.get(key) || 0;
+                        analysis.assets.set(key, current + amount);
+                    }
+                }
+            }
+        }
+    }
+    
+    return {
+        policyCount: analysis.policies.size,
+        assetCount: analysis.assets.size,
+        policies: Array.from(analysis.policies),
+        assets: Object.fromEntries(analysis.assets)
+    };
+}
+```
+
+---
+
+## Testing and Debugging
+
+### Local Testing
+
+#### Test Data Preparation
+
+Create test data files:
+
+```python
+# scripts/tests/test_data.py
+
+sample_utxo = {
+    "tx_hash": "abc123...",
+    "output_index": 0,
+    "owner_addr": "addr1...",
+    "lovelace_amount": 5000000000,  # 5000 ADA
+    "amounts": [
+        {
+            "policy": "policy123...",
+            "asset_name": "546f6b656e",  # "Token" in hex
+            "quantity": 1000000
+        }
+    ]
+}
+
+sample_block = {
+    "hash": "block123...",
+    "number": 12345,
+    "slot": 567890,
+    "no_of_txs": 150,
+    "total_output": 50000000000,
+    "total_fees": 15000000
+}
+```
+
+#### Unit Testing
+
+```python
+# scripts/tests/test_filters.py
+
+import sys
+sys.path.append('../filters')
+
+from high_value_filter import filter_high_value
+
+def test_high_value_filter():
+    """Test high value UTXO filter"""
+    test_utxos = [
+        {"lovelace_amount": 500000000},   # 500 ADA - should be filtered out
+        {"lovelace_amount": 2000000000},  # 2000 ADA - should pass
+        {"lovelace_amount": 5000000000},  # 5000 ADA - should pass
+    ]
+    
+    # Mock context
+    class MockContext:
+        def __init__(self):
+            self.logger = MockLogger()
+    
+    class MockLogger:
+        def info(self, msg):
+            print(f"INFO: {msg}")
+    
+    context = MockContext()
+    result = filter_high_value(test_utxos, context)
+    
+    assert len(result) == 2
+    assert all(utxo["lovelace_amount"] >= 1000000000 for utxo in result)
+    print("✅ High value filter test passed")
+
+if __name__ == "__main__":
+    test_high_value_filter()
+```
+
+### Integration Testing
+
+#### Test with Sample Configuration
+
+```yaml
+# config/test-plugins.yml
+store:
+  plugins:
+    enabled: true
+    exit-on-error: false
+    
+    filters:
+      utxo.unspent.save:
+        - name: "Test Filter"
+          lang: python
+          script:
+            file: /app/plugins/scripts/tests/test_filter.py
+            function: test_filter
+```
+
+#### Debugging Techniques
+
+1. **Verbose Logging**
+
+```python
+def debug_plugin(items, context):
+    logger = context.logger
+    logger.info(f"Plugin received {len(items)} items")
+    
+    for i, item in enumerate(items[:5]):  # Log first 5 items
+        logger.info(f"Item {i}: {type(item).__name__}")
+        logger.info(f"  Fields: {dir(item)}")
+        
+        if hasattr(item, 'tx_hash'):
+            logger.info(f"  TX Hash: {item.tx_hash}")
+        if hasattr(item, 'lovelace_amount'):
+            logger.info(f"  Amount: {item.lovelace_amount}")
+    
+    return items
+```
+
+2. **Error Handling**
+
+```javascript
+function safeProcessing(items, context) {
+    const results = [];
+    
+    for (let i = 0; i < items.length; i++) {
+        try {
+            const processed = processItem(items[i], context);
+            results.push(processed);
+        } catch (error) {
+            console.error(`Error processing item ${i}: ${error.message}`);
+            console.error(`Item: ${JSON.stringify(items[i])}`);
+            
+            // Continue with original item or skip
+            results.push(items[i]);
+        }
+    }
+    
+    return results;
+}
+```
+
+3. **Performance Monitoring**
+
+```mvel
+// MVEL performance monitoring
+start_time = System.currentTimeMillis();
+
+// Your processing logic here
+filtered_items = items.select(i| i.amount > 1000000);
+
+end_time = System.currentTimeMillis();
+execution_time = end_time - start_time;
+
+System.out.println("Filter executed in " + execution_time + "ms");
+System.out.println("Processed " + items.size() + " items");
+System.out.println("Filtered to " + filtered_items.size() + " items");
+
+return filtered_items;
+```
+
+---
+
+## Best Practices
+
+### Code Organization
+
+#### Modular Design
+
+```python
+# scripts/utils/address_utils.py
+def is_stake_address(address):
+    """Check if address is a stake address"""
+    return address.startswith('stake1') or address.startswith('stake_test1')
+
+def get_address_type(address):
+    """Categorize address type"""
+    if address.startswith('addr1'):
+        return 'mainnet_payment'
+    elif address.startswith('addr_test1'):
+        return 'testnet_payment'
+    elif address.startswith('stake1'):
+        return 'mainnet_stake'
+    elif address.startswith('stake_test1'):
+        return 'testnet_stake'
+    else:
+        return 'unknown'
+
+# scripts/filters/address_filter.py
+import sys
+sys.path.append('../utils')
+from address_utils import is_stake_address, get_address_type
+
+def filter_by_address_type(items, context):
+    """Filter items by address type"""
+    target_type = context.get_variable('target_address_type', 'mainnet_payment')
+    
+    filtered = []
+    for item in items:
+        if hasattr(item, 'owner_addr'):
+            addr_type = get_address_type(item.owner_addr)
+            if addr_type == target_type:
+                filtered.append(item)
+    
+    return filtered
+```
+
+#### Error Handling Patterns
+
+```python
+# Standard error handling pattern
+def robust_plugin(items, context):
+    """Plugin with comprehensive error handling"""
+    logger = context.logger
+    results = []
+    error_count = 0
+    
+    try:
+        for i, item in enumerate(items):
+            try:
+                processed = process_single_item(item, context)
+                results.append(processed)
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Error processing item {i}: {e}")
+                
+                # Decide whether to include original item or skip
+                if not context.get_variable('skip_on_error', False):
+                    results.append(item)
+                
+                # Stop processing if too many errors
+                if error_count > 10:
+                    logger.error("Too many errors, stopping processing")
+                    break
+    
+    except Exception as e:
+        logger.error(f"Critical error in plugin: {e}")
+        # Return original items on critical failure
+        return items
+    
+    logger.info(f"Processed {len(results)} items with {error_count} errors")
+    return results
+```
+
+### Performance Optimization
+
+#### Efficient Data Processing
+
+```javascript
+// Efficient JavaScript processing
+function optimizedFilter(items, context) {
+    // Pre-compile regex patterns
+    const addressPattern = /^addr1[a-z0-9]+$/;
+    
+    // Use Set for O(1) lookups
+    const targetPolicies = new Set(context.getVariable('target_policies') || []);
+    
+    // Process in batches to avoid memory issues
+    const batchSize = 1000;
+    const results = [];
+    
+    for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize);
+        const batchResults = processBatch(batch, targetPolicies, addressPattern);
+        results.push(...batchResults);
+        
+        // Yield occasionally to avoid blocking
+        if (i % 10000 === 0) {
+            console.log(`Processed ${i} items...`);
+        }
+    }
+    
+    return results;
+}
+
+function processBatch(batch, targetPolicies, addressPattern) {
+    return batch.filter(item => {
+        // Fast address validation
+        if (!addressPattern.test(item.owner_addr)) {
+            return false;
+        }
+        
+        // Check for target policies
+        if (item.amounts) {
+            for (const amount of item.amounts) {
+                if (targetPolicies.has(amount.policy)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    });
+}
+```
+
+#### Caching Strategies
+
+```python
+# Caching expensive operations
+def cached_enrichment(items, context):
+    """Plugin with caching for expensive operations"""
+    state = context.state
+    cache_key_prefix = "policy_metadata_"
+    
+    enriched_items = []
+    
+    for item in items:
+        if hasattr(item, 'amounts'):
+            for amount in item.amounts:
+                cache_key = f"{cache_key_prefix}{amount.policy}"
+                
+                # Check cache first
+                cached_metadata = state.get(cache_key)
+                
+                if cached_metadata is None:
+                    # Expensive operation - fetch from external API
+                    metadata = fetch_policy_metadata(amount.policy, context)
+                    
+                    # Cache for 1 hour (implemented in state storage)
+                    state.put(cache_key, metadata, ttl=3600)
+                    cached_metadata = metadata
+                
+                # Add cached data to item
+                amount.metadata = cached_metadata
+        
+        enriched_items.append(item)
+    
+    return enriched_items
+
+def fetch_policy_metadata(policy_id, context):
+    """Fetch policy metadata from external API"""
+    try:
+        url = f"https://api.example.com/policy/{policy_id}"
+        response = context.http_client.get(url)
+        
+        if response.status == 200:
+            return response.json()
+        else:
+            context.logger.warning(f"Failed to fetch metadata for {policy_id}")
+            return {}
+    except Exception as e:
+        context.logger.error(f"Error fetching metadata: {e}")
+        return {}
+```
+
+---
+
+## Real-World Examples
+
+### NFT Collection Tracker
+
+Complete plugin to track NFT collections and their activity:
+
+```python
+# scripts/handlers/nft_tracker.py
+
+import json
+from datetime import datetime
+
+class NFTCollectionTracker:
+    def __init__(self, context):
+        self.context = context
+        self.state = context.state
+        self.logger = context.logger
+        self.http_client = context.http_client
+    
+    def handle_mint_burn_event(self, event):
+        """Handle NFT mint/burn events"""
+        for mint_burn in event.tx_mint_burns:
+            if abs(mint_burn.quantity) == 1:  # Likely NFT
+                self.process_nft_operation(mint_burn, event.metadata)
+    
+    def handle_metadata_event(self, event):
+        """Handle NFT metadata events"""
+        for metadata in event.tx_metadata_list:
+            if metadata.label == "721":
+                self.process_nft_metadata(metadata)
+    
+    def process_nft_operation(self, mint_burn, metadata):
+        """Process NFT mint or burn operation"""
+        policy_id = mint_burn.policy
+        asset_name = mint_burn.asset_name
+        is_mint = mint_burn.quantity > 0
+        
+        # Update collection statistics
+        collection_key = f"collection_{policy_id}"
+        collection_data = self.state.get(collection_key, {
+            "policy_id": policy_id,
+            "total_minted": 0,
+            "total_burned": 0,
+            "assets": {},
+            "first_seen": metadata.slot,
+            "last_activity": metadata.slot
+        })
+        
+        if is_mint:
+            collection_data["total_minted"] += 1
+            collection_data["assets"][asset_name] = {
+                "minted_at": metadata.slot,
+                "tx_hash": mint_burn.transaction_hash,
+                "burned": False
+            }
+            
+            self.logger.info(f"NFT MINT: {policy_id}.{asset_name}")
+        else:
+            collection_data["total_burned"] += 1
+            if asset_name in collection_data["assets"]:
+                collection_data["assets"][asset_name]["burned"] = True
+                collection_data["assets"][asset_name]["burned_at"] = metadata.slot
+            
+            self.logger.info(f"NFT BURN: {policy_id}.{asset_name}")
+        
+        collection_data["last_activity"] = metadata.slot
+        collection_data["net_supply"] = collection_data["total_minted"] - collection_data["total_burned"]
+        
+        self.state.put(collection_key, collection_data)
+        
+        # Notify if collection reaches milestones
+        self.check_milestones(collection_data)
+    
+    def process_nft_metadata(self, metadata):
+        """Process NFT metadata"""
+        try:
+            nft_data = json.loads(metadata.body)
+            
+            for policy_id, assets in nft_data.items():
+                collection_key = f"collection_{policy_id}"
+                collection_data = self.state.get(collection_key, {})
+                
+                # Add metadata to collection
+                if "metadata" not in collection_data:
+                    collection_data["metadata"] = {}
+                
+                for asset_name, asset_metadata in assets.items():
+                    collection_data["metadata"][asset_name] = {
+                        "name": asset_metadata.get("name", ""),
+                        "description": asset_metadata.get("description", ""),
+                        "image": asset_metadata.get("image", ""),
+                        "attributes": asset_metadata.get("attributes", []),
+                        "tx_hash": metadata.tx_hash
+                    }
+                
+                self.state.put(collection_key, collection_data)
+        
+        except Exception as e:
+            self.logger.error(f"Error processing NFT metadata: {e}")
+    
+    def check_milestones(self, collection_data):
+        """Check and notify about collection milestones"""
+        total_minted = collection_data["total_minted"]
+        policy_id = collection_data["policy_id"]
+        
+        milestones = [100, 500, 1000, 5000, 10000]
+        
+        for milestone in milestones:
+            if total_minted == milestone:
+                self.notify_milestone(policy_id, milestone)
+                break
+    
+    def notify_milestone(self, policy_id, milestone):
+        """Send milestone notification"""
+        webhook_url = self.context.get_variable("nft_webhook_url")
+        
+        if webhook_url:
+            payload = {
+                "type": "nft_milestone",
+                "policy_id": policy_id,
+                "milestone": milestone,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            try:
+                response = self.http_client.post(webhook_url, payload)
+                self.logger.info(f"Milestone notification sent for {policy_id}: {milestone}")
+            except Exception as e:
+                self.logger.error(f"Failed to send milestone notification: {e}")
+
+# Plugin entry points
+tracker = None
+
+def handle_mint_burn_event(event, context):
+    global tracker
+    if tracker is None:
+        tracker = NFTCollectionTracker(context)
+    tracker.handle_mint_burn_event(event)
+
+def handle_metadata_event(event, context):
+    global tracker
+    if tracker is None:
+        tracker = NFTCollectionTracker(context)
+    tracker.handle_metadata_event(event)
+```
+
+### DeFi Protocol Monitor
+
+Plugin to monitor DeFi protocol activity:
+
+```javascript
+// scripts/handlers/defi_monitor.js
+
+class DeFiMonitor {
+    constructor(context) {
+        this.context = context;
+        this.protocolAddresses = new Set(context.getVariable('protocol_addresses') || []);
+        this.tokenPolicies = new Set(context.getVariable('token_policies') || []);
+        this.priceApiUrl = context.getVariable('price_api_url');
+    }
+    
+    handleTransactionEvent(event) {
+        for (const tx of event.transactions) {
+            this.analyzeTransaction(tx, event.metadata);
+        }
+    }
+    
+    analyzeTransaction(tx, metadata) {
+        const analysis = {
+            hash: tx.hash,
+            protocol_interactions: [],
+            token_movements: [],
+            estimated_value_usd: 0,
+            block_time: metadata.block_time
+        };
+        
+        // Check for protocol interactions
+        for (const output of tx.outputs) {
+            if (this.protocolAddresses.has(output.address)) {
+                analysis.protocol_interactions.push({
+                    protocol_address: output.address,
+                    ada_amount: output.amount,
+                    assets: this.extractAssets(output)
+                });
+            }
+        }
+        
+        // Analyze token movements
+        this.analyzeTokenMovements(tx, analysis);
+        
+        // Calculate estimated USD value
+        this.calculateUSDValue(analysis);
+        
+        // Store analysis and trigger alerts
+        if (analysis.protocol_interactions.length > 0 || analysis.estimated_value_usd > 10000) {
+            this.storeAnalysis(analysis);
+            this.checkAlerts(analysis);
+        }
+    }
+    
+    analyzeTokenMovements(tx, analysis) {
+        const movements = new Map();
+        
+        // Aggregate token movements across inputs and outputs
+        for (const input of tx.inputs) {
+            this.processTokens(input, movements, -1); // Outgoing
+        }
+        
+        for (const output of tx.outputs) {
+            this.processTokens(output, movements, 1); // Incoming
+        }
+        
+        // Convert to analysis format
+        for (const [token, netMovement] of movements) {
+            if (Math.abs(netMovement) > 0) {
+                analysis.token_movements.push({
+                    token: token,
+                    net_movement: netMovement,
+                    direction: netMovement > 0 ? 'incoming' : 'outgoing'
+                });
+            }
+        }
+    }
+    
+    processTokens(utxo, movements, multiplier) {
+        if (utxo.multi_asset) {
+            for (const [policy, assets] of Object.entries(utxo.multi_asset)) {
+                if (this.tokenPolicies.has(policy)) {
+                    for (const [assetName, amount] of Object.entries(assets)) {
+                        const token = `${policy}.${assetName}`;
+                        const current = movements.get(token) || 0;
+                        movements.set(token, current + (amount * multiplier));
+                    }
+                }
+            }
+        }
+    }
+    
+    extractAssets(output) {
+        const assets = [];
+        
+        if (output.multi_asset) {
+            for (const [policy, policyAssets] of Object.entries(output.multi_asset)) {
+                for (const [assetName, amount] of Object.entries(policyAssets)) {
+                    assets.push({
+                        policy: policy,
+                        asset_name: assetName,
+                        amount: amount
+                    });
+                }
+            }
+        }
+        
+        return assets;
+    }
+    
+    calculateUSDValue(analysis) {
+        // This would integrate with price APIs
+        // For now, use simple ADA conversion
+        let totalUsd = 0;
+        
+        for (const interaction of analysis.protocol_interactions) {
+            totalUsd += (interaction.ada_amount / 1000000) * this.getAdaPrice();
+        }
+        
+        analysis.estimated_value_usd = totalUsd;
+    }
+    
+    getAdaPrice() {
+        // Cache price data in state
+        const cacheKey = 'ada_price_usd';
+        const cached = this.context.state.get(cacheKey);
+        
+        if (cached && (Date.now() - cached.timestamp) < 300000) { // 5 minutes
+            return cached.price;
+        }
+        
+        // Fetch new price
+        try {
+            if (this.priceApiUrl) {
+                const response = this.context.httpClient.get(this.priceApiUrl);
+                if (response.status === 200) {
+                    const data = response.json();
+                    const price = data.cardano.usd;
+                    
+                    this.context.state.put(cacheKey, {
+                        price: price,
+                        timestamp: Date.now()
+                    });
+                    
+                    return price;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch ADA price:', error.message);
+        }
+        
+        return 0.5; // Fallback price
+    }
+    
+    storeAnalysis(analysis) {
+        const key = `defi_analysis_${analysis.hash}`;
+        this.context.state.put(key, JSON.stringify(analysis));
+    }
+    
+    checkAlerts(analysis) {
+        // High value transaction alert
+        if (analysis.estimated_value_usd > 100000) {
+            this.sendAlert('high_value_defi', analysis);
+        }
+        
+        // Multiple protocol interaction alert
+        if (analysis.protocol_interactions.length > 2) {
+            this.sendAlert('complex_defi', analysis);
+        }
+        
+        // Large token movement alert
+        for (const movement of analysis.token_movements) {
+            if (Math.abs(movement.net_movement) > 1000000) { // 1M tokens
+                this.sendAlert('large_token_movement', analysis);
+                break;
+            }
+        }
+    }
+    
+    sendAlert(alertType, analysis) {
+        const webhookUrl = this.context.getVariable('defi_alerts_webhook');
+        
+        if (webhookUrl) {
+            const alert = {
+                type: alertType,
+                transaction_hash: analysis.hash,
+                estimated_value_usd: analysis.estimated_value_usd,
+                protocol_interactions: analysis.protocol_interactions.length,
+                token_movements: analysis.token_movements.length,
+                timestamp: new Date(analysis.block_time * 1000).toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, alert);
+                console.log(`Alert sent: ${alertType} for ${analysis.hash}`);
+            } catch (error) {
+                console.error(`Failed to send alert: ${error.message}`);
+            }
+        }
+    }
+}
+
+// Plugin entry point
+let monitor = null;
+
+function handleTransactionEvent(event, context) {
+    if (!monitor) {
+        monitor = new DeFiMonitor(context);
+    }
+    monitor.handleTransactionEvent(event);
+}
+```
+
+---
+
+## Deployment Strategies
+
+### Development Deployment
+
+1. **Local Testing**
+   - Use inline scripts for rapid iteration
+   - Enable debug logging
+   - Test with recent blockchain data
+
+2. **Staging Environment**
+   - Deploy to test environment
+   - Use production-like data volume
+   - Monitor performance metrics
+
+### Production Deployment
+
+1. **Preparation Checklist**
+   - [ ] Code review completed
+   - [ ] Unit tests passing
+   - [ ] Integration tests successful
+   - [ ] Performance benchmarks acceptable
+   - [ ] Error handling comprehensive
+   - [ ] Logging configured appropriately
+   - [ ] Monitoring alerts set up
+
+2. **Deployment Process**
+   - Update plugin configuration
+   - Deploy plugin files
+   - Restart yaci-store
+   - Monitor logs for errors
+   - Verify plugin execution
+
+3. **Rollback Plan**
+   - Keep previous plugin versions
+   - Document rollback procedures
+   - Monitor for performance degradation
+
+### Monitoring and Maintenance
+
+1. **Key Metrics**
+   - Plugin execution time
+   - Success/failure rates
+   - Memory usage
+   - Error counts
+
+2. **Alerting**
+   - Plugin execution failures
+   - Performance degradation
+   - High error rates
+   - Resource exhaustion
+
+3. **Maintenance Tasks**
+   - Regular log review
+   - Performance optimization
+   - Dependency updates
+   - Configuration updates
+
+This comprehensive development guide provides everything needed to build, test, and deploy sophisticated yaci-store plugins. Start with simple inline scripts and gradually move to complex, production-ready plugins following the patterns and best practices outlined here.

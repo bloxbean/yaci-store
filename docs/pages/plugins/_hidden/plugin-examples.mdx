@@ -1,0 +1,1633 @@
+# Plugin Examples
+
+**Real-World Plugin Implementations for Common Use Cases**
+
+## Table of Contents
+1. [Basic Examples](#basic-examples)
+2. [DeFi and Asset Tracking](#defi-and-asset-tracking)
+3. [NFT and Metadata Processing](#nft-and-metadata-processing)
+4. [Governance and Staking](#governance-and-staking)
+5. [Analytics and Monitoring](#analytics-and-monitoring)
+6. [External Integrations](#external-integrations)
+7. [Performance Optimization Examples](#performance-optimization-examples)
+
+---
+
+## Basic Examples
+
+### Simple UTXO Filter
+
+Filter UTXOs based on value threshold:
+
+```yaml
+# Configuration
+store:
+  plugins:
+    filters:
+      utxo.unspent.save:
+        - name: "High Value UTXO Filter"
+          lang: mvel
+          expression: "lovelaceAmount > 10000000000"  # > 10,000 ADA
+```
+
+```python
+# Python implementation
+def filter_high_value_utxos(items, context):
+    """Filter UTXOs worth more than 1000 ADA"""
+    threshold = 1000 * 1_000_000  # 1000 ADA in lovelace
+    filtered = []
+    
+    for utxo in items:
+        if utxo.lovelace_amount > threshold:
+            filtered.append(utxo)
+    
+    context.logger.info(f"Filtered {len(filtered)} high-value UTXOs from {len(items)} total")
+    return filtered
+```
+
+### Transaction Monitor
+
+Basic transaction monitoring with webhook notifications:
+
+```javascript
+// JavaScript implementation
+function monitorTransactions(event, context) {
+    const transactions = event.transactions;
+    const metadata = event.metadata;
+    
+    for (const tx of transactions) {
+        const totalOutput = tx.outputs.reduce((sum, out) => sum + out.amount, 0);
+        const feeAda = tx.fee / 1_000_000;
+        
+        // Monitor high-fee transactions
+        if (feeAda > 50) {
+            notifyHighFeeTransaction(tx, feeAda, context);
+        }
+        
+        // Monitor large transactions
+        if (totalOutput > 100_000 * 1_000_000) { // > 100k ADA
+            notifyLargeTransaction(tx, totalOutput, context);
+        }
+    }
+}
+
+function notifyHighFeeTransaction(tx, feeAda, context) {
+    const webhook = context.getVariable('high_fee_webhook');
+    if (webhook) {
+        const payload = {
+            type: 'high_fee_transaction',
+            tx_hash: tx.hash,
+            fee_ada: feeAda,
+            timestamp: new Date().toISOString()
+        };
+        
+        context.httpClient.post(webhook, payload);
+    }
+}
+
+function notifyLargeTransaction(tx, totalOutput, context) {
+    const webhook = context.getVariable('large_tx_webhook');
+    if (webhook) {
+        const payload = {
+            type: 'large_transaction',
+            tx_hash: tx.hash,
+            total_output_ada: totalOutput / 1_000_000,
+            timestamp: new Date().toISOString()
+        };
+        
+        context.httpClient.post(webhook, payload);
+    }
+}
+```
+
+---
+
+## DeFi and Asset Tracking
+
+### Comprehensive Asset Tracker
+
+Track and analyze native asset activity:
+
+```python
+# Asset tracking plugin
+import json
+from datetime import datetime
+
+class AssetTracker:
+    def __init__(self, context):
+        self.context = context
+        self.state = context.state
+        self.logger = context.logger
+        
+    def handle_mint_burn_event(self, event):
+        """Process asset mint/burn events"""
+        for mint_burn in event.tx_mint_burns:
+            self.process_asset_operation(mint_burn, event.metadata)
+    
+    def process_asset_operation(self, mint_burn, metadata):
+        """Process individual asset operation"""
+        policy_id = mint_burn.policy
+        asset_name = mint_burn.asset_name
+        quantity = mint_burn.quantity
+        unit = f"{policy_id}{asset_name}"
+        
+        # Get or create asset record
+        asset_key = f"asset_{unit}"
+        asset_data = self.state.get(asset_key, {
+            "policy_id": policy_id,
+            "asset_name": asset_name,
+            "unit": unit,
+            "total_minted": 0,
+            "total_burned": 0,
+            "net_supply": 0,
+            "transactions": [],
+            "first_seen": metadata.slot,
+            "last_activity": metadata.slot,
+            "fingerprint": self.calculate_fingerprint(policy_id, asset_name)
+        })
+        
+        # Update statistics
+        if quantity > 0:
+            asset_data["total_minted"] += quantity
+            self.logger.info(f"MINT: {quantity} of {policy_id}.{asset_name}")
+        else:
+            asset_data["total_burned"] += abs(quantity)
+            self.logger.info(f"BURN: {abs(quantity)} of {policy_id}.{asset_name}")
+        
+        asset_data["net_supply"] = asset_data["total_minted"] - asset_data["total_burned"]
+        asset_data["last_activity"] = metadata.slot
+        asset_data["transactions"].append({
+            "tx_hash": mint_burn.transaction_hash,
+            "quantity": quantity,
+            "slot": metadata.slot,
+            "block_time": metadata.block_time
+        })
+        
+        # Keep only last 100 transactions to save space
+        if len(asset_data["transactions"]) > 100:
+            asset_data["transactions"] = asset_data["transactions"][-100:]
+        
+        self.state.put(asset_key, asset_data)
+        
+        # Analyze asset patterns
+        self.analyze_asset_patterns(asset_data, quantity)
+    
+    def calculate_fingerprint(self, policy_id, asset_name):
+        """Calculate CIP-14 asset fingerprint"""
+        # Simplified fingerprint calculation
+        import hashlib
+        combined = policy_id + asset_name
+        hash_obj = hashlib.blake2b(bytes.fromhex(combined), digest_size=20)
+        return f"asset{hash_obj.hexdigest()}"
+    
+    def analyze_asset_patterns(self, asset_data, current_quantity):
+        """Analyze asset behavior patterns"""
+        patterns = []
+        
+        # NFT detection
+        if (asset_data["total_minted"] == 1 and 
+            asset_data["total_burned"] == 0 and 
+            current_quantity == 1):
+            patterns.append("nft_creation")
+        
+        # Token burn detection
+        if (asset_data["net_supply"] == 0 and 
+            asset_data["total_minted"] > 0):
+            patterns.append("token_burned_out")
+        
+        # High-volume token
+        if asset_data["total_minted"] > 1_000_000_000:
+            patterns.append("high_volume_token")
+        
+        # Frequent activity
+        recent_txs = [tx for tx in asset_data["transactions"] 
+                     if tx["slot"] > asset_data["last_activity"] - 86400]  # Last day
+        if len(recent_txs) > 100:
+            patterns.append("high_frequency_trading")
+        
+        # Log interesting patterns
+        if patterns:
+            self.logger.info(f"Asset {asset_data['unit']} patterns: {', '.join(patterns)}")
+            
+            # Send alerts for significant patterns
+            if "nft_creation" in patterns:
+                self.alert_nft_creation(asset_data)
+            elif "token_burned_out" in patterns:
+                self.alert_token_burnout(asset_data)
+    
+    def alert_nft_creation(self, asset_data):
+        """Alert when new NFT is created"""
+        webhook_url = self.context.get_variable("nft_alert_webhook")
+        if webhook_url:
+            payload = {
+                "type": "nft_creation",
+                "policy_id": asset_data["policy_id"],
+                "asset_name": asset_data["asset_name"],
+                "fingerprint": asset_data["fingerprint"],
+                "first_seen": asset_data["first_seen"],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            try:
+                self.context.http_client.post(webhook_url, payload)
+            except Exception as e:
+                self.logger.error(f"Failed to send NFT alert: {e}")
+    
+    def alert_token_burnout(self, asset_data):
+        """Alert when token is completely burned"""
+        webhook_url = self.context.get_variable("burn_alert_webhook")
+        if webhook_url:
+            payload = {
+                "type": "token_burnout",
+                "policy_id": asset_data["policy_id"],
+                "asset_name": asset_data["asset_name"],
+                "total_minted": asset_data["total_minted"],
+                "total_burned": asset_data["total_burned"],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            try:
+                self.context.http_client.post(webhook_url, payload)
+            except Exception as e:
+                self.logger.error(f"Failed to send burn alert: {e}")
+
+# Plugin entry point
+tracker = None
+
+def handle_mint_burn_event(event, context):
+    global tracker
+    if tracker is None:
+        tracker = AssetTracker(context)
+    tracker.handle_mint_burn_event(event)
+```
+
+### DeFi Liquidity Pool Monitor
+
+Monitor liquidity pool activity on decentralized exchanges:
+
+```javascript
+// DeFi pool monitoring plugin
+class DeFiPoolMonitor {
+    constructor(context) {
+        this.context = context;
+        this.poolAddresses = new Set(context.getVariable('pool_addresses') || []);
+        this.poolTokens = new Set(context.getVariable('pool_tokens') || []);
+        this.minLiquidityChange = context.getVariable('min_liquidity_change') || 1000; // ADA
+    }
+    
+    handleTransactionEvent(event) {
+        for (const tx of event.transactions) {
+            this.analyzePoolTransaction(tx, event.metadata);
+        }
+    }
+    
+    analyzePoolTransaction(tx, metadata) {
+        const poolInteractions = [];
+        
+        // Check inputs and outputs for pool interactions
+        for (const output of tx.outputs) {
+            if (this.poolAddresses.has(output.address)) {
+                poolInteractions.push({
+                    type: 'output',
+                    address: output.address,
+                    ada_amount: output.amount,
+                    assets: this.extractAssets(output)
+                });
+            }
+        }
+        
+        for (const input of tx.inputs) {
+            if (this.poolAddresses.has(input.address)) {
+                poolInteractions.push({
+                    type: 'input',
+                    address: input.address,
+                    ada_amount: input.amount,
+                    assets: this.extractAssets(input)
+                });
+            }
+        }
+        
+        if (poolInteractions.length > 0) {
+            this.processPoolActivity(tx, poolInteractions, metadata);
+        }
+    }
+    
+    extractAssets(utxo) {
+        const assets = [];
+        
+        if (utxo.multi_asset) {
+            for (const [policy, policyAssets] of Object.entries(utxo.multi_asset)) {
+                for (const [assetName, amount] of Object.entries(policyAssets)) {
+                    assets.push({
+                        policy: policy,
+                        asset_name: assetName,
+                        amount: amount,
+                        unit: `${policy}${assetName}`
+                    });
+                }
+            }
+        }
+        
+        return assets;
+    }
+    
+    processPoolActivity(tx, interactions, metadata) {
+        // Calculate net changes per pool
+        const poolChanges = new Map();
+        
+        for (const interaction of interactions) {
+            const poolAddr = interaction.address;
+            
+            if (!poolChanges.has(poolAddr)) {
+                poolChanges.set(poolAddr, {
+                    address: poolAddr,
+                    ada_change: 0,
+                    asset_changes: new Map()
+                });
+            }
+            
+            const change = poolChanges.get(poolAddr);
+            const multiplier = interaction.type === 'output' ? 1 : -1;
+            
+            change.ada_change += interaction.ada_amount * multiplier;
+            
+            for (const asset of interaction.assets) {
+                const current = change.asset_changes.get(asset.unit) || 0;
+                change.asset_changes.set(asset.unit, current + (asset.amount * multiplier));
+            }
+        }
+        
+        // Analyze changes and generate events
+        for (const [poolAddr, change] of poolChanges) {
+            this.analyzePoolChange(tx, poolAddr, change, metadata);
+        }
+    }
+    
+    analyzePoolChange(tx, poolAddr, change, metadata) {
+        const adaChangeAmount = Math.abs(change.ada_change / 1_000_000);
+        
+        // Determine transaction type
+        let txType = 'unknown';
+        
+        if (change.ada_change > 0 && change.asset_changes.size > 0) {
+            // ADA increased, assets likely decreased (someone swapped assets for ADA)
+            txType = 'asset_to_ada_swap';
+        } else if (change.ada_change < 0 && change.asset_changes.size > 0) {
+            // ADA decreased, assets likely increased (someone swapped ADA for assets)
+            txType = 'ada_to_asset_swap';
+        } else if (change.ada_change > 0) {
+            txType = 'liquidity_removal';
+        } else if (change.ada_change < 0) {
+            txType = 'liquidity_addition';
+        }
+        
+        // Log significant changes
+        if (adaChangeAmount > this.minLiquidityChange) {
+            console.log(`Pool ${poolAddr}: ${txType}, ADA change: ${adaChangeAmount.toFixed(2)}`);
+            
+            // Store pool activity
+            this.storePoolActivity({
+                tx_hash: tx.hash,
+                pool_address: poolAddr,
+                transaction_type: txType,
+                ada_change: change.ada_change,
+                asset_changes: Object.fromEntries(change.asset_changes),
+                block_time: metadata.block_time,
+                slot: metadata.slot
+            });
+            
+            // Send alerts for large transactions
+            if (adaChangeAmount > 100000) { // > 100k ADA
+                this.sendLargeTransactionAlert(tx, poolAddr, txType, adaChangeAmount);
+            }
+        }
+    }
+    
+    storePoolActivity(activity) {
+        const key = `pool_activity_${activity.tx_hash}_${activity.pool_address}`;
+        this.context.state.put(key, JSON.stringify(activity));
+        
+        // Update pool statistics
+        const statsKey = `pool_stats_${activity.pool_address}`;
+        const stats = this.context.state.get(statsKey) || {
+            total_transactions: 0,
+            total_volume_ada: 0,
+            last_activity: 0
+        };
+        
+        stats.total_transactions += 1;
+        stats.total_volume_ada += Math.abs(activity.ada_change) / 1_000_000;
+        stats.last_activity = activity.slot;
+        
+        this.context.state.put(statsKey, stats);
+    }
+    
+    sendLargeTransactionAlert(tx, poolAddr, txType, amount) {
+        const webhookUrl = this.context.getVariable('defi_alert_webhook');
+        
+        if (webhookUrl) {
+            const alert = {
+                type: 'large_pool_transaction',
+                tx_hash: tx.hash,
+                pool_address: poolAddr,
+                transaction_type: txType,
+                ada_amount: amount,
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, alert);
+                console.log(`Large transaction alert sent for ${tx.hash}`);
+            } catch (error) {
+                console.error(`Failed to send alert: ${error.message}`);
+            }
+        }
+    }
+}
+
+// Plugin entry point
+let monitor = null;
+
+function handleTransactionEvent(event, context) {
+    if (!monitor) {
+        monitor = new DeFiPoolMonitor(context);
+    }
+    monitor.handleTransactionEvent(event);
+}
+```
+
+---
+
+## NFT and Metadata Processing
+
+### NFT Collection Analytics
+
+Comprehensive NFT collection tracking and analysis:
+
+```python
+# NFT collection analytics plugin
+import json
+import re
+from collections import defaultdict
+from datetime import datetime
+
+class NFTCollectionAnalytics:
+    def __init__(self, context):
+        self.context = context
+        self.state = context.state
+        self.logger = context.logger
+        self.http_client = context.http_client
+        
+    def handle_mint_burn_event(self, event):
+        """Process NFT mint/burn operations"""
+        for mint_burn in event.tx_mint_burns:
+            if abs(mint_burn.quantity) == 1:  # NFT detection
+                self.process_nft_operation(mint_burn, event.metadata)
+    
+    def handle_metadata_event(self, event):
+        """Process NFT metadata (CIP-25)"""
+        for metadata in event.tx_metadata_list:
+            if metadata.label == "721":
+                self.process_nft_metadata(metadata)
+    
+    def process_nft_operation(self, mint_burn, metadata):
+        """Process NFT mint or burn"""
+        policy_id = mint_burn.policy
+        asset_name = mint_burn.asset_name
+        is_mint = mint_burn.quantity > 0
+        
+        # Update collection data
+        collection_key = f"nft_collection_{policy_id}"
+        collection = self.state.get(collection_key, {
+            "policy_id": policy_id,
+            "name": None,
+            "description": None,
+            "website": None,
+            "twitter": None,
+            "discord": None,
+            "total_supply": 0,
+            "burned_count": 0,
+            "floor_price": None,
+            "total_volume": 0,
+            "holders": set(),
+            "assets": {},
+            "rarity_scores": {},
+            "first_mint": metadata.slot,
+            "last_activity": metadata.slot,
+            "mint_distribution": defaultdict(int),
+            "activity_by_day": defaultdict(int)
+        })
+        
+        # Update asset data
+        asset_data = collection["assets"].get(asset_name, {
+            "asset_name": asset_name,
+            "minted_at": None,
+            "burned_at": None,
+            "current_owner": None,
+            "ownership_history": [],
+            "sale_history": [],
+            "metadata": None,
+            "rarity_rank": None,
+            "traits": {}
+        })
+        
+        if is_mint:
+            collection["total_supply"] += 1
+            asset_data["minted_at"] = metadata.slot
+            
+            # Track mint distribution by time
+            day_key = self.get_day_key(metadata.block_time)
+            collection["mint_distribution"][day_key] += 1
+            
+            self.logger.info(f"NFT MINT: {policy_id}.{asset_name}")
+        else:
+            collection["burned_count"] += 1
+            asset_data["burned_at"] = metadata.slot
+            
+            self.logger.info(f"NFT BURN: {policy_id}.{asset_name}")
+        
+        collection["assets"][asset_name] = asset_data
+        collection["last_activity"] = metadata.slot
+        
+        # Track daily activity
+        day_key = self.get_day_key(metadata.block_time)
+        collection["activity_by_day"][day_key] += 1
+        
+        # Convert sets to lists for JSON serialization
+        collection_copy = collection.copy()
+        collection_copy["holders"] = list(collection["holders"])
+        
+        self.state.put(collection_key, collection_copy)
+        
+        # Analyze collection milestones
+        self.check_collection_milestones(collection, is_mint)
+    
+    def process_nft_metadata(self, metadata):
+        """Process CIP-25 NFT metadata"""
+        try:
+            nft_data = json.loads(metadata.body)
+            
+            for policy_id, assets in nft_data.items():
+                collection_key = f"nft_collection_{policy_id}"
+                collection = self.state.get(collection_key, {})
+                
+                for asset_name, asset_metadata in assets.items():
+                    self.process_asset_metadata(
+                        collection, policy_id, asset_name, 
+                        asset_metadata, metadata.tx_hash
+                    )
+                
+                # Convert sets to lists for JSON serialization
+                if "holders" in collection:
+                    collection["holders"] = list(collection["holders"])
+                
+                self.state.put(collection_key, collection)
+        
+        except Exception as e:
+            self.logger.error(f"Error processing NFT metadata: {e}")
+    
+    def process_asset_metadata(self, collection, policy_id, asset_name, metadata, tx_hash):
+        """Process individual asset metadata"""
+        if "assets" not in collection:
+            collection["assets"] = {}
+        
+        if asset_name not in collection["assets"]:
+            collection["assets"][asset_name] = {}
+        
+        asset_data = collection["assets"][asset_name]
+        
+        # Extract metadata
+        asset_data["metadata"] = {
+            "name": metadata.get("name", ""),
+            "description": metadata.get("description", ""),
+            "image": metadata.get("image", ""),
+            "media_type": metadata.get("mediaType", ""),
+            "attributes": metadata.get("attributes", []),
+            "files": metadata.get("files", []),
+            "metadata_tx": tx_hash
+        }
+        
+        # Extract traits for rarity calculation
+        traits = {}
+        if "attributes" in metadata:
+            for attr in metadata["attributes"]:
+                if isinstance(attr, dict):
+                    trait_type = attr.get("trait_type", "")
+                    value = attr.get("value", "")
+                    if trait_type and value:
+                        traits[trait_type] = value
+        
+        asset_data["traits"] = traits
+        
+        # Update collection metadata if not set
+        if not collection.get("name"):
+            collection["name"] = self.extract_collection_name(metadata.get("name", ""))
+        
+        # Calculate rarity after processing
+        self.calculate_rarity_scores(collection)
+    
+    def extract_collection_name(self, asset_name):
+        """Extract collection name from asset name"""
+        # Remove common numbering patterns
+        patterns = [
+            r'\s*#\d+$',      # " #123"
+            r'\s*\d+$',       # " 123"
+            r'_\d+$',         # "_123"
+            r'-\d+$'          # "-123"
+        ]
+        
+        collection_name = asset_name
+        for pattern in patterns:
+            collection_name = re.sub(pattern, '', collection_name)
+        
+        return collection_name.strip()
+    
+    def calculate_rarity_scores(self, collection):
+        """Calculate rarity scores for all assets in collection"""
+        if "assets" not in collection:
+            return
+        
+        # Count trait occurrences
+        trait_counts = defaultdict(lambda: defaultdict(int))
+        total_assets = len(collection["assets"])
+        
+        for asset_data in collection["assets"].values():
+            traits = asset_data.get("traits", {})
+            for trait_type, value in traits.items():
+                trait_counts[trait_type][value] += 1
+        
+        # Calculate rarity scores
+        for asset_name, asset_data in collection["assets"].items():
+            traits = asset_data.get("traits", {})
+            rarity_score = 0
+            
+            for trait_type, value in traits.items():
+                trait_rarity = trait_counts[trait_type][value] / total_assets
+                rarity_score += 1 / trait_rarity if trait_rarity > 0 else 0
+            
+            asset_data["rarity_score"] = rarity_score
+        
+        # Rank by rarity
+        sorted_assets = sorted(
+            collection["assets"].items(),
+            key=lambda x: x[1].get("rarity_score", 0),
+            reverse=True
+        )
+        
+        for rank, (asset_name, asset_data) in enumerate(sorted_assets, 1):
+            asset_data["rarity_rank"] = rank
+    
+    def get_day_key(self, timestamp):
+        """Get day key for time-based aggregation"""
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+    
+    def check_collection_milestones(self, collection, is_mint):
+        """Check and notify about collection milestones"""
+        if not is_mint:
+            return
+        
+        supply = collection["total_supply"]
+        policy_id = collection["policy_id"]
+        
+        # Supply milestones
+        milestones = [100, 500, 1000, 2500, 5000, 10000]
+        
+        for milestone in milestones:
+            if supply == milestone:
+                self.send_milestone_notification(policy_id, "supply", milestone)
+                break
+        
+        # Check for potential completion (no mints for 24 hours)
+        if supply > 100:  # Only for established collections
+            recent_activity = sum(
+                count for day, count in collection["mint_distribution"].items()
+                if self.is_recent_day(day, 1)  # Last day
+            )
+            
+            if recent_activity == 0:
+                self.check_collection_completion(collection)
+    
+    def is_recent_day(self, day_key, days_ago):
+        """Check if day is within specified days ago"""
+        from datetime import datetime, timedelta
+        day = datetime.strptime(day_key, '%Y-%m-%d')
+        cutoff = datetime.now() - timedelta(days=days_ago)
+        return day >= cutoff
+    
+    def check_collection_completion(self, collection):
+        """Check if collection minting appears to be complete"""
+        # Logic to determine if collection is complete
+        # This could involve checking mint patterns, metadata, etc.
+        policy_id = collection["policy_id"]
+        supply = collection["total_supply"]
+        
+        # Simple heuristic: no mints for 7 days and supply is round number
+        recent_mints = sum(
+            count for day, count in collection["mint_distribution"].items()
+            if self.is_recent_day(day, 7)
+        )
+        
+        if recent_mints == 0 and supply % 100 == 0:
+            self.send_completion_notification(policy_id, supply)
+    
+    def send_milestone_notification(self, policy_id, milestone_type, value):
+        """Send milestone notification"""
+        webhook_url = self.context.get_variable("nft_milestone_webhook")
+        
+        if webhook_url:
+            payload = {
+                "type": "nft_milestone",
+                "policy_id": policy_id,
+                "milestone_type": milestone_type,
+                "value": value,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            try:
+                self.http_client.post(webhook_url, payload)
+                self.logger.info(f"Milestone notification sent: {policy_id} reached {value} {milestone_type}")
+            except Exception as e:
+                self.logger.error(f"Failed to send milestone notification: {e}")
+    
+    def send_completion_notification(self, policy_id, final_supply):
+        """Send collection completion notification"""
+        webhook_url = self.context.get_variable("nft_completion_webhook")
+        
+        if webhook_url:
+            payload = {
+                "type": "nft_collection_complete",
+                "policy_id": policy_id,
+                "final_supply": final_supply,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            try:
+                self.http_client.post(webhook_url, payload)
+                self.logger.info(f"Collection completion notification sent: {policy_id} completed with {final_supply} NFTs")
+            except Exception as e:
+                self.logger.error(f"Failed to send completion notification: {e}")
+
+# Plugin entry points
+analytics = None
+
+def handle_mint_burn_event(event, context):
+    global analytics
+    if analytics is None:
+        analytics = NFTCollectionAnalytics(context)
+    analytics.handle_mint_burn_event(event)
+
+def handle_metadata_event(event, context):
+    global analytics
+    if analytics is None:
+        analytics = NFTCollectionAnalytics(context)
+    analytics.handle_metadata_event(event)
+```
+
+---
+
+## Governance and Staking
+
+### Governance Activity Monitor
+
+Monitor Conway era governance activity:
+
+```javascript
+// Governance monitoring plugin
+class GovernanceMonitor {
+    constructor(context) {
+        this.context = context;
+        this.state = context.state;
+        this.minimumDeposit = context.getVariable('min_governance_deposit') || 1000; // ADA
+    }
+    
+    handleGovernanceEvent(event) {
+        for (const govTx of event.tx_governance_list) {
+            this.processGovernanceTransaction(govTx, event.metadata);
+        }
+    }
+    
+    processGovernanceTransaction(govTx, metadata) {
+        console.log(`Governance transaction: ${govTx.transaction_hash}`);
+        
+        // Process proposals
+        if (govTx.proposal_procedures) {
+            for (const proposal of govTx.proposal_procedures) {
+                this.processProposal(proposal, govTx.transaction_hash, metadata);
+            }
+        }
+        
+        // Process votes
+        if (govTx.voting_procedures) {
+            for (const vote of govTx.voting_procedures) {
+                this.processVote(vote, govTx.transaction_hash, metadata);
+            }
+        }
+        
+        // Process DRep registrations
+        if (govTx.drep_registrations) {
+            for (const drep of govTx.drep_registrations) {
+                this.processDRepRegistration(drep, govTx.transaction_hash, metadata);
+            }
+        }
+    }
+    
+    processProposal(proposal, txHash, metadata) {
+        const proposalData = {
+            tx_hash: txHash,
+            proposal_index: proposal.index,
+            deposit: proposal.deposit,
+            return_address: proposal.return_address,
+            action_type: proposal.gov_action_type,
+            anchor_url: proposal.anchor_url,
+            anchor_hash: proposal.anchor_hash,
+            submitted_at: metadata.slot,
+            epoch: metadata.epoch_number,
+            status: 'submitted'
+        };
+        
+        // Store proposal
+        const proposalKey = `proposal_${txHash}_${proposal.index}`;
+        this.state.put(proposalKey, JSON.stringify(proposalData));
+        
+        // Update governance statistics
+        this.updateGovernanceStats('proposals', 1);
+        
+        console.log(`New ${proposal.gov_action_type} proposal: ${proposalKey}`);
+        console.log(`Deposit: ${proposal.deposit / 1_000_000} ADA`);
+        
+        // Send notifications for significant proposals
+        if (proposal.deposit / 1_000_000 >= this.minimumDeposit) {
+            this.sendProposalNotification(proposalData);
+        }
+        
+        // Special handling for different proposal types
+        this.analyzeProposalType(proposal, proposalData);
+    }
+    
+    processVote(vote, txHash, metadata) {
+        const voteData = {
+            tx_hash: txHash,
+            vote_index: vote.index,
+            voter_type: vote.voter_type,
+            voter_hash: vote.voter_hash,
+            gov_action_tx_hash: vote.gov_action_tx_hash,
+            gov_action_index: vote.gov_action_index,
+            vote: vote.vote,
+            anchor_url: vote.anchor_url,
+            voted_at: metadata.slot,
+            epoch: metadata.epoch_number
+        };
+        
+        // Store vote
+        const voteKey = `vote_${txHash}_${vote.index}`;
+        this.state.put(voteKey, JSON.stringify(voteData));
+        
+        // Update vote statistics for the proposal
+        this.updateProposalVoteStats(vote.gov_action_tx_hash, vote.gov_action_index, vote);
+        
+        // Update governance statistics
+        this.updateGovernanceStats('votes', 1);
+        this.updateGovernanceStats(`votes_${vote.voter_type.toLowerCase()}`, 1);
+        
+        console.log(`${vote.voter_type} vote: ${vote.vote} on ${vote.gov_action_tx_hash}#${vote.gov_action_index}`);
+        
+        // Send notifications for significant votes
+        this.sendVoteNotification(voteData);
+    }
+    
+    processDRepRegistration(drep, txHash, metadata) {
+        const drepData = {
+            tx_hash: txHash,
+            drep_hash: drep.drep_hash,
+            drep_id: drep.drep_id,
+            deposit: drep.deposit,
+            anchor_url: drep.anchor_url,
+            anchor_hash: drep.anchor_hash,
+            registered_at: metadata.slot,
+            epoch: metadata.epoch_number,
+            status: 'active'
+        };
+        
+        // Store DRep registration
+        const drepKey = `drep_${drep.drep_hash}`;
+        this.state.put(drepKey, JSON.stringify(drepData));
+        
+        // Update governance statistics
+        this.updateGovernanceStats('drep_registrations', 1);
+        
+        console.log(`New DRep registration: ${drep.drep_id}`);
+        console.log(`Deposit: ${drep.deposit / 1_000_000} ADA`);
+        
+        // Send DRep registration notification
+        this.sendDRepNotification(drepData);
+    }
+    
+    analyzeProposalType(proposal, proposalData) {
+        switch (proposal.gov_action_type) {
+            case 'PARAMETER_CHANGE_ACTION':
+                this.analyzeParameterChange(proposal, proposalData);
+                break;
+            case 'HARD_FORK_INITIATION_ACTION':
+                this.analyzeHardFork(proposal, proposalData);
+                break;
+            case 'TREASURY_WITHDRAWALS_ACTION':
+                this.analyzeTreasuryWithdrawal(proposal, proposalData);
+                break;
+            case 'NO_CONFIDENCE':
+                this.analyzeNoConfidence(proposal, proposalData);
+                break;
+            case 'UPDATE_COMMITTEE':
+                this.analyzeCommitteeUpdate(proposal, proposalData);
+                break;
+            case 'NEW_CONSTITUTION':
+                this.analyzeConstitutionUpdate(proposal, proposalData);
+                break;
+            case 'INFO_ACTION':
+                this.analyzeInfoAction(proposal, proposalData);
+                break;
+        }
+    }
+    
+    analyzeParameterChange(proposal, proposalData) {
+        console.log('📋 Parameter change proposal detected');
+        
+        // Mark as high priority if it's a significant parameter change
+        if (proposal.details && typeof proposal.details === 'object') {
+            const details = proposal.details;
+            
+            if (details.max_tx_size || details.utxo_cost_per_word || details.min_fee_a) {
+                proposalData.priority = 'high';
+                proposalData.category = 'fee_structure';
+            } else if (details.treasury_cut || details.monetary_expand_rate) {
+                proposalData.priority = 'high';
+                proposalData.category = 'monetary_policy';
+            }
+        }
+    }
+    
+    analyzeHardFork(proposal, proposalData) {
+        console.log('🔄 Hard fork proposal detected - HIGH PRIORITY');
+        proposalData.priority = 'critical';
+        proposalData.category = 'protocol_upgrade';
+        
+        // Send immediate notification for hard fork proposals
+        this.sendCriticalNotification('hard_fork_proposal', proposalData);
+    }
+    
+    analyzeTreasuryWithdrawal(proposal, proposalData) {
+        console.log('💰 Treasury withdrawal proposal detected');
+        
+        if (proposal.deposit > 10000 * 1_000_000) { // > 10k ADA
+            proposalData.priority = 'high';
+            proposalData.category = 'large_treasury_withdrawal';
+        }
+    }
+    
+    analyzeNoConfidence(proposal, proposalData) {
+        console.log('❌ No confidence proposal detected - HIGH PRIORITY');
+        proposalData.priority = 'critical';
+        proposalData.category = 'no_confidence';
+        
+        // Send immediate notification
+        this.sendCriticalNotification('no_confidence_proposal', proposalData);
+    }
+    
+    analyzeCommitteeUpdate(proposal, proposalData) {
+        console.log('👥 Committee update proposal detected');
+        proposalData.priority = 'high';
+        proposalData.category = 'committee_change';
+    }
+    
+    analyzeConstitutionUpdate(proposal, proposalData) {
+        console.log('📜 Constitution update proposal detected - HIGH PRIORITY');
+        proposalData.priority = 'critical';
+        proposalData.category = 'constitution_change';
+        
+        // Send immediate notification
+        this.sendCriticalNotification('constitution_proposal', proposalData);
+    }
+    
+    analyzeInfoAction(proposal, proposalData) {
+        console.log('ℹ️  Info action proposal detected');
+        proposalData.priority = 'low';
+        proposalData.category = 'informational';
+    }
+    
+    updateGovernanceStats(statType, increment) {
+        const statsKey = 'governance_stats';
+        const stats = this.state.get(statsKey) || {};
+        
+        stats[statType] = (stats[statType] || 0) + increment;
+        stats.last_updated = Date.now();
+        
+        this.state.put(statsKey, stats);
+    }
+    
+    updateProposalVoteStats(govActionTxHash, govActionIndex, vote) {
+        const proposalKey = `proposal_${govActionTxHash}_${govActionIndex}`;
+        const proposalData = this.state.get(proposalKey);
+        
+        if (proposalData) {
+            const proposal = JSON.parse(proposalData);
+            
+            if (!proposal.vote_stats) {
+                proposal.vote_stats = {
+                    total_votes: 0,
+                    yes_votes: 0,
+                    no_votes: 0,
+                    abstain_votes: 0,
+                    cc_votes: 0,
+                    drep_votes: 0,
+                    spo_votes: 0
+                };
+            }
+            
+            proposal.vote_stats.total_votes += 1;
+            proposal.vote_stats[`${vote.vote.toLowerCase()}_votes`] += 1;
+            proposal.vote_stats[`${vote.voter_type.toLowerCase()}_votes`] += 1;
+            
+            this.state.put(proposalKey, JSON.stringify(proposal));
+        }
+    }
+    
+    sendProposalNotification(proposalData) {
+        const webhookUrl = this.context.getVariable('governance_webhook');
+        
+        if (webhookUrl) {
+            const notification = {
+                type: 'governance_proposal',
+                action_type: proposalData.action_type,
+                deposit_ada: proposalData.deposit / 1_000_000,
+                tx_hash: proposalData.tx_hash,
+                proposal_index: proposalData.proposal_index,
+                priority: proposalData.priority || 'normal',
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, notification);
+                console.log(`Proposal notification sent: ${proposalData.action_type}`);
+            } catch (error) {
+                console.error(`Failed to send proposal notification: ${error.message}`);
+            }
+        }
+    }
+    
+    sendVoteNotification(voteData) {
+        const webhookUrl = this.context.getVariable('governance_vote_webhook');
+        
+        if (webhookUrl) {
+            const notification = {
+                type: 'governance_vote',
+                voter_type: voteData.voter_type,
+                vote: voteData.vote,
+                gov_action_tx_hash: voteData.gov_action_tx_hash,
+                tx_hash: voteData.tx_hash,
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, notification);
+            } catch (error) {
+                console.error(`Failed to send vote notification: ${error.message}`);
+            }
+        }
+    }
+    
+    sendDRepNotification(drepData) {
+        const webhookUrl = this.context.getVariable('drep_webhook');
+        
+        if (webhookUrl) {
+            const notification = {
+                type: 'drep_registration',
+                drep_id: drepData.drep_id,
+                deposit_ada: drepData.deposit / 1_000_000,
+                anchor_url: drepData.anchor_url,
+                tx_hash: drepData.tx_hash,
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, notification);
+                console.log(`DRep notification sent: ${drepData.drep_id}`);
+            } catch (error) {
+                console.error(`Failed to send DRep notification: ${error.message}`);
+            }
+        }
+    }
+    
+    sendCriticalNotification(notificationType, proposalData) {
+        const webhookUrl = this.context.getVariable('critical_governance_webhook');
+        
+        if (webhookUrl) {
+            const notification = {
+                type: notificationType,
+                urgency: 'critical',
+                proposal_data: proposalData,
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                this.context.httpClient.post(webhookUrl, notification);
+                console.log(`Critical governance notification sent: ${notificationType}`);
+            } catch (error) {
+                console.error(`Failed to send critical notification: ${error.message}`);
+            }
+        }
+    }
+}
+
+// Plugin entry point
+let monitor = null;
+
+function handleGovernanceEvent(event, context) {
+    if (!monitor) {
+        monitor = new GovernanceMonitor(context);
+    }
+    monitor.handleGovernanceEvent(event);
+}
+```
+
+---
+
+## Analytics and Monitoring
+
+### Blockchain Analytics Dashboard
+
+Real-time blockchain analytics and dashboard data generation:
+
+```python
+# Blockchain analytics plugin
+import json
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+class BlockchainAnalytics:
+    def __init__(self, context):
+        self.context = context
+        self.state = context.state
+        self.logger = context.logger
+        self.http_client = context.http_client
+        
+        # Analytics configuration
+        self.update_interval = context.get_variable('analytics_update_interval', 300)  # 5 minutes
+        self.dashboard_webhook = context.get_variable('dashboard_webhook')
+        
+    def handle_block_event(self, event):
+        """Process block events for analytics"""
+        block = event.block
+        metadata = event.metadata
+        
+        self.update_block_analytics(block, metadata)
+        self.check_analytics_update(metadata)
+    
+    def handle_transaction_event(self, event):
+        """Process transaction events for analytics"""
+        transactions = event.transactions
+        metadata = event.metadata
+        
+        self.update_transaction_analytics(transactions, metadata)
+    
+    def handle_mint_burn_event(self, event):
+        """Process asset events for analytics"""
+        for mint_burn in event.tx_mint_burns:
+            self.update_asset_analytics(mint_burn, event.metadata)
+    
+    def update_block_analytics(self, block, metadata):
+        """Update block-related analytics"""
+        hour_key = self.get_hour_key(metadata.block_time)
+        day_key = self.get_day_key(metadata.block_time)
+        
+        # Update hourly stats
+        hourly_stats = self.get_or_create_stats(f"block_stats_hourly_{hour_key}")
+        hourly_stats['blocks_count'] += 1
+        hourly_stats['total_transactions'] += block.no_of_txs
+        hourly_stats['total_fees'] += block.total_fees
+        hourly_stats['total_output'] += block.total_output
+        hourly_stats['avg_block_size'] = (
+            (hourly_stats.get('avg_block_size', 0) * (hourly_stats['blocks_count'] - 1) + 
+             block.block_body_size) / hourly_stats['blocks_count']
+        )
+        self.state.put(f"block_stats_hourly_{hour_key}", hourly_stats)
+        
+        # Update daily stats
+        daily_stats = self.get_or_create_stats(f"block_stats_daily_{day_key}")
+        daily_stats['blocks_count'] += 1
+        daily_stats['total_transactions'] += block.no_of_txs
+        daily_stats['total_fees'] += block.total_fees
+        daily_stats['total_output'] += block.total_output
+        self.state.put(f"block_stats_daily_{day_key}", daily_stats)
+        
+        # Update global stats
+        global_stats = self.get_or_create_stats("global_blockchain_stats")
+        global_stats['latest_block'] = block.number
+        global_stats['latest_slot'] = block.slot
+        global_stats['latest_epoch'] = metadata.epoch_number
+        global_stats['total_blocks'] = global_stats.get('total_blocks', 0) + 1
+        global_stats['total_transactions'] = global_stats.get('total_transactions', 0) + block.no_of_txs
+        global_stats['last_updated'] = metadata.block_time
+        self.state.put("global_blockchain_stats", global_stats)
+        
+        # Track block producers
+        self.track_block_producer(block.slot_leader, hour_key)
+    
+    def update_transaction_analytics(self, transactions, metadata):
+        """Update transaction-related analytics"""
+        hour_key = self.get_hour_key(metadata.block_time)
+        day_key = self.get_day_key(metadata.block_time)
+        
+        # Analyze transactions
+        tx_analysis = self.analyze_transactions(transactions)
+        
+        # Update hourly transaction stats
+        hourly_tx_stats = self.get_or_create_stats(f"tx_stats_hourly_{hour_key}")
+        self.merge_tx_stats(hourly_tx_stats, tx_analysis)
+        self.state.put(f"tx_stats_hourly_{hour_key}", hourly_tx_stats)
+        
+        # Update daily transaction stats
+        daily_tx_stats = self.get_or_create_stats(f"tx_stats_daily_{day_key}")
+        self.merge_tx_stats(daily_tx_stats, tx_analysis)
+        self.state.put(f"tx_stats_daily_{day_key}", daily_tx_stats)
+    
+    def update_asset_analytics(self, mint_burn, metadata):
+        """Update asset-related analytics"""
+        hour_key = self.get_hour_key(metadata.block_time)
+        day_key = self.get_day_key(metadata.block_time)
+        
+        # Update hourly asset stats
+        hourly_asset_stats = self.get_or_create_stats(f"asset_stats_hourly_{hour_key}")
+        if mint_burn.quantity > 0:
+            hourly_asset_stats['assets_minted'] += 1
+            hourly_asset_stats['total_minted_quantity'] += mint_burn.quantity
+            
+            # Track NFT mints (quantity = 1)
+            if mint_burn.quantity == 1:
+                hourly_asset_stats['nfts_minted'] += 1
+        else:
+            hourly_asset_stats['assets_burned'] += 1
+            hourly_asset_stats['total_burned_quantity'] += abs(mint_burn.quantity)
+            
+            if abs(mint_burn.quantity) == 1:
+                hourly_asset_stats['nfts_burned'] += 1
+        
+        hourly_asset_stats['unique_policies'] = len(
+            set(hourly_asset_stats.get('policy_list', []) + [mint_burn.policy])
+        )
+        hourly_asset_stats['policy_list'] = list(
+            set(hourly_asset_stats.get('policy_list', []) + [mint_burn.policy])
+        )
+        
+        self.state.put(f"asset_stats_hourly_{hour_key}", hourly_asset_stats)
+    
+    def analyze_transactions(self, transactions):
+        """Analyze transaction patterns"""
+        analysis = {
+            'transaction_count': len(transactions),
+            'simple_payments': 0,
+            'multi_asset_txs': 0,
+            'smart_contract_txs': 0,
+            'metadata_txs': 0,
+            'high_fee_txs': 0,
+            'large_txs': 0,
+            'total_fees': 0,
+            'total_output': 0,
+            'avg_inputs': 0,
+            'avg_outputs': 0,
+            'fee_distribution': defaultdict(int)
+        }
+        
+        total_inputs = 0
+        total_outputs = 0
+        
+        for tx in transactions:
+            analysis['total_fees'] += tx.fee
+            
+            # Count inputs and outputs
+            input_count = len(tx.inputs) if tx.inputs else 0
+            output_count = len(tx.outputs) if tx.outputs else 0
+            total_inputs += input_count
+            total_outputs += output_count
+            
+            # Calculate total output value
+            tx_output_value = sum(out.amount for out in tx.outputs if hasattr(out, 'amount'))
+            analysis['total_output'] += tx_output_value
+            
+            # Categorize transactions
+            if tx.script_data_hash:
+                analysis['smart_contract_txs'] += 1
+            elif tx.auxiliary_data_hash:
+                analysis['metadata_txs'] += 1
+            elif input_count == 1 and output_count <= 2:
+                analysis['simple_payments'] += 1
+            
+            # Check for multi-asset transactions
+            has_assets = any(
+                hasattr(out, 'multi_asset') and out.multi_asset 
+                for out in tx.outputs
+            )
+            if has_assets:
+                analysis['multi_asset_txs'] += 1
+            
+            # Fee analysis
+            fee_ada = tx.fee / 1_000_000
+            if fee_ada > 10:  # > 10 ADA
+                analysis['high_fee_txs'] += 1
+            
+            # Size analysis (large transactions)
+            if output_count > 10:
+                analysis['large_txs'] += 1
+            
+            # Fee distribution
+            fee_bucket = self.get_fee_bucket(fee_ada)
+            analysis['fee_distribution'][fee_bucket] += 1
+        
+        # Calculate averages
+        if len(transactions) > 0:
+            analysis['avg_inputs'] = total_inputs / len(transactions)
+            analysis['avg_outputs'] = total_outputs / len(transactions)
+            analysis['avg_fee'] = analysis['total_fees'] / len(transactions)
+        
+        return analysis
+    
+    def get_fee_bucket(self, fee_ada):
+        """Categorize fees into buckets"""
+        if fee_ada < 0.2:
+            return 'very_low'
+        elif fee_ada < 0.5:
+            return 'low'
+        elif fee_ada < 1.0:
+            return 'medium'
+        elif fee_ada < 5.0:
+            return 'high'
+        else:
+            return 'very_high'
+    
+    def track_block_producer(self, slot_leader, hour_key):
+        """Track block producer statistics"""
+        producer_stats_key = f"producer_stats_{hour_key}"
+        producer_stats = self.state.get(producer_stats_key, {})
+        
+        if slot_leader not in producer_stats:
+            producer_stats[slot_leader] = 0
+        
+        producer_stats[slot_leader] += 1
+        self.state.put(producer_stats_key, producer_stats)
+    
+    def get_or_create_stats(self, key):
+        """Get existing stats or create new empty stats"""
+        stats = self.state.get(key, {})
+        
+        # Initialize common fields if they don't exist
+        default_fields = {
+            'blocks_count': 0,
+            'total_transactions': 0,
+            'total_fees': 0,
+            'total_output': 0,
+            'assets_minted': 0,
+            'assets_burned': 0,
+            'nfts_minted': 0,
+            'nfts_burned': 0,
+            'total_minted_quantity': 0,
+            'total_burned_quantity': 0,
+            'unique_policies': 0,
+            'policy_list': [],
+            'transaction_count': 0,
+            'simple_payments': 0,
+            'multi_asset_txs': 0,
+            'smart_contract_txs': 0,
+            'metadata_txs': 0,
+            'high_fee_txs': 0,
+            'large_txs': 0,
+            'avg_inputs': 0,
+            'avg_outputs': 0,
+            'avg_fee': 0,
+            'fee_distribution': {}
+        }
+        
+        for field, default_value in default_fields.items():
+            if field not in stats:
+                stats[field] = default_value
+        
+        return stats
+    
+    def merge_tx_stats(self, target_stats, source_analysis):
+        """Merge transaction analysis into target stats"""
+        for key, value in source_analysis.items():
+            if key == 'fee_distribution':
+                if 'fee_distribution' not in target_stats:
+                    target_stats['fee_distribution'] = {}
+                for bucket, count in value.items():
+                    target_stats['fee_distribution'][bucket] = (
+                        target_stats['fee_distribution'].get(bucket, 0) + count
+                    )
+            elif isinstance(value, (int, float)):
+                target_stats[key] = target_stats.get(key, 0) + value
+    
+    def check_analytics_update(self, metadata):
+        """Check if it's time to send analytics update"""
+        last_update_key = "last_analytics_update"
+        last_update = self.state.get(last_update_key, 0)
+        
+        if metadata.block_time - last_update >= self.update_interval:
+            self.send_analytics_update(metadata)
+            self.state.put(last_update_key, metadata.block_time)
+    
+    def send_analytics_update(self, metadata):
+        """Send analytics update to dashboard"""
+        if not self.dashboard_webhook:
+            return
+        
+        try:
+            # Compile latest analytics
+            analytics_data = self.compile_analytics_data(metadata)
+            
+            payload = {
+                'type': 'analytics_update',
+                'timestamp': datetime.now().isoformat(),
+                'data': analytics_data
+            }
+            
+            response = self.http_client.post(self.dashboard_webhook, payload)
+            
+            if response.status == 200:
+                self.logger.info("Analytics update sent successfully")
+            else:
+                self.logger.warning(f"Analytics update failed with status: {response.status}")
+        
+        except Exception as e:
+            self.logger.error(f"Failed to send analytics update: {e}")
+    
+    def compile_analytics_data(self, metadata):
+        """Compile current analytics data"""
+        current_hour = self.get_hour_key(metadata.block_time)
+        current_day = self.get_day_key(metadata.block_time)
+        
+        # Get global stats
+        global_stats = self.state.get("global_blockchain_stats", {})
+        
+        # Get recent hourly stats (last 24 hours)
+        hourly_stats = []
+        for i in range(24):
+            hour_time = metadata.block_time - (i * 3600)
+            hour_key = self.get_hour_key(hour_time)
+            stats = self.state.get(f"block_stats_hourly_{hour_key}", {})
+            if stats:
+                stats['hour'] = hour_key
+                hourly_stats.append(stats)
+        
+        # Get recent daily stats (last 7 days)
+        daily_stats = []
+        for i in range(7):
+            day_time = metadata.block_time - (i * 86400)
+            day_key = self.get_day_key(day_time)
+            stats = self.state.get(f"block_stats_daily_{day_key}", {})
+            if stats:
+                stats['day'] = day_key
+                daily_stats.append(stats)
+        
+        # Get current producer stats
+        producer_stats = self.state.get(f"producer_stats_{current_hour}", {})
+        
+        return {
+            'global': global_stats,
+            'hourly': hourly_stats,
+            'daily': daily_stats,
+            'producers': producer_stats,
+            'current_epoch': metadata.epoch_number,
+            'current_slot': metadata.slot,
+            'network': 'mainnet' if metadata.mainnet else 'testnet'
+        }
+    
+    def get_hour_key(self, timestamp):
+        """Get hour key for time-based aggregation"""
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d_%H')
+    
+    def get_day_key(self, timestamp):
+        """Get day key for time-based aggregation"""
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+
+# Plugin entry points
+analytics = None
+
+def handle_block_event(event, context):
+    global analytics
+    if analytics is None:
+        analytics = BlockchainAnalytics(context)
+    analytics.handle_block_event(event)
+
+def handle_transaction_event(event, context):
+    global analytics
+    if analytics is None:
+        analytics = BlockchainAnalytics(context)
+    analytics.handle_transaction_event(event)
+
+def handle_mint_burn_event(event, context):
+    global analytics
+    if analytics is None:
+        analytics = BlockchainAnalytics(context)
+    analytics.handle_mint_burn_event(event)
+```
+
+---
+
+## External Integrations
+
+### Webhook Integration System
+
+Comprehensive webhook system for external integrations:
+
+```mvel
+// MVEL webhook integration plugin
+import java.util.concurrent.CompletableFuture;
+
+def processWebhookNotifications(items) {
+    webhookManager = new WebhookManager(context);
+    
+    for (item : items) {
+        // Determine webhook type based on item
+        webhookType = determineWebhookType(item);
+        
+        if (webhookType != null) {
+            webhookManager.queueWebhook(webhookType, item);
+        }
+    }
+    
+    // Send queued webhooks
+    webhookManager.sendQueuedWebhooks();
+    
+    return items;
+}
+
+def determineWebhookType(item) {
+    // High-value UTXO webhook
+    if (item.lovelaceAmount > 1000000000) { // > 1000 ADA
+        return "high_value_utxo";
+    }
+    
+    // Asset-related webhook
+    if (item.amounts != null && item.amounts.size() > 0) {
+        return "asset_activity";
+    }
+    
+    // Smart contract webhook
+    if (item.scriptRef != null || item.dataHash != null) {
+        return "smart_contract";
+    }
+    
+    return null;
+}
+
+class WebhookManager {
+    def webhooks = [:];
+    def context;
+    
+    def WebhookManager(ctx) {
+        this.context = ctx;
+    }
+    
+    def queueWebhook(type, data) {
+        if (!webhooks.containsKey(type)) {
+            webhooks[type] = [];
+        }
+        webhooks[type].add(data);
+    }
+    
+    def sendQueuedWebhooks() {
+        webhooks.each { type, dataList ->
+            sendWebhook(type, dataList);
+        };
+    }
+    
+    def sendWebhook(type, dataList) {
+        webhookUrl = context.getVariable(type + "_webhook_url");
+        
+        if (webhookUrl != null) {
+            payload = [
+                "type": type,
+                "count": dataList.size(),
+                "timestamp": new Date().toString(),
+                "items": dataList.collect { item ->
+                    [
+                        "tx_hash": item.txHash,
+                        "output_index": item.outputIndex,
+                        "amount": item.lovelaceAmount,
+                        "address": item.ownerAddr
+                    ];
+                }
+            ];
+            
+            try {
+                response = context.httpClient.post(webhookUrl, payload);
+                System.out.println("Webhook sent: " + type + " (status: " + response.status + ")");
+            } catch (Exception e) {
+                System.out.println("Webhook failed: " + type + " - " + e.getMessage());
+            }
+        }
+    }
+}
+
+// Execute the webhook processing
+return processWebhookNotifications(items);
+```
+
+This comprehensive set of plugin examples demonstrates the flexibility and power of the yaci-store plugin framework. Each example can be adapted and extended for specific use cases, providing a solid foundation for building sophisticated blockchain data processing and integration solutions.
