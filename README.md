@@ -84,9 +84,9 @@ store.governance.enabled=false
 Yaci Store powers various production applications in the Cardano ecosystem:
 
 - [**Cardano Rosetta Java**](https://github.com/cardano-foundation/cardano-rosetta-java) - Cardano Foundation's Rosetta API implementation
-- [**FluidTokens Aquarium Node**](https://github.com/FluidTokens/ft-aquarium-node) - Multi-asset token management platform
+- [**FluidTokens Aquarium Node**](https://github.com/FluidTokens/ft-aquarium-node)
 - [**CF Cardano Ballot**](https://github.com/cardano-foundation/cf-cardano-ballot) - Cardano Foundation's voting platform
-- [**CF Reeve Platform**](https://github.com/cardano-foundation/cf-reeve-platform) - Governance and delegation platform
+- [**CF Reeve Platform**](https://github.com/cardano-foundation/cf-reeve-platform) - Cardano Foundation's Ledger on the Blockchain Project
 - [**CF AdaHandle Resolver**](https://github.com/cardano-foundation/cf-adahandle-resolver) - AdaHandle resolution service
 - [**AdaMatic**](https://adamatic.xyz/) - Cardano automation platform
 - [**SundaeSwap Scooper Analytics**](https://github.com/easy1staking-com/sundaeswap-scooper-analytics) - DEX analytics platform
