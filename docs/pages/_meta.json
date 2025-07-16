@@ -13,10 +13,7 @@
   "plugins": {
     "title": "Plugin Framework"
   },
-  "about": {
-    "title": "About",
-    "type": "page"
-  },
   "other-configurations": "Other Configurations",
-  "ledger-state-mismatches": "Ledger State Mismatches"
+  "ledger-state-mismatches": "Ledger State Mismatches",
+  "showcase": "Showcase"
 }
