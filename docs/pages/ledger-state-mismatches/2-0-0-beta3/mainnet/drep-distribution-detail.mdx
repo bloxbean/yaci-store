@@ -1,7 +1,5 @@
 # Complete DRep Details - All 143 DReps
 
-> **💡 Note**: All stake amounts in this analysis are measured in **lovelace** (1 ADA = 1,000,000 lovelace).
-
 
 ## Summary Statistics
 
@@ -11,7 +9,6 @@
 | **Total Mismatch Entries** | **4,800** | Individual discrepancies |
 | **Analysis Period** | **64 epochs** | Epochs 506-569 |
 | **Worst Case** | **99.61% deviation** | Near-total stake loss |
-| **Most Persistent** | **62/64 epochs** | Almost always affected |
 
 
 ### Severity Distribution
@@ -26,8 +23,9 @@
 
 ## Complete DRep Table (143 entries)
 
-*Note: Epochs shown as ranges (e.g., 513→518 = epochs 513,514,515,516,517,518)*
-
+> *Note:*
+> - Epochs shown as ranges (e.g., 513→518 = epochs 513,514,515,516,517,518)
+> - Deviation % = |DB_Sync_Amount - Indexer_Amount| / max(DB_Sync_Amount, Indexer_Amount) × 100
 
 | # | DRep ID | Hash | Max Dev% | Avg Dev% | Epochs Affected | Epoch Ranges |
 |---|---------|------|----------|----------|-----------------|--------------|
@@ -175,32 +173,7 @@
 | 142 | drep1yfeqm8wfd2h9pf2c9y934qskuw3z04selrpr7esf4gdsl2c5zvpgf | 720d9dc96aae50a558290b1a8216e3a227d619f8c23f6609aa1b0fab | 🟢 **0.000%** | 0.000% | 7 | 563→569 |
 | 143 | drep1yfr747pqr904utcw24puj9a9lx6t0x4xpjy38nvsux3rukskd7dj3 | 47eaf820195f5e2f0e5543c917a5f9b4b79aa60c8913cd90e1a23e5a | 🟢 **0.000%** | 0.000% | 6 | 564→569 |
 
-
-## Key Observations
-
-
-### Most Critical Cases
-
-1. **99.61% deviation**: Nearly complete stake loss detected
-
-2. **90%+ deviations**: 4 DReps with severe calculation errors
-
-3. **Persistent issues**: Some DReps affected across 60+ epochs
-
-
-### Pattern Analysis
-
-- **High severity** issues tend to be concentrated in epochs 508-521
-
-- **Most persistent** DRep has issues in 62/64 epochs
-
-- **Low severity** issues (130 DReps) suggest minor calculation differences
-
-
 ---
 
 
 *Data source: Yaci Store and Cardano DB Sync from epochs 506-569*
-
-
-[Back to Summary](./summary) | [Original Analysis](./drep-distribution-analysis)
