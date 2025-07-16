@@ -1,0 +1,73 @@
+import { Cards, Card, Callout } from 'nextra/components'
+
+# Projects Using Yaci Store
+
+Discover how organizations and developers are leveraging Yaci Store to build powerful Cardano applications.
+
+<Callout type="info">
+Is your project using Yaci Store? We'd love to feature it here! Please [open a PR](https://github.com/bloxbean/yaci-store/pulls) or [create an issue](https://github.com/bloxbean/yaci-store/issues).
+</Callout>
+
+## Community Projects
+
+### [Cardano Rosetta Java](https://github.com/cardano-foundation/cardano-rosetta-java)
+**Cardano Foundation**
+The official Rosetta API implementation for Cardano, enabling seamless blockchain integration for exchanges and wallets. Built on Yaci Store for reliable blockchain data indexing.
+
+---
+
+### [FluidTokens Aquarium Node](https://github.com/FluidTokens/ft-aquarium-node)
+**FluidTokens**
+The Aquarium Node is a java app which indexes FluidTokens users' Tanks utxos and processes Scheduled Transactions when conditions are met.
+
+---
+
+### [CF Cardano Ballot](https://github.com/cardano-foundation/cf-cardano-ballot)
+**Cardano Foundation**
+Cardano Ballot is a user-friendly, hybrid on- and off-chain voting system developed by the Cardano Foundation.
+Cardano Ballot leverages a set of backend services combined with frontend applications to facilitate voting within the Cardano Ecosystem.
+
+---
+
+### [CF Reeve Platform](https://github.com/cardano-foundation/cf-reeve-platform)
+**Cardano Foundation**
+The Reeve platform is designed to integrate traditional accounting systems with blockchain technology, ensuring transparency, immutability, and enhanced security for financial records.
+
+---
+
+### [CF AdaHandle Resolver](https://github.com/cardano-foundation/cf-adahandle-resolver)
+**Cardano Foundation**
+An efficient resolution service for AdaHandle, Cardano's human-readable wallet address system, providing fast lookups and integration capabilities.
+
+---
+
+### [AdaMatic](https://adamatic.xyz/)
+**Easy1 Staking**
+
+---
+
+### [SundaeSwap Scooper Analytics](https://github.com/easy1staking-com/sundaeswap-scooper-analytics)
+**Easy1 Staking**
+A simple crawler app that stores relevant scoop transaction info and serves aggreagate data over a rest endpoint.
+
+## Technical Integration Patterns
+
+These projects demonstrate various integration patterns with Yaci Store:
+
+- **API Gateway Pattern**: Cardano Rosetta uses Yaci Store as a data layer for standardized blockchain APIs
+- **Event-Driven Architecture**: FluidTokens leverages the event system for real-time token tracking
+- **Analytics Pipeline**: SundaeSwap Analytics uses selective stores for focused DeFi data
+- **Microservices**: AdaHandle Resolver runs as a lightweight service with minimal stores enabled
+- **Governance Infrastructure**: Ballot and Reeve platforms utilize governance stores for on-chain voting
+- **Automation Workflows**: AdaMatic integrates multiple stores for complex blockchain interactions
+
+## Join the Community
+
+<Cards>
+  <Card title="Start Building" href="/getting-started/getting-started-2.x.x">
+    Get started with Yaci Store and build your own Cardano application
+  </Card>
+  <Card title="Share Your Project" href="https://github.com/bloxbean/yaci-store/issues/new">
+    Tell us about your project to be featured on this page
+  </Card>
+</Cards>

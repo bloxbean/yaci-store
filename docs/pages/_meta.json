@@ -10,10 +10,10 @@
     "title": "Usage"
   },
   "stores": "Stores",
-  "about": {
-    "title": "About",
-    "type": "page"
+  "plugins": {
+    "title": "Plugin Framework"
   },
   "other-configurations": "Other Configurations",
-  "ledger-state-mismatches": "Ledger State Mismatches"
+  "ledger-state-mismatches": "Ledger State Mismatches",
+  "showcase": "Showcase"
 }
