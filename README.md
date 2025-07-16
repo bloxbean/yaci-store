@@ -22,6 +22,13 @@ Yaci Store is a modular, high-performance Cardano blockchain indexer and datasto
 - **✂️ Data Pruning**: Configurable pruning strategies for sustainable storage
 - **🎯 Production Ready**: Battle-tested in multiple production environments
 
+### Latest Releases
+
+- **Stable Release**: [v0.1.4](https://github.com/bloxbean/yaci-store/releases/tag/v0.1.4) - Production-ready release
+- **Beta Release**: [v2.0.0-beta3](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0-beta3) - Next generation release with enhanced features
+  - All core modules and stores are production-ready
+  - Note: Ledger State module is still in beta
+
 ### Core Stores
 
 - **Assets**: Native tokens, NFTs, and fungible tokens
