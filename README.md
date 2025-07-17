@@ -17,7 +17,7 @@ Yaci Store is a modular, high-performance Cardano blockchain indexer and datasto
 - **🔌 Plugin Framework**: Extend and customize functionality without forking
 - **🗄️ Multi-Database Support**: PostgreSQL, MySQL, and H2 out of the box
 - **🌐 Multi-Network**: Support for mainnet, preprod, preview, sanchonet, and custom networks
-- **📊 REST APIs**: Comprehensive Blockfrost-compatible and custom APIs
+- **📊 REST APIs**: Essential Blockfrost-compatible APIs for transaction building and submission, plus custom endpoints
 - **🔧 Flexible Deployment**: Run as standalone application, embed as library, or deploy with Docker
 - **✂️ Data Pruning**: Configurable pruning strategies for sustainable storage
 - **🎯 Production Ready**: Battle-tested in multiple production environments
