@@ -35,7 +35,7 @@ Yaci Store is a modular, high-performance Cardano blockchain indexer and datasto
 - **Blocks**: Block data
 - **Transactions**: Transaction details
 - **UTxO**: Unspent transaction outputs
-- **Staking**: Pools, delegations, and rewards
+- **Staking**: Pools, delegations, registrations
 - **Governance**: Proposals, votes, and DRep data
 - **Scripts**: Plutus scripts and native scripts
 - **Metadata**: Transaction metadata
@@ -45,7 +45,7 @@ Yaci Store is a modular, high-performance Cardano blockchain indexer and datasto
 
 - **Account**: Address balance tracking
 - **Ledger State**: Full ledger state calculations
-- **Governance State**: Governance aggregations
+- **Governance State**: Governance state calculations
 
 ## Quick Start
 
