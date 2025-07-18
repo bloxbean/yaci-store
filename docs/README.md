@@ -1,2 +1,0 @@
-# Yaci DevKit Documentation
-

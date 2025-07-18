@@ -1,0 +1,19 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Top face -->
+  <path d="M24 6L36 12L24 18L12 12L24 6Z" fill="#4F46E5"/>
+  
+  <!-- Right face -->
+  <path d="M36 12L36 24L24 30L24 18L36 12Z" fill="#3730A3"/>
+  
+  <!-- Left face -->
+  <path d="M12 12L12 24L24 30L24 18L12 12Z" fill="#6366F1"/>
+  
+  <!-- Bottom face -->
+  <path d="M12 24L24 30L36 24L36 30L24 36L12 30L12 24Z" fill="#1E1B4B"/>
+  
+  <!-- White edge lines for depth -->
+  <path d="M24 6L36 12L24 18L12 12L24 6Z" fill="none" stroke="white" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M24 18L24 30" stroke="white" stroke-width="1"/>
+  <path d="M12 12L12 24" stroke="white" stroke-width="1"/>
+  <path d="M36 12L36 24" stroke="white" stroke-width="1"/>
+</svg>

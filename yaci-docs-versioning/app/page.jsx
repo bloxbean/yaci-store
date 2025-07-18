@@ -1,0 +1,241 @@
+"use client";
+
+import Link from "next/link";
+import Image from "next/image";
+import YaciStore from "../utils/icons/YaciStore.svg";
+
+export default function LandingPage() {
+  return (
+    <>
+      <style jsx global>{`
+        .landing-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #f0f9ff 0%, #e0e7ff 100%);
+          font-family:
+            -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .dark .landing-page {
+          background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        }
+
+        .container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 4rem 1rem;
+        }
+
+        .hero-content {
+          max-width: 64rem;
+          margin: 0 auto;
+          text-align: center;
+        }
+
+        .logo-section {
+          margin-bottom: 2rem;
+        }
+
+        .hero-title {
+          font-size: 3rem;
+          font-weight: bold;
+          color: #111827;
+          margin-bottom: 1.5rem;
+          line-height: 1.1;
+        }
+
+        .dark .hero-title {
+          color: #ffffff;
+        }
+
+        .title-accent {
+          color: #2563eb;
+        }
+
+        .hero-description {
+          font-size: 1.25rem;
+          color: #4b5563;
+          margin-bottom: 2rem;
+          max-width: 42rem;
+          margin-left: auto;
+          margin-right: auto;
+          line-height: 1.6;
+        }
+
+        .dark .hero-description {
+          color: #d1d5db;
+        }
+
+        .features-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 2rem;
+          margin-bottom: 3rem;
+        }
+
+        .feature-card {
+          background: #ffffff;
+          padding: 1.5rem;
+          border-radius: 0.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e5e7eb;
+        }
+
+        .dark .feature-card {
+          background: #1f2937;
+          border-color: #374151;
+        }
+
+        .feature-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #111827;
+          margin-bottom: 0.75rem;
+        }
+
+        .dark .feature-title {
+          color: #ffffff;
+        }
+
+        .feature-description {
+          color: #4b5563;
+          line-height: 1.5;
+        }
+
+        .dark .feature-description {
+          color: #d1d5db;
+        }
+
+        .cta-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          justify-content: center;
+          align-items: center;
+        }
+
+        @media (min-width: 640px) {
+          .cta-buttons {
+            flex-direction: row;
+          }
+        }
+
+        .btn-primary {
+          background: #2563eb;
+          color: #ffffff;
+          font-weight: 600;
+          padding: 0.75rem 2rem;
+          border-radius: 0.5rem;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+          background: #1d4ed8;
+        }
+
+        .btn-secondary {
+          background: #111827;
+          color: #ffffff;
+          font-weight: 600;
+          padding: 0.75rem 2rem;
+          border-radius: 0.5rem;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .btn-secondary:hover {
+          background: #000000;
+        }
+
+        .version-info {
+          margin-top: 3rem;
+          font-size: 0.875rem;
+          color: #6b7280;
+        }
+
+        .dark .version-info {
+          color: #9ca3af;
+        }
+      `}</style>
+
+      <div className="landing-page">
+        <div className="container">
+          <div className="hero-content">
+            {/* Logo */}
+            <div className="logo-section">
+              <Image
+                src={YaciStore}
+                alt="Yaci Store Logo"
+                height={80}
+                style={{ margin: "0 auto" }}
+              />
+            </div>
+
+            {/* Hero Section */}
+            <h1 className="hero-title">
+              Welcome to <span className="title-accent">Yaci Store</span>
+            </h1>
+
+            <p className="hero-description">
+              A powerful blockchain data indexing and storage solution for
+              Cardano. Build applications with fast, reliable access to on-chain
+              data.
+            </p>
+
+            {/* Features */}
+            <div className="features-grid">
+              <div className="feature-card">
+                <h3 className="feature-title">Fast Indexing</h3>
+                <p className="feature-description">
+                  High-performance blockchain data indexing with optimized
+                  storage
+                </p>
+              </div>
+
+              <div className="feature-card">
+                <h3 className="feature-title">Easy Integration</h3>
+                <p className="feature-description">
+                  Simple APIs and Spring Boot starters for quick development
+                </p>
+              </div>
+
+              <div className="feature-card">
+                <h3 className="feature-title">Scalable</h3>
+                <p className="feature-description">
+                  Built for production with Docker support and monitoring
+                </p>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="cta-buttons">
+              <Link href="/docs" className="btn-primary">
+                📚 Read Documentation
+              </Link>
+
+              <Link
+                href="https://github.com/bloxbean/yaci-store"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+              >
+                ⭐ View on GitHub
+              </Link>
+            </div>
+
+            {/* Version Info */}
+            <div className="version-info">
+              <p>Latest version: v2.0.0 | Previous version: v1.0.0</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

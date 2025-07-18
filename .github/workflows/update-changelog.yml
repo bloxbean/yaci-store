@@ -1,0 +1,32 @@
+name: Update Changelog
+
+on:
+  release:
+    types: [published]  # Trigger when a new release is published
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Update changelogs.mdx
+        run: python scripts/update_changelog.py
+
+      - name: Commit and Push Changelog
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add docs/changelogs.mdx
+          git commit -m "docs: update changelog from new release"
+          git push

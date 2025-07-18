@@ -1,0 +1,152 @@
+&nbsp;
+
+# 🔌 Granular Indexing - Plugin Framework
+
+Yaci Store enables powerful customization and extensibility through its plugin framework, supporting both **Java** and **non-Java** logic via scripting languages.
+
+---
+
+## ⚙️ Why Customize Indexing?
+
+By default, Yaci Store stores all chain data. However, many use cases require **targeted data extraction**, such as:
+
+- Only metadata with specific labels
+- UTXOs for specific addresses
+- Custom processing logic before storage
+- Real-time reactions to chain events
+
+---
+
+## 🔧 Current Customization Options
+
+### 1. Configure Out-of-the-Box Indexer
+
+- Enable/disable specific stores via `application.properties`
+  - e.g. disable metadata or governance stores
+
+### 2. Build a Custom Java App
+
+- Use only necessary modules
+- Override default storage logic
+- Listen to domain events such as `BlockEvent`, `MetadataEvent`, `AddressUtxoEvent`
+
+---
+
+## 🧩 Plugin Framework (Preview)
+
+Yaci Store introduces a **new plugin framework** that allows custom logic in:
+
+- JavaScript
+- Python
+- MVEL / SPEL
+- *(Future: WebAssembly/WASM)*
+
+### 🔍 Capabilities
+
+Plugins can:
+
+- Filter what to store
+- Inject custom logic before or after storage
+- React to blockchain events
+- Be written without touching core Java code
+
+---
+
+## 🔐 Plugin Types
+
+### 📥 Storage Plugin
+
+Attached to specific **storage extension points** (e.g., `utxo.unspent.save`, `metadata.save`).
+
+Supports:
+
+| Hook       | Purpose                            |
+|------------|------------------------------------|
+| `Filter`   | Decide whether to store an item    |
+| `Pre-Action`  | Run logic before storage          |
+| `Post-Action` | Run logic after storage           |
+
+---
+
+### 🎧 Event Handler Plugin
+
+Listens to emitted events:
+
+- `BlockEvent`
+- `TransactionEvent`
+- `MetadataEvent`, etc.
+
+Can be used for:
+
+- Logging
+- Notifications
+- External integrations
+
+---
+
+## 🧩 Binding Variables
+
+When a plugin runs (e.g. in MVEL, JS, or Python), it has access to **predefined variables**:
+
+| Variable       | Description                                    |
+|----------------|------------------------------------------------|
+| `jdbc`         | JDBC helper (`JdbcTemplate`) for DB access    |
+| `named_jdbc`   | JDBC helper with named parameters              |
+| `http`         | HTTP client wrapper                            |
+| `env`          | Access app configuration/environment           |
+| `global_state` | Shared state across all plugins                |
+| `state`        | Local state per plugin instance                |
+
+These allow scripting without needing deep Java knowledge.
+
+---
+
+## 🛠️ Custom Variable Providers
+
+You can extend plugin context using your **own Java-based variable providers**.
+
+### Key Capabilities
+
+- Written in Java
+- Can expose config, services, utilities
+- Packaged as a JAR
+- Auto-discovered or configured manually
+
+---
+
+## ⚠️ Language-Specific Limitations
+
+### 🐍 Python
+
+- Plugins with native extensions (e.g. `psycopg2`, `numpy`):
+  - Not safe for parallel execution (auto-managed by framework)
+  - Only one plugin with native code can run at a time
+  - Experimental multi-native support with GraalVM (Linux only)
+
+### 📦 JavaScript
+
+- Cannot use **Node.js-specific modules**
+  - No support for `fs`, `net`, etc.
+- Must use **pure ES-compatible libraries**
+
+---
+
+## 🔭 What’s Next
+
+### 📚 Documentation Plans
+
+- Fully document all plugin types and storage extension points
+- List domain objects and their accessible fields
+- Provide examples and patterns
+
+### 🤖 Developer Tooling
+
+- Auto-generate type hints and interface definitions for JS/Python
+- Improve IDE support with:
+  - Autocomplete
+  - Inline documentation
+  - Static typing
+
+---
+
+> ✉️ For updates and contribution details, stay connected with the Cardano Foundation team.

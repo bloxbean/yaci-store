@@ -42,3 +42,5 @@ logs
 _rocksdb
 _pagefind/  
 yaci-docs/node_modules/
+yaci-docs-versioning/node_modules/
+yaci-docs-versioning/.next/

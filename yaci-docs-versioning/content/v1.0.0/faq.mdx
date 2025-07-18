@@ -1,0 +1,162 @@
+&nbsp;
+# ❓ Yaci Store — Frequently Asked Questions (FAQ)
+
+---
+
+## 1. What is the purpose of Yaci Store?
+
+Yaci Store is a modular, event-driven indexing framework for the Cardano blockchain. It captures and stores on-chain data in a structured way, making it easy for developers to build services, analytics tools, and applications that require efficient access to blockchain state and transactions.
+
+---
+
+## 2. What is the key difference between Yaci Store and other chain indexers?
+
+Yaci Store is **modular**, **developer-friendly**, and **plugin-based**. Unlike monolithic indexers like DB Sync or some flat-file indexers, Yaci Store allows you to selectively enable or disable indexing modules ("stores"), giving you flexibility to tailor it for your specific use case or performance needs.
+
+---
+
+## 3. What are the key features that Yaci Store offers?
+
+- 🔌 **Plugin-based architecture** – Easily add or remove indexing modules
+- 🚀 **Fast sync** – Designed to be highly performant with quick sync from genesis
+- 🧩 **Event-driven model** – Reacts to chain events in near-real-time
+- 🛠️ **Customizable** – Add your own stores or replace internal logic
+- 🧪 **Built-in REST APIs** – Includes ready-to-use API endpoints via Yaci Store Server
+
+---
+
+## 4. What are the key benefits offered by Yaci Store?
+
+- 🧱 **Fine-grained modularity**: Use only what you need
+- 📊 **Rich data availability**: Access on-chain data with ready-to-use REST endpoints
+- 🛡️ **Open source and extensible**: Adapt it to new Cardano protocol features
+- 🏗️ **Developer-centric**: Easier to maintain and integrate compared to legacy indexers
+- 💼 **Supports multiple stores in parallel**: Ideal for specialized services
+
+---
+
+## 5. How long does it take to sync the database from scratch?
+
+Syncing speed depends on your hardware and enabled stores. On a modern machine, syncing **mainnet with all core stores** (UTXO, transactions, blocks, stake, etc.) can take **a few hours**, which is significantly faster than DB Sync.
+
+---
+
+## 6. When should I choose to use Yaci Store over other chain indexers?
+
+You should consider Yaci Store if:
+- ✅ You need **high performance and fast sync**.
+- ✅ You want to build **custom dApps or services** with tailored data needs.
+- ✅ You prefer **clean APIs and modular control** over indexed content.
+- ✅ You want a **lightweight indexer** for a single feature (e.g. UTXOs only).
+
+For full-node-style historical analytics or deeply integrated ledger state, legacy tools like DB Sync may still be required. Yaci Store is ideal for modern, efficient, and composable backends.
+
+---
+
+# ❓ Frequently Asked Questions (FAQ)
+
+---
+
+### 1. What is the purpose of Yaci Store?
+
+Yaci Store is a modular and extensible chain indexer for the Cardano blockchain. It extracts and indexes comprehensive on-chain data into a PostgreSQL database and exposes high-performance RESTful APIs. Designed for developers, it supports fast queries, easy customization, and seamless integration with applications that need insight into transaction flows, accounts, rewards, and governance.
+
+---
+
+### 2. What makes Yaci Store different from other indexers?
+
+Yaci Store stands out by combining **performance, modularity, and completeness**:
+
+- ✅ **First full-featured indexer after DB Sync** that tracks **rewards**, **epoch stake**, and **governance state**
+- 🧩 **Modular plugin architecture**: Activate only the stores you need
+- 🚀 **High sync performance** with optional data pruning
+- 🛠️ **Built-in REST APIs with Swagger UI**—no GraphQL or extra layers required
+- 🪶 **Lighter footprint** compared to DB Sync and some Haskell-based solutions
+
+---
+
+### 3. What features does Yaci Store offer?
+
+- 📦 **Pluggable Stores**: Enable/disable data stores like transactions, assets, blocks, rewards, and governance
+- 🧭 **Governance & Reward Indexing**: Access to proposal statuses, DRep tracking, delegation, and reward events
+- ⚙️ **Pruning Support**: Reduce disk usage by trimming old UTxO and transaction data
+- 🐘 **PostgreSQL-native**: All indexed data is stored in a normalized SQL schema
+- 🧪 **RESTful API**: Swagger auto-documented endpoints, easy to integrate
+- 🔄 **Standalone or Docker**: Supports multiple deployment models
+
+---
+
+### 4. What benefits does Yaci Store bring?
+
+- ⚡ **Fast Full-Chain Syncing** (~24h under tested conditions)
+- 🧰 **Customizable Store Composition** for lighter deployments
+- 💾 **Disk Efficiency with Pruning Options**
+- 🔬 **Detailed Governance & Ledger State Tracking**
+- 🔍 **Transparent and queryable via API without extra infrastructure**
+- 👷 **Suited for both production and experimental usage**
+
+---
+
+### 5. How long does it take to sync the database from scratch?
+
+Here are results from our most recent benchmarks:
+
+#### 🧪 Test Environment
+
+- VM: 64 GB RAM, 32 cores
+- Cardano Node: IOG public relay (remote)
+- Storage: Docker Compose, PostgreSQL with `shm_size=2g`
+
+> ⚠️ **Note**: Yaci Store does *not* require 64 GB RAM. A VM with **8–10 GB RAM** and **6–8 cores** is typically sufficient.
+
+#### 🔍 Sync Results
+
+| Configuration                            | Sync Time | Disk Usage |
+|-----------------------------------------|-----------|------------|
+| All on-chain data (ledger state off)    | ~24h      | 689 GB     |
+| With transaction witness enabled         | ~24h      | ~790 GB    |
+| With UTXO pruning enabled                | ~24h      | 338 GB     |
+
+> Transaction pruning was disabled during these tests but is supported.  
+> Additional benchmarks (including with ledger state enabled) are planned.
+
+---
+
+### 6. When should I choose Yaci Store over other indexers?
+
+Yaci Store is the ideal choice when you need:
+
+- A fast alternative to DB Sync with **lower resource requirements**
+- Full access to **on-chain governance**, **DReps**, **proposal history**, and **staking data**
+- Fine-grained **modularity and control** over what data to index
+- A **PostgreSQL-backed indexer** with a developer-friendly API layer
+- An easy way to **prune** unnecessary data and keep infrastructure lean
+- A solution that doesn’t require setting up complex GraphQL layers or Kafka pipelines
+
+---
+## ⚖️ How does Yaci Store compare to other indexers?
+
+| **Solution**        | **Language** | **Key Characteristics** |
+|---------------------|--------------|--------------------------|
+| **Kupo**           | Rust     | Kupo focuses exclusively on UTxO indexing and offers a blazing-fast HTTP API to retrieve UTxOs by address, stake address, or policy ID. It is lightweight but lacks broader chain state support (e.g. governance, rewards). |
+| **Yaci Store**      | Java         | Full ledger state indexer with REST APIs, governance/rewards support, pruning, and multiple storage backends. |
+| **Oura**            | Rust         | Event-based filter pipeline; no built-in storage — requires external sinks like Kafka or Elastic. |
+| **Adder**           | Go           | Event emitter with filters; no built-in persistence — needs backend integration. |
+| **Scrolls**         | Rust         | In-memory Redis-based aggregator; best for real-time metrics, not full-chain history. |
+| **Carp**            | Rust         | Plugin-based indexer built on Oura; stores in PostgreSQL using custom or prebuilt tasks. |
+| **Cardano DB-Sync** | Haskell      | Most complete indexer; heavy on resources and sync time; full PostgreSQL schema. |
+
+---
+
+## 7. When should I choose Yaci Store over other chain indexers?
+
+Choose **Yaci Store** if you:
+
+- Need rich governance and rewards data with ledger-state accuracy.
+- Want a pluggable, standalone indexer with no external dependencies.
+- Prefer REST APIs over writing custom sinks.
+- Need fine-grained pruning for space efficiency.
+- Are building systems that rely on stake snapshots, constitutional state, or DRep data.
+
+Use alternatives like **Oura** or **Carp** if you're designing event-based pipelines, need quick filters, or already use Kafka/Redis for real-time streaming.
+
