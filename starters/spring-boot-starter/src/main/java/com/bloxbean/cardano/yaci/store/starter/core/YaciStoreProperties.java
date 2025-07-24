@@ -18,6 +18,8 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+
+    private Metrics metrics = new Metrics();
     private boolean continueOnParseError = false;
 
     @Getter
@@ -100,5 +102,11 @@ public class YaciStoreProperties {
         private int writeThreadDefaultBatchSize = 1000;
         private int jooqWriteBatchSize = 3000;
         private int writeThreadCount = 5;
+    }
+
+    @Getter
+    @Setter
+    public static final class Metrics {
+        boolean enabled = true;
     }
 }

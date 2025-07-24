@@ -111,4 +111,6 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     @Builder.Default
     private boolean continueOnParseError = false;
+
+    private boolean metricsEnabled = true;
 }
