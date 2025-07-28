@@ -56,15 +56,6 @@ public class YaciStoreAutoConfiguration {
 
     @Bean
     @ReadOnly(false)
-    public TipFinder tipFinder() {
-        TipFinder tipFinder = new TipFinder(properties.getCardano().getHost(), properties.getCardano().getPort(),
-                Point.ORIGIN, properties.getCardano().getProtocolMagic());
-        tipFinder.start();
-        return tipFinder;
-    }
-
-    @Bean
-    @ReadOnly(false)
     @Scope("prototype")
     public BlockRangeSync blockRangeSync() {
         log.info("Creating BlockRangeSync to fetch blocks");
