@@ -29,7 +29,7 @@ public class ChainTipService {
      */
     public synchronized Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
         try {
-            var tip = tipFinderService.getTip().block(Duration.ofSeconds(5));
+            var tip = tipFinderService.getTip().block(Duration.ofSeconds(10));
 
             if (tip != null) {
                 int epoch = epochConfig.epochFromSlot(eraService.getFirstNonByronSlot(), Era.Shelley, tip.getPoint().getSlot());
