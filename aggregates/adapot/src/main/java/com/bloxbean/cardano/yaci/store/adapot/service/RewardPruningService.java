@@ -1,18 +1,19 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
+
 import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,57 +23,57 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_EPOCH_STAKE_PRUNING_ENABLED;
+import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_REWARD_PRUNING_ENABLED;
 
 @Component
 @ConditionalOnProperty(
-        value = "store.adapot.epoch-stake-pruning-enabled",
+        value = "store.adapot.reward-pruning-enabled",
         havingValue = "true",
         matchIfMissing = false
 )
 @RequiredArgsConstructor
-@EnableIf(STORE_ADAPOT_EPOCH_STAKE_PRUNING_ENABLED)
+@EnableIf(STORE_ADAPOT_REWARD_PRUNING_ENABLED)
 @Slf4j
-public class EpochStakePruningService {
-    private final EpochStakeService epochStakeService;
+public class RewardPruningService {
     private final AdaPotProperties adaPotProperties;
+    private final RewardService rewardService;
+    private final CursorService cursorService;
     private final AdaPotJobStorage adaPotJobStorage;
-    private AtomicBoolean isPruning = new AtomicBoolean(false);
+    private final AtomicBoolean isPruning = new AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
-        log.info("<< Epoch Stake Pruning Service Enabled >>");
+        log.info("<< Reward Pruning Service Enabled >>");
     }
 
-    @Scheduled(fixedRateString = "${store.adapot.epoch-stake-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 300)
+    @Scheduled(fixedRateString = "${store.adapot.reward-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS, initialDelay = 500)
     public void handleScheduledPruning() {
-        if (!adaPotProperties.isEpochStakePruningEnabled()) {
+        if (!adaPotProperties.isRewardPruningEnabled()) {
             return;
         }
 
         if (isPruning.get()) {
-            log.debug("Epoch stake pruning is already in progress. Skipping this run !!!");
+            log.debug("Reward pruning is already in progress. Skipping this run !!!");
             return;
         }
-
-        Thread.startVirtualThread(this::pruneOldEpochStakes);
+        Thread.startVirtualThread(this::pruneWithdrawnRewards);
     }
 
     @EventListener
     @Transactional
-    @Order(1)
     public void handlePreAdaPotJobProcessingEvent(PreAdaPotJobProcessingEvent event) {
         if (isPruning.get()) {
-            log.debug("Epoch stake pruning is already in progress. Skipping this run !!!");
+            log.debug("Reward pruning is already in progress. Skipping this run !!!");
             return;
         }
 
-        Thread.startVirtualThread(this::pruneOldEpochStakes);
-        log.info("Epoch stake pruning triggered by pre adapot job processing event");
+        Thread.startVirtualThread(this::pruneWithdrawnRewards);
+        log.info("Reward pruning triggered by pre adapot job processing event");
     }
 
-    private void pruneOldEpochStakes() {
+    private void pruneWithdrawnRewards() {
         isPruning.set(true);
+
         try {
             List<AdaPotJob> completedJobs = adaPotJobStorage.getJobsByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED)
                     .stream()
@@ -83,34 +84,21 @@ public class EpochStakePruningService {
                 return;
             }
 
-            int maxCompletedEpoch = completedJobs.getLast().getEpoch();
+            long maxCompletedAdaPotJobsSlot = completedJobs.getLast().getSlot();
 
-            int retentionEpochs = adaPotProperties.getEpochStakePruningSafeEpochs();
+            long slot = maxCompletedAdaPotJobsSlot - adaPotProperties.getRewardPruningSafeSlots();
 
-            if (retentionEpochs < 4) {
-                log.error("Epoch stake safe epochs is set to less than 4." +
-                        " This may cause issues with reward calculation. Minimum recommended value is 4. Current value: {}", retentionEpochs);
-                return;
-            }
-
-            int pruneBeforeEpoch = maxCompletedEpoch - retentionEpochs + 1;
-
-            if (pruneBeforeEpoch > 0) {
-                log.info(">> Pruning epoch stake records before epoch: {}", pruneBeforeEpoch);
-
+            if (slot > 0) {
+                log.info(">> Pruning withdrawn reward before slot: {}", slot);
                 long t1 = System.currentTimeMillis();
-                long deleteCount = epochStakeService.deleteByEpochLessThan(pruneBeforeEpoch);
+                int deleteCount = rewardService.deleteWithdrawnRewards(slot);
                 long t2 = System.currentTimeMillis();
 
-                log.info(">> Deleted {} epoch stake records before epoch {}, Time taken: {} ms",
-                        deleteCount, pruneBeforeEpoch, (t2 - t1));
-            } else {
-                log.debug("No epoch stake records to prune. Max epoch: {}, Retention: {} epochs",
-                        maxCompletedEpoch, retentionEpochs);
+                log.info(">> Deleted {} reward records before slot {}, Time taken: {} ms",
+                        deleteCount, slot, (t2 - t1));
             }
         } finally {
             isPruning.set(false);
         }
     }
-
 }
