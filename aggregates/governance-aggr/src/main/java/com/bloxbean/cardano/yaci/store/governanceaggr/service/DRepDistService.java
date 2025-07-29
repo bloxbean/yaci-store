@@ -232,21 +232,71 @@ public class DRepDistService {
 
         String activeProposalDepositsQuery = String.format("""
                 CREATE %s TABLE ss_gov_active_proposal_deposits AS
-                select
-                      g.return_address,
-                      SUM(g.deposit) as deposit
-                    from
-                      gov_action_proposal g
-                      left join gov_action_proposal_status s on g.tx_hash = s.gov_action_tx_hash
-                      and g.idx = s.gov_action_index
-                    where
-                     (s.status = 'ACTIVE'
-                     		and g.epoch < :epoch
-                     		and s.epoch = :epoch)
-                     	or (s.status is null
-                     		and g.epoch = :epoch)
-                    group by
-                      g.return_address
+                WITH refund_counts AS (
+                    -- Count proposal refunds that have earned_epoch = :epoch
+                    -- These refunds correspond to proposals that will be dropped in the upcoming epoch
+                    SELECT
+                        rr.address,
+                        COUNT(*) as refund_count,
+                        SUM(rr.amount) as total_refund_amount
+                    FROM reward_rest rr
+                    WHERE rr.type = 'proposal_refund'
+                      AND rr.earned_epoch = :epoch
+                    GROUP BY rr.address
+                ),
+                ratified_expired_proposal_counts AS (
+                    -- Count proposals that were RATIFIED or EXPIRED in the just ended epoch
+                    SELECT
+                        g.return_address,
+                        COUNT(*) as ratified_expired_count,
+                        SUM(g.deposit) as total_ratified_expired_deposit
+                    FROM gov_action_proposal g
+                    INNER JOIN gov_action_proposal_status s ON g.tx_hash = s.gov_action_tx_hash
+                        AND g.idx = s.gov_action_index
+                        AND s.epoch = :epoch
+                    WHERE s.status IN ('RATIFIED', 'EXPIRED')
+                    GROUP BY g.return_address
+                ),
+                active_proposals AS (
+                    -- Get proposals that the corresponding deposits should still be counted in voting power:
+                    -- 1. Proposals that had ACTIVE status
+                    -- 2. Newly created proposals (no status record yet)
+                    SELECT
+                        g.return_address,
+                        SUM(g.deposit) as total_active_deposit
+                    FROM gov_action_proposal g
+                    LEFT JOIN gov_action_proposal_status s ON g.tx_hash = s.gov_action_tx_hash
+                        AND g.idx = s.gov_action_index
+                        AND s.epoch = :epoch
+                    WHERE
+                        (s.status = 'ACTIVE' AND g.epoch < :epoch)
+                        OR (s.status IS NULL AND g.epoch = :epoch)
+                    GROUP BY g.return_address
+                )
+                SELECT
+                    ap.return_address,
+                    CASE
+                        -- If refund count matches expired/ratified proposal count AND amounts match,
+                        -- we can be confident that refunds correspond exactly to ratified/expired proposals
+                        -- In this case, don't subtract refunds from active proposals
+                        WHEN COALESCE(rc.refund_count, 0) = COALESCE(repc.ratified_expired_count, 0)
+                             AND COALESCE(rc.total_refund_amount, 0) = COALESCE(repc.total_ratified_expired_deposit, 0)
+                        THEN ap.total_active_deposit
+                        -- Otherwise, subtract the deposits of proposals that will be dropped due to their siblings/parents
+                        -- being ratified or expired. These proposals had ACTIVE status in epoch (:epoch)
+                        ELSE ap.total_active_deposit - (COALESCE(rc.total_refund_amount, 0) - COALESCE(repc.total_ratified_expired_deposit, 0))
+                    END as deposit
+                FROM active_proposals ap
+                LEFT JOIN refund_counts rc ON ap.return_address = rc.address
+                LEFT JOIN ratified_expired_proposal_counts repc ON ap.return_address = repc.return_address
+                WHERE
+                    -- Only include addresses with positive total deposits
+                    CASE
+                        WHEN COALESCE(rc.refund_count, 0) = COALESCE(repc.ratified_expired_count, 0)
+                             AND COALESCE(rc.total_refund_amount, 0) = COALESCE(repc.total_ratified_expired_deposit, 0)
+                        THEN ap.total_active_deposit > 0
+                        ELSE ap.total_active_deposit - (COALESCE(rc.total_refund_amount, 0) - COALESCE(repc.total_ratified_expired_deposit, 0)) > 0
+                    END
                 """, tableType);
 
         String spendableRewardRestQuery = String.format("""
