@@ -289,14 +289,6 @@ public class DRepDistService {
                 FROM active_proposals ap
                 LEFT JOIN refund_counts rc ON ap.return_address = rc.address
                 LEFT JOIN ratified_expired_proposal_counts repc ON ap.return_address = repc.return_address
-                WHERE
-                    -- Only include addresses with positive total deposits
-                    CASE
-                        WHEN COALESCE(rc.refund_count, 0) = COALESCE(repc.ratified_expired_count, 0)
-                             AND COALESCE(rc.total_refund_amount, 0) = COALESCE(repc.total_ratified_expired_deposit, 0)
-                        THEN ap.total_active_deposit > 0
-                        ELSE ap.total_active_deposit - (COALESCE(rc.total_refund_amount, 0) - COALESCE(repc.total_ratified_expired_deposit, 0)) > 0
-                    END
                 """, tableType);
 
         String spendableRewardRestQuery = String.format("""
