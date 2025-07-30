@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.core.metrics;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,9 @@ public class MetricsService {
     public static final String YACI_STORE_CURRENT_ERA = "yaci.store.current.era";
     public static final String YACI_STORE_SYNC_MODE = "yaci.store.sync_mode";
     public static final String YACI_STORE_PROTOCOL_MAGIC = "yaci.store.protocol_magic";
+    public static final String YACI_STORE_CURRENT_SLOT = "yaci.store.current.slot";
+    public static final String YACI_STORE_CONNECTION_STATUS = "yaci.store.connection.status";
+    public static final String YACI_STORE_CONNECTION_RESETS = "yaci.store.connection.resets";
 
     private AtomicLong currentBlockNo = new AtomicLong(0);
     private AtomicLong currentEpochNo = new AtomicLong(0);
@@ -24,6 +28,9 @@ public class MetricsService {
     private AtomicLong currentBlockTime = new AtomicLong(0);
     private AtomicInteger isSyncMode = new AtomicInteger(0);
     private AtomicLong protocolMagic = new AtomicLong(0);
+    private AtomicLong currentSlot = new AtomicLong(0);
+    private AtomicInteger connectionStatus = new AtomicInteger(0);
+    private Counter connectionResetCounter;
 
     public MetricsService(MeterRegistry meterRegistry, StoreProperties storeProperties) {
 
@@ -53,6 +60,18 @@ public class MetricsService {
         Gauge.builder(YACI_STORE_PROTOCOL_MAGIC, protocolMagic, AtomicLong::get)
                 .description("Protocol magic of the current chain")
                 .register(meterRegistry);
+
+        Gauge.builder(YACI_STORE_CURRENT_SLOT, currentSlot, AtomicLong::get)
+                .description("Current slot being processed")
+                .register(meterRegistry);
+
+        Gauge.builder(YACI_STORE_CONNECTION_STATUS, connectionStatus, AtomicInteger::get)
+                .description("Connection status to the node. 1 for up, 0 for down")
+                .register(meterRegistry);
+
+        connectionResetCounter = Counter.builder(YACI_STORE_CONNECTION_RESETS)
+                .description("Number of connection resets to the node")
+                .register(meterRegistry);
     }
 
     public void updateMetrics(EventMetadata metadata) {
@@ -63,5 +82,16 @@ public class MetricsService {
         currentEraNo.set(metadata.getEra().getValue());
         isSyncMode.set(metadata.isSyncMode()? 1 : 0);
         protocolMagic.set(metadata.getProtocolMagic());
+        currentSlot.set(metadata.getSlot());
+    }
+
+    public void updateConnectionStatus(boolean isConnected) {
+        connectionStatus.set(isConnected ? 1 : 0);
+    }
+
+    public void incrementConnectionResets() {
+        if (connectionResetCounter != null) {
+            connectionResetCounter.increment();
+        }
     }
 }

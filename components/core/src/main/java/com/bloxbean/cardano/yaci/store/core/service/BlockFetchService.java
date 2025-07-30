@@ -380,6 +380,8 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = false;
         cursorService.setSyncMode(syncMode);
 
+        metricsService.updateConnectionStatus(true);
+
         startKeepAliveThread(syncMode);
     }
 
@@ -392,6 +394,8 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = true;
         cursorService.setSyncMode(syncMode);
         startKeepAliveThread(syncMode);
+
+        metricsService.updateConnectionStatus(true);
     }
 
     public synchronized void shutdown() {
@@ -424,6 +428,11 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         return blockRangeSync.getLastKeepAliveResponseTime();
+    }
+
+    @Override
+    public void onDisconnect() {
+        metricsService.updateConnectionStatus(false);
     }
 
     public boolean isScheduledToStop() {
