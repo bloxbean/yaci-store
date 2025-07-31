@@ -19,8 +19,8 @@ public class MetricsService {
     public static final String YACI_STORE_SYNC_MODE = "yaci.store.sync_mode";
     public static final String YACI_STORE_PROTOCOL_MAGIC = "yaci.store.protocol_magic";
     public static final String YACI_STORE_CURRENT_SLOT = "yaci.store.current.slot";
-    public static final String YACI_STORE_CONNECTION_STATUS = "yaci.store.connection.status";
-    public static final String YACI_STORE_CONNECTION_RESETS = "yaci.store.connection.resets";
+    public static final String YACI_STORE_CONNECTION_STATUS = "yaci.store.node.connection.status";
+    public static final String YACI_STORE_CONNECTION_RESETS = "yaci.store.node.connection.resets";
 
     private AtomicLong currentBlockNo = new AtomicLong(0);
     private AtomicLong currentEpochNo = new AtomicLong(0);

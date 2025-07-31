@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.admin.api;
 
 import com.bloxbean.cardano.yaci.store.account.service.AddressBalanceSnapshotService;
 import com.bloxbean.cardano.yaci.store.account.service.BalanceSnapshotService;
-import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,16 +24,13 @@ public class AdminController {
     private final StartService startService;
     private final BalanceSnapshotService balanceSnapshotService;
     private final AddressBalanceSnapshotService addressBalanceSnapshotService;
-    private final MetricsService metricsService;
 
     public AdminController(@Autowired(required = true) StartService startService,
                            @Autowired(required = false) BalanceSnapshotService balanceSnapshotService,
-                           @Autowired(required = false) AddressBalanceSnapshotService addressBalanceSnapshotService,
-                           @Autowired(required = true) MetricsService metricsService) {
+                           @Autowired(required = false) AddressBalanceSnapshotService addressBalanceSnapshotService) {
         this.startService = startService;
         this.balanceSnapshotService = balanceSnapshotService;
         this.addressBalanceSnapshotService = addressBalanceSnapshotService;
-        this.metricsService = metricsService;
     }
 
     @PostMapping(value = "/admin/calculate-address-balance", consumes = {MediaType.APPLICATION_JSON_VALUE})
@@ -82,8 +78,6 @@ public class AdminController {
             startService.stop();
             TimeUnit.SECONDS.sleep(2);
             startService.start();
-
-            metricsService.incrementConnectionResets();
 
             return "Sync restarted";
         } else {
