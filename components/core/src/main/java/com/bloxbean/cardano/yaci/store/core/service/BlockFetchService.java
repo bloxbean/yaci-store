@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
@@ -23,6 +24,7 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -529,5 +531,21 @@ public class BlockFetchService implements BlockChainDataListener {
                 .era(eventMetadata.getEra())
                 .build();
         publisher.publishEvent(epochChangeEvent);
+    }
+
+    @Override
+    public void intersactNotFound(Tip tip) {
+        log.error("Intersection not found. Current tip: {}", tip);
+        
+        // Publish restart event
+        RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
+                .reason("IntersectionNotFound")
+                .errorCode("INTERSECTION_NOT_FOUND")
+                .timestamp(System.currentTimeMillis())
+                .source("BlockFetchService")
+                .details(String.format("Intersect not found. Current Tip: %s", tip))
+                .build();
+        
+        publisher.publishEvent(restartEvent);
     }
 }

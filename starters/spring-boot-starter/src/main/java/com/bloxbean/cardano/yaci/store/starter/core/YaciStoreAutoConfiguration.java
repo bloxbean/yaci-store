@@ -250,6 +250,12 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
 
+        //Auto-restart properties
+        storeProperties.setAutoRestartEnabled(properties.getAutoRestart().isEnabled());
+        storeProperties.setAutoRestartDebounceWindowMs(properties.getAutoRestart().getDebounceWindowMs());
+        storeProperties.setAutoRestartMaxAttempts(properties.getAutoRestart().getMaxAttempts());
+        storeProperties.setAutoRestartBackoffBaseMs(properties.getAutoRestart().getBackoffBaseMs());
+
         return storeProperties;
     }
 
