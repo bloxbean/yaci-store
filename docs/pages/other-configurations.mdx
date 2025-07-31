@@ -90,6 +90,82 @@ By default, saving of transaction witness data is disabled.
 ```properties
 store.transaction.save-witness=false
 ```
+## Auto-Restart Configuration
+
+Yaci-store includes an auto-restart feature that automatically handles recoverable sync errors, such as IntersectionNotFound errors that can occur after network disconnections and node rollbacks.
+
+The auto-restart system uses an event-driven architecture to detect sync issues and restart the sync process with proper backpressure controls.
+
+```properties
+# Auto-restart configuration (enabled by default)
+store.auto-restart.enabled=true
+store.auto-restart.debounce-window-ms=30000
+store.auto-restart.max-attempts=5
+store.auto-restart.backoff-base-ms=5000
+```
+
+### Configuration Options
+
+- **`store.auto-restart.enabled`** (default: `true`): Enable or disable the auto-restart feature
+- **`store.auto-restart.debounce-window-ms`** (default: `30000`): Time window in milliseconds to prevent multiple restart attempts. If multiple restart events occur within this window, only the first one will be processed
+- **`store.auto-restart.max-attempts`** (default: `5`): Maximum number of restart attempts before giving up and requiring manual intervention
+- **`store.auto-restart.backoff-base-ms`** (default: `5000`): Base delay in milliseconds for exponential backoff between restart attempts
+
+### How It Works
+
+The auto-restart system automatically handles:
+- **IntersectionNotFound errors**: When the node can't find a common intersection point after network issues
+- **Health check failures**: When the auto-recovery service detects sync problems
+
+The system includes safeguards to prevent restart storms:
+- **Debouncing**: Ignores rapid restart requests within the configured window
+- **Exponential backoff**: Increases delay between retry attempts (5s, 10s, 20s, 40s, 60s max)
+- **Retry limits**: Stops trying after the maximum attempts are reached
+- **Success tracking**: Resets the retry counter after 5 minutes of stable sync
+
+<Callout>
+The auto-restart feature is enabled by default since IntersectionNotFound is a valid scenario that should be handled automatically, especially in production environments.
+</Callout>
+
+## Auto-Recovery Service
+
+In addition to the auto-restart feature, yaci-store provides an auto-recovery service that monitors the overall health of the sync process and triggers restarts when health issues are detected.
+
+The auto-recovery service performs periodic health checks and publishes restart events when:
+- Connection to the Cardano node is not alive
+- Sync process is in an error state
+- General sync health problems are detected
+
+```properties
+# Auto-recovery service configuration (disabled by default)
+store.admin.auto-recovery-enabled=false
+store.admin.health-check-interval=120
+```
+
+### Configuration Options
+
+- **`store.admin.auto-recovery-enabled`** (default: `false`): Enable or disable the auto-recovery service
+- **`store.admin.health-check-interval`** (default: `120`): Health check interval in seconds
+
+### How Auto-Recovery Works
+
+The auto-recovery service:
+1. **Periodic Health Monitoring**: Runs health checks at the configured interval
+2. **Connection Monitoring**: Checks if the connection to the Cardano node is alive
+3. **Error Detection**: Monitors for sync errors and problematic states
+4. **Event Publishing**: Publishes restart events that are handled by the auto-restart system
+
+<Callout>
+The auto-recovery service is disabled by default. It should only be enabled in environments where you want comprehensive health monitoring beyond just IntersectionNotFound errors. When enabled, it works together with the auto-restart system to provide robust sync reliability.
+</Callout>
+
+### Relationship Between Auto-Restart and Auto-Recovery
+
+- **Auto-Restart**: Always enabled by default, handles specific recoverable errors like IntersectionNotFound
+- **Auto-Recovery**: Disabled by default, provides broader health monitoring and triggers restarts for general health issues
+- Both systems work together through the same event-driven architecture
+- Auto-recovery publishes events that are processed by the auto-restart system's backpressure controls
+
 ## Auto Sync off
 
 Ideally, you should only have one write instance of yaci-store. However, if you want to set up multiple read-only yaci-store instances alongside one write instance,
