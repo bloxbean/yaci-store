@@ -21,6 +21,7 @@ public class YaciStoreProperties {
 
     private Metrics metrics = new Metrics();
     private boolean continueOnParseError = false;
+    private AutoRestart autoRestart = new AutoRestart();
 
     @Getter
     @Setter
@@ -109,4 +110,14 @@ public class YaciStoreProperties {
     public static final class Metrics {
         boolean enabled = true;
     }
+
+    @Getter
+    @Setter
+    public static final class AutoRestart {
+        private boolean enabled = true;
+        private long debounceWindowMs = 30000;
+        private int maxAttempts = 5;
+        private long backoffBaseMs = 5000;
+    }
+
 }
