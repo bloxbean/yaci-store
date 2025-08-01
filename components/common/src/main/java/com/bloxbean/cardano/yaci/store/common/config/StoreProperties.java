@@ -112,5 +112,11 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     @Builder.Default
     private boolean continueOnParseError = false;
 
+    //Auto-restart properties
+    private boolean autoRestartEnabled = true;
+    private long autoRestartDebounceWindowMs = 30000;
+    private int autoRestartMaxAttempts = 5;
+    private long autoRestartBackoffBaseMs = 5000;
+
     private boolean metricsEnabled = true;
 }
