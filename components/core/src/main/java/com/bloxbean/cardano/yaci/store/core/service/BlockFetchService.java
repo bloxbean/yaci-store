@@ -59,7 +59,6 @@ public class BlockFetchService implements BlockChainDataListener {
     private boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
     private AtomicBoolean scheduledToStop = new AtomicBoolean(false);
-    private AtomicBoolean disconectionDetected = new AtomicBoolean(false);
     private Thread keepAliveThread;
 
     //Required to publish EpochChangeEvent
@@ -147,6 +146,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Update metrics
         try {
             metricsService.updateMetrics(eventMetadata);
+            metricsService.updateLastReceivedBlockTime(lastReceivedBlockTime);
         } catch (Exception e) {
             log.warn("Error updating metrics for block: " + block.getHeader().getHeaderBody().getBlockNumber(), e);
         }
@@ -322,18 +322,6 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     @Override
-    public void batchStarted() {
-        if (!syncMode) {
-            metricsService.updateConnectionStatus(true);
-
-            if (disconectionDetected.get()) {
-                metricsService.incrementConnectionResets();
-                disconectionDetected.set(false);
-            }
-        }
-    }
-
-    @Override
     public void batchDone() {
 
         if (!syncMode) {
@@ -393,8 +381,6 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = false;
         cursorService.setSyncMode(syncMode);
 
-        metricsService.updateConnectionStatus(true);
-
         startKeepAliveThread(syncMode);
     }
 
@@ -407,26 +393,6 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = true;
         cursorService.setSyncMode(syncMode);
         startKeepAliveThread(syncMode);
-
-        metricsService.updateConnectionStatus(true);
-    }
-
-    @Override
-    public void intersactFound(Tip tip, Point point) {
-        if (disconectionDetected.get()) {
-            metricsService.incrementConnectionResets();
-            metricsService.updateConnectionStatus(true);
-            disconectionDetected.set(false);
-        }
-    }
-
-    @Override
-    public void intersactNotFound(Tip tip) {
-        if (disconectionDetected.get()) {
-            metricsService.incrementConnectionResets();
-            metricsService.updateConnectionStatus(true);
-            disconectionDetected.set(false);
-        }
     }
 
     public synchronized void shutdown() {
@@ -459,12 +425,6 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         return blockRangeSync.getLastKeepAliveResponseTime();
-    }
-
-    @Override
-    public void onDisconnect() {
-        metricsService.updateConnectionStatus(false);
-        disconectionDetected.set(true);
     }
 
     public boolean isScheduledToStop() {
@@ -544,6 +504,16 @@ public class BlockFetchService implements BlockChainDataListener {
                 .era(eventMetadata.getEra())
                 .build();
         publisher.publishEvent(epochChangeEvent);
+    }
+
+    @Override
+    public void onDisconnect() {
+        metricsService.updateConnectionStatus(false);
+    }
+
+    @Override
+    public void intersactFound(Tip tip, Point point) {
+        metricsService.updateConnectionStatus(true);
     }
 
     @Override
