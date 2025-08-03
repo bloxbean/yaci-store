@@ -23,6 +23,9 @@ public class YaciStoreProperties {
     private boolean continueOnParseError = false;
     private AutoRestart autoRestart = new AutoRestart();
 
+    //Block receive delay threshold in seconds for health check
+    private int blockReceiveDelaySeconds = 120;
+
     @Getter
     @Setter
     public static final class Cardano {
