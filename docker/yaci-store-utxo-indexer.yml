@@ -1,6 +1,6 @@
 services:
   yaci-store-utxo-indexer:
-    image: bloxbean/yaci-store-utxo-indexer:0.1.3
+    image: bloxbean/yaci-store-utxo-indexer:0.1.5-beta
     container_name: yaci-store-utxo-indexer
     environment:
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=utxo_indexer}
