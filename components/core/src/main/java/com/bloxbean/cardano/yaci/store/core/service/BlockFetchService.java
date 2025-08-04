@@ -146,6 +146,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Update metrics
         try {
             metricsService.updateMetrics(eventMetadata);
+            metricsService.updateLastReceivedBlockTime(lastReceivedBlockTime);
         } catch (Exception e) {
             log.warn("Error updating metrics for block: " + block.getHeader().getHeaderBody().getBlockNumber(), e);
         }
@@ -531,6 +532,16 @@ public class BlockFetchService implements BlockChainDataListener {
                 .era(eventMetadata.getEra())
                 .build();
         publisher.publishEvent(epochChangeEvent);
+    }
+
+    @Override
+    public void onDisconnect() {
+        metricsService.updateConnectionStatus(false);
+    }
+
+    @Override
+    public void intersactFound(Tip tip, Point point) {
+        metricsService.updateConnectionStatus(true);
     }
 
     @Override
