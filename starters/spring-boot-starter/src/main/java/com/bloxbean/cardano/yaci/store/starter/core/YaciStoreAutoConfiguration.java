@@ -56,6 +56,15 @@ public class YaciStoreAutoConfiguration {
 
     @Bean
     @ReadOnly(false)
+    public TipFinder tipFinder() {
+        TipFinder tipFinder = new TipFinder(properties.getCardano().getHost(), properties.getCardano().getPort(),
+                Point.ORIGIN, properties.getCardano().getProtocolMagic());
+        tipFinder.start();
+        return tipFinder;
+    }
+
+    @Bean
+    @ReadOnly(false)
     @Scope("prototype")
     public BlockRangeSync blockRangeSync() {
         log.info("Creating BlockRangeSync to fetch blocks");
@@ -209,7 +218,6 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
 
         storeProperties.setKeepAliveInterval(properties.getCardano().getKeepAliveInterval());
-        storeProperties.setBlockReceiveDelaySeconds(properties.getBlockReceiveDelaySeconds());
 
         storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
 
@@ -245,14 +253,6 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setN2cPoolMaxWaitInMillis(properties.getCardano().getN2cPoolMaxWaitInMillis());
 
         storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
-
-        storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
-
-        //Auto-restart properties
-        storeProperties.setAutoRestartEnabled(properties.getAutoRestart().isEnabled());
-        storeProperties.setAutoRestartDebounceWindowMs(properties.getAutoRestart().getDebounceWindowMs());
-        storeProperties.setAutoRestartMaxAttempts(properties.getAutoRestart().getMaxAttempts());
-        storeProperties.setAutoRestartBackoffBaseMs(properties.getAutoRestart().getBackoffBaseMs());
 
         return storeProperties;
     }

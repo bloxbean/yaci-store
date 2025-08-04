@@ -21,19 +21,4 @@ public class HealthStatus {
     private int lastKeepAliveResponseCookie;
     private long lastKeepAliveResponseTime;
     private long lastReceivedBlockTime;
-
-    /**
-     * Time since last block was received in milliseconds
-     */
-    private long timeSinceLastBlock;
-
-    /**
-     * Indicates if blocks are being received within the configured threshold
-     */
-    private boolean isReceivingBlocks;
-
-    /**
-     * The configured block receive delay threshold in milliseconds
-     */
-    private long blockReceiveDelayThreshold;
 }

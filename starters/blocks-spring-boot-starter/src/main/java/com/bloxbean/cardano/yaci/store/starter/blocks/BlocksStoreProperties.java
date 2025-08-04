@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
-public class BlocksStoreAutoConfigProperties {
-    private Blocks blocks = new Blocks();
+public class BlocksStoreProperties {
+    private Blocks blocks;
 
     @Getter
     @Setter
@@ -18,7 +18,6 @@ public class BlocksStoreAutoConfigProperties {
        private boolean apiEnabled = true;
 
        private Endpoints endpoints = new Endpoints();
-       private Metrics metrics = new Metrics();
     }
 
     @Getter
@@ -31,12 +30,5 @@ public class BlocksStoreAutoConfigProperties {
     @Setter
     public static final class Endpoint {
         private boolean enabled = true;
-    }
-
-    @Getter
-    @Setter
-    public static final class Metrics {
-        private boolean enabled = true;
-        private long updateInterval = 60000; // 60 seconds
     }
 }

@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
-import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.BlockRangeSync;
 import com.bloxbean.cardano.yaci.helper.BlockSync;
@@ -19,12 +18,11 @@ import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
-import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
-import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +44,7 @@ import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.D
 @Slf4j
 public class BlockFetchService implements BlockChainDataListener {
     private final ApplicationEventPublisher publisher;
-    private final MetricsService metricsService;
+    private final MeterRegistry meterRegistry;
     private final BlockRangeSync blockRangeSync;
     private final BlockSync blockSync;
     private final CursorService cursorService;
@@ -141,14 +139,6 @@ public class BlockFetchService implements BlockChainDataListener {
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
             stopSyncOnError();
             throw new RuntimeException(e);
-        }
-
-        //Update metrics
-        try {
-            metricsService.updateMetrics(eventMetadata);
-            metricsService.updateLastReceivedBlockTime(lastReceivedBlockTime);
-        } catch (Exception e) {
-            log.warn("Error updating metrics for block: " + block.getHeader().getHeaderBody().getBlockNumber(), e);
         }
     }
 
@@ -504,31 +494,5 @@ public class BlockFetchService implements BlockChainDataListener {
                 .era(eventMetadata.getEra())
                 .build();
         publisher.publishEvent(epochChangeEvent);
-    }
-
-    @Override
-    public void onDisconnect() {
-        metricsService.updateConnectionStatus(false);
-    }
-
-    @Override
-    public void intersactFound(Tip tip, Point point) {
-        metricsService.updateConnectionStatus(true);
-    }
-
-    @Override
-    public void intersactNotFound(Tip tip) {
-        log.error("Intersection not found. Current tip: {}", tip);
-        
-        // Publish restart event
-        RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
-                .reason("IntersectionNotFound")
-                .errorCode("INTERSECTION_NOT_FOUND")
-                .timestamp(System.currentTimeMillis())
-                .source("BlockFetchService")
-                .details(String.format("Intersect not found. Current Tip: %s", tip))
-                .build();
-        
-        publisher.publishEvent(restartEvent);
     }
 }
