@@ -18,7 +18,13 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+
+    private Metrics metrics = new Metrics();
     private boolean continueOnParseError = false;
+    private AutoRestart autoRestart = new AutoRestart();
+
+    //Block receive delay threshold in seconds for health check
+    private int blockReceiveDelaySeconds = 120;
 
     @Getter
     @Setter
@@ -101,4 +107,20 @@ public class YaciStoreProperties {
         private int jooqWriteBatchSize = 3000;
         private int writeThreadCount = 5;
     }
+
+    @Getter
+    @Setter
+    public static final class Metrics {
+        boolean enabled = true;
+    }
+
+    @Getter
+    @Setter
+    public static final class AutoRestart {
+        private boolean enabled = true;
+        private long debounceWindowMs = 30000;
+        private int maxAttempts = 5;
+        private long backoffBaseMs = 5000;
+    }
+
 }

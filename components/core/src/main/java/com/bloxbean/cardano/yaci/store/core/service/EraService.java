@@ -138,7 +138,7 @@ public class EraService {
      */
     public synchronized Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
         try {
-            var tip = tipFinderService.getTip().block(Duration.ofSeconds(5));
+            var tip = tipFinderService.getTip().block(Duration.ofSeconds(10));
 
             if (tip != null) {
                 int epoch = epochConfig.epochFromSlot(firstShelleySlot(), Era.Shelley, tip.getPoint().getSlot());

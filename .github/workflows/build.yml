@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - develop
+      - release/*
+      - develop/*
   pull_request:
     branches:
       - main
       - develop
+      - release/*
+      - develop/*
 
 jobs:
   commit-build:

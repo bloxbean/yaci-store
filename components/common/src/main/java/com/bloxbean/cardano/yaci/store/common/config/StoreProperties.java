@@ -54,6 +54,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private int keepAliveInterval = 10000;
 
+    //Block receive delay threshold in seconds
+    @Builder.Default
+    private int blockReceiveDelaySeconds = 120;
+
     //Only required if the genesis hash can't be fetched
     private String defaultGenesisHash = "Genesis";
 
@@ -111,4 +115,12 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     @Builder.Default
     private boolean continueOnParseError = false;
+
+    //Auto-restart properties
+    private boolean autoRestartEnabled = true;
+    private long autoRestartDebounceWindowMs = 30000;
+    private int autoRestartMaxAttempts = 5;
+    private long autoRestartBackoffBaseMs = 5000;
+
+    private boolean metricsEnabled = true;
 }
