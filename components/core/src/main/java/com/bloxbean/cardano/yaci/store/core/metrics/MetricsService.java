@@ -18,7 +18,6 @@ public class MetricsService {
     public static final String YACI_STORE_SYNC_MODE = "yaci.store.sync_mode";
     public static final String YACI_STORE_PROTOCOL_MAGIC = "yaci.store.protocol_magic";
     public static final String YACI_STORE_CURRENT_SLOT = "yaci.store.current.slot";
-    public static final String YACI_STORE_CONNECTION_STATUS = "yaci.store.node.connection.status";
     public static final String YACI_STORE_LAST_RECEIVED_BLOCK_TIME = "yaci.store.last_received_block_time";
 
     private AtomicLong currentBlockNo = new AtomicLong(0);
@@ -28,7 +27,6 @@ public class MetricsService {
     private AtomicInteger isSyncMode = new AtomicInteger(0);
     private AtomicLong protocolMagic = new AtomicLong(0);
     private AtomicLong currentSlot = new AtomicLong(0);
-    private AtomicInteger connectionStatus = new AtomicInteger(0);
     private AtomicLong lastReceivedBlockTime = new AtomicLong(0);
 
     public MetricsService(MeterRegistry meterRegistry, StoreProperties storeProperties) {
@@ -64,10 +62,6 @@ public class MetricsService {
                 .description("Current slot being processed")
                 .register(meterRegistry);
 
-        Gauge.builder(YACI_STORE_CONNECTION_STATUS, connectionStatus, AtomicInteger::get)
-                .description("Connection status to the node. 1 for up, 0 for down")
-                .register(meterRegistry);
-
         Gauge.builder(YACI_STORE_LAST_RECEIVED_BLOCK_TIME, lastReceivedBlockTime, AtomicLong::get)
                 .description("Timestamp of the last received block in milliseconds")
                 .register(meterRegistry);
@@ -82,10 +76,6 @@ public class MetricsService {
         isSyncMode.set(metadata.isSyncMode()? 1 : 0);
         protocolMagic.set(metadata.getProtocolMagic());
         currentSlot.set(metadata.getSlot());
-    }
-
-    public void updateConnectionStatus(boolean isConnected) {
-        connectionStatus.set(isConnected ? 1 : 0);
     }
 
     public void updateLastReceivedBlockTime(long timestamp) {
