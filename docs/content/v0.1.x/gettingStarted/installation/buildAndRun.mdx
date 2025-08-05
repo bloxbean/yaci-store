@@ -1,0 +1,63 @@
+&nbsp;
+
+# ▶️ How to Run
+
+**Pre-requisites:** Java 24
+
+---
+
+## 🔽 Download and Run
+
+1. Download the latest binary and property file from the [release page](https://github.com/bloxbean/yaci-store/releases)
+2. You need to download:
+   - `yaci-store-all-<version>.jar`
+   - `application.properties`
+3. Create a subfolder named `config` and copy `application.properties` into the `config` directory
+4. Edit `application.properties` to configure your datasource and network details
+5. Run the following command from the directory where you copied the JAR file:
+
+```bash
+java -jar yaci-store-all-<version>.jar
+```
+---
+
+# 🏗️ Build from Source and Run
+
+**Pre-requisites:** Java 24
+
+---
+
+## 🔨 Build
+
+Clone the repository and build the project using Gradle:
+
+```bash
+# Clone the Yaci Store repository
+git clone https://github.com/bloxbean/yaci-store
+
+# Navigate into the project directory
+cd yaci-store
+
+# Build the project using Gradle
+./gradlew clean build
+```
+---
+
+# 🚀 Run
+---
+
+Open a terminal and execute the following:
+
+```bash
+# Navigate to the project directory
+cd yaci-store
+
+# Open and edit the configuration file
+nano config/application.properties  # configure datasource and network settings
+
+# Run the application
+java -jar applications/all/build/libs/yaci-store-all-<version>.jar
+```
+
+
+

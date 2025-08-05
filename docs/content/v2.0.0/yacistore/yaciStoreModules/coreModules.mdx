@@ -1,0 +1,36 @@
+&nbsp;
+
+##  🧱 Core Modules
+
+Core modules serve a critical purpose. They read data directly from the Cardano blockchain and then publish various domain-specific events. Since these events are essentially Spring events, developers have the freedom to write their own Spring event listeners. This allows them to tap into these events and process them accordingly. In addition to this, the core module monitors and records the current point in the database.
+
+**Major core modules include:**
+
+- `core`  
+- `common`  
+- `events`
+
+**Events published by core modules:**
+
+- `BlockEvent`  
+- `BlockHeaderEvent`  
+- `ByronEbBlockEvent`  
+- `ByronMainBlockEvent`  
+- `RollbackEvent`  
+- `TransactionEvent`  
+- `MintBurnEvent`  
+- `ScriptEvent`  
+- `CertificateEvent`  
+- `GenesisBlockEvent`  
+- `AuxDataEvent`  
+- `GovernanceEvent`
+
+**Derived Events: Events published by stores:**
+
+- `AddressUtxoEvent`  
+- `TxAssetEvent`  
+- `TxMetadataEvent`  
+- `DatumEvent`  
+- `TxScriptEvent`
+
+---

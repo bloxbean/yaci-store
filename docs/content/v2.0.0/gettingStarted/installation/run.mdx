@@ -1,0 +1,174 @@
+&nbsp;
+
+# 🚀 Run
+
+Get Yaci Store running in **under 2 minutes** with zero configuration. Perfect for evaluation, testing, and getting started.
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
+  padding: '1.5rem',
+  borderRadius: '12px',
+  border: '1px solid rgba(34, 197, 94, 0.2)',
+  marginBottom: '2rem'
+}}>
+
+**⚡ What You Get:**
+- Pre-built JAR with embedded H2 database
+- Sample Cardano mainnet data (last 1000 blocks)
+- REST API endpoints ready to query
+- Web UI for exploring data
+- **Zero external dependencies** required
+
+</div>
+
+---
+
+## 🎯 One-Command Setup
+
+### Prerequisites
+- **Java 11** or **Java 17** ([Download here](https://adoptium.net/temurin/releases/))
+- **4 GB RAM** minimum
+
+### Run Yaci Store
+
+```bash
+# Download and run the quick-start package
+curl -L https://github.com/bloxbean/yaci-store/releases/latest/download/yaci-store-quickstart.jar -o yaci-store-quickstart.jar
+
+# Start Yaci Store with sample data
+java -jar yaci-store-quickstart.jar --quickstart
+```
+
+**🎉 That's it!** Yaci Store will:
+1. Start with embedded H2 database
+2. Load sample blockchain data
+3. Launch REST API on `http://localhost:8080`
+4. Open web UI at `http://localhost:8080/swagger-ui.html`
+
+---
+
+## 🔍 What's Included
+
+### Sample Data
+- **Latest 1000 blocks** from Cardano mainnet
+- **Transaction data** with full metadata
+- **UTxO information** for sample addresses
+- **Native assets** and token data
+- **Staking information** for active pools
+
+### Available APIs
+- **Blocks API**: `/api/v1/blocks`
+- **Transactions API**: `/api/v1/transactions`
+- **Addresses API**: `/api/v1/addresses`
+- **Assets API**: `/api/v1/assets`
+- **Epochs API**: `/api/v1/epochs`
+
+### Example Queries
+```bash
+# Get latest blocks
+curl http://localhost:8080/api/v1/blocks?page=0&size=10
+
+# Get transactions for a specific block
+curl http://localhost:8080/api/v1/blocks/{block-hash}/transactions
+
+# Check API health
+curl http://localhost:8080/actuator/health
+```
+
+---
+
+## 🚀 Next Steps
+
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+  gap: '1.5rem',
+  marginTop: '2rem'
+}}>
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
+  border: '1px solid rgba(59, 130, 246, 0.2)',
+  borderRadius: '12px',
+  padding: '1.5rem'
+}}>
+
+### 🐳 Production Ready?
+Ready for production deployment with PostgreSQL and full sync?
+
+**[Docker Setup →](/docs/v2.0.0/gettingStarted/installation/docker)**
+
+</div>
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%)',
+  border: '1px solid rgba(168, 85, 247, 0.2)',
+  borderRadius: '12px',
+  padding: '1.5rem'
+}}>
+
+### ⚙️ Custom Setup?
+Need custom configuration or want to build from source?
+
+**[Build & Run →](/docs/v2.0.0/gettingStarted/installation/buildAndRun)**
+
+</div>
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
+  border: '1px solid rgba(16, 185, 129, 0.2)',
+  borderRadius: '12px',
+  padding: '1.5rem'
+}}>
+
+### 📚 Explore APIs
+Start building with our comprehensive API documentation.
+
+**[API Reference →](/docs/v2.0.0/apis/apiList)**
+
+</div>
+
+</div>
+
+---
+
+## ❓ Troubleshooting
+
+### Java Not Found
+```bash
+# Check Java version
+java -version
+
+# If not installed, download from:
+# https://adoptium.net/temurin/releases/
+```
+
+### Port 8080 Already in Use
+```bash
+# Run on different port
+java -jar yaci-store-quickstart.jar --quickstart --server.port=8081
+```
+
+### Memory Issues
+```bash
+# Increase memory allocation
+java -Xmx6g -jar yaci-store-quickstart.jar --quickstart
+```
+
+### Need Help?
+- 📖 [Full Documentation](/docs/v2.0.0)
+- 🐛 [Troubleshooting Guide](/docs/v2.0.0/troubleshooting/indexerTroubleshooting)
+- 💬 [Discord Community](https://discord.gg/6AnKrFx4ne)
+- 🐙 [GitHub Issues](https://github.com/bloxbean/yaci-store/issues)
+
+---
+
+## 🎯 Perfect For
+
+- **👩‍💻 Developers**: Quick evaluation and prototyping
+- **🏢 Teams**: Proof of concepts and demos  
+- **🎓 Learning**: Understanding Cardano data structure
+- **🔬 Testing**: API integration testing
+- **📊 Analytics**: Quick data exploration
+
+**Ready for more?** Check out our [Docker setup](/docs/v2.0.0/gettingStarted/installation/docker) for production deployment!
