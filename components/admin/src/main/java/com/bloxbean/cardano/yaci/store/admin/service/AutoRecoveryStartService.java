@@ -28,10 +28,27 @@ public class AutoRecoveryStartService {
         if (healthStatus.isScheduleToStop())
             return;
 
-        if(healthStatus.isConnectionAlive() && !healthStatus.isError()) {
+        // Check if system is healthy: connection alive, no errors, and receiving blocks
+        if (healthStatus.isConnectionAlive() && !healthStatus.isError() && healthStatus.isReceivingBlocks()) {
             if (log.isDebugEnabled())
-                log.debug("Connection is alive.");
+                log.debug("System healthy: connection alive, no errors, receiving blocks.");
             return;
+        }
+
+        if (!healthStatus.isConnectionAlive()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Connection is not alive, scheduling restart");
+            }
+        } else if (healthStatus.isError()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Error detected, scheduling restart");
+            }
+        } else if (!healthStatus.isReceivingBlocks()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Not receiving blocks for {} seconds (threshold: {} seconds), scheduling restart",
+                        healthStatus.getTimeSinceLastBlock() / 1000,
+                        healthStatus.getBlockReceiveDelayThreshold() / 1000);
+            }
         }
 
         // Publish restart event - let RequiredRestartProcessor handle the restart

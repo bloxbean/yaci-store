@@ -17,6 +17,8 @@ public class MetricsService {
     public static final String YACI_STORE_CURRENT_ERA = "yaci.store.current.era";
     public static final String YACI_STORE_SYNC_MODE = "yaci.store.sync_mode";
     public static final String YACI_STORE_PROTOCOL_MAGIC = "yaci.store.protocol_magic";
+    public static final String YACI_STORE_CURRENT_SLOT = "yaci.store.current.slot";
+    public static final String YACI_STORE_LAST_RECEIVED_BLOCK_TIME = "yaci.store.last_received_block_time";
 
     private AtomicLong currentBlockNo = new AtomicLong(0);
     private AtomicLong currentEpochNo = new AtomicLong(0);
@@ -24,6 +26,8 @@ public class MetricsService {
     private AtomicLong currentBlockTime = new AtomicLong(0);
     private AtomicInteger isSyncMode = new AtomicInteger(0);
     private AtomicLong protocolMagic = new AtomicLong(0);
+    private AtomicLong currentSlot = new AtomicLong(0);
+    private AtomicLong lastReceivedBlockTime = new AtomicLong(0);
 
     public MetricsService(MeterRegistry meterRegistry, StoreProperties storeProperties) {
 
@@ -53,6 +57,14 @@ public class MetricsService {
         Gauge.builder(YACI_STORE_PROTOCOL_MAGIC, protocolMagic, AtomicLong::get)
                 .description("Protocol magic of the current chain")
                 .register(meterRegistry);
+
+        Gauge.builder(YACI_STORE_CURRENT_SLOT, currentSlot, AtomicLong::get)
+                .description("Current slot being processed")
+                .register(meterRegistry);
+
+        Gauge.builder(YACI_STORE_LAST_RECEIVED_BLOCK_TIME, lastReceivedBlockTime, AtomicLong::get)
+                .description("Timestamp of the last received block in milliseconds")
+                .register(meterRegistry);
     }
 
     public void updateMetrics(EventMetadata metadata) {
@@ -63,5 +75,10 @@ public class MetricsService {
         currentEraNo.set(metadata.getEra().getValue());
         isSyncMode.set(metadata.isSyncMode()? 1 : 0);
         protocolMagic.set(metadata.getProtocolMagic());
+        currentSlot.set(metadata.getSlot());
+    }
+
+    public void updateLastReceivedBlockTime(long timestamp) {
+        lastReceivedBlockTime.set(timestamp);
     }
 }
