@@ -535,16 +535,6 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     @Override
-    public void onDisconnect() {
-        metricsService.updateConnectionStatus(false);
-    }
-
-    @Override
-    public void intersactFound(Tip tip, Point point) {
-        metricsService.updateConnectionStatus(true);
-    }
-
-    @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
         
