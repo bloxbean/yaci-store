@@ -277,18 +277,14 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private void stopSyncOnError() {
         setError();
-        if (blockRangeSync != null)
-            blockRangeSync.stop();
-        if (blockSync != null)
-            blockSync.stop();
+        shutdownRangeSync();
+        shutdownSync();
     }
 
     public void stop() {
         scheduledToStop.set(true);
-        if (blockRangeSync != null)
-            blockRangeSync.stop();
-        if (blockSync != null)
-            blockSync.stop();
+        shutdownRangeSync();
+        shutdownSync();
     }
 
     @Transactional
@@ -400,14 +396,20 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public synchronized void shutdownRangeSync() {
         try {
-            blockRangeSync.stop();
+            if (blockRangeSync != null)
+                blockRangeSync.stop();
         } catch (Exception e) {
             log.error("Error stopping blockRangeSync", e);
         }
     }
 
     public synchronized void shutdownSync() {
-        blockSync.stop();
+        try {
+            if (blockSync != null)
+                blockSync.stop();
+        } catch (Exception e) {
+            log.error("Error stopping blockSync", e);
+        }
     }
 
     public boolean isRunning() {
