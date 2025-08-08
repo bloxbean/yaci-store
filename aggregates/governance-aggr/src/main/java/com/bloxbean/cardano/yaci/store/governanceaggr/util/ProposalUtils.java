@@ -16,8 +16,8 @@ public class ProposalUtils {
      * @return A list of proposals that are descendants and siblings of the given proposal.
      */
     public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> allProposals) {
-        // Handle special types that have no siblings or descendants
-        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+        // Handle types that don't belong to any purpose tree
+        if (!belongsToPurposeTree(proposal.getType())) {
             return Collections.emptyList();
         }
 
@@ -32,14 +32,15 @@ public class ProposalUtils {
             // Find siblings with the same parent and type
             result.addAll(
                     allProposals.stream()
-                            .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && type == p.getType())
+                            .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal)
+                                    && isSamePurpose(p.getType(), type))
                             .toList()
             );
         } else {
             // If no parent, find siblings among root nodes
             result.addAll(
                     allProposals.stream()
-                            .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && type == p.getType())
+                            .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                             .toList()
             );
         }
@@ -56,7 +57,7 @@ public class ProposalUtils {
     public static List<Proposal> findSiblings(Proposal proposal, List<Proposal> allProposals) {
         GovActionType type = proposal.getType();
 
-        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+        if (!belongsToPurposeTree(type)) {
             return Collections.emptyList();
         }
 
@@ -64,11 +65,11 @@ public class ProposalUtils {
 
         if (parentId == null) {
             return allProposals.stream()
-                    .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && type == p.getType())
+                    .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         } else {
             return allProposals.stream()
-                    .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && type == p.getType())
+                    .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         }
     }
@@ -86,7 +87,7 @@ public class ProposalUtils {
     }
 
     private static List<Proposal> findDescendants(Proposal rootProposal, List<Proposal> allProposals, GovActionType type) {
-        if (type == GovActionType.INFO_ACTION || type == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+        if (!belongsToPurposeTree(type)) {
             return Collections.emptyList();
         }
 
@@ -97,7 +98,7 @@ public class ProposalUtils {
         while (!queue.isEmpty()) {
             Proposal current = queue.poll();
             List<Proposal> children = allProposals.stream()
-                    .filter(p -> current.getGovActionId().equals(p.getPreviousGovActionId()) && type.equals(p.getType()))
+                    .filter(p -> current.getGovActionId().equals(p.getPreviousGovActionId()) && isSamePurpose(p.getType(), type))
                     .toList();
 
             descendants.addAll(children);
@@ -106,4 +107,71 @@ public class ProposalUtils {
 
         return descendants;
     }
+
+    /**
+     * Finds siblings and their descendants of a ratified proposal.
+     *
+     * @param ratifiedProposal The ratified proposal for which siblings and their descendants are to be found.
+     * @param allProposals     The list of all proposals.
+     * @return A list of proposals that are siblings and descendants of siblings of the ratified proposal.
+     */
+    public static List<Proposal> findSiblingsAndTheirDescendants(Proposal ratifiedProposal, List<Proposal> allProposals) {
+        if (!belongsToPurposeTree(ratifiedProposal.getType())) {
+            return Collections.emptyList();
+        }
+
+        List<Proposal> result = new ArrayList<>();
+
+        // First, find all siblings of the ratified proposal
+        List<Proposal> siblings = findSiblings(ratifiedProposal, allProposals);
+
+        // For each sibling, find all its descendants and add both sibling and descendants to result
+        for (Proposal sibling : siblings) {
+            result.add(sibling);
+            result.addAll(findDescendants(sibling, allProposals));
+        }
+
+        return result;
+    }
+
+    /**
+     * Determines if a governance action type belongs to a purpose tree.
+     * Types that belong to purpose trees can have siblings and descendants.
+     * TREASURY_WITHDRAWALS_ACTION and INFO_ACTION don't belong to any purpose tree.
+     *
+     * @param type The governance action type to check
+     * @return true if the type belongs to a purpose tree
+     */
+    public static boolean belongsToPurposeTree(GovActionType type) {
+        return type != GovActionType.INFO_ACTION && type != GovActionType.TREASURY_WITHDRAWALS_ACTION;
+    }
+
+    /**
+     * Determines if two governance action types belong to the same purpose group.
+     * Purpose groups:
+     * - PParamUpdatePurpose: PARAMETER_CHANGE_ACTION
+     * - HardForkPurpose: HARD_FORK_INITIATION_ACTION
+     * - CommitteePurpose: NO_CONFIDENCE, UPDATE_COMMITTEE
+     * - ConstitutionPurpose: NEW_CONSTITUTION_ACTION
+     * - No purpose: TREASURY_WITHDRAWALS_ACTION, INFO_ACTION
+     *
+     * @param type1 First governance action type
+     * @param type2 Second governance action type
+     * @return true if both types belong to the same purpose group
+     */
+    public static boolean isSamePurpose(GovActionType type1, GovActionType type2) {
+        if (type1 == type2) {
+            return true;
+        }
+
+        // CommitteePurpose: NO_CONFIDENCE and UPDATE_COMMITTEE belong to the same purpose
+        if ((type1 == GovActionType.NO_CONFIDENCE && type2 == GovActionType.UPDATE_COMMITTEE) ||
+            (type1 == GovActionType.UPDATE_COMMITTEE && type2 == GovActionType.NO_CONFIDENCE)) {
+            return true;
+        }
+
+        // TREASURY_WITHDRAWALS_ACTION and INFO_ACTION don't belong to any purpose tree
+        return false;
+    }
+
 }

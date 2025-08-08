@@ -729,23 +729,22 @@ public class ProposalStatusProcessor {
                 .toList();
 
         List<Proposal> allProposals = Stream.concat(expiredProposals.stream(), Stream.concat(ratifiedProposals.stream(), activeProposals.stream())).toList();
-        Map<GovActionId, Proposal> siblingsOrDescendantsBeDroppedInCurrentEpoch = new HashMap<>();
+        Map<GovActionId, Proposal> proposalsBeDroppedInCurrentEpoch = new HashMap<>();
 
         for (Proposal proposal : expiredProposals) {
             List<Proposal> proposalsToPrune = ProposalUtils.findDescendants(proposal, allProposals);
-            proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
+            proposalsToPrune.forEach(p -> proposalsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
         }
 
         for (Proposal proposal : ratifiedProposals) {
-            // TODO: just a workaround, need to check ledger rule carefully.
-            if (!GovernanceActionUtil.isDelayingAction(proposal.getType())) {
-                List<Proposal> proposalsToPrune = ProposalUtils.findDescendantsAndSiblings(proposal, allProposals);
-                proposalsToPrune.forEach(p -> siblingsOrDescendantsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
-            }
+            // For ratified proposals, only drop siblings and descendants of siblings,
+            // NOT descendants of the ratified proposal itself
+            List<Proposal> proposalsToPrune = ProposalUtils.findSiblingsAndTheirDescendants(proposal, allProposals);
+            proposalsToPrune.forEach(p -> proposalsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
         }
 
         List<GovActionProposal> filteredActiveProposals = activeProposalsInPrevSnapshot.stream()
-                .filter(govActionProposal -> !siblingsOrDescendantsBeDroppedInCurrentEpoch.containsKey(
+                .filter(govActionProposal -> !proposalsBeDroppedInCurrentEpoch.containsKey(
                         GovActionId.builder()
                                 .gov_action_index(govActionProposal.getIndex())
                                 .transactionId(govActionProposal.getTxHash())
