@@ -17,7 +17,7 @@ public class ProposalUtils {
      */
     public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> allProposals) {
         // Handle types that don't belong to any purpose tree
-        if (!belongsToPurposeTree(proposal.getType())) {
+        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
 
@@ -57,7 +57,7 @@ public class ProposalUtils {
     public static List<Proposal> findSiblings(Proposal proposal, List<Proposal> allProposals) {
         GovActionType type = proposal.getType();
 
-        if (!belongsToPurposeTree(type)) {
+        if (type == GovActionType.INFO_ACTION || type == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
 
@@ -87,7 +87,7 @@ public class ProposalUtils {
     }
 
     private static List<Proposal> findDescendants(Proposal rootProposal, List<Proposal> allProposals, GovActionType type) {
-        if (!belongsToPurposeTree(type)) {
+        if (type == GovActionType.INFO_ACTION || type == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
 
@@ -116,7 +116,7 @@ public class ProposalUtils {
      * @return A list of proposals that are siblings and descendants of siblings of the ratified proposal.
      */
     public static List<Proposal> findSiblingsAndTheirDescendants(Proposal ratifiedProposal, List<Proposal> allProposals) {
-        if (!belongsToPurposeTree(ratifiedProposal.getType())) {
+        if (ratifiedProposal.getType() == GovActionType.INFO_ACTION || ratifiedProposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
 
@@ -132,18 +132,6 @@ public class ProposalUtils {
         }
 
         return result;
-    }
-
-    /**
-     * Determines if a governance action type belongs to a purpose tree.
-     * Types that belong to purpose trees can have siblings and descendants.
-     * TREASURY_WITHDRAWALS_ACTION and INFO_ACTION don't belong to any purpose tree.
-     *
-     * @param type The governance action type to check
-     * @return true if the type belongs to a purpose tree
-     */
-    public static boolean belongsToPurposeTree(GovActionType type) {
-        return type != GovActionType.INFO_ACTION && type != GovActionType.TREASURY_WITHDRAWALS_ACTION;
     }
 
     /**
@@ -170,7 +158,6 @@ public class ProposalUtils {
             return true;
         }
 
-        // TREASURY_WITHDRAWALS_ACTION and INFO_ACTION don't belong to any purpose tree
         return false;
     }
 
