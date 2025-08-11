@@ -1,0 +1,58 @@
+```
+Epoch Transition (n → n+1)
+        |
+        v
++-----------------------------+
+| EpochTransitionCommitEvent  |
++-----------------------------+
+        |
+        v
++-----------------------------+
+| Create AdaPotJob            |
+|                             |
++-----------------------------+
+        |
+        v
+================= Process Job =================
+        |
+        v
++----------------------------------------------+
+| Publish PreAdaPotJobProcessingEvent          |
+|   - Update protocol params                   |
+|   - Update committee & constitution          |
+|   - Apply proposal refunds & withdrawals     |
+|     (earned_epoch = n)                       |
++----------------------------------------------+
+        |
+        v
++------------------+
+| Update fee pot   |
++------------------+
+        |
+        v
++-------------------------+
+| Update deposit stake pot|
++-------------------------+
+        |
+        v
++----------------------------------------------+
+| Compute & update rewards                     |
++----------------------------------------------+
+        |
+        v
++----------------------------------------------+
+| Take epoch stake snapshot                    |
++----------------------------------------------+
+        |
+        v
++----------------------------------------------+
+| Process proposal states                       |
+|   - Compute DRep voting power                 |
+|   - Evaluate proposal statuses                |
++----------------------------------------------+
+        |
+        v
++-------------------+
+| Job Completed     |
++-------------------+
+```
