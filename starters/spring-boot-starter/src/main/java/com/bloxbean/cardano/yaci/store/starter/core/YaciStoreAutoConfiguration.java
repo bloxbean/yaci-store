@@ -200,7 +200,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
 
         storeProperties.setKeepAliveInterval(properties.getCardano().getKeepAliveInterval());
-
+        storeProperties.setBlockReceiveDelaySeconds(properties.getBlockReceiveDelaySeconds());
         storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
 
         //executor properties

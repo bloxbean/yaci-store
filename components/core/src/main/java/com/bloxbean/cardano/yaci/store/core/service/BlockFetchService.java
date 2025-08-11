@@ -146,6 +146,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Update metrics
         try {
             metricsService.updateMetrics(eventMetadata);
+            metricsService.updateLastReceivedBlockTime(lastReceivedBlockTime);
         } catch (Exception e) {
             log.warn("Error updating metrics for block: " + block.getHeader().getHeaderBody().getBlockNumber(), e);
         }
@@ -276,18 +277,14 @@ public class BlockFetchService implements BlockChainDataListener {
 
     private void stopSyncOnError() {
         setError();
-        if (blockRangeSync != null)
-            blockRangeSync.stop();
-        if (blockSync != null)
-            blockSync.stop();
+        shutdownRangeSync();
+        shutdownSync();
     }
 
     public void stop() {
         scheduledToStop.set(true);
-        if (blockRangeSync != null)
-            blockRangeSync.stop();
-        if (blockSync != null)
-            blockSync.stop();
+        shutdownRangeSync();
+        shutdownSync();
     }
 
     @Transactional
@@ -337,6 +334,9 @@ public class BlockFetchService implements BlockChainDataListener {
             log.info("Batch Done >>>");
 
             if (storeProperties.isPrimaryInstance()) {
+                //Stop BlockRange Sync before starting BlockSync
+                shutdownRangeSync();
+
                 //If primary instance, start sync
                 //start sync
                 cursorService.getCursor()
@@ -408,8 +408,22 @@ public class BlockFetchService implements BlockChainDataListener {
         blockRangeSync.stop();
     }
 
+    public synchronized void shutdownRangeSync() {
+        try {
+            if (blockRangeSync != null)
+                blockRangeSync.stop();
+        } catch (Exception e) {
+            log.error("Error stopping blockRangeSync", e);
+        }
+    }
+
     public synchronized void shutdownSync() {
-        blockSync.stop();
+        try {
+            if (blockSync != null)
+                blockSync.stop();
+        } catch (Exception e) {
+            log.error("Error stopping blockSync", e);
+        }
     }
 
     public boolean isRunning() {
@@ -476,13 +490,19 @@ public class BlockFetchService implements BlockChainDataListener {
                     Thread.sleep(interval);
                     int randomNo = getRandomNumber(0, 60000);
 
-                    if (log.isDebugEnabled())
+                    if (log.isDebugEnabled()) {
                         log.debug("Sending keep alive : " + randomNo);
+                    }
 
-                    if (syncMode)
+                    if (syncMode) {
                         blockSync.sendKeepAliveMessage(randomNo);
-                    else
+                        if (log.isDebugEnabled())
+                            log.debug("Response from keep alive : " + blockSync.getLastKeepAliveResponseCookie());
+                    } else {
                         blockRangeSync.sendKeepAliveMessage(randomNo);
+                        if (log.isDebugEnabled())
+                            log.debug("Response from keep alive : " + blockRangeSync.getLastKeepAliveResponseCookie());
+                    }
 
                 } catch (InterruptedException e) {
                     log.info("Keep alive thread interrupted");

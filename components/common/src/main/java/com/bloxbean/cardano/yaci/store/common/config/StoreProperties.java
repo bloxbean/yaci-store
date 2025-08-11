@@ -64,6 +64,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private int keepAliveInterval = 10000;
 
+    //Block receive delay threshold in seconds
+    @Builder.Default
+    private int blockReceiveDelaySeconds = 120;
+
     //Only required if the genesis hash can't be fetched
     private String defaultGenesisHash = "Genesis";
 
