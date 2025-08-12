@@ -728,7 +728,13 @@ public class ProposalStatusProcessor {
                 .map(proposalMapper::toProposal)
                 .toList();
 
-        List<Proposal> allProposals = Stream.concat(expiredProposals.stream(), Stream.concat(ratifiedProposals.stream(), activeProposals.stream())).toList();
+        List<Proposal> newProposals = newProposalsCreatedInPrevEpoch.stream()
+                .map(proposalMapper::toProposal)
+                .toList();
+
+        List<Proposal> allProposals = Stream.concat(expiredProposals.stream(),
+                Stream.concat(ratifiedProposals.stream(),
+                Stream.concat(activeProposals.stream(), newProposals.stream()))).toList();
         Map<GovActionId, Proposal> proposalsBeDroppedInCurrentEpoch = new HashMap<>();
 
         for (Proposal proposal : expiredProposals) {
