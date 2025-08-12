@@ -16,7 +16,6 @@ public class ProposalUtils {
      * @return A list of proposals that are descendants and siblings of the given proposal.
      */
     public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> allProposals) {
-        // Handle types that don't belong to any purpose tree
         if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }

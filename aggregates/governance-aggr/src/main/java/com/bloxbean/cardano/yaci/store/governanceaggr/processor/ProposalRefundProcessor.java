@@ -75,7 +75,7 @@ public class ProposalRefundProcessor {
         );
 
         ratifiedProposalsInThisEpoch.forEach(proposal ->
-                ProposalUtils.findDescendantsAndSiblings(proposal, proposalListInThisEpoch)
+                ProposalUtils.findSiblingsAndTheirDescendants(proposal, proposalListInThisEpoch)
                         .forEach(p -> siblingsOrDescendantsBePrunedInNextEpoch.putIfAbsent(p.getGovActionId(), p))
         );
 
