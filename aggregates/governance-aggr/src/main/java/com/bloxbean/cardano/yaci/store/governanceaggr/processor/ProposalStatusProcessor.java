@@ -749,7 +749,8 @@ public class ProposalStatusProcessor {
             proposalsToPrune.forEach(p -> proposalsBeDroppedInCurrentEpoch.put(p.getGovActionId(), p));
         }
 
-        List<GovActionProposal> filteredActiveProposals = activeProposalsInPrevSnapshot.stream()
+        List<GovActionProposal> filteredActiveProposals =
+                Stream.concat(activeProposalsInPrevSnapshot.stream(), newProposalsCreatedInPrevEpoch.stream())
                 .filter(govActionProposal -> !proposalsBeDroppedInCurrentEpoch.containsKey(
                         GovActionId.builder()
                                 .gov_action_index(govActionProposal.getIndex())
@@ -757,8 +758,7 @@ public class ProposalStatusProcessor {
                                 .build()))
                 .toList();
 
-        return Stream.concat(filteredActiveProposals.stream(), newProposalsCreatedInPrevEpoch.stream())
-                .toList();
+        return filteredActiveProposals;
     }
 
     private boolean isEpochInConwayBootstrapPhase(int epoch) {

@@ -584,11 +584,7 @@ public class DRepDistService {
 
         for (Proposal proposal : ratifiedProposals) {
             List<Proposal> proposalsToPrune = ProposalUtils.findSiblingsAndTheirDescendants(proposal, activeOrNewCreatedProposals);
-            proposalsToPrune.forEach(p -> {
-                if (activeProposals.contains(p) || newProposals.contains(p)) {
-                    proposalsToBeDropped.add(p.getGovActionId());
-                }
-            });
+            proposalsToPrune.forEach(p -> {proposalsToBeDropped.add(p.getGovActionId());});
         }
 
         return proposalsToBeDropped;
