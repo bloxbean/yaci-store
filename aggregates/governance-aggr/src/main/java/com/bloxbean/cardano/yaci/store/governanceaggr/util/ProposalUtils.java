@@ -12,10 +12,10 @@ public class ProposalUtils {
      * Finds all descendants and siblings of a specific proposal.
      *
      * @param proposal     The proposal for which descendants and/or siblings are to be found.
-     * @param allProposals The list of all proposals.
+     * @param proposalList The list of proposals.
      * @return A list of proposals that are descendants and siblings of the given proposal.
      */
-    public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> allProposals) {
+    public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> proposalList) {
         if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
@@ -24,13 +24,13 @@ public class ProposalUtils {
         GovActionType type = proposal.getType();
 
         // Add descendants
-        result.addAll(findDescendants(proposal, allProposals, type));
+        result.addAll(findDescendants(proposal, proposalList, type));
 
         GovActionId parentId = proposal.getPreviousGovActionId();
         if (parentId != null) {
             // Find siblings with the same parent and type
             result.addAll(
-                    allProposals.stream()
+                    proposalList.stream()
                             .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal)
                                     && isSamePurpose(p.getType(), type))
                             .toList()
@@ -38,7 +38,7 @@ public class ProposalUtils {
         } else {
             // If no parent, find siblings among root nodes
             result.addAll(
-                    allProposals.stream()
+                    proposalList.stream()
                             .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                             .toList()
             );
@@ -49,11 +49,11 @@ public class ProposalUtils {
 
     /**
      * Find siblings of a proposal
-     * @param proposal
-     * @param allProposals
-     * @return
+     * @param proposal The proposal for which siblings are to be found.
+     * @param proposalList The list of proposals.
+     * @return A list of proposals that are descendants and siblings of the given proposal.
      */
-    public static List<Proposal> findSiblings(Proposal proposal, List<Proposal> allProposals) {
+    public static List<Proposal> findSiblings(Proposal proposal, List<Proposal> proposalList) {
         GovActionType type = proposal.getType();
 
         if (type == GovActionType.INFO_ACTION || type == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
@@ -63,11 +63,11 @@ public class ProposalUtils {
         GovActionId parentId = proposal.getPreviousGovActionId();
 
         if (parentId == null) {
-            return allProposals.stream()
+            return proposalList.stream()
                     .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         } else {
-            return allProposals.stream()
+            return proposalList.stream()
                     .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         }
@@ -75,14 +75,14 @@ public class ProposalUtils {
 
     /**
      * Find descendants of a proposal
-     * @param proposal
-     * @param allProposals
-     * @return
+     * @param proposal The proposal for which siblings are to be found.
+     * @param proposalList The list of proposals.
+     * @return A list of proposals that are descendants of the given proposal.
      */
-    public static List<Proposal> findDescendants(Proposal proposal, List<Proposal> allProposals) {
+    public static List<Proposal> findDescendants(Proposal proposal, List<Proposal> proposalList) {
         GovActionType type = proposal.getType();
 
-        return new ArrayList<>(findDescendants(proposal, allProposals, type));
+        return new ArrayList<>(findDescendants(proposal, proposalList, type));
     }
 
     private static List<Proposal> findDescendants(Proposal rootProposal, List<Proposal> allProposals, GovActionType type) {
@@ -108,26 +108,26 @@ public class ProposalUtils {
     }
 
     /**
-     * Finds siblings and their descendants of a ratified proposal.
+     * Finds siblings and their descendants of a proposal.
      *
-     * @param ratifiedProposal The ratified proposal for which siblings and their descendants are to be found.
-     * @param allProposals     The list of all proposals.
-     * @return A list of proposals that are siblings and descendants of siblings of the ratified proposal.
+     * @param proposal         The proposal for which siblings and their descendants are to be found.
+     * @param proposalList     The list of proposals.
+     * @return A list of proposals that are siblings and descendants of siblings of the proposal.
      */
-    public static List<Proposal> findSiblingsAndTheirDescendants(Proposal ratifiedProposal, List<Proposal> allProposals) {
-        if (ratifiedProposal.getType() == GovActionType.INFO_ACTION || ratifiedProposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
+    public static List<Proposal> findSiblingsAndTheirDescendants(Proposal proposal, List<Proposal> proposalList) {
+        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
             return Collections.emptyList();
         }
 
         List<Proposal> result = new ArrayList<>();
 
-        // First, find all siblings of the ratified proposal
-        List<Proposal> siblings = findSiblings(ratifiedProposal, allProposals);
+        // First, find all siblings of the proposal
+        List<Proposal> siblings = findSiblings(proposal, proposalList);
 
         // For each sibling, find all its descendants and add both sibling and descendants to result
         for (Proposal sibling : siblings) {
             result.add(sibling);
-            result.addAll(findDescendants(sibling, allProposals));
+            result.addAll(findDescendants(sibling, proposalList));
         }
 
         return result;
