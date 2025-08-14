@@ -8,12 +8,12 @@ public class PluginStateConfig {
 
     @Bean
     public State<String, Object> globalState() {
-        return new ConcurrentMapState<>();
+        return new AtomicState<>();
     }
 
     @Bean
     public State<String,
             State<String, Object>> pluginStates() {
-        return new ConcurrentMapState<>();
+        return new AtomicState<>();
     }
 }
