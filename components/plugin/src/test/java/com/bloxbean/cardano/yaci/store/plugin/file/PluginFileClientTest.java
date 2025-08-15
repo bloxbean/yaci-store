@@ -80,7 +80,7 @@ class PluginFileClientTest {
         // Create directory
         FileOperationResult createResult = fileClient.createDir(dirPath);
         assertThat(createResult.isSuccess()).isTrue();
-        assertThat(fileClient.isDirectory(dirPath)).isTrue();
+        assertThat(fileClient.exists(dirPath)).isTrue();
 
         // Create files in directory
         fileClient.write("test_dir/file1.txt", "Content 1");
@@ -111,18 +111,6 @@ class PluginFileClientTest {
         // Get filename
         String filename = fileClient.getFileName(nested);
         assertThat(filename).isEqualTo("file.txt");
-
-        // Get extension
-        String extension = fileClient.getExtension(nested);
-        assertThat(extension).isEqualTo("txt");
-
-        // Get base name
-        String baseName = fileClient.getBaseName(nested);
-        assertThat(baseName).isEqualTo("file");
-
-        // Get parent
-        String parent = fileClient.getParent(nested);
-        assertThat(parent).contains("path").contains("to");
     }
 
     @Test
@@ -141,11 +129,15 @@ class PluginFileClientTest {
         assertThat(writeResult.isSuccess()).isTrue();
 
         // Read JSON
-        FileOperationResult readResult = fileClient.readJsonMap(jsonPath);
+        FileOperationResult readResult = fileClient.readJson(jsonPath);
         assertThat(readResult.isSuccess()).isTrue();
 
+        // The readJson now returns Object, cast it appropriately
+        Object data = readResult.getData();
+        assertThat(data).isInstanceOf(Map.class);
+        
         @SuppressWarnings("unchecked")
-        Map<String, Object> readData = readResult.getAs(Map.class);
+        Map<String, Object> readData = (Map<String, Object>) data;
         assertThat(readData.get("name")).isEqualTo("Test");
         assertThat(readData.get("value")).isEqualTo(123);
         assertThat(readData.get("active")).isEqualTo(true);
@@ -164,11 +156,14 @@ class PluginFileClientTest {
         assertThat(appendResult2.isSuccess()).isTrue();
 
         // Read and verify array
-        FileOperationResult readResult = fileClient.readJsonList(jsonPath);
+        FileOperationResult readResult = fileClient.readJson(jsonPath);
         assertThat(readResult.isSuccess()).isTrue();
 
+        Object data = readResult.getData();
+        assertThat(data).isInstanceOf(List.class);
+        
         @SuppressWarnings("unchecked")
-        List<Object> list = readResult.getAs(List.class);
+        List<Object> list = (List<Object>) data;
         assertThat(list).hasSize(2);
     }
 
@@ -184,7 +179,7 @@ class PluginFileClientTest {
                 List.of("Charlie", "35", "Chicago")
         );
 
-        FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows);
+        FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows, false);
         assertThat(writeResult.isSuccess()).isTrue();
 
         // Read CSV
@@ -210,7 +205,7 @@ class PluginFileClientTest {
                 List.of("efgh", 1, 2000000L)
         );
 
-        FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows);
+        FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows, false);
         assertThat(writeResult.isSuccess()).isTrue();
 
         FileOperationResult readResult = fileClient.readCsv(csvPath);
@@ -232,7 +227,7 @@ class PluginFileClientTest {
         List<String> headers = List.of("id", "value");
         List<List<?>> initialRows = List.of(List.of("1", "first"));
 
-        fileClient.writeCsv(csvPath, headers, initialRows);
+        fileClient.writeCsv(csvPath, headers, initialRows, false);
 
         // Append new rows (mixed types OK)
         List<List<?>> newRows = List.of(
@@ -253,76 +248,32 @@ class PluginFileClientTest {
     }
 
     @Test
-    void testFileInfo() {
-        String filePath = "info_test.txt";
-        String content = "Test content for file info";
+    void testCsvWriteWithAppendFlag() {
+        String csvPath = "write_append.csv";
 
-        // Write file
-        fileClient.write(filePath, content);
+        // Write initial CSV with headers
+        List<String> headers = List.of("block", "tx_count");
+        List<List<?>> initialRows = List.of(List.of("100", "5"));
 
-        // Get file info
-        FileOperationResult infoResult = fileClient.getInfo(filePath);
-        assertThat(infoResult.isSuccess()).isTrue();
+        fileClient.writeCsv(csvPath, headers, initialRows, false);
 
-        FileInfo info = infoResult.getAs(FileInfo.class);
-        assertThat(info.exists()).isTrue();
-        assertThat(info.isFile()).isTrue();
-        assertThat(info.isDirectory()).isFalse();
-        assertThat(info.getName()).isEqualTo("info_test.txt");
-        assertThat(info.getSize()).isEqualTo(content.length());
-        assertThat(info.getExtension()).isEqualTo("txt");
-        assertThat(info.getBaseName()).isEqualTo("info_test");
-    }
+        // Append using writeCsv with append=true
+        List<List<?>> newRows = List.of(
+                List.of("101", "3"),
+                List.of("102", "7")
+        );
 
-    @Test
-    void testCopyAndMove() {
-        String sourcePath = "source.txt";
-        String copyPath = "copy.txt";
-        String movePath = "moved.txt";
-        String content = "Content to copy and move";
+        FileOperationResult appendResult = fileClient.writeCsv(csvPath, headers, newRows, true);
+        assertThat(appendResult.isSuccess()).isTrue();
 
-        // Create source file
-        fileClient.write(sourcePath, content);
-
-        // Copy file
-        FileOperationResult copyResult = fileClient.copy(sourcePath, copyPath);
-        assertThat(copyResult.isSuccess()).isTrue();
-        assertThat(fileClient.exists(sourcePath)).isTrue();
-        assertThat(fileClient.exists(copyPath)).isTrue();
-
-        // Verify copy content
-        FileOperationResult readResult = fileClient.read(copyPath);
-        assertThat(readResult.getAsString()).isEqualTo(content);
-
-        // Move file
-        FileOperationResult moveResult = fileClient.move(copyPath, movePath);
-        assertThat(moveResult.isSuccess()).isTrue();
-        assertThat(fileClient.exists(copyPath)).isFalse();
-        assertThat(fileClient.exists(movePath)).isTrue();
-    }
-
-    @Test
-    void testTempOperations() {
-        // Create temp file
-        FileOperationResult tempFileResult = fileClient.createTempFile("test", ".tmp");
-        assertThat(tempFileResult.isSuccess()).isTrue();
-
-        String tempPath = tempFileResult.getAsString();
-        assertThat(fileClient.exists(tempPath)).isTrue();
-        assertThat(tempPath).contains("test");
-        assertThat(tempPath).endsWith(".tmp");
-
-        // Create temp directory
-        FileOperationResult tempDirResult = fileClient.createTempDirectory("testdir");
-        assertThat(tempDirResult.isSuccess()).isTrue();
-
-        String tempDirPath = tempDirResult.getAsString();
-        assertThat(fileClient.isDirectory(tempDirPath)).isTrue();
-        assertThat(tempDirPath).contains("testdir");
-
-        // Cleanup
-        fileClient.delete(tempPath);
-        fileClient.delete(tempDirPath);
+        // Read and verify
+        FileOperationResult readResult = fileClient.readCsv(csvPath);
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> records = readResult.getAs(List.class);
+        assertThat(records).hasSize(3);
+        assertThat(records.get(0).get("block")).isEqualTo("100");
+        assertThat(records.get(1).get("block")).isEqualTo("101");
+        assertThat(records.get(2).get("tx_count")).isEqualTo("7");
     }
 
     @Test
@@ -336,11 +287,7 @@ class PluginFileClientTest {
 
         FileOperationResult deleteResult = fileClient.delete(insideNonExistent);
         assertThat(deleteResult.isError()).isTrue();
-
-        FileOperationResult infoResult = fileClient.getInfo(insideNonExistent);
-        assertThat(infoResult.isSuccess()).isTrue(); // Returns info with exists=false
-        FileInfo info = infoResult.getAs(FileInfo.class);
-        assertThat(info.exists()).isFalse();
+        assertThat(deleteResult.getErrorMessage()).contains("does not exist");
 
         // Path OUTSIDE sandbox → "Access denied"
         String outsidePath = "/non/existent/path/file.txt";
@@ -350,18 +297,22 @@ class PluginFileClientTest {
     }
 
     @Test
-    void testUtilityMethods() {
-        String filePath = "utility_test.txt";
-        String content = "Test content";
-
-        fileClient.write(filePath, content);
-
-        // Test utility methods
+    void testExistsMethod() {
+        String filePath = "exists_test.txt";
+        
+        // File doesn't exist
+        assertThat(fileClient.exists(filePath)).isFalse();
+        
+        // Create file
+        fileClient.write(filePath, "test content");
+        
+        // File exists
         assertThat(fileClient.exists(filePath)).isTrue();
-        assertThat(fileClient.isFile(filePath)).isTrue();
-        assertThat(fileClient.isDirectory(filePath)).isFalse();
-        assertThat(fileClient.isReadable(filePath)).isTrue();
-        assertThat(fileClient.isWritable(filePath)).isTrue();
-        assertThat(fileClient.getFileSize(filePath)).isEqualTo(content.length());
+        
+        // Delete file
+        fileClient.delete(filePath);
+        
+        // File doesn't exist again
+        assertThat(fileClient.exists(filePath)).isFalse();
     }
 }

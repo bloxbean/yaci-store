@@ -2,11 +2,9 @@ package com.bloxbean.cardano.yaci.store.plugin.file;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -20,27 +18,28 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 /**
- * Secure, sandboxed file API for plugin scripts (MVEL/JS/Python).
- * - All paths are confined under {@code sandboxRoot}.
- * - Non-append writes are atomic (temp + ATOMIC_MOVE) for crash safety.
- * - CSV parsing supports quoted fields and CRLF.
- * - NDJSON append for scalable event logs.
- * - Optional advisory locking to avoid interleaved writes.
+ * Simplified, secure file API for plugin scripts (MVEL/JS/Python).
+ * Provides essential file operations for blockchain data processing:
+ * - Basic file I/O (read, write, append)
+ * - JSON operations for configuration and data export
+ * - CSV operations for tabular data export
+ * - Simple directory operations
+ *
+ * Security features:
+ * - All paths are confined under sandbox root
+ * - Atomic writes for data integrity
+ * - Path validation against directory traversal
+ * - Optional file locking for concurrent access
  */
 @Component
 public class PluginFileClient {
     private static final long ATOMIC_WRITE_THRESHOLD_BYTES = 16 * 1024 * 1024; // 16 MB
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ObjectWriter prettyWriter = objectMapper.writerWithDefaultPrettyPrinter();
 
     private final Path pluginFilesRoot;
     private final Path realRoot; // cached real path for fast checks
@@ -129,8 +128,13 @@ public class PluginFileClient {
         if (lock != null) lock.unlock();
     }
 
-    // ===== Basic File Operations =====
+    // ===== Core File Operations =====
 
+    /**
+     * Read the contents of a text file.
+     * @param filePath Path to the file relative to sandbox root
+     * @return FileOperationResult containing the file content as string
+     */
     public FileOperationResult read(String filePath) {
         try {
             Path path = safeResolve(filePath);
@@ -146,29 +150,24 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult readBytes(String filePath) {
-        try {
-            Path path = safeResolve(filePath);
-            if (!Files.exists(path)) {
-                return FileOperationResult.error("File does not exist: " + filePath);
-            }
-            byte[] content = Files.readAllBytes(path);
-            return FileOperationResult.success(content);
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to read file bytes (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult readText(String filePath) {
-        return read(filePath);
-    }
-
+    /**
+     * Write content to a file. Creates parent directories if needed.
+     * Uses atomic write for files &lt;= 16MB for crash safety.
+     * @param filePath Path to the file relative to sandbox root
+     * @param content Content to write
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult write(String filePath, String content) {
         return write(filePath, content, false);
     }
 
+    /**
+     * Write or append content to a file. Creates parent directories if needed.
+     * @param filePath Path to the file relative to sandbox root
+     * @param content Content to write
+     * @param append If true, append to existing file; if false, overwrite
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult write(String filePath, String content, boolean append) {
         try {
             Path path = safeResolve(filePath);
@@ -178,21 +177,6 @@ public class PluginFileClient {
             return FileOperationResult.error("Access denied: " + se.getMessage());
         } catch (Exception e) {
             return FileOperationResult.error("Failed to write file (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult writeBytes(String filePath, byte[] content) {
-        return writeBytes(filePath, content, false);
-    }
-
-    public FileOperationResult writeBytes(String filePath, byte[] content, boolean append) {
-        try {
-            Path path = safeResolve(filePath);
-            return doWriteBytes(path, content, append);
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to write file bytes (" + e.getClass().getSimpleName() + "): " + e.getMessage());
         }
     }
 
@@ -235,28 +219,27 @@ public class PluginFileClient {
         Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
-    public FileOperationResult writeText(String filePath, String content) {
-        return write(filePath, content, false);
-    }
-
+    /**
+     * Append content to a file. Creates the file if it doesn't exist.
+     * @param filePath Path to the file relative to sandbox root
+     * @param content Content to append
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult append(String filePath, String content) {
         return write(filePath, content, true);
     }
 
-    public FileOperationResult appendText(String filePath, String content) {
-        return write(filePath, content, true);
-    }
-
-    public FileOperationResult appendBytes(String filePath, byte[] content) {
-        return writeBytes(filePath, content, true);
-    }
-
+    /**
+     * Delete a file.
+     * @param filePath Path to the file relative to sandbox root
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult delete(String filePath) {
         try {
             Path path = safeResolve(filePath);
             boolean deleted = Files.deleteIfExists(path);
             if (deleted) return FileOperationResult.success();
-            return FileOperationResult.error("Failed to delete file: " + filePath);
+            return FileOperationResult.error("File does not exist: " + filePath);
         } catch (SecurityException se) {
             return FileOperationResult.error("Access denied: " + se.getMessage());
         } catch (Exception e) {
@@ -264,34 +247,11 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult copy(String sourcePath, String targetPath) {
-        try {
-            Path source = safeResolve(sourcePath);
-            Path target = safeResolve(targetPath);
-            Files.createDirectories(target.getParent());
-            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to copy file (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult move(String sourcePath, String targetPath) {
-        try {
-            Path source = safeResolve(sourcePath);
-            Path target = safeResolve(targetPath);
-            Files.createDirectories(target.getParent());
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to move file (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
+    /**
+     * Check if a file or directory exists.
+     * @param filePath Path to check relative to sandbox root
+     * @return true if the file exists, false otherwise
+     */
     public boolean exists(String filePath) {
         try {
             Path p = safeResolve(filePath);
@@ -301,34 +261,13 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult getInfo(String filePath) {
-        try {
-            Path path = safeResolve(filePath);
-            if (!Files.exists(path)) {
-                FileInfo info = new FileInfo(path, 0, 0, false, false, false, false, false);
-                return FileOperationResult.success(info);
-            }
-            BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            FileInfo info = new FileInfo(
-                    path,
-                    attrs.size(),
-                    attrs.lastModifiedTime().toMillis(),
-                    attrs.isDirectory(),
-                    attrs.isRegularFile(),
-                    true,
-                    Files.isReadable(path),
-                    Files.isWritable(path)
-            );
-            return FileOperationResult.success(info);
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to get file info (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
     // ===== Directory Operations =====
 
+    /**
+     * Create a directory and all necessary parent directories.
+     * @param dirPath Path to the directory relative to sandbox root
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult createDir(String dirPath) {
         try {
             Path path = safeResolve(dirPath);
@@ -341,15 +280,12 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult createDirectory(String dirPath) {
-        return createDir(dirPath);
-    }
-
+    /**
+     * List files and directories in a directory (non-recursive).
+     * @param dirPath Path to the directory relative to sandbox root
+     * @return DirectoryListing containing file information
+     */
     public DirectoryListing listFiles(String dirPath) {
-        return listFiles(dirPath, false);
-    }
-
-    public DirectoryListing listFiles(String dirPath, boolean recursive) {
         try {
             Path path = safeResolve(dirPath);
             if (!Files.exists(path)) {
@@ -360,19 +296,10 @@ public class PluginFileClient {
             }
 
             List<FileInfo> files;
-            if (recursive) {
-                try (Stream<Path> walk = Files.walk(path, FileVisitOption.FOLLOW_LINKS)) {
-                    files = walk.filter(p -> !p.equals(path))
-                            .map(this::createFileInfoQuiet)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toList());
-                }
-            } else {
-                try (Stream<Path> list = Files.list(path)) {
-                    files = list.map(this::createFileInfoQuiet)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toList());
-                }
+            try (Stream<Path> list = Files.list(path)) {
+                files = list.map(this::createFileInfoQuiet)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
             }
             return DirectoryListing.success(files);
         } catch (SecurityException se) {
@@ -380,10 +307,6 @@ public class PluginFileClient {
         } catch (Exception e) {
             return DirectoryListing.error("Failed to list files (" + e.getClass().getSimpleName() + "): " + e.getMessage());
         }
-    }
-
-    public DirectoryListing listFilesRecursive(String dirPath) {
-        return listFiles(dirPath, true);
     }
 
     private FileInfo createFileInfoQuiet(Path path) {
@@ -406,21 +329,21 @@ public class PluginFileClient {
 
     // ===== Path Operations =====
 
+    /**
+     * Join path components into a single path string.
+     * @param parts Path components to join
+     * @return Joined path string
+     */
     public String joinPath(String... parts) {
         if (parts == null || parts.length == 0) return "";
         return Paths.get("", parts).normalize().toString();
     }
 
-    public String getParent(String filePath) {
-        try {
-            Path path = safeResolve(filePath);
-            Path parent = path.getParent();
-            return parent != null ? parent.toString() : null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
+    /**
+     * Get the filename from a path.
+     * @param filePath Path to extract filename from
+     * @return Filename or empty string if extraction fails
+     */
     public String getFileName(String filePath) {
         try {
             Path path = safeResolve(filePath);
@@ -431,56 +354,13 @@ public class PluginFileClient {
         }
     }
 
-    public String getExtension(String filePath) {
-        String fileName = getFileName(filePath);
-        int lastDot = fileName.lastIndexOf('.');
-        if (lastDot > 0 && lastDot < fileName.length() - 1) {
-            return fileName.substring(lastDot + 1).toLowerCase();
-        }
-        return "";
-    }
-
-    public String getBaseName(String filePath) {
-        String fileName = getFileName(filePath);
-        int lastDot = fileName.lastIndexOf('.');
-        if (lastDot > 0) return fileName.substring(0, lastDot);
-        return fileName;
-    }
-
-    public String getAbsolutePath(String filePath) {
-        try {
-            return safeResolve(filePath).toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    public String resolvePath(String basePath, String relativePath) {
-        try {
-            Path base = safeResolve(basePath);
-            Path resolved = base.resolve(relativePath).normalize();
-            // Re-check sandbox after resolve
-            if (!resolved.toRealPath(LinkOption.NOFOLLOW_LINKS).startsWith(realRoot)) {
-                throw new SecurityException("Resolved path escapes sandbox");
-            }
-            return resolved.toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    public String relativize(String basePath, String childPath) {
-        try {
-            Path base = safeResolve(basePath);
-            Path child = safeResolve(childPath);
-            return base.relativize(child).toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
     // ===== JSON Operations =====
 
+    /**
+     * Read a JSON file and parse it into an Object.
+     * @param filePath Path to the JSON file relative to sandbox root
+     * @return FileOperationResult containing the parsed JSON object
+     */
     public FileOperationResult readJson(String filePath) {
         try {
             FileOperationResult readResult = read(filePath);
@@ -496,37 +376,12 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult readJsonMap(String filePath) {
-        try {
-            FileOperationResult readResult = read(filePath);
-            if (!readResult.isSuccess()) return readResult;
-            String content = readResult.getAsString();
-            if (content == null || content.trim().isEmpty()) {
-                return FileOperationResult.error("File is empty or null");
-            }
-            Map<String, Object> jsonData = objectMapper.readValue(content, Map.class);
-            return FileOperationResult.success(jsonData);
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to read JSON as Map (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult readJsonList(String filePath) {
-        try {
-            FileOperationResult readResult = read(filePath);
-            if (!readResult.isSuccess()) return readResult;
-            String content = readResult.getAsString();
-            if (content == null || content.trim().isEmpty()) {
-                return FileOperationResult.error("File is empty or null");
-            }
-            CollectionType listType = objectMapper.getTypeFactory().constructCollectionType(List.class, Object.class);
-            List<Object> jsonData = objectMapper.readValue(content, listType);
-            return FileOperationResult.success(jsonData);
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to read JSON as List (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
+    /**
+     * Write an object as JSON to a file.
+     * @param filePath Path to the JSON file relative to sandbox root
+     * @param data Object to serialize as JSON
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult writeJson(String filePath, Object data) {
         try {
             String jsonString = objectMapper.writeValueAsString(data);
@@ -536,15 +391,13 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult writeJsonPretty(String filePath, Object data) {
-        try {
-            String jsonString = prettyWriter.writeValueAsString(data);
-            return write(filePath, jsonString, false);
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to write pretty JSON (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
+    /**
+     * Append an element to a JSON array file. If file doesn't exist or is not an array,
+     * creates a new array with the element.
+     * @param filePath Path to the JSON file relative to sandbox root
+     * @param newElement Element to append to the array
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult appendJson(String filePath, Object newElement) {
         try {
             List<Object> jsonList;
@@ -561,24 +414,31 @@ public class PluginFileClient {
         }
     }
 
-    /** Append one JSON object per line (NDJSON). Scales well for logs. */
-    public FileOperationResult appendJsonLine(String filePath, Object elem) {
+    // Helper method for appendJson - not exposed to plugins
+    private FileOperationResult readJsonList(String filePath) {
         try {
-            String line = objectMapper.writeValueAsString(elem) + "\n";
-            return write(filePath, line, true);
+            FileOperationResult readResult = read(filePath);
+            if (!readResult.isSuccess()) return readResult;
+            String content = readResult.getAsString();
+            if (content == null || content.trim().isEmpty()) {
+                return FileOperationResult.error("File is empty or null");
+            }
+            CollectionType listType = objectMapper.getTypeFactory().constructCollectionType(List.class, Object.class);
+            List<Object> jsonData = objectMapper.readValue(content, listType);
+            return FileOperationResult.success(jsonData);
         } catch (Exception e) {
-            return FileOperationResult.error("Failed to append JSON line (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            return FileOperationResult.error("Failed to read JSON as List (" + e.getClass().getSimpleName() + "): " + e.getMessage());
         }
     }
 
     // ===== CSV Operations =====
-    // Robust parsing for quoted fields + CRLF; writing auto-converts value types to String
 
+    /**
+     * Read a CSV file with headers. Returns a list of maps where keys are column headers.
+     * @param filePath Path to the CSV file relative to sandbox root
+     * @return FileOperationResult containing List&lt;Map&lt;String, String&gt;&gt; of CSV records
+     */
     public FileOperationResult readCsv(String filePath) {
-        return readCsv(filePath, ",", true);
-    }
-
-    public FileOperationResult readCsv(String filePath, String delimiter, boolean hasHeaders) {
         try {
             Path path = safeResolve(filePath);
             if (!Files.exists(path)) return FileOperationResult.success(new ArrayList<>());
@@ -589,14 +449,14 @@ public class PluginFileClient {
                 String line;
                 List<String> headers = null;
 
-                if (hasHeaders && (headerLine = br.readLine()) != null) {
-                    headers = parseCsvLine(headerLine, delimiter);
+                if ((headerLine = br.readLine()) != null) {
+                    headers = parseCsvLine(headerLine);
                 }
 
                 while ((line = br.readLine()) != null) {
-                    List<String> values = parseCsvLine(line, delimiter);
+                    List<String> values = parseCsvLine(line);
                     Map<String, String> rec = new LinkedHashMap<>();
-                    if (hasHeaders && headers != null) {
+                    if (headers != null) {
                         for (int i = 0; i < values.size(); i++) {
                             String key = i < headers.size() ? headers.get(i).trim() : "column_" + i;
                             rec.put(key, values.get(i));
@@ -618,11 +478,15 @@ public class PluginFileClient {
         }
     }
 
-    public FileOperationResult writeCsv(String filePath, List<?> headers, List<List<?>> rows) {
-        return writeCsv(filePath, headers, rows, ",", false);
-    }
-
-    public FileOperationResult writeCsv(String filePath, List<?> headers, List<List<?>> rows, String delimiter, boolean append) {
+    /**
+     * Write data to a CSV file with headers.
+     * @param filePath Path to the CSV file relative to sandbox root
+     * @param headers List of column headers
+     * @param rows List of data rows (each row is a list of values)
+     * @param append If true, append rows to existing file; if false, overwrite
+     * @return FileOperationResult indicating success or failure
+     */
+    public FileOperationResult writeCsv(String filePath, List<?> headers, List<List<?>> rows, boolean append) {
         try {
             StringBuilder csv = new StringBuilder();
 
@@ -630,9 +494,9 @@ public class PluginFileClient {
             if (!append || !exists(filePath)) {
                 if (headers != null && !headers.isEmpty()) {
                     List<String> headerStrings = headers.stream()
-                            .map(v -> escapeCsvValue(String.valueOf(v), delimiter))
+                            .map(v -> escapeCsvValue(String.valueOf(v)))
                             .collect(Collectors.toList());
-                    csv.append(String.join(delimiter, headerStrings)).append("\n");
+                    csv.append(String.join(",", headerStrings)).append("\n");
                 }
             }
 
@@ -640,9 +504,9 @@ public class PluginFileClient {
                 for (List<?> row : rows) {
                     if (row != null) {
                         List<String> escapedRow = row.stream()
-                                .map(v -> escapeCsvValue(String.valueOf(v), delimiter))
+                                .map(v -> escapeCsvValue(String.valueOf(v)))
                                 .collect(Collectors.toList());
-                        csv.append(String.join(delimiter, escapedRow)).append("\n");
+                        csv.append(String.join(",", escapedRow)).append("\n");
                     }
                 }
             }
@@ -653,19 +517,20 @@ public class PluginFileClient {
         }
     }
 
+    /**
+     * Append rows to a CSV file. Assumes file already has headers if it exists.
+     * @param filePath Path to the CSV file relative to sandbox root
+     * @param rows List of data rows to append
+     * @return FileOperationResult indicating success or failure
+     */
     public FileOperationResult appendCsv(String filePath, List<List<?>> rows) {
-        return appendCsv(filePath, rows, ",");
+        return writeCsv(filePath, null, rows, true);
     }
 
-    public FileOperationResult appendCsv(String filePath, List<List<?>> rows, String delimiter) {
-        return writeCsv(filePath, null, rows, delimiter, true);
-    }
-
-    private List<String> parseCsvLine(String line, String delimiter) {
+    private List<String> parseCsvLine(String line) {
         List<String> out = new ArrayList<>();
         if (line == null) return out;
 
-        char delim = delimiter != null && delimiter.length() == 1 ? delimiter.charAt(0) : ',';
         StringBuilder cur = new StringBuilder();
         boolean inQuotes = false;
 
@@ -687,7 +552,7 @@ public class PluginFileClient {
             } else {
                 if (c == '"') {
                     inQuotes = true;
-                } else if (c == delim) {
+                } else if (c == ',') {
                     out.add(cur.toString());
                     cur.setLength(0);
                 } else {
@@ -699,248 +564,12 @@ public class PluginFileClient {
         return out;
     }
 
-    private String escapeCsvValue(String value, String delimiter) {
+    private String escapeCsvValue(String value) {
         if (value == null) return "";
-        boolean mustQuote = value.contains("\n") || value.contains("\r") || value.contains("\"")
-                || (delimiter != null && delimiter.length() == 1 && value.indexOf(delimiter.charAt(0)) >= 0);
+        boolean mustQuote = value.contains("\n") || value.contains("\r") || value.contains("\"") || value.contains(",");
         if (mustQuote) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }
         return value;
-    }
-
-    // ===== Archive Operations =====
-
-    public FileOperationResult zip(String sourceDir, String zipFilePath) {
-        try {
-            Path sourcePath = safeResolve(sourceDir);
-            Path zipPath = safeResolve(zipFilePath);
-            Files.createDirectories(zipPath.getParent());
-
-            try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(zipPath)))) {
-                final Path realSource = sourcePath.toRealPath(LinkOption.NOFOLLOW_LINKS);
-
-                Files.walk(sourcePath) // do not follow symlinks implicitly
-                        .filter(p -> !Files.isDirectory(p))
-                        .forEach(p -> {
-                            try {
-                                // Skip symlinks or files escaping the source root
-                                if (Files.isSymbolicLink(p)) return;
-                                Path realP = p.toRealPath(LinkOption.NOFOLLOW_LINKS);
-                                if (!realP.startsWith(realSource)) return;
-
-                                ZipEntry zipEntry = new ZipEntry(realSource.relativize(realP).toString().replace('\\', '/'));
-                                try {
-                                    zipEntry.setTime(Files.getLastModifiedTime(realP).toMillis());
-                                } catch (Exception ignore) { /* best effort */ }
-
-                                zos.putNextEntry(zipEntry);
-                                try (BufferedInputStream in = new BufferedInputStream(Files.newInputStream(realP))) {
-                                    in.transferTo(zos);
-                                }
-                                zos.closeEntry();
-                            } catch (Exception ignoredPerEntry) {
-                                // Collecting per-entry errors would be nicer; keep silent to continue.
-                            }
-                        });
-            }
-
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to create zip archive (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult unzip(String zipFilePath, String targetDir) {
-        try {
-            Path zipPath = safeResolve(zipFilePath);
-            Path targetPath = safeResolve(targetDir);
-            Files.createDirectories(targetPath);
-
-            try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(Files.newInputStream(zipPath)))) {
-                ZipEntry zipEntry;
-                while ((zipEntry = zis.getNextEntry()) != null) {
-                    Path newFile = targetPath.resolve(zipEntry.getName()).normalize();
-
-                    // Prevent zip slip and ensure inside sandbox
-                    Path realNewFileParent = newFile.getParent().toRealPath(LinkOption.NOFOLLOW_LINKS);
-                    if (!realNewFileParent.startsWith(realRoot)) {
-                        zis.closeEntry();
-                        return FileOperationResult.error("Zip entry is outside target directory: " + zipEntry.getName());
-                    }
-
-                    if (zipEntry.isDirectory()) {
-                        Files.createDirectories(newFile);
-                    } else {
-                        Files.createDirectories(newFile.getParent());
-                        // Refuse to write through an existing symlink
-                        if (Files.exists(newFile) && Files.isSymbolicLink(newFile)) {
-                            zis.closeEntry();
-                            return FileOperationResult.error("Refusing to overwrite symlink: " + zipEntry.getName());
-                        }
-                        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(newFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE))) {
-                            zis.transferTo(out);
-                        }
-                    }
-                    zis.closeEntry();
-                }
-            }
-
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to extract zip archive (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    // ===== Utility Methods =====
-
-    public FileOperationResult createTempFile() {
-        return createTempFile("temp", ".tmp");
-    }
-
-    public FileOperationResult createTempFile(String prefix, String suffix) {
-        try {
-            Path tmp = Files.createTempFile(safeResolve("."), prefix, suffix);
-            return FileOperationResult.success(tmp.toString());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to create temp file (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public FileOperationResult createTempDirectory() {
-        return createTempDirectory("temp");
-    }
-
-    public FileOperationResult createTempDirectory(String prefix) {
-        try {
-            Path tmp = Files.createTempDirectory(safeResolve("."), prefix);
-            return FileOperationResult.success(tmp.toString());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to create temp directory (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    public long getFileSize(String filePath) {
-        try {
-            return Files.size(safeResolve(filePath));
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    public boolean isDirectory(String filePath) {
-        try {
-            return Files.isDirectory(safeResolve(filePath));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public boolean isFile(String filePath) {
-        try {
-            return Files.isRegularFile(safeResolve(filePath));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public boolean isReadable(String filePath) {
-        try {
-            return Files.isReadable(safeResolve(filePath));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public boolean isWritable(String filePath) {
-        try {
-            return Files.isWritable(safeResolve(filePath));
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** Glob helper: pattern like "*.csv" */
-    public List<String> glob(String dirPath, String pattern) {
-        try {
-            Path dir = safeResolve(dirPath);
-            if (!Files.isDirectory(dir)) return List.of();
-            try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir, pattern)) {
-                List<String> out = new ArrayList<>();
-                for (Path p : ds) out.add(p.toString());
-                return out;
-            }
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
-    /** Read up to {@code limit} lines to avoid huge allocations. */
-    public FileOperationResult readLines(String filePath, int limit) {
-        try {
-            Path path = safeResolve(filePath);
-            if (!Files.exists(path)) return FileOperationResult.success(List.of());
-            List<String> lines = new ArrayList<>(Math.max(0, limit));
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(path), StandardCharsets.UTF_8))) {
-                String line;
-                int count = 0;
-                while ((line = br.readLine()) != null && (limit <= 0 || count++ < limit)) {
-                    lines.add(line);
-                }
-            }
-            return FileOperationResult.success(lines);
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to read lines (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    /** Delete a directory; if recursive=false, only empty dirs are removed. */
-    public FileOperationResult deleteDir(String dirPath, boolean recursive) {
-        try {
-            Path dir = safeResolve(dirPath);
-            if (!Files.exists(dir)) return FileOperationResult.success();
-            if (!recursive) {
-                Files.delete(dir);
-            } else {
-                // Depth-first delete
-                try (Stream<Path> walk = Files.walk(dir)) {
-                    List<Path> list = walk.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
-                    for (Path p : list) {
-                        Files.deleteIfExists(p);
-                    }
-                }
-            }
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to delete directory (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
-    }
-
-    // ===== Streaming helper (optional large writes) =====
-
-    /** Stream large content into a file (non-atomic). Consumer should write bytes to the provided OutputStream. */
-    public FileOperationResult writeLarge(String filePath, Consumer<BufferedOutputStream> writer) {
-        try {
-            Path path = safeResolve(filePath);
-            Files.createDirectories(path.getParent());
-            ReentrantLock localLock = acquireLocalLock(path);
-            try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(path,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE))) {
-                writer.accept(out);
-            } finally {
-                releaseLocalLock(localLock);
-            }
-            return FileOperationResult.success();
-        } catch (SecurityException se) {
-            return FileOperationResult.error("Access denied: " + se.getMessage());
-        } catch (Exception e) {
-            return FileOperationResult.error("Failed to write large file (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-        }
     }
 }
