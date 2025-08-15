@@ -132,6 +132,8 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private String pythonVenv;
     private List<ScriptRef> pluginGlobalScripts;
+    private String pluginFilesRootPath;
+    private boolean pluginFilesEnableLocks = true;
 
     private boolean metricsEnabled = true;
 

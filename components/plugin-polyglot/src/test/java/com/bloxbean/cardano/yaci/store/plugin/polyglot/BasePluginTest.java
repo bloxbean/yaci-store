@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.plugin.polyglot;
 
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateConfig;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
+import com.bloxbean.cardano.yaci.store.plugin.file.PluginFileClient;
 import com.bloxbean.cardano.yaci.store.plugin.http.PluginHttpClient;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
@@ -40,6 +41,8 @@ public class BasePluginTest {
     private PluginHttpClient pluginHttpClient;
     @Mock
     private Locker locker;
+    @Mock
+    private PluginFileClient files;
 
     @InjectMocks
     protected PluginContextUtil pluginContextUtil;

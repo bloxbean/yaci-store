@@ -130,6 +130,7 @@ public class YaciStoreProperties {
         private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
 
         private PythonSettings python = new PythonSettings();
+        private FileSettings files = new FileSettings();
     }
 
     @Getter
@@ -142,5 +143,12 @@ public class YaciStoreProperties {
     @Setter
     public static final class Metrics {
         boolean enabled = true;
+    }
+
+    @Getter
+    @Setter
+    public static final class FileSettings {
+        private String rootPath = "./plugin-files";
+        private boolean enableLocks = true;
     }
 }
