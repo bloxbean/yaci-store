@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
-      - develop
+      - develop*
+      - release*
   pull_request:
     branches:
       - main
-      - develop
+      - develop*
+      - release*
 
 jobs:
   commit-build:
