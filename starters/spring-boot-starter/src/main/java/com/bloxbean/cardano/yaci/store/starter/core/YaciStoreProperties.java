@@ -29,6 +29,10 @@ public class YaciStoreProperties {
 
     private Plugins plugins = new Plugins();
     private Metrics metrics = new Metrics();
+    private AutoRestart autoRestart = new AutoRestart();
+
+    //Block receive delay threshold in seconds for health check
+    private int blockReceiveDelaySeconds = 120;
 
     @Getter
     @Setter
@@ -151,4 +155,14 @@ public class YaciStoreProperties {
         private String rootPath = "./plugin-files";
         private boolean enableLocks = true;
     }
+
+    @Getter
+    @Setter
+    public static final class AutoRestart {
+        private boolean enabled = true;
+        private long debounceWindowMs = 30000;
+        private int maxAttempts = 5;
+        private long backoffBaseMs = 5000;
+    }
+
 }
