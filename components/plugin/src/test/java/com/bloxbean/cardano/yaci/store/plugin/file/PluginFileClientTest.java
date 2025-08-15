@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.file;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -15,16 +16,20 @@ class PluginFileClientTest {
     private PluginFileClient fileClient;
 
     @TempDir
-    Path tempDir;
+    Path tempDir; // used as the sandbox root
 
     @BeforeEach
     void setUp() {
-        fileClient = new PluginFileClient();
+        StoreProperties storeProperties = new StoreProperties();
+        storeProperties.setPluginFilesRootPath(tempDir.toString());
+        storeProperties.setPluginsEnabled(true);
+        storeProperties.setPluginFilesEnableLocks(false);
+        fileClient = new PluginFileClient(storeProperties);
     }
 
     @Test
     void testBasicFileOperations() {
-        String filePath = tempDir.resolve("test.txt").toString();
+        String filePath = "test.txt";
         String content = "Hello, World!";
 
         // Write file
@@ -47,7 +52,7 @@ class PluginFileClientTest {
 
     @Test
     void testAppendOperations() {
-        String filePath = tempDir.resolve("append_test.txt").toString();
+        String filePath = "append_test.txt";
 
         // Write initial content
         fileClient.write(filePath, "Line 1\n");
@@ -70,7 +75,7 @@ class PluginFileClientTest {
 
     @Test
     void testDirectoryOperations() {
-        String dirPath = tempDir.resolve("test_dir").toString();
+        String dirPath = "test_dir";
 
         // Create directory
         FileOperationResult createResult = fileClient.createDir(dirPath);
@@ -78,8 +83,8 @@ class PluginFileClientTest {
         assertThat(fileClient.isDirectory(dirPath)).isTrue();
 
         // Create files in directory
-        fileClient.write(tempDir.resolve("test_dir/file1.txt").toString(), "Content 1");
-        fileClient.write(tempDir.resolve("test_dir/file2.json").toString(), "{}");
+        fileClient.write("test_dir/file1.txt", "Content 1");
+        fileClient.write("test_dir/file2.json", "{}");
 
         // List files
         DirectoryListing listing = fileClient.listFiles(dirPath);
@@ -94,38 +99,41 @@ class PluginFileClientTest {
 
     @Test
     void testPathOperations() {
+        // Create a nested path inside the sandbox so safeResolve() works
+        String nested = "path/to/file.txt";
+        fileClient.createDir("path/to");
+        fileClient.write(nested, "x");
+
         // Join paths
         String joinedPath = fileClient.joinPath("base", "sub", "file.txt");
-        assertThat(joinedPath).contains("base");
-        assertThat(joinedPath).contains("sub");
-        assertThat(joinedPath).contains("file.txt");
+        assertThat(joinedPath).contains("base").contains("sub").contains("file.txt");
 
         // Get filename
-        String filename = fileClient.getFileName("/path/to/file.txt");
+        String filename = fileClient.getFileName(nested);
         assertThat(filename).isEqualTo("file.txt");
 
         // Get extension
-        String extension = fileClient.getExtension("/path/to/file.txt");
+        String extension = fileClient.getExtension(nested);
         assertThat(extension).isEqualTo("txt");
 
         // Get base name
-        String baseName = fileClient.getBaseName("/path/to/file.txt");
+        String baseName = fileClient.getBaseName(nested);
         assertThat(baseName).isEqualTo("file");
 
         // Get parent
-        String parent = fileClient.getParent("/path/to/file.txt");
+        String parent = fileClient.getParent(nested);
         assertThat(parent).contains("path").contains("to");
     }
 
     @Test
     void testJsonOperations() {
-        String jsonPath = tempDir.resolve("test.json").toString();
+        String jsonPath = "test.json";
 
         // Create test data
         Map<String, Object> testData = Map.of(
-            "name", "Test",
-            "value", 123,
-            "active", true
+                "name", "Test",
+                "value", 123,
+                "active", true
         );
 
         // Write JSON
@@ -145,7 +153,7 @@ class PluginFileClientTest {
 
     @Test
     void testJsonArrayAppend() {
-        String jsonPath = tempDir.resolve("array.json").toString();
+        String jsonPath = "array.json";
 
         // Append to non-existent file (should create new array)
         FileOperationResult appendResult1 = fileClient.appendJson(jsonPath, Map.of("id", 1, "name", "First"));
@@ -166,14 +174,14 @@ class PluginFileClientTest {
 
     @Test
     void testCsvOperations() {
-        String csvPath = tempDir.resolve("test.csv").toString();
+        String csvPath = "test.csv";
 
         // Write CSV
         List<String> headers = List.of("name", "age", "city");
-        List<List<String>> rows = List.of(
-            List.of("Alice", "30", "New York"),
-            List.of("Bob", "25", "Los Angeles"),
-            List.of("Charlie", "35", "Chicago")
+        List<List<?>> rows = List.of(
+                List.of("Alice", "30", "New York"),
+                List.of("Bob", "25", "Los Angeles"),
+                List.of("Charlie", "35", "Chicago")
         );
 
         FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows);
@@ -192,19 +200,44 @@ class PluginFileClientTest {
     }
 
     @Test
+    void testCsvAutoCoercionOfTypes() {
+        String csvPath = "coerce.csv";
+
+        // Headers/rows with mixed types (Integer/Long/String)
+        List<?> headers = List.of("txHash", "outputIndex", "lovelaceAmount");
+        List<List<?>> rows = List.of(
+                List.of("abcd", 0, 1000L),
+                List.of("efgh", 1, 2000000L)
+        );
+
+        FileOperationResult writeResult = fileClient.writeCsv(csvPath, headers, rows);
+        assertThat(writeResult.isSuccess()).isTrue();
+
+        FileOperationResult readResult = fileClient.readCsv(csvPath);
+        assertThat(readResult.isSuccess()).isTrue();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> records = readResult.getAs(List.class);
+        assertThat(records).hasSize(2);
+        assertThat(records.get(0).get("outputIndex")).isEqualTo("0");
+        assertThat(records.get(0).get("lovelaceAmount")).isEqualTo("1000");
+        assertThat(records.get(1).get("lovelaceAmount")).isEqualTo("2000000");
+    }
+
+    @Test
     void testCsvAppend() {
-        String csvPath = tempDir.resolve("append.csv").toString();
+        String csvPath = "append.csv";
 
         // Write initial CSV with headers
         List<String> headers = List.of("id", "value");
-        List<List<String>> initialRows = List.of(List.of("1", "first"));
+        List<List<?>> initialRows = List.of(List.of("1", "first"));
 
         fileClient.writeCsv(csvPath, headers, initialRows);
 
-        // Append new rows
-        List<List<String>> newRows = List.of(
-            List.of("2", "second"),
-            List.of("3", "third")
+        // Append new rows (mixed types OK)
+        List<List<?>> newRows = List.of(
+                List.of(2, "second"),
+                List.of(3L, "third")
         );
 
         FileOperationResult appendResult = fileClient.appendCsv(csvPath, newRows);
@@ -216,11 +249,12 @@ class PluginFileClientTest {
         List<Map<String, String>> records = readResult.getAs(List.class);
         assertThat(records).hasSize(3);
         assertThat(records.get(2).get("value")).isEqualTo("third");
+        assertThat(records.get(1).get("id")).isEqualTo("2");
     }
 
     @Test
     void testFileInfo() {
-        String filePath = tempDir.resolve("info_test.txt").toString();
+        String filePath = "info_test.txt";
         String content = "Test content for file info";
 
         // Write file
@@ -242,9 +276,9 @@ class PluginFileClientTest {
 
     @Test
     void testCopyAndMove() {
-        String sourcePath = tempDir.resolve("source.txt").toString();
-        String copyPath = tempDir.resolve("copy.txt").toString();
-        String movePath = tempDir.resolve("moved.txt").toString();
+        String sourcePath = "source.txt";
+        String copyPath = "copy.txt";
+        String movePath = "moved.txt";
         String content = "Content to copy and move";
 
         // Create source file
@@ -293,27 +327,31 @@ class PluginFileClientTest {
 
     @Test
     void testErrorHandling() {
-        String nonExistentPath = "/non/existent/path/file.txt";
+        // Non-existent path INSIDE sandbox → "does not exist"
+        String insideNonExistent = "no/such/file.txt";
 
-        // Read non-existent file
-        FileOperationResult readResult = fileClient.read(nonExistentPath);
+        FileOperationResult readResult = fileClient.read(insideNonExistent);
         assertThat(readResult.isError()).isTrue();
         assertThat(readResult.getErrorMessage()).contains("does not exist");
 
-        // Delete non-existent file
-        FileOperationResult deleteResult = fileClient.delete(nonExistentPath);
+        FileOperationResult deleteResult = fileClient.delete(insideNonExistent);
         assertThat(deleteResult.isError()).isTrue();
 
-        // Get info for non-existent file
-        FileOperationResult infoResult = fileClient.getInfo(nonExistentPath);
+        FileOperationResult infoResult = fileClient.getInfo(insideNonExistent);
         assertThat(infoResult.isSuccess()).isTrue(); // Returns info with exists=false
         FileInfo info = infoResult.getAs(FileInfo.class);
         assertThat(info.exists()).isFalse();
+
+        // Path OUTSIDE sandbox → "Access denied"
+        String outsidePath = "/non/existent/path/file.txt";
+        FileOperationResult denied = fileClient.read(outsidePath);
+        assertThat(denied.isError()).isTrue();
+        assertThat(denied.getErrorMessage()).contains("Access denied");
     }
 
     @Test
     void testUtilityMethods() {
-        String filePath = tempDir.resolve("utility_test.txt").toString();
+        String filePath = "utility_test.txt";
         String content = "Test content";
 
         fileClient.write(filePath, content);
