@@ -152,7 +152,7 @@ public class YaciStoreProperties {
     @Getter
     @Setter
     public static final class FileSettings {
-        private String rootPath = "./plugin-files";
+        private String rootPath = "./plugins/files";
         private boolean enableLocks = true;
     }
 
