@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.plugin.aspect;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.api.PostActionPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.PreActionPlugin;
@@ -63,7 +64,7 @@ public class PluginAspect {
             try {
                 items = sf.filter(items);
             } catch (Exception e) {
-                if (storeProperties.isPluginExitOnError() || f.getPluginDef().isExitOnError()) {
+                if (shouldExitOnError(f.getPluginDef())) {
                     throw e;
                 }
             }
@@ -88,7 +89,7 @@ public class PluginAspect {
                 } catch (Exception e) {
                     //TODO : Should we throw exception or just log it?
                     log.error("Error executing pre-filter {}: {}", preStoreFilter.getName(), e.getMessage());
-                    if (storeProperties.isPluginExitOnError() || preStoreFilter.getPluginDef().isExitOnError()) {
+                    if (shouldExitOnError(preStoreFilter.getPluginDef())) {
                         throw e;
                     }
                 }
@@ -113,7 +114,7 @@ public class PluginAspect {
                 } catch (Exception e) {
                     //TODO : Should we throw exception or just log it?
                     log.error("Error executing post-filter {}: {}", postStoreFilter.getName(), e.getMessage());
-                    if (storeProperties.isPluginExitOnError() || postStoreFilter.getPluginDef().isExitOnError()) {
+                    if (shouldExitOnError(postStoreFilter.getPluginDef())) {
                         throw e;
                     }
                 }
@@ -121,5 +122,11 @@ public class PluginAspect {
         }
 
         return returnObj;
+    }
+
+    private boolean shouldExitOnError(PluginDef pluginDef) {
+        return pluginDef.getExitOnError() != null
+                ? pluginDef.getExitOnError()
+                : storeProperties.isPluginExitOnError();
     }
 }

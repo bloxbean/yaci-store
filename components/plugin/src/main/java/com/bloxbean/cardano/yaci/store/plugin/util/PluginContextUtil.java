@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.util;
 
+import com.bloxbean.cardano.yaci.store.plugin.file.PluginFileClient;
 import com.bloxbean.cardano.yaci.store.plugin.http.PluginHttpClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
@@ -17,6 +18,7 @@ public class PluginContextUtil {
     public final RestTemplate rest;
     public final Environment env;
     public final PluginHttpClient http;
+    public final PluginFileClient files;
     public final Locker locker;
 
     public JdbcTemplate getJdbc() {
@@ -37,6 +39,10 @@ public class PluginContextUtil {
 
     public PluginHttpClient getHttp() {
         return http;
+    }
+
+    public PluginFileClient getFiles() {
+        return files;
     }
 
     public Locker getLocker() {

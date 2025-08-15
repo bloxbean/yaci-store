@@ -1,0 +1,488 @@
+# Plugin File Client Usage Guide
+
+## Overview
+
+The `PluginFileClient` provides essential file operations designed specifically for blockchain plugin developers using MVEL, JavaScript, or Python. It offers simple, secure methods for file I/O, JSON/CSV handling, and directory operations with built-in error handling and sandboxing.
+
+## Key Features
+
+- **Simplified API**: Only essential methods for blockchain data processing
+- **Script-Friendly**: Designed for MVEL, JavaScript, and Python developers  
+- **Secure by Design**: Sandboxed operations with path validation
+- **Atomic Writes**: Data integrity for configuration and export files
+- **JSON/CSV Support**: Built-in support for common data formats
+- **Error Handling**: Consistent error reporting without exceptions
+
+## Core API Methods
+
+### File Operations (6 methods)
+- `read(String filePath)` - Read text file content
+- `write(String filePath, String content)` - Write text to file
+- `write(String filePath, String content, boolean append)` - Write or append text
+- `append(String filePath, String content)` - Append to file (convenience method)
+- `delete(String filePath)` - Delete a file
+- `exists(String filePath)` - Check if file exists
+
+### JSON Operations (3 methods)
+- `readJson(String filePath)` - Read and parse JSON file
+- `writeJson(String filePath, Object data)` - Write object as JSON
+- `appendJson(String filePath, Object element)` - Append to JSON array
+
+### CSV Operations (3 methods)
+- `readCsv(String filePath)` - Read CSV with headers
+- `writeCsv(String filePath, List headers, List<List> rows, boolean append)` - Write CSV data
+- `appendCsv(String filePath, List<List> rows)` - Append rows to CSV
+
+### Directory Operations (2 methods)
+- `createDir(String dirPath)` - Create directory with parents
+- `listFiles(String dirPath)` - List files in directory
+
+### Path Utilities (2 methods)
+- `joinPath(String... parts)` - Build platform-independent paths
+- `getFileName(String filePath)` - Extract filename from path
+
+## Basic Usage Examples
+
+### Simple File Operations
+
+```javascript
+// MVEL - Read configuration
+content = files.read("config.txt")
+if (content.isSuccess()) {
+    configText = content.getAsString()
+    log.info("Config loaded: " + configText)
+}
+
+// Write blockchain data
+result = files.write("output.txt", "Block processed: " + blockNumber)
+if (result.isSuccess()) {
+    log.info("Data written successfully")
+}
+
+// Append to log file
+files.append("process.log", "Transaction: " + txHash + "\n")
+```
+
+```javascript
+// JavaScript - File operations with error handling
+const content = files.read("data.txt");
+if (content.isSuccess()) {
+    console.log("File content:", content.getAsString());
+} else {
+    console.error("Read failed:", content.getErrorMessage());
+}
+
+// Append to event log
+const logEntry = `[${new Date()}] Block ${blockNumber} processed\n`;
+files.append("events.log", logEntry);
+```
+
+```python
+# Python - Check and write file
+if not files.exists("output.csv"):
+    # Create new file with headers
+    headers = ["block", "timestamp", "tx_count"]
+    files.writeCsv("output.csv", headers, [], False)
+
+# Append data
+files.append("debug.log", f"Processing block {block_number}\n")
+```
+
+### JSON Operations
+
+```javascript
+// MVEL - Read configuration
+configResult = files.readJson("config.json")
+if (configResult.isSuccess()) {
+    config = configResult.getData()
+    apiUrl = config.get("api_url")
+    timeout = config.get("timeout")
+}
+
+// Export block data
+blockData = {
+    "number": blockNumber,
+    "timestamp": System.currentTimeMillis(),
+    "transactions": txCount
+}
+files.writeJson("blocks/" + blockNumber + ".json", blockData)
+
+// Append to event log
+event = {
+    "type": "block_processed",
+    "block": blockNumber,
+    "time": System.currentTimeMillis()
+}
+files.appendJson("events.json", event)
+```
+
+```javascript
+// JavaScript - Configuration and logging
+const settings = files.readJson("settings.json");
+if (settings.isSuccess()) {
+    const config = settings.getData();
+    const network = config.network || "mainnet";
+    console.log(`Connected to ${network}`);
+}
+
+// Log transaction event
+const txEvent = {
+    hash: transaction.getTxHash(),
+    amount: transaction.getTotalOutput(),
+    timestamp: Date.now()
+};
+files.appendJson("transactions.json", txEvent);
+```
+
+```python
+# Python - JSON data export
+block_summary = {
+    "epoch": current_epoch,
+    "blocks_processed": block_count,
+    "total_transactions": tx_count,
+    "timestamp": System.currentTimeMillis()
+}
+files.writeJson(f"summaries/epoch_{current_epoch}.json", block_summary)
+
+# Append to audit log
+audit_entry = {
+    "action": "export_completed",
+    "epoch": current_epoch,
+    "records": tx_count
+}
+files.appendJson("audit.json", audit_entry)
+```
+
+### CSV Operations
+
+```javascript
+// MVEL - Export transaction data
+headers = ["tx_hash", "block", "amount", "fee"]
+rows = []
+
+for (tx : transactions) {
+    row = [
+        tx.getTxHash(),
+        String.valueOf(blockNumber),
+        String.valueOf(tx.getTotalOutput()),
+        String.valueOf(tx.getFee())
+    ]
+    rows.add(row)
+}
+
+// Write new CSV file
+files.writeCsv("transactions.csv", headers, rows, false)
+
+// Or append to existing CSV
+files.appendCsv("all_transactions.csv", rows)
+```
+
+```javascript
+// JavaScript - Read and process CSV
+const csvResult = files.readCsv("addresses.csv");
+if (csvResult.isSuccess()) {
+    const records = csvResult.getData();
+    console.log(`Processing ${records.length} addresses`);
+    
+    records.forEach(record => {
+        const address = record.address;
+        const balance = record.balance;
+        // Process each address
+    });
+}
+
+// Append new data
+const newRows = [
+    [newAddress, newBalance.toString(), "0"],
+    [anotherAddress, anotherBalance.toString(), "1"]
+];
+files.appendCsv("addresses.csv", newRows);
+```
+
+```python
+# Python - CSV export with append
+headers = ["epoch", "slot", "block_hash", "tx_count"]
+
+# Write headers if new file
+if not files.exists("blocks.csv"):
+    files.writeCsv("blocks.csv", headers, [], False)
+
+# Append block data
+row = [
+    str(epoch_number),
+    str(slot_number), 
+    block_hash,
+    str(transaction_count)
+]
+files.appendCsv("blocks.csv", [row])
+```
+
+### Directory Operations
+
+```javascript
+// MVEL - Organize output by date
+dateDir = "exports/" + new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date())
+files.createDir(dateDir)
+files.writeJson(dateDir + "/block_" + blockNumber + ".json", blockData)
+
+// List and process files
+listing = files.listFiles("imports/")
+if (listing.isSuccess()) {
+    fileList = listing.getFiles()
+    log.info("Found " + fileList.size() + " files to process")
+    
+    for (fileInfo : fileList) {
+        if (fileInfo.getName().endsWith(".json")) {
+            // Process JSON file
+            data = files.readJson("imports/" + fileInfo.getName())
+            // ...
+        }
+    }
+}
+```
+
+```javascript
+// JavaScript - Batch processing
+files.createDir("processed");
+
+const listing = files.listFiles("pending/");
+if (listing.isSuccess()) {
+    const files = listing.getFiles();
+    const jsonFiles = listing.filterByExtension("json");
+    
+    console.log(`Processing ${jsonFiles.length} JSON files`);
+    
+    jsonFiles.forEach(file => {
+        const result = files.readJson(`pending/${file.getName()}`);
+        if (result.isSuccess()) {
+            // Process and move to processed directory
+            const data = result.getData();
+            // ... process data ...
+            files.writeJson(`processed/${file.getName()}`, data);
+            files.delete(`pending/${file.getName()}`);
+        }
+    });
+}
+```
+
+```python
+# Python - Directory organization
+# Create directory structure
+files.createDir("data/blocks")
+files.createDir("data/transactions")
+files.createDir("data/addresses")
+
+# List and count files
+listing = files.listFiles("data/blocks/")
+if listing.isSuccess():
+    file_count = len(listing.getFiles())
+    print(f"Total blocks stored: {file_count}")
+```
+
+### Path Operations
+
+```javascript
+// MVEL - Build paths safely
+basePath = "exports"
+yearMonth = new java.text.SimpleDateFormat("yyyy/MM").format(new java.util.Date())
+fileName = "block_" + blockNumber + ".json"
+
+// Cross-platform path construction
+fullPath = files.joinPath(basePath, yearMonth, fileName)
+files.createDir(files.joinPath(basePath, yearMonth))
+files.writeJson(fullPath, blockData)
+```
+
+```javascript
+// JavaScript - Path manipulation
+const exportDir = "exports";
+const date = new Date().toISOString().split('T')[0];
+const filename = `transactions_${date}.csv`;
+
+const fullPath = files.joinPath(exportDir, date, filename);
+const dirPath = files.joinPath(exportDir, date);
+
+files.createDir(dirPath);
+files.writeCsv(fullPath, headers, rows, false);
+
+// Extract filename for logging
+const savedFile = files.getFileName(fullPath);
+console.log(`Data saved to: ${savedFile}`);
+```
+
+## Common Blockchain Plugin Patterns
+
+### 1. Event Logging
+```javascript
+// Continuously log blockchain events
+function logBlockEvent(blockNumber, txCount) {
+    const event = {
+        timestamp: Date.now(),
+        block: blockNumber,
+        transactions: txCount,
+        type: "block_processed"
+    };
+    
+    // Append to JSON array for structured logs
+    files.appendJson("events/blocks.json", event);
+    
+    // Also append to text log for simple monitoring
+    const logLine = `[${new Date().toISOString()}] Block ${blockNumber}: ${txCount} transactions\n`;
+    files.append("events/blocks.log", logLine);
+}
+```
+
+### 2. Data Export
+```javascript
+// Export blockchain data in multiple formats
+function exportBlockData(block) {
+    const blockDir = files.joinPath("exports", "blocks", block.epoch.toString());
+    files.createDir(blockDir);
+    
+    // JSON for complete data
+    files.writeJson(
+        files.joinPath(blockDir, `block_${block.number}.json`),
+        block
+    );
+    
+    // CSV for analysis
+    const csvRow = [
+        block.number.toString(),
+        block.hash,
+        block.timestamp.toString(),
+        block.transactionCount.toString()
+    ];
+    files.appendCsv("exports/all_blocks.csv", [csvRow]);
+}
+```
+
+### 3. Configuration Management
+```javascript
+// Load and cache configuration
+let config = null;
+
+function loadConfig() {
+    const result = files.readJson("config.json");
+    if (result.isSuccess()) {
+        config = result.getData();
+        return true;
+    } else {
+        // Use defaults if config doesn't exist
+        config = {
+            batchSize: 100,
+            exportFormat: "json",
+            logLevel: "info"
+        };
+        // Save defaults for next time
+        files.writeJson("config.json", config);
+        return false;
+    }
+}
+```
+
+### 4. Incremental Processing
+```javascript
+// Track processing progress
+function saveProgress(lastBlock) {
+    const progress = {
+        lastProcessedBlock: lastBlock,
+        timestamp: Date.now(),
+        status: "running"
+    };
+    files.writeJson("progress.json", progress);
+}
+
+function getLastProcessedBlock() {
+    const result = files.readJson("progress.json");
+    if (result.isSuccess()) {
+        return result.getData().lastProcessedBlock;
+    }
+    return 0; // Start from beginning
+}
+```
+
+## Best Practices
+
+### 1. Always Check Operation Results
+```javascript
+const result = files.read("important.json");
+if (!result.isSuccess()) {
+    console.error(`Failed to read file: ${result.getErrorMessage()}`);
+    return; // Handle error appropriately
+}
+const data = result.getAsString();
+```
+
+### 2. Use Path Utilities for Cross-Platform Compatibility
+```javascript
+// Good - works on all platforms
+const logPath = files.joinPath("logs", "2024", "01", "app.log");
+
+// Avoid - platform-specific
+// const logPath = "logs/2024/01/app.log";  // Unix only
+// const logPath = "logs\\2024\\01\\app.log"; // Windows only
+```
+
+### 3. Choose Appropriate Write Mode
+```javascript
+// For configuration and complete data - use write (overwrites)
+files.writeJson("config.json", settings);
+
+// For logs and continuous data - use append
+files.append("transaction.log", logEntry);
+files.appendJson("events.json", eventData);
+files.appendCsv("metrics.csv", newRows);
+```
+
+### 4. Organize Data with Directories
+```javascript
+// Create logical directory structure
+files.createDir("data/blocks");
+files.createDir("data/transactions");
+files.createDir("logs/daily");
+
+// Use date-based organization for time-series data
+const dateDir = new Date().toISOString().split('T')[0];
+files.createDir(files.joinPath("exports", dateDir));
+```
+
+### 5. Handle Missing Files Gracefully
+```javascript
+// Check existence before reading
+if (files.exists("state.json")) {
+    const state = files.readJson("state.json");
+    // Resume from saved state
+} else {
+    // Initialize new state
+    const newState = { startBlock: 0, processed: 0 };
+    files.writeJson("state.json", newState);
+}
+```
+
+## Security Features
+
+The file client includes built-in security measures:
+
+1. **Sandboxing**: All file operations are confined to a designated sandbox directory
+2. **Path Validation**: Prevents directory traversal attacks
+3. **Atomic Writes**: Ensures data integrity for files ≤16MB
+4. **No Dangerous Operations**: No recursive deletion, file movement, or archive extraction
+5. **Safe Defaults**: Conservative permissions and error handling
+
+## Error Handling
+
+All operations return a `FileOperationResult` with consistent error handling:
+
+```javascript
+const result = files.readJson("data.json");
+
+if (result.isSuccess()) {
+    const data = result.getData();  // For JSON/CSV operations
+    // or
+    const text = result.getAsString();  // For text operations
+    // Process data...
+} else {
+    const error = result.getErrorMessage();
+    console.error(`Operation failed: ${error}`);
+}
+```

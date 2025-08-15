@@ -13,5 +13,5 @@ public class PluginDef {
     private String expression; //nullable
     private String inlineScript; //nullable
     private ScriptDef script; //nullable
-    private boolean exitOnError = false;
+    private Boolean exitOnError;
 }

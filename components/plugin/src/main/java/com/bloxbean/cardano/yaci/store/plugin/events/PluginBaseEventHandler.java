@@ -22,7 +22,10 @@ public class PluginBaseEventHandler {
                 plugin.handleEvent(event);
             } catch (Exception e) {
                 log.error("Error in plugin " + plugin.getName() + ": " + e.getMessage(), e);
-                if (storeProperties.isPluginExitOnError() || plugin.getPluginDef().isExitOnError())
+                boolean shouldExitOnError = plugin.getPluginDef().getExitOnError() != null 
+                    ? plugin.getPluginDef().getExitOnError() 
+                    : storeProperties.isPluginExitOnError();
+                if (shouldExitOnError)
                     throw new RuntimeException("Plugin " + plugin.getName() + " failed to handle event: " + e.getMessage(), e);
             }
         }
