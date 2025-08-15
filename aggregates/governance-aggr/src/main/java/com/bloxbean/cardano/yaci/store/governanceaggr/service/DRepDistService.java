@@ -2,10 +2,12 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
+import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
@@ -14,8 +16,12 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -26,10 +32,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -39,6 +44,9 @@ public class DRepDistService {
     private final EraService eraService;
     private final EpochParamStorage epochParamStorage;
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
+    private final GovActionProposalStorage govActionProposalStorage;
+    private final ProposalStateClient proposalStateClient;
+    private final ProposalMapper proposalMapper;
     private final StoreProperties storeProperties;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
     private final DRepExpiryService dRepExpiryService;
@@ -102,6 +110,7 @@ public class DRepDistService {
             "DROP TABLE IF EXISTS ss_drep_ranked_delegations",
             "DROP TABLE IF EXISTS ss_drep_status",
             "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits",
+            "DROP TABLE IF EXISTS ss_gov_scheduled_to_drop_proposal_deposits",
             "DROP TABLE IF EXISTS ss_gov_spendable_reward_rest",
             "DROP TABLE IF EXISTS ss_gov_pool_refund_rewards"
         );
@@ -110,6 +119,9 @@ public class DRepDistService {
             jdbcTemplate.update(query, Map.of());
         }
         log.info("Dropped existing temp tables for DRep distribution !!!");
+
+        // Get proposals that will be dropped in current epoch
+        Set<GovActionId> proposalsToBeDropped = getActiveProposalsScheduledToDrop(currentEpoch);
 
         String rankedDelegationsQuery = String.format("""
                 CREATE %s TABLE ss_drep_ranked_delegations AS
@@ -249,6 +261,42 @@ public class DRepDistService {
                       g.return_address
                 """, tableType);
 
+        String droppedProposalDepositsQuery;
+        if (!proposalsToBeDropped.isEmpty()) {
+            String droppedProposals = proposalsToBeDropped.stream()
+                    .map(govActionId -> String.format("('%s', %d)",
+                            govActionId.getTransactionId(), govActionId.getGov_action_index()))
+                    .collect(Collectors.joining(", "));
+
+            droppedProposalDepositsQuery = String.format("""
+                    CREATE %s TABLE ss_gov_scheduled_to_drop_proposal_deposits AS
+                    select
+                          g.return_address,
+                          SUM(g.deposit) as deposit
+                        from
+                          gov_action_proposal g
+                          left join gov_action_proposal_status s on g.tx_hash = s.gov_action_tx_hash
+                          and g.idx = s.gov_action_index
+                        where
+                         ((s.status = 'ACTIVE'
+                         		and g.epoch < :epoch
+                         		and s.epoch = :epoch)
+                         	or (s.status is null
+                         		and g.epoch = :epoch))
+                         and (g.tx_hash, g.idx) IN (%s)
+                        group by
+                          g.return_address
+                    """, tableType, droppedProposals);
+        } else {
+            // Create empty table if no proposals scheduled to be drop
+            droppedProposalDepositsQuery = String.format("""
+                    CREATE %s TABLE ss_gov_scheduled_to_drop_proposal_deposits (
+                        return_address varchar(255),
+                        deposit bigint
+                    )
+                    """, tableType);
+        }
+
         String spendableRewardRestQuery = String.format("""
                 CREATE %s TABLE ss_gov_spendable_reward_rest AS
                 select
@@ -262,7 +310,7 @@ public class DRepDistService {
                 where
                     (lw.max_slot is null
                         or r.slot > lw.max_slot)
-                    and r.spendable_epoch <= :snapshot_epoch 
+                    and r.spendable_epoch <= :snapshot_epoch
                 group by
                     r.address
                 """, tableType);
@@ -281,6 +329,7 @@ public class DRepDistService {
                 rankedDelegationsQuery,
                 drepStatusQuery,
                 activeProposalDepositsQuery,
+                droppedProposalDepositsQuery,
                 spendableRewardRestQuery,
                 poolRefundRewardsQuery
         );
@@ -307,7 +356,8 @@ public class DRepDistService {
                 "CREATE INDEX idx_ss_gov_pool_refund_rewards_address ON ss_gov_pool_refund_rewards(address)",
                 "CREATE INDEX idx_ss_drep_status_drep_hash ON ss_drep_status(drep_hash)",
                 "CREATE INDEX idx_ss_drep_status_drep_type ON ss_drep_status(type)",
-                "CREATE INDEX idx_ss_gov_active_proposal_deposits_ret_address ON ss_gov_active_proposal_deposits(return_address)"
+                "CREATE INDEX idx_ss_gov_active_proposal_deposits_ret_address ON ss_gov_active_proposal_deposits(return_address)",
+                "CREATE INDEX idx_ss_gov_scheduled_to_drop_proposal_deposits_ret_address ON ss_gov_scheduled_to_drop_proposal_deposits(return_address)"
         );
 
         start = System.currentTimeMillis();
@@ -379,7 +429,8 @@ public class DRepDistService {
                       COALESCE(sab.quantity, 0) 
                           + COALESCE(r.withdrawable_reward, 0) 
                           + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
-                          + coalesce(apd.deposit, 0) 
+                          + COALESCE(apd.deposit, 0)
+                          - COALESCE(dpd.deposit, 0)
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
@@ -391,6 +442,7 @@ public class DRepDistService {
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
                     left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join ss_gov_spendable_reward_rest rr ON rd.address = rr.address
@@ -422,7 +474,8 @@ public class DRepDistService {
                       COALESCE(sab.quantity, 0)
                           + COALESCE(r.withdrawable_reward, 0) 
                           + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
-                          + coalesce(apd.deposit, 0)
+                          + COALESCE(apd.deposit, 0)
+                          - COALESCE(dpd.deposit, 0)
                           + COALESCE(rr.withdrawable_reward_rest, 0)
                     ),
                     :snapshot_epoch,
@@ -430,10 +483,11 @@ public class DRepDistService {
                     null,
                     NOW()
                   from
-                    ss_drep_ranked_delegations rd                      
+                    ss_drep_ranked_delegations rd
                     left join ss_pool_rewards r on rd.address = r.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
+                    left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
                     left join ss_max_slot_balances msb on msb.address = rd.address
                     left join stake_address_balance sab on msb.address = sab.address and msb.max_slot = sab.slot
                     left join ss_gov_spendable_reward_rest rr ON rd.address = rr.address
@@ -497,5 +551,42 @@ public class DRepDistService {
         return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
+    }
+
+    private Set<GovActionId> getActiveProposalsScheduledToDrop(int currentEpoch) {
+        int prevEpoch = currentEpoch - 1;
+        
+        List<Proposal> newProposals = govActionProposalStorage.findByEpoch(prevEpoch)
+                .stream()
+                .map(proposalMapper::toGovActionProposal)
+                .flatMap(Optional::stream)
+                .map(proposalMapper::toProposal)
+                .toList();
+
+        List<Proposal> ratifiedProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch).stream()
+                .map(proposalMapper::toProposal)
+                .toList();
+        List<Proposal> activeProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, prevEpoch).stream()
+                .map(proposalMapper::toProposal)
+                .toList();
+        List<Proposal> expiredProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, prevEpoch).stream()
+                .map(proposalMapper::toProposal)
+                .toList();
+
+        List<Proposal> activeOrNewCreatedProposals = Stream.concat(activeProposals.stream(), newProposals.stream()).toList();
+
+        Set<GovActionId> proposalsToBeDropped = new HashSet<>();
+
+        for (Proposal proposal : expiredProposals) {
+            List<Proposal> proposalsToPrune = ProposalUtils.findDescendants(proposal, activeOrNewCreatedProposals);
+            proposalsToPrune.forEach(p -> proposalsToBeDropped.add(p.getGovActionId()));
+        }
+
+        for (Proposal proposal : ratifiedProposals) {
+            List<Proposal> proposalsToPrune = ProposalUtils.findSiblingsAndTheirDescendants(proposal, activeOrNewCreatedProposals);
+            proposalsToPrune.forEach(p -> {proposalsToBeDropped.add(p.getGovActionId());});
+        }
+
+        return proposalsToBeDropped;
     }
 }
