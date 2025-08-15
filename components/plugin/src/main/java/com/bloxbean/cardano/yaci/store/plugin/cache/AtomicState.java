@@ -144,24 +144,28 @@ public class AtomicState<K, V> implements State<K, V> {
     
     @Override
     public boolean addToSet(K key, Object element) {
-        Object result = state.compute(key, (k, currentValue) -> {
+        AtomicReference<Boolean> wasAdded = new AtomicReference<>(false);
+        
+        state.compute(key, (k, currentValue) -> {
             Set<Object> set;
             if (currentValue == null) {
                 set = ConcurrentHashMap.newKeySet();
+                wasAdded.set(set.add(element));
             } else if (currentValue instanceof Set) {
                 @SuppressWarnings("unchecked")
                 Set<Object> existing = (Set<Object>) currentValue;
                 set = existing;
+                wasAdded.set(set.add(element));
             } else {
                 // Convert non-set value to a set containing that value
                 set = ConcurrentHashMap.newKeySet();
                 set.add(currentValue);
+                wasAdded.set(set.add(element));
             }
-            set.add(element);
             return set;
         });
         
-        return result instanceof Set && ((Set<?>) result).contains(element);
+        return wasAdded.get();
     }
     
     @Override
