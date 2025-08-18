@@ -404,7 +404,11 @@ public class ProposalStatusProcessor {
             List<CommitteeMemberDetails> committeeMembersDoNotVote = membersCanVote.stream()
                     .filter(committeeMember ->
                             coldKeyHotKeyMap.get(committeeMember.getColdKey()) == null ||
-                                    votesByCommittee.stream().noneMatch(
+                                    votesByCommittee.stream()
+                                            .filter(votingProcedure ->
+                                                    votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
+                                                            && votingProcedure.getGovActionIndex() == proposal.getIndex())
+                                            .noneMatch(
                                             votingProcedure ->
                                                     coldKeyHotKeyMap.get(committeeMember.getColdKey())
                                                             .equals(votingProcedure.getVoterHash())))
