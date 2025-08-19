@@ -25,8 +25,9 @@ public class DefaultVariableProvider implements VariableProvider {
                 "rest", pluginContextUtil.getRest(),
                 "env", pluginContextUtil.getEnv(),
                 "http", pluginContextUtil.getHttp(),
+                "files", pluginContextUtil.getFiles(),
                 "locker", pluginContextUtil.getLocker(),
-                "global_state", stateService
+                "global_state", stateService.global()
         );
     }
 

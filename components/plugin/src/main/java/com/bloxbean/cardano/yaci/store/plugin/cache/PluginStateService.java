@@ -26,7 +26,7 @@ public class PluginStateService {
      * @return a dedicated state for that plugin
      */
     public State<String, Object> forPlugin(String pluginKey) {
-        return pluginStates.computeIfAbsent(pluginKey, k -> new ConcurrentMapState<>());
+        return pluginStates.computeIfAbsent(pluginKey, k -> new AtomicState<>());
     }
 }
 
