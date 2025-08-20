@@ -1,6 +1,6 @@
 # Getting Started with Yaci Store 2.x.x
 
-## Current Version: 2.0.0-beta3
+## Current Version: 2.0.0-beta4
 
 This is the **latest beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
 
@@ -44,7 +44,7 @@ While governance state data calculation has some mismatches, and even though rew
 - The **default indexer application**, includes all modules.
 - **Ledger-state calculation is disabled by default** but can be enabled via profile.
 
-### 3. **Yaci Store Admin CLI App**
+### 2. **Yaci Store Admin CLI App**
 - CLI tool to **apply optional indexes after sync is complete**.
 - Optional indexes improve API query performance and are not applied during initial sync.
 
@@ -337,7 +337,7 @@ yaci-store> apply-indexes
 ### 3. Yaci Store Native (GraalVM) Distribution *(Preview)*
 
 Native binaries are available under a separate release tag:
-`<version>-native` (e.g., `2.0.0-beta3-native`)
+`<version>-native` (e.g., `2.0.0-beta4-native`)
 
 #### Download Format
 
@@ -350,7 +350,7 @@ yaci-store-<version>-<os>-<arch>-all.zip
 Example:
 
 ```text
-yaci-store-2.0.0-beta3-linux-x64-all.zip
+yaci-store-2.0.0-beta4-linux-x64-all.zip
 ```
 
 > ⚠️ Only use the ZIP files ending with `-all`.
