@@ -1,274 +1,230 @@
-import { Callout } from 'nextra/components'
+import { Callout, Tabs } from 'nextra/components'
 
-# Plugin Context Variables
+# Context Variables Overview
 
-**Built-in Variables and Custom Variable Providers for Plugin Development**
+**Built-in variables and utilities available in all plugin scripts**
 
-## Overview
+## What are Context Variables?
 
-Context variables are pre-defined objects and utilities that are automatically available to all plugin scripts without any import or initialization. These variables provide access to essential functionality like database operations, HTTP requests, state management, and more.
+Context variables are pre-defined objects that are automatically injected into your plugin scripts. They provide instant access to:
+- Database operations
+- HTTP client for API calls
+- File I/O operations
+- State management
+- Configuration access
 
-The plugin framework also supports custom Variable Providers, allowing developers to extend the available variables by implementing their own providers and bundling them as JAR files.
+No imports or initialization needed - just use them directly in your MVEL, JavaScript, or Python plugins.
 
-## Built-in Variables
+<Callout type="tip">
+**New to plugins?** Check our [Quick Reference](./variables/quick-reference) for a concise overview of all variables.
+</Callout>
 
-Yaci-store provides several built-in variables through the `DefaultVariableProvider`. These variables are automatically injected into the plugin execution context and can be used directly in your scripts.
+## Available Variables
 
-### Core Variables
+### Essential Variables
 
-#### `named_jdbc`  (Recommended)
+#### `named_jdbc` - Database Access (Recommended)
 **Type**: `NamedParameterJdbcTemplate`
 **Purpose**: Execute SQL queries with named parameters for better readability and safety.
 
-**MVEL Example**:
-```mvel
-// Query with named parameters (much more readable)
-params = ["address": utxo.ownerAddr, "minAmount": 1000000];
-result = named_jdbc.queryForMap("SELECT COUNT(*) as count FROM address_utxo WHERE owner_addr = :address AND lovelace_amount > :minAmount", params);
-count = result["count"];
-
-// Query for multiple records with named parameters
-params = ["address": utxo.ownerAddr];
-rows = named_jdbc.queryForList("SELECT tx_hash, lovelace_amount FROM address_utxo WHERE owner_addr = :address", params);
-for (row: rows) {
-  tx_hash = row['tx_hash'];
-  amount = row['lovelace_amount'];
-}
-
-// Update with named parameters
-updateParams = ["txHash": txHash, "newStatus": "confirmed", "timestamp": System.currentTimeMillis()];
-named_jdbc.update("UPDATE tx_status SET status = :newStatus, updated_at = :timestamp WHERE tx_hash = :txHash", updateParams);
-
-// Complex query with multiple parameters
-queryParams = ["poolId": poolId, "fromEpoch": 350, "toEpoch": 360];
-delegations = named_jdbc.queryForObject("SELECT COUNT(*) FROM delegation WHERE pool_id = :poolId AND epoch >= :fromEpoch AND epoch <= :toEpoch", queryParams);
-```
-
-#### `jdbc`
-**Type**: `JdbcTemplate`
-**Purpose**: Direct database access using JDBC for executing SQL queries and updates.
-
-**MVEL Example**:
-```mvel
-// Query for a single value (count, sum, etc.)
-result = jdbc.queryForMap("SELECT COUNT(*) as cnt FROM address_utxo WHERE owner_addr = ?", address);
-count = result['cnt'];
-
-// Query for multiple records
-rows = jdbc.queryForList("SELECT tx_hash, lovelace_amount FROM address_utxo WHERE owner_addr = ?", address);
-for (row: rows) {
-  tx_hash = row['tx_hash'];
-  amount = row['lovelace_amount'];
-}
-
-// Execute update/insert/delete
-jdbc.update("UPDATE custom_table SET processed = true WHERE tx_hash = ?", txHash);
-jdbc.update("INSERT INTO tx_log (tx_hash, status) VALUES (?, ?)", txHash, "processed");
-```
-
-**JavaScript Example**:
 ```javascript
-// Query for a single value (count, sum, etc.)
-var result = jdbc.queryForMap("SELECT COUNT(*) as cnt FROM address_utxo WHERE owner_addr = ?", address);
-console.log(result.get("cnt"));
+// Query with named parameters
+params = ["address": ownerAddr];
+result = named_jdbc.queryForMap(
+    "SELECT COUNT(*) as count FROM address_utxo WHERE owner_addr = :address",
+    params
+);
 ```
 
-#### `http`
+[📖 Full Database Guide →](./variables/database-access)
+
+#### `http` - HTTP Client
 **Type**: `PluginHttpClient`
-**Purpose**: Simplified HTTP client specifically designed for plugin developers with common operations.
+**Purpose**: Make HTTP requests with built-in JSON handling.
 
-**MVEL Example**:
-```mvel
+```javascript
 // GET request
-response = http.get("https://jsonplaceholder.typicode.com/todos/1", ["header1": "value1", "header2": "value2"]);
-if (response.status == 200) {
-    System.out.println("Response: " + response.body);
-} else {
-    System.out.println("Failed to fetch data: " + response.status);
+response = http.get("https://api.example.com/data")
+
+if (response.isSuccess()) {
+    data = response.asJson();
 }
-
-// POST JSON
-jsonData = ["title": "foo", "body": "bar", "userId": 1];
-response = http.postJson("https://jsonplaceholder.typicode.com/posts", jsonData, ["Content-Type": "application/json"]);
-
-// POST form data
-formData = ["title": txHash, "status": "processed"];
-response = http.postForm("https://api.example.com/notify", formData, null);
-
-// PUT JSON
-updateData = ["status": "confirmed"];
-response = http.putJson("https://api.example.com/tx/" + txHash, updateData, ["Authorization": "Bearer token"]);
-
-// DELETE request
-response = http.delete("https://api.example.com/resource/" + id, ["Authorization": "Bearer token"]);
 ```
 
-#### `rest`
-**Type**: `RestTemplate`
-**Purpose**: Make HTTP/REST API calls to external services.
+[📖 Full HTTP Client Guide →](./variables/http-client)
 
-**MVEL Example**:
-```mvel
-// GET request
-response = rest.getForObject("https://api.example.com/data", java.lang.String);
+#### `files` - File Operations
+**Type**: `PluginFileClient`
+**Purpose**: Read/write files with JSON and CSV support.
 
-// POST request with JSON (simple approach)
-jsonData = '{"transaction": "' + txHash + '", "amount": ' + amount + '}';
-response = rest.postForObject("https://api.example.com/webhook", jsonData, java.lang.String);
-
-// Note: For more complex HTTP operations, consider using the 'http' variable instead
+```javascript
+// Read and write JSON
+config = files.readJson("config.json");
+if (config.isSuccess()) {
+    settings = config.getData();
+    // Process...
+    files.writeJson("output.json", results);
+}
 ```
 
-#### `env`
+[📖 Full File Operations Guide →](./variables/file-operations)
+
+#### `env` - Configuration Access
 **Type**: `Environment`
-**Purpose**: Access environment variables and application configuration properties.
+**Purpose**: Access environment variables and application properties.
 
-**MVEL Example**:
-```mvel
-// Get configuration with default value
-webhookUrl = env.getProperty("plugin.webhook.url", "http://localhost:8080/webhook");
-dbTimeout = env.getProperty("plugin.db.timeout", "30");
+```javascript
+// Get configuration with defaults
+apiUrl = env.getProperty("plugin.api.url", "http://localhost:8080");
+apiKey = env.getProperty("API_KEY"); // Environment variable
+```
 
-// Check if property exists
-if (env.containsProperty("plugin.feature.enabled")) {
-    enabled = env.getProperty("plugin.feature.enabled", Boolean.class);
+[📖 Full Configuration Guide →](./variables/configuration)
+
+#### `state` & `global_state` - State Management
+**Type**: `State`
+**Purpose**: Plugin or global state with atomic operations.
+
+- **`state`**: Plugin-specific storage
+- **`global_state`**: Shared across all plugins
+
+```javascript
+// Store progress
+state.put("last_block", blockNumber);
+
+// Atomic counter
+count = state.increment("processed_count");
+
+// Thread-safe set operations
+state.addToSet("processed_txs", txHash);
+```
+
+[📖 Full State Management Guide →](./variables/state-management)
+
+### Quick Examples
+
+<Tabs items={['Database', 'HTTP', 'State', 'Files']}>
+<Tabs.Tab>
+```javascript
+// Count transactions for an address
+params = ["addr": "addr1..."];
+result = named_jdbc.queryForMap(
+    "SELECT COUNT(*) as cnt FROM tx WHERE address = :addr",
+    params
+);
+count = result["cnt"];
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Send webhook
+response = http.postJson("https://webhook.site/id", {
+        "block": blockNumber,
+        "txCount": transactions.size()
+    });
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Track processing progress
+state.put("last_block", blockNumber);
+count = state.increment("blocks_processed");
+
+if (!state.addToSet("seen_txs", txHash)) {
+    // Already processed this transaction
+    return;
 }
 ```
+</Tabs.Tab>
 
-#### `state`
-**Type**: `State`
-**Purpose**: Plugin-specific persistent state management that survives between executions.
-
-**MVEL Example**:
-```mvel
-// Store and retrieve values
-state.put("last_processed_slot", currentSlot);
-state.put("transaction_count", 1000);
-
-// Retrieve values
-lastSlot = state.get("last_processed_slot");
-count = state.get("transaction_count");
-
-// Check if key exists
-if (state.containsKey("last_processed_slot")) {
-    // Process based on stored state
+<Tabs.Tab>
+```javascript
+// Read config and write results
+config = files.readJson("config.json");
+if (config.isSuccess()) {
+    // Process with config...
+    files.writeJson("results.json", data);
+    files.appendCsv("log.csv", [[timestamp, status]]);
 }
 ```
+</Tabs.Tab>
+</Tabs>
 
-#### `global_state`
-**Type**: `State`
-**Purpose**: Global state shared across all plugins for cross-plugin communication and data sharing.
+## Language Support
 
-<Callout type="warning">
-**Note**: Due to a bug in version 2.0.0-beta3, global state must be accessed using `global_state.global()` in plugins instead of directly using `global_state`.
-</Callout>
+All context variables work seamlessly across supported scripting languages:
 
-**MVEL Example**:
-```mvel
-// Store global data (accessible by all plugins)
-global_state.global().put("network_tip", currentSlot);
-global_state.global().put("epoch_info", epochData);
-
-// Retrieve global data in any plugin
-networkTip = global_state.global().get("network_tip");
-epochInfo = global_state.global().get("epoch_info");
+<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs.Tab>
+```javascript
+// MVEL - Direct and concise
+result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", ["num": 100]);
+state.increment("counter");
+response = http.get("https://api.example.com/data");
 ```
+</Tabs.Tab>
 
-#### `locker`
-**Type**: `Locker`
-**Purpose**: Thread-safe locking mechanism for synchronizing access to shared resources.
-
-**MVEL Example**:
-```mvel
-//TODO
+<Tabs.Tab>
+```javascript
+// JavaScript - Familiar syntax
+const result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", {num: 100});
+state.increment("counter");
+const response = http.get("https://api.example.com/data");
 ```
+</Tabs.Tab>
 
-<Callout type="info">
-All built-in variables are directly accessible by name in your plugin scripts. For example, you can use `jdbc.queryForObject(...)` directly without any initialization.
-</Callout>
-
-## Variable Providers
-
-Variable Providers are a powerful extension mechanism that allows developers to add new variables to the plugin context without modifying the core yaci-store codebase.
-
-### What is a Variable Provider?
-
-A Variable Provider is a Java class that implements the `VariableProvider` interface. It defines:
-- A map of variable names to their corresponding objects
-- The lifecycle and initialization of these variables
-
-### How Variable Providers Work
-
-1. **Implementation**: Create a Java class implementing the `VariableProvider` interface
-2. **Packaging**: Bundle the compiled class and its dependencies into a JAR file
-3. **Deployment**: Copy the JAR to the `plugins/ext-jars` folder
-4. **Configuration**: Add variable provider class name to the `application-plugins.yml` under `variable-providers`
-4. **Auto-loading**: Yaci-store automatically discovers and loads all Variable Providers at startup
-5. **Usage**: Variables become available to all plugin scripts immediately
-
-### Benefits of Variable Providers
-
-1. **No Core Modifications**: Extend functionality without touching yaci-store source code
-2. **Modular Design**: Each provider is independent and can be added/removed easily
-3. **Reusability**: Share providers across different yaci-store instances
-5. **Community Ecosystem**: Share and use community-developed providers
-
-<Callout type="warning">
-Variable Providers must be thread-safe as they may be accessed concurrently by multiple plugins executing in parallel.
-</Callout>
+<Tabs.Tab>
+```python
+# Python - Pythonic style
+result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", {"num": 100})
+state.increment("counter")
+response = http.get("https://api.example.com/data")
+```
+</Tabs.Tab>
+</Tabs>
 
 ## Best Practices
 
-### For Variable Provider Developers
-- Use descriptive variable names that don't conflict with built-ins
-- Implement proper error handling and logging
-- Document required configuration and dependencies
+1. **Handle errors gracefully**: Check operation results before using data
+2. **Use atomic operations**: For counters and concurrent access
+3. **Clean up resources**: Remove old state data periodically
+4. **Never log secrets**: Mask sensitive configuration values
 
-## Configuration
+## Custom Variable Providers
 
-Variable Providers may require configuration through:
-- Application properties (`application.yml` or `application.properties`)
-- Environment variables
-- Configuration files in the `config` directory
-- Provider-specific configuration mechanisms
+Extend the plugin framework by creating your own Variable Providers:
+
+### What is a Variable Provider?
+
+A Java class that implements the `VariableProvider` interface to add new variables to the plugin context.
+
+### How to Create One
+
+1. Implement the `VariableProvider` interface
+2. Bundle as a JAR file
+3. Place in `plugins/ext-jars` folder
+4. Configure in `application-plugins.yml`
+5. Use the new variables in your plugins
+
+### Example Use Cases
+
+- **Communication**: Telegram, Slack, Email variables
+- **Storage**: IPFS, S3, Redis variables
+- **Blockchain**: Blockfrost, Koios API variables
+- **Monitoring**: Prometheus, custom metrics variables
 
 <Callout type="info">
-Some Variable Providers may require API keys, connection strings, or other configuration. Always check the provider's documentation for setup requirements.
+Variable Providers must be thread-safe as they may be accessed concurrently.
 </Callout>
 
-## Troubleshooting
+## Next Steps
 
-Common issues with context variables:
-
-1. **Variable not found**: Ensure the Variable Provider JAR is in `plugins/ext-jars`
-2. **ClassNotFoundException**: Check that all dependencies are included in the JAR
-3. **Configuration errors**: Verify required configuration properties are set
-
-### Use Cases and Ideas for Custom Variable Providers
-
-Custom Variable Providers enable powerful integrations and functionality extensions:
-
-#### Communication Services
-- **Telegram Bot Integration**: Expose a `telegram` variable for sending notifications
-- **Slack Webhooks**: Provide `slack` variable for team alerts
-- **Email Service**: Add `email` variable for sending automated emails
-- **SMS Gateway**: Include `sms` variable for critical alerts
-
-#### External Integrations
-- **IPFS Client**: Expose `ipfs` variable for decentralized storage operations
-- **Redis Client**: Provide `redis` variable for caching and pub/sub
-- **Elasticsearch**: Add `elastic` variable for advanced search capabilities
-- **Message Queues**: Include `rabbitmq` or `kafka` variables for event streaming
-
-#### Blockchain Integrations
-- **Blockfrost API**: Expose `blockfrost` variable for additional blockchain queries
-- **Koios API**: Provide `koios` variable as an alternative data source
-
-#### Monitoring and Analytics
-- **Prometheus Metrics**: Expose `metrics` variable for custom metric collection
-- **Custom Loggers**: Provide specialized logging capabilities
-- **Analytics Services**: Add variables for tracking and analytics platforms
+- **Quick Start**: See our [Variable Quick Reference](./variables/quick-reference)
+- **Learn by Example**: Check [Getting Started](./plugin-getting-started) for complete plugin examples
+- **Advanced Topics**: Read the [Plugin API Guide](./plugin_api-guide)
 
 ---
 
-The context variable system, combined with custom Variable Providers, makes yaci-store's plugin framework extremely flexible and extensible, allowing for sophisticated integrations without modifying the core system.
+The context variable system makes yaci-store's plugin framework powerful yet simple, providing everything you need to build sophisticated blockchain data processing pipelines.
