@@ -30,12 +30,12 @@ public class ProposalUtils {
         // Add descendants
         result.addAll(findDescendants(proposal, proposalList, type));
 
-        GovActionId parentId = proposal.getPreviousGovActionId();
+        GovActionId parentId = proposal.getPrevGovActionId();
         if (parentId != null) {
             // Find siblings with the same parent and type
             result.addAll(
                     proposalList.stream()
-                            .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal)
+                            .filter(p -> parentId.equals(p.getPrevGovActionId()) && !p.equals(proposal)
                                     && isSamePurpose(p.getType(), type))
                             .toList()
             );
@@ -43,7 +43,7 @@ public class ProposalUtils {
             // If no parent, find siblings among root nodes
             result.addAll(
                     proposalList.stream()
-                            .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
+                            .filter(p -> p.getPrevGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                             .toList()
             );
         }
@@ -64,15 +64,15 @@ public class ProposalUtils {
             return Collections.emptyList();
         }
 
-        GovActionId parentId = proposal.getPreviousGovActionId();
+        GovActionId parentId = proposal.getPrevGovActionId();
 
         if (parentId == null) {
             return proposalList.stream()
-                    .filter(p -> p.getPreviousGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
+                    .filter(p -> p.getPrevGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         } else {
             return proposalList.stream()
-                    .filter(p -> parentId.equals(p.getPreviousGovActionId()) && !p.equals(proposal) && isSamePurpose(p.getType(), type))
+                    .filter(p -> parentId.equals(p.getPrevGovActionId()) && !p.equals(proposal) && isSamePurpose(p.getType(), type))
                     .toList();
         }
     }
@@ -101,7 +101,7 @@ public class ProposalUtils {
         while (!queue.isEmpty()) {
             Proposal current = queue.poll();
             List<Proposal> children = allProposals.stream()
-                    .filter(p -> current.getGovActionId().equals(p.getPreviousGovActionId()) && isSamePurpose(p.getType(), type))
+                    .filter(p -> current.getGovActionId().equals(p.getPrevGovActionId()) && isSamePurpose(p.getType(), type))
                     .toList();
 
             descendants.addAll(children);

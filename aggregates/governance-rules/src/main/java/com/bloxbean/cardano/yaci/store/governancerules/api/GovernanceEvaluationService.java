@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
 import com.bloxbean.cardano.yaci.store.governancerules.domain.GovernanceContext;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluatorFactory;
@@ -22,18 +23,33 @@ public class GovernanceEvaluationService {
         input.validate();
         
         List<ProposalEvaluationResult> proposalResults = evaluateIndividualProposals(input);
-        
-        List<com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal> siblingDrops = proposalDropService.getProposalsShouldBeDropped(
-            input.getCurrentProposals(),
-            proposalResults
-        );
+
+        List<Proposal> expiredProposals = proposalResults.stream()
+                .filter(result -> result.getStatus() == RatificationResult.REJECT)
+                .map(ProposalEvaluationResult::getProposal)
+                .toList();
+
+        List<Proposal> ratifiedProposals = proposalResults.stream()
+                .filter(result -> result.getStatus() == RatificationResult.ACCEPT)
+                .map(ProposalEvaluationResult::getProposal)
+                .toList();
+
+        List<Proposal> droppedProposals
+                = proposalDropService.getProposalsBeDropped(
+                input.getCurrentProposals().stream().map(proposalContext ->
+                                Proposal.builder().govActionId(proposalContext.getGovActionId())
+                                        .prevGovActionId(proposalContext.getPreviousGovActionId())
+                                        .type(proposalContext.getGovAction().getType())
+                                        .build())
+                        .toList(),
+                expiredProposals, ratifiedProposals);
 
         // TODO: check if action ratification is delayed
         boolean isActionRatificationDelayed = false;
 
         return GovernanceEvaluationResult.builder()
             .proposalResults(proposalResults)
-            .proposalsToDropNext(siblingDrops)
+            .proposalsToDropNext(droppedProposals)
             .isActionRatificationDelayed(isActionRatificationDelayed)
             .build();
     }
@@ -67,7 +83,10 @@ public class GovernanceEvaluationService {
             
             // Build detailed result
             ProposalEvaluationResult evaluationResult = ProposalEvaluationResult.builder()
-                .proposal(proposalContext)
+                    .proposal(Proposal.builder().type(proposalContext.getGovAction().getType())
+                            .govActionId(proposalContext.getGovActionId())
+                            .prevGovActionId(proposalContext.getPreviousGovActionId())
+                            .build())
                 .status(result)
                 .build();
             

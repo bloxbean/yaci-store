@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommittee;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import lombok.Builder;
 import lombok.Value;
 
