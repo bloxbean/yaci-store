@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
+import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import lombok.Builder;
 import lombok.Value;
@@ -10,10 +11,8 @@ import lombok.Value;
 @Value
 @Builder
 public class ProposalEvaluationResult {
-    
     // The proposal that was evaluated
-    ProposalContext proposal;
-    
+    Proposal proposal;
     // The ratification result
     RatificationResult status;
 

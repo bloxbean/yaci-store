@@ -10,15 +10,15 @@ import lombok.*;
 @ToString
 public class Proposal {
     private GovActionId govActionId;
-    private GovActionId previousGovActionId;
+    private GovActionId prevGovActionId;
     private GovActionType type;
 
-    public Proposal(GovActionId govActionId, GovActionId previousGovActionId, GovActionType type) {
+    public Proposal(GovActionId govActionId, GovActionId prevGovActionId, GovActionType type) {
         this.govActionId = govActionId;
-        this.previousGovActionId = previousGovActionId;
+        this.prevGovActionId = prevGovActionId;
         this.type = type;
 
-        if (previousGovActionId != null &&
+        if (prevGovActionId != null &&
                 (type.equals(GovActionType.INFO_ACTION) || type.equals(GovActionType.TREASURY_WITHDRAWALS_ACTION))) {
             throw new IllegalArgumentException("INFO ACTION and TREASURY WITHDRAWALS ACTION can not have prev gov action id");
         }
