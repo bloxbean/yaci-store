@@ -5,8 +5,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.actions.NoConfidence;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
-import com.bloxbean.cardano.yaci.store.governancerules.rule.DRepVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.rule.SPOVotingState;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.DRepVotingState;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.SPOVotingState;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 
@@ -59,14 +59,14 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
     }
     
     private DRepVotingState buildDRepVotingState(RatificationContext context) {
-        var govContext = context.getGovernanceContext();
-
         return DRepVotingState.builder()
                 .govAction(context.getGovAction())
-                .dRepVotingThresholds(govContext.getEpochParam().getParams().getDrepVotingThresholds())
+                .dRepVotingThresholds(context.getGovernanceContext().getEpochParam().getParams().getDrepVotingThresholds())
                 .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
                 .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
-                .ccState(govContext.getCommittee().getState())
+                .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())
+                .noConfidenceStake(context.getVotingData().getDrepVotes().getNoConfidenceStake())
+                .ccState(context.getGovernanceContext().getCommittee().getState())
                 .build();
     }
     

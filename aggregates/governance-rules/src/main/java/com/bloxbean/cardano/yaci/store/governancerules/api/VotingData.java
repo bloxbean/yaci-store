@@ -42,7 +42,7 @@ public class VotingData {
     @Builder
     public static class SPOVotes {
         BigInteger yesVoteStake;
-        BigInteger delegateToNoConfidenceDRepStake;
+        BigInteger delegateToAutoAbstainDRepStake;
         BigInteger abstainVoteStake;
         BigInteger doNotVoteStake;
         BigInteger totalStake;
@@ -84,7 +84,6 @@ public class VotingData {
      * @throws IllegalArgumentException if voting data is invalid
      */
     public void validate() {
-        // Basic validation - can be extended as needed
         if (drepVotes == null && spoVotes == null && committeeVotes == null) {
             throw new IllegalArgumentException("At least one type of voting data must be provided");
         }
