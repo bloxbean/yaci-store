@@ -1,12 +1,14 @@
 package com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.rule.CommitteeVotingState;
 import com.bloxbean.cardano.yaci.store.governancerules.rule.DRepVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
+
+import java.math.BigDecimal;
 
 /**
  * Evaluator for evaluating Treasury Withdrawal governance actions.
@@ -26,7 +28,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
         // Check if withdrawal amount is valid
         boolean withdrawalCanWithdraw = GovernanceActionUtil.withdrawalCanWithdraw(
             treasuryAction, 
-            context.getGovernanceState().getTreasury()
+            context.getGovernanceContext().getTreasury()
         );
         
         if (!withdrawalCanWithdraw) {
@@ -58,27 +60,33 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
             throw new IllegalArgumentException("DRep votes are required for Treasury Withdrawal actions");
         }
         
-        if (context.getGovernanceState().getTreasury() == null) {
+        if (context.getGovernanceContext().getTreasury() == null) {
             throw new IllegalArgumentException("Treasury amount is required for Treasury Withdrawal actions");
         }
     }
     
     private CommitteeVotingState buildCommitteeVotingState(RatificationContext context) {
+        Integer yesVote = 0;
+        Integer noVote = 0;
+        BigDecimal threshold = BigDecimal.ZERO;
+        // TODO
+
         return CommitteeVotingState.builder()
                 .govAction(context.getGovAction())
-                .yesVote(context.getVotingData().getCommitteeVotes().getYesVote())
-                .noVote(context.getVotingData().getCommitteeVotes().getNoVote())
-                .threshold(context.getVotingData().getCommitteeVotes().getThreshold())
+                .yesVote(yesVote)
+                .noVote(noVote)
+                .threshold(threshold)
                 .build();
     }
     
     private DRepVotingState buildDRepVotingState(RatificationContext context) {
+
         return DRepVotingState.builder()
                 .govAction(context.getGovAction())
-                .dRepVotingThresholds(context.getGovernanceState().getEpochParam().getParams().getDrepVotingThresholds())
+                .dRepVotingThresholds(context.getGovernanceContext().getEpochParam().getParams().getDrepVotingThresholds())
                 .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
                 .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
-                .ccState(context.getGovernanceState().getCommitteeState())
+                .ccState(context.getGovernanceContext().getCommittee().getState())
                 .build();
     }
 }

@@ -25,11 +25,11 @@ public interface RatificationEvaluator {
      * @throws IllegalArgumentException if required data is missing
      */
     default void validateRequiredData(RatificationContext context) {
-        if (context.getGovAction() == null) {
-            throw new IllegalArgumentException("Governance action is required");
-        }
-        if (context.getGovernanceState() == null) {
-            throw new IllegalArgumentException("Governance state is required");
-        }
+//        if (context.getGovAction() == null) {
+//            throw new IllegalArgumentException("Governance action is required");
+//        }
+//        if (context.getGovernanceStateInput() == null) {
+//            throw new IllegalArgumentException("Governance state is required");
+//        }
     }
 }

@@ -1,10 +1,11 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import lombok.Builder;
 import lombok.Value;
 
-import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Map;
 
 /**
  * Encapsulates all voting-related data.
@@ -25,8 +26,10 @@ public class VotingData {
     @Builder
     public static class DRepVotes {
         BigInteger yesVoteStake;
+        BigInteger noConfidenceStake;
         BigInteger noVoteStake;
-        
+        BigInteger doNotVoteStake;
+
         public boolean hasVotes() {
             return yesVoteStake != null || noVoteStake != null;
         }
@@ -39,7 +42,9 @@ public class VotingData {
     @Builder
     public static class SPOVotes {
         BigInteger yesVoteStake;
+        BigInteger delegateToNoConfidenceDRepStake;
         BigInteger abstainVoteStake;
+        BigInteger doNotVoteStake;
         BigInteger totalStake;
         
         public boolean hasVotes() {
@@ -53,12 +58,11 @@ public class VotingData {
     @Value
     @Builder
     public static class CommitteeVotes {
-        Integer yesVote;
-        Integer noVote;
-        BigDecimal threshold;
-        
+        // (hot key, vote)
+        Map<String, Vote> votes;
+
         public boolean hasVotes() {
-            return yesVote != null || noVote != null || threshold != null;
+            return votes != null && !votes.isEmpty();
         }
     }
     
@@ -72,5 +76,17 @@ public class VotingData {
     
     public boolean hasCommitteeVotes() {
         return committeeVotes != null && committeeVotes.hasVotes();
+    }
+
+    /**
+     * Validates the voting data.
+     *
+     * @throws IllegalArgumentException if voting data is invalid
+     */
+    public void validate() {
+        // Basic validation - can be extended as needed
+        if (drepVotes == null && spoVotes == null && committeeVotes == null) {
+            throw new IllegalArgumentException("At least one type of voting data must be provided");
+        }
     }
 }

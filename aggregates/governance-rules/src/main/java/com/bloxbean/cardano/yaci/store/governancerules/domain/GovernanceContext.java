@@ -1,29 +1,25 @@
-package com.bloxbean.cardano.yaci.store.governancerules.api;
+package com.bloxbean.cardano.yaci.store.governancerules.domain;
 
-import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
 import lombok.Builder;
 import lombok.Value;
 
 import java.math.BigInteger;
+import java.util.Map;
 
-/**
- * Represents the current state of governance.
- * Contains epoch information, committee state, and protocol parameters.
- */
 @Value
 @Builder
-public class GovernanceState {
-    
+public class GovernanceContext {
     // Current epoch information
     int currentEpoch;
 
     // Current epoch parameters
     EpochParam epochParam;
-    
+
     // Constitutional committee state
-    ConstitutionCommitteeState committeeState;
-    
+    ConstitutionCommittee committee;
+
     // Whether we're in Conway bootstrap phase
     boolean isBootstrapPhase;
 
@@ -33,13 +29,16 @@ public class GovernanceState {
     // Current treasury amount (for treasury withdrawals)
     BigInteger treasury;
 
+    // Last enacted gov actions
+    Map<ProposalType, GovActionId> lastEnactedGovActionIds;
+
     /**
      * Checks if the committee is in normal state.
-     * 
+     *
      * @return true if committee state is NORMAL
      */
     public boolean isCommitteeNormal() {
-        return ConstitutionCommitteeState.NORMAL.equals(committeeState);
+        return ConstitutionCommitteeState.NORMAL.equals(committee.getState());
     }
 
     /**
