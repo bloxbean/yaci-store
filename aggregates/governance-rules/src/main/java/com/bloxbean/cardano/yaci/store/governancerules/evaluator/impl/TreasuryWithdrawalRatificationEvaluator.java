@@ -4,11 +4,9 @@ import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawa
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
-import com.bloxbean.cardano.yaci.store.governancerules.rule.CommitteeVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.rule.DRepVotingState;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
-
-import java.math.BigDecimal;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.CommitteeVotingState;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.DRepVotingState;
 
 /**
  * Evaluator for evaluating Treasury Withdrawal governance actions.
@@ -66,16 +64,11 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
     }
     
     private CommitteeVotingState buildCommitteeVotingState(RatificationContext context) {
-        Integer yesVote = 0;
-        Integer noVote = 0;
-        BigDecimal threshold = BigDecimal.ZERO;
-        // TODO
 
         return CommitteeVotingState.builder()
                 .govAction(context.getGovAction())
-                .yesVote(yesVote)
-                .noVote(noVote)
-                .threshold(threshold)
+                .committee(context.getGovernanceContext().getCommittee())
+                .votes(context.getVotingData().getCommitteeVotes().getVotes())
                 .build();
     }
     
@@ -86,6 +79,8 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
                 .dRepVotingThresholds(context.getGovernanceContext().getEpochParam().getParams().getDrepVotingThresholds())
                 .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
                 .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
+                .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())
+                .noConfidenceStake(context.getVotingData().getDrepVotes().getNoConfidenceStake())
                 .ccState(context.getGovernanceContext().getCommittee().getState())
                 .build();
     }
