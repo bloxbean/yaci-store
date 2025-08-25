@@ -62,7 +62,7 @@ public class GovernanceEvaluationService {
 
             GovernanceContext governanceContext = GovernanceContext.builder()
                 .currentEpoch(input.getCurrentEpoch())
-                .epochParam(input.getEpochParam())
+                .protocolParams(input.getProtocolParams())
                 .committee(input.getCommittee())
                 .isBootstrapPhase(input.isBootstrapPhase())
                 .treasury(input.getTreasury())

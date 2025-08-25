@@ -2,8 +2,8 @@ package com.bloxbean.cardano.yaci.store.governancerules.api;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommittee;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.EpochParam;
 import lombok.Builder;
 import lombok.Value;
 
@@ -26,7 +26,7 @@ public class GovernanceEvaluationInput {
 
     // Current governance state
     int currentEpoch;
-    EpochParam epochParam;
+    ProtocolParams protocolParams;
     ConstitutionCommittee committee;
     boolean isBootstrapPhase;
     BigInteger treasury;
@@ -44,8 +44,8 @@ public class GovernanceEvaluationInput {
             throw new IllegalArgumentException("Current proposals cannot be null or empty");
         }
         
-        if (epochParam == null) {
-            throw new IllegalArgumentException("Epoch parameters are required");
+        if (protocolParams == null) {
+            throw new IllegalArgumentException("Protocol parameters are required");
         }
         
         if (committee == null) {
