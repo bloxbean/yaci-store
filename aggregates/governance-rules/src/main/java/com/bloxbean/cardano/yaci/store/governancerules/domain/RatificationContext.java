@@ -1,8 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governancerules.domain;
 
 import com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction;
-import com.bloxbean.cardano.yaci.store.governancerules.api.GovernanceState;
-import com.bloxbean.cardano.yaci.store.governancerules.api.ProposalContext;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
 import lombok.Builder;
 import lombok.Value;
@@ -14,32 +12,31 @@ import lombok.Value;
 @Value
 @Builder
 public class RatificationContext {
-    
+    GovernanceContext governanceContext;
+    Integer maxAllowedVotingEpoch;
     GovAction govAction;
     VotingData votingData;
-    GovernanceState governanceState;
-    ProposalContext proposalContext;
 
     public boolean isProposalExpired() {
-        if (proposalContext.getMaxAllowedVotingEpoch() == null) {
+        if (maxAllowedVotingEpoch == null) {
             return false;
         }
-        return governanceState.getCurrentEpoch() - proposalContext.getMaxAllowedVotingEpoch() > 1;
+        return governanceContext.getCurrentEpoch() - maxAllowedVotingEpoch > 1;
     }
 
     public boolean isLastVotingEpoch() {
-        return governanceState.getCurrentEpoch() - proposalContext.getMaxAllowedVotingEpoch() == 1;
+        return governanceContext.getCurrentEpoch() - maxAllowedVotingEpoch == 1;
     }
     
     public boolean isCommitteeNormal() {
-        return governanceState.isCommitteeNormal();
+        return governanceContext.isCommitteeNormal();
     }
     
     public boolean isNotDelayed() {
-        return governanceState.isNotDelayed();
+        return governanceContext.isNotDelayed();
     }
     
     public boolean isBootstrapPhase() {
-        return governanceState.isBootstrapPhase();
+        return governanceContext.isBootstrapPhase();
     }
 }
