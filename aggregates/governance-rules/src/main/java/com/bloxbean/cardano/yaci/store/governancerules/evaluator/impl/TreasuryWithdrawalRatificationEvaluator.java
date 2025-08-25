@@ -76,7 +76,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
 
         return DRepVotingState.builder()
                 .govAction(context.getGovAction())
-                .dRepVotingThresholds(context.getGovernanceContext().getEpochParam().getParams().getDrepVotingThresholds())
+                .dRepVotingThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
                 .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
                 .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())

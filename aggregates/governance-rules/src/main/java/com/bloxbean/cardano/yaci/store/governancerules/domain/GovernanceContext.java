@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.governancerules.domain;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import lombok.Builder;
 import lombok.Value;
 
@@ -14,8 +15,8 @@ public class GovernanceContext {
     // Current epoch information
     int currentEpoch;
 
-    // Current epoch parameters
-    EpochParam epochParam;
+    // Current protocol parameters
+    ProtocolParams protocolParams;
 
     // Constitutional committee state
     ConstitutionCommittee committee;

@@ -61,7 +61,7 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
     private DRepVotingState buildDRepVotingState(RatificationContext context) {
         return DRepVotingState.builder()
                 .govAction(context.getGovAction())
-                .dRepVotingThresholds(context.getGovernanceContext().getEpochParam().getParams().getDrepVotingThresholds())
+                .dRepVotingThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
                 .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
                 .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())
@@ -75,7 +75,7 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
 
         return SPOVotingState.builder()
                 .govAction(context.getGovAction())
-                .poolVotingThresholds(govContext.getEpochParam().getParams().getPoolVotingThresholds())
+                .poolVotingThresholds(govContext.getProtocolParams().getPoolVotingThresholds())
                 .yesVoteStake(context.getVotingData().getSpoVotes().getYesVoteStake())
                 .abstainVoteStake(context.getVotingData().getSpoVotes().getAbstainVoteStake())
                 .totalStake(context.getVotingData().getSpoVotes().getTotalStake())
