@@ -85,6 +85,16 @@ public class MvelStorePluginFactory implements PluginFactory {
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for mvel plugin: " + def);
     }
 
+    @Override
+    public <T> SchedulerPlugin<T> createSchedulerPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            throw new IllegalArgumentException("Expression is not supported for scheduler plugin. Use inline-script or script instead: " + def);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return createFromScript(def, PluginType.SCHEDULER);
+        else
+            throw new IllegalArgumentException("No inline-script or script found in scheduler definition for mvel plugin: " + def);
+    }
+
     private <T> MvelScriptStorePlugin<T> createFromScript(PluginDef def, PluginType pluginType) {
         if (def.getScript() != null) {
             var script = def.getScript();

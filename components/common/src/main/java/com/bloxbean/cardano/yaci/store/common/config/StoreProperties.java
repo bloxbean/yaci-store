@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.config;
 
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -129,6 +130,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private Map<String, List<PluginDef>> preActions = new HashMap<>();
     private Map<String, List<PluginDef>> postActions = new HashMap<>();
     private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
+    private List<SchedulerPluginDef> schedulers = new ArrayList<>();
 
     private String pythonVenv;
     private List<ScriptRef> pluginGlobalScripts;
