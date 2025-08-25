@@ -52,15 +52,24 @@ public class PythonScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T
     }
 
     public String wrapInFunction(String script, String fnName) {
-        var argName = "items";
-        if (getPluginType() == PluginType.EVENT_HANDLER)
-            argName = "event";
+        if (getPluginType() == PluginType.SCHEDULER) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("def ").append(fnName).append("():\n");
+            for (String line : script.split("\\R")) {
+                sb.append("    ").append(line).append('\n');
+            }
+            return sb.toString();
+        } else {
+            var argName = "items";
+            if (getPluginType() == PluginType.EVENT_HANDLER)
+                argName = "event";
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("def ").append(fnName).append("(" + argName + "):\n");
-        for (String line : script.split("\\R")) {
-            sb.append("    ").append(line).append('\n');
+            StringBuilder sb = new StringBuilder();
+            sb.append("def ").append(fnName).append("(" + argName + "):\n");
+            for (String line : script.split("\\R")) {
+                sb.append("    ").append(line).append('\n');
+            }
+            return sb.toString();
         }
-        return sb.toString();
     }
 }

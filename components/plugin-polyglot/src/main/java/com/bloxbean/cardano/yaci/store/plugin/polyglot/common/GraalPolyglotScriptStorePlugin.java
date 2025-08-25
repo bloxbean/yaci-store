@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
+import com.bloxbean.cardano.yaci.store.plugin.scheduler.SchedulerVariableContext;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.*;
@@ -14,7 +15,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 @Slf4j
-public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
+public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T>, SchedulerPlugin<T> {
     public static final String INIT_VALUE_STATE_KEY = "__init_plugin__init_value";
     private final String name;
     private final PluginDef pluginDef;
@@ -194,6 +195,14 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
         invoke(event, PluginType.EVENT_HANDLER);
     }
 
+    @Override
+    public void execute() {
+        if (log.isTraceEnabled())
+            log.trace("Execute scheduler plugin {} - {}", name, language());
+
+        invoke(null, PluginType.SCHEDULER);
+    }
+
     private void invoke(Object arg, PluginType pluginType) {
         Context ctx = null;
         try {
@@ -212,11 +221,14 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
             synchronized (ctx) {
                 ctx.enter();
                 try {
-                    Value fn = ctx.getBindings(language()).getMember(functionName);
-                    if (fn == null || !fn.canExecute()) {
-                        throw new IllegalArgumentException(pluginType.name() + " function not found: " + functionName);
-                    }
-                    fn.execute(arg);
+                        Value fn = ctx.getBindings(language()).getMember(functionName);
+                        if (fn == null || !fn.canExecute()) {
+                            throw new IllegalArgumentException(pluginType.name() + " function not found: " + functionName);
+                        }
+                        if (arg != null)
+                            fn.execute(arg);
+                        else
+                            fn.execute();
                 } finally {
                     ctx.leave();
                     if (scriptRef == null && ctx != null) {
@@ -285,7 +297,27 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                     });
         }
 
+        // Add scheduler-specific variables if available
+        var schedulerVars = SchedulerVariableContext.getVariables();
+        if (schedulerVars != null && !schedulerVars.isEmpty()) {
+            schedulerVars.entrySet()
+                    .stream()
+                    .forEach(entry -> {
+                        String key = entry.getKey();
+                        Object value = entry.getValue();
+
+                        if (log.isTraceEnabled())
+                            log.trace("Setting scheduler variable {} = {}", key, value);
+
+                        if (!binding.hasMember(key))
+                            binding.putMember(key, value);
+                    });
+        }
+
         binding.putMember("state", stateService.forPlugin(name));
+        
+        // Add unwrapper instance for converting polyglot values to Java objects
+        binding.putMember("unwrapper", new Unwrapper());
 
         var globalState = stateService.global();
         //TODO -- review if we need this or any perfomance issue
@@ -309,6 +341,8 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
             return "__postAction__";
         else if (pluginType == PluginType.EVENT_HANDLER)
             return "__eventHandler__";
+        else if (pluginType == PluginType.SCHEDULER)
+            return "__scheduler__";
         else
             return "__defaultFunction__";
     }

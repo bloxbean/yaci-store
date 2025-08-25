@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.plugin.impl.mvel;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
+import com.bloxbean.cardano.yaci.store.plugin.scheduler.SchedulerVariableContext;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.mvel2.MVEL;
@@ -14,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
+public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T>, SchedulerPlugin<T> {
     private final String name;
     private final PluginDef pluginDef;
     private final PluginType pluginType;
@@ -193,6 +194,36 @@ public class MvelScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>,
         MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
 
         MVEL.executeExpression(compiledExpr, null, vrf);
+    }
+
+    @Override
+    public void execute() {
+        if (log.isTraceEnabled())
+            log.trace("Execute scheduler plugin {} - MVEL", name);
+
+        Map<String,Object> vars = new HashMap<>();
+        setCommonVariables(vars);
+        
+        // Add scheduler-specific variables from context
+        Map<String, Object> schedulerVars = SchedulerVariableContext.getVariables();
+        if (schedulerVars != null && !schedulerVars.isEmpty()) {
+            vars.putAll(schedulerVars);
+            if (log.isDebugEnabled()) {
+                log.debug("Added {} scheduler variables for plugin {}", schedulerVars.size(), name);
+            }
+        }
+
+        MapVariableResolverFactory vrf = new MapVariableResolverFactory(vars);
+
+        if (functionName != null) {
+            MVEL.executeExpression(compiledExpr, null, vrf);
+
+            String invokeExpr = functionName + "()";
+            MVEL.executeExpression(
+                    MVEL.compileExpression(invokeExpr), null, vrf);
+        } else {
+            MVEL.executeExpression(compiledExpr, null, vrf);
+        }
     }
 
     private void setCommonVariables(Map<String,Object> vars) {
