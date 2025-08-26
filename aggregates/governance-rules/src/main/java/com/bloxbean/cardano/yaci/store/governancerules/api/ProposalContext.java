@@ -13,6 +13,7 @@ public class ProposalContext {
     VotingData votingData;
     GovActionId govActionId;
     Integer maxAllowedVotingEpoch;
+    Long proposalSlot;
 
     public GovActionId getPreviousGovActionId() {
         if (govAction == null) {
