@@ -28,11 +28,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
             treasuryAction, 
             context.getGovernanceContext().getTreasury()
         );
-        
-        if (!withdrawalCanWithdraw) {
-            return RatificationResult.REJECT;
-        }
-        
+
         CommitteeVotingState committeeVotingState = buildCommitteeVotingState(context);
         DRepVotingState drepVotingState = buildDRepVotingState(context);
         
@@ -40,9 +36,9 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
         boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
         
         if (context.isLastVotingEpoch()) {
-            return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
+            return (isAccepted && isNotDelayed && withdrawalCanWithdraw) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
-            return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
+            return (isAccepted && isNotDelayed && withdrawalCanWithdraw) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
         }
     }
     
