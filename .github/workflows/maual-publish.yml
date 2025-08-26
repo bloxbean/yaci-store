@@ -1,9 +1,8 @@
 name: Manual Publish package to the Maven Central Repository
-#on:
-#  release:
-#    types: [created]
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'mvn-*'
 
 jobs:
   publish:
