@@ -21,9 +21,6 @@ public class GovernanceEvaluationInput {
     // Current proposals to evaluate
     List<ProposalContext> currentProposals;
 
-//    List<Proposal> ratifiedProposalsFromPrevEpoch;
-//    List<Proposal> expiredProposalsFromPrevEpoch;
-
     // Current governance state
     int currentEpoch;
     ProtocolParams protocolParams;

@@ -20,5 +20,8 @@ public class GovernanceEvaluationResult {
     // Proposals that should be dropped in the next epoch
     List<Proposal> proposalsToDropNext;
 
+    // Whether action ratification is delayed for this epoch
+    // True if any delaying action (NoConfidence, UpdateCommittee, NewConstitution, HardFork) was ratified
     boolean isActionRatificationDelayed;
+
 }

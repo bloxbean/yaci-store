@@ -37,6 +37,6 @@ public class RatificationContext {
     }
     
     public boolean isBootstrapPhase() {
-        return governanceContext.isBootstrapPhase();
+        return governanceContext.isInBootstrapPhase();
     }
 }

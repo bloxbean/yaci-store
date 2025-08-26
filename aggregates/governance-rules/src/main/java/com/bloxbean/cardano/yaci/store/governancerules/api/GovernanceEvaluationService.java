@@ -6,13 +6,15 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContex
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluatorFactory;
 import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
+import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 
 public class GovernanceEvaluationService {
-    
+
     private final ProposalDropService proposalDropService;
 
     public GovernanceEvaluationService() {
@@ -21,8 +23,14 @@ public class GovernanceEvaluationService {
 
     public GovernanceEvaluationResult evaluateGovernanceState(GovernanceEvaluationInput input) {
         input.validate();
-        
+
         List<ProposalEvaluationResult> proposalResults = evaluateIndividualProposals(input);
+
+        boolean isActionRatificationDelayed = proposalResults.stream()
+                .anyMatch(result ->
+                        result.getStatus() == RatificationResult.ACCEPT &&
+                                GovernanceActionUtil.isDelayingAction(result.getProposal().getType())
+                );
 
         List<Proposal> expiredProposals = proposalResults.stream()
                 .filter(result -> result.getStatus() == RatificationResult.REJECT)
@@ -44,56 +52,68 @@ public class GovernanceEvaluationService {
                         .toList(),
                 expiredProposals, ratifiedProposals);
 
-        // TODO: check if action ratification is delayed
-        boolean isActionRatificationDelayed = false;
-
         return GovernanceEvaluationResult.builder()
-            .proposalResults(proposalResults)
-            .proposalsToDropNext(droppedProposals)
-            .isActionRatificationDelayed(isActionRatificationDelayed)
-            .build();
+                .proposalResults(proposalResults)
+                .proposalsToDropNext(droppedProposals)
+                .isActionRatificationDelayed(isActionRatificationDelayed)
+                .build();
     }
 
     private List<ProposalEvaluationResult> evaluateIndividualProposals(GovernanceEvaluationInput input) {
-        
         List<ProposalEvaluationResult> results = new ArrayList<>();
-        
-        for (ProposalContext proposalContext : input.getCurrentProposals()) {
 
-            GovernanceContext governanceContext = GovernanceContext.builder()
-                .currentEpoch(input.getCurrentEpoch())
-                .protocolParams(input.getProtocolParams())
-                .committee(input.getCommittee())
-                .isBootstrapPhase(input.isBootstrapPhase())
-                .treasury(input.getTreasury())
-                .lastEnactedGovActionIds(input.getLastEnactedGovActionIds())
-                .build();
+        List<ProposalContext> sortedProposals = input.getCurrentProposals().stream()
+                .sorted(Comparator.comparingInt((ProposalContext proposal) -> GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType()))
+                        .thenComparingLong(ProposalContext::getProposalSlot))
+                .toList();
 
-            // Build ratification context
-            RatificationContext context = RatificationContext.builder()
-                .govAction(proposalContext.getGovAction())
-                .votingData(proposalContext.getVotingData())
-                .governanceContext(governanceContext)
-                .build();
-            
-            // Get appropriate evaluator and evaluate
-            RatificationResult result = RatificationEvaluatorFactory
-                .getEvaluator(proposalContext.getGovAction().getType())
-                .evaluate(context);
-            
-            // Build detailed result
+        boolean isDelayedByDelayingAction = false;
+
+        for (ProposalContext proposalContext : sortedProposals) {
+            RatificationResult result = evaluateProposal(proposalContext, input, isDelayedByDelayingAction);
+
             ProposalEvaluationResult evaluationResult = ProposalEvaluationResult.builder()
                     .proposal(Proposal.builder().type(proposalContext.getGovAction().getType())
                             .govActionId(proposalContext.getGovActionId())
                             .prevGovActionId(proposalContext.getPreviousGovActionId())
                             .build())
-                .status(result)
-                .build();
-            
+                    .status(result)
+                    .build();
+
             results.add(evaluationResult);
+
+            if (GovernanceActionUtil.isDelayingAction(proposalContext.getGovAction().getType()) && result == RatificationResult.ACCEPT) {
+                isDelayedByDelayingAction = true;
+            }
         }
-        
+
         return results;
+    }
+
+    private RatificationResult evaluateProposal(
+            ProposalContext proposalContext,
+            GovernanceEvaluationInput input,
+            boolean isDelayedByDelayingAction) {
+
+        GovernanceContext governanceContext = GovernanceContext.builder()
+                .currentEpoch(input.getCurrentEpoch())
+                .protocolParams(input.getProtocolParams())
+                .committee(input.getCommittee())
+                .isInBootstrapPhase(input.isBootstrapPhase())
+                .treasury(input.getTreasury())
+                .lastEnactedGovActionIds(input.getLastEnactedGovActionIds())
+                .isActionRatificationDelayed(isDelayedByDelayingAction)
+                .build();
+
+        RatificationContext context = RatificationContext.builder()
+                .govAction(proposalContext.getGovAction())
+                .votingData(proposalContext.getVotingData())
+                .governanceContext(governanceContext)
+                .build();
+
+        return RatificationEvaluatorFactory
+                .getEvaluator(proposalContext.getGovAction().getType())
+                .evaluate(context);
     }
 
 }

@@ -22,7 +22,7 @@ public class GovernanceContext {
     ConstitutionCommittee committee;
 
     // Whether we're in Conway bootstrap phase
-    boolean isBootstrapPhase;
+    boolean isInBootstrapPhase;
 
     // Whether ratification is delayed by previous actions
     boolean isActionRatificationDelayed;

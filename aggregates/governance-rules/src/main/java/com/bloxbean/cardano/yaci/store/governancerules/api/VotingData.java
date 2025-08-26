@@ -84,8 +84,6 @@ public class VotingData {
      * @throws IllegalArgumentException if voting data is invalid
      */
     public void validate() {
-        if (drepVotes == null && spoVotes == null && committeeVotes == null) {
-            throw new IllegalArgumentException("At least one type of voting data must be provided");
-        }
+        //TODO
     }
 }
