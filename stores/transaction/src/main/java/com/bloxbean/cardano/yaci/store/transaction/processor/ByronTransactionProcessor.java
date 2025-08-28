@@ -141,6 +141,9 @@ public class ByronTransactionProcessor {
                 txnList.add(unresolvedTxs._1);
             }
 
+            if (txnList.size() > 0) {
+                transactionStorage.saveAll(txnList);
+            }
         } finally {
             unresolvedFeeTxns.clear();
         }
