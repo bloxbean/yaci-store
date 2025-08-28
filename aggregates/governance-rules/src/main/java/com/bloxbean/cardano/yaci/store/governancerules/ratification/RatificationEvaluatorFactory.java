@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.governancerules.evaluator;
+package com.bloxbean.cardano.yaci.store.governancerules.ratification;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl.*;
+import com.bloxbean.cardano.yaci.store.governancerules.ratification.impl.*;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

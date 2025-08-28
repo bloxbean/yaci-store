@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.GovernanceContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
-import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluatorFactory;
+import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluatorFactory;
 import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 

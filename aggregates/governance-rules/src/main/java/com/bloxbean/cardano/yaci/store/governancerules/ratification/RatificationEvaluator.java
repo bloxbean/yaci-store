@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.governancerules.evaluator;
+package com.bloxbean.cardano.yaci.store.governancerules.ratification;
 
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
