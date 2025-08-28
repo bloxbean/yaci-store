@@ -1,8 +1,8 @@
-package com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl;
+package com.bloxbean.cardano.yaci.store.governancerules.ratification.impl;
 
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
-import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import lombok.extern.slf4j.Slf4j;
 
 /**

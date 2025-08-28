@@ -1,64 +1,74 @@
-package com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl;
+package com.bloxbean.cardano.yaci.store.governancerules.ratification.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
-import com.bloxbean.cardano.yaci.core.model.governance.actions.NoConfidence;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.HardForkInitiationAction;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
-import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
 
 /**
- * Evaluator for evaluating No Confidence governance actions.
+ * Evaluator for evaluating Hard Fork Initiation governance actions.
  */
-public class NoConfidenceRatificationEvaluator implements RatificationEvaluator {
+public class HardForkRatificationEvaluator implements RatificationEvaluator {
     
     @Override
     public RatificationResult evaluate(RatificationContext context) {
         validateRequiredData(context);
-        
+
         if (context.isProposalExpired()) {
             return RatificationResult.REJECT;
         }
-        
-        NoConfidence noConfidence = (NoConfidence) context.getGovAction();
+
+        HardForkInitiationAction hardForkInitiationAction = (HardForkInitiationAction) context.getGovAction();
 
         VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
+
+        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
         VotingResult spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
         VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
-        GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.COMMITTEE);
+        GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.HARD_FORK);
 
-        final boolean isAccepted = dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+        final boolean isAccepted = context.isBootstrapPhase() ?
+                committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                        && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                :
+                committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                        && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                        && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
 
         final boolean isNotDelayed = context.isNotDelayed()
                 && context.isCommitteeNormal()
-                && GovernanceActionUtil.isPrevActionAsExpected(
-                    noConfidence.getType(),
-                    noConfidence.getGovActionId(),
-                    lastEnactedGovActionId);
-        
+                && GovernanceActionUtil.isPrevActionAsExpected(hardForkInitiationAction.getType(), hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
+
         if (context.isLastVotingEpoch()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
         }
     }
-    
+
     @Override
     public void validateRequiredData(RatificationContext context) {
         RatificationEvaluator.super.validateRequiredData(context);
-        
-        if (!context.getVotingData().hasDRepVotes()) {
-            throw new IllegalArgumentException("DRep votes are required for No Confidence actions");
+
+        if (!context.getVotingData().hasCommitteeVotes()) {
+            throw new IllegalArgumentException("Committee votes are required for Hard Fork Initiation actions");
         }
-        
+
+        if (!context.getVotingData().hasDRepVotes()) {
+            throw new IllegalArgumentException("DRep votes are required for Hard Fork Initiation actions");
+        }
+
         if (!context.getVotingData().hasSPOVotes()) {
-            throw new IllegalArgumentException("SPO votes are required for No Confidence actions");
+            throw new IllegalArgumentException("SPO votes are required for Hard Fork Initiation actions");
         }
     }
 

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl;
+package com.bloxbean.cardano.yaci.store.governancerules.ratification.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
-import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
