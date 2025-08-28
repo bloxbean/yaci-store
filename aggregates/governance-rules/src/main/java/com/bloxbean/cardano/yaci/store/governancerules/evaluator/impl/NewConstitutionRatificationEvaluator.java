@@ -3,13 +3,14 @@ package com.bloxbean.cardano.yaci.store.governancerules.evaluator.impl;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.NewConstitution;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult;
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.CommitteeVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.DRepVotingState;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 
 /**
  * Evaluator for evaluating New Constitution governance actions.
@@ -25,8 +26,10 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
         }
 
         NewConstitution newConstitution = (NewConstitution) context.getGovAction();
-        DRepVotingState dRepVotingState = buildDRepVotingState(context);
-        CommitteeVotingState committeeVotingState = buildCommitteeVotingState(context);
+
+        VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
+        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.CONSTITUTION);
 
@@ -34,7 +37,8 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
                 && context.isCommitteeNormal()
                 && GovernanceActionUtil.isPrevActionAsExpected(newConstitution.getType(), newConstitution.getGovActionId(), lastEnactedGovActionId);
 
-        final boolean isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
+        final boolean isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
 
         if (context.isLastVotingEpoch()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
@@ -56,25 +60,12 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
         }
     }
 
-    private CommitteeVotingState buildCommitteeVotingState(RatificationContext context) {
-
-        return CommitteeVotingState.builder()
+    private VotingEvaluationContext buildVotingEvaluationContext(RatificationContext context) {
+        return VotingEvaluationContext.builder()
                 .govAction(context.getGovAction())
                 .committee(context.getGovernanceContext().getCommittee())
-                .votes(context.getVotingData().getCommitteeVotes().getVotes())
-                .build();
-    }
-
-    private DRepVotingState buildDRepVotingState(RatificationContext context) {
-
-        return DRepVotingState.builder()
-                .govAction(context.getGovAction())
-                .dRepVotingThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
-                .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
-                .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
-                .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())
-                .noConfidenceStake(context.getVotingData().getDrepVotes().getNoConfidenceStake())
-                .ccState(context.getGovernanceContext().getCommittee().getState())
+                .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
+                .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
                 .build();
     }
 }

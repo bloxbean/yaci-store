@@ -9,9 +9,11 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult
 import com.bloxbean.cardano.yaci.store.governancerules.evaluator.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.CommitteeVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.DRepVotingState;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.SPOVotingState;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
 
 import java.util.List;
 
@@ -29,7 +31,9 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         }
 
         ParameterChangeAction parameterChangeAction = (ParameterChangeAction) context.getGovAction();
-        CommitteeVotingState committeeVotingState = buildCommitteeVotingState(context);
+        VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
+
+        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.P_PARAM_UPDATE);
         final boolean isNotDelayed = context.isNotDelayed()
@@ -39,19 +43,19 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         boolean isAccepted;
 
         if (context.isBootstrapPhase()) {
-            isAccepted = committeeVotingState.isAccepted();
+            isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD);
         } else {
             List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
-            DRepVotingState dRepVotingState = buildDRepVotingState(context);
+            VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
             if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
-                SPOVotingState spoVotingState = buildSPOVotingState(context);
+                VotingResult spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
                 if (ppGroupChangeList.size() == 1) {
-                    isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted();
+                    isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD);
                 } else
-                    isAccepted = committeeVotingState.isAccepted() && spoVotingState.isAccepted() && dRepVotingState.isAccepted();
+                    isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
             } else
-                isAccepted = committeeVotingState.isAccepted() && dRepVotingState.isAccepted();
+                isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
         }
 
         if (context.isLastVotingEpoch()) {
@@ -61,36 +65,12 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         }
     }
 
-    private CommitteeVotingState buildCommitteeVotingState(RatificationContext context) {
-        return CommitteeVotingState.builder()
+    private VotingEvaluationContext buildVotingEvaluationContext(RatificationContext context) {
+        return VotingEvaluationContext.builder()
                 .govAction(context.getGovAction())
                 .committee(context.getGovernanceContext().getCommittee())
-                .votes(context.getVotingData().getCommitteeVotes().getVotes())
-                .build();
-    }
-
-    private DRepVotingState buildDRepVotingState(RatificationContext context) {
-        return DRepVotingState.builder()
-                .govAction(context.getGovAction())
-                .dRepVotingThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
-                .yesVoteStake(context.getVotingData().getDrepVotes().getYesVoteStake())
-                .noVoteStake(context.getVotingData().getDrepVotes().getNoVoteStake())
-                .doNotVoteStake(context.getVotingData().getDrepVotes().getDoNotVoteStake())
-                .noConfidenceStake(context.getVotingData().getDrepVotes().getNoConfidenceStake())
-                .ccState(context.getGovernanceContext().getCommittee().getState())
-                .build();
-    }
-
-    private SPOVotingState buildSPOVotingState(RatificationContext context) {
-        var govContext = context.getGovernanceContext();
-
-        return SPOVotingState.builder()
-                .govAction(context.getGovAction())
-                .poolVotingThresholds(govContext.getProtocolParams().getPoolVotingThresholds())
-                .yesVoteStake(context.getVotingData().getSpoVotes().getYesVoteStake())
-                .abstainVoteStake(context.getVotingData().getSpoVotes().getAbstainVoteStake())
-                .totalStake(context.getVotingData().getSpoVotes().getTotalStake())
-                .ccState(govContext.getCommittee().getState())
+                .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
+                .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
                 .build();
     }
 }

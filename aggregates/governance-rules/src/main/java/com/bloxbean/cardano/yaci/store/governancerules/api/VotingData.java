@@ -43,6 +43,7 @@ public class VotingData {
     public static class SPOVotes {
         BigInteger yesVoteStake;
         BigInteger delegateToAutoAbstainDRepStake;
+        BigInteger delegateToNoConfidenceDRepStake;
         BigInteger abstainVoteStake;
         BigInteger doNotVoteStake;
         BigInteger totalStake;
