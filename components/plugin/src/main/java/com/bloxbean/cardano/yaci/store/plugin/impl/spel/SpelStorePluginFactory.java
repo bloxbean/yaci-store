@@ -55,5 +55,10 @@ public class SpelStorePluginFactory implements PluginFactory {
         throw new UnsupportedOperationException("Event Handler plugin is not supported for spel");
     }
 
+    @Override
+    public <T> SchedulerPlugin<T> createSchedulerPlugin(PluginDef def) {
+        throw new UnsupportedOperationException("Scheduler plugin is not supported for spel");
+    }
+
 }
 

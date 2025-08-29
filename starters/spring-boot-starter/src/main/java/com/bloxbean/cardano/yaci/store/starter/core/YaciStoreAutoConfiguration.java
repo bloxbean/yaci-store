@@ -242,6 +242,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setPreActions(properties.getPlugins().getPreActions());
         storeProperties.setPostActions(properties.getPlugins().getPostActions());
         storeProperties.setEventHandlers(properties.getPlugins().getEventHandlers());
+        storeProperties.setSchedulers(properties.getPlugins().getSchedulers());
 
         storeProperties.setPythonVenv(properties.getPlugins().getPython().getVenv());
         storeProperties.setPluginGlobalScripts(properties.getPlugins().getScripts());

@@ -19,5 +19,7 @@ public interface PluginFactory {
     <T> PreActionPlugin<T> createPreActionPlugin(PluginDef def);
 
     <T> EventHandlerPlugin<T> createEventHandlerPlugin(PluginDef def);
+
+    <T> SchedulerPlugin<T> createSchedulerPlugin(PluginDef def);
 }
 
