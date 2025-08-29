@@ -1,10 +1,9 @@
 package com.bloxbean.cardano.yaci.store.plugin.scheduler;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.plugin.api.SchedulerPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
-import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,8 +26,7 @@ import java.util.concurrent.ScheduledFuture;
 public class SchedulerService {
 
     private final TaskScheduler taskScheduler;
-    private final PluginStateService pluginStateService;
-    private final VariableProviderFactory variableProviderFactory;
+    private final StoreProperties storeProperties;
 
     // Track scheduled tasks
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -52,9 +50,7 @@ public class SchedulerService {
             log.info("Scheduled plugin: {} with schedule: {}", name, schedulerDef.getSchedule());
         } catch (Exception e) {
             log.error("Failed to schedule plugin: {}", name, e);
-            if (schedulerDef.isExitOnError()) {
-                throw new RuntimeException("Failed to schedule plugin: " + name, e);
-            }
+            handleSchedulerError(name, e, plugin.getPluginDef().getExitOnError());
         }
     }
 
@@ -105,7 +101,7 @@ public class SchedulerService {
                 executeScheduler(pluginName, plugin, pluginDef, false);
             } catch (Exception e) {
                 log.error("Error executing scheduler plugin: {}", pluginName, e);
-                handleSchedulerError(pluginName, e, pluginDef.isExitOnError());
+                handleSchedulerError(pluginName, e, pluginDef.getExitOnError());
             }
         };
     }
@@ -205,7 +201,7 @@ public class SchedulerService {
     /**
      * Handle scheduler execution errors
      */
-    private void handleSchedulerError(String pluginName, Exception error, boolean exitOnError) {
+    private void handleSchedulerError(String pluginName, Exception error, Boolean exitOnError) {
         log.error("Scheduler plugin {} failed: {}", pluginName, error.getMessage());
 
         // Update error info
@@ -215,7 +211,11 @@ public class SchedulerService {
             info.setStatus(SchedulerStatus.FAILED);
         }
 
-        if (exitOnError) {
+        boolean shouldExitOnError = exitOnError != null
+                ? exitOnError
+                : storeProperties.isPluginExitOnError();
+
+        if (shouldExitOnError) {
             // Cancel the scheduler
             cancelScheduler(pluginName);
             log.warn("Scheduler plugin {} has been cancelled due to exitOnError=true", pluginName);

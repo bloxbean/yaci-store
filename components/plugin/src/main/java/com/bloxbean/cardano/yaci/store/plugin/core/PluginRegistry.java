@@ -273,9 +273,6 @@ public class PluginRegistry {
 
             } catch (Exception e) {
                 log.error("Failed to initialize scheduler plugin: {}", schedulerDef.getName(), e);
-                if (schedulerDef.isExitOnError()) {
-                    throw new RuntimeException("Failed to initialize scheduler plugin: " + schedulerDef.getName(), e);
-                }
             }
         }
 
