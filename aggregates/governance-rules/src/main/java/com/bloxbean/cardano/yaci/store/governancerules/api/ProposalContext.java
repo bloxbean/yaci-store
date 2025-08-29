@@ -52,27 +52,27 @@ public class ProposalContext {
      */
     public void validate() {
         if (govAction == null) {
-            throw new IllegalArgumentException("Governance action is required");
+            throw new IllegalArgumentException("ProposalContext: Governance action is required");
         }
 
         if (votingData == null) {
-            throw new IllegalArgumentException("Voting data is required");
+            throw new IllegalArgumentException("ProposalContext: Voting data is required");
+        }
+
+        if (govActionId == null) {
+            throw new IllegalArgumentException("ProposalContext: Governance action id is required");
+        }
+
+        if (proposalSlot == null) {
+            throw new IllegalArgumentException("ProposalContext: Proposal slot is required");
+        }
+
+        if (maxAllowedVotingEpoch == null) {
+            throw new IllegalArgumentException("ProposalContext: Max allowed voting epoch is required");
         }
 
         // Validate voting data
         votingData.validate();
     }
 
-    /**
-     * Checks if this proposal has expired based on current epoch.
-     *
-     * @param currentEpoch Current epoch
-     * @return true if proposal has expired
-     */
-    public boolean isExpired(int currentEpoch) {
-        if (maxAllowedVotingEpoch == null) {
-            return false;
-        }
-        return currentEpoch > maxAllowedVotingEpoch;
-    }
 }

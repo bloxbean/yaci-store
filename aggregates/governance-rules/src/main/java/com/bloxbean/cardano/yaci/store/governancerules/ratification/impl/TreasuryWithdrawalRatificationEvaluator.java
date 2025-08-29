@@ -50,11 +50,11 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
     public void validateRequiredData(RatificationContext context) {
         RatificationEvaluator.super.validateRequiredData(context);
         
-        if (!context.getVotingData().hasCommitteeVotes()) {
+        if (context.getVotingData().getCommitteeVotes() == null) {
             throw new IllegalArgumentException("Committee votes are required for Treasury Withdrawal actions");
         }
         
-        if (!context.getVotingData().hasDRepVotes()) {
+        if (context.getVotingData().getDrepVotes() == null) {
             throw new IllegalArgumentException("DRep votes are required for Treasury Withdrawal actions");
         }
         

@@ -53,11 +53,11 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
     public void validateRequiredData(RatificationContext context) {
         RatificationEvaluator.super.validateRequiredData(context);
         
-        if (!context.getVotingData().hasDRepVotes()) {
+        if (context.getVotingData().getDrepVotes() == null) {
             throw new IllegalArgumentException("DRep votes are required for No Confidence actions");
         }
         
-        if (!context.getVotingData().hasSPOVotes()) {
+        if (context.getVotingData().getSpoVotes() == null) {
             throw new IllegalArgumentException("SPO votes are required for No Confidence actions");
         }
     }
