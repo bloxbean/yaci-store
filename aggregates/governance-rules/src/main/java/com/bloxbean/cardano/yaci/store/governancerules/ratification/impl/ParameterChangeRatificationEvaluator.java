@@ -65,6 +65,27 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         }
     }
 
+    @Override
+    public void validateRequiredData(RatificationContext context) {
+        RatificationEvaluator.super.validateRequiredData(context);
+
+        if (context.getVotingData().getCommitteeVotes() == null) {
+            throw new IllegalArgumentException("Committee votes are required for Parameter Change actions");
+        }
+
+        if (context.isBootstrapPhase()) {
+            if (context.getVotingData().getDrepVotes() == null) {
+                throw new IllegalArgumentException("DRep votes are required for Parameter Change actions");
+            }
+            ParameterChangeAction parameterChangeAction = (ParameterChangeAction) context.getGovAction();
+            List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
+
+            if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY) && context.getVotingData().getSpoVotes() == null) {
+                throw new IllegalArgumentException("SPO votes are required for Parameter Change actions changing SECURITY parameters");
+            }
+        }
+    }
+
     private VotingEvaluationContext buildVotingEvaluationContext(RatificationContext context) {
         return VotingEvaluationContext.builder()
                 .govAction(context.getGovAction())

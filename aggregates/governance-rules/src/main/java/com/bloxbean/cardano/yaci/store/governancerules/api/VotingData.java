@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import lombok.Builder;
 import lombok.Value;
@@ -29,10 +30,6 @@ public class VotingData {
         BigInteger noConfidenceStake;
         BigInteger noVoteStake;
         BigInteger doNotVoteStake;
-
-        public boolean hasVotes() {
-            return yesVoteStake != null || noVoteStake != null;
-        }
     }
     
     /**
@@ -47,10 +44,6 @@ public class VotingData {
         BigInteger abstainVoteStake;
         BigInteger doNotVoteStake;
         BigInteger totalStake;
-        
-        public boolean hasVotes() {
-            return yesVoteStake != null || abstainVoteStake != null || totalStake != null;
-        }
     }
     
     /**
@@ -61,23 +54,8 @@ public class VotingData {
     public static class CommitteeVotes {
         // (hot key, vote)
         Map<String, Vote> votes;
-
-        public boolean hasVotes() {
-            return votes != null && !votes.isEmpty();
-        }
     }
     
-    public boolean hasDRepVotes() {
-        return drepVotes != null && drepVotes.hasVotes();
-    }
-    
-    public boolean hasSPOVotes() {
-        return spoVotes != null && spoVotes.hasVotes();
-    }
-    
-    public boolean hasCommitteeVotes() {
-        return committeeVotes != null && committeeVotes.hasVotes();
-    }
 
     /**
      * Validates the voting data.
