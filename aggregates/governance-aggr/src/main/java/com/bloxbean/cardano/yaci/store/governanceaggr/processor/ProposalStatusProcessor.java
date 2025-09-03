@@ -68,8 +68,8 @@ import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
 
-@Component
-@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
+//@Component
+//@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
 // TODO: write tests
 public class ProposalStatusProcessor {
