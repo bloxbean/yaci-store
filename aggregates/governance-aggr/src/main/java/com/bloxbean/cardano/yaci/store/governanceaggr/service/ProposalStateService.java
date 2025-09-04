@@ -21,7 +21,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -43,8 +45,12 @@ public class ProposalStateService {
 
         final boolean isInConwayBootstrapPhase = bootstrapPhaseDetector.isInConwayBootstrapPhase(currentEpoch);
         
-        List<GovActionProposal> proposalsForEvaluation = proposalCollectionService.getActiveProposalsInEpoch(currentEpoch - 1);
-        
+        List<GovActionProposal> proposalsForEvaluation = proposalCollectionService.getProposalsForStatusEvaluation(currentEpoch);
+
+        if (proposalsForEvaluation.isEmpty()) {
+            return null;
+        }
+
         Map<GovActionId, VotingData> votingDataMap = votingDataService.collectVotingDataBatch(proposalsForEvaluation, currentEpoch - 1);
         
         List<ProposalContext> currentProposalContexts = proposalCollectionService.createProposalContexts(proposalsForEvaluation, votingDataMap);

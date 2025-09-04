@@ -59,6 +59,11 @@ public class ProposalStateProcessor {
 
             // Collect governance evaluation input
             GovernanceEvaluationInput input = proposalStateService.collectGovernanceData(currentEpoch);
+
+            if (input == null) {
+                log.info("No proposals found for evaluation in epoch: {}", currentEpoch);
+                return;
+            }
             
             // Evaluate governance state
             GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);

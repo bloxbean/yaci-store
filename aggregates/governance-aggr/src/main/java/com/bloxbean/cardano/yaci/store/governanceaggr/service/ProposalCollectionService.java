@@ -9,6 +9,8 @@ import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStora
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.governancerules.api.ProposalContext;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
+import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,19 +24,57 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class ProposalCollectionService {
-    
     private final GovActionProposalStorage govActionProposalStorage;
     private final ProposalStateClient proposalStateClient;
     private final EpochParamStorage epochParamStorage;
     private final ProposalMapper proposalMapper;
-    
+
     public List<ProposalContext> createProposalContexts(List<GovActionProposal> proposals, Map<GovActionId, VotingData> votingDataMap) {
         return proposals.stream()
                 .map(proposal -> mapToProposalContext(proposal, votingDataMap))
                 .toList();
     }
-    
-    public List<GovActionProposal> getActiveProposalsInEpoch(int epoch) {
+
+    public List<GovActionProposal> getProposalsForStatusEvaluation(int epoch) {
+        List<GovActionProposal> expiredProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch - 1);
+        List<GovActionProposal> ratifiedProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);
+
+        List<GovActionProposal> activeProposalsInPrevEpoch =  getActiveProposalsInEpoch(epoch - 1);
+
+        List<Proposal> activeProposals = activeProposalsInPrevEpoch
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        List<Proposal> expiredProposals = expiredProposalsInPrevSnapshot
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        List<Proposal> ratifiedProposals = ratifiedProposalsInPrevSnapshot
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        ProposalDropService proposalDropService = new ProposalDropService();
+
+        var scheduledToDropProposals =
+                proposalDropService.getProposalsBeDropped(activeProposals, expiredProposals, ratifiedProposals)
+                        .stream()
+                        .map(Proposal::getGovActionId)
+                        .toList();
+
+        return activeProposalsInPrevEpoch
+                .stream()
+                .filter(govActionProposal -> !scheduledToDropProposals.contains(
+                        GovActionId.builder()
+                                .gov_action_index(govActionProposal.getIndex())
+                                .transactionId(govActionProposal.getTxHash())
+                                .build()))
+                .toList();
+    }
+
+    private List<GovActionProposal> getActiveProposalsInEpoch(int epoch) {
         List<GovActionProposal> newProposals = govActionProposalStorage.findByEpoch(epoch)
                 .stream()
                 .map(proposalMapper::toGovActionProposal)
