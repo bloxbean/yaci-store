@@ -1,0 +1,19 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+
+    api project(":stores:utxo")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store CIP-139 Utxo'
+                description = 'Yaci Store CIP-139 Utxo API'
+            }
+        }
+    }
+}

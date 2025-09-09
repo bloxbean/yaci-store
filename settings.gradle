@@ -80,5 +80,8 @@ include ':starters:adapot-spring-boot-starter'
 include ':extensions:storage:utxo-rocksdb'
 include ':extensions:storage:account-rocksdb'
 
+include ':extensions:cip-139:epoch'
+include ':extensions:cip-139:utxo'
+
 
 include 'e2e-tests'

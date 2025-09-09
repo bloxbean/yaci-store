@@ -1,0 +1,19 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+
+	api project(":stores:epoch")
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			pom {
+				name = 'Yaci Store CIP-139 Protocol Parameters'
+				description = 'Yaci Store CIP-139 Protocol Parameters API'
+			}
+		}
+	}
+}
