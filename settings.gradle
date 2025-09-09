@@ -80,8 +80,11 @@ include ':starters:adapot-spring-boot-starter'
 include ':extensions:storage:utxo-rocksdb'
 include ':extensions:storage:account-rocksdb'
 
-include ':extensions:cip-139:epoch'
-include ':extensions:cip-139:utxo'
+include ':extensions:cip-139:cip139-epoch'
+project(':extensions:cip-139:cip139-epoch').projectDir = new File('extensions/cip-139/epoch')
+
+include ':extensions:cip-139:cip139-utxo'
+project(':extensions:cip-139:cip139-utxo').projectDir = new File('extensions/cip-139/utxo')
 
 
 include 'e2e-tests'
