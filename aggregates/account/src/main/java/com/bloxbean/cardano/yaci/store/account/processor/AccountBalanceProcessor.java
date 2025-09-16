@@ -373,8 +373,7 @@ public class AccountBalanceProcessor {
                                 addressUtxo.setOwnerStakeCredential(null);
                             }
                         } catch (Exception e) {
-                            if (log.isDebugEnabled())
-                                log.debug("Unable to parse address for pointer check: {}", addressUtxo.getOwnerAddr());
+                            log.error("Unable to parse address for pointer check: {}", addressUtxo.getOwnerAddr());
                         }
                     }
                 });
@@ -402,11 +401,20 @@ public class AccountBalanceProcessor {
         Integer computed = null;
         try {
             var eras = eraService.getEras();
-            if (eras != null) {
+            if (eras != null && !eras.isEmpty()) {
                 for (var ce : eras) {
                     if (ce.getEra() == Era.Conway) {
                         computed = eraService.getEpochNo(Era.Conway, ce.getStartSlot());
                         break;
+                    }
+                }
+
+                // If Conway is not present and the network starts after Conway (devnet starting from a future era),
+                // treat first Conway epoch as 0
+                if (computed == null) {
+                    var firstEra = eras.get(0);
+                    if (firstEra.getEra().getValue() > Era.Conway.getValue()) {
+                        computed = 0;
                     }
                 }
             }
