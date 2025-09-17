@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult
 import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 
@@ -28,8 +28,8 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
         NewConstitution newConstitution = (NewConstitution) context.getGovAction();
 
         VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
-        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
-        VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.CONSTITUTION);
 
@@ -37,8 +37,8 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
                 && context.isCommitteeNormal()
                 && GovernanceActionUtil.isPrevActionAsExpected(newConstitution.getType(), newConstitution.getGovActionId(), lastEnactedGovActionId);
 
-        final boolean isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
-                && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+        final boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
+                && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
 
         if (context.isLastVotingEpoch()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;

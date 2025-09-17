@@ -10,7 +10,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.ratification.Ratification
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
@@ -33,7 +33,7 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         ParameterChangeAction parameterChangeAction = (ParameterChangeAction) context.getGovAction();
         VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
 
-        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.P_PARAM_UPDATE);
         final boolean isNotDelayed = context.isNotDelayed()
@@ -43,19 +43,19 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         boolean isAccepted;
 
         if (context.isBootstrapPhase()) {
-            isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+            isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
         } else {
             List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
-            VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+            VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
             if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
-                VotingResult spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+                VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
                 if (ppGroupChangeList.size() == 1) {
-                    isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+                    isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
                 } else
-                    isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+                    isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
             } else
-                isAccepted = committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+                isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
         }
 
         if (context.isLastVotingEpoch()) {

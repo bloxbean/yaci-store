@@ -4,9 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -16,33 +14,33 @@ import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeR
 public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
     
     @Override
-    public VotingResult evaluate(VotingData votingData, VotingEvaluationContext context) {
+    public VotingStatus evaluate(VotingData votingData, VotingEvaluationContext context) {
         var spoData = votingData.getSpoVotes();
         if (spoData == null || context.getPoolThresholds() == null) {
-            return VotingResult.INSUFFICIENT_DATA;
+            return VotingStatus.INSUFFICIENT_DATA;
         }
         
         GovActionType actionType = context.getGovAction().getType();
         if (!isSPOVotingRequired(actionType)) {
-            return VotingResult.INSUFFICIENT_DATA;
+            return VotingStatus.INSUFFICIENT_DATA;
         }
-        
-        BigInteger totalYes = calculateTotalYesStake(spoData, actionType);
-        BigInteger totalAbstain = calculateTotalAbstainStake(spoData, actionType, context.isInBootstrapPhase());
+
+        var spoVoteTallies = VoteTallyCalculator.computeSPOTallies(spoData, actionType, context.isInBootstrapPhase());
+        BigInteger totalYes = spoVoteTallies.getTotalYesStake();
+        BigInteger totalAbstain = spoVoteTallies.getTotalAbstainStake();
         BigInteger totalStake = spoData.getTotalStake();
         
         if (totalStake.equals(BigInteger.ZERO) || totalAbstain.equals(totalStake)) {
-            return VotingResult.PASSED_THRESHOLD;
+            return VotingStatus.PASSED_THRESHOLD;
         }
         
-        BigInteger activeStake = totalStake.subtract(totalAbstain);
         BigDecimal acceptedRatio = new BigDecimal(totalYes)
-            .divide(new BigDecimal(activeStake), BigNumberUtils.mathContext);
+            .divide(new BigDecimal(totalStake.subtract(totalAbstain)), BigNumberUtils.mathContext);
             
         BigDecimal requiredThreshold = getRequiredThreshold(actionType, context);
         
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
-            VotingResult.PASSED_THRESHOLD : VotingResult.NOT_PASSED_THRESHOLD;
+                VotingStatus.PASSED_THRESHOLD : VotingStatus.NOT_PASSED_THRESHOLD;
     }
     
     private boolean isSPOVotingRequired(GovActionType actionType) {
@@ -51,26 +49,7 @@ public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
                actionType == GovActionType.HARD_FORK_INITIATION_ACTION ||
                actionType == GovActionType.PARAMETER_CHANGE_ACTION;
     }
-    
-    private BigInteger calculateTotalYesStake(VotingData.SPOVotes data, GovActionType actionType) {
-        BigInteger total = data.getYesVoteStake();
-        if (actionType == GovActionType.NO_CONFIDENCE && data.getDelegateToNoConfidenceDRepStake() != null) {
-            total = total.add(data.getDelegateToNoConfidenceDRepStake());
-        }
-        return total;
-    }
-    
-    private BigInteger calculateTotalAbstainStake(VotingData.SPOVotes data, GovActionType actionType, boolean isBootstrap) {
-        BigInteger total = data.getAbstainVoteStake();
-        if (data.getDelegateToAutoAbstainDRepStake() != null) {
-            total = total.add(data.getDelegateToAutoAbstainDRepStake());
-        }
-        if (isBootstrap && actionType != GovActionType.HARD_FORK_INITIATION_ACTION && data.getDoNotVoteStake() != null) {
-            total = total.add(data.getDoNotVoteStake());
-        }
-        return total;
-    }
-    
+
     private BigDecimal getRequiredThreshold(GovActionType actionType, VotingEvaluationContext context) {
         var thresholds = context.getPoolThresholds();
         

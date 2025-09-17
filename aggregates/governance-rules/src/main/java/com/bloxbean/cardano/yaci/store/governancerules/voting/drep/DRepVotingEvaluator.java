@@ -1,15 +1,15 @@
 package com.bloxbean.cardano.yaci.store.governancerules.voting.drep;
 
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
 import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.ProtocolParamGroup;
 import com.bloxbean.cardano.yaci.store.governancerules.util.ProtocolParamUtil;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VoteTallyCalculator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -18,58 +18,28 @@ import java.util.List;
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
 public class DRepVotingEvaluator implements VotingEvaluator<VotingData> {
-    
+
     @Override
-    public VotingResult evaluate(VotingData votingData, VotingEvaluationContext context) {
+    public VotingStatus evaluate(VotingData votingData, VotingEvaluationContext context) {
         var drepData = votingData.getDrepVotes();
         if (drepData == null || context.getDrepThresholds() == null) {
-            return VotingResult.INSUFFICIENT_DATA;
+            return VotingStatus.INSUFFICIENT_DATA;
+        }
+
+        var dRepVoteTallies = VoteTallyCalculator.computeDRepTallies(drepData, context.getGovAction().getType());
+        BigInteger totalYes = dRepVoteTallies.getTotalYesStake();
+        BigInteger totalNo = dRepVoteTallies.getTotalNoStake();
+        BigInteger totalYesAndNo = totalYes.add(totalNo);
+        
+        if (totalYesAndNo.equals(BigInteger.ZERO)) {
+            return VotingStatus.PASSED_THRESHOLD;
         }
         
-        boolean isNoConfidence = context.getGovAction().getType() == GovActionType.NO_CONFIDENCE;
-        BigInteger totalYes = calculateTotalYesStake(drepData, isNoConfidence);
-        BigInteger totalNo = calculateTotalNoStake(drepData);
-        BigInteger totalExcludingAbstain = totalYes.add(totalNo);
-        
-        if (totalExcludingAbstain.equals(BigInteger.ZERO)) {
-            return VotingResult.PASSED_THRESHOLD;
-        }
-        
-        BigDecimal acceptedRatio = BigNumberUtils.divide(totalYes, totalExcludingAbstain);
+        BigDecimal acceptedRatio = BigNumberUtils.divide(totalYes, totalYesAndNo);
         BigDecimal requiredThreshold = getRequiredThreshold(context);
         
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
-            VotingResult.PASSED_THRESHOLD : VotingResult.NOT_PASSED_THRESHOLD;
-    }
-    
-    private BigInteger calculateTotalYesStake(VotingData.DRepVotes data, boolean isNoConfidence) {
-         /*
-            Total DRep yes stake – The total stake of:
-            1. Registered dReps that voted 'Yes', plus
-            2. The AlwaysNoConfidence dRep, in case the action is NoConfidence.
-         */
-        BigInteger total = data.getYesVoteStake();
-        if (isNoConfidence && data.getNoConfidenceStake() != null) {
-            total = total.add(data.getNoConfidenceStake());
-        }
-        return total;
-    }
-    
-    private BigInteger calculateTotalNoStake(VotingData.DRepVotes data) {
-        /*
-            DRep No Stake – The total stake of:
-            1. Registered dReps that voted 'No', plus
-            2. Registered dReps that did not vote for this action, plus
-            3. The AlwaysNoConfidence dRep.
-        */
-        BigInteger total = data.getNoVoteStake();
-        if (data.getNoConfidenceStake() != null) {
-            total = total.add(data.getNoConfidenceStake());
-        }
-        if (data.getDoNotVoteStake() != null) {
-            total = total.add(data.getDoNotVoteStake());
-        }
-        return total;
+            VotingStatus.PASSED_THRESHOLD : VotingStatus.NOT_PASSED_THRESHOLD;
     }
 
     private BigDecimal getRequiredThreshold(VotingEvaluationContext context) {
