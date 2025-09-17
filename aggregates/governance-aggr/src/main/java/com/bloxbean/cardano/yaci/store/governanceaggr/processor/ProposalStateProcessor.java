@@ -8,6 +8,8 @@ import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.DRepDistService;
 import com.bloxbean.cardano.yaci.store.governanceaggr.service.ProposalStateService;
+import com.bloxbean.cardano.yaci.store.governanceaggr.service.VotingStatsService;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovernanceEvaluationInputMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governancerules.api.GovernanceEvaluationInput;
 import com.bloxbean.cardano.yaci.store.governancerules.api.GovernanceEvaluationResult;
@@ -35,6 +37,8 @@ public class ProposalStateProcessor {
     private final DRepDistService dRepDistService;
     private final EraService eraService;
     private final ApplicationEventPublisher publisher;
+    private final VotingStatsService votingStatsService;
+    private final GovernanceEvaluationInputMapper governanceInputAdapter;
 
     @EventListener
     @Transactional
@@ -57,18 +61,20 @@ public class ProposalStateProcessor {
         try {
             GovernanceEvaluationService governanceEvaluationService = new GovernanceEvaluationService();
 
-            // Collect governance evaluation input
-            GovernanceEvaluationInput input = proposalStateService.collectGovernanceData(currentEpoch);
+            var aggregatorGovernanceData = proposalStateService.collectGovernanceData(currentEpoch);
 
-            if (input == null) {
+            if (aggregatorGovernanceData == null) {
                 log.info("No proposals found for evaluation in epoch: {}", currentEpoch);
                 return;
             }
+
+            GovernanceEvaluationInput input = governanceInputAdapter.toRulesInput(aggregatorGovernanceData);
             
-            // Evaluate governance state
             GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);
             
-            List<GovActionProposalStatus> statusList = proposalStatusMapper.mapToProposalStatus(result, currentEpoch);
+            var statsMap = votingStatsService.computeVotingStats(aggregatorGovernanceData);
+
+            List<GovActionProposalStatus> statusList = proposalStatusMapper.mapToProposalStatus(result, currentEpoch, statsMap);
             
             if (!statusList.isEmpty()) {
                 govActionProposalStatusStorage.saveAll(statusList);

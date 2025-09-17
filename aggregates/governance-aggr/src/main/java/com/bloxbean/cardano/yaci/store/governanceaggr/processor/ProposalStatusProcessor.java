@@ -13,7 +13,6 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
-import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
@@ -56,7 +55,6 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -65,8 +63,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
 
 //@Component
 //@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
@@ -567,7 +563,7 @@ public class ProposalStatusProcessor {
                 // The total stake of active dReps that did not vote for this action = totalDRepStake - totalStakeDRepDoVote - dRepAutoAbstainStake - dRepNoConfidenceStake
                 BigInteger totalStakeDRepDoNotVote = totalDRepStake.subtract(totalStakeDRepDoVote).subtract(dRepAutoAbstainStake)
                         .subtract(dRepNoConfidenceStake.orElse(BigInteger.ZERO));
-                votingStats.setDrepNotVotedStake(totalStakeDRepDoNotVote);
+                votingStats.setDrepDoNotVoteStake(totalStakeDRepDoNotVote);
 
                 dRepNoStake = dRepNoStake.add(totalStakeDRepDoNotVote);
 
@@ -787,7 +783,7 @@ public class ProposalStatusProcessor {
             .drepTotalYesStake(BigInteger.ZERO)
             .drepTotalNoStake(BigInteger.ZERO)
             .drepNoVoteStake(BigInteger.ZERO)
-            .drepNotVotedStake(BigInteger.ZERO)
+            .drepDoNotVoteStake(BigInteger.ZERO)
             .drepNoConfidenceStake(BigInteger.ZERO)
             .spoTotalYesStake(BigInteger.ZERO)
             .spoTotalNoStake(BigInteger.ZERO)

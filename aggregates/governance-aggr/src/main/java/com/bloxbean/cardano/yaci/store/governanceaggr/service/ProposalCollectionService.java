@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
 import com.bloxbean.cardano.yaci.store.governancerules.api.ProposalContext;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
@@ -29,7 +30,7 @@ public class ProposalCollectionService {
     private final EpochParamStorage epochParamStorage;
     private final ProposalMapper proposalMapper;
 
-    public List<ProposalContext> createProposalContexts(List<GovActionProposal> proposals, Map<GovActionId, VotingData> votingDataMap) {
+    public List<ProposalContext> createProposalContexts(List<GovActionProposal> proposals, Map<GovActionId, AggregatedVotingData> votingDataMap) {
         return proposals.stream()
                 .map(proposal -> mapToProposalContext(proposal, votingDataMap))
                 .toList();
@@ -88,13 +89,14 @@ public class ProposalCollectionService {
         return Stream.concat(newProposals.stream(), activeProposals.stream()).toList();
     }
 
-    private ProposalContext mapToProposalContext(GovActionProposal proposal, Map<GovActionId, VotingData> votingDataMap) {
+    private ProposalContext mapToProposalContext(GovActionProposal proposal, Map<GovActionId, AggregatedVotingData> votingDataMap) {
         GovActionId govActionId = GovActionId.builder()
                 .transactionId(proposal.getTxHash())
                 .gov_action_index(proposal.getIndex())
                 .build();
 
-        VotingData votingData = votingDataMap.get(govActionId);
+        AggregatedVotingData aggrVoting = votingDataMap.get(govActionId);
+        VotingData votingData = toRulesVotingData(aggrVoting);
 
         var govActionLifetime = epochParamStorage.getProtocolParams(proposal.getEpoch())
                 .map(ep -> ep.getParams().getGovActionLifetime())
@@ -108,6 +110,34 @@ public class ProposalCollectionService {
                 .govActionId(govActionId)
                 .maxAllowedVotingEpoch(maxAllowedVotingEpoch)
                 .proposalSlot(proposal.getSlot())
+                .build();
+    }
+
+    private VotingData toRulesVotingData(AggregatedVotingData aggr) {
+        if (aggr == null) return null;
+
+        var dRepVotes = aggr.drepVotes();
+        var spoVotes = aggr.spoVotes();
+        var committeeVotes = aggr.committeeVotes();
+
+        return VotingData.builder()
+                .drepVotes(dRepVotes == null ? null : VotingData.DRepVotes.builder()
+                        .yesVoteStake(dRepVotes.getYesVoteStake())
+                        .noVoteStake(dRepVotes.getNoVoteStake())
+                        .doNotVoteStake(dRepVotes.getDoNotVoteStake())
+                        .noConfidenceStake(dRepVotes.getNoConfidenceStake())
+                        .build())
+                .spoVotes(spoVotes == null ? null : VotingData.SPOVotes.builder()
+                        .yesVoteStake(spoVotes.getYesVoteStake())
+                        .abstainVoteStake(spoVotes.getAbstainVoteStake())
+                        .doNotVoteStake(spoVotes.getDoNotVoteStake())
+                        .delegateToAutoAbstainDRepStake(spoVotes.getDelegateToAutoAbstainDRepStake())
+                        .delegateToNoConfidenceDRepStake(spoVotes.getDelegateToNoConfidenceDRepStake())
+                        .totalStake(spoVotes.getTotalStake())
+                        .build())
+                .committeeVotes(committeeVotes == null ? null : VotingData.CommitteeVotes.builder()
+                        .votes(committeeVotes.getVotes())
+                        .build())
                 .build();
     }
 }
