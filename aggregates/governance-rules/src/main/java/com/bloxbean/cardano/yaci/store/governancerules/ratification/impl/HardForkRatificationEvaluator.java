@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult
 import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.committee.CommitteeVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
@@ -30,19 +30,19 @@ public class HardForkRatificationEvaluator implements RatificationEvaluator {
 
         VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
 
-        VotingResult committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
-        VotingResult spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
-        VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.HARD_FORK);
 
         final boolean isAccepted = context.isBootstrapPhase() ?
-                committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
-                        && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD)
+                committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
+                        && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
                 :
-                committeeVotingResult.equals(VotingResult.PASSED_THRESHOLD)
-                        && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD)
-                        && dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+                committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
+                        && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
+                        && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
 
         final boolean isNotDelayed = context.isNotDelayed()
                 && context.isCommitteeNormal()

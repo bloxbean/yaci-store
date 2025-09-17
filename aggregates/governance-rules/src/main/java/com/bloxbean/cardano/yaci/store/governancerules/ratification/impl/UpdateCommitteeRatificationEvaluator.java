@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationResult
 import com.bloxbean.cardano.yaci.store.governancerules.ratification.RatificationEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
-import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingResult;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.drep.DRepVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
 
@@ -28,10 +28,10 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
         UpdateCommittee updateCommittee = (UpdateCommittee) context.getGovAction();
 
         VotingEvaluationContext votingEvaluationContext = buildVotingEvaluationContext(context);
-        VotingResult spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
-        VotingResult dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+        VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
-        final boolean isAccepted = dRepVotingResult.equals(VotingResult.PASSED_THRESHOLD) && spoVotingResult.equals(VotingResult.PASSED_THRESHOLD);
+        final boolean isAccepted = dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
 
         final boolean isValidCommitteeTerm = GovernanceActionUtil.isValidCommitteeTerm(updateCommittee,
                 context.getGovernanceContext().getProtocolParams().getCommitteeMaxTermLength(), context.getGovernanceContext().getCurrentEpoch());
