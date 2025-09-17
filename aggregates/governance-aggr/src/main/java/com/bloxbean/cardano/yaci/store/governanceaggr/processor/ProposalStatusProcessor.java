@@ -67,7 +67,7 @@ import java.util.stream.Stream;
 //@Component
 //@EnableIf(value = STORE_GOVERNANCEAGGR_ENABLED, defaultValue = false)
 @Slf4j
-// TODO: write tests
+// TODO: remove this class after refactoring
 public class ProposalStatusProcessor {
     private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final GovActionProposalStorage govActionProposalStorage;

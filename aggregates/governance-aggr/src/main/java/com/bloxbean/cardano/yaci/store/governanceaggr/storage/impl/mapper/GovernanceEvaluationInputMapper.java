@@ -19,7 +19,7 @@ public class GovernanceEvaluationInputMapper {
 
     private final ProposalCollectionService proposalCollectionService;
 
-    public GovernanceEvaluationInput toRulesInput(AggregatedGovernanceData data) {
+    public GovernanceEvaluationInput toGovernanceEvaluationInput(AggregatedGovernanceData data) {
         List<ProposalContext> proposalContexts = proposalCollectionService
                 .createProposalContexts(data.proposalsForEvaluation(), data.aggregatedVotingDataByProposal());
 
