@@ -21,16 +21,21 @@ public class ProposalVotingStats {
     private BigInteger spoTotalYesStake;
     private BigInteger spoTotalNoStake;
     private BigInteger spoTotalAbstainStake;
+    private BigInteger spoYesVoteStake;
+    private BigInteger spoNoVoteStake;
+    private BigInteger spoAbstainVoteStake;
+    private BigInteger spoDoNotVoteStake;
 
     // dReps stats
     private BigInteger drepTotalYesStake;
-
     private BigInteger drepTotalNoStake;
-    private BigInteger drepNoVoteStake;
-    private BigInteger drepNotVotedStake;
-    private BigInteger drepNoConfidenceStake;
-
     private BigInteger drepTotalAbstainStake;
+    private BigInteger drepYesVoteStake;
+    private BigInteger drepNoVoteStake;
+    private BigInteger drepAbstainVoteStake;
+    private BigInteger drepNoConfidenceStake;
+    private BigInteger drepAutoAbstainStake;
+    private BigInteger drepDoNotVoteStake;
 
     // committee stats
     private Integer ccYes;

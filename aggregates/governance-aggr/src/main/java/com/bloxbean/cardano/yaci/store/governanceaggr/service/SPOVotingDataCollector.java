@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
-import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorageReader;
@@ -32,12 +32,13 @@ public class SPOVotingDataCollector {
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
 
-    public VotingData.SPOVotes collectSPOVotes(GovActionProposal proposal,
+    public AggregatedVotingData.SPOVotes collectSPOVotes(GovActionProposal proposal,
                                                 List<VotingProcedure> spoVotes,
                                                 boolean isInConwayBootstrapPhase,
                                                 int epoch) {
         var yesVoteStake = calculateSPOStakeByVote(spoVotes, Vote.YES, epoch);
         var abstainVoteStake = calculateSPOStakeByVote(spoVotes, Vote.ABSTAIN, epoch);
+        var noVoteStake = calculateSPOStakeByVote(spoVotes, Vote.NO, epoch);
         var totalStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2).orElse(BigInteger.ZERO);
 
         List<String> activePools = poolStorage.findActivePools(epoch).stream()
@@ -80,25 +81,16 @@ public class SPOVotingDataCollector {
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
 
-        BigInteger totalDoNotVoteStake = BigInteger.ZERO;
+        BigInteger totalDoNotVoteStake = totalStake.subtract(yesVoteStake)
+                .subtract(noVoteStake)
+                .subtract(abstainVoteStake)
+                .subtract(totalStakeSPODelegatedToAbstainDRep)
+                .subtract(totalStakeSPODelegatedToNoConfidenceDRep);
 
-        if (isInConwayBootstrapPhase && !proposal.getGovAction().getType().equals(GovActionType.HARD_FORK_INITIATION_ACTION)) {
-            List<String> poolsDoNotVoteForThisAction = activePools.stream()
-                    .filter(poolId -> spoVotes.stream()
-                            .noneMatch(votingProcedure -> votingProcedure.getVoterHash().equals(poolId)
-                                    && votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
-                                    && votingProcedure.getGovActionIndex() == proposal.getIndex()))
-                    .toList();
-
-            totalDoNotVoteStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolsDoNotVoteForThisAction)
-                    .stream()
-                    .map(EpochStake::getAmount)
-                    .reduce(BigInteger.ZERO, BigInteger::add);
-        }
-
-        return VotingData.SPOVotes.builder()
+        return AggregatedVotingData.SPOVotes.builder()
                 .yesVoteStake(yesVoteStake)
                 .abstainVoteStake(abstainVoteStake)
+                .noVoteStake(noVoteStake)
                 .totalStake(totalStake)
                 .delegateToAutoAbstainDRepStake(totalStakeSPODelegatedToAbstainDRep)
                 .delegateToNoConfidenceDRepStake(totalStakeSPODelegatedToNoConfidenceDRep)

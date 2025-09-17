@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
-import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +31,7 @@ public class VotingDataCollector {
     private final BootstrapPhaseDetector bootstrapPhaseDetector;
     private final SPOVotingDataCollector spoVotingDataCollector;
 
-    public Map<GovActionId, VotingData> collectVotingDataBatch(List<GovActionProposal> proposals, int epoch) {
+    public Map<GovActionId, AggregatedVotingData> collectVotingDataBatch(List<GovActionProposal> proposals, int epoch) {
         if (proposals.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -63,21 +63,21 @@ public class VotingDataCollector {
             ));
     }
     
-    private VotingData createVotingData(GovActionProposal proposal,
+    private AggregatedVotingData createVotingData(GovActionProposal proposal,
                                         List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> drepVotes,
                                         List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> spoVotes,
                                         List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> committeeVotes,
                                         boolean isInConwayBootstrapPhase,
                                         int epoch) {
-        return VotingData.builder()
+        return AggregatedVotingData.builder()
             .drepVotes(isInConwayBootstrapPhase ? createEmptyDRepVotes() : collectDRepVotes(proposal, drepVotes, epoch + 1))
             .spoVotes(spoVotingDataCollector.collectSPOVotes(proposal, filterVotesForProposal(spoVotes, proposal), isInConwayBootstrapPhase, epoch))
             .committeeVotes(collectCommitteeVotes(proposal, committeeVotes))
             .build();
     }
     
-    private VotingData.DRepVotes createEmptyDRepVotes() {
-        return VotingData.DRepVotes.builder()
+    private AggregatedVotingData.DRepVotes createEmptyDRepVotes() {
+        return AggregatedVotingData.DRepVotes.builder()
             .yesVoteStake(BigInteger.ZERO)
             .noVoteStake(BigInteger.ZERO)
             .noConfidenceStake(BigInteger.ZERO)
@@ -85,28 +85,31 @@ public class VotingDataCollector {
             .build();
     }
 
-    private VotingData.DRepVotes collectDRepVotes(GovActionProposal proposal,
+    private AggregatedVotingData.DRepVotes collectDRepVotes(GovActionProposal proposal,
                                                   List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> dRepVotes,
                                                   int epoch) {
         var proposalDRepVotes = filterVotesForProposal(dRepVotes, proposal);
         var noConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, epoch).orElse(BigInteger.ZERO);
         var yesVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.YES, epoch);
         var noVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.NO, epoch);
+        var abstainVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.ABSTAIN, epoch);
         var totalDRepStake = dRepDistStorage.getTotalStakeExcludeInactiveDRepForEpoch(epoch)
                 .orElse(BigInteger.ZERO);
         var autoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, epoch).orElse(BigInteger.ZERO);
         var doNotVoteStake = totalDRepStake.subtract(totalDRepStake).subtract(autoAbstainStake)
                 .subtract(noConfidenceStake);
 
-        return VotingData.DRepVotes.builder()
+        return AggregatedVotingData.DRepVotes.builder()
                 .yesVoteStake(yesVoteStake)
                 .noVoteStake(noVoteStake)
+                .abstainVoteStake(abstainVoteStake)
+                .autoAbstainStake(autoAbstainStake)
                 .noConfidenceStake(noConfidenceStake)
                 .doNotVoteStake(doNotVoteStake)
                 .build();
     }
 
-    private VotingData.CommitteeVotes collectCommitteeVotes(GovActionProposal proposal,
+    private AggregatedVotingData.CommitteeVotes collectCommitteeVotes(GovActionProposal proposal,
                                                             List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> committeeVotes) {
         Map<String, Vote> votes = filterVotesForProposal(committeeVotes, proposal).stream()
             .collect(Collectors.toMap(
@@ -115,7 +118,7 @@ public class VotingDataCollector {
                 (existing, replacement) -> existing
             ));
         
-        return VotingData.CommitteeVotes.builder()
+        return AggregatedVotingData.CommitteeVotes.builder()
             .votes(votes)
             .build();
     }

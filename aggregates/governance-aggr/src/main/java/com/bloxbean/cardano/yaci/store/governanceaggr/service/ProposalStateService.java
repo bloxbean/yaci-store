@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
-import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.adapot.domain.AdaPot;
 import com.bloxbean.cardano.yaci.store.adapot.storage.AdaPotStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
@@ -12,11 +11,8 @@ import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorage;
-import com.bloxbean.cardano.yaci.store.governancerules.api.GovernanceEvaluationInput;
-import com.bloxbean.cardano.yaci.store.governancerules.api.ProposalContext;
-import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.CommitteeMember;
-import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommittee;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedGovernanceData;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,7 +34,7 @@ public class ProposalStateService {
     private final ProposalCollectionService proposalCollectionService;
     private final VotingDataCollector votingDataService;
 
-    public GovernanceEvaluationInput collectGovernanceData(int currentEpoch) {
+    public AggregatedGovernanceData collectGovernanceData(int currentEpoch) {
         if (log.isDebugEnabled()) {
             log.debug("Collecting governance data for epoch: {}", currentEpoch);
         }
@@ -51,9 +47,7 @@ public class ProposalStateService {
             return null;
         }
 
-        Map<GovActionId, VotingData> votingDataMap = votingDataService.collectVotingDataBatch(proposalsForEvaluation, currentEpoch - 1);
-        
-        List<ProposalContext> currentProposalContexts = proposalCollectionService.createProposalContexts(proposalsForEvaluation, votingDataMap);
+        Map<GovActionId, AggregatedVotingData> votingDataMap = votingDataService.collectVotingDataBatch(proposalsForEvaluation, currentEpoch - 1);
 
         // Get protocol parameters
         var epochParam = epochParamStorage.getProtocolParams(currentEpoch)
@@ -64,11 +58,6 @@ public class ProposalStateService {
                 .orElseThrow(() -> new IllegalStateException("Committee not found for epoch: " + (currentEpoch)));
         List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(currentEpoch - 1);
 
-        ConstitutionCommittee constitutionCommittee = ConstitutionCommittee.builder()
-                .members(membersCanVote.stream().map(this::mapToCommitteeMember).toList())
-                .threshold(new UnitInterval(committee.getThresholdNumerator(), committee.getThresholdDenominator()))
-                .build();
-
         // Get treasury
         var treasury = adaPotStorage.findByEpoch(currentEpoch)
                 .map(AdaPot::getTreasury)
@@ -77,25 +66,17 @@ public class ProposalStateService {
         // Get last enacted gov actions
         Map<ProposalType, GovActionId> lastEnactedActions = getLastEnactedGovActions(currentEpoch);
 
-        return GovernanceEvaluationInput.builder()
-                .currentProposals(currentProposalContexts)
+        return AggregatedGovernanceData.builder()
                 .currentEpoch(currentEpoch)
+                .proposalsForEvaluation(proposalsForEvaluation)
+                .aggregatedVotingDataByProposal(votingDataMap)
                 .protocolParams(epochParam.getParams())
-                .committee(constitutionCommittee)
-                .isBootstrapPhase(isInConwayBootstrapPhase)
+                .committeeThresholdNumerator(committee.getThresholdNumerator())
+                .committeeThresholdDenominator(committee.getThresholdDenominator())
+                .committeeMembers(membersCanVote)
                 .treasury(treasury)
                 .lastEnactedGovActionIds(lastEnactedActions)
-                .build();
-    }
-
-
-    private CommitteeMember mapToCommitteeMember(CommitteeMemberDetails committeeMemberDetails) {
-        return CommitteeMember.builder()
-                .coldKey(committeeMemberDetails.getColdKey())
-                .hotKey(committeeMemberDetails.getHotKey())
-                .startEpoch(committeeMemberDetails.getStartEpoch())
-                .expiredEpoch(committeeMemberDetails.getExpiredEpoch())
-                .credType(committeeMemberDetails.getCredType())
+                .bootstrapPhase(isInConwayBootstrapPhase)
                 .build();
     }
 
