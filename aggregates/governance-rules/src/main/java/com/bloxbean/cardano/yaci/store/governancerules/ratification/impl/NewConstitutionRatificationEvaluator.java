@@ -37,8 +37,8 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
                 && context.isCommitteeNormal()
                 && GovernanceActionUtil.isPrevActionAsExpected(newConstitution.getType(), newConstitution.getGovActionId(), lastEnactedGovActionId);
 
-        final boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
-                && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+        final boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD)
+                && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
         if (context.isLastVotingEpoch()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;

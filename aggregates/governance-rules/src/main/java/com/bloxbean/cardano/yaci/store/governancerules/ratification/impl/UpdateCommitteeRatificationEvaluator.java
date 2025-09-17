@@ -31,7 +31,7 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
         VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
         VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
-        final boolean isAccepted = dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+        final boolean isAccepted = dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
         final boolean isValidCommitteeTerm = GovernanceActionUtil.isValidCommitteeTerm(updateCommittee,
                 context.getGovernanceContext().getProtocolParams().getCommitteeMaxTermLength(), context.getGovernanceContext().getCurrentEpoch());

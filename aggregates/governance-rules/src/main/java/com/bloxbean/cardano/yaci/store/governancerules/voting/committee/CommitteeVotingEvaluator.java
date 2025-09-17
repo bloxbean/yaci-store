@@ -21,7 +21,7 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         
         var threshold = committee.getThreshold().safeRatio();
         if (threshold.equals(BigDecimal.ZERO)) {
-            return VotingStatus.PASSED_THRESHOLD;
+            return VotingStatus.PASS_THRESHOLD;
         }
 
         var committeeVoteTallies = VoteTallyCalculator.computeCommitteeTallies(votes.getVotes(), committee.getMembers());
@@ -31,13 +31,13 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
 
         int totalVotes = yesVotes + noVotes;
         if (totalVotes == 0) {
-            return VotingStatus.NOT_PASSED_THRESHOLD;
+            return VotingStatus.NOT_PASS_THRESHOLD;
         }
         
         BigDecimal yesRatio = BigDecimal.valueOf(yesVotes)
                 .divide(BigDecimal.valueOf(totalVotes), 2, BigDecimal.ROUND_HALF_UP);
 
         return yesRatio.compareTo(threshold) >= 0 ?
-                VotingStatus.PASSED_THRESHOLD : VotingStatus.NOT_PASSED_THRESHOLD;
+                VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
 }

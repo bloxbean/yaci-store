@@ -36,7 +36,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
         VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
         VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
-        boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+        boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
         boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
         
         if (context.isLastVotingEpoch()) {
