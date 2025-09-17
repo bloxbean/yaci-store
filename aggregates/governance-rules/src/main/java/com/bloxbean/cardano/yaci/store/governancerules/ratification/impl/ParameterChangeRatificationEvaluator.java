@@ -43,7 +43,7 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         boolean isAccepted;
 
         if (context.isBootstrapPhase()) {
-            isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+            isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD);
         } else {
             List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
             VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
@@ -51,11 +51,11 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
             if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
                 VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
                 if (ppGroupChangeList.size() == 1) {
-                    isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+                    isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
                 } else
-                    isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+                    isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
             } else
-                isAccepted = committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+                isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
         }
 
         if (context.isLastVotingEpoch()) {

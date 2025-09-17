@@ -37,12 +37,12 @@ public class HardForkRatificationEvaluator implements RatificationEvaluator {
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.HARD_FORK);
 
         final boolean isAccepted = context.isBootstrapPhase() ?
-                committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
-                        && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
+                committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD)
+                        && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD)
                 :
-                committeeVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
-                        && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD)
-                        && dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+                committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD)
+                        && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD)
+                        && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
         final boolean isNotDelayed = context.isNotDelayed()
                 && context.isCommitteeNormal()

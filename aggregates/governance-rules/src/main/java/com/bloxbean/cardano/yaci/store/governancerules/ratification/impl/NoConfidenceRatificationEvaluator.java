@@ -33,7 +33,7 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.COMMITTEE);
 
-        final boolean isAccepted = dRepVotingResult.equals(VotingStatus.PASSED_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASSED_THRESHOLD);
+        final boolean isAccepted = dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
         final boolean isNotDelayed = context.isNotDelayed()
                 && context.isCommitteeNormal()

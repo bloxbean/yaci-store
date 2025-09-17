@@ -31,7 +31,7 @@ public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
         BigInteger totalStake = spoData.getTotalStake();
         
         if (totalStake.equals(BigInteger.ZERO) || totalAbstain.equals(totalStake)) {
-            return VotingStatus.PASSED_THRESHOLD;
+            return VotingStatus.PASS_THRESHOLD;
         }
         
         BigDecimal acceptedRatio = new BigDecimal(totalYes)
@@ -40,7 +40,7 @@ public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
         BigDecimal requiredThreshold = getRequiredThreshold(actionType, context);
         
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
-                VotingStatus.PASSED_THRESHOLD : VotingStatus.NOT_PASSED_THRESHOLD;
+                VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
     
     private boolean isSPOVotingRequired(GovActionType actionType) {

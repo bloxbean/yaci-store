@@ -32,14 +32,14 @@ public class DRepVotingEvaluator implements VotingEvaluator<VotingData> {
         BigInteger totalYesAndNo = totalYes.add(totalNo);
         
         if (totalYesAndNo.equals(BigInteger.ZERO)) {
-            return VotingStatus.PASSED_THRESHOLD;
+            return VotingStatus.PASS_THRESHOLD;
         }
         
         BigDecimal acceptedRatio = BigNumberUtils.divide(totalYes, totalYesAndNo);
         BigDecimal requiredThreshold = getRequiredThreshold(context);
         
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
-            VotingStatus.PASSED_THRESHOLD : VotingStatus.NOT_PASSED_THRESHOLD;
+            VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
 
     private BigDecimal getRequiredThreshold(VotingEvaluationContext context) {
