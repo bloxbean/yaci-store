@@ -38,7 +38,7 @@ public class ProposalStateProcessor {
     private final EraService eraService;
     private final ApplicationEventPublisher publisher;
     private final VotingStatsService votingStatsService;
-    private final GovernanceEvaluationInputMapper governanceInputAdapter;
+    private final GovernanceEvaluationInputMapper governanceInputMapper;
 
     @EventListener
     @Transactional
@@ -68,7 +68,7 @@ public class ProposalStateProcessor {
                 return;
             }
 
-            GovernanceEvaluationInput input = governanceInputAdapter.toRulesInput(aggregatorGovernanceData);
+            GovernanceEvaluationInput input = governanceInputMapper.toGovernanceEvaluationInput(aggregatorGovernanceData);
             
             GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);
             
