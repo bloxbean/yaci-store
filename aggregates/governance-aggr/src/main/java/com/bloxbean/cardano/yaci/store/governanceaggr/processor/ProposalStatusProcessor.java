@@ -290,52 +290,52 @@ public class ProposalStatusProcessor {
         log.debug("GetActivePools time: {} ms", end - start);
 
         start = System.currentTimeMillis();
+
+        // active pools that SPOs did not vote for the gov actions
+        List<String> poolsWithNonVotingSPOs = activePools.stream()
+                .filter(poolId ->
+                        votesBySPO.stream().map(VotingProcedure::getVoterHash)
+                                .distinct().noneMatch(votedPoolId -> votedPoolId.equals(poolId)))
+                .toList();
+
         // map (reward account, List of pools)
-        var activePoolsBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
-        Map<String, List<String>> rewardAccountPoolMap = activePoolsBatches.parallelStream()
+        var nonVotingSPOPoolBatches = ListUtil.partition(poolsWithNonVotingSPOs, QUERY_BATCH_SIZE);
+        Map<String, List<String>> rewardAccountToNonVotingPoolsMap = nonVotingSPOPoolBatches.parallelStream()
                 .flatMap(batch -> poolStorageReader.getPoolDetails(batch, prevEpoch).stream())
                 .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
         end = System.currentTimeMillis();
         log.debug("GetPoolDetails time: {} ms", end - start);
 
         start = System.currentTimeMillis();
-        // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep
-        List<String> poolsDelegatedToAlwaysAbstainDRep = new ArrayList<>();
-        var poolBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.values()), QUERY_BATCH_SIZE);
-        poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.ABSTAIN, prevEpoch)
-                .parallelStream()
-                .forEach(delegationVote ->
-                        poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep and did not vote for the gov actions
+        var nonVotingSPORewardAccountBatches = ListUtil.partition(new ArrayList<>(rewardAccountToNonVotingPoolsMap.keySet()), QUERY_BATCH_SIZE);
+        List<String> poolsDelegatedToAlwaysAbstainDRep = nonVotingSPORewardAccountBatches.parallelStream()
+                .flatMap(batch -> delegationVoteDataService
+                        .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.ABSTAIN, prevEpoch)
+                        .parallelStream()
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap.get(delegationVote.getAddress()).stream()))
+                .collect(Collectors.toList());
         end = System.currentTimeMillis();
         log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
 
         start = System.currentTimeMillis();
-        BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToAlwaysAbstainDRep)
-                .stream()
-                .map(EpochStake::getAmount)
-                .reduce(BigInteger.ZERO, BigInteger::add);
+        BigInteger totalStakeSPODelegatedToAbstainDRep = getActiveStakesByEpochAndPoolsBatch(prevEpoch + 2, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
         end = System.currentTimeMillis();
         log.debug("GetAllActiveStakesByEpochAndPools time: {} ms", end - start);
 
         start = System.currentTimeMillis();
         // Calculate the total stake of SPOs that delegated to NoConfidence DRep
-        List<String> poolsDelegatedToNoConfidenceDRep = new ArrayList<>();
-        poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.NO_CONFIDENCE, prevEpoch)
-                .parallelStream()
-                .forEach(delegationVote ->
-                        poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        List<String> poolsDelegatedToNoConfidenceDRep = nonVotingSPORewardAccountBatches.parallelStream()
+                .flatMap(batch -> delegationVoteDataService
+                        .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.NO_CONFIDENCE, prevEpoch)
+                        .parallelStream()
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap.get(delegationVote.getAddress()).stream()))
+                .collect(Collectors.toList());
         end = System.currentTimeMillis();
         log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
 
         start = System.currentTimeMillis();
-        BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDelegatedToNoConfidenceDRep)
-                .stream()
-                .map(EpochStake::getAmount)
-                .reduce(BigInteger.ZERO, BigInteger::add);
+        BigInteger totalStakeSPODelegatedToNoConfidenceDRep = getActiveStakesByEpochAndPoolsBatch(prevEpoch + 2, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
         end = System.currentTimeMillis();
         log.debug("GetAllActiveStakesByEpochAndPools time: {} ms", end - start);
 
@@ -404,7 +404,11 @@ public class ProposalStatusProcessor {
             List<CommitteeMemberDetails> committeeMembersDoNotVote = membersCanVote.stream()
                     .filter(committeeMember ->
                             coldKeyHotKeyMap.get(committeeMember.getColdKey()) == null ||
-                                    votesByCommittee.stream().noneMatch(
+                                    votesByCommittee.stream()
+                                            .filter(votingProcedure ->
+                                                    votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
+                                                            && votingProcedure.getGovActionIndex() == proposal.getIndex())
+                                            .noneMatch(
                                             votingProcedure ->
                                                     coldKeyHotKeyMap.get(committeeMember.getColdKey())
                                                             .equals(votingProcedure.getVoterHash())))
@@ -458,10 +462,7 @@ public class ProposalStatusProcessor {
 
             start = System.currentTimeMillis();
             if (!poolsVoteYes.isEmpty()) {
-                spoYesStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteYes)
-                        .stream()
-                        .map(EpochStake::getAmount)
-                        .reduce(BigInteger.ZERO, BigInteger::add);
+                spoYesStake = getActiveStakesByEpochAndPoolsBatch(prevEpoch + 2, poolsVoteYes, QUERY_BATCH_SIZE);
             }
             end = System.currentTimeMillis();
             log.debug("GetAllActiveStakesByEpochAndPools (in loop) time: {} ms", end - start);
@@ -478,11 +479,8 @@ public class ProposalStatusProcessor {
                     .toList();
 
             start = System.currentTimeMillis();
-            if (!poolsVoteYes.isEmpty()) {
-                spoAbstainStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsVoteAbstain)
-                        .stream()
-                        .map(EpochStake::getAmount)
-                        .reduce(BigInteger.ZERO, BigInteger::add);
+            if (!poolsVoteAbstain.isEmpty()) {
+                spoAbstainStake = getActiveStakesByEpochAndPoolsBatch(prevEpoch + 2, poolsVoteAbstain, QUERY_BATCH_SIZE);
             }
             end = System.currentTimeMillis();
             log.debug("GetAllActiveStakesByEpochAndPools (in loop -- poolsVoteAbstain) time: {} ms", end - start);
@@ -594,10 +592,7 @@ public class ProposalStatusProcessor {
                                             && votingProcedure.getGovActionTxHash().equals(proposal.getTxHash())
                                             && votingProcedure.getGovActionIndex() == proposal.getIndex()))
                             .toList();
-                    BigInteger totalStakeSPODoNotVote = epochStakeStorage.getAllActiveStakesByEpochAndPools(prevEpoch + 2, poolsDoNotVoteForThisAction)
-                            .stream()
-                            .map(EpochStake::getAmount)
-                            .reduce(BigInteger.ZERO, BigInteger::add);
+                    BigInteger totalStakeSPODoNotVote = getActiveStakesByEpochAndPoolsBatch(prevEpoch + 2, poolsDoNotVoteForThisAction, QUERY_BATCH_SIZE);
                     spoAbstainStake = spoAbstainStake.add(totalStakeSPODoNotVote);
                 }
                 end = System.currentTimeMillis();
@@ -804,5 +799,17 @@ public class ProposalStatusProcessor {
         return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
+    }
+
+    private BigInteger getActiveStakesByEpochAndPoolsBatch(int epoch, List<String> poolIds, int batchSize) {
+        if (poolIds.isEmpty()) {
+            return BigInteger.ZERO;
+        }
+        
+        return ListUtil.partition(poolIds, batchSize)
+                .parallelStream()
+                .flatMap(batch -> epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch, batch).stream())
+                .map(EpochStake::getAmount)
+                .reduce(BigInteger.ZERO, BigInteger::add);
     }
 }
