@@ -291,16 +291,16 @@ public class ProposalStatusProcessor {
 
         start = System.currentTimeMillis();
 
-        // active pools did not vote for the gov actions
-        List<String> activePoolsDidNotVote = activePools.stream()
+        // active pools that SPOs did not vote for the gov actions
+        List<String> poolsWithNonVotingSPOs = activePools.stream()
                 .filter(poolId ->
                         votesBySPO.stream().map(VotingProcedure::getVoterHash)
                                 .distinct().noneMatch(votedPoolId -> votedPoolId.equals(poolId)))
                 .toList();
 
         // map (reward account, List of pools)
-        var poolsBatches = ListUtil.partition(activePoolsDidNotVote, QUERY_BATCH_SIZE);
-        Map<String, List<String>> rewardAccountPoolMap = poolsBatches.parallelStream()
+        var nonVotingSPOPoolBatches = ListUtil.partition(poolsWithNonVotingSPOs, QUERY_BATCH_SIZE);
+        Map<String, List<String>> rewardAccountToNonVotingPoolsMap = nonVotingSPOPoolBatches.parallelStream()
                 .flatMap(batch -> poolStorageReader.getPoolDetails(batch, prevEpoch).stream())
                 .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
         end = System.currentTimeMillis();
@@ -308,12 +308,12 @@ public class ProposalStatusProcessor {
 
         start = System.currentTimeMillis();
         // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep and did not vote for the gov actions
-        var addressBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.keySet()), QUERY_BATCH_SIZE);
-        List<String> poolsDelegatedToAlwaysAbstainDRep = addressBatches.parallelStream()
+        var nonVotingSPORewardAccountBatches = ListUtil.partition(new ArrayList<>(rewardAccountToNonVotingPoolsMap.keySet()), QUERY_BATCH_SIZE);
+        List<String> poolsDelegatedToAlwaysAbstainDRep = nonVotingSPORewardAccountBatches.parallelStream()
                 .flatMap(batch -> delegationVoteDataService
                         .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.ABSTAIN, prevEpoch)
                         .parallelStream()
-                        .flatMap(delegationVote -> rewardAccountPoolMap.get(delegationVote.getAddress()).stream()))
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap.get(delegationVote.getAddress()).stream()))
                 .collect(Collectors.toList());
         end = System.currentTimeMillis();
         log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
@@ -325,11 +325,11 @@ public class ProposalStatusProcessor {
 
         start = System.currentTimeMillis();
         // Calculate the total stake of SPOs that delegated to NoConfidence DRep
-        List<String> poolsDelegatedToNoConfidenceDRep = addressBatches.parallelStream()
+        List<String> poolsDelegatedToNoConfidenceDRep = nonVotingSPORewardAccountBatches.parallelStream()
                 .flatMap(batch -> delegationVoteDataService
                         .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.NO_CONFIDENCE, prevEpoch)
                         .parallelStream()
-                        .flatMap(delegationVote -> rewardAccountPoolMap.get(delegationVote.getAddress()).stream()))
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap.get(delegationVote.getAddress()).stream()))
                 .collect(Collectors.toList());
         end = System.currentTimeMillis();
         log.debug("GetDelegationVotesByDRepTypeAndAddressList time: {} ms", end - start);
