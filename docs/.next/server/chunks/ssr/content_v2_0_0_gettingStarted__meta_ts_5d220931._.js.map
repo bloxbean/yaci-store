@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/content/v2.0.0/gettingStarted/_meta.ts"],"sourcesContent":["const meta = {\n  quickStart: \"Quick Start Guide\",\n  requirements: \"Requirements\", \n  compatibilityMatrix: \"Compatibility Matrix\",\n  installation: { title: \"Installation\", theme: { collapsed: true } },\n};\n\nexport default meta;\n"],"names":[],"mappings":";;;AAAA,MAAM,OAAO;IACX,YAAY;IACZ,cAAc;IACd,qBAAqB;IACrB,cAAc;QAAE,OAAO;QAAgB,OAAO;YAAE,WAAW;QAAK;IAAE;AACpE;uCAEe","debugId":null}}]
+}

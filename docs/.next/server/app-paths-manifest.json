@@ -1,0 +1,5 @@
+{
+  "/docs/[[...mdxPath]]/page": "app/docs/[[...mdxPath]]/page.js",
+  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
+  "/page": "app/page.js"
+}

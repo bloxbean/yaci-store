@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/content/v2.0.0/troubleshooting/_meta.ts"],"sourcesContent":["const meta = {\n  libraryTroubleshooting: \"As a Library Troubleshooting\",\n  indexerTroubleshooting: \"Out of the box Chain Indexer Troubleshooting\",\n};\n\nexport default meta;\n"],"names":[],"mappings":";;;AAAA,MAAM,OAAO;IACX,wBAAwB;IACxB,wBAAwB;AAC1B;uCAEe","debugId":null}}]
+}

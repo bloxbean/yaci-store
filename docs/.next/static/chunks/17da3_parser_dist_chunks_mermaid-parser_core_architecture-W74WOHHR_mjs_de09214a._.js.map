@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/node_modules/%40mermaid-js/parser/dist/chunks/mermaid-parser.core/architecture-W74WOHHR.mjs"],"sourcesContent":["import {\n  ArchitectureModule,\n  createArchitectureServices\n} from \"./chunk-6MM43HOH.mjs\";\nimport \"./chunk-YAJQ3QCK.mjs\";\nexport {\n  ArchitectureModule,\n  createArchitectureServices\n};\n"],"names":[],"mappings":";AAAA;AAIA","ignoreList":[0],"debugId":null}}]
+}

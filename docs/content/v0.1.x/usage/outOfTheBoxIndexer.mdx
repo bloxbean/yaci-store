@@ -1,0 +1,159 @@
+&nbsp;
+
+# 🚀 Chain Indexer
+
+Yaci Store comes with a few applications that you can use directly. These applications are designed to be used as-is:
+
+### 🚀 Available Out of the Box Applications
+
+| Application                  | Description                                                                                      | Use Case                                      |
+|-----------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------|
+| **`yaci-store-all`**        | Bundles all available modules/stores into a single application.                                  | Index **all available data**                  |
+| **`yaci-store-utxo-indexer`** | Contains UTXO store, protocol parameters store, and submit module.                               | **UTXO indexing** and **transaction submission** |
+| **`yaci-store-aggregation-app`** | Handles account balance aggregation; runs as a separate app. See the Aggregation App Getting Started section. | Calculate **address balances** separately     |
+
+> 🧹 The JAR files for these applications are available in the [release section](https://github.com/bloxbean/yaci-store/releases).
+
+---
+
+## ⚙️ Configuration
+
+### 🛠️ Setup
+
+Download the `application.properties` file from the release section and place it inside a `config` folder in the same directory as your JAR file. The app will pick it up automatically.
+
+Update the configuration file with your own values. Below are key properties:
+
+---
+
+### 🔌 Mandatory Configuration
+
+#### Network
+
+```properties
+store.cardano.host=preprod-node.world.dev.cardano.org
+store.cardano.port=30000
+store.cardano.protocol-magic=1
+```
+
+#### Database
+
+```properties
+spring.datasource.url=
+spring.datasource.username=user
+spring.datasource.password=
+```
+
+Additional DB configs:
+
+```properties
+spring.datasource.hikari.maximum-pool-size=50
+spring.datasource.hikari.minimum-idle=5
+spring.jpa.properties.hibernate.jdbc.batch_size=100
+spring.jpa.properties.hibernate.order_inserts=true
+```
+
+---
+
+### ⚡ Parallel Processing (Optional)
+
+```properties
+store.executor.enable-parallel-processing=true
+store.executor.blocks-batch-size=200
+store.executor.blocks-partition-size=10
+store.executor.use-virtual-thread-for-batch-processing=true
+store.executor.use-virtual-thread-for-event-processing=true
+```
+
+> ⚠️ If parallel processing is enabled, ensure your DB pool settings are scaled accordingly.
+
+---
+
+### 🧪 Genesis File Configuration (for custom networks)
+
+These are **only required for custom networks**. For public networks like `mainnet`, `preprod`, `preview`, or `sanchonet`, these are already embedded.
+
+```properties
+store.cardano.byron-genesis-file=/path/byron-genesis.json
+store.cardano.shelley-genesis-file=/path/shelley-genesis.json
+store.cardano.alonzo-genesis-file=/path/alonzo-genesis.json
+store.cardano.conway-genesis-file=/path/conway-genesis.json
+```
+
+---
+
+### 🔗 N2C Configuration (Optional)
+
+Used for transaction submission and protocol parameter fetching:
+
+```properties
+#store.cardano.n2c-node-socket-path=/path/to/node.socket
+
+# Optional: using relay
+#store.cardano.n2c-host=<relay_host>
+#store.cardano.n2c-port=<relay_port>
+```
+
+---
+
+### 🛡️ Enable / Disable Specific Stores
+
+You can selectively enable/disable stores in `yaci-store-all`. Example:
+
+```properties
+store.utxo.enabled=false
+store.<store_name>.enabled=false
+```
+
+---
+
+### 🌟 Start from a Specific Point
+
+```properties
+store.cardano.sync-start-slot=2738868
+store.cardano.sync-start-blockhash=a5c72a0e...
+# For Byron start
+#store.cardano.sync-start-byron-block-number=2737340
+# Optional stop point
+#store.cardano.sync-stop-slot=76667163
+#store.cardano.sync-stop-blockhash=3e9a93a...
+```
+
+---
+
+## 🔮 Run as JAR
+
+To run Yaci Store apps:
+
+```bash
+java -jar yaci-store-all-<version>.jar
+```
+
+```bash
+java -jar yaci-store-utxo-indexer-<version>.jar
+```
+
+---
+
+## 📜 Swagger UI
+
+Access Swagger UI at:
+
+```
+http://localhost:8080/swagger-ui/index.html
+```
+
+---
+
+## 📃 DB Indexes (Post-Sync)
+
+To speed up syncing, optional indexes are **dropped during initial sync**. Re-apply them after sync completion:
+
+* **Yaci Store All** → `create-index.sql`
+* **UTxO Indexer** → `create-index.sql`
+
+You’ll find these scripts in the [GitHub repository](https://github.com/bloxbean/yaci-store).
+
+---
+
+*Last updated on: June 23, 2025*

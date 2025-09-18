@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/content/v0.1.x/tutorialsAndUseCases/_meta.ts"],"sourcesContent":["const meta = {\n  defiPortfolioTracker: \"DeFi Portfolio Tracker\",\n  nftMarketplaceAnalytics: \"NFT Marketplace Analytics\",\n  stakePoolMonitor: \"Stake Pool Monitor\",\n};\n\nexport default meta;\n"],"names":[],"mappings":";;;AAAA,MAAM,OAAO;IACX,sBAAsB;IACtB,yBAAyB;IACzB,kBAAkB;AACpB;uCAEe","debugId":null}}]
+}
