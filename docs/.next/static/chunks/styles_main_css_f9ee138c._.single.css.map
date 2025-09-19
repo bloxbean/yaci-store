@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/styles/main.css"],"sourcesContent":["video {\n  display: block;\n  margin: 0 auto;\n  width: 70%;\n  padding: 1.5rem 0rem;\n}\n\n.wide-asset {\n  width: 90%;\n  margin: 0 auto;\n}\n\n@media (min-width: 1024px) {\n  video {\n    width: 50%;\n  }\n}\n\nfooter {\n  font-weight: 600;\n  text-decoration: underline;\n}"],"names":[],"mappings":"AAAA;;;;;;;AAOA;;;;;AAKA;EACE;;;;;AAKF"}}]
-}
