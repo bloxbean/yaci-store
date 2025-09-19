@@ -40,3 +40,6 @@ out/
 
 logs
 _rocksdb
+
+docs/.next/
+docs/node_modules/

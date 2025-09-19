@@ -1,0 +1,582 @@
+&nbsp;
+
+# 🏦 Use Case 3: Stake Pool Performance Monitor
+
+Build a comprehensive stake pool monitoring and analysis system that tracks pool performance, rewards distribution, and provides insights for delegators using Yaci Store v0.1.x.
+
+---
+
+## 🎯 Project Overview
+
+**Goal**: Create a stake pool monitoring platform that helps delegators make informed decisions and pool operators optimize their performance.
+
+**What We'll Build**:
+- Real-time pool performance metrics
+- Delegator rewards tracking
+- Pool comparison tools
+- Performance alerts and notifications
+- Historical trend analysis
+- Delegation recommendations
+
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Cardano Node  │───▶│   Yaci Store    │───▶│  Pool Monitor   │
+│                 │    │                 │    │                 │
+│ • Epoch Data    │    │ • Stake Data    │    │ • Performance   │
+│ • Rewards       │    │ • Pool Info     │    │ • Analytics     │
+│ • Delegations   │    │ • Certificates  │    │ • Alerts        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                                               ┌─────────────────┐
+                                               │  Delegator UI   │
+                                               │                 │
+                                               │ • Pool Rankings │
+                                               │ • Rewards Calc  │
+                                               │ • Comparisons   │
+                                               └─────────────────┘
+```
+
+### Components:
+- **Yaci Store v0.1.x**: Blockchain data indexing
+- **PostgreSQL**: Pool and rewards data storage
+- **Spring Boot**: Pool analytics API
+- **React**: Delegator dashboard
+- **WebSocket**: Real-time notifications
+
+---
+
+## 📋 Prerequisites
+
+### System Requirements
+- Java 24
+- PostgreSQL 14+
+- 12 GB RAM (for epoch calculations)
+- 800 GB storage for complete staking data
+
+### Pool Monitoring Setup
+```bash
+# Download Yaci Store v0.1.4
+wget https://github.com/bloxbean/yaci-store/releases/download/v0.1.4/yaci-store-all-0.1.4.jar
+
+# Create pool monitoring database
+createdb pool_monitor
+```
+
+---
+
+## ⚙️ Configuration
+
+### 1. Yaci Store Configuration
+
+Create `application.properties`:
+
+```properties
+# Cardano Node Connection
+store.cardano.host=localhost
+store.cardano.port=3001
+store.cardano.protocol-magic=764824073
+
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/pool_monitor
+spring.datasource.username=pool_user
+spring.datasource.password=secure_password
+spring.jpa.hibernate.ddl-auto=update
+
+# Enable Staking-focused Stores
+store.blocks.enabled=true
+store.transactions.enabled=true
+store.epochs.enabled=true
+store.stake-pools.enabled=true
+store.stake-addresses.enabled=true
+store.stake-rewards.enabled=true
+store.stake-registrations.enabled=true
+store.stake-delegations.enabled=true
+
+# Pool-specific optimizations
+store.epochs.save-epoch-params=true
+store.stake-pools.fetch-pool-metadata=true
+store.stake-rewards.calculate-delegator-rewards=true
+
+# Performance settings
+store.blocks.batch-size=1000
+store.parallel-processing=true
+store.thread-pool-size=10
+```
+
+### 2. Pool Monitor Configuration
+
+```yaml
+# Pool Monitoring Settings
+pool-monitor:
+  tracked-pools:
+    - pool-id: "pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2q3lkdy"  # IOHK
+    - pool-id: "pool1z5uqdk7dzdxaae5633fqfcu2eqzy3a3rgtuvy087fdld7yws0xt"  # Cardano Foundation
+    
+  alerts:
+    low-performance-threshold: 0.85  # Below 85% expected rewards
+    high-saturation-threshold: 0.95  # Above 95% saturation
+    missed-blocks-threshold: 2       # More than 2 missed blocks per epoch
+    
+  notifications:
+    discord-webhook: "https://discord.com/api/webhooks/..."
+    email-enabled: true
+    
+  calculations:
+    reward-calculation-epochs: 5     # Calculate rewards for last 5 epochs
+    performance-window-epochs: 10    # Performance metrics over 10 epochs
+```
+
+---
+
+## 🚀 Implementation
+
+### 1. Pool Performance Service
+
+Create `PoolPerformanceService.java`:
+
+```java
+@Service
+public class PoolPerformanceService {
+    
+    @Autowired
+    private StakePoolRepository poolRepository;
+    
+    @Autowired
+    private EpochRepository epochRepository;
+    
+    @Autowired
+    private StakeRewardRepository rewardRepository;
+    
+    @Autowired
+    private BlockRepository blockRepository;
+    
+    public PoolPerformance calculatePoolPerformance(String poolId, int epochs) {
+        List<Epoch> recentEpochs = epochRepository.findLastNEpochs(epochs);
+        StakePool pool = poolRepository.findByPoolId(poolId);
+        
+        // Calculate key metrics
+        BigDecimal totalStake = getCurrentPoolStake(poolId);
+        BigDecimal totalRewards = calculateTotalRewards(poolId, recentEpochs);
+        double avgROA = calculateAverageROA(poolId, recentEpochs);
+        int totalBlocks = countBlocksProduced(poolId, recentEpochs);
+        int expectedBlocks = calculateExpectedBlocks(poolId, recentEpochs);
+        double blockPerformance = (double) totalBlocks / expectedBlocks;
+        
+        // Calculate saturation
+        BigDecimal maxStake = getProtocolParameter("maxPoolStake");
+        double saturation = totalStake.divide(maxStake, 4, RoundingMode.HALF_UP).doubleValue();
+        
+        return PoolPerformance.builder()
+            .poolId(poolId)
+            .poolTicker(pool.getTicker())
+            .poolName(pool.getName())
+            .totalStake(totalStake)
+            .totalRewards(totalRewards)
+            .averageROA(avgROA)
+            .blockPerformance(blockPerformance)
+            .blocksProduced(totalBlocks)
+            .blocksExpected(expectedBlocks)
+            .saturation(saturation)
+            .activeStakeEpoch(getCurrentEpoch().getEpochNo())
+            .delegatorCount(getDelegatorCount(poolId))
+            .build();
+    }
+    
+    public List<PoolComparison> comparePoolPerformance(List<String> poolIds, int epochs) {
+        return poolIds.stream()
+            .map(poolId -> {
+                PoolPerformance perf = calculatePoolPerformance(poolId, epochs);
+                return PoolComparison.builder()
+                    .poolId(poolId)
+                    .performance(perf)
+                    .ranking(calculatePoolRanking(perf))
+                    .build();
+            })
+            .sorted((a, b) -> Double.compare(b.getRanking(), a.getRanking()))
+            .collect(Collectors.toList());
+    }
+    
+    private double calculateAverageROA(String poolId, List<Epoch> epochs) {
+        return epochs.stream()
+            .mapToDouble(epoch -> calculateEpochROA(poolId, epoch))
+            .average()
+            .orElse(0.0);
+    }
+    
+    private double calculateEpochROA(String poolId, Epoch epoch) {
+        BigDecimal epochStake = getEpochStake(poolId, epoch.getEpochNo());
+        BigDecimal epochRewards = getEpochRewards(poolId, epoch.getEpochNo());
+        
+        if (epochStake.compareTo(BigDecimal.ZERO) == 0) return 0.0;
+        
+        // Annual ROA calculation (5 days per epoch average)
+        return epochRewards.divide(epochStake, 6, RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(365.0 / 5.0))
+            .doubleValue();
+    }
+}
+```
+
+### 2. Delegator Rewards Service
+
+```java
+@Service
+public class DelegatorRewardsService {
+    
+    public DelegatorRewardsSummary getDelegatorRewards(String stakeAddress, int epochs) {
+        List<StakeReward> rewards = rewardRepository
+            .findByStakeAddressAndLastNEpochs(stakeAddress, epochs);
+        
+        BigDecimal totalRewards = rewards.stream()
+            .map(StakeReward::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Calculate current delegation
+        StakeDelegation currentDelegation = getCurrentDelegation(stakeAddress);
+        String currentPoolId = currentDelegation.getPoolId();
+        
+        // Calculate projected rewards
+        PoolPerformance poolPerf = poolService.calculatePoolPerformance(currentPoolId, 5);
+        BigDecimal currentStake = getCurrentStake(stakeAddress);
+        BigDecimal projectedEpochReward = calculateProjectedReward(currentStake, poolPerf);
+        
+        return DelegatorRewardsSummary.builder()
+            .stakeAddress(stakeAddress)
+            .currentPoolId(currentPoolId)
+            .currentStake(currentStake)
+            .totalRewards(totalRewards)
+            .lastEpochReward(getLastEpochReward(stakeAddress))
+            .projectedEpochReward(projectedEpochReward)
+            .averageEpochReward(calculateAverageEpochReward(rewards))
+            .rewardsHistory(mapRewardsHistory(rewards))
+            .build();
+    }
+    
+    public List<PoolRecommendation> getPoolRecommendations(String stakeAddress) {
+        BigDecimal delegatorStake = getCurrentStake(stakeAddress);
+        List<StakePool> allPools = poolRepository.findActivePools();
+        
+        return allPools.stream()
+            .map(pool -> {
+                PoolPerformance perf = poolService.calculatePoolPerformance(pool.getPoolId(), 10);
+                double score = calculateRecommendationScore(perf, delegatorStake);
+                
+                return PoolRecommendation.builder()
+                    .poolId(pool.getPoolId())
+                    .poolTicker(pool.getTicker())
+                    .poolName(pool.getName())
+                    .performance(perf)
+                    .recommendationScore(score)
+                    .estimatedYearlyReward(calculateEstimatedYearlyReward(delegatorStake, perf))
+                    .reasonCodes(generateRecommendationReasons(perf))
+                    .build();
+            })
+            .sorted((a, b) -> Double.compare(b.getRecommendationScore(), a.getRecommendationScore()))
+            .limit(10)
+            .collect(Collectors.toList());
+    }
+    
+    private double calculateRecommendationScore(PoolPerformance perf, BigDecimal delegatorStake) {
+        double roaWeight = 0.4;
+        double blockPerfWeight = 0.3;
+        double saturationWeight = 0.2;
+        double sizeWeight = 0.1;
+        
+        // Normalize metrics to 0-1 scale
+        double roaScore = Math.min(perf.getAverageROA() / 0.05, 1.0); // 5% max ROA
+        double blockScore = perf.getBlockPerformance();
+        double saturationScore = 1.0 - Math.max(0, perf.getSaturation() - 0.7) / 0.3; // Penalty after 70%
+        double sizeScore = Math.min(perf.getTotalStake().doubleValue() / 50000000.0, 1.0); // 50M ADA optimal
+        
+        return (roaScore * roaWeight) + 
+               (blockScore * blockPerfWeight) + 
+               (saturationScore * saturationWeight) + 
+               (sizeScore * sizeWeight);
+    }
+}
+```
+
+### 3. Pool Monitoring Controller
+
+```java
+@RestController
+@RequestMapping("/api/pool-monitor")
+public class PoolMonitorController {
+    
+    @Autowired
+    private PoolPerformanceService poolService;
+    
+    @Autowired
+    private DelegatorRewardsService rewardsService;
+    
+    @GetMapping("/pools/{poolId}/performance")
+    public ResponseEntity<PoolPerformance> getPoolPerformance(
+            @PathVariable String poolId,
+            @RequestParam(defaultValue = "10") int epochs) {
+        PoolPerformance performance = poolService.calculatePoolPerformance(poolId, epochs);
+        return ResponseEntity.ok(performance);
+    }
+    
+    @GetMapping("/pools/rankings")
+    public ResponseEntity<List<PoolRanking>> getPoolRankings(
+            @RequestParam(defaultValue = "ROA") String sortBy,
+            @RequestParam(defaultValue = "50") int limit) {
+        List<PoolRanking> rankings = poolService.getPoolRankings(sortBy, limit);
+        return ResponseEntity.ok(rankings);
+    }
+    
+    @GetMapping("/delegators/{stakeAddress}/rewards")
+    public ResponseEntity<DelegatorRewardsSummary> getDelegatorRewards(
+            @PathVariable String stakeAddress,
+            @RequestParam(defaultValue = "5") int epochs) {
+        DelegatorRewardsSummary rewards = rewardsService.getDelegatorRewards(stakeAddress, epochs);
+        return ResponseEntity.ok(rewards);
+    }
+    
+    @GetMapping("/delegators/{stakeAddress}/recommendations")
+    public ResponseEntity<List<PoolRecommendation>> getPoolRecommendations(
+            @PathVariable String stakeAddress) {
+        List<PoolRecommendation> recommendations = 
+            rewardsService.getPoolRecommendations(stakeAddress);
+        return ResponseEntity.ok(recommendations);
+    }
+    
+    @GetMapping("/pools/compare")
+    public ResponseEntity<List<PoolComparison>> comparePools(
+            @RequestParam List<String> poolIds,
+            @RequestParam(defaultValue = "10") int epochs) {
+        List<PoolComparison> comparison = 
+            poolService.comparePoolPerformance(poolIds, epochs);
+        return ResponseEntity.ok(comparison);
+    }
+}
+```
+
+---
+
+## 📊 Key Analytics Queries
+
+### 1. Pool Performance Rankings
+
+```sql
+-- Get top performing pools by ROA
+WITH pool_stats AS (
+    SELECT 
+        sp.pool_id,
+        sp.ticker,
+        sp.name,
+        SUM(sr.amount) as total_rewards,
+        AVG(CAST(sp.active_stake AS DECIMAL)) as avg_stake,
+        COUNT(DISTINCT b.epoch_no) as epochs_with_blocks,
+        COUNT(b.hash) as total_blocks
+    FROM stake_pool sp
+    LEFT JOIN stake_reward sr ON sp.pool_id = sr.pool_id
+    LEFT JOIN block b ON sp.pool_id = b.pool_id
+    WHERE sr.epoch_no >= (SELECT MAX(epoch_no) - 10 FROM epoch)
+    GROUP BY sp.pool_id, sp.ticker, sp.name
+)
+SELECT 
+    pool_id,
+    ticker,
+    name,
+    total_rewards / 1000000 as total_rewards_ada,
+    avg_stake / 1000000 as avg_stake_ada,
+    CASE 
+        WHEN avg_stake > 0 THEN (total_rewards / avg_stake) * (365.0 / 5.0) * 100
+        ELSE 0 
+    END as estimated_yearly_roa,
+    total_blocks,
+    epochs_with_blocks
+FROM pool_stats
+WHERE avg_stake > 1000000  -- At least 1 ADA staked
+ORDER BY estimated_yearly_roa DESC
+LIMIT 50;
+```
+
+### 2. Delegator Rewards Analysis
+
+```sql
+-- Calculate delegator rewards history
+SELECT 
+    e.epoch_no,
+    e.start_time,
+    e.end_time,
+    sr.amount / 1000000 as reward_ada,
+    sd.pool_id,
+    sp.ticker as pool_ticker,
+    sa.active_stake / 1000000 as stake_ada,
+    CASE 
+        WHEN sa.active_stake > 0 THEN (sr.amount / sa.active_stake) * 100
+        ELSE 0 
+    END as epoch_roa_percent
+FROM stake_reward sr
+JOIN epoch e ON sr.epoch_no = e.epoch_no
+JOIN stake_address sa ON sr.addr_id = sa.id
+JOIN stake_delegation sd ON sa.stake_address = sd.address
+JOIN stake_pool sp ON sd.pool_id = sp.pool_id
+WHERE sa.stake_address = :stakeAddress
+    AND sr.epoch_no >= (SELECT MAX(epoch_no) - 20 FROM epoch)
+ORDER BY e.epoch_no DESC;
+```
+
+### 3. Pool Saturation Monitoring
+
+```sql
+-- Monitor pool saturation levels
+SELECT 
+    sp.pool_id,
+    sp.ticker,
+    sp.name,
+    sp.active_stake / 1000000 as current_stake_ada,
+    ep.optimal_pool_count,
+    (SELECT SUM(active_stake) FROM stake_pool WHERE active_stake > 0) / ep.optimal_pool_count as optimal_stake,
+    (sp.active_stake / ((SELECT SUM(active_stake) FROM stake_pool WHERE active_stake > 0) / ep.optimal_pool_count)) * 100 as saturation_percent,
+    CASE 
+        WHEN (sp.active_stake / ((SELECT SUM(active_stake) FROM stake_pool WHERE active_stake > 0) / ep.optimal_pool_count)) > 1.0 
+        THEN 'Over-saturated'
+        WHEN (sp.active_stake / ((SELECT SUM(active_stake) FROM stake_pool WHERE active_stake > 0) / ep.optimal_pool_count)) > 0.8 
+        THEN 'Highly saturated'
+        ELSE 'Normal'
+    END as saturation_status
+FROM stake_pool sp
+CROSS JOIN epoch_param ep
+WHERE sp.active_stake > 0
+    AND ep.epoch_no = (SELECT MAX(epoch_no) FROM epoch_param)
+ORDER BY saturation_percent DESC;
+```
+
+---
+
+## 🔔 Alert System
+
+### 1. Performance Alerts
+
+```java
+@Component
+public class PoolAlertService {
+    
+    @Scheduled(cron = "0 0 6 * * *") // Daily at 6 AM
+    public void checkPoolPerformance() {
+        List<String> trackedPools = getTrackedPools();
+        
+        trackedPools.forEach(poolId -> {
+            PoolPerformance perf = poolService.calculatePoolPerformance(poolId, 5);
+            
+            // Check for performance issues
+            if (perf.getBlockPerformance() < 0.85) {
+                sendAlert(AlertType.LOW_BLOCK_PERFORMANCE, poolId, perf);
+            }
+            
+            if (perf.getSaturation() > 0.95) {
+                sendAlert(AlertType.HIGH_SATURATION, poolId, perf);
+            }
+            
+            if (perf.getAverageROA() < 0.03) { // Below 3% ROA
+                sendAlert(AlertType.LOW_REWARDS, poolId, perf);
+            }
+        });
+    }
+    
+    @EventListener
+    public void handleMissedBlock(BlockMissedEvent event) {
+        String poolId = event.getPoolId();
+        int missedBlocksThisEpoch = countMissedBlocksInCurrentEpoch(poolId);
+        
+        if (missedBlocksThisEpoch >= 2) {
+            sendImmediateAlert(AlertType.MULTIPLE_MISSED_BLOCKS, poolId, event);
+        }
+    }
+    
+    private void sendAlert(AlertType type, String poolId, Object data) {
+        Alert alert = Alert.builder()
+            .type(type)
+            .poolId(poolId)
+            .timestamp(LocalDateTime.now())
+            .data(data)
+            .build();
+            
+        // Send to configured notification channels
+        notificationChannels.forEach(channel -> channel.send(alert));
+    }
+}
+```
+
+### 2. Delegation Change Alerts
+
+```java
+@Service
+public class DelegationAlertService {
+    
+    @EventListener
+    public void handleDelegationChange(DelegationChangeEvent event) {
+        String stakeAddress = event.getStakeAddress();
+        String newPoolId = event.getNewPoolId();
+        String oldPoolId = event.getOldPoolId();
+        
+        // Analyze if this is a good delegation choice
+        PoolPerformance newPoolPerf = poolService.calculatePoolPerformance(newPoolId, 10);
+        PoolPerformance oldPoolPerf = poolService.calculatePoolPerformance(oldPoolId, 10);
+        
+        DelegationAnalysis analysis = DelegationAnalysis.builder()
+            .stakeAddress(stakeAddress)
+            .oldPoolPerformance(oldPoolPerf)
+            .newPoolPerformance(newPoolPerf)
+            .expectedROAChange(newPoolPerf.getAverageROA() - oldPoolPerf.getAverageROA())
+            .recommendation(generateDelegationRecommendation(newPoolPerf, oldPoolPerf))
+            .build();
+            
+        // Store for user dashboard
+        delegationAnalysisRepository.save(analysis);
+    }
+}
+```
+
+---
+
+## 📈 Dashboard Features
+
+### Pool Operator Dashboard
+- **Real-time Performance Metrics**: Block production, rewards, saturation
+- **Delegator Analytics**: New delegations, churn rate, loyalty metrics
+- **Performance Trends**: Historical charts showing pool evolution
+- **Competitive Analysis**: Compare against similar-sized pools
+
+### Delegator Dashboard  
+- **Rewards Tracking**: Historical and projected earnings
+- **Pool Comparison**: Side-by-side performance comparison
+- **Delegation Recommendations**: AI-powered pool suggestions
+- **Performance Alerts**: Notifications for pool changes
+
+### Network Analytics
+- **Network Health**: Overall staking participation and distribution
+- **Pool Diversity**: Geographic and size distribution analysis
+- **Rewards Distribution**: Network-wide rewards analysis
+- **Epoch Summaries**: Complete epoch performance reports
+
+---
+
+## 🎯 Expected Outcomes
+
+### For Pool Operators
+- **Performance optimization insights** to improve block production
+- **Delegator retention analytics** to understand churn patterns
+- **Competitive benchmarking** against top-performing pools
+- **Early warning system** for performance issues
+
+### For Delegators
+- **Data-driven delegation decisions** based on comprehensive metrics
+- **Rewards optimization** through intelligent pool recommendations
+- **Performance tracking** with detailed historical analysis
+- **Risk assessment** for delegation choices
+
+### For the Ecosystem
+- **Network health monitoring** tracking overall staking participation
+- **Pool diversity analysis** promoting decentralization
+- **Performance transparency** improving delegator confidence
+- **Research insights** for protocol improvements
+
+This use case demonstrates how Yaci Store v0.1.x can power comprehensive stake pool monitoring, providing essential tools for both pool operators and delegators to optimize their staking strategies.

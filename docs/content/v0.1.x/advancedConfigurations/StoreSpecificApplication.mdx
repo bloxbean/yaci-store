@@ -1,0 +1,18 @@
+&nbsp;
+
+## 🧩 Store-Specific Application
+
+Yaci Store bundles **all stores by default**, but you can **selectively enable or disable** them using store-specific flags in the `application.properties` file.
+
+This allows you to run **multiple Yaci Store instances** with different store modules enabled. By default, each instance writes to its own **separate database**.
+
+---
+
+### 🗂️ Shared Database with Multiple Instances
+
+If you want **multiple store-specific Yaci Store applications** to write to the **same database**, each must maintain its own cursor in the `cursor_` table.
+
+To do this, assign a **unique event publisher ID** to each instance by setting:
+
+```properties
+store.event-publisher-id=1000  // some unique ID

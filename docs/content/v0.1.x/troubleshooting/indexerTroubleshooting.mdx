@@ -1,0 +1,91 @@
+&nbsp;
+
+# 🛠️ Chain Indexer Troubleshooting
+
+This guide covers common issues when running Yaci Store v1.0 as a standalone chain indexer (Spring Boot application) and their solutions.
+
+## 🔗 Yaci Store as a Chain Indexer (Spring Boot App)
+
+### 1. 🔄 Sync Not Starting Automatically
+
+**Symptoms**: The application starts, but block syncing doesn't begin.
+
+**Solutions**:
+- Ensure this configuration is enabled:
+
+<pre><code class="language-properties">
+store.sync-auto-start=true
+</code></pre>
+
+- Check connectivity to the node:
+  - Is `ogmios.url` or `n2c.socket-path` correctly configured?
+  - Is the node fully synced and accepting connections?
+
+---
+
+### 2. 💾 High Disk Usage
+
+**Symptoms**: PostgreSQL database consumes excessive disk space.
+
+**Solutions**:
+- Enable pruning in `application.properties`:
+
+<pre><code class="language-properties">
+store.utxo.pruning-enabled=true
+store.transaction.pruning-enabled=true
+store.utxo.pruning.interval=600
+</code></pre>
+
+- Adjust pruning intervals as necessary.
+- Note: Pruning is currently supported for UTXO and transaction stores only.
+
+---
+
+### 3. 🧩 Only Some Stores Are Working
+
+**Symptoms**: You expected governance or rewards data, but only block and transaction data appear.
+
+**Solutions**:
+- Make sure all necessary stores are enabled:
+
+<pre><code class="language-properties">
+store.reward.enabled=true
+store.governance.enabled=true
+</code></pre>
+
+- Check logs for initialization errors or misconfigurations.
+
+---
+
+### 4. 🧠 Ledger State Mismatches
+
+**Symptoms**: Rewards, DRep, or governance data differs from DB-Sync.
+
+**Solutions**:
+- Refer to the [Ledger State Mismatch Report](#📋-ledger-state-mismatch-summary) if available.
+- Report discrepancies via GitHub Issues with clear details (epoch, address, tx hash, etc.).
+- Ensure you're running the latest Yaci Store version with all patches applied.
+
+---
+
+### 5. 🐘 PostgreSQL Performance Issues
+
+**Symptoms**: Queries are slow or time out.
+
+**Solutions**:
+- For containerized deployments:
+  - Use `shm_size=2g` for PostgreSQL in Docker Compose.
+- For native installations:
+  - Tune `postgresql.conf` parameters for production workloads:
+    - `shared_buffers`
+    - `work_mem`
+    - `max_connections`
+- Ensure indexes exist on frequently queried fields (e.g. block number, tx hash, address).
+
+---
+> 💬 **Still stuck?**
+>
+> - Ask questions on [Bloxbean Developers Discord](https://discord.gg/6AnKrFx4ne)& [GitHub Discussions](https://github.com/bloxbean/yaci-store/discussions) 
+> - Report bugs via the [Issue Tracker](https://github.com/bloxbean/yaci-store/issues)  
+
+

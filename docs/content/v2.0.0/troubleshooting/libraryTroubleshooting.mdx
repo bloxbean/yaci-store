@@ -1,0 +1,455 @@
+&nbsp;
+
+# 📦 Library Integration Troubleshooting
+
+This guide helps resolve common issues when integrating Yaci Store as a library in your Java application.
+
+## 📦 Yaci Store as a Library
+
+### 1. ❌ Missing Events or Data
+
+**Symptoms**:
+- Event listeners not receiving expected events
+- Partial data in custom processors
+- Events firing but handlers not executing
+- Missing transaction or block data in custom stores
+
+**Root Causes**:
+- Incorrect event subscription configuration
+- Event bus initialization issues
+- Missing @EventListener annotations
+- Wrong event type or filter configuration
+
+**Solutions**:
+
+1. **Verify Event Subscription**:
+   ```java
+   @Component
+   public class CustomEventListener {
+       
+       @EventListener
+       public void handleBlockEvent(BlockEvent blockEvent) {
+           // Process block events
+           log.info("Processing block: {}", blockEvent.getBlockNumber());
+       }
+       
+       @EventListener
+       public void handleTransactionEvent(TransactionEvent txEvent) {
+           // Process transaction events
+           log.info("Processing tx: {}", txEvent.getTxHash());
+       }
+   }
+   ```
+
+2. **Enable Event Publishing**:
+   ```properties
+   # Enable event publishing
+   store.events.enabled=true
+   store.events.publish-mode=async
+   
+   # Configure event filters if needed
+   store.events.block-events=true
+   store.events.transaction-events=true
+   store.events.utxo-events=true
+   ```
+
+3. **Check Component Scanning**:
+   ```java
+   @SpringBootApplication
+   @ComponentScan(basePackages = {
+       "com.bloxbean.cardano.yaci.store",
+       "your.custom.package"  // Include your event listeners
+   })
+   public class YourApplication {
+       // Main application class
+   }
+   ```
+
+4. **Verify Event Bus Configuration**:
+   ```java
+   @Configuration
+   public class EventBusConfig {
+       
+       @Bean
+       @ConditionalOnMissingBean
+       public ApplicationEventPublisher applicationEventPublisher() {
+           return new SimpleApplicationEventPublisher();
+       }
+   }
+   ```
+
+**Debugging**:
+```java
+@EventListener
+public void handleAllEvents(Object event) {
+    log.debug("Received event: {} - {}", event.getClass().getSimpleName(), event);
+}
+```
+
+---
+
+### 2. 💤 No Chain Sync Happening
+
+**Symptoms**:
+- Application starts but no blocks are processed
+- Sync service shows "stopped" status
+- Database remains empty after startup
+- No connection to Cardano node
+
+**Root Causes**:
+- Auto-sync disabled in embedded mode
+- Node connection configuration issues
+- Missing sync service initialization
+- Network configuration problems
+
+**Solutions**:
+
+1. **Enable Auto-Sync**:
+   ```properties
+   # Enable automatic sync on startup
+   store.sync-auto-start=true
+   
+   # Configure network
+   store.cardano.network=mainnet
+   
+   # Node connection (choose one)
+   # Option 1: Ogmios
+   ogmios.url=ws://localhost:1337
+   
+   # Option 2: Node-to-Client
+   n2c.host=localhost
+   n2c.port=3001
+   n2c.socket-path=/opt/cardano/cnode/sockets/node0.socket
+   ```
+
+2. **Manual Sync Control**:
+   ```java
+   @Autowired
+   private SyncService syncService;
+   
+   @PostConstruct
+   public void startSync() {
+       try {
+           // Start from latest point
+           syncService.startSync();
+           
+           // Or start from specific slot
+           syncService.startSync(Point.at(108000000));
+           
+       } catch (Exception e) {
+           log.error("Failed to start sync", e);
+       }
+   }
+   ```
+
+3. **Connection Testing**:
+   ```java
+   @Component
+   public class ConnectionTest {
+       
+       @Autowired
+       private NodeConnector nodeConnector;
+       
+       @PostConstruct
+       public void testConnection() {
+           try {
+               boolean connected = nodeConnector.testConnection();
+               log.info("Node connection test: {}", connected ? "SUCCESS" : "FAILED");
+           } catch (Exception e) {
+               log.error("Connection test failed", e);
+           }
+       }
+   }
+   ```
+
+4. **Custom Sync Configuration**:
+   ```java
+   @Configuration
+   public class SyncConfig {
+       
+       @Bean
+       public SyncConfiguration syncConfiguration() {
+           return SyncConfiguration.builder()
+               .network(Networks.mainnet())
+               .autoStart(true)
+               .startPoint(Point.ORIGIN)  // Start from genesis
+               .build();
+       }
+   }
+   ```
+
+---
+
+### 3. 🗃️ Custom Store Not Writing to DB
+
+**Symptoms**:
+- Custom store processes events but no database changes
+- Repository save operations fail silently
+- Transactions not committing properly
+- Data appears in logs but not in database
+
+**Root Causes**:
+- Missing @Transactional annotations
+- Incorrect database configuration
+- Repository/entity mapping issues
+- Database connection problems
+
+**Solutions**:
+
+1. **Proper Store Implementation**:
+   ```java
+   @Component
+   @EnableJpaRepositories
+   public class CustomAddressStore {
+       
+       @Autowired
+       private CustomAddressRepository repository;
+       
+       @EventListener
+       @Transactional
+       public void handleTransactionEvent(TransactionEvent event) {
+           try {
+               // Process and save data
+               CustomAddress address = processTransaction(event);
+               repository.save(address);
+               
+               log.debug("Saved custom address: {}", address.getAddress());
+           } catch (Exception e) {
+               log.error("Failed to save custom address", e);
+               throw e;  // Rollback transaction
+           }
+       }
+   }
+   ```
+
+2. **Entity and Repository Setup**:
+   ```java
+   @Entity
+   @Table(name = "custom_address")
+   public class CustomAddress {
+       
+       @Id
+       @GeneratedValue(strategy = GenerationType.IDENTITY)
+       private Long id;
+       
+       @Column(nullable = false)
+       private String address;
+       
+       @Column(name = "balance")
+       private BigInteger balance;
+       
+       // Constructors, getters, setters
+   }
+   
+   @Repository
+   public interface CustomAddressRepository extends JpaRepository<CustomAddress, Long> {
+       Optional<CustomAddress> findByAddress(String address);
+   }
+   ```
+
+3. **Database Configuration**:
+   ```properties
+   # Database connection
+   spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_store
+   spring.datasource.username=postgres
+   spring.datasource.password=password
+   spring.datasource.driver-class-name=org.postgresql.Driver
+   
+   # JPA configuration
+   spring.jpa.hibernate.ddl-auto=update
+   spring.jpa.show-sql=false
+   spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+   
+   # Transaction management
+   spring.transaction.default-timeout=30
+   ```
+
+4. **Transaction Management Configuration**:
+   ```java
+   @Configuration
+   @EnableTransactionManagement
+   public class TransactionConfig {
+       
+       @Bean
+       public PlatformTransactionManager transactionManager(EntityManagerFactory emf) {
+           return new JpaTransactionManager(emf);
+       }
+   }
+   ```
+
+---
+
+### 4. 🔌 Dependency and Classpath Issues
+
+**Symptoms**:
+- NoClassDefFoundError or ClassNotFoundException
+- Version conflicts between dependencies
+- Auto-configuration failures
+- Bean creation exceptions
+
+**Solutions**:
+
+1. **Maven Dependency Management**:
+   ```xml
+   <dependencyManagement>
+       <dependencies>
+           <dependency>
+               <groupId>com.bloxbean.cardano</groupId>
+               <artifactId>yaci-store-bom</artifactId>
+               <version>2.0.0</version>
+               <type>pom</type>
+               <scope>import</scope>
+           </dependency>
+       </dependencies>
+   </dependencyManagement>
+   
+   <dependencies>
+       <dependency>
+           <groupId>com.bloxbean.cardano</groupId>
+           <artifactId>yaci-store-spring-boot-starter</artifactId>
+       </dependency>
+   </dependencies>
+   ```
+
+2. **Exclude Conflicting Dependencies**:
+   ```xml
+   <dependency>
+       <groupId>com.bloxbean.cardano</groupId>
+       <artifactId>yaci-store-core</artifactId>
+       <exclusions>
+           <exclusion>
+               <groupId>org.springframework.boot</groupId>
+               <artifactId>spring-boot-starter-logging</artifactId>
+           </exclusion>
+       </exclusions>
+   </dependency>
+   ```
+
+---
+
+### 5. 🌐 Configuration and Environment Issues
+
+**Symptoms**:
+- Properties not loading correctly
+- Environment-specific configuration problems
+- Profile-based configuration not working
+
+**Solutions**:
+
+1. **Profile Configuration**:
+   ```properties
+   # application.properties (default)
+   store.sync-auto-start=false
+   
+   # application-dev.properties
+   store.sync-auto-start=true
+   store.cardano.network=preprod
+   ogmios.url=ws://localhost:1337
+   
+   # application-prod.properties
+   store.sync-auto-start=true
+   store.cardano.network=mainnet
+   ogmios.url=ws://prod-node:1337
+   ```
+
+2. **Configuration Class**:
+   ```java
+   @ConfigurationProperties(prefix = "custom.store")
+   @Component
+   public class CustomStoreConfig {
+       private boolean enabled = true;
+       private String dataPath;
+       private int batchSize = 100;
+       
+       // Getters and setters
+   }
+   ```
+
+---
+
+### 6. 🌐 Performance and Memory Optimization
+
+**Symptoms**:
+- High memory usage in library mode
+- Slow event processing
+- Application becomes unresponsive
+
+**Solutions**:
+
+1. **Event Processing Optimization**:
+   ```properties
+   # Async event processing
+   store.events.publish-mode=async
+   store.events.thread-pool-size=4
+   
+   # Batch processing
+   store.events.batch-size=50
+   store.events.batch-timeout=1000
+   ```
+
+2. **Selective Store Loading**:
+   ```java
+   @Configuration
+   public class StoreConfig {
+       
+       @Bean
+       @ConditionalOnProperty(name = "custom.store.blocks.enabled", havingValue = "true")
+       public BlockStore blockStore() {
+           return new BlockStore();
+       }
+       
+       // Only load stores you actually need
+   }
+   ```
+
+---
+
+### 7. 🔍 Testing and Development
+
+**Symptoms**:
+- Difficulty testing custom stores
+- Integration test failures
+- Mock data setup problems
+
+**Solutions**:
+
+1. **Test Configuration**:
+   ```java
+   @TestConfiguration
+   public class TestStoreConfig {
+       
+       @Bean
+       @Primary
+       public SyncService mockSyncService() {
+           return Mockito.mock(SyncService.class);
+       }
+   }
+   ```
+
+2. **Integration Test Setup**:
+   ```java
+   @SpringBootTest
+   @TestPropertySource(properties = {
+       "store.sync-auto-start=false",
+       "spring.datasource.url=jdbc:h2:mem:testdb"
+   })
+   class CustomStoreIntegrationTest {
+       
+       @Autowired
+       private CustomAddressStore customStore;
+       
+       @Test
+       void testEventProcessing() {
+           // Test event processing logic
+       }
+   }
+   ```
+
+---
+
+> 💬 **Still stuck?**
+>
+> - Ask questions on [Bloxbean Developers Discord](https://discord.gg/6AnKrFx4ne) & [GitHub Discussions](https://github.com/bloxbean/yaci-store/discussions) 
+> - Report bugs via the [Issue Tracker](https://github.com/bloxbean/yaci-store/issues)
+> - Check the [API Documentation](https://store.yaci.xyz/api-docs) for integration examples
+> - Review [Sample Applications](https://github.com/bloxbean/yaci-store/tree/main/samples) for reference implementations  
