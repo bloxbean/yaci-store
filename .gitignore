@@ -40,3 +40,15 @@ out/
 
 logs
 _rocksdb
+
+# macOS system files
+.DS_Store
+
+# Pagefind index and fragment files
+docs/public/_pagefind/
+
+# Node modules
+docs/node_modules/
+
+# Next.js build output
+docs/.next/
