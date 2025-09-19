@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/content/v2.0.0/plugin-framework/_meta.ts"],"sourcesContent":["const meta = {\n  \"getting-started\": \"Getting Started\",\n  \"plugin-api-guide\": \"Plugin API Guide\", \n  \"context-variables\": \"Context Variables\",\n  \"plugin-configuration\": \"Plugin Configuration\",\n};\n\nexport default meta;"],"names":[],"mappings":";;;AAAA,MAAM,OAAO;IACX,mBAAmB;IACnB,oBAAoB;IACpB,qBAAqB;IACrB,wBAAwB;AAC1B;uCAEe","debugId":null}}]
-}

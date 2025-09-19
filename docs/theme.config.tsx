@@ -1,11 +1,11 @@
 const config = {
-  logo: <span>Yaci Store Documentation</span>,
+  logo: <span>Yaci Store</span>,
   project: {
     link: 'https://github.com/bloxbean/yaci-store',
   },
   docsRepositoryBase: 'https://github.com/bloxbean/yaci-store/tree/main/docs',
   footer: {
-    text: 'Yaci Store Documentation',
+    text: '© 2025 BloxBean project',
   },
   useNextSeoProps() {
     return {

@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/darlisaconsoni/Desktop/yaci-store/docs/app/layout.jsx"],"sourcesContent":["import { Head } from \"nextra/components\";\nimport \"nextra-theme-docs/style.css\";\nimport \"../styles/main.css\";\n\nexport const metadata = {\n  title: \"Yaci Store - Cardano Blockchain Data Indexing\",\n  description: \"A powerful blockchain data indexing and storage solution for Cardano\",\n  openGraph: {\n    images: \"/opengraph-image.jpg\",\n  },\n  twitter: {\n    images: \"/opengraph-image.jpg\",\n  },\n};\n\nexport default function RootLayout({ children }) {\n  return (\n    <html lang=\"en\" dir=\"ltr\" suppressHydrationWarning>\n      <Head>\n        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n      </Head>\n      <body>{children}</body>\n    </html>\n  );\n}\n"],"names":[],"mappings":";;;;;AAAA;;;;;AAIO,MAAM,WAAW;IACtB,OAAO;IACP,aAAa;IACb,WAAW;QACT,QAAQ;IACV;IACA,SAAS;QACP,QAAQ;IACV;AACF;AAEe,SAAS,WAAW,EAAE,QAAQ,EAAE;IAC7C,qBACE,8OAAC;QAAK,MAAK;QAAK,KAAI;QAAM,wBAAwB;;0BAChD,8OAAC,8JAAA,CAAA,OAAI;0BACH,cAAA,8OAAC;oBAAK,MAAK;oBAAW,SAAQ;;;;;;;;;;;0BAEhC,8OAAC;0BAAM;;;;;;;;;;;;AAGb","debugId":null}}]
-}
