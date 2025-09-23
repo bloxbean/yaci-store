@@ -53,26 +53,45 @@ public class VotingDataCollector {
         List<String> hotKeys = membersCanVote.stream().map(CommitteeMemberDetails::getHotKey).distinct().toList();
         var committeeVotes = votingAggrService.getVotesByCommittee(epoch, govActionIds, hotKeys);
         
+        var dRepVotesByProposal = isInConwayBootstrapPhase
+            ? Collections.<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>>emptyMap()
+            : groupVotesByGovAction(dRepVotes);
+        var spoVotesByProposal = groupVotesByGovAction(spoVotes);
+        var committeeVotesByProposal = groupVotesByGovAction(committeeVotes);
+
+        var dRepEpochAggregates = isInConwayBootstrapPhase ? null : buildDRepEpochAggregates(epoch + 1);
+        var spoEpochAggregates = spoVotingDataCollector.buildEpochAggregates(spoVotes, epoch);
+
         return proposals.stream()
             .collect(Collectors.toMap(
-                p -> GovActionId.builder()
-                    .transactionId(p.getTxHash())
-                    .gov_action_index(p.getIndex())
-                    .build(),
-                p -> createVotingData(p, dRepVotes, spoVotes, committeeVotes, isInConwayBootstrapPhase, epoch)
+                this::toGovActionId,
+                proposal -> createVotingData(
+                    proposal,
+                    dRepVotesByProposal,
+                    spoVotesByProposal,
+                    committeeVotesByProposal,
+                    isInConwayBootstrapPhase,
+                    dRepEpochAggregates,
+                    spoEpochAggregates)
             ));
     }
-    
+
     private AggregatedVotingData createVotingData(GovActionProposal proposal,
-                                        List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> drepVotes,
-                                        List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> spoVotes,
-                                        List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> committeeVotes,
+                                        Map<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>> dRepVotesByProposal,
+                                        Map<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>> spoVotesByProposal,
+                                        Map<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>> committeeVotesByProposal,
                                         boolean isInConwayBootstrapPhase,
-                                        int epoch) {
+                                        DRepEpochAggregates dRepEpochAggregates,
+                                        SPOVotingDataCollector.SPOEpochAggregates spoEpochAggregates) {
+        var govActionId = toGovActionId(proposal);
+        var dRepVotesForProposal = dRepVotesByProposal.getOrDefault(govActionId, Collections.emptyList());
+        var spoVotesForProposal = spoVotesByProposal.getOrDefault(govActionId, Collections.emptyList());
+        var committeeVotesForProposal = committeeVotesByProposal.getOrDefault(govActionId, Collections.emptyList());
+
         return AggregatedVotingData.builder()
-            .drepVotes(isInConwayBootstrapPhase ? createEmptyDRepVotes() : collectDRepVotes(proposal, drepVotes, epoch + 1))
-            .spoVotes(spoVotingDataCollector.collectSPOVotes(proposal, filterVotesForProposal(spoVotes, proposal), isInConwayBootstrapPhase, epoch))
-            .committeeVotes(collectCommitteeVotes(proposal, committeeVotes))
+            .drepVotes(isInConwayBootstrapPhase ? createEmptyDRepVotes() : collectDRepVotes(dRepVotesForProposal, dRepEpochAggregates))
+            .spoVotes(spoVotingDataCollector.collectSPOVotes(spoVotesForProposal, spoEpochAggregates))
+            .committeeVotes(collectCommitteeVotes(committeeVotesForProposal))
             .build();
     }
     
@@ -85,18 +104,19 @@ public class VotingDataCollector {
             .build();
     }
 
-    private AggregatedVotingData.DRepVotes collectDRepVotes(GovActionProposal proposal,
-                                                  List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> dRepVotes,
-                                                  int epoch) {
-        var proposalDRepVotes = filterVotesForProposal(dRepVotes, proposal);
-        var noConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, epoch).orElse(BigInteger.ZERO);
-        var yesVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.YES, epoch);
-        var noVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.NO, epoch);
-        var abstainVoteStake = calculateDRepStakeByVote(proposalDRepVotes, Vote.ABSTAIN, epoch);
-        var totalDRepStake = dRepDistStorage.getTotalStakeExcludeInactiveDRepForEpoch(epoch)
-                .orElse(BigInteger.ZERO);
-        var autoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, epoch).orElse(BigInteger.ZERO);
-        var doNotVoteStake = totalDRepStake.subtract(totalDRepStake).subtract(autoAbstainStake)
+    private AggregatedVotingData.DRepVotes collectDRepVotes(List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> dRepVotes,
+                                                  DRepEpochAggregates context) {
+        var noConfidenceStake = context.noConfidenceStake();
+        var yesVoteStake = calculateDRepStakeByVote(dRepVotes, Vote.YES, context.epoch());
+        var noVoteStake = calculateDRepStakeByVote(dRepVotes, Vote.NO, context.epoch());
+        var abstainVoteStake = calculateDRepStakeByVote(dRepVotes, Vote.ABSTAIN, context.epoch());
+        var totalDRepStake = context.totalStake();
+        var autoAbstainStake = context.autoAbstainStake();
+        var doNotVoteStake = totalDRepStake
+                .subtract(yesVoteStake)
+                .subtract(noVoteStake)
+                .subtract(abstainVoteStake)
+                .subtract(autoAbstainStake)
                 .subtract(noConfidenceStake);
 
         return AggregatedVotingData.DRepVotes.builder()
@@ -109,9 +129,15 @@ public class VotingDataCollector {
                 .build();
     }
 
-    private AggregatedVotingData.CommitteeVotes collectCommitteeVotes(GovActionProposal proposal,
-                                                            List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> committeeVotes) {
-        Map<String, Vote> votes = filterVotesForProposal(committeeVotes, proposal).stream()
+    private AggregatedVotingData.CommitteeVotes collectCommitteeVotes(
+            List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> committeeVotes) {
+        if (committeeVotes.isEmpty()) {
+            return AggregatedVotingData.CommitteeVotes.builder()
+                    .votes(Collections.emptyMap())
+                    .build();
+        }
+
+        Map<String, Vote> votes = committeeVotes.stream()
             .collect(Collectors.toMap(
                     VotingProcedure::getVoterHash,
                     VotingProcedure::getVote,
@@ -121,15 +147,6 @@ public class VotingDataCollector {
         return AggregatedVotingData.CommitteeVotes.builder()
             .votes(votes)
             .build();
-    }
-    
-    private List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> filterVotesForProposal(
-            List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> votes, 
-            GovActionProposal proposal) {
-        return votes.stream()
-            .filter(v -> v.getGovActionTxHash().equals(proposal.getTxHash()) && 
-                        v.getGovActionIndex() == proposal.getIndex())
-            .toList();
     }
     
     private BigInteger calculateDRepStakeByVote(List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> votes, 
@@ -149,4 +166,48 @@ public class VotingDataCollector {
             .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
+    private Map<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>> groupVotesByGovAction(
+            List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> votes) {
+        if (votes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<GovActionId, List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure>> groupedVotes = votes.stream()
+                .collect(Collectors.groupingBy(
+                        this::toGovActionId,
+                        Collectors.collectingAndThen(Collectors.toList(), List::copyOf)));
+
+        return Map.copyOf(groupedVotes);
+    }
+
+    private GovActionId toGovActionId(GovActionProposal proposal) {
+        return GovActionId.builder()
+                .transactionId(proposal.getTxHash())
+                .gov_action_index(proposal.getIndex())
+                .build();
+    }
+
+    private GovActionId toGovActionId(com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure vote) {
+        return GovActionId.builder()
+                .transactionId(vote.getGovActionTxHash())
+                .gov_action_index(vote.getGovActionIndex())
+                .build();
+    }
+
+    private DRepEpochAggregates buildDRepEpochAggregates(int epoch) {
+        var totalStake = dRepDistStorage.getTotalStakeExcludeInactiveDRepForEpoch(epoch)
+                .orElse(BigInteger.ZERO);
+        var autoAbstainStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.ABSTAIN, epoch)
+                .orElse(BigInteger.ZERO);
+        var noConfidenceStake = dRepDistStorage.getStakeByDRepTypeAndEpoch(DrepType.NO_CONFIDENCE, epoch)
+                .orElse(BigInteger.ZERO);
+
+        return new DRepEpochAggregates(epoch, totalStake, autoAbstainStake, noConfidenceStake);
+    }
+
+    private record DRepEpochAggregates(int epoch,
+                                       BigInteger totalStake,
+                                       BigInteger autoAbstainStake,
+                                       BigInteger noConfidenceStake) {
+    }
 }

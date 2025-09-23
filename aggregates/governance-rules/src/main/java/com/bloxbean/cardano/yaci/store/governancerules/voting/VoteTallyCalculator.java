@@ -101,17 +101,20 @@ public final class VoteTallyCalculator {
                         CommitteeMember::getHotKey,
                         Collectors.mapping(CommitteeMember::getColdKey, Collectors.toList())
                 ));
-        yes = (int) votesByHotKey.entrySet().stream()
+        yes = votesByHotKey.entrySet().stream()
                 .filter(e -> e.getValue() == Vote.YES && hotKeyColdKeysMap.containsKey(e.getKey()))
-                .count();
+                .mapToInt(e -> hotKeyColdKeysMap.get(e.getKey()).size())
+                .sum();
 
-        no = (int) votesByHotKey.entrySet().stream()
+        no = votesByHotKey.entrySet().stream()
                 .filter(e -> e.getValue() == Vote.NO && hotKeyColdKeysMap.containsKey(e.getKey()))
-                .count();
+                .mapToInt(e -> hotKeyColdKeysMap.get(e.getKey()).size())
+                .sum();
 
-        abstain = (int) votesByHotKey.entrySet().stream()
-                .filter(e -> e.getValue() == Vote.NO && hotKeyColdKeysMap.containsKey(e.getKey()))
-                .count();
+        abstain = votesByHotKey.entrySet().stream()
+                .filter(e -> e.getValue() == Vote.ABSTAIN && hotKeyColdKeysMap.containsKey(e.getKey()))
+                .mapToInt(e -> hotKeyColdKeysMap.get(e.getKey()).size())
+                .sum();
 
         Map<String, String> coldKeyHotKeyMap = members.stream()
                 .collect(Collectors.toMap(

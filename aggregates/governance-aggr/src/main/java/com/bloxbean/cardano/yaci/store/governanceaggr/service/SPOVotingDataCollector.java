@@ -1,11 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
-import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
@@ -20,86 +18,95 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class SPOVotingDataCollector {
-    
+    private static final int QUERY_BATCH_SIZE = 500;
+
     private final EpochStakeStorageReader epochStakeStorage;
     private final PoolStorage poolStorage;
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
 
-    public AggregatedVotingData.SPOVotes collectSPOVotes(GovActionProposal proposal,
-                                                List<VotingProcedure> spoVotes,
-                                                boolean isInConwayBootstrapPhase,
-                                                int epoch) {
-        var yesVoteStake = calculateSPOStakeByVote(spoVotes, Vote.YES, epoch);
-        var abstainVoteStake = calculateSPOStakeByVote(spoVotes, Vote.ABSTAIN, epoch);
-        var noVoteStake = calculateSPOStakeByVote(spoVotes, Vote.NO, epoch);
-        var totalStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2).orElse(BigInteger.ZERO);
+    public SPOEpochAggregates buildEpochAggregates(List<VotingProcedure> spoVotes, int epoch) {
+        BigInteger totalActiveStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
+                .orElse(BigInteger.ZERO);
 
         List<String> activePools = poolStorage.findActivePools(epoch).stream()
                 .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
                 .toList();
 
-        // map (reward account, List of pools)
-        int QUERY_BATCH_SIZE = 500;
-        var activePoolsBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
-        Map<String, List<String>> rewardAccountPoolMap = activePoolsBatches.parallelStream()
+        Set<String> poolsThatVoted = spoVotes.stream()
+                .map(VotingProcedure::getVoterHash)
+                .collect(Collectors.toSet());
+
+        List<String> poolsWithNonVotingSPOs = activePools.stream()
+                .filter(poolId -> !poolsThatVoted.contains(poolId))
+                .toList();
+
+        var nonVotingSPOPoolBatches = ListUtil.partition(poolsWithNonVotingSPOs, QUERY_BATCH_SIZE);
+
+        Map<String, List<String>> rewardAccountToNonVotingPoolsMap = nonVotingSPOPoolBatches.parallelStream()
                 .flatMap(batch -> poolStorageReader.getPoolDetails(batch, epoch).stream())
-                .collect(Collectors.groupingBy(PoolDetails::getRewardAccount, Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
-        var poolBatches = ListUtil.partition(new ArrayList<>(rewardAccountPoolMap.values()), QUERY_BATCH_SIZE);
+                .collect(Collectors.groupingBy(
+                        PoolDetails::getRewardAccount,
+                        Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
 
-        // Calculate the total stake of SPOs that delegated to AlwaysAbstain DRep
-        List<String> poolsDelegatedToAlwaysAbstainDRep = new ArrayList<>();
-        poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.ABSTAIN, epoch)
-                .parallelStream()
-                .forEach(delegationVote ->
-                        poolsDelegatedToAlwaysAbstainDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        var nonVotingSPORewardAccountBatches = ListUtil.partition(new ArrayList<>(rewardAccountToNonVotingPoolsMap.keySet()), QUERY_BATCH_SIZE);
 
-        BigInteger totalStakeSPODelegatedToAbstainDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToAlwaysAbstainDRep)
-                .stream()
-                .map(EpochStake::getAmount)
-                .reduce(BigInteger.ZERO, BigInteger::add);
+        List<String> poolsDelegatedToAlwaysAbstainDRep = nonVotingSPORewardAccountBatches.parallelStream()
+                .flatMap(batch -> delegationVoteDataService
+                        .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.ABSTAIN, epoch)
+                        .parallelStream()
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap
+                                .getOrDefault(delegationVote.getAddress(), List.of())
+                                .stream()))
+                .collect(Collectors.toList());
 
-        // Calculate the total stake of SPOs that delegated to NoConfidence DRep
-        List<String> poolsDelegatedToNoConfidenceDRep = new ArrayList<>();
-        poolBatches.parallelStream().forEach(batch -> delegationVoteDataService
-                .getDelegationVotesByDRepTypeAndAddressList(batch.stream().flatMap(List::stream).toList(), DrepType.NO_CONFIDENCE, epoch)
-                .parallelStream()
-                .forEach(delegationVote ->
-                        poolsDelegatedToNoConfidenceDRep.addAll(rewardAccountPoolMap.get(delegationVote.getAddress()))));
+        BigInteger totalStakeSPODelegatedToAbstainDRep = getActiveStakesByEpochAndPoolsBatch(epoch + 2, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
 
-        BigInteger totalStakeSPODelegatedToNoConfidenceDRep = epochStakeStorage
-                .getAllActiveStakesByEpochAndPools(epoch + 2, poolsDelegatedToNoConfidenceDRep)
-                .stream()
-                .map(EpochStake::getAmount)
-                .reduce(BigInteger.ZERO, BigInteger::add);
+        List<String> poolsDelegatedToNoConfidenceDRep = nonVotingSPORewardAccountBatches.parallelStream()
+                .flatMap(batch -> delegationVoteDataService
+                        .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.NO_CONFIDENCE, epoch)
+                        .parallelStream()
+                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap
+                                .getOrDefault(delegationVote.getAddress(), List.of())
+                                .stream()))
+                .collect(Collectors.toList());
 
-        BigInteger totalDoNotVoteStake = totalStake.subtract(yesVoteStake)
+        BigInteger totalStakeSPODelegatedToNoConfidenceDRep = getActiveStakesByEpochAndPoolsBatch(epoch + 2, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
+
+        return new SPOEpochAggregates(epoch, totalActiveStake, totalStakeSPODelegatedToAbstainDRep, totalStakeSPODelegatedToNoConfidenceDRep);
+    }
+
+    public AggregatedVotingData.SPOVotes collectSPOVotes(List<VotingProcedure> spoVotesForProposal, SPOEpochAggregates spoEpochAggregates) {
+        var yesVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.YES, spoEpochAggregates.epoch());
+        var abstainVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.ABSTAIN, spoEpochAggregates.epoch());
+        var noVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.NO, spoEpochAggregates.epoch());
+
+        BigInteger totalDoNotVoteStake = spoEpochAggregates.totalStake()
+                .subtract(yesVoteStake)
                 .subtract(noVoteStake)
                 .subtract(abstainVoteStake)
-                .subtract(totalStakeSPODelegatedToAbstainDRep)
-                .subtract(totalStakeSPODelegatedToNoConfidenceDRep);
+                .subtract(spoEpochAggregates.delegateToAutoAbstainDRepStake())
+                .subtract(spoEpochAggregates.delegateToNoConfidenceDRepStake());
 
         return AggregatedVotingData.SPOVotes.builder()
                 .yesVoteStake(yesVoteStake)
                 .abstainVoteStake(abstainVoteStake)
                 .noVoteStake(noVoteStake)
-                .totalStake(totalStake)
-                .delegateToAutoAbstainDRepStake(totalStakeSPODelegatedToAbstainDRep)
-                .delegateToNoConfidenceDRepStake(totalStakeSPODelegatedToNoConfidenceDRep)
+                .totalStake(spoEpochAggregates.totalStake())
+                .delegateToAutoAbstainDRepStake(spoEpochAggregates.delegateToAutoAbstainDRepStake())
+                .delegateToNoConfidenceDRepStake(spoEpochAggregates.delegateToNoConfidenceDRepStake())
                 .doNotVoteStake(totalDoNotVoteStake)
                 .build();
     }
 
-    private BigInteger calculateSPOStakeByVote(List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> votes,
-                                               Vote voteType, int epoch) {
+    private BigInteger calculateSPOStakeByVote(List<VotingProcedure> votes, Vote voteType, int epoch) {
         var poolIds = votes.stream()
                 .filter(vote -> vote.getVote().equals(voteType))
                 .map(VotingProcedure::getVoterHash)
@@ -115,4 +122,21 @@ public class SPOVotingDataCollector {
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
+    private BigInteger getActiveStakesByEpochAndPoolsBatch(int activeEpoch, List<String> poolIds, int batchSize) {
+        if (poolIds.isEmpty()) {
+            return BigInteger.ZERO;
+        }
+
+        return ListUtil.partition(poolIds, batchSize)
+                .parallelStream()
+                .flatMap(batch -> epochStakeStorage.getAllActiveStakesByEpochAndPools(activeEpoch, batch).stream())
+                .map(EpochStake::getAmount)
+                .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
+    public record SPOEpochAggregates(int epoch,
+                                     BigInteger totalStake,
+                                     BigInteger delegateToAutoAbstainDRepStake,
+                                     BigInteger delegateToNoConfidenceDRepStake) {
+    }
 }

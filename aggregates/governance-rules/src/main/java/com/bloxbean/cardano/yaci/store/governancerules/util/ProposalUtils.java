@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import java.util.*;
 
 /**
- * Copy of ProposalUtils from governance-aggr for drop logic.
  * Utilities for finding proposal relationships and dependencies.
  */
 public class ProposalUtils {
