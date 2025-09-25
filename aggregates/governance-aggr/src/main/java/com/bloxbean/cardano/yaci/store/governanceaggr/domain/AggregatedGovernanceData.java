@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @Builder
-public record AggregatedGovernanceData(int currentEpoch,
+public record AggregatedGovernanceData(int epoch,
                                        List<GovActionProposal> proposalsForEvaluation,
                                        Map<GovActionId, AggregatedVotingData> aggregatedVotingDataByProposal,
                                        ProtocolParams protocolParams,

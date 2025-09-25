@@ -21,7 +21,7 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
     public RatificationResult evaluate(RatificationContext context) {
         validateRequiredData(context);
 
-        if (context.isProposalExpired()) {
+        if (context.isOutOfLifecycle()) {
             return RatificationResult.REJECT;
         }
 
@@ -42,7 +42,7 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
                 && context.isCommitteeNormal()
                 && GovernanceActionUtil.isPrevActionAsExpected(updateCommittee.getType(), updateCommittee.getGovActionId(), lastEnactedGovActionId);
 
-        if (context.isLastVotingEpoch()) {
+        if (context.isLastRatificationOpportunity()) {
             return (isAccepted && isNotDelayed && isValidCommitteeTerm) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
             return (isAccepted && isNotDelayed && isValidCommitteeTerm) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;

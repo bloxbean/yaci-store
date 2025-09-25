@@ -16,7 +16,7 @@ import java.util.Optional;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class BootstrapPhaseDetector {
+public class BootstrapPhaseService {
     
     private final EpochParamStorage epochParamStorage;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;

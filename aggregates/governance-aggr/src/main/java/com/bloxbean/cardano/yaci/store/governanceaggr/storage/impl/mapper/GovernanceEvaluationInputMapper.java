@@ -34,7 +34,7 @@ public class GovernanceEvaluationInputMapper {
 
         return GovernanceEvaluationInput.builder()
                 .currentProposals(proposalContexts)
-                .currentEpoch(data.currentEpoch())
+                .currentEpoch(data.epoch())
                 .protocolParams(data.protocolParams())
                 .committee(committee)
                 .isBootstrapPhase(data.bootstrapPhase())

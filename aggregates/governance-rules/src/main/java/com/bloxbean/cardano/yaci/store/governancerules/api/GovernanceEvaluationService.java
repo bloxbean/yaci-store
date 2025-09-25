@@ -12,7 +12,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-
+/*
+ * Service to evaluate the governance state for a given epoch.
+ * It evaluates each proposal and determines which proposals should be dropped.
+ */
 public class GovernanceEvaluationService {
 
     private final ProposalDropService proposalDropService;
@@ -109,6 +112,7 @@ public class GovernanceEvaluationService {
                 .govAction(proposalContext.getGovAction())
                 .votingData(proposalContext.getVotingData())
                 .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(proposalContext.getMaxAllowedVotingEpoch())
                 .build();
 
         return RatificationEvaluatorFactory

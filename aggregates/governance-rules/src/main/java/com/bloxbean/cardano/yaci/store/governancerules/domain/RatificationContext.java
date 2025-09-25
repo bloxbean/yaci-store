@@ -13,18 +13,18 @@ import lombok.Value;
 @Builder
 public class RatificationContext {
     GovernanceContext governanceContext;
+
+    // Max allowed voting epoch for the proposal ( = proposal creation epoch + gov action lifetime)
     Integer maxAllowedVotingEpoch;
+
     GovAction govAction;
     VotingData votingData;
 
-    public boolean isProposalExpired() {
-        if (maxAllowedVotingEpoch == null) {
-            return false;
-        }
+    public boolean isOutOfLifecycle() {
         return governanceContext.getCurrentEpoch() - maxAllowedVotingEpoch > 1;
     }
 
-    public boolean isLastVotingEpoch() {
+    public boolean isLastRatificationOpportunity() {
         return governanceContext.getCurrentEpoch() - maxAllowedVotingEpoch == 1;
     }
     

@@ -33,7 +33,8 @@ public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
         if (totalStake.equals(BigInteger.ZERO) || totalAbstain.equals(totalStake)) {
             return VotingStatus.PASS_THRESHOLD;
         }
-        
+
+        // the ratio = yes/(total - abstain)
         BigDecimal acceptedRatio = new BigDecimal(totalYes)
             .divide(new BigDecimal(totalStake.subtract(totalAbstain)), BigNumberUtils.mathContext);
             

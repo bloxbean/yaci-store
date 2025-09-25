@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import lombok.Builder;
 import lombok.Value;
@@ -42,7 +41,10 @@ public class VotingData {
         BigInteger delegateToAutoAbstainDRepStake;
         BigInteger delegateToNoConfidenceDRepStake;
         BigInteger abstainVoteStake;
+
+        // do not vote and do not delegate to auto-abstain DRep, no-confidence DRep
         BigInteger doNotVoteStake;
+
         BigInteger totalStake;
     }
     

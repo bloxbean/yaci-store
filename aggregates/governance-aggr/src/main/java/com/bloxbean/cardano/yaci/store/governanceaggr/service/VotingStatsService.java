@@ -23,8 +23,15 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// Calculates proposal-level voting statistics for reporting and evaluation
 public class VotingStatsService {
 
+    /**
+     * Compute vote tallies and stake statistics for each proposal in the aggregated data
+     *
+     * @param data aggregated governance snapshot including proposals, votes, and committee members
+     * @return map of proposal IDs to their computed voting statistics
+     */
     public Map<GovActionId, ProposalVotingStats> computeVotingStats(AggregatedGovernanceData data) {
         Map<GovActionId, ProposalVotingStats> out = new HashMap<>();
         if (data == null || data.proposalsForEvaluation() == null || data.proposalsForEvaluation().isEmpty()) return out;

@@ -22,7 +22,7 @@ public class HardForkRatificationEvaluator implements RatificationEvaluator {
     public RatificationResult evaluate(RatificationContext context) {
         validateRequiredData(context);
 
-        if (context.isProposalExpired()) {
+        if (context.isOutOfLifecycle()) {
             return RatificationResult.REJECT;
         }
 
@@ -48,7 +48,7 @@ public class HardForkRatificationEvaluator implements RatificationEvaluator {
                 && context.isCommitteeNormal()
                 && GovernanceActionUtil.isPrevActionAsExpected(hardForkInitiationAction.getType(), hardForkInitiationAction.getGovActionId(), lastEnactedGovActionId);
 
-        if (context.isLastVotingEpoch()) {
+        if (context.isLastRatificationOpportunity()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;

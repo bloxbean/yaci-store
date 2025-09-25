@@ -24,50 +24,54 @@ import java.util.Map;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+/*
+    Collects all data required for governance evaluation in an epoch
+ */
 public class ProposalStateService {
     private final ProposalStateClient proposalStateClient;
     private final EpochParamStorage epochParamStorage;
     private final CommitteeStorage committeeStorage;
     private final CommitteeMemberStorage committeeMemberStorage;
     private final AdaPotStorage adaPotStorage;
-    private final BootstrapPhaseDetector bootstrapPhaseDetector;
+    private final BootstrapPhaseService bootstrapPhaseDetector;
     private final ProposalCollectionService proposalCollectionService;
     private final VotingDataCollector votingDataService;
 
-    public AggregatedGovernanceData collectGovernanceData(int currentEpoch) {
+    public AggregatedGovernanceData collectGovernanceData(int epoch) {
         if (log.isDebugEnabled()) {
-            log.debug("Collecting governance data for epoch: {}", currentEpoch);
+            log.debug("Collecting governance data for epoch: {}", epoch);
         }
 
-        final boolean isInConwayBootstrapPhase = bootstrapPhaseDetector.isInConwayBootstrapPhase(currentEpoch);
-        
-        List<GovActionProposal> proposalsForEvaluation = proposalCollectionService.getProposalsForStatusEvaluation(currentEpoch);
+        final boolean isInConwayBootstrapPhase = bootstrapPhaseDetector.isInConwayBootstrapPhase(epoch);
+
+        // Get proposals for status evaluation
+        List<GovActionProposal> proposalsForEvaluation = proposalCollectionService.getProposalsForStatusEvaluation(epoch);
 
         if (proposalsForEvaluation.isEmpty()) {
             return null;
         }
 
-        Map<GovActionId, AggregatedVotingData> votingDataMap = votingDataService.collectVotingDataBatch(proposalsForEvaluation, currentEpoch - 1);
+        Map<GovActionId, AggregatedVotingData> votingDataMap = votingDataService.collectVotingDataBatch(proposalsForEvaluation, epoch - 1);
 
         // Get protocol parameters
-        var epochParam = epochParamStorage.getProtocolParams(currentEpoch)
-                .orElseThrow(() -> new IllegalStateException("Protocol params not found for epoch: " + currentEpoch));
+        var epochParam = epochParamStorage.getProtocolParams(epoch)
+                .orElseThrow(() -> new IllegalStateException("Protocol params not found for epoch: " + epoch));
 
         // Get committee
-        var committee = committeeStorage.getCommitteeByEpoch(currentEpoch)
-                .orElseThrow(() -> new IllegalStateException("Committee not found for epoch: " + (currentEpoch)));
-        List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(currentEpoch - 1);
+        var committee = committeeStorage.getCommitteeByEpoch(epoch)
+                .orElseThrow(() -> new IllegalStateException("Committee not found for epoch: " + (epoch)));
+        List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch - 1);
 
         // Get treasury
-        var treasury = adaPotStorage.findByEpoch(currentEpoch)
+        var treasury = adaPotStorage.findByEpoch(epoch)
                 .map(AdaPot::getTreasury)
-                .orElseThrow(() -> new IllegalStateException("Treasury not found for epoch: " + currentEpoch));
+                .orElseThrow(() -> new IllegalStateException("Treasury not found for epoch: " + epoch));
 
         // Get last enacted gov actions
-        Map<ProposalType, GovActionId> lastEnactedActions = getLastEnactedGovActions(currentEpoch);
+        Map<ProposalType, GovActionId> lastEnactedActions = getLastEnactedGovActions(epoch);
 
         return AggregatedGovernanceData.builder()
-                .currentEpoch(currentEpoch)
+                .epoch(epoch)
                 .proposalsForEvaluation(proposalsForEvaluation)
                 .aggregatedVotingDataByProposal(votingDataMap)
                 .protocolParams(epochParam.getParams())

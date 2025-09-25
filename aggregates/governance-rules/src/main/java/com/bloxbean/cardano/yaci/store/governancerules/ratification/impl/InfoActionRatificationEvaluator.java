@@ -7,15 +7,21 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Evaluator for evaluating Info Action governance actions.
- * Info actions are always rejected as they cannot be ratified.
+ * Info actions cannot be ratified or enacted, since they do not have any effect on the protocol.
  */
 @Slf4j
 public class InfoActionRatificationEvaluator implements RatificationEvaluator {
     
     @Override
     public RatificationResult evaluate(RatificationContext context) {
-        log.error("Info actions cannot be ratified or enacted, since they do not have any effect on the protocol.");
-        // Info actions cannot be ratified or enacted
-        return RatificationResult.REJECT;
+        if (log.isDebugEnabled()) {
+            log.debug("Info actions cannot be ratified or enacted, since they do not have any effect on the protocol.");
+        }
+
+        if (context.getGovernanceContext().getCurrentEpoch() - context.getMaxAllowedVotingEpoch() >= 1) {
+            return RatificationResult.REJECT;
+        }
+
+        return RatificationResult.CONTINUE;
     }
 }

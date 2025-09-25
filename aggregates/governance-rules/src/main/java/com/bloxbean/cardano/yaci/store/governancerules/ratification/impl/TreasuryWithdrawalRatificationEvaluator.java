@@ -19,7 +19,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
     public RatificationResult evaluate(RatificationContext context) {
         validateRequiredData(context);
         
-        if (context.isProposalExpired()) {
+        if (context.isOutOfLifecycle()) {
             return RatificationResult.REJECT;
         }
         
@@ -39,7 +39,7 @@ public class TreasuryWithdrawalRatificationEvaluator implements RatificationEval
         boolean isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
         boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
         
-        if (context.isLastVotingEpoch()) {
+        if (context.isLastRatificationOpportunity()) {
             return (isAccepted && isNotDelayed && withdrawalCanWithdraw) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
             return (isAccepted && isNotDelayed && withdrawalCanWithdraw) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;

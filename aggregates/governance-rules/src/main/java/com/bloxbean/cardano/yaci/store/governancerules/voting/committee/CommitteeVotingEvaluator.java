@@ -27,17 +27,19 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         var committeeVoteTallies = VoteTallyCalculator.computeCommitteeTallies(votes.getVotes(), committee.getMembers());
 
         int yesVotes = committeeVoteTallies.getYesCount();
+
+        // Do not vote is considered as No vote
         int noVotes = committeeVoteTallies.getNoCount() + committeeVoteTallies.getDoNotVoteCount();
 
-        int totalVotes = yesVotes + noVotes;
-        if (totalVotes == 0) {
+        int totalExcludingAbstain = yesVotes + noVotes;
+        if (totalExcludingAbstain == 0) {
             return VotingStatus.NOT_PASS_THRESHOLD;
         }
         
-        BigDecimal yesRatio = BigDecimal.valueOf(yesVotes)
-                .divide(BigDecimal.valueOf(totalVotes), 2, BigDecimal.ROUND_HALF_UP);
+        BigDecimal acceptedRatio = BigDecimal.valueOf(yesVotes)
+                .divide(BigDecimal.valueOf(totalExcludingAbstain), 2, BigDecimal.ROUND_HALF_UP);
 
-        return yesRatio.compareTo(threshold) >= 0 ?
+        return acceptedRatio.compareTo(threshold) >= 0 ?
                 VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
 }

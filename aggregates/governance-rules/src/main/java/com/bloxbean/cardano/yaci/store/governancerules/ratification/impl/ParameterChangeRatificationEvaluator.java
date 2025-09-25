@@ -26,7 +26,7 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
     public RatificationResult evaluate(RatificationContext context) {
         validateRequiredData(context);
 
-        if (context.isProposalExpired()) {
+        if (context.isOutOfLifecycle()) {
             return RatificationResult.REJECT;
         }
 
@@ -58,7 +58,7 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
                 isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
         }
 
-        if (context.isLastVotingEpoch()) {
+        if (context.isLastRatificationOpportunity()) {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
             return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;

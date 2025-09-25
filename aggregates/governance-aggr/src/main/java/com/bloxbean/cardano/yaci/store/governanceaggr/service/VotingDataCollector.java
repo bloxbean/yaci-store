@@ -23,14 +23,22 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+// Builds combined DRep, SPO, and committee voting data for proposals in an epoch
 public class VotingDataCollector {
-    
+
     private final VotingAggrService votingAggrService;
     private final CommitteeMemberStorage committeeMemberStorage;
     private final DRepDistStorageReader dRepDistStorage;
-    private final BootstrapPhaseDetector bootstrapPhaseDetector;
+    private final BootstrapPhaseService bootstrapPhaseDetector;
     private final SPOVotingDataCollector spoVotingDataCollector;
 
+    /**
+     * Collect aggregated voting data for the provided proposals in the given epoch.
+     *
+     * @param proposals list of proposals to collect voting data for
+     * @param epoch     snapshot epoch used to resolve votes and stake
+     * @return map from governance action id to aggregated voting data
+     */
     public Map<GovActionId, AggregatedVotingData> collectVotingDataBatch(List<GovActionProposal> proposals, int epoch) {
         if (proposals.isEmpty()) {
             return Collections.emptyMap();
@@ -94,7 +102,7 @@ public class VotingDataCollector {
             .committeeVotes(collectCommitteeVotes(committeeVotesForProposal))
             .build();
     }
-    
+
     private AggregatedVotingData.DRepVotes createEmptyDRepVotes() {
         return AggregatedVotingData.DRepVotes.builder()
             .yesVoteStake(BigInteger.ZERO)
@@ -148,7 +156,7 @@ public class VotingDataCollector {
             .votes(votes)
             .build();
     }
-    
+
     private BigInteger calculateDRepStakeByVote(List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> votes, 
                                                Vote voteType, int epoch) {
         var drepIds = votes.stream()

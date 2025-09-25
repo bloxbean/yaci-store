@@ -24,7 +24,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+// Pre-computes SPO stake aggregates and per-proposal vote totals each epoch
 public class SPOVotingDataCollector {
+
     private static final int QUERY_BATCH_SIZE = 500;
 
     private final EpochStakeStorageReader epochStakeStorage;
@@ -32,6 +34,13 @@ public class SPOVotingDataCollector {
     private final PoolStorageReader poolStorageReader;
     private final DelegationVoteDataService delegationVoteDataService;
 
+    /**
+     * Build SPO-level stake aggregates for the supplied epoch.
+     *
+     * @param spoVotes votes cast by SPOs across all proposals in scope
+     * @param epoch    epoch for which to compute aggregates
+     * @return aggregated SPO stake metrics shared across proposals
+     */
     public SPOEpochAggregates buildEpochAggregates(List<VotingProcedure> spoVotes, int epoch) {
         BigInteger totalActiveStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
                 .orElse(BigInteger.ZERO);
@@ -83,6 +92,13 @@ public class SPOVotingDataCollector {
         return new SPOEpochAggregates(epoch, totalActiveStake, totalStakeSPODelegatedToAbstainDRep, totalStakeSPODelegatedToNoConfidenceDRep);
     }
 
+    /**
+     * Aggregate SPO aggregated voting data for a specific proposal
+     *
+     * @param spoVotesForProposal votes emitted by SPOs for the proposal
+     * @param spoEpochAggregates  epoch-level SPO stake aggregates
+     * @return aggregated SPO voting data for the proposal
+     */
     public AggregatedVotingData.SPOVotes collectSPOVotes(List<VotingProcedure> spoVotesForProposal, SPOEpochAggregates spoEpochAggregates) {
         var yesVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.YES, spoEpochAggregates.epoch());
         var abstainVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.ABSTAIN, spoEpochAggregates.epoch());

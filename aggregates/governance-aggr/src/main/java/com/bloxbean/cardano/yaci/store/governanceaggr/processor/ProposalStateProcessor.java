@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.domain.ProposalStatusCapturedEvent;
@@ -21,7 +24,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
 
@@ -32,13 +37,16 @@ import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfi
 public class ProposalStateProcessor {
     
     private final ProposalStateService proposalStateService;
-    private final ProposalStatusMapper proposalStatusMapper;
-    private final GovActionProposalStatusStorage govActionProposalStatusStorage;
     private final DRepDistService dRepDistService;
-    private final EraService eraService;
-    private final ApplicationEventPublisher publisher;
     private final VotingStatsService votingStatsService;
-    private final GovernanceEvaluationInputMapper governanceInputMapper;
+    private final EraService eraService;
+    private final GovActionProposalStatusStorage govActionProposalStatusStorage;
+    private final AdaPotJobStorage adaPotJobStorage;
+
+    private final GovernanceEvaluationInputMapper governanceEvaluationInputMapper;
+    private final ProposalStatusMapper proposalStatusMapper;
+
+    private final ApplicationEventPublisher publisher;
 
     @EventListener
     @Transactional
@@ -56,11 +64,12 @@ public class ProposalStateProcessor {
         govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
         
         // Take DRep distribution snapshot
-        dRepDistService.takeStakeSnapshot(currentEpoch);
-        
+        takeDRepDistrSnapshot(currentEpoch);
+
         try {
             GovernanceEvaluationService governanceEvaluationService = new GovernanceEvaluationService();
 
+            // Collect aggregated governance data (proposals, votes, stake snapshots) for evaluation and voting stats computation
             var aggregatorGovernanceData = proposalStateService.collectGovernanceData(currentEpoch);
 
             if (aggregatorGovernanceData == null) {
@@ -68,12 +77,16 @@ public class ProposalStateProcessor {
                 return;
             }
 
-            GovernanceEvaluationInput input = governanceInputMapper.toGovernanceEvaluationInput(aggregatorGovernanceData);
-            
+            // convert to governance evaluation input
+            GovernanceEvaluationInput input = governanceEvaluationInputMapper.toGovernanceEvaluationInput(aggregatorGovernanceData);
+
+            // evaluate proposal status
             GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);
-            
+
+            // compute voting stats
             var statsMap = votingStatsService.computeVotingStats(aggregatorGovernanceData);
 
+            // map to GovActionProposalStatus and save
             List<GovActionProposalStatus> statusList = proposalStatusMapper.mapToProposalStatus(result, currentEpoch, statsMap);
             
             if (!statusList.isEmpty()) {
@@ -87,6 +100,20 @@ public class ProposalStateProcessor {
         } catch (Exception e) {
             log.error("Error processing proposal status for epoch {}", currentEpoch, e);
             throw e;
+        }
+    }
+
+    private void takeDRepDistrSnapshot(int epoch) {
+        var start = Instant.now();
+        dRepDistService.takeStakeSnapshot(epoch);
+        var end = Instant.now();
+
+        Optional<AdaPotJob> adaPotJobOpt = adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch);
+        if (adaPotJobOpt.isPresent()) {
+            var job = adaPotJobOpt.get();
+            job.setDrepDistrSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
+
+            adaPotJobStorage.save(job);
         }
     }
 }

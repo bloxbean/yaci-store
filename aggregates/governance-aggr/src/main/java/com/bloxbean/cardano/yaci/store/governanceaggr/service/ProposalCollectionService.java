@@ -24,18 +24,30 @@ import java.util.stream.Stream;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+// Assembles proposal contexts and snapshot voting data for governance evaluation
 public class ProposalCollectionService {
+
     private final GovActionProposalStorage govActionProposalStorage;
     private final ProposalStateClient proposalStateClient;
     private final EpochParamStorage epochParamStorage;
     private final ProposalMapper proposalMapper;
 
+    /*
+        Create ProposalContext list from GovActionProposal list
+     */
     public List<ProposalContext> createProposalContexts(List<GovActionProposal> proposals, Map<GovActionId, AggregatedVotingData> votingDataMap) {
         return proposals.stream()
                 .map(proposal -> mapToProposalContext(proposal, votingDataMap))
                 .toList();
     }
 
+    /*
+        Get proposals for status evaluation in the given epoch
+        1. Get all active proposals in the previous epoch
+        2. Get all expired and ratified proposals in the previous snapshot (epoch -1)
+        3. Find which proposals are to be dropped in the epoch boundary (prev epoch -> current epoch)
+        4. Return active proposals which are not in the drop list -> these proposals need status evaluation
+     */
     public List<GovActionProposal> getProposalsForStatusEvaluation(int epoch) {
         List<GovActionProposal> expiredProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch - 1);
         List<GovActionProposal> ratifiedProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch - 1);

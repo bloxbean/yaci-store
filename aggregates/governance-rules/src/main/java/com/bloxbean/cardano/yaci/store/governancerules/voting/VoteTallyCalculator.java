@@ -74,6 +74,8 @@ public final class VoteTallyCalculator {
         }
 
         BigInteger totalAbstainStake = abstainVote.add(delegateAutoAbstainDRep);
+
+        // In bootstrap phase, all do not vote stake is considered as abstain stake except for HardForkInitiationAction
         if (isInBootstrapPhase && type != GovActionType.HARD_FORK_INITIATION_ACTION) {
             totalAbstainStake = totalAbstainStake.add(doNotVote);
         }
@@ -94,8 +96,6 @@ public final class VoteTallyCalculator {
         // calculate cc yes vote
 
         // Many CC Cold Credentials map to the same Hot Credential act as many votes.
-        // If the hot credential is compromised at any point, the committee member must generate a new one and issue a new Authorization Certificate.
-        // A new Authorization Certificate registered on-chain overrides the previous one, effectively invalidating any votes signed by the old hot credential.
         Map<String, List<String>> hotKeyColdKeysMap = members.stream()
                 .collect(Collectors.groupingBy(
                         CommitteeMember::getHotKey,
