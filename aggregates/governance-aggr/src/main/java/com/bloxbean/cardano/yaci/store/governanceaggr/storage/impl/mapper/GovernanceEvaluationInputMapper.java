@@ -30,6 +30,7 @@ public class GovernanceEvaluationInputMapper {
         ConstitutionCommittee committee = ConstitutionCommittee.builder()
                 .members(members)
                 .threshold(new UnitInterval(data.committeeThresholdNumerator(), data.committeeThresholdDenominator()))
+                .state(data.committeeState())
                 .build();
 
         return GovernanceEvaluationInput.builder()

@@ -35,6 +35,7 @@ public class ProposalStateService {
     private final AdaPotStorage adaPotStorage;
     private final BootstrapPhaseService bootstrapPhaseDetector;
     private final ProposalCollectionService proposalCollectionService;
+    private final CommitteeStateService committeeStateService;
     private final VotingDataCollector votingDataService;
 
     public AggregatedGovernanceData collectGovernanceData(int epoch) {
@@ -61,6 +62,7 @@ public class ProposalStateService {
         var committee = committeeStorage.getCommitteeByEpoch(epoch)
                 .orElseThrow(() -> new IllegalStateException("Committee not found for epoch: " + (epoch)));
         List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch - 1);
+        var committeeState = committeeStateService.getCurrentCommitteeState();
 
         // Get treasury
         var treasury = adaPotStorage.findByEpoch(epoch)
@@ -78,6 +80,7 @@ public class ProposalStateService {
                 .committeeThresholdNumerator(committee.getThresholdNumerator())
                 .committeeThresholdDenominator(committee.getThresholdDenominator())
                 .committeeMembers(membersCanVote)
+                .committeeState(committeeState)
                 .treasury(treasury)
                 .lastEnactedGovActionIds(lastEnactedActions)
                 .bootstrapPhase(isInConwayBootstrapPhase)

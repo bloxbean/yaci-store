@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.governance.domain.CommitteeMemberDetails;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import lombok.Builder;
 
 import java.math.BigInteger;
@@ -19,6 +20,7 @@ public record AggregatedGovernanceData(int epoch,
                                        BigInteger committeeThresholdNumerator,
                                        BigInteger committeeThresholdDenominator,
                                        List<CommitteeMemberDetails> committeeMembers,
+                                       ConstitutionCommitteeState committeeState,
                                        BigInteger treasury,
                                        Map<ProposalType, GovActionId> lastEnactedGovActionIds,
                                        boolean bootstrapPhase) {
