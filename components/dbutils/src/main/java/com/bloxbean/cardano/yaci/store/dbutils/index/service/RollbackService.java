@@ -21,7 +21,7 @@ public class RollbackService {
     private final DatabaseUtils databaseUtils;
 
     @Transactional
-    public Pair<List<TableRollbackAction>, Boolean> executeRollback(List<String> tableNames, RollbackContext context) {
+    public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
         int epoch = context.getEpoch();
         long eventPublisherId = context.getEventPublisherId();
 
@@ -43,14 +43,18 @@ public class RollbackService {
 
         List<TableRollbackAction> failedRollbackActions = new ArrayList<>();
 
-        // Execute DELETE statements for each table/condition
-        for (String tableName : tableNames) {
+        for (RollbackConfig.TableRollbackDefinition tableDef : config.getTables()) {
+            String tableName = tableDef.getName();
             if (databaseUtils.tableExists(tableName)) {
                 String sql;
-                if (context.isRollbackLedgerState() && tableName.equals("adapot_jobs")) {
-                    sql = "UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch";
-                } else
-                    sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
+                if ("UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildUpdateSql(tableDef, rollbackBlock.getEpoch());
+                } else if ("DELETE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildDeleteSql(tableDef, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
+                } else {
+                    throw new IllegalArgumentException("Invalid operation: " + tableDef.getOperation());
+                }
+
                 log.info("Executing rollback on table '{}': {}", tableName, sql);
                 try {
                     jdbcTemplate.update(sql, params);
@@ -62,12 +66,11 @@ public class RollbackService {
         }
 
         boolean rollbackSuccess = failedRollbackActions.isEmpty();
-
         return Pair.of(failedRollbackActions, rollbackSuccess);
     }
 
+
     private RollbackBlock getRollbackBlockByEpoch(int epoch) {
-        // TODO: Handling for cases where there is no 'block' table
         String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
 
         var params = new MapSqlParameterSource()
@@ -117,24 +120,52 @@ public class RollbackService {
         return epoch >= 1 && epoch <= maxEpoch;
     }
 
-    private String buildDeleteSql(String table, int epoch, long slot) {
-        String deleteFilter = buildDeleteFilter(table, epoch, slot);
-        return "DELETE FROM " + table + " WHERE " + deleteFilter;
+    private String buildDeleteSql(RollbackConfig.TableRollbackDefinition tableDef, int epoch, long slot) {
+        String deleteFilter = buildDeleteFilter(tableDef.getCondition(), epoch, slot);
+        return "DELETE FROM " + tableDef.getName() + " WHERE " + deleteFilter;
     }
 
-    private String buildDeleteFilter(String tableName, int epoch, long slot) {
-        if (tableName.equals("epoch_stake")) {
-            return "epoch >= " + (epoch - 1);
-        } else if (tableName.equals("drep_dist") || tableName.equals("gov_action_proposal_status")
-                || tableName.equals("gov_epoch_activity") || tableName.equals("committee_state")) {
-            return "epoch >= " + epoch;
-        } else if (tableName.equals("tx_input")) {
-            return "spent_at_slot > " + slot;
+    private String buildUpdateSql(RollbackConfig.TableRollbackDefinition tableDef, int epoch) {
+        StringBuilder updateSetClause = new StringBuilder();
+        for (int i = 0; i < tableDef.getUpdateSet().size(); i++) {
+            RollbackConfig.TableRollbackDefinition.UpdateSet update = tableDef.getUpdateSet().get(i);
+            updateSetClause.append(update.getColumn()).append(" = ").append(update.getValue());
+            if (i < tableDef.getUpdateSet().size() - 1) {
+                updateSetClause.append(", ");
+            }
         }
-        else {
-            return "slot > " + slot;
+        String conditionFilter = buildUpdateConditionFilter(tableDef.getCondition(), epoch);
+        return String.format("UPDATE %s SET %s WHERE %s", tableDef.getName(), updateSetClause.toString(), conditionFilter);
+    }
+
+    private String buildDeleteFilter(RollbackConfig.TableRollbackDefinition.Condition condition, int epoch, long slot) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        String type = condition.getType();
+        Integer offset = condition.getOffset() != null ? condition.getOffset() : 0;
+
+        if ("epoch".equalsIgnoreCase(type)) {
+            return String.format("%s %s %d", column, operator, epoch + offset);
+        } else if ("slot".equalsIgnoreCase(type)) {
+            return String.format("%s %s %d", column, operator, slot);
+        } else {
+            return "1=1"; // Should not happen with proper config
         }
     }
+
+    private String buildUpdateConditionFilter(RollbackConfig.TableRollbackDefinition.Condition condition, int epoch) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        String type = condition.getType();
+        Integer offset = condition.getOffset() != null ? condition.getOffset() : 0;
+
+        if ("epoch".equalsIgnoreCase(type)) {
+            return String.format("%s %s %d", column, operator, epoch + offset);
+        } else {
+            return "1=1"; // Should not happen for update conditions
+        }
+    }
+
 
     private void rollbackCursor(RollbackBlock rollbackBlock, long eventPublisherId) {
         String truncateCursor = "TRUNCATE TABLE cursor_";

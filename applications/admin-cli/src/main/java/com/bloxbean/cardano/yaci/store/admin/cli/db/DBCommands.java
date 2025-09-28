@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.admin.cli.db;
 
 import com.bloxbean.cardano.yaci.store.admin.cli.Groups;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.IndexDefinition;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig.TableRollbackDefinition;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableIndex;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
@@ -123,16 +125,15 @@ public class DBCommands {
 
     private void applyRollback(String rollbackFile, RollbackContext rollbackContext) {
         RollbackLoader rollbackLoader = new RollbackLoader();
+        RollbackConfig rollbackConfig = rollbackLoader.loadRollbackConfig(rollbackFile);
 
-        List<String> rollbackTableNames = rollbackLoader.loadRollbackTableNames(rollbackFile);
-
-        if (rollbackTableNames == null || rollbackTableNames.isEmpty()) {
+        if (rollbackConfig.getTables() == null || rollbackConfig.getTables().isEmpty()) {
             log.warn("No table found to rollback");
             writeLn(warn("No table found to rollback : {}", rollbackFile));
             return;
         }
 
-        var result = rollbackService.executeRollback(rollbackTableNames, rollbackContext);
+        var result = rollbackService.executeRollback(rollbackConfig, rollbackContext);
 
         if (result.getSecond().equals(Boolean.FALSE)) {
             log.warn(">> Failed to rollback data");
