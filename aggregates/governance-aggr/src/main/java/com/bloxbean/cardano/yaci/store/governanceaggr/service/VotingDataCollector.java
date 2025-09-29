@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorage
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDist;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
+import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -161,7 +162,7 @@ public class VotingDataCollector {
                                                Vote voteType, int epoch) {
         var drepIds = votes.stream()
             .filter(vote -> vote.getVote().equals(voteType))
-            .map(VotingProcedure::getVoterHash)
+            .map(DRepUtil::getDRepId)
             .toList();
         
         if (drepIds.isEmpty()) {
