@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.util;
 
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
+import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
@@ -9,6 +12,16 @@ import java.util.List;
 import java.util.Map;
 
 public class RollbackLoader {
+
+    private ResourceLoader resourceLoader;
+
+    public RollbackLoader() {
+        this.resourceLoader = new DefaultResourceLoader();
+    }
+
+    public RollbackLoader(ResourceLoader resourceLoader) {
+        this.resourceLoader = resourceLoader;
+    }
 
     @SuppressWarnings("unchecked")
     public List<String> loadRollbackTableNames(String yamlFilePath) {
@@ -96,5 +109,60 @@ public class RollbackLoader {
                 .condition(condition)
                 .updateSet(updateSet)
                 .build();
+    }
+
+    /**
+     * Load rollback configuration from multiple YAML files
+     * Supports both classpath resources and external files via Spring ResourceLoader
+     * @param filePaths Array of file paths (e.g., "rollback.yml", "classpath:custom-rollback.yml", "file:///path/to/file.yml")
+     * @return Combined RollbackConfig with all tables from all files
+     */
+    public RollbackConfig loadRollbackConfigFromMultipleFiles(String... filePaths) {
+        List<RollbackConfig.TableRollbackDefinition> allTables = new ArrayList<>();
+
+        for (String filePath : filePaths) {
+            RollbackConfig config;
+
+            // Check if it's a resource path (classpath:, file:, etc.)
+            if (isResourcePath(filePath)) {
+                if (resourceLoader == null) {
+                    throw new IllegalStateException("ResourceLoader not configured for resource path: " + filePath);
+                }
+                config = loadRollbackConfigFromResourcePath(filePath);
+            } else {
+                // Regular classpath resource
+                config = loadRollbackConfig(filePath);
+            }
+
+            if (config != null && config.getTables() != null) {
+                allTables.addAll(config.getTables());
+            }
+        }
+
+        return RollbackConfig.builder()
+                .tables(allTables)
+                .build();
+    }
+
+    private boolean isResourcePath(String filePath) {
+        return filePath.startsWith("classpath:") || 
+               filePath.startsWith("file:") || 
+               filePath.startsWith("http:") || 
+               filePath.startsWith("https:");
+    }
+
+    private RollbackConfig loadRollbackConfigFromResourcePath(String resourcePath) {
+        try {
+            Resource resource = resourceLoader.getResource(resourcePath);
+            if (!resource.exists()) {
+                throw new IllegalArgumentException("Resource not found: " + resourcePath);
+            }
+
+            Yaml yaml = new Yaml();
+            Map<String, Object> root = yaml.load(resource.getInputStream());
+            return parseRollbackConfig(root);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Error loading resource: " + resourcePath, e);
+        }
     }
 }

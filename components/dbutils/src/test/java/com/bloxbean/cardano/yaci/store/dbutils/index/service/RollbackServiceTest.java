@@ -67,15 +67,15 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM asset WHERE slot > 1000"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM block WHERE slot > 1000"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM epoch_stake WHERE epoch >= 99"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM tx_input WHERE spent_at_slot > 1000"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= 100"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM drep_dist WHERE epoch >= 100"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM gov_action_proposal_status WHERE epoch >= 100"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM gov_epoch_activity WHERE epoch >= 100"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM committee_state WHERE epoch >= 100"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_dist WHERE epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM gov_action_proposal_status WHERE epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM gov_epoch_activity WHERE epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM committee_state WHERE epoch >= :epoch"), any(SqlParameterSource.class));
 
         verify(plainJdbcTemplate, times(1)).update(contains("TRUNCATE TABLE cursor_"));
         verify(jdbcTemplate, times(1)).update(contains("INSERT INTO cursor_"), any(SqlParameterSource.class));
@@ -106,10 +106,10 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM asset WHERE slot > 500"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM epoch_stake WHERE epoch >= 49"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("DELETE FROM tx_input WHERE spent_at_slot > 500"), any(SqlParameterSource.class));
-        verify(jdbcTemplate, times(1)).update(contains("UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= 50"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch"), any(SqlParameterSource.class));
     }
 
     @Test

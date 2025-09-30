@@ -48,9 +48,9 @@ public class RollbackService {
             if (databaseUtils.tableExists(tableName)) {
                 String sql;
                 if ("UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
-                    sql = buildUpdateSql(tableDef, rollbackBlock.getEpoch());
+                    sql = buildUpdateSql(tableDef);
                 } else if ("DELETE".equalsIgnoreCase(tableDef.getOperation())) {
-                    sql = buildDeleteSql(tableDef, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
+                    sql = buildDeleteSql(tableDef);
                 } else {
                     throw new IllegalArgumentException("Invalid operation: " + tableDef.getOperation());
                 }
@@ -120,12 +120,19 @@ public class RollbackService {
         return epoch >= 1 && epoch <= maxEpoch;
     }
 
-    private String buildDeleteSql(RollbackConfig.TableRollbackDefinition tableDef, int epoch, long slot) {
-        String deleteFilter = buildDeleteFilter(tableDef.getCondition(), epoch, slot);
+    private String buildDeleteSql(RollbackConfig.TableRollbackDefinition tableDef) {
+        validateCondition(tableDef.getCondition());
+        String deleteFilter = buildDeleteFilter(tableDef.getCondition());
         return "DELETE FROM " + tableDef.getName() + " WHERE " + deleteFilter;
     }
 
-    private String buildUpdateSql(RollbackConfig.TableRollbackDefinition tableDef, int epoch) {
+    private String buildUpdateSql(RollbackConfig.TableRollbackDefinition tableDef) {
+        validateCondition(tableDef.getCondition());
+        
+        if (tableDef.getUpdateSet() == null || tableDef.getUpdateSet().isEmpty()) {
+            throw new IllegalArgumentException("UPDATE operation requires 'update_set' clause for table: " + tableDef.getName());
+        }
+        
         StringBuilder updateSetClause = new StringBuilder();
         for (int i = 0; i < tableDef.getUpdateSet().size(); i++) {
             RollbackConfig.TableRollbackDefinition.UpdateSet update = tableDef.getUpdateSet().get(i);
@@ -134,38 +141,68 @@ public class RollbackService {
                 updateSetClause.append(", ");
             }
         }
-        String conditionFilter = buildUpdateConditionFilter(tableDef.getCondition(), epoch);
+        String conditionFilter = buildUpdateConditionFilter(tableDef.getCondition());
         return String.format("UPDATE %s SET %s WHERE %s", tableDef.getName(), updateSetClause.toString(), conditionFilter);
     }
 
-    private String buildDeleteFilter(RollbackConfig.TableRollbackDefinition.Condition condition, int epoch, long slot) {
+    private String buildDeleteFilter(RollbackConfig.TableRollbackDefinition.Condition condition) {
         String column = condition.getColumn();
         String operator = condition.getOperator();
         String type = condition.getType();
-        Integer offset = condition.getOffset() != null ? condition.getOffset() : 0;
+        Integer offset = condition.getOffset();
 
         if ("epoch".equalsIgnoreCase(type)) {
-            return String.format("%s %s %d", column, operator, epoch + offset);
+            if (offset != null && offset != 0) {
+                return String.format("%s %s (:epoch + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :epoch", column, operator);
+            }
         } else if ("slot".equalsIgnoreCase(type)) {
-            return String.format("%s %s %d", column, operator, slot);
+            if (offset != null && offset != 0) {
+                return String.format("%s %s (:slot + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :slot", column, operator);
+            }
         } else {
             return "1=1"; // Should not happen with proper config
         }
     }
 
-    private String buildUpdateConditionFilter(RollbackConfig.TableRollbackDefinition.Condition condition, int epoch) {
+    private String buildUpdateConditionFilter(RollbackConfig.TableRollbackDefinition.Condition condition) {
         String column = condition.getColumn();
         String operator = condition.getOperator();
         String type = condition.getType();
-        Integer offset = condition.getOffset() != null ? condition.getOffset() : 0;
+        Integer offset = condition.getOffset();
 
         if ("epoch".equalsIgnoreCase(type)) {
-            return String.format("%s %s %d", column, operator, epoch + offset);
+            if (offset != null) {
+                return String.format("%s %s (:epoch + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :epoch", column, operator);
+            }
+        } else if ("slot".equalsIgnoreCase(type)) {
+            if (offset != null) {
+                return String.format("%s %s (:slot + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :slot", column, operator);
+            }
         } else {
             return "1=1"; // Should not happen for update conditions
         }
     }
 
+    private void validateCondition(RollbackConfig.TableRollbackDefinition.Condition condition) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        
+        if (column == null || column.trim().isEmpty()) {
+            throw new IllegalArgumentException("Column name cannot be null or empty");
+        }
+        
+        if (operator == null || operator.trim().isEmpty()) {
+            throw new IllegalArgumentException("Operator cannot be null or empty");
+        }
+    }
 
     private void rollbackCursor(RollbackBlock rollbackBlock, long eventPublisherId) {
         String truncateCursor = "TRUNCATE TABLE cursor_";
