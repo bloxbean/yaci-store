@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.voting.VoteTallyCalculato
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -17,6 +18,7 @@ import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
+@Slf4j
 public class DRepVotingEvaluator implements VotingEvaluator<VotingData> {
 
     @Override
@@ -66,6 +68,7 @@ public class DRepVotingEvaluator implements VotingEvaluator<VotingData> {
         List<ProtocolParamGroup> groups = ProtocolParamUtil.getGroupsWithNonNullField(paramUpdate);
         
         return groups.stream()
+            .filter(group -> group != ProtocolParamGroup.SECURITY)
             .map(group -> getThresholdForGroup(group, context))
             .max(BigDecimal::compareTo)
             .orElse(BigDecimal.ZERO);
