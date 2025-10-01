@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.admin.cli.db;
 import com.bloxbean.cardano.yaci.store.admin.cli.Groups;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.IndexDefinition;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
-import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig.TableRollbackDefinition;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableIndex;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
@@ -13,10 +12,14 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.util.IndexLoader;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.RollbackLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.util.Pair;
 import org.springframework.shell.command.annotation.Command;
 import org.springframework.shell.command.annotation.Option;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 
@@ -26,11 +29,13 @@ import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 public class DBCommands {
     private static final String INDEX_FILE = "index.yml";
     private static final String EXTRA_INDEX_FILE = "extra-index.yml";
-    private static final String ROLLBACK_FILE = "rollback.yml";
     private static final String ROLLBACK_LEDGER_STATE_FILE = "rollback-ledger-state.yml";
 
     private final IndexService indexService;
     private final RollbackService rollbackService;
+
+    @Value("${store.dbutils.rollback_files:rollback.yml}")
+    private String rollbackFiles;
 
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
@@ -51,16 +56,18 @@ public class DBCommands {
 
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId) {
+                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
+                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles) {
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
-            verifyRollback(ROLLBACK_FILE);
+            String[] filesToUse = getRollbackFiles(rollbackFiles);
+            verifyRollback(filesToUse);
             RollbackContext rollbackContext = RollbackContext.builder()
                     .epoch(epoch)
                     .eventPublisherId(eventPublisherId)
                     .build();
 
-            applyRollback(ROLLBACK_FILE, rollbackContext);
+            applyRollback(filesToUse, rollbackContext);
         }
     }
 
@@ -69,13 +76,14 @@ public class DBCommands {
 
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
-            verifyRollback(ROLLBACK_LEDGER_STATE_FILE);
+            String[] files = {ROLLBACK_LEDGER_STATE_FILE};
+            verifyRollback(files);
             RollbackContext rollbackContext = RollbackContext.builder()
                     .epoch(epoch)
                     .rollbackLedgerState(true)
                     .build();
 
-            applyRollback(ROLLBACK_LEDGER_STATE_FILE, rollbackContext);
+            applyRollback(files, rollbackContext);
         }
     }
 
@@ -123,17 +131,30 @@ public class DBCommands {
         }
     }
 
-    private void applyRollback(String rollbackFile, RollbackContext rollbackContext) {
+    private String[] getRollbackFiles(String rollbackFiles) {
+        if (rollbackFiles != null && !rollbackFiles.trim().isEmpty()) {
+            return Arrays.stream(rollbackFiles.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toArray(String[]::new);
+        }
+
+        return new String[]{this.rollbackFiles};
+    }
+
+    private void applyRollback(String[] rollbackFiles, RollbackContext rollbackContext) {
         RollbackLoader rollbackLoader = new RollbackLoader();
-        RollbackConfig rollbackConfig = rollbackLoader.loadRollbackConfig(rollbackFile);
+        RollbackConfig rollbackConfig;
+        
+        rollbackConfig = rollbackLoader.loadRollbackConfigFromMultipleFiles(rollbackFiles);
 
         if (rollbackConfig.getTables() == null || rollbackConfig.getTables().isEmpty()) {
             log.warn("No table found to rollback");
-            writeLn(warn("No table found to rollback : {}", rollbackFile));
+            writeLn(warn("No table found to rollback from files: {}", String.join(", ", rollbackFiles)));
             return;
         }
 
-        var result = rollbackService.executeRollback(rollbackConfig, rollbackContext);
+        Pair<List<TableRollbackAction>, Boolean> result = rollbackService.executeRollback(rollbackConfig, rollbackContext);
 
         if (result.getSecond().equals(Boolean.FALSE)) {
             log.warn(">> Failed to rollback data");
@@ -147,10 +168,15 @@ public class DBCommands {
         }
     }
 
-    private void verifyRollback(String rollbackFile) {
+    private void verifyRollback(String[] rollbackFiles) {
         RollbackLoader rollbackLoader = new RollbackLoader();
+        List<String> tableNames;
+        
+        RollbackConfig config = rollbackLoader.loadRollbackConfigFromMultipleFiles(rollbackFiles);
+        tableNames = config.getTables().stream()
+                .map(RollbackConfig.TableRollbackDefinition::getName)
+                .collect(Collectors.toList());
 
-        List<String> tableNames = rollbackLoader.loadRollbackTableNames(rollbackFile);
         rollbackService.verifyRollbackActions(tableNames);
     }
 

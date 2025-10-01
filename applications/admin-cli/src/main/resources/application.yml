@@ -23,3 +23,10 @@ shell.out.error: RED
 
 spring.shell.history.enabled: true
 spring.shell.history.name: admin-cli.history
+
+# Rollback Configuration
+# Custom rollback files (comma-separated list of YAML files)
+# Examples: rollback.yml,classpath:custom-rollback.yml,file:///path/to/rollback.yml
+store:
+  dbutils:
+    rollback_files: rollback.yml
