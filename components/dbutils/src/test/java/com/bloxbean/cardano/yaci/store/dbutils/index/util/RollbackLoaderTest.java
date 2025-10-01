@@ -40,11 +40,9 @@ class RollbackLoaderTest {
 
         RollbackConfig.TableRollbackDefinition adapotJobsTable = findTableByName(config.getTables(), "adapot_jobs");
         assertNotNull(adapotJobsTable);
-        assertEquals("UPDATE", adapotJobsTable.getOperation());
-        assertNotNull(adapotJobsTable.getUpdateSet());
-        assertEquals(1, adapotJobsTable.getUpdateSet().size());
-        assertEquals("status", adapotJobsTable.getUpdateSet().get(0).getColumn());
-        assertEquals("'NOT_STARTED'", adapotJobsTable.getUpdateSet().get(0).getValue());
+        assertEquals("slot", adapotJobsTable.getCondition().getType());
+        assertEquals("slot", adapotJobsTable.getCondition().getColumn());
+        assertEquals(">", adapotJobsTable.getCondition().getOperator());
 
         RollbackConfig.TableRollbackDefinition txInputTable = findTableByName(config.getTables(), "tx_input");
         assertNotNull(txInputTable);
