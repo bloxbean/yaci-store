@@ -260,14 +260,11 @@ rollback:
         operator: ">"
         
     - name: "adapot_jobs"
-      operation: "UPDATE"
+      operation: "DELETE"
       condition:
-        type: "epoch"
-        column: "epoch"
-        operator: ">="
-      update_set:
-        - column: "status"
-          value: "'NOT_STARTED'"
+        type: "slot"
+        column: "slot"
+        operator: ">"
           
     - name: "epoch_stake"
       operation: "DELETE"
