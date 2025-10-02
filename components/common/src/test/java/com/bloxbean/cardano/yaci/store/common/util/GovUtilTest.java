@@ -18,10 +18,10 @@ class GovUtilTest {
         int index = 17;
         String govActionId = "gov_action1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf";
 
-        GovUtil.GovActionIdParts parts = GovUtil.convertGovActionIdToTxHashAndIndex(govActionId);
+        GovUtil.GovActionIdParts parts = GovUtil.toGovActionId(govActionId);
 
-        assertEquals(txHash, parts.getTxHash());
-        assertEquals(index, parts.getIndex());
+        assertEquals(txHash, parts.txHash());
+        assertEquals(index, parts.index());
     }
 
     @Test
@@ -31,10 +31,10 @@ class GovUtilTest {
         int index = 0;
         String govActionId = "gov_action1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygsq6dmejn";
 
-        GovUtil.GovActionIdParts parts = GovUtil.convertGovActionIdToTxHashAndIndex(govActionId);
+        GovUtil.GovActionIdParts parts = GovUtil.toGovActionId(govActionId);
 
-        assertEquals(txHash, parts.getTxHash());
-        assertEquals(index, parts.getIndex());
+        assertEquals(txHash, parts.txHash());
+        assertEquals(index, parts.index());
     }
 
     @Test
@@ -44,158 +44,121 @@ class GovUtilTest {
         int index = 42;
         String govActionId = GovId.govAction(txHash, index);
 
-        GovUtil.GovActionIdParts parts = GovUtil.convertGovActionIdToTxHashAndIndex(govActionId);
+        GovUtil.GovActionIdParts parts = GovUtil.toGovActionId(govActionId);
 
-        assertEquals(txHash, parts.getTxHash());
-        assertEquals(index, parts.getIndex());
+        assertEquals(txHash, parts.txHash());
+        assertEquals(index, parts.index());
     }
 
     @Test
     @DisplayName("Should throw exception for null input")
     void shouldThrowExceptionForNullInput() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.convertGovActionIdToTxHashAndIndex(null);
-            });
-        }
+        assertThrows(IllegalArgumentException.class, () -> {
+            GovUtil.toGovActionId(null);
+        });
+    }
 
     @Test
     @DisplayName("Should throw exception for empty input")
     void shouldThrowExceptionForEmptyInput() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.convertGovActionIdToTxHashAndIndex("");
-            });
-        }
-
+        assertThrows(IllegalArgumentException.class, () -> {
+            GovUtil.toGovActionId("");
+        });
+    }
 
     @Test
     @DisplayName("Should throw exception for invalid prefix")
     void shouldThrowExceptionForInvalidPrefix() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.convertGovActionIdToTxHashAndIndex("invalid_prefix1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf");
-            });
-        }
+        assertThrows(IllegalArgumentException.class, () -> {
+            GovUtil.toGovActionId("invalid_prefix1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf");
+        });
+    }
 
     @Test
     @DisplayName("Should throw exception for malformed bech32 data")
     void shouldThrowExceptionForMalformedBech32Data() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.convertGovActionIdToTxHashAndIndex("gov_action1invalid_characters");
-            });
-        }
+        assertThrows(IllegalArgumentException.class, () -> {
+            GovUtil.toGovActionId("gov_action1invalid_characters");
+        });
+    }
 
     @Test
     @DisplayName("Should create gov_action_id using CCL")
     void shouldCreateGovActionIdUsingCCL() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long index = 42L;
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int index = 42;
 
-            String govActionId = GovUtil.createGovActionId(txHash, index);
+        String govActionId = GovId.govAction(txHash, index);
 
-            assertTrue(govActionId.startsWith("gov_action1"));
-            GovUtil.GovActionIdParts parts = GovUtil.convertGovActionIdToTxHashAndIndex(govActionId);
-            assertEquals(txHash, parts.getTxHash());
-            assertEquals(index, parts.getIndex());
-        }
-
-    @Test
-    @DisplayName("Should throw exception for invalid txHash")
-    void shouldThrowExceptionForInvalidTxHash() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.createGovActionId("invalid_txhash", 42L);
-            });
-        }
-
-    @Test
-    @DisplayName("Should throw exception for negative index")
-    void shouldThrowExceptionForNegativeIndex() {
-            assertThrows(IllegalArgumentException.class, () -> {
-                GovUtil.createGovActionId("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", -1L);
-            });
-        }
-
-    @Test
-    @DisplayName("Should throw exception for index too large")
-    void shouldThrowExceptionForIndexTooLarge() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            GovUtil.createGovActionId("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", 256L);
-        });
+        assertTrue(govActionId.startsWith("gov_action1"));
+        
+        GovUtil.GovActionIdParts parts = GovUtil.toGovActionId(govActionId);
+        assertEquals(txHash, parts.txHash());
+        assertEquals(index, parts.index());
     }
+
     @Test
     @DisplayName("Should create GovActionIdParts with correct values")
     void shouldCreateGovActionIdPartsWithCorrectValues() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long index = 42L;
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int index = 42;
 
-            GovUtil.GovActionIdParts parts = new GovUtil.GovActionIdParts(txHash, index);
+        GovUtil.GovActionIdParts parts = new GovUtil.GovActionIdParts(txHash, index);
 
-            assertEquals(txHash, parts.getTxHash());
-            assertEquals(index, parts.getIndex());
-        }
-
-    @Test
-    @DisplayName("Should have correct toString representation")
-    void shouldHaveCorrectToStringRepresentation() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long index = 42L;
-
-            GovUtil.GovActionIdParts parts = new GovUtil.GovActionIdParts(txHash, index);
-            String toString = parts.toString();
-
-            assertTrue(toString.contains("GovActionIdParts"));
-            assertTrue(toString.contains("txHash='" + txHash + "'"));
-            assertTrue(toString.contains("index=" + index));
-        }
+        assertEquals(txHash, parts.txHash());
+        assertEquals(index, parts.index());
+    }
 
     @Test
     @DisplayName("Should be equal for same txHash and index")
     void shouldBeEqualForSameTxHashAndIndex() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long index = 42L;
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int index = 42;
 
-            GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash, index);
-            GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash, index);
+        GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash, index);
+        GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash, index);
 
-            assertEquals(parts1, parts2);
-            assertEquals(parts1.hashCode(), parts2.hashCode());
-        }
+        assertEquals(parts1, parts2);
+        assertEquals(parts1.hashCode(), parts2.hashCode());
+    }
 
     @Test
     @DisplayName("Should not be equal for different txHash")
     void shouldNotBeEqualForDifferentTxHash() {
-            String txHash1 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            String txHash2 = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
-            long index = 42L;
+        String txHash1 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        String txHash2 = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
+        int index = 42;
 
-            GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash1, index);
-            GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash2, index);
+        GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash1, index);
+        GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash2, index);
 
-            assertNotEquals(parts1, parts2);
-        }
+        assertNotEquals(parts1, parts2);
+    }
 
     @Test
     @DisplayName("Should not be equal for different index")
     void shouldNotBeEqualForDifferentIndex() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long index1 = 42L;
-            long index2 = 43L;
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int index1 = 42;
+        int index2 = 43;
 
-            GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash, index1);
-            GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash, index2);
+        GovUtil.GovActionIdParts parts1 = new GovUtil.GovActionIdParts(txHash, index1);
+        GovUtil.GovActionIdParts parts2 = new GovUtil.GovActionIdParts(txHash, index2);
 
-            assertNotEquals(parts1, parts2);
-        }
+        assertNotEquals(parts1, parts2);
+    }
 
     @Test
     @DisplayName("Should handle zero index")
     void shouldHandleZeroIndex() {
-            String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-            long zeroIndex = 0L;
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int zeroIndex = 0;
 
-            GovUtil.GovActionIdParts parts = new GovUtil.GovActionIdParts(txHash, zeroIndex);
+        GovUtil.GovActionIdParts parts = new GovUtil.GovActionIdParts(txHash, zeroIndex);
 
-            assertEquals(txHash, parts.getTxHash());
-            assertEquals(zeroIndex, parts.getIndex());
-        }
+        assertEquals(txHash, parts.txHash());
+        assertEquals(zeroIndex, parts.index());
+    }
 
     @Test
     @DisplayName("Should handle maximum single-byte index value")
@@ -204,9 +167,9 @@ class GovUtilTest {
         int maxIndex = 255;
         
         String govActionId = GovId.govAction(txHash, maxIndex);
-        GovUtil.GovActionIdParts parts = GovUtil.convertGovActionIdToTxHashAndIndex(govActionId);
+        GovUtil.GovActionIdParts parts = GovUtil.toGovActionId(govActionId);
 
-        assertEquals(txHash, parts.getTxHash());
-        assertEquals(maxIndex, parts.getIndex());
+        assertEquals(txHash, parts.txHash());
+        assertEquals(maxIndex, parts.index());
     }
 }
