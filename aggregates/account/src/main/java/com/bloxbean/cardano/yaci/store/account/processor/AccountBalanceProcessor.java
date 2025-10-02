@@ -365,9 +365,10 @@ public class AccountBalanceProcessor {
             if (firstConwayEpoch != null) {
                 inputAddressUtxos.forEach(addressUtxo -> {
                     Integer utxoEpoch = addressUtxo.getEpoch();
-                    if (utxoEpoch != null && utxoEpoch < firstConwayEpoch) {
+                    String ownerAddress = addressUtxo.getOwnerAddr();
+                    if (utxoEpoch != null && utxoEpoch < firstConwayEpoch  && ownerAddress != null && ownerAddress.startsWith("addr")) {
                         try {
-                            Address addr = new Address(addressUtxo.getOwnerAddr());
+                            Address addr = new Address(ownerAddress);
                             if (addr.getAddressType() == AddressType.Ptr) {
                                 addressUtxo.setOwnerStakeAddr(null);
                                 addressUtxo.setOwnerStakeCredential(null);
