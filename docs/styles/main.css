@@ -1,0 +1,22 @@
+video {
+  display: block;
+  margin: 0 auto;
+  width: 70%;
+  padding: 1.5rem 0rem;
+}
+
+.wide-asset {
+  width: 90%;
+  margin: 0 auto;
+}
+
+@media (min-width: 1024px) {
+  video {
+    width: 50%;
+  }
+}
+
+footer {
+  font-weight: 600;
+  text-decoration: underline;
+}

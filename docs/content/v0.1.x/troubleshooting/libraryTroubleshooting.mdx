@@ -1,0 +1,49 @@
+&nbsp;
+
+# 📦 Library Integration Troubleshooting
+
+This guide helps resolve common issues when integrating Yaci Store v1.0 as a library in your Java application.
+
+## 📦 Yaci Store as a Library
+
+### 1. ❌ Missing Events or Data
+
+**Symptoms**: Your application does not receive events, or data is missing.
+
+**Solutions**:
+- Ensure you subscribed to the correct event types from the event bus.
+
+---
+
+### 2. 💤 No Chain Sync Happening
+
+**Symptoms**: Your embedded Yaci Store is not syncing with the chain.
+
+**Solutions**:
+- Confirm that chain connection configuration is correct (e.g., node socket or host/port).
+- If using **Ogmios** or **Node-to-Client**, verify that the node is accessible.
+- Ensure the following is set in `application.properties`:
+
+<pre><code class="language-properties">
+store.sync-auto-start=true
+</code></pre>
+
+- Or manually start syncing from your application code.
+
+---
+
+### 3. 🗃️ Custom Store Not Writing to DB
+
+**Symptoms**: Your store processes events but nothing is saved to the database.
+
+**Solutions**:
+- Double check your repository/service layer implementation.
+- Make sure transactional annotations like `@Transactional` are used properly.
+- Ensure the correct database dialect and driver are configured in `application.properties`.
+
+---
+---
+> 💬 **Still stuck?**
+>
+> - Ask questions on [Bloxbean Developers Discord](https://discord.gg/6AnKrFx4ne)& [GitHub Discussions](https://github.com/bloxbean/yaci-store/discussions) 
+> - Report bugs via the [Issue Tracker](https://github.com/bloxbean/yaci-store/issues)  

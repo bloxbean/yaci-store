@@ -1,0 +1,557 @@
+&nbsp;
+
+# 🏪 Use Case 2: Building a Cardano NFT Marketplace Analytics Dashboard
+
+Create a comprehensive analytics dashboard that tracks NFT marketplace activity, monitors collection performance, and provides real-time market insights using Yaci Store v0.1.x.
+
+---
+
+## 🎯 Project Overview
+
+**Goal**: Build an NFT marketplace analytics platform that aggregates data from multiple Cardano NFT marketplaces and provides comprehensive market insights.
+
+**What We'll Build**:
+- NFT collection performance tracking
+- Marketplace volume analytics
+- Price trend analysis
+- Rarity and trait distribution
+- Real-time transaction monitoring
+- Collection floor price tracking
+
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Cardano Node  │───▶│   Yaci Store    │───▶│  Analytics API  │
+│                 │    │                 │    │                 │
+│ • NFT Trades    │    │ • Asset Data    │    │ • REST APIs     │
+│ • Metadata      │    │ • Transactions  │    │ • Dashboard     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                                               ┌─────────────────┐
+                                               │   Frontend UI   │
+                                               │                 │
+                                               │ • Charts        │
+                                               │ • Tables        │
+                                               │ • Real-time     │
+                                               └─────────────────┘
+```
+
+### Components:
+- **Yaci Store v0.1.x**: Blockchain data indexing
+- **PostgreSQL**: Data storage and analytics
+- **Spring Boot**: Analytics API service
+- **React/Vue**: Frontend dashboard
+- **Chart.js**: Data visualization
+
+---
+
+## 📋 Prerequisites
+
+### System Requirements
+- Java 24
+- PostgreSQL 14+
+- 16 GB RAM (recommended for NFT metadata processing)
+- 1 TB storage for complete NFT data
+
+### NFT-Specific Setup
+```bash
+# Download Yaci Store v0.1.4
+wget https://github.com/bloxbean/yaci-store/releases/download/v0.1.4/yaci-store-all-0.1.4.jar
+
+# Create analytics database
+createdb nft_analytics
+```
+
+---
+
+## ⚙️ Configuration
+
+### 1. Yaci Store Configuration
+
+Create `application.properties`:
+
+```properties
+# Cardano Node Connection
+store.cardano.host=localhost
+store.cardano.port=3001
+store.cardano.protocol-magic=764824073
+
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/nft_analytics
+spring.datasource.username=nft_user
+spring.datasource.password=secure_password
+spring.jpa.hibernate.ddl-auto=update
+
+# Enable NFT-focused Stores
+store.blocks.enabled=true
+store.transactions.enabled=true
+store.utxos.enabled=true
+store.assets.enabled=true
+store.asset-metadata.enabled=true
+store.multi-assets.enabled=true
+
+# NFT-specific optimizations
+store.asset-metadata.fetch-metadata=true
+store.asset-metadata.ipfs-gateway=https://ipfs.io/ipfs/
+store.transactions.include-cbor=false
+
+# Performance settings
+store.blocks.batch-size=500
+store.transactions.batch-size=500
+store.parallel-processing=true
+store.thread-pool-size=12
+```
+
+### 2. Analytics Configuration
+
+```yaml
+# NFT Analytics Settings
+nft-analytics:
+  tracked-collections:
+    - policy-id: "d5e6bf0500378d4f0da4e8dde6becec7621cd8cbf5cbb9b87013d4cc"  # SpaceBudz
+    - policy-id: "40fa2aa67258b4ce7b5782f74831d46a84c59a0ff0c28262fab21728"  # Clay Nation
+    - policy-id: "8654e8b350e298c80d6d55c37d8c70d1d8d7bd5b5e7b8a8a1f1f1f1f"  # Custom collection
+  
+  marketplaces:
+    - name: "jpg.store"
+      contract-address: "addr1..."
+    - name: "cnft.io" 
+      contract-address: "addr1..."
+  
+  price-feeds:
+    ada-usd-api: "https://api.coingecko.com/api/v3/simple/price?ids=cardano&vs_currencies=usd"
+  
+  refresh-intervals:
+    collection-stats: 300  # 5 minutes
+    floor-prices: 60      # 1 minute
+    trending: 180         # 3 minutes
+```
+
+---
+
+## 🚀 Implementation
+
+### 1. NFT Collection Service
+
+Create `NFTCollectionService.java`:
+
+```java
+@Service
+public class NFTCollectionService {
+    
+    @Autowired
+    private AssetRepository assetRepository;
+    
+    @Autowired
+    private TransactionRepository transactionRepository;
+    
+    @Autowired
+    private UtxoRepository utxoRepository;
+    
+    public CollectionStats getCollectionStats(String policyId) {
+        // Get all assets in collection
+        List<Asset> collectionAssets = assetRepository.findByPolicyId(policyId);
+        
+        // Calculate basic stats
+        int totalSupply = collectionAssets.size();
+        int uniqueHolders = getUniqueHolders(policyId);
+        BigDecimal floorPrice = calculateFloorPrice(policyId);
+        BigDecimal totalVolume = calculateTotalVolume(policyId);
+        
+        // Get recent activity
+        List<Transaction> recentSales = getRecentSales(policyId, 7); // Last 7 days
+        BigDecimal weeklyVolume = calculateWeeklyVolume(recentSales);
+        
+        return CollectionStats.builder()
+            .policyId(policyId)
+            .totalSupply(totalSupply)
+            .uniqueHolders(uniqueHolders)
+            .floorPrice(floorPrice)
+            .totalVolume(totalVolume)
+            .weeklyVolume(weeklyVolume)
+            .averagePrice(totalVolume.divide(BigDecimal.valueOf(recentSales.size()), 2, RoundingMode.HALF_UP))
+            .build();
+    }
+    
+    private int getUniqueHolders(String policyId) {
+        return utxoRepository.countUniqueHoldersByPolicyId(policyId);
+    }
+    
+    private BigDecimal calculateFloorPrice(String policyId) {
+        // Query active listings from marketplace contracts
+        return utxoRepository.findLowestListingPrice(policyId)
+            .orElse(BigDecimal.ZERO);
+    }
+    
+    private List<Transaction> getRecentSales(String policyId, int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        return transactionRepository.findNFTSalesByPolicyIdSince(policyId, since);
+    }
+}
+```
+
+### 2. Market Analytics Service
+
+```java
+@Service
+public class MarketAnalyticsService {
+    
+    public MarketOverview getMarketOverview() {
+        LocalDateTime last24h = LocalDateTime.now().minusHours(24);
+        
+        // Calculate 24h metrics
+        BigDecimal volume24h = transactionRepository.calculateNFTVolume24h();
+        int sales24h = transactionRepository.countNFTSales24h();
+        int activeCollections = assetRepository.countActiveCollections24h();
+        
+        // Calculate market trends
+        BigDecimal avgSalePrice = volume24h.divide(BigDecimal.valueOf(sales24h), 2, RoundingMode.HALF_UP);
+        
+        return MarketOverview.builder()
+            .volume24h(volume24h)
+            .sales24h(sales24h)
+            .activeCollections(activeCollections)
+            .averageSalePrice(avgSalePrice)
+            .topCollections(getTopCollectionsByVolume(10))
+            .trendingCollections(getTrendingCollections())
+            .build();
+    }
+    
+    public List<CollectionTrend> getCollectionTrends(String policyId, int days) {
+        List<CollectionTrend> trends = new ArrayList<>();
+        
+        for (int i = days; i >= 0; i--) {
+            LocalDate date = LocalDate.now().minusDays(i);
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime endOfDay = date.atTime(23, 59, 59);
+            
+            BigDecimal dailyVolume = transactionRepository
+                .calculateNFTVolumeByPolicyIdAndDateRange(policyId, startOfDay, endOfDay);
+            int dailySales = transactionRepository
+                .countNFTSalesByPolicyIdAndDateRange(policyId, startOfDay, endOfDay);
+            BigDecimal floorPrice = calculateDailyFloorPrice(policyId, date);
+            
+            trends.add(CollectionTrend.builder()
+                .date(date)
+                .volume(dailyVolume)
+                .salesCount(dailySales)
+                .floorPrice(floorPrice)
+                .averagePrice(dailySales > 0 ? 
+                    dailyVolume.divide(BigDecimal.valueOf(dailySales), 2, RoundingMode.HALF_UP) : 
+                    BigDecimal.ZERO)
+                .build());
+        }
+        
+        return trends;
+    }
+}
+```
+
+### 3. NFT Analytics Controller
+
+```java
+@RestController
+@RequestMapping("/api/nft-analytics")
+public class NFTAnalyticsController {
+    
+    @Autowired
+    private NFTCollectionService collectionService;
+    
+    @Autowired
+    private MarketAnalyticsService marketService;
+    
+    @GetMapping("/market/overview")
+    public ResponseEntity<MarketOverview> getMarketOverview() {
+        MarketOverview overview = marketService.getMarketOverview();
+        return ResponseEntity.ok(overview);
+    }
+    
+    @GetMapping("/collections/{policyId}/stats")
+    public ResponseEntity<CollectionStats> getCollectionStats(
+            @PathVariable String policyId) {
+        CollectionStats stats = collectionService.getCollectionStats(policyId);
+        return ResponseEntity.ok(stats);
+    }
+    
+    @GetMapping("/collections/{policyId}/trends")
+    public ResponseEntity<List<CollectionTrend>> getCollectionTrends(
+            @PathVariable String policyId,
+            @RequestParam(defaultValue = "30") int days) {
+        List<CollectionTrend> trends = marketService.getCollectionTrends(policyId, days);
+        return ResponseEntity.ok(trends);
+    }
+    
+    @GetMapping("/collections/top")
+    public ResponseEntity<List<CollectionStats>> getTopCollections(
+            @RequestParam(defaultValue = "volume") String sortBy,
+            @RequestParam(defaultValue = "10") int limit) {
+        List<CollectionStats> topCollections = 
+            collectionService.getTopCollections(sortBy, limit);
+        return ResponseEntity.ok(topCollections);
+    }
+    
+    @GetMapping("/assets/{policyId}/{assetName}/history")
+    public ResponseEntity<List<AssetSaleHistory>> getAssetHistory(
+            @PathVariable String policyId,
+            @PathVariable String assetName) {
+        List<AssetSaleHistory> history = 
+            collectionService.getAssetSaleHistory(policyId, assetName);
+        return ResponseEntity.ok(history);
+    }
+}
+```
+
+---
+
+## 📊 Key Analytics Queries
+
+### 1. Collection Volume Rankings
+
+```sql
+-- Get top collections by 24h volume
+SELECT 
+    a.policy_id,
+    COUNT(DISTINCT a.asset_name) as total_supply,
+    COUNT(DISTINCT t.hash) as sales_24h,
+    SUM(CAST(o.value AS DECIMAL)) / 1000000 as volume_24h_ada,
+    AVG(CAST(o.value AS DECIMAL)) / 1000000 as avg_price_ada,
+    MIN(CAST(o.value AS DECIMAL)) / 1000000 as floor_price_ada
+FROM asset a
+JOIN transaction_output o ON a.policy_id = ANY(o.asset_list)
+JOIN transaction t ON o.tx_hash = t.hash
+WHERE t.block_time >= NOW() - INTERVAL '24 hours'
+    AND o.value > 1000000  -- Filter out non-sale transactions
+GROUP BY a.policy_id
+ORDER BY volume_24h_ada DESC
+LIMIT 20;
+```
+
+### 2. NFT Price History
+
+```sql
+-- Get price history for specific NFT
+SELECT 
+    t.block_time as sale_date,
+    CAST(o.value AS DECIMAL) / 1000000 as price_ada,
+    t.hash as transaction_hash,
+    o.address as buyer_address
+FROM transaction_output o
+JOIN transaction t ON o.tx_hash = t.hash
+JOIN asset a ON a.policy_id = :policyId AND a.asset_name = :assetName
+WHERE o.asset_list @> ARRAY[a.policy_id || a.asset_name]
+    AND o.value > 1000000
+ORDER BY t.block_time DESC;
+```
+
+### 3. Holder Distribution Analysis
+
+```sql
+-- Analyze holder distribution for a collection
+SELECT 
+    holder_count_range,
+    COUNT(*) as holders_in_range,
+    SUM(asset_count) as total_assets
+FROM (
+    SELECT 
+        u.address,
+        COUNT(*) as asset_count,
+        CASE 
+            WHEN COUNT(*) = 1 THEN '1 NFT'
+            WHEN COUNT(*) BETWEEN 2 AND 5 THEN '2-5 NFTs'
+            WHEN COUNT(*) BETWEEN 6 AND 10 THEN '6-10 NFTs'
+            WHEN COUNT(*) BETWEEN 11 AND 50 THEN '11-50 NFTs'
+            ELSE '50+ NFTs'
+        END as holder_count_range
+    FROM utxo u
+    JOIN asset a ON a.policy_id = :policyId
+    WHERE u.asset_list @> ARRAY[a.policy_id || a.asset_name]
+        AND u.spent = false
+    GROUP BY u.address
+) holder_stats
+GROUP BY holder_count_range
+ORDER BY 
+    CASE holder_count_range
+        WHEN '1 NFT' THEN 1
+        WHEN '2-5 NFTs' THEN 2
+        WHEN '6-10 NFTs' THEN 3
+        WHEN '11-50 NFTs' THEN 4
+        ELSE 5
+    END;
+```
+
+---
+
+## 📈 Advanced Features
+
+### 1. Rarity Calculator
+
+```java
+@Service
+public class RarityService {
+    
+    public List<AssetRarity> calculateCollectionRarity(String policyId) {
+        List<Asset> assets = assetRepository.findByPolicyId(policyId);
+        Map<String, Map<String, Integer>> traitCounts = new HashMap<>();
+        
+        // Count trait occurrences
+        assets.forEach(asset -> {
+            if (asset.getMetadata() != null) {
+                asset.getMetadata().getAttributes().forEach(attr -> {
+                    traitCounts.computeIfAbsent(attr.getTraitType(), k -> new HashMap<>())
+                        .merge(attr.getValue(), 1, Integer::sum);
+                });
+            }
+        });
+        
+        // Calculate rarity scores
+        return assets.stream().map(asset -> {
+            double rarityScore = calculateAssetRarityScore(asset, traitCounts, assets.size());
+            return AssetRarity.builder()
+                .policyId(asset.getPolicyId())
+                .assetName(asset.getAssetName())
+                .rarityScore(rarityScore)
+                .rarityRank(0) // Will be set after sorting
+                .build();
+        })
+        .sorted((a, b) -> Double.compare(b.getRarityScore(), a.getRarityScore()))
+        .collect(Collectors.toList());
+    }
+    
+    private double calculateAssetRarityScore(Asset asset, 
+            Map<String, Map<String, Integer>> traitCounts, int totalSupply) {
+        if (asset.getMetadata() == null) return 0.0;
+        
+        return asset.getMetadata().getAttributes().stream()
+            .mapToDouble(attr -> {
+                int traitCount = traitCounts.get(attr.getTraitType())
+                    .getOrDefault(attr.getValue(), 1);
+                return 1.0 / ((double) traitCount / totalSupply);
+            })
+            .sum();
+    }
+}
+```
+
+### 2. Real-time Notifications
+
+```java
+@Service
+public class NFTNotificationService {
+    
+    @EventListener
+    public void handleNewNFTSale(NFTSaleEvent event) {
+        // Check if it's a notable sale (high value, rare NFT, etc.)
+        if (isNotableSale(event)) {
+            sendNotification(createSaleNotification(event));
+        }
+        
+        // Update collection statistics
+        updateCollectionStats(event.getPolicyId());
+    }
+    
+    private boolean isNotableSale(NFTSaleEvent event) {
+        // Notable if:
+        // - Price > 1000 ADA
+        // - New floor price
+        // - Rare NFT (top 5% by rarity)
+        return event.getPriceAda().compareTo(BigDecimal.valueOf(1000)) > 0 ||
+               isNewFloorPrice(event) ||
+               isRareNFT(event);
+    }
+    
+    @Scheduled(fixedRate = 60000) // Every minute
+    public void checkFloorPriceChanges() {
+        List<String> trackedCollections = getTrackedCollections();
+        
+        trackedCollections.forEach(policyId -> {
+            BigDecimal currentFloor = calculateFloorPrice(policyId);
+            BigDecimal previousFloor = getCachedFloorPrice(policyId);
+            
+            if (hasSignificantFloorChange(currentFloor, previousFloor)) {
+                sendFloorPriceAlert(policyId, currentFloor, previousFloor);
+            }
+            
+            updateCachedFloorPrice(policyId, currentFloor);
+        });
+    }
+}
+```
+
+---
+
+## 🎯 Dashboard Features
+
+### Real-time Market Metrics
+- **24h Volume**: Total ADA volume across all NFT sales
+- **Active Collections**: Collections with recent trading activity
+- **Top Movers**: Collections with biggest volume/price changes
+- **New Listings**: Recently listed NFTs
+
+### Collection Analytics
+- **Floor Price Tracking**: Historical floor price charts
+- **Volume Trends**: Daily/weekly/monthly volume analysis
+- **Holder Statistics**: Distribution and whale tracking
+- **Rarity Rankings**: Trait-based rarity calculations
+
+### Individual Asset Tracking
+- **Price History**: Complete sale history for any NFT
+- **Ownership Timeline**: Track ownership changes
+- **Rarity Scores**: Calculated rarity with trait breakdown
+- **Market Comparisons**: Compare similar assets
+
+---
+
+## 🔧 Optimization Strategies
+
+### 1. Database Performance
+```sql
+-- Indexes for NFT analytics
+CREATE INDEX idx_asset_policy_id ON asset(policy_id);
+CREATE INDEX idx_transaction_block_time ON transaction(block_time);
+CREATE INDEX idx_utxo_asset_list ON utxo USING GIN(asset_list);
+CREATE INDEX idx_transaction_output_value ON transaction_output(value) WHERE value > 1000000;
+```
+
+### 2. Caching Layer
+```java
+@Service
+public class NFTCacheService {
+    
+    @Cacheable(value = "collection-stats", key = "#policyId")
+    public CollectionStats getCachedCollectionStats(String policyId) {
+        return collectionService.getCollectionStats(policyId);
+    }
+    
+    @Cacheable(value = "floor-prices", key = "#policyId")
+    public BigDecimal getCachedFloorPrice(String policyId) {
+        return collectionService.calculateFloorPrice(policyId);
+    }
+}
+```
+
+---
+
+## 🚀 Expected Outcomes
+
+### Analytics Capabilities
+- **Comprehensive market overview** with real-time metrics
+- **Collection performance tracking** across all major NFT projects
+- **Rarity analysis** with trait-based scoring
+- **Price trend forecasting** using historical data
+
+### Technical Benefits
+- **Real-time data processing** with minimal latency
+- **Scalable architecture** handling millions of NFT transactions
+- **Flexible analytics** adaptable to new marketplace formats
+- **Historical data preservation** for trend analysis
+
+### Business Value
+- **Market intelligence** for traders and collectors
+- **Collection insights** for project creators
+- **Investment analysis** for institutional buyers
+- **Marketplace optimization** for platform operators
+
+This use case demonstrates how Yaci Store v0.1.x can power sophisticated NFT market analysis, providing the foundation for data-driven decision making in the Cardano NFT ecosystem.

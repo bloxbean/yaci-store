@@ -1,0 +1,378 @@
+&nbsp;
+
+# Store Configuration Guide
+
+This guide covers the essential configuration options for yaci-store, including how to enable/disable stores and configure key properties for optimal performance.
+
+## Store Configuration Flags
+
+### Core Stores
+
+All stores are enabled by default. To disable a store, set its flag to false:
+
+```properties
+# Core store flags
+store.assets.enabled=true
+store.blocks.enabled=true
+store.epoch.enabled=true
+store.metadata.enabled=true
+store.mir.enabled=true
+store.script.enabled=true
+store.staking.enabled=true
+store.transaction.enabled=true
+store.utxo.enabled=true
+store.governance.enabled=true
+```
+
+### Aggregation Modules
+
+These modules are disabled by default and are enabled only for the ledger-state profile. While core store indexing is done in parallel, most of the processing in aggregation modules is sequential. Therefore, it is recommended to enable aggregation modules only when you need them.
+
+```properties
+# Aggregation module flags (disabled by default)
+store.account.enabled=false
+store.adapot.enabled=false
+store.governance-aggr.enabled=false
+
+# Epoch aggregation
+store.epoch-aggr.enabled=false
+```
+
+### API Control Flags
+
+Each store can have its API independently disabled:
+
+```properties
+# API control flags (all enabled by default when store is enabled)
+store.assets.api-enabled=true
+store.blocks.api-enabled=true
+store.epoch.api-enabled=true
+store.metadata.api-enabled=true
+store.script.api-enabled=true
+store.staking.api-enabled=true
+store.transaction.api-enabled=true
+store.utxo.api-enabled=true
+store.mir.api-enabled=true
+store.governance.api-enabled=true
+```
+
+> 💡 **Note**: Disabling unnecessary stores can significantly reduce database storage requirements and improve sync performance.
+
+## Network Configuration
+
+### Supported Networks
+
+```properties
+# Preprod (default)
+store.cardano.host=preprod-node.play.dev.cardano.org
+store.cardano.port=3001
+store.cardano.protocol-magic=1
+
+# Preview
+store.cardano.host=preview-node.play.dev.cardano.org
+store.cardano.port=3001
+store.cardano.protocol-magic=2
+
+# Mainnet
+store.cardano.host=backbone.cardano.iog.io
+store.cardano.port=3001
+store.cardano.protocol-magic=764824073
+
+# Custom Network
+store.cardano.host=<cardano_host>
+store.cardano.port=<cardano_port>
+store.cardano.protocol-magic=<protocol_magic>
+```
+
+### Local Node Configuration (Optional)
+
+Yaci Store can connect to a local node to fetch current protocol parameters and current governance state data through n2c. It can also be used to submit transactions. You can use either a Unix socket or a TCP socket (through socat) to connect to your local node.
+
+> ⚠️ **Important**: Even if the local node is configured for n2c, you still need to configure the `store.cardano.host`, `store.cardano.port`, and `store.cardano.protocol-magic` properties for indexing, as the indexing is done through the n2n protocol.
+
+```properties
+# Unix socket (local node)
+store.cardano.n2c-node-socket-path=/path/to/node.socket
+
+# Or TCP socket (remote node via socat)
+store.cardano.n2c-host=192.168.0.228
+store.cardano.n2c-port=31001
+```
+
+## Database Configuration
+
+### H2 (Default - In-Memory / File-Based)
+
+> ⚠️ **Warning**: Only for testing purposes, not recommended for production use.
+
+```properties
+spring.datasource.url=jdbc:h2:mem:mydb
+spring.datasource.username=sa
+spring.datasource.password=password
+spring.h2.console.enabled=true
+```
+
+### PostgreSQL
+
+```properties
+spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_indexer?currentSchema=preprod
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+### MySQL
+
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/yaci_indexer
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+### Connection Pool Settings
+
+```properties
+# HikariCP settings
+spring.datasource.hikari.maximum-pool-size=30
+spring.datasource.hikari.minimum-idle=5
+
+# Batch processing
+spring.jpa.properties.hibernate.jdbc.batch_size=100
+spring.jpa.properties.hibernate.order_inserts=true
+```
+
+## Performance Configuration
+
+### Parallel Processing
+
+Parallel processing is enabled by default, but you can disable it if you want to run in sequential mode.
+
+```properties
+# Enable parallel processing (recommended)
+store.executor.enable-parallel-processing=true
+
+# Batch sizes
+store.executor.blocks-batch-size=100
+store.executor.blocks-partition-size=10
+
+# Virtual threads (Java 21+)
+store.executor.use-virtual-thread-for-batch-processing=true
+store.executor.use-virtual-thread-for-event-processing=true
+```
+
+### Database Insert Performance
+
+```properties
+# JOOQ batch settings
+store.db.batch-size=1000
+store.db.parallel-insert=true
+```
+
+## Sync Configuration
+
+### Custom Start Point
+
+```properties
+# Start from specific slot
+store.cardano.sync-start-slot=2738868
+store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c
+
+# Stop at specific slot
+store.cardano.sync-stop-slot=76667163
+store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
+```
+
+### Auto-start Control
+
+```properties
+# Disable auto-start of sync
+store.sync-auto-start=false
+```
+
+### Index Management
+
+For public networks like mainnet, preprod, and preview, you still need to apply indexes manually or through admin-cli.
+
+```properties
+# Auto-manage indexes during sync
+store.auto-index-management=true
+```
+
+## Common Configuration Scenarios (Examples)
+
+### Scenario 1: NFT Explorer
+
+Focus on NFT-related data only:
+
+```properties
+# Disable unnecessary stores
+store.staking.enabled=false
+store.mir.enabled=false
+store.governance.enabled=false
+store.epoch.enabled=false
+
+# Keep only NFT-relevant stores
+store.assets.enabled=true
+store.metadata.enabled=true
+store.transaction.enabled=true
+store.utxo.enabled=true
+```
+
+### Scenario 2: Staking Analytics
+
+Focus on staking and epoch data:
+
+```properties
+# Disable non-staking stores
+store.assets.enabled=false
+store.metadata.enabled=false
+store.script.enabled=false
+store.utxo.enabled=false
+
+# Keep staking-relevant stores
+store.staking.enabled=true
+store.epoch.enabled=true
+store.blocks.enabled=true
+store.transaction.enabled=true
+```
+
+## Advanced Features
+
+### Pruning Configuration
+
+By default, pruning is disabled for all stores. Enable pruning to automatically remove historical data and reduce storage requirements.
+
+#### UTxO Pruning
+
+```properties
+# Enable UTxO pruning
+store.utxo.pruning-enabled=true
+store.utxo.pruning.interval=600
+store.utxo.pruning-safe-blocks=2160
+```
+
+#### Transaction Pruning
+
+```properties
+# Enable transaction pruning
+store.transaction.pruning-enabled=true
+store.transaction.pruning.interval=86400
+```
+
+#### Transaction Witness Saving
+
+```properties
+# Save transaction witness data (disabled by default to reduce storage)
+store.transaction.save-witness=false
+```
+
+#### Epoch Stake Pruning
+
+```properties
+# Enable epoch stake pruning (for adapot module)
+store.adapot.epoch-stake-pruning-enabled=true
+store.adapot.epoch-stake-pruning-interval=86400
+store.adapot.epoch-stake-safe-epochs=4
+```
+
+### Address Storage
+
+By default, addresses are not saved in address table. Enable this feature if you need to have all used addresses in address table.
+
+```properties
+# Enable saving addresses to address table (default: false)
+store.utxo.save-address=true
+
+# Enable address caching for better performance
+store.utxo.address-cache-enabled=true
+store.utxo.address-cache-size=100000
+```
+
+### Keep-Alive Settings
+
+```properties
+# Maintain connection to node
+store.cardano.keep-alive-interval=10000
+```
+
+## Transaction Submission Configuration (Optional)
+
+Transaction submission is optional and disabled by default. You can enable it through multiple methods based on your infrastructure.
+
+Yaci Store supports three methods for transaction submission, with the following priority order:
+
+### 1. Submit API (Recommended)
+
+```properties
+# Enable transaction submission via Submit API
+store.cardano.submit-api-url=http://localhost:8090/api/submit/tx
+```
+
+### 2. Ogmios
+
+```properties
+# Enable transaction submission and script cost evaluation via Ogmios
+store.cardano.ogmios-url=http://ogmios-host:1337
+```
+
+### 3. Local N2C Protocol
+
+```properties
+# Automatically enabled if n2c configuration is provided
+# See "Local Node Configuration" section above
+```
+
+> 💡 **Tip**: You can combine Submit API for transaction submission with Ogmios for script cost evaluation by configuring both URLs. This provides the best of both services.
+
+### N2C Connection Pool Configuration
+
+When using N2C protocol for transaction submission:
+
+```properties
+# N2C connection pool settings
+store.cardano.n2c-pool-enabled=true
+store.cardano.n2c-max-total=10
+store.cardano.n2c-pool-min-idle=2
+store.cardano.n2c-pool-max-idle=5
+store.cardano.n2c-pool-max-wait-in-millis=10000
+```
+
+## Read-Only Mode
+
+```properties
+# Enable read-only mode (no writes to database)
+store.read-only-mode=true
+```
+
+## Fine-Grained Data Control
+
+For more advanced control over what specific data gets stored within each enabled store, yaci-store provides a powerful plugin framework. This allows you to:
+
+- Filter specific assets or transactions or other blockchain data
+- Transform data before storage
+- Implement business-specific logic
+
+Learn more about fine-grained data control using plugins in the Plugin Getting Started Guide.
+
+## Best Practices
+
+1. **Start minimal**: Enable only the stores you need
+2. **Use appropriate database**: H2 for testing, PostgreSQL for production
+3. **Enable parallel processing**: Significantly improves sync performance
+4. **Monitor resources**: Adjust batch sizes based on available memory
+5. **Test configurations**: Always test on testnet before mainnet
+
+## Monitoring and Observability
+
+```properties
+# Expose metrics endpoints
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.health.show-details=always
+
+# Logging configuration
+logging.file.name=./logs/yaci-store.log
+logging.level.com.bloxbean.cardano.yaci.store.core.service=INFO
+```
+
+## Next Steps
+
+Explore Plugin Development for fine-grained control
