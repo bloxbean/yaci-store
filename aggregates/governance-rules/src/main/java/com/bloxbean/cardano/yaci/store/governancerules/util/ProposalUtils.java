@@ -11,44 +11,6 @@ import java.util.*;
  */
 public class ProposalUtils {
 
-    /**
-     * Finds all descendants and siblings of a specific proposal.
-     *
-     * @param proposal     The proposal for which descendants and/or siblings are to be found.
-     * @param proposalList The list of proposals.
-     * @return A list of proposals that are descendants and siblings of the given proposal.
-     */
-    public static List<Proposal> findDescendantsAndSiblings(Proposal proposal, List<Proposal> proposalList) {
-        if (proposal.getType() == GovActionType.INFO_ACTION || proposal.getType() == GovActionType.TREASURY_WITHDRAWALS_ACTION) {
-            return Collections.emptyList();
-        }
-
-        List<Proposal> result = new ArrayList<>();
-        GovActionType type = proposal.getType();
-
-        // Add descendants
-        result.addAll(findDescendants(proposal, proposalList, type));
-
-        GovActionId parentId = proposal.getPrevGovActionId();
-        if (parentId != null) {
-            // Find siblings with the same parent and type
-            result.addAll(
-                    proposalList.stream()
-                            .filter(p -> parentId.equals(p.getPrevGovActionId()) && !p.equals(proposal)
-                                    && isSamePurpose(p.getType(), type))
-                            .toList()
-            );
-        } else {
-            // If no parent, find siblings among root nodes
-            result.addAll(
-                    proposalList.stream()
-                            .filter(p -> p.getPrevGovActionId() == null && !p.equals(proposal) && isSamePurpose(p.getType(), type))
-                            .toList()
-            );
-        }
-
-        return result;
-    }
 
     /**
      * Find siblings of a proposal
@@ -149,6 +111,7 @@ public class ProposalUtils {
      * @param type2 Second governance action type
      * @return true if both types belong to the same purpose group
      */
+    // TODO: maybe we need add link to ledger code here
     public static boolean isSamePurpose(GovActionType type1, GovActionType type2) {
         if (type1 == type2) {
             return true;

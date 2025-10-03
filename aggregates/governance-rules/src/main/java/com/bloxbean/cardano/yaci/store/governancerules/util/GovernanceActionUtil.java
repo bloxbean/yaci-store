@@ -85,6 +85,8 @@ public class GovernanceActionUtil {
         return totalWithdrawal.compareTo(treasury) <= 0;
     }
 
+
+    // todo: comment here
     public static boolean isDelayingAction(GovActionType govActionType) {
         return govActionType == GovActionType.HARD_FORK_INITIATION_ACTION
                 || govActionType == GovActionType.NEW_CONSTITUTION
@@ -92,6 +94,7 @@ public class GovernanceActionUtil {
                 || govActionType == GovActionType.NO_CONFIDENCE;
     }
 
+    // todo: add link to ledger code
     public static int getActionPriority(GovActionType govActionType) {
         return switch (govActionType) {
             case NO_CONFIDENCE -> 0;

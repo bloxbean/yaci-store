@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.governancerules.voting;
 
-import com.bloxbean.cardano.client.transaction.spec.governance.DRep;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;

@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// TODO: write documentation
 public class ProposalDropService {
 
     public List<Proposal> getProposalsBeDropped(
