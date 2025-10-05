@@ -4,6 +4,10 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.cardanofoundation.conversions.ClasspathConversionsFactory;
+import org.cardanofoundation.conversions.converters.EpochConversions;
+import org.cardanofoundation.conversions.converters.SlotConversions;
+import org.cardanofoundation.conversions.domain.NetworkType;
 import org.springframework.data.util.Pair;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -12,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.cardanofoundation.conversions.domain.EpochOffset.END;
 
 @Service
 @RequiredArgsConstructor
@@ -23,9 +29,10 @@ public class RollbackService {
     @Transactional
     public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
         int epoch = context.getEpoch();
+        String network = context.getNetwork();
         long eventPublisherId = context.getEventPublisherId();
 
-        RollbackBlock rollbackBlock = getRollbackBlockByEpoch(epoch);
+        RollbackBlock rollbackBlock = getRollbackBlockByEpochAndNetwork(epoch, network);
 
         if (rollbackBlock == null) {
             log.error("Failed to get rollback block for epoch: {}", epoch);
@@ -70,28 +77,69 @@ public class RollbackService {
     }
 
 
-    private RollbackBlock getRollbackBlockByEpoch(int epoch) {
-        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
+    private RollbackBlock getRollbackBlockByEpochAndNetwork(int epoch, String network) {
+        if (!databaseUtils.tableExists("cursor_")) {
+            log.error("cursor_ table not found for rollback block");
+            return null;
+        }
+        NetworkType networkType = getNetworkType(network);
+        var converters = ClasspathConversionsFactory.createConverters(networkType);
+        EpochConversions epochConversions = converters.epoch();
+        Long maxSlot = epochConversions.epochToAbsoluteSlot(epoch, END);
+
+        String sql = "SELECT block_hash, slot, block_number, era FROM cursor_ WHERE slot >= :slot ORDER BY slot DESC LIMIT 1";
+        log.info("Getting rollback block from cursor_ table: {}", sql);
 
         var params = new MapSqlParameterSource()
-                .addValue("epoch", epoch - 1);
+                .addValue("slot", maxSlot);
 
         return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) ->
                 RollbackBlock.builder()
-                        .hash(rs.getString("hash"))
+                        .hash(rs.getString("block_hash"))
                         .slot(rs.getLong("slot"))
                         .epoch(epoch)
-                        .epochSlot(rs.getInt("epoch_slot"))
-                        .number(rs.getLong("number"))
-                        .era(Integer.valueOf(rs.getString("era")))
+                        .number(rs.getLong("block_number"))
+                        .era(rs.getInt("era"))
                         .build()
-
         );
     }
 
-    private Integer getMaxEpoch() {
-        String sql = "SELECT MAX(epoch) FROM block";
-        return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
+    private Integer getMaxEpoch(String network) {
+        if (!databaseUtils.tableExists("cursor_")) {
+            log.error("cursor_ table not found for max epoch calculation");
+            return null;
+        }
+
+        String sql = "SELECT MAX(slot) FROM cursor_";
+        log.info("Getting max epoch from cursor_ table: {}", sql);
+        
+        Long maxSlot = jdbcTemplate.getJdbcTemplate().queryForObject(sql, Long.class);
+        if (maxSlot != null) {
+            NetworkType networkType = getNetworkType(network);
+            var converters = ClasspathConversionsFactory.createConverters(networkType);
+            SlotConversions slotConversions = converters.slot();
+            return slotConversions.slotToEpoch(maxSlot).intValue();
+        }
+
+        return null;
+    }
+
+    private NetworkType getNetworkType(String network) {
+        if (network == null) {
+            return NetworkType.MAINNET;
+        }
+        
+        switch (network.toUpperCase()) {
+            case "PREPROD":
+                return NetworkType.PREPROD;
+            case "PREVIEW":
+                return NetworkType.PREVIEW;
+            case "SANCHONET":
+                return NetworkType.SANCHONET;
+            case "MAINNET":
+            default:
+                return NetworkType.MAINNET;
+        }
     }
 
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
@@ -109,11 +157,11 @@ public class RollbackService {
         return Pair.of(tableExists, tableNotExists);
     }
 
-    public boolean isValidRollbackEpoch(int epoch) {
-        Integer maxEpoch = getMaxEpoch();
+    public boolean isValidRollbackEpoch(int epoch, String network) {
+        Integer maxEpoch = getMaxEpoch(network);
 
         if (maxEpoch == null) {
-            log.error("Failed to get max epoch from block table");
+            log.error("Failed to get max epoch from cursor_ table");
             return false;
         }
 

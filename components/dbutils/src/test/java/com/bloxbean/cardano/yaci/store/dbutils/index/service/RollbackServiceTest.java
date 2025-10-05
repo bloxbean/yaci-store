@@ -14,9 +14,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.util.Pair;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
+import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,6 +56,7 @@ class RollbackServiceTest {
                 .build();
 
         when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
                 createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
         );
@@ -93,6 +96,7 @@ class RollbackServiceTest {
                 .build();
 
         when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
                 createMockRollbackBlock(50, 500L, "block_hash_456", 1000L, 25, 5)
         );
@@ -114,20 +118,83 @@ class RollbackServiceTest {
 
     @Test
     void testIsValidRollbackEpoch_WithValidEpoch_ShouldReturnTrue() {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(200);
+        // Mock MAX(slot) query to return a slot that converts to epoch 200
+        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(86400000L); // This should convert to epoch ~200
 
-        boolean result = rollbackService.isValidRollbackEpoch(100);
+        boolean result = rollbackService.isValidRollbackEpoch(100, "MAINNET");
 
         assertTrue(result);
     }
 
     @Test
-    void testIsValidRollbackEpoch_WithInvalidEpoch_ShouldReturnFalse() {
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(50);
+    void testGetRollbackBlockByEpochAndNetwork_WithValidEpoch_ShouldReturnBlock() throws Exception {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        
+        // Mock the queryForObject to return a mock RollbackBlock
+        RollbackBlock mockBlock = createMockRollbackBlock(100, 43200000L, "test-hash", 1000L, 0, 1);
+        when(jdbcTemplate.queryForObject(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
+                .thenReturn(mockBlock);
 
-        boolean result = rollbackService.isValidRollbackEpoch(100);
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        method.setAccessible(true);
+        
+        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100, "MAINNET");
+
+        assertNotNull(result);
+        assertEquals(100, result.getEpoch());
+        assertEquals("test-hash", result.getHash());
+        assertEquals(43200000L, result.getSlot());
+        assertEquals(1000L, result.getNumber());
+        assertEquals(1, result.getEra());
+    }
+
+    @Test
+    void testGetRollbackBlockByEpochAndNetwork_WithCursorTableNotExists_ShouldReturnNull() throws Exception {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(false);
+
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        method.setAccessible(true);
+        
+        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100, "MAINNET");
+
+        assertNull(result);
+    }
+
+    @Test
+    void testGetRollbackBlockByEpochAndNetwork_WithDifferentNetworks() throws Exception {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        
+        // Mock the queryForObject to return a mock RollbackBlock
+        RollbackBlock mockBlock = createMockRollbackBlock(50, 21600000L, "test-hash", 500L, 0, 1);
+        when(jdbcTemplate.queryForObject(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
+                .thenReturn(mockBlock);
+
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        method.setAccessible(true);
+        
+        // Test with different networks
+        RollbackBlock result1 = (RollbackBlock) method.invoke(rollbackService, 50, "PREPROD");
+        RollbackBlock result2 = (RollbackBlock) method.invoke(rollbackService, 50, "PREVIEW");
+        RollbackBlock result3 = (RollbackBlock) method.invoke(rollbackService, 50, "SANCHONET");
+
+        assertNotNull(result1);
+        assertNotNull(result2);
+        assertNotNull(result3);
+        assertEquals(50, result1.getEpoch());
+        assertEquals(50, result2.getEpoch());
+        assertEquals(50, result3.getEpoch());
+    }
+
+    @Test
+    void testIsValidRollbackEpoch_WithInvalidEpoch_ShouldReturnFalse() {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        // Mock MAX(slot) query to return a slot that converts to epoch 50 (much smaller than 100)
+        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(2160000L); // This should convert to epoch ~50
+
+        boolean result = rollbackService.isValidRollbackEpoch(101, "MAINNET");
 
         assertFalse(result);
     }
