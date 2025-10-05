@@ -189,7 +189,7 @@ class GovUtilTest {
     @DisplayName("Should handle maximum single-byte index value")
     void shouldHandleMaximumSingleByteIndexValue() {
         String txHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-        int maxIndex = 290;
+        int maxIndex = 255;
         
         String govActionId = GovId.govAction(txHash, maxIndex);
         GovActionId parts = GovUtil.toGovActionIdFromBech32(govActionId);
