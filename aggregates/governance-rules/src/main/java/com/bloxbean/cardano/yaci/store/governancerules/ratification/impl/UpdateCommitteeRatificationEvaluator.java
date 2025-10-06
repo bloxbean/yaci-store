@@ -38,14 +38,13 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.COMMITTEE);
 
-        final boolean isNotDelayed = context.isNotDelayed()
-                && context.isCommitteeNormal()
-                && GovernanceActionUtil.isPrevActionAsExpected(updateCommittee.getType(), updateCommittee.getGovActionId(), lastEnactedGovActionId);
+        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(updateCommittee.getType(), updateCommittee.getGovActionId(), lastEnactedGovActionId);
 
         if (context.isLastRatificationOpportunity()) {
-            return (isAccepted && isNotDelayed && isValidCommitteeTerm) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
+            return (isAccepted && isNotDelayed && isValidCommitteeTerm && isPreviousActionAsExpected) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
-            return (isAccepted && isNotDelayed && isValidCommitteeTerm) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
+            return (isAccepted && isNotDelayed && isValidCommitteeTerm && isPreviousActionAsExpected) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
         }
     }
 

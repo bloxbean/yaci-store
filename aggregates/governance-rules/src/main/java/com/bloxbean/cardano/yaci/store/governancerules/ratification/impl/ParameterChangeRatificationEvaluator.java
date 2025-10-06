@@ -36,10 +36,8 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.P_PARAM_UPDATE);
-        final boolean isNotDelayed = context.isNotDelayed()
-                && context.isCommitteeNormal()
-                && GovernanceActionUtil.isPrevActionAsExpected(parameterChangeAction.getType(), parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
-
+        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(parameterChangeAction.getType(), parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
         boolean isAccepted;
 
         if (context.isBootstrapPhase()) {
@@ -59,9 +57,9 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         }
 
         if (context.isLastRatificationOpportunity()) {
-            return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
+            return (isAccepted && isNotDelayed && isPreviousActionAsExpected) ? RatificationResult.ACCEPT : RatificationResult.REJECT;
         } else {
-            return (isAccepted && isNotDelayed) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
+            return (isAccepted && isNotDelayed && isPreviousActionAsExpected) ? RatificationResult.ACCEPT : RatificationResult.CONTINUE;
         }
     }
 

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
@@ -21,9 +22,14 @@ public class BootstrapPhaseService {
     private final EpochParamStorage epochParamStorage;
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
     private final StoreProperties storeProperties;
+    private final EraService eraService;
 
     public boolean isInConwayBootstrapPhase(int epoch) {
         boolean result = true;
+
+        if (eraService.getEraForEpoch(epoch).getValue() != Era.Conway.getValue()) {
+            return false;
+        }
 
         if (isPublicNetwork()) {
             Optional<EpochParam> epochParamOpt = epochParamStorage.getProtocolParams(epoch);
