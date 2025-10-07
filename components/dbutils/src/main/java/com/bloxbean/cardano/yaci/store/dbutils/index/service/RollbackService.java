@@ -36,11 +36,6 @@ public class RollbackService {
             return Pair.of(new ArrayList<>(), false);
         }
 
-        if (!context.isRollbackLedgerState()) {
-            rollbackCursor(rollbackBlock, eventPublisherId);
-            rollbackAccountConfig(rollbackBlock);
-        }
-
         var params = new MapSqlParameterSource();
         params.addValue("epoch", rollbackBlock.getEpoch());
         params.addValue("slot", rollbackBlock.getSlot());
@@ -67,6 +62,11 @@ public class RollbackService {
                     failedRollbackActions.add(new TableRollbackAction(tableName, sql));
                 }
             }
+        }
+
+        if (!context.isRollbackLedgerState()) {
+            rollbackCursor(rollbackBlock, eventPublisherId);
+            rollbackAccountConfig(rollbackBlock);
         }
 
         boolean rollbackSuccess = failedRollbackActions.isEmpty();
@@ -120,23 +120,20 @@ public class RollbackService {
         }
 
         String sql = "SELECT MAX(slot) FROM cursor_";
-        
+        Integer epoch = null;
         Long maxSlot = jdbcTemplate.getJdbcTemplate().queryForObject(sql, Long.class);
         if (maxSlot != null) {
             long shelleyStartSlot = slotEpochService.getFirstNonByronSlot();
             if (maxSlot < shelleyStartSlot) {
                 long byronSlotsPerEpoch = slotEpochService.slotsPerEpoch(Era.Byron);
-                int epoch = (int) (maxSlot / byronSlotsPerEpoch);
-                return epoch;
+                epoch = (int) (maxSlot / byronSlotsPerEpoch);
             } else {
-                int epoch = slotEpochService.getEpochNo(Era.Shelley, maxSlot);
-                return epoch;
+                epoch = slotEpochService.getEpochNo(Era.Shelley, maxSlot);
             }
         }
 
-        return null;
+        return epoch;
     }
-
 
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
         List<String> tableExists = new ArrayList<>();
