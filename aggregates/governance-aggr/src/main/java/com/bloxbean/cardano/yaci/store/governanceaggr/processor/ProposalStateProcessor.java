@@ -59,14 +59,14 @@ public class ProposalStateProcessor {
         int currentEpoch = epoch + 1;
         
         log.info("Processing proposal status for epoch: {}", currentEpoch);
-        
-        // Delete existing records
-        govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
-        
-        // Take DRep distribution snapshot
-        takeDRepDistrSnapshot(currentEpoch);
 
         try {
+            // Delete existing records
+            govActionProposalStatusStorage.deleteByEpoch(currentEpoch);
+
+            // Take DRep distribution snapshot
+            takeDRepDistrSnapshot(currentEpoch);
+
             GovernanceEvaluationService governanceEvaluationService = new GovernanceEvaluationService();
 
             // Collect aggregated governance data (proposals, votes, stake snapshots) for evaluation and voting stats computation
