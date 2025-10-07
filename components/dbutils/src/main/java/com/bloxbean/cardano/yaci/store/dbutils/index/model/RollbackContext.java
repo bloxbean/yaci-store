@@ -11,5 +11,4 @@ public class RollbackContext {
     private boolean rollbackLedgerState;
     private int epoch;
     private long eventPublisherId;
-    private String network;
 }

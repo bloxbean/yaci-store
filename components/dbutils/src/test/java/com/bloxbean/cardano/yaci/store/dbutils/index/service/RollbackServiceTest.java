@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.time.SlotEpochService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackBlock;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
@@ -24,6 +26,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class RollbackServiceTest {
@@ -37,13 +40,16 @@ class RollbackServiceTest {
     @Mock
     private DatabaseUtils databaseUtils;
 
+    @Mock
+    private SlotEpochService slotEpochService;
+
     private RollbackLoader configLoader;
     private RollbackService rollbackService;
 
     @BeforeEach
     void setUp() {
         configLoader = new RollbackLoader();
-        rollbackService = new RollbackService(jdbcTemplate, databaseUtils);
+        rollbackService = new RollbackService(jdbcTemplate, databaseUtils, slotEpochService);
     }
 
     @Test
@@ -57,6 +63,12 @@ class RollbackServiceTest {
 
         when(databaseUtils.tableExists(anyString())).thenReturn(true);
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        
+        // Mock SlotEpochService for era calculation
+        // epoch 100 < 208 (shelleyStartEpoch), so it will use Byron formula
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(4492800L);
+        when(slotEpochService.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
                 createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
         );
@@ -97,8 +109,14 @@ class RollbackServiceTest {
 
         when(databaseUtils.tableExists(anyString())).thenReturn(true);
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        
+        // Mock SlotEpochService for era calculation
+        // epoch 50 < 208 (shelleyStartEpoch), so it will use Byron formula
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(4492800L);
+        when(slotEpochService.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
-                createMockRollbackBlock(50, 500L, "block_hash_456", 1000L, 25, 5)
+                createMockRollbackBlock(50, 1079999L, "block_hash_456", 1000L, 25, 5)
         );
         when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
@@ -120,27 +138,37 @@ class RollbackServiceTest {
     void testIsValidRollbackEpoch_WithValidEpoch_ShouldReturnTrue() {
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        // Mock MAX(slot) query to return a slot that converts to epoch 200
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(86400000L); // This should convert to epoch ~200
+        // Mock MAX(slot) query to return a slot
+        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(86400000L);
+        // Shelley path
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(0L);
+        // Mock EraService to return epoch 200 for the given slot
+        when(slotEpochService.getEpochNo(Era.Shelley, 86400000L)).thenReturn(200);
 
-        boolean result = rollbackService.isValidRollbackEpoch(100, "MAINNET");
+        boolean result = rollbackService.isValidRollbackEpoch(100);
 
         assertTrue(result);
     }
 
     @Test
-    void testGetRollbackBlockByEpochAndNetwork_WithValidEpoch_ShouldReturnBlock() throws Exception {
+    void testGetRollbackBlockByEpoch_WithValidEpoch_ShouldReturnBlock() throws Exception {
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+        
+        // Mock SlotEpochService to avoid divide-by-zero in getRollbackBlockByEpoch
+        lenient().when(slotEpochService.getFirstNonByronSlot()).thenReturn(4492800L);
+        lenient().when(slotEpochService.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        lenient().when(slotEpochService.slotsPerEpoch(Era.Shelley)).thenReturn(432000L);
+        lenient().when(slotEpochService.getShelleyAbsoluteSlot(100, 431999)).thenReturn(43200000L);
         
         // Mock the queryForObject to return a mock RollbackBlock
         RollbackBlock mockBlock = createMockRollbackBlock(100, 43200000L, "test-hash", 1000L, 0, 1);
         when(jdbcTemplate.queryForObject(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(mockBlock);
 
-        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpoch", int.class);
         method.setAccessible(true);
         
-        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100, "MAINNET");
+        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100);
 
         assertNotNull(result);
         assertEquals(100, result.getEpoch());
@@ -151,50 +179,70 @@ class RollbackServiceTest {
     }
 
     @Test
-    void testGetRollbackBlockByEpochAndNetwork_WithCursorTableNotExists_ShouldReturnNull() throws Exception {
+    void testGetRollbackBlockByEpoch_WithCursorTableNotExists_ShouldReturnNull() throws Exception {
         when(databaseUtils.tableExists("cursor_")).thenReturn(false);
 
-        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpoch", int.class);
         method.setAccessible(true);
         
-        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100, "MAINNET");
+        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 100);
 
         assertNull(result);
     }
 
     @Test
-    void testGetRollbackBlockByEpochAndNetwork_WithDifferentNetworks() throws Exception {
+    void testByronEpochCalculations_MaxEpoch_FromSlot() {
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
-        
-        // Mock the queryForObject to return a mock RollbackBlock
-        RollbackBlock mockBlock = createMockRollbackBlock(50, 21600000L, "test-hash", 500L, 0, 1);
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        // max slot before shelley start
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(4492800L);
+        when(slotEpochService.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+        // choose a byron slot within epoch 10 (10*21600 + 100)
+        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(21600L * 10 + 100L);
+
+        boolean result = rollbackService.isValidRollbackEpoch(10);
+        assertTrue(result);
+    }
+
+    @Test
+    void testGetRollbackBlockByEpoch_ByronEpoch_ShouldUseByronFormula() throws Exception {
+        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
+
+        // Byron context: shelley starts at epoch 208 (mainnet typical), slotsPerEpoch Byron = 21600
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(4492800L); // 208 * 21600
+        when(slotEpochService.slotsPerEpoch(Era.Byron)).thenReturn(21600L);
+
+        // For epoch 10, last slot = 10*21600 + (21600-1) = 237, - 1 = 215999, but absolute; we don't assert SQL, only mapping
+        long expectedMaxSlot = 21600L * 10 + (21600L - 1);
+
+        // Return a block at that boundary
+        RollbackBlock mockBlock = createMockRollbackBlock(10, expectedMaxSlot, "byron-hash", 123L, 0, 0);
         when(jdbcTemplate.queryForObject(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(mockBlock);
 
-        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpochAndNetwork", int.class, String.class);
+        Method method = RollbackService.class.getDeclaredMethod("getRollbackBlockByEpoch", int.class);
         method.setAccessible(true);
-        
-        // Test with different networks
-        RollbackBlock result1 = (RollbackBlock) method.invoke(rollbackService, 50, "PREPROD");
-        RollbackBlock result2 = (RollbackBlock) method.invoke(rollbackService, 50, "PREVIEW");
-        RollbackBlock result3 = (RollbackBlock) method.invoke(rollbackService, 50, "SANCHONET");
 
-        assertNotNull(result1);
-        assertNotNull(result2);
-        assertNotNull(result3);
-        assertEquals(50, result1.getEpoch());
-        assertEquals(50, result2.getEpoch());
-        assertEquals(50, result3.getEpoch());
+        RollbackBlock result = (RollbackBlock) method.invoke(rollbackService, 10);
+
+        assertNotNull(result);
+        assertEquals(10, result.getEpoch());
+        assertEquals("byron-hash", result.getHash());
+        assertEquals(expectedMaxSlot, result.getSlot());
+        assertEquals(123L, result.getNumber());
     }
 
     @Test
     void testIsValidRollbackEpoch_WithInvalidEpoch_ShouldReturnFalse() {
         when(databaseUtils.tableExists("cursor_")).thenReturn(true);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        // Mock MAX(slot) query to return a slot that converts to epoch 50 (much smaller than 100)
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(2160000L); // This should convert to epoch ~50
+        // Mock MAX(slot) query to return a slot
+        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(2160000L);
+        // Shelley path
+        when(slotEpochService.getFirstNonByronSlot()).thenReturn(0L);
+        when(slotEpochService.getEpochNo(Era.Shelley, 2160000L)).thenReturn(50);
 
-        boolean result = rollbackService.isValidRollbackEpoch(101, "MAINNET");
+        boolean result = rollbackService.isValidRollbackEpoch(101);
 
         assertFalse(result);
     }

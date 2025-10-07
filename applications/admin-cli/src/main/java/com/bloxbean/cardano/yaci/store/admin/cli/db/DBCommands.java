@@ -57,16 +57,14 @@ public class DBCommands {
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
                          @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
-                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
-                         @Option(longNames = "network", defaultValue = "MAINNET", description = "Cardano network type (MAINNET, PREPROD, PREVIEW, SANCHONET)") String network) {
+                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles) {
         writeLn(info("Start to rollback data ..."));
-        if (isRollbackEpochValid(epoch, network)) {
+        if (isRollbackEpochValid(epoch)) {
             String[] filesToUse = getRollbackFiles(rollbackFiles);
             verifyRollback(filesToUse);
             RollbackContext rollbackContext = RollbackContext.builder()
                     .epoch(epoch)
                     .eventPublisherId(eventPublisherId)
-                    .network(network)
                     .build();
 
             applyRollback(filesToUse, rollbackContext);
@@ -74,17 +72,15 @@ public class DBCommands {
     }
 
 //    @Command(description = "Rollback ledger state data to a previous epoch")
-    public void rollbackLedgerStateData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                                       @Option(longNames = "network", defaultValue = "MAINNET", description = "Cardano network type (MAINNET, PREPROD, PREVIEW, SANCHONET)") String network) {
+    public void rollbackLedgerStateData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch) {
 
         writeLn(info("Start to rollback data ..."));
-        if (isRollbackEpochValid(epoch, network)) {
+        if (isRollbackEpochValid(epoch)) {
             String[] files = {ROLLBACK_LEDGER_STATE_FILE};
             verifyRollback(files);
             RollbackContext rollbackContext = RollbackContext.builder()
                     .epoch(epoch)
                     .rollbackLedgerState(true)
-                    .network(network)
                     .build();
 
             applyRollback(files, rollbackContext);
@@ -184,8 +180,8 @@ public class DBCommands {
         rollbackService.verifyRollbackActions(tableNames);
     }
 
-    private boolean isRollbackEpochValid(int epoch, String network) {
-        if (!rollbackService.isValidRollbackEpoch(epoch, network)) {
+    private boolean isRollbackEpochValid(int epoch) {
+        if (!rollbackService.isValidRollbackEpoch(epoch)) {
             writeLn(warn("Epoch %d is not a valid rollback epoch. The rollback epoch must be " +
                     "less than or equal to the current max epoch in the database and greater than 0.", epoch));
             return false;
