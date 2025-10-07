@@ -100,7 +100,8 @@ public class ProposalUtils {
 
     /**
      * Determines if two governance action types belong to the same purpose group.
-     * Purpose groups:
+     *
+     * Purpose groups (per Conway ledger purposes):
      * - PParamUpdatePurpose: PARAMETER_CHANGE_ACTION
      * - HardForkPurpose: HARD_FORK_INITIATION_ACTION
      * - CommitteePurpose: NO_CONFIDENCE, UPDATE_COMMITTEE
@@ -111,7 +112,6 @@ public class ProposalUtils {
      * @param type2 Second governance action type
      * @return true if both types belong to the same purpose group
      */
-    // TODO: maybe we need add link to ledger code here
     public static boolean isSamePurpose(GovActionType type1, GovActionType type2) {
         if (type1 == type2) {
             return true;
