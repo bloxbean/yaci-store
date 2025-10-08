@@ -8,11 +8,13 @@ dependencies {
     implementation 'org.springframework.shell:spring-shell-starter'
 
     implementation project(':components:dbutils')
+    implementation project(':components:common')
 
     runtimeOnly "com.mysql:mysql-connector-j:${mysqlDriverVersion}"
     runtimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation project(':starters:spring-boot-starter')
 }
 
 dependencyManagement {

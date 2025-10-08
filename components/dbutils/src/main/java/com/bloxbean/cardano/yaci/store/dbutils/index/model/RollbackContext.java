@@ -11,4 +11,7 @@ public class RollbackContext {
     private boolean rollbackLedgerState;
     private int epoch;
     private long eventPublisherId;
+    private Long rollbackPointBlock;
+    private String rollbackPointBlockHash;
+    private Long rollbackPointSlot;
 }

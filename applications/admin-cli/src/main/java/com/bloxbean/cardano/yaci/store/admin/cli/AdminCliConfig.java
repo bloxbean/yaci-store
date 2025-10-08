@@ -5,7 +5,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.shell.command.annotation.CommandScan;
 
 @Configuration
-@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.admin.cli", "com.bloxbean.cardano.yaci.store.dbutils"})
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.admin.cli",
+        "com.bloxbean.cardano.yaci.store.dbutils",
+        "com.bloxbean.cardano.yaci.store.common"})
 @CommandScan
 public class AdminCliConfig {
 }

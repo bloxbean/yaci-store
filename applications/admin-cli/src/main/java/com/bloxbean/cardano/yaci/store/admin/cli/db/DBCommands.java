@@ -37,6 +37,15 @@ public class DBCommands {
     @Value("${store.dbutils.rollback_files:rollback.yml}")
     private String rollbackFiles;
 
+    @Value("${store.rollback.point.block:#{null}}")
+    private Long rollbackPointBlock;
+
+    @Value("${store.rollback.point.block_hash:#{null}}")
+    private String rollbackPointBlockHash;
+
+    @Value("${store.rollback.point.slot:#{null}}")
+    private Long rollbackPointSlot;
+
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
         writeLn(info("Start to apply index ..."));
@@ -57,14 +66,21 @@ public class DBCommands {
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
                          @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
-                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles) {
+                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
+                         @Option(longNames = "block", description = "Block number for rollback point (required when block table is not available)") Long block,
+                         @Option(longNames = "block-hash", description = "Block hash for rollback point (required when block table is not available)") String blockHash,
+                         @Option(longNames = "slot", description = "Slot number for rollback point (optional)") Long slot) {
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
             String[] filesToUse = getRollbackFiles(rollbackFiles);
             verifyRollback(filesToUse);
+            
             RollbackContext rollbackContext = RollbackContext.builder()
                     .epoch(epoch)
                     .eventPublisherId(eventPublisherId)
+                    .rollbackPointBlock(block != null ? block : rollbackPointBlock)
+                    .rollbackPointBlockHash(blockHash != null ? blockHash : rollbackPointBlockHash)
+                    .rollbackPointSlot(slot != null ? slot : rollbackPointSlot)
                     .build();
 
             applyRollback(filesToUse, rollbackContext);

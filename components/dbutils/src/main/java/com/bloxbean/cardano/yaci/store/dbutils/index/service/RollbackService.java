@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.service.IEraService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
@@ -19,13 +21,14 @@ import java.util.List;
 public class RollbackService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final DatabaseUtils databaseUtils;
+    private final IEraService eraService;
 
     @Transactional
     public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
         int epoch = context.getEpoch();
         long eventPublisherId = context.getEventPublisherId();
 
-        RollbackBlock rollbackBlock = getRollbackBlockByEpoch(epoch);
+        RollbackBlock rollbackBlock = getRollbackBlockByRollbackContext(context);
 
         if (rollbackBlock == null) {
             log.error("Failed to get rollback block for epoch: {}", epoch);
@@ -70,28 +73,67 @@ public class RollbackService {
     }
 
 
-    private RollbackBlock getRollbackBlockByEpoch(int epoch) {
-        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
+    private RollbackBlock getRollbackBlockByRollbackContext(RollbackContext context) {
+        if (!databaseUtils.tableExists("block")) {
+            if (context.getRollbackPointBlock() == null || context.getRollbackPointBlockHash() == null || context.getRollbackPointSlot() == null) {
+                String errorMsg = String.format("Block table not available and manual rollback point not provided for epoch %d. " +
+                        "Please provide slot, block_number and block_hash using CLI options (--slot, --block, --block-hash) " +
+                        "or configure them in application properties", context.getEpoch());
+                log.error(errorMsg);
+                throw new IllegalArgumentException(errorMsg);
+            }
 
+            Era era = eraService.getEraForEpoch(context.getEpoch());
+
+            return RollbackBlock.builder()
+                    .hash(context.getRollbackPointBlockHash())
+                    .slot(context.getRollbackPointSlot())
+                    .epoch(context.getEpoch())
+                    .number(context.getRollbackPointBlock())
+                    .era(era.getValue())
+                    .build();
+        }
+
+        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
         var params = new MapSqlParameterSource()
-                .addValue("epoch", epoch - 1);
+                .addValue("epoch", context.getEpoch() - 1);
 
         return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) ->
                 RollbackBlock.builder()
                         .hash(rs.getString("hash"))
                         .slot(rs.getLong("slot"))
-                        .epoch(epoch)
+                        .epoch(context.getEpoch())
                         .epochSlot(rs.getInt("epoch_slot"))
                         .number(rs.getLong("number"))
                         .era(Integer.valueOf(rs.getString("era")))
                         .build()
-
         );
     }
 
     private Integer getMaxEpoch() {
-        String sql = "SELECT MAX(epoch) FROM block";
-        return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
+        if(!databaseUtils.tableExists("block")) {
+            if (!databaseUtils.tableExists("cursor_")) {
+                return null;
+            }
+
+            String sql = "SELECT MAX(slot) FROM cursor_";
+            Integer epoch = null;
+            Long maxSlot = jdbcTemplate.getJdbcTemplate().queryForObject(sql, Long.class);
+            if (maxSlot != null) {
+                long shelleyStartSlot = eraService.getFirstNonByronSlot();
+                if (maxSlot < shelleyStartSlot) {
+                    long byronSlotsPerEpoch = eraService.slotsPerEpoch(Era.Byron);
+                    epoch = (int) (maxSlot / byronSlotsPerEpoch);
+                } else {
+                    epoch = eraService.getEpochNo(Era.Shelley, maxSlot);
+                }
+            }
+
+            return epoch;
+        } else {
+            String sql = "SELECT MAX(epoch) FROM block";
+            return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
+        }
     }
 
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
