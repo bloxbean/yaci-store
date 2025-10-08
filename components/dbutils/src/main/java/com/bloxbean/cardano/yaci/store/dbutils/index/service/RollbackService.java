@@ -4,8 +4,6 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.store.common.time.SlotEpochService;
 import org.springframework.data.util.Pair;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -15,14 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class RollbackService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final DatabaseUtils databaseUtils;
-    private final SlotEpochService slotEpochService;
 
     @Transactional
     public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
@@ -34,6 +30,11 @@ public class RollbackService {
         if (rollbackBlock == null) {
             log.error("Failed to get rollback block for epoch: {}", epoch);
             return Pair.of(new ArrayList<>(), false);
+        }
+
+        if (!context.isRollbackLedgerState()) {
+            rollbackCursor(rollbackBlock, eventPublisherId);
+            rollbackAccountConfig(rollbackBlock);
         }
 
         var params = new MapSqlParameterSource();
@@ -64,75 +65,33 @@ public class RollbackService {
             }
         }
 
-        if (!context.isRollbackLedgerState()) {
-            rollbackCursor(rollbackBlock, eventPublisherId);
-            rollbackAccountConfig(rollbackBlock);
-        }
-
         boolean rollbackSuccess = failedRollbackActions.isEmpty();
         return Pair.of(failedRollbackActions, rollbackSuccess);
     }
 
 
     private RollbackBlock getRollbackBlockByEpoch(int epoch) {
-        if (!databaseUtils.tableExists("cursor_")) {
-            log.error("cursor_ table not found for rollback block");
-            return null;
-        }
-
-        long shelleyStartSlot = slotEpochService.getFirstNonByronSlot();
-        long byronSlotsPerEpoch = slotEpochService.slotsPerEpoch(Era.Byron);
-        long shelleyStartEpoch = shelleyStartSlot / byronSlotsPerEpoch;
-
-        Era targetEra = epoch < shelleyStartEpoch ? Era.Byron : Era.Shelley;
-
-        long slotsPerEpoch = slotEpochService.slotsPerEpoch(targetEra);
-        int lastEpochSlot = (int) (slotsPerEpoch - 1);
-
-        long maxSlot;
-        if (targetEra == Era.Byron) {
-            maxSlot = (slotsPerEpoch * epoch) + lastEpochSlot;
-        } else {
-            maxSlot = slotEpochService.getShelleyAbsoluteSlot(epoch, lastEpochSlot);
-        }
-
-        String sql = "SELECT block_hash, slot, block_number, era FROM cursor_ WHERE slot >= :slot ORDER BY slot DESC LIMIT 1";
-        log.info("Getting rollback block from cursor_ table: {}", sql);
+        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
 
         var params = new MapSqlParameterSource()
-                .addValue("slot", maxSlot);
+                .addValue("epoch", epoch - 1);
 
         return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) ->
                 RollbackBlock.builder()
-                        .hash(rs.getString("block_hash"))
+                        .hash(rs.getString("hash"))
                         .slot(rs.getLong("slot"))
                         .epoch(epoch)
-                        .number(rs.getLong("block_number"))
-                        .era(rs.getInt("era"))
+                        .epochSlot(rs.getInt("epoch_slot"))
+                        .number(rs.getLong("number"))
+                        .era(Integer.valueOf(rs.getString("era")))
                         .build()
+
         );
     }
 
     private Integer getMaxEpoch() {
-        if (!databaseUtils.tableExists("cursor_")) {
-            log.error("cursor_ table not found for max epoch calculation");
-            return null;
-        }
-
-        String sql = "SELECT MAX(slot) FROM cursor_";
-        Integer epoch = null;
-        Long maxSlot = jdbcTemplate.getJdbcTemplate().queryForObject(sql, Long.class);
-        if (maxSlot != null) {
-            long shelleyStartSlot = slotEpochService.getFirstNonByronSlot();
-            if (maxSlot < shelleyStartSlot) {
-                long byronSlotsPerEpoch = slotEpochService.slotsPerEpoch(Era.Byron);
-                epoch = (int) (maxSlot / byronSlotsPerEpoch);
-            } else {
-                epoch = slotEpochService.getEpochNo(Era.Shelley, maxSlot);
-            }
-        }
-
-        return epoch;
+        String sql = "SELECT MAX(epoch) FROM block";
+        return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
     }
 
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
@@ -154,7 +113,7 @@ public class RollbackService {
         Integer maxEpoch = getMaxEpoch();
 
         if (maxEpoch == null) {
-            log.error("Failed to get max epoch from cursor_ table");
+            log.error("Failed to get max epoch from block table");
             return false;
         }
 
