@@ -1,0 +1,379 @@
+&nbsp;
+
+# ⚙️ System Requirements
+
+Yaci Store v2.0 requires a robust development environment optimized for blockchain data indexing. This guide outlines the complete hardware and software requirements for different deployment scenarios.
+
+## 🎩 Quick Start Requirements
+
+For immediate setup and testing:
+- **Java 21** (required for v2.0)
+- **4 GB RAM** minimum
+- **PostgreSQL 15** (or Docker)
+- **10 GB free disk space**
+
+---
+
+## 🖥️ Hardware Requirements
+
+### 📈 Deployment Size Recommendations
+
+| Deployment Type | CPU | RAM | Storage | Network |
+|----------------|-----|-----|---------|----------|
+| **Development/Testing** | 2 cores | 4-6 GB | 50 GB SSD | 100 Mbps |
+| **Small Production** | 4 cores | 8-12 GB | 200 GB SSD | 500 Mbps |
+| **Full Production** | 8+ cores | 16-32 GB | 1 TB+ NVMe | 1 Gbps |
+| **Enterprise Scale** | 16+ cores | 64+ GB | 2 TB+ NVMe | 10 Gbps |
+
+### 📊 Storage Requirements by Configuration
+
+| Configuration | Estimated Size | Growth Rate |
+|--------------|----------------|-------------|
+| **Minimal stores** (blocks, txs) | ~200 GB | ~5 GB/month |
+| **Standard stores** (+ UTXOs, rewards) | ~500 GB | ~12 GB/month |
+| **All stores enabled** | ~800 GB | ~20 GB/month |
+| **With pruning enabled** | ~300 GB | ~8 GB/month |
+| **Archive mode** (no pruning) | ~1.5 TB+ | ~25 GB/month |
+
+> 📝 **Note**: Storage requirements are based on mainnet data as of 2024. Actual usage may vary based on network activity and configuration.
+
+### 🎯 Performance Benchmarks
+
+**Sync Performance** (from genesis):
+- **Development setup** (4 cores, 8 GB): ~48-72 hours
+- **Recommended setup** (8 cores, 16 GB): ~24-36 hours
+- **High-performance setup** (16 cores, 32 GB): ~12-18 hours
+
+**Query Performance** (95th percentile):
+- Simple queries: Sub-100ms
+- Complex aggregations: Sub-500ms
+- Historical analysis: Sub-5 seconds
+
+---
+
+## 📊 Version Requirements History
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)',
+  padding: '1.5rem',
+  borderRadius: '12px',
+  border: '1px solid rgba(102, 126, 234, 0.2)',
+  marginBottom: '2rem'
+}}>
+
+### Version Comparison Matrix
+
+| **Requirement** | **v2.0.0-beta1** | **v2.0.0-beta3** | **Key Differences** |
+|-----------------|-------------------|-------------------|---------------------|
+| **Java Version** | Java 21 LTS | Java 21 LTS | Same requirement |
+| **Memory (Min)** | 4 GB | 4 GB | Same baseline |
+| **Memory (Prod)** | 8-16 GB | 8-16 GB | Same recommendations |
+| **Network Support** | All networks (limited epochs) | **All networks (extended epochs)** | **+5 months mainnet data** |
+| **Epoch Coverage** | Mainnet: 546, Basic others | **Mainnet: 569, Preprod: 227, Preview: 989** | **Significantly extended** |
+| **Monitoring** | ❌ Basic logging only | **✅ Prometheus + Grafana** | **Major enhancement** |
+| **Accuracy** | ~95% ledger state | **99.98% ledger state** | **Critical improvement** |
+| **Database** | PostgreSQL 13+ | PostgreSQL 13+ | Same requirement |
+
+</div>
+
+### 🚀 What's Better in beta3?
+
+- **🔍 Extended Network Support**: 5+ months of additional mainnet validation
+- **📊 Production Monitoring**: Native Prometheus metrics and Grafana dashboards  
+- **🎯 Enhanced Accuracy**: Resolved critical treasury, governance, and DRep calculation issues
+- **🛠️ Better Tools**: Improved admin CLI with optional indexing capabilities
+- **📈 Performance**: More efficient reward calculations during epoch transitions
+
+> 📖 **See Full Comparison**: Check our [Changelog](/changelogs) for detailed version differences and migration guide.
+
+---
+
+## 💽 Software Requirements
+
+### 🧑‍💻 Operating System Support
+
+| OS | Version | Support Level | Notes |
+|----|---------|---------------|-------|
+| **Ubuntu** | 20.04 LTS+ | ✅ Fully Supported | Recommended for production |
+| **CentOS/RHEL** | 8+ | ✅ Fully Supported | Enterprise environments |
+| **Debian** | 11+ | ✅ Fully Supported | Lightweight deployments |
+| **macOS** | 12+ (Monterey) | ✅ Development Only | Not recommended for production |
+| **Windows** | 11 + WSL2 | 🔶 Limited Support | Development only |
+| **Docker** | Any | ✅ Fully Supported | Preferred deployment method |
+
+---
+
+### ☕ Java Environment
+
+**Required: Java 21** (LTS)
+
+| Provider | Version | Status | Download |
+|----------|---------|--------|----------|
+| **Eclipse Temurin** | 21 LTS | ✅ Recommended | [Download](https://adoptium.net/temurin/releases/) |
+| **Oracle OpenJDK** | 21 | ✅ Supported | [Download](https://jdk.java.net/21/) |
+| **Amazon Corretto** | 21 | ✅ Supported | [Download](https://aws.amazon.com/corretto/) |
+| **GraalVM** | 21 | ✅ Supported | [Download](https://www.graalvm.org/downloads/) |
+
+**JVM Configuration** for production:
+```bash
+# Recommended JVM flags for Yaci Store v2.0
+export JAVA_OPTS="-Xms2g -Xmx8g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 \
+  -XX:+UseStringDeduplication -XX:+OptimizeStringConcat \
+  -XX:+EnableJVMCI -XX:+UseJVMCICompiler"
+```
+
+**Version Compatibility**:
+- ❌ **Java 8**: Not supported (legacy)
+- ❌ **Java 11**: Not supported in v2.0
+- ❌ **Java 17**: Not supported in v2.0
+- ✅ **Java 21**: Required and optimized
+- 🔍 **Java 22+**: Experimental support
+
+---
+
+### 🔨 Build and Development Tools
+
+| Tool | Version | Required | Purpose |
+|------|---------|----------|----------|
+| **Maven** | 3.9+ | ✅ Yes | Build management |
+| **Git** | 2.30+ | ✅ Yes | Version control |
+| **Docker** | 24+ | 🔶 Optional | Container deployment |
+| **Docker Compose** | 2.0+ | 🔶 Optional | Multi-container orchestration |
+
+**Maven Configuration**:
+```xml
+<properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <java.version>21</java.version>
+</properties>
+```
+
+---
+
+### 🐘 Database Requirements
+
+**Primary Database: PostgreSQL**
+
+| Version | Status | Performance | Notes |
+|---------|--------|-------------|-------|
+| **PostgreSQL 15** | ✅ Recommended | Excellent | Latest optimizations |
+| **PostgreSQL 14** | ✅ Supported | Very Good | Stable for production |
+| **PostgreSQL 13** | ✅ Supported | Good | Minimum recommended |
+| **PostgreSQL 12** | 🔶 Limited | Fair | End of support soon |
+
+**Database Configuration** for production:
+```sql
+-- postgresql.conf optimizations
+shared_buffers = '25% of RAM'          -- e.g., 4GB for 16GB RAM
+effective_cache_size = '75% of RAM'    -- e.g., 12GB for 16GB RAM
+work_mem = 64MB                        -- Per query operation
+maintenance_work_mem = 512MB           -- For maintenance tasks
+max_connections = 200                  -- Concurrent connections
+random_page_cost = 1.1                 -- SSD optimization
+effective_io_concurrency = 200         -- SSD concurrent I/O
+wal_buffers = 16MB                     -- Write-ahead logging
+checkpoint_completion_target = 0.7     -- Checkpoint tuning
+shared_preload_libraries = 'pg_stat_statements'  -- Query analysis
+```
+
+**Required Extensions**:
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+CREATE EXTENSION IF NOT EXISTS "btree_gin";  -- For advanced indexing
+```
+
+---
+
+### 💻 Development Environment
+
+**Recommended IDEs**:
+
+| IDE | Version | Plugins | Performance |
+|-----|---------|---------|-------------|
+| **IntelliJ IDEA** | 2024.1+ | Spring Boot, JPA Buddy, Database Navigator | Excellent |
+| **Eclipse** | 2024-03+ | Spring Tools 4, DBeaver Integration | Good |
+| **VS Code** | Latest | Extension Pack for Java, Spring Boot Tools | Good |
+| **NetBeans** | 19+ | Native Java 21 support | Fair |
+
+**Required IDE Plugins**:
+- Spring Boot support
+- JPA/Hibernate tools
+- Database connectivity
+- Docker integration
+- Git integration
+
+---
+
+### 🌐 Network and Connectivity
+
+**Cardano Node Connection**:
+
+| Method | Port | Protocol | Performance | Reliability |
+|--------|------|----------|-------------|-------------|
+| **Ogmios WebSocket** | 1337 | WSS | Excellent | High |
+| **Node-to-Client** | 3001 | TCP | Very Good | High |
+| **Cardano Submit API** | 8090 | HTTP | Good | Medium |
+
+**Firewall Configuration**:
+```bash
+# Allow inbound connections
+sudo ufw allow 5432/tcp  # PostgreSQL
+sudo ufw allow 8080/tcp  # Yaci Store API
+sudo ufw allow 1337/tcp  # Ogmios (if external)
+
+# Allow outbound connections
+sudo ufw allow out 1337/tcp  # Ogmios
+sudo ufw allow out 3001/tcp  # Node-to-Client
+```
+
+---
+
+### 📦 Container Requirements
+
+**Docker Configuration**:
+
+```yaml
+# Minimum docker-compose.yml requirements
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    shm_size: 2g  # Important for performance
+    environment:
+      POSTGRES_DB: yaci_store
+      POSTGRES_USER: yaci
+      POSTGRES_PASSWORD: changeme
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  yaci-store:
+    image: bloxbean/yaci-store:2.0.0
+    environment:
+      JAVA_OPTS: "-Xms2g -Xmx6g -XX:+UseG1GC"
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+```
+
+**Resource Limits**:
+```yaml
+# Production resource limits
+yaci-store:
+  deploy:
+    resources:
+      limits:
+        cpus: '4.0'
+        memory: 8G
+      reservations:
+        cpus: '2.0'
+        memory: 4G
+```
+
+---
+
+## 🧰 Optional Tools and Integrations
+
+### 🔍 API Testing and Monitoring
+
+| Tool | Purpose | Integration |
+|------|---------|-------------|
+| **Postman** | API testing and documentation | Native OpenAPI import |
+| **Swagger UI** | Interactive API exploration | Built-in at `/swagger-ui/` |
+| **Prometheus** | Metrics collection | Built-in metrics endpoint |
+| **Grafana** | Metrics visualization | Pre-built dashboards available |
+| **Jaeger** | Distributed tracing | OpenTelemetry integration |
+
+### 🔎 Observability Stack
+
+```yaml
+# Optional monitoring stack
+prometheus:
+  image: prom/prometheus:latest
+  ports:
+    - "9090:9090"
+
+grafana:
+  image: grafana/grafana:latest
+  ports:
+    - "3000:3000"
+
+jaeger:
+  image: jaegertracing/all-in-one:latest
+  ports:
+    - "16686:16686"
+```
+
+---
+
+## 🚀 Performance Optimization
+
+### 📏 System Tuning
+
+**Linux Kernel Parameters**:
+```bash
+# /etc/sysctl.conf optimizations
+vm.swappiness=1
+vm.dirty_ratio=15
+vm.dirty_background_ratio=5
+net.core.rmem_max=134217728
+net.core.wmem_max=134217728
+net.ipv4.tcp_rmem=4096 65536 134217728
+net.ipv4.tcp_wmem=4096 65536 134217728
+```
+
+**File System Recommendations**:
+- **ext4** with `noatime,nodiratime` mount options
+- **XFS** for large datasets
+- **ZFS** for enterprise with compression and snapshots
+
+---
+
+## ✓ Pre-Installation Checklist
+
+### 📋 System Verification
+
+```bash
+# Check Java version
+java -version  # Should show Java 21
+
+# Check available memory
+free -h  # Should show adequate RAM
+
+# Check disk space
+df -h  # Should show sufficient storage
+
+# Check PostgreSQL connection
+psql -h localhost -U postgres -c "SELECT version();"  
+
+# Check network connectivity to Cardano node
+telnet cardano-node-host 1337
+
+# Verify Docker (if using containers)
+docker --version && docker-compose --version
+```
+
+### 🎡 Performance Baseline Test
+
+```bash
+# CPU performance test
+sysbench cpu --cpu-max-prime=20000 --threads=4 run
+
+# Memory bandwidth test
+sysbench memory --memory-block-size=1M --memory-total-size=10G run
+
+# Disk I/O performance test
+sysbench fileio --file-total-size=10G --file-test-mode=rndrw prepare
+sysbench fileio --file-total-size=10G --file-test-mode=rndrw run
+```
+
+---
+
+> 📝 **Next Steps**: Once your system meets these requirements, proceed to the [Installation Guide](/gettingStarted/installation/docker) or [Compatibility Matrix](/gettingStarted/compatibilityMatrix) for version-specific setup instructions.
