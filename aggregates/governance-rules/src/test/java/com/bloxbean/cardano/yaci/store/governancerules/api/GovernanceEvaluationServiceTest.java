@@ -222,8 +222,8 @@ class GovernanceEvaluationServiceTest {
         // Purpose: ensure evaluating a delaying proposal sets the flag consumed by later evaluations within the same epoch.
         VotingData votingData = VotingData.builder().build();
 
-        GovActionId updateActionId = mock(GovActionId.class);
-        GovActionId infoActionId = mock(GovActionId.class);
+        GovActionId updateCommitteeActionId = mock(GovActionId.class);
+        GovActionId ppChangeActionId = mock(GovActionId.class);
 
         // Init mix: delaying committee change and neutral info action tested for propagated context.
         UpdateCommittee updateCommittee = mock(UpdateCommittee.class);
@@ -233,19 +233,19 @@ class GovernanceEvaluationServiceTest {
         ParameterChangeAction parameterChange = mock(ParameterChangeAction.class);
         when(parameterChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
 
-        AtomicBoolean infoContextWasDelayed = new AtomicBoolean(false);
+        AtomicBoolean ppChangeContextWasDelayed = new AtomicBoolean(false);
 
         // Stub the update evaluator to return ACCEPT so the delay flag becomes true, capture flag visible inside param change evaluation.
         stubEvaluator(GovActionType.UPDATE_COMMITTEE, context -> RatificationResult.ACCEPT);
         stubEvaluator(GovActionType.PARAMETER_CHANGE_ACTION, context -> {
-            infoContextWasDelayed.set(context.getGovernanceContext().isActionRatificationDelayed());
+            ppChangeContextWasDelayed.set(context.getGovernanceContext().isActionRatificationDelayed());
             return RatificationResult.CONTINUE;
         });
 
         ProposalContext updateCommitteeProposal = ProposalContext.builder()
                 .govAction(updateCommittee)
                 .votingData(votingData)
-                .govActionId(updateActionId)
+                .govActionId(updateCommitteeActionId)
                 .maxAllowedVotingEpoch(7)
                 .proposalSlot(10L)
                 .build();
@@ -253,7 +253,7 @@ class GovernanceEvaluationServiceTest {
         ProposalContext paramChangeProposal = ProposalContext.builder()
                 .govAction(parameterChange)
                 .votingData(votingData)
-                .govActionId(infoActionId)
+                .govActionId(ppChangeActionId)
                 .maxAllowedVotingEpoch(7)
                 .proposalSlot(40L)
                 .build();
@@ -275,12 +275,12 @@ class GovernanceEvaluationServiceTest {
                 .extracting(proposalResult -> proposalResult.getProposal().getType())
                 .containsExactly(
                         GovActionType.UPDATE_COMMITTEE,
-                        GovActionType.INFO_ACTION
+                        GovActionType.PARAMETER_CHANGE_ACTION
                 );
 
         // Delay flag must stay true and be observable inside later evaluation.
         assertThat(result.isActionRatificationDelayed()).isTrue();
-        assertThat(infoContextWasDelayed.get()).isTrue();
+        assertThat(ppChangeContextWasDelayed.get()).isTrue();
     }
 
     @SuppressWarnings("unchecked")
