@@ -69,7 +69,7 @@ public class VotingStatsService {
         var drepTallies = VoteTallyCalculator.computeDRepTallies(
                 VotingData.DRepVotes.builder()
                         .yesVoteStake(dRepVotes.getYesVoteStake())
-                        .noVoteStake(dRepVotes.getYesVoteStake())
+                        .noVoteStake(dRepVotes.getNoVoteStake())
                         .doNotVoteStake(dRepVotes.getDoNotVoteStake())
                         .noConfidenceStake(dRepVotes.getNoConfidenceStake())
                         .build()
