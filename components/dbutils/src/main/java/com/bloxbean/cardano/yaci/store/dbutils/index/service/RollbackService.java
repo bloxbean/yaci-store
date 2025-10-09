@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.store.common.service.IEraService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,6 @@ import java.util.List;
 public class RollbackService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final DatabaseUtils databaseUtils;
-    private final IEraService eraService;
 
     @Transactional
     public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
@@ -75,22 +73,23 @@ public class RollbackService {
 
     private RollbackBlock getRollbackBlockByRollbackContext(RollbackContext context) {
         if (!databaseUtils.tableExists("block")) {
-            if (context.getRollbackPointBlock() == null || context.getRollbackPointBlockHash() == null || context.getRollbackPointSlot() == null) {
+            if (context.getRollbackPointBlock() == null
+                    || context.getRollbackPointBlockHash() == null
+                    || context.getRollbackPointEra() == null
+                    || context.getRollbackPointSlot() == null) {
                 String errorMsg = String.format("Block table not available and manual rollback point not provided for epoch %d. " +
-                        "Please provide slot, block_number and block_hash using CLI options (--slot, --block, --block-hash) " +
+                        "Please provide slot, era, block_number and block_hash using CLI options (--slot, --block, --era --block-hash) " +
                         "or configure them in application properties", context.getEpoch());
                 log.error(errorMsg);
                 throw new IllegalArgumentException(errorMsg);
             }
-
-            Era era = eraService.getEraForEpoch(context.getEpoch());
 
             return RollbackBlock.builder()
                     .hash(context.getRollbackPointBlockHash())
                     .slot(context.getRollbackPointSlot())
                     .epoch(context.getEpoch())
                     .number(context.getRollbackPointBlock())
-                    .era(era.getValue())
+                    .era(context.getRollbackPointEra())
                     .build();
         }
 
@@ -110,32 +109,6 @@ public class RollbackService {
         );
     }
 
-    private Integer getMaxEpoch() {
-        if(!databaseUtils.tableExists("block")) {
-            if (!databaseUtils.tableExists("cursor_")) {
-                return null;
-            }
-
-            String sql = "SELECT MAX(slot) FROM cursor_";
-            Integer epoch = null;
-            Long maxSlot = jdbcTemplate.getJdbcTemplate().queryForObject(sql, Long.class);
-            if (maxSlot != null) {
-                long shelleyStartSlot = eraService.getFirstNonByronSlot();
-                if (maxSlot < shelleyStartSlot) {
-                    long byronSlotsPerEpoch = eraService.slotsPerEpoch(Era.Byron);
-                    epoch = (int) (maxSlot / byronSlotsPerEpoch);
-                } else {
-                    epoch = eraService.getEpochNo(Era.Shelley, maxSlot);
-                }
-            }
-
-            return epoch;
-        } else {
-            String sql = "SELECT MAX(epoch) FROM block";
-            return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
-        }
-    }
-
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
         List<String> tableExists = new ArrayList<>();
         List<String> tableNotExists = new ArrayList<>();
@@ -152,14 +125,7 @@ public class RollbackService {
     }
 
     public boolean isValidRollbackEpoch(int epoch) {
-        Integer maxEpoch = getMaxEpoch();
-
-        if (maxEpoch == null) {
-            log.error("Failed to get max epoch from block table");
-            return false;
-        }
-
-        return epoch >= 1 && epoch <= maxEpoch;
+        return epoch >= 1;
     }
 
     private String buildDeleteSql(RollbackConfig.TableRollbackDefinition tableDef) {

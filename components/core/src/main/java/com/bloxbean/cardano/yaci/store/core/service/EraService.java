@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.core.service;
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.service.IEraService;
 import com.bloxbean.cardano.yaci.store.core.configuration.EpochConfig;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -19,7 +18,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class EraService implements IEraService {
+public class EraService {
     private final EraStorage eraStorage;
     private final CursorStorage cursorStorage;
     private final EpochConfig epochConfig;
@@ -65,7 +64,6 @@ public class EraService implements IEraService {
         eraStorage.saveEra(cardanoEra);
     }
 
-    @Override
     public int getEpochNo(Era era, long slot) {
         if (shelleyStartSlot == -1) {
             shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
@@ -85,7 +83,6 @@ public class EraService implements IEraService {
         return epochConfig.shelleyEpochSlot(shelleyStartSlot, shelleyAbsoluteSlot);
     }
 
-    @Override
     public long getShelleyAbsoluteSlot(int epoch, int epochSlot) {
         if (shelleyStartSlot == -1) {
             shelleyStartSlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot()) //For local devenet, it could be babbage era
@@ -106,12 +103,10 @@ public class EraService implements IEraService {
         return _shelleyStartTime;
     }
 
-    @Override
     public long slotsPerEpoch(Era era) {
         return genesisConfig.slotsPerEpoch(era);
     }
 
-    @Override
     public long getFirstNonByronSlot() {
         return firstShelleySlot();
     }
@@ -166,7 +161,6 @@ public class EraService implements IEraService {
      * @param epoch The epoch number for which to find the corresponding era.
      * @return Era corresponding to the given epoch.
      */
-    @Override
     public Era getEraForEpoch(int epoch) {
         var cardanoEras = eraStorage.findAllEras();
         int lastEraIndex = cardanoEras.size() - 1;

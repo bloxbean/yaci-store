@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
-import com.bloxbean.cardano.yaci.store.common.service.IEraService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackBlock;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
@@ -36,16 +35,13 @@ class RollbackServiceTest {
     @Mock
     private DatabaseUtils databaseUtils;
 
-    @Mock
-    private IEraService eraService;
-
     private RollbackLoader configLoader;
     private RollbackService rollbackService;
 
     @BeforeEach
     void setUp() {
         configLoader = new RollbackLoader();
-        rollbackService = new RollbackService(jdbcTemplate, databaseUtils, eraService);
+        rollbackService = new RollbackService(jdbcTemplate, databaseUtils);
     }
 
     @Test
@@ -118,23 +114,13 @@ class RollbackServiceTest {
 
     @Test
     void testIsValidRollbackEpoch_WithValidEpoch_ShouldReturnTrue() {
-        when(databaseUtils.tableExists("block")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(200);
-
         boolean result = rollbackService.isValidRollbackEpoch(100);
-
         assertTrue(result);
     }
 
     @Test
     void testIsValidRollbackEpoch_WithInvalidEpoch_ShouldReturnFalse() {
-        when(databaseUtils.tableExists("block")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(50);
-
-        boolean result = rollbackService.isValidRollbackEpoch(100);
-
+        boolean result = rollbackService.isValidRollbackEpoch(0);
         assertFalse(result);
     }
 
@@ -148,6 +134,7 @@ class RollbackServiceTest {
                 .rollbackPointBlock(2000L)
                 .rollbackPointBlockHash("manual_block_hash_123")
                 .rollbackPointSlot(1000L)
+                .rollbackPointEra(5) // Era required
                 .build();
 
         // Mock tableExists to return false for "block" table, true for others
@@ -155,7 +142,6 @@ class RollbackServiceTest {
             String tableName = invocation.getArgument(0);
             return !"block".equals(tableName);
         });
-        when(eraService.getEraForEpoch(100)).thenReturn(com.bloxbean.cardano.yaci.core.model.Era.Shelley);
         when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
         when(plainJdbcTemplate.update(anyString())).thenReturn(1);
@@ -166,7 +152,6 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(eraService, times(1)).getEraForEpoch(100);
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
     }
 
@@ -191,30 +176,14 @@ class RollbackServiceTest {
     }
 
     @Test
-    void testIsValidRollbackEpoch_WithoutBlockTable_WithCursorTable_ShouldReturnTrue() {
-        when(databaseUtils.tableExists("block")).thenReturn(false);
-        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(50000000L);
-        when(eraService.getFirstNonByronSlot()).thenReturn(4492800L);
-        when(eraService.getEpochNo(any(), anyLong())).thenReturn(200);
-
-        boolean result = rollbackService.isValidRollbackEpoch(100);
-
+    void testIsValidRollbackEpoch_WithPositiveEpoch_ShouldReturnTrue() {
+        boolean result = rollbackService.isValidRollbackEpoch(1);
         assertTrue(result);
     }
 
     @Test
-    void testIsValidRollbackEpoch_WithoutBlockTable_ByronEra_ShouldCalculateCorrectly() {
-        when(databaseUtils.tableExists("block")).thenReturn(false);
-        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(2000000L);
-        when(eraService.getFirstNonByronSlot()).thenReturn(4492800L);
-        when(eraService.slotsPerEpoch(com.bloxbean.cardano.yaci.core.model.Era.Byron)).thenReturn(21600L);
-
-        boolean result = rollbackService.isValidRollbackEpoch(50);
-
+    void testIsValidRollbackEpoch_WithLargeEpoch_ShouldReturnTrue() {
+        boolean result = rollbackService.isValidRollbackEpoch(1000);
         assertTrue(result);
     }
 
@@ -329,47 +298,16 @@ class RollbackServiceTest {
         assertTrue(result.getSecond().contains("another_missing_table"));
     }
 
-    @Test
-    void testIsValidRollbackEpoch_WithEpochZero_ShouldReturnFalse() {
-        when(databaseUtils.tableExists("block")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(200);
-
-        boolean result = rollbackService.isValidRollbackEpoch(0);
-
-        assertFalse(result);
-    }
 
     @Test
     void testIsValidRollbackEpoch_WithNegativeEpoch_ShouldReturnFalse() {
-        when(databaseUtils.tableExists("block")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(200);
-
-        boolean result = rollbackService.isValidRollbackEpoch(-5);
-
+        boolean result = rollbackService.isValidRollbackEpoch(-1);
         assertFalse(result);
     }
 
     @Test
-    void testIsValidRollbackEpoch_WithNullMaxEpoch_ShouldReturnFalse() {
-        when(databaseUtils.tableExists("block")).thenReturn(false);
-        when(databaseUtils.tableExists("cursor_")).thenReturn(false);
-
-        boolean result = rollbackService.isValidRollbackEpoch(100);
-
-        assertFalse(result);
-    }
-
-    @Test
-    void testIsValidRollbackEpoch_WithNullSlotFromCursor_ShouldReturnFalse() {
-        when(databaseUtils.tableExists("block")).thenReturn(false);
-        when(databaseUtils.tableExists("cursor_")).thenReturn(true);
-        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
-        when(plainJdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(null);
-
-        boolean result = rollbackService.isValidRollbackEpoch(100);
-
+    void testIsValidRollbackEpoch_WithZeroEpoch_ShouldReturnFalse() {
+        boolean result = rollbackService.isValidRollbackEpoch(0);
         assertFalse(result);
     }
 
@@ -415,6 +353,7 @@ class RollbackServiceTest {
                 .rollbackPointBlock(2000L)
                 .rollbackPointBlockHash("hash123")
                 .rollbackPointSlot(null) // Missing slot
+                .rollbackPointEra(5)
                 .build();
 
         when(databaseUtils.tableExists("block")).thenReturn(false);
@@ -438,6 +377,7 @@ class RollbackServiceTest {
                 .rollbackPointBlock(2000L)
                 .rollbackPointBlockHash(null) // Missing block hash
                 .rollbackPointSlot(1000L)
+                .rollbackPointEra(5)
                 .build();
 
         when(databaseUtils.tableExists("block")).thenReturn(false);
@@ -450,6 +390,82 @@ class RollbackServiceTest {
 
         assertTrue(exception.getMessage().contains("Block table not available"));
         assertTrue(exception.getMessage().contains("manual rollback point not provided"));
+    }
+
+    @Test
+    void testExecuteRollback_WithMissingEraInManualRollback_ShouldThrowException() {
+        RollbackContext context = RollbackContext.builder()
+                .epoch(100)
+                .eventPublisherId(1L)
+                .rollbackLedgerState(false)
+                .rollbackPointBlock(2000L)
+                .rollbackPointBlockHash("hash123")
+                .rollbackPointSlot(1000L)
+                .rollbackPointEra(null) // Missing era
+                .build();
+
+        when(databaseUtils.tableExists("block")).thenReturn(false);
+
+        RollbackConfig config = configLoader.loadRollbackConfig("rollback.yml");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            rollbackService.executeRollback(config, context);
+        });
+
+        assertTrue(exception.getMessage().contains("Block table not available"));
+        assertTrue(exception.getMessage().contains("manual rollback point not provided"));
+    }
+
+    @Test
+    void testExecuteRollback_WithMissingBlockNumberInManualRollback_ShouldThrowException() {
+        RollbackContext context = RollbackContext.builder()
+                .epoch(100)
+                .eventPublisherId(1L)
+                .rollbackLedgerState(false)
+                .rollbackPointBlock(null) // Missing block number
+                .rollbackPointBlockHash("hash123")
+                .rollbackPointSlot(1000L)
+                .rollbackPointEra(5)
+                .build();
+
+        when(databaseUtils.tableExists("block")).thenReturn(false);
+
+        RollbackConfig config = configLoader.loadRollbackConfig("rollback.yml");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            rollbackService.executeRollback(config, context);
+        });
+
+        assertTrue(exception.getMessage().contains("Block table not available"));
+        assertTrue(exception.getMessage().contains("manual rollback point not provided"));
+    }
+
+    @Test
+    void testExecuteRollback_WithAllManualRollbackPointFields_ShouldSucceed() {
+        String configFilePath = "rollback.yml";
+        RollbackContext context = RollbackContext.builder()
+                .epoch(100)
+                .eventPublisherId(1L)
+                .rollbackLedgerState(false)
+                .rollbackPointBlock(2000L)
+                .rollbackPointBlockHash("complete_hash_123")
+                .rollbackPointSlot(1000L)
+                .rollbackPointEra(5)
+                .build();
+
+        // Mock tableExists to return false for "block" table
+        when(databaseUtils.tableExists("block")).thenReturn(false);
+        when(databaseUtils.tableExists(argThat(name -> !"block".equals(name)))).thenReturn(true);
+        when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        when(plainJdbcTemplate.update(anyString())).thenReturn(1);
+
+        RollbackConfig config = configLoader.loadRollbackConfig(configFilePath);
+        Pair<List<TableRollbackAction>, Boolean> result = rollbackService.executeRollback(config, context);
+
+        assertNotNull(result);
+        assertTrue(result.getSecond());
+        assertTrue(result.getFirst().isEmpty());
     }
 
     @Test

@@ -14,4 +14,5 @@ public class RollbackContext {
     private Long rollbackPointBlock;
     private String rollbackPointBlockHash;
     private Long rollbackPointSlot;
+    private Integer rollbackPointEra;
 }

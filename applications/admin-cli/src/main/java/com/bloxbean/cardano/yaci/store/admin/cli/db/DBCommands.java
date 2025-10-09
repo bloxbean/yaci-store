@@ -46,6 +46,9 @@ public class DBCommands {
     @Value("${store.rollback.point.slot:#{null}}")
     private Long rollbackPointSlot;
 
+    @Value("${store.rollback.point.era:#{null}}")
+    private Integer rollbackPointEra;
+
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
         writeLn(info("Start to apply index ..."));
@@ -65,11 +68,12 @@ public class DBCommands {
 
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
+                         @Option(longNames = "event-publisher-id", defaultValue = "1000", description = "Event Publisher ID") long eventPublisherId,
                          @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
                          @Option(longNames = "block", description = "Block number for rollback point (required when block table is not available)") Long block,
                          @Option(longNames = "block-hash", description = "Block hash for rollback point (required when block table is not available)") String blockHash,
-                         @Option(longNames = "slot", description = "Slot number for rollback point (optional)") Long slot) {
+                         @Option(longNames = "slot", description = "Slot number for rollback point (required when block table is not available)") Long slot,
+                         @Option(longNames = "era", description = "Era for rollback point (required when block table is not available)") Integer era) {
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {
             String[] filesToUse = getRollbackFiles(rollbackFiles);
@@ -81,6 +85,7 @@ public class DBCommands {
                     .rollbackPointBlock(block != null ? block : rollbackPointBlock)
                     .rollbackPointBlockHash(blockHash != null ? blockHash : rollbackPointBlockHash)
                     .rollbackPointSlot(slot != null ? slot : rollbackPointSlot)
+                    .rollbackPointEra(era != null ? era : rollbackPointEra)
                     .build();
 
             applyRollback(filesToUse, rollbackContext);
@@ -160,9 +165,7 @@ public class DBCommands {
 
     private void applyRollback(String[] rollbackFiles, RollbackContext rollbackContext) {
         RollbackLoader rollbackLoader = new RollbackLoader();
-        RollbackConfig rollbackConfig;
-        
-        rollbackConfig = rollbackLoader.loadRollbackConfigFromMultipleFiles(rollbackFiles);
+        RollbackConfig rollbackConfig = rollbackLoader.loadRollbackConfigFromMultipleFiles(rollbackFiles);
 
         if (rollbackConfig.getTables() == null || rollbackConfig.getTables().isEmpty()) {
             log.warn("No table found to rollback");

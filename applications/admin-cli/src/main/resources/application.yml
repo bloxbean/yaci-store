@@ -30,10 +30,3 @@ spring.shell.history.name: admin-cli.history
 store:
   dbutils:
     rollback_files: rollback.yml
-  # Manual rollback point configuration (required when block table is not available)
-  # These can be overridden via CLI options: --block, --block-hash, --slot
-  rollback:
-    point:
-       block: 1000000
-       block_hash: "abc123..."
-       slot: 50000000
