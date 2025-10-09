@@ -46,10 +46,6 @@ public class GovEpochActivityProcessor {
         int epoch = event.getEpoch();
         int prevEpoch = event.getEpoch() - 1;
 
-        if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
-            return;
-        }
-
         jdbcTemplate.update("delete from gov_epoch_activity where epoch = :epoch",
                 new MapSqlParameterSource().addValue("epoch", epoch));
 
