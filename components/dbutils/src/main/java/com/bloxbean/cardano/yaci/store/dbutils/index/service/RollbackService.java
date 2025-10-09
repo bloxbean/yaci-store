@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +22,11 @@ public class RollbackService {
     private final DatabaseUtils databaseUtils;
 
     @Transactional
-    public Pair<List<TableRollbackAction>, Boolean> executeRollback(List<String> tableNames, RollbackContext context) {
+    public Pair<List<TableRollbackAction>, Boolean> executeRollback(RollbackConfig config, RollbackContext context) {
         int epoch = context.getEpoch();
         long eventPublisherId = context.getEventPublisherId();
 
-        RollbackBlock rollbackBlock = getRollbackBlockByEpoch(epoch);
+        RollbackBlock rollbackBlock = getRollbackBlockByRollbackContext(context);
 
         if (rollbackBlock == null) {
             log.error("Failed to get rollback block for epoch: {}", epoch);
@@ -43,14 +44,18 @@ public class RollbackService {
 
         List<TableRollbackAction> failedRollbackActions = new ArrayList<>();
 
-        // Execute DELETE statements for each table/condition
-        for (String tableName : tableNames) {
+        for (RollbackConfig.TableRollbackDefinition tableDef : config.getTables()) {
+            String tableName = tableDef.getName();
             if (databaseUtils.tableExists(tableName)) {
                 String sql;
-                if (context.isRollbackLedgerState() && tableName.equals("adapot_jobs")) {
-                    sql = "UPDATE adapot_jobs SET status = 'NOT_STARTED' WHERE epoch >= :epoch";
-                } else
-                    sql = buildDeleteSql(tableName, rollbackBlock.getEpoch(), rollbackBlock.getSlot());
+                if ("UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildUpdateSql(tableDef);
+                } else if ("DELETE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildDeleteSql(tableDef);
+                } else {
+                    throw new IllegalArgumentException("Invalid operation: " + tableDef.getOperation());
+                }
+
                 log.info("Executing rollback on table '{}': {}", tableName, sql);
                 try {
                     jdbcTemplate.update(sql, params);
@@ -62,33 +67,46 @@ public class RollbackService {
         }
 
         boolean rollbackSuccess = failedRollbackActions.isEmpty();
-
         return Pair.of(failedRollbackActions, rollbackSuccess);
     }
 
-    private RollbackBlock getRollbackBlockByEpoch(int epoch) {
-        // TODO: Handling for cases where there is no 'block' table
-        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
 
+    private RollbackBlock getRollbackBlockByRollbackContext(RollbackContext context) {
+        if (!databaseUtils.tableExists("block")) {
+            if (context.getRollbackPointBlock() == null
+                    || context.getRollbackPointBlockHash() == null
+                    || context.getRollbackPointEra() == null
+                    || context.getRollbackPointSlot() == null) {
+                String errorMsg = String.format("Block table not available and manual rollback point not provided for epoch %d. " +
+                        "Please provide slot, era, block_number and block_hash using CLI options (--slot, --block, --era --block-hash) " +
+                        "or configure them in application properties", context.getEpoch());
+                log.error(errorMsg);
+                throw new IllegalArgumentException(errorMsg);
+            }
+
+            return RollbackBlock.builder()
+                    .hash(context.getRollbackPointBlockHash())
+                    .slot(context.getRollbackPointSlot())
+                    .epoch(context.getEpoch())
+                    .number(context.getRollbackPointBlock())
+                    .era(context.getRollbackPointEra())
+                    .build();
+        }
+
+        String sql = "SELECT hash, slot, number, epoch_slot, era FROM block WHERE epoch = :epoch ORDER BY slot DESC LIMIT 1";
         var params = new MapSqlParameterSource()
-                .addValue("epoch", epoch - 1);
+                .addValue("epoch", context.getEpoch() - 1);
 
         return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) ->
                 RollbackBlock.builder()
                         .hash(rs.getString("hash"))
                         .slot(rs.getLong("slot"))
-                        .epoch(epoch)
+                        .epoch(context.getEpoch())
                         .epochSlot(rs.getInt("epoch_slot"))
                         .number(rs.getLong("number"))
                         .era(Integer.valueOf(rs.getString("era")))
                         .build()
-
         );
-    }
-
-    private Integer getMaxEpoch() {
-        String sql = "SELECT MAX(epoch) FROM block";
-        return jdbcTemplate.getJdbcTemplate().queryForObject(sql, Integer.class);
     }
 
     public Pair<List<String>, List<String>> verifyRollbackActions(List<String> tableNames) {
@@ -107,32 +125,90 @@ public class RollbackService {
     }
 
     public boolean isValidRollbackEpoch(int epoch) {
-        Integer maxEpoch = getMaxEpoch();
-
-        if (maxEpoch == null) {
-            log.error("Failed to get max epoch from block table");
-            return false;
-        }
-
-        return epoch >= 1 && epoch <= maxEpoch;
+        return epoch >= 1;
     }
 
-    private String buildDeleteSql(String table, int epoch, long slot) {
-        String deleteFilter = buildDeleteFilter(table, epoch, slot);
-        return "DELETE FROM " + table + " WHERE " + deleteFilter;
+    private String buildDeleteSql(RollbackConfig.TableRollbackDefinition tableDef) {
+        validateCondition(tableDef.getCondition());
+        String deleteFilter = buildDeleteFilter(tableDef.getCondition());
+        return "DELETE FROM " + tableDef.getName() + " WHERE " + deleteFilter;
     }
 
-    private String buildDeleteFilter(String tableName, int epoch, long slot) {
-        if (tableName.equals("epoch_stake")) {
-            return "epoch >= " + (epoch - 1);
-        } else if (tableName.equals("drep_dist") || tableName.equals("gov_action_proposal_status")
-                || tableName.equals("gov_epoch_activity") || tableName.equals("committee_state")) {
-            return "epoch >= " + epoch;
-        } else if (tableName.equals("tx_input")) {
-            return "spent_at_slot > " + slot;
+    private String buildUpdateSql(RollbackConfig.TableRollbackDefinition tableDef) {
+        validateCondition(tableDef.getCondition());
+        
+        if (tableDef.getUpdateSet() == null || tableDef.getUpdateSet().isEmpty()) {
+            throw new IllegalArgumentException("UPDATE operation requires 'update_set' clause for table: " + tableDef.getName());
         }
-        else {
-            return "slot > " + slot;
+        
+        StringBuilder updateSetClause = new StringBuilder();
+        for (int i = 0; i < tableDef.getUpdateSet().size(); i++) {
+            RollbackConfig.TableRollbackDefinition.UpdateSet update = tableDef.getUpdateSet().get(i);
+            updateSetClause.append(update.getColumn()).append(" = ").append(update.getValue());
+            if (i < tableDef.getUpdateSet().size() - 1) {
+                updateSetClause.append(", ");
+            }
+        }
+        String conditionFilter = buildUpdateConditionFilter(tableDef.getCondition());
+        return String.format("UPDATE %s SET %s WHERE %s", tableDef.getName(), updateSetClause.toString(), conditionFilter);
+    }
+
+    private String buildDeleteFilter(RollbackConfig.TableRollbackDefinition.Condition condition) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        String type = condition.getType();
+        Integer offset = condition.getOffset();
+
+        if ("epoch".equalsIgnoreCase(type)) {
+            if (offset != null && offset != 0) {
+                return String.format("%s %s (:epoch + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :epoch", column, operator);
+            }
+        } else if ("slot".equalsIgnoreCase(type)) {
+            if (offset != null && offset != 0) {
+                return String.format("%s %s (:slot + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :slot", column, operator);
+            }
+        } else {
+            return "1=1"; // Should not happen with proper config
+        }
+    }
+
+    private String buildUpdateConditionFilter(RollbackConfig.TableRollbackDefinition.Condition condition) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        String type = condition.getType();
+        Integer offset = condition.getOffset();
+
+        if ("epoch".equalsIgnoreCase(type)) {
+            if (offset != null) {
+                return String.format("%s %s (:epoch + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :epoch", column, operator);
+            }
+        } else if ("slot".equalsIgnoreCase(type)) {
+            if (offset != null) {
+                return String.format("%s %s (:slot + %d)", column, operator, offset);
+            } else {
+                return String.format("%s %s :slot", column, operator);
+            }
+        } else {
+            return "1=1"; // Should not happen for update conditions
+        }
+    }
+
+    private void validateCondition(RollbackConfig.TableRollbackDefinition.Condition condition) {
+        String column = condition.getColumn();
+        String operator = condition.getOperator();
+        
+        if (column == null || column.trim().isEmpty()) {
+            throw new IllegalArgumentException("Column name cannot be null or empty");
+        }
+        
+        if (operator == null || operator.trim().isEmpty()) {
+            throw new IllegalArgumentException("Operator cannot be null or empty");
         }
     }
 
