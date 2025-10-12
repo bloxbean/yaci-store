@@ -88,23 +88,15 @@ User submits TX
 CREATE TABLE submitted_transaction (
     -- Primary Key
     tx_hash VARCHAR(64) PRIMARY KEY,
-    
-    cbor_hex TEXT NOT NULL,
-    
     status VARCHAR(20) NOT NULL,
     -- Values: SUBMITTED, CONFIRMED, SUCCESS, FINALIZED, FAILED, ROLLED_BACK
-    
     submitted_at TIMESTAMP NOT NULL,
-    metadata JSONB,
-    
     confirmed_at TIMESTAMP,
     confirmed_slot BIGINT,
     confirmed_block_number BIGINT,
     success_at TIMESTAMP,
     finalized_at TIMESTAMP,
-    
     error_message TEXT,
-    
     update_datetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -115,9 +107,7 @@ CREATE TABLE submitted_transaction (
 | Field | Purpose | Why Included |
 |-------|---------|--------------|
 | `tx_hash` | Unique identifier | Primary key |
-| `cbor_hex` | Transaction data | For resubmission if needed |
 | `status` | Lifecycle state | Track current state |
-| `metadata` | Custom tags | User-defined metadata |
 | `submitted_at` | Submission timestamp | Track when submitted |
 | `confirmed_at` | Confirmation timestamp | When appeared in block |
 | `confirmed_slot` | Confirmation slot | For rollback detection |
