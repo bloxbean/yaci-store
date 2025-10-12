@@ -27,6 +27,11 @@ spring.shell.history.name: admin-cli.history
 # Rollback Configuration
 # Custom rollback files (comma-separated list of YAML files)
 # Examples: rollback.yml,classpath:custom-rollback.yml,file:///path/to/rollback.yml
-store:
-  dbutils:
-    rollback_files: rollback.yml
+store.admin-cli.db.rollback.rollback-files: rollback.yml
+
+# Manual rollback point configuration (required when block table is not available)
+# These can be overridden via CLI options: --block, --block-hash, --slot --era
+store.admin-cli.db.rollback.point.block: 1255
+store.admin-cli.db.rollback.point.block-hash: block-hash
+store.admin-cli.db.rollback.point.slot: 1234567
+store.admin-cli.db.rollback.point.era: 2

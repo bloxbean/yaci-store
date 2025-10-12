@@ -34,19 +34,19 @@ public class DBCommands {
     private final IndexService indexService;
     private final RollbackService rollbackService;
 
-    @Value("${store.dbutils.rollback_files:rollback.yml}")
+    @Value("${store.admin-cli.db.rollback.rollback-files")
     private String rollbackFiles;
 
-    @Value("${store.rollback.point.block:#{null}}")
+    @Value("${store.admin-cli.db.rollback.point.block")
     private Long rollbackPointBlock;
 
-    @Value("${store.rollback.point.block_hash:#{null}}")
+    @Value("${store.admin-cli.db.rollback.point.block-hash}")
     private String rollbackPointBlockHash;
 
-    @Value("${store.rollback.point.slot:#{null}}")
+    @Value("${store.admin-cli.db.rollback.point.slot}")
     private Long rollbackPointSlot;
 
-    @Value("${store.rollback.point.era:#{null}}")
+    @Value("${store.admin-cli.db.rollback.point.era")
     private Integer rollbackPointEra;
 
     @Command(description = "Apply the default indexes required for read operations.")
