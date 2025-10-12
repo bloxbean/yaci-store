@@ -58,7 +58,16 @@ User submits TX
 │    - Publish StatusUpdateEvent                              │
 └─────────────────────────────────────────────────────────────┘
       │
-      └──> 4. ROLLBACK (RollbackEvent)
+      ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 4. FINALIZED (After 2,160 blocks)                           │
+│    - Scheduled job checks if SUCCESS for 2,160+ blocks      │
+│    - Update: status = FINALIZED                             │
+│    - Publish StatusUpdateEvent                              │
+└─────────────────────────────────────────────────────────────┘
+      │
+      └──> 5. ROLLBACK (RollbackEvent)
+           - Can rollback from CONFIRMED or SUCCESS
            - Update: status = ROLLED_BACK
            - Publish StatusUpdateEvent
 
@@ -83,7 +92,7 @@ CREATE TABLE submitted_transaction (
     cbor_hex TEXT NOT NULL,
     
     status VARCHAR(20) NOT NULL,
-    -- Values: SUBMITTED, CONFIRMED, SUCCESS, FAILED, ROLLED_BACK
+    -- Values: SUBMITTED, CONFIRMED, SUCCESS, FINALIZED, FAILED, ROLLED_BACK
     
     submitted_at TIMESTAMP NOT NULL,
     metadata JSONB,
@@ -92,6 +101,7 @@ CREATE TABLE submitted_transaction (
     confirmed_slot BIGINT,
     confirmed_block_number BIGINT,
     success_at TIMESTAMP,
+    finalized_at TIMESTAMP,
     
     error_message TEXT,
     
@@ -112,7 +122,8 @@ CREATE TABLE submitted_transaction (
 | `confirmed_at` | Confirmation timestamp | When appeared in block |
 | `confirmed_slot` | Confirmation slot | For rollback detection |
 | `confirmed_block_number` | Block number | For depth calculation |
-| `success_at` | Success timestamp | When reached SUCCESS state |
+| `success_at` | Success timestamp | When reached SUCCESS state (after N blocks) |
+| `finalized_at` | Finalized timestamp | When reached FINALIZED state (after 2160 blocks) |
 | `error_message` | Error details | For failed submissions |
 
 ---
@@ -128,13 +139,19 @@ CREATE TABLE submitted_transaction (
                            │ Periodic check finds tx in transaction table
                            ↓
                     ┌─────────────┐
-               ┌───→│  CONFIRMED  │ ← Appears in block
+               ┌───→│  CONFIRMED  │ ← Appears in block (re-submission target)
                │    └──────┬──────┘
                │           │
-               │           │ No rollback after N blocks
+               │           │ No rollback after N blocks (configurable)
                │           ↓
                │    ┌─────────────┐
-               │    │   SUCCESS   │ ← Immutable (final success)
+               │    │   SUCCESS   │ ← Practically safe (e.g., 15 blocks)
+               │    └──────┬──────┘
+               │           │
+               │           │ After 2,160 blocks (security parameter)
+               │           ↓
+               │    ┌─────────────┐
+               │    │  FINALIZED  │ ← Mathematically immutable (final state)
                │    └─────────────┘
                │
                │    ┌──────────────┐
@@ -155,9 +172,35 @@ Special States:
 
 **State Transitions:**
 - `SUBMITTED` → `CONFIRMED`: Via TransactionEvent or periodic check
-- `CONFIRMED` → `SUCCESS`: After N blocks without rollback (N configurable)
-- `CONFIRMED` → `ROLLED_BACK`: Via RollbackEvent
-- `ROLLED_BACK` → `CONFIRMED`: Can re-confirm after rollback
+- `CONFIRMED` → `SUCCESS`: After N blocks without rollback (N configurable, e.g., 15 blocks)
+- `SUCCESS` → `FINALIZED`: After 2,160 blocks (Cardano security parameter - mathematical finality)
+- `CONFIRMED` → `ROLLED_BACK`: Via RollbackEvent (before SUCCESS)
+- `SUCCESS` → `ROLLED_BACK`: Via RollbackEvent (rare, but possible before 2,160 blocks)
+- `ROLLED_BACK` → `CONFIRMED`: Re-confirm after re-submission
+
+**Note on Rollback & Re-confirmation:**
+
+According to Cardano protocol and Cardano Wallet Transaction Lifecycle specification:
+
+1. **Rollback Behavior**: When a transaction is rolled back due to chain reorganization (fork), the transaction is removed from the blockchain database (`deleteBySlotGreaterThan`).
+
+2. **Transaction Fate**: The rolled-back transaction is no longer on the main chain. However:
+   - The transaction **may reappear** in the winning fork if nodes re-include it
+   - The transaction **must be re-submitted** if it doesn't naturally reappear
+
+3. **State Transition**: 
+   - Cardano Wallet spec: rolled-back transactions move from `in_ledger` → `pending`
+   - Yaci Store: `CONFIRMED` → `ROLLED_BACK` → (after re-submission) → `CONFIRMED`
+
+4. **Re-submission Strategy**:
+   - **Automatic re-submission**: System can automatically re-submit `ROLLED_BACK` transactions
+   - **Manual re-submission**: User can manually re-submit via the same submission endpoint
+   - Both approaches will transition the transaction back to `SUBMITTED` → `CONFIRMED`
+
+**References:**
+- [Cardano Wallet - Transaction Lifecycle](https://cardano-foundation.github.io/cardano-wallet/design/concepts/transaction-lifecycle.html)
+- [Cardano Stack Exchange - Best practice for handling rollbacks](https://cardano.stackexchange.com/questions/4614/best-practice-for-handling-rollbacks)
+- Yaci Store Implementation: `TransactionRollbackProcessor.deleteBySlotGreaterThan()`
 
 ---
 
@@ -167,11 +210,13 @@ Special States:
 - [ ] Users can submit transactions with tracking
 - [ ] System detects confirmation via TransactionEvent
 - [ ] System detects and handles rollbacks
-- [ ] System marks transactions as SUCCESS after N blocks
+- [ ] System marks transactions as SUCCESS after N blocks (configurable)
+- [ ] System marks transactions as FINALIZED after 2,160 blocks (security parameter)
 - [ ] Users can query transaction status by txHash
 - [ ] StatusUpdateEvent is published for every status change
 - [ ] (Optional) WebSocket provides real-time updates
 - [ ] Configuration allows toggling detection methods
+- [ ] Efficient transition from SUCCESS to FINALIZED (periodic check)
 - [ ] Documentation is complete
 ---
 
