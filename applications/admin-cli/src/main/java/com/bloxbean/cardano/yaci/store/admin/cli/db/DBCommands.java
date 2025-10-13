@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableIndex;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
 import com.bloxbean.cardano.yaci.store.dbutils.index.service.IndexService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.service.RollbackService;
+import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.IndexLoader;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.RollbackLoader;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class DBCommands {
 
     private final IndexService indexService;
     private final RollbackService rollbackService;
+    private final DatabaseUtils databaseUtils;
 
     @Value("${store.admin-cli.db.rollback.rollback-files")
     private String rollbackFiles;
@@ -75,6 +77,9 @@ public class DBCommands {
                          @Option(longNames = "slot", description = "Slot number for rollback point (required when block table is not available)") Long slot,
                          @Option(longNames = "era", description = "Era for rollback point (required when block table is not available)") Integer era) {
         writeLn(info("Start to rollback data ..."));
+        
+        validateMutuallyExclusiveOptions(epoch, block, blockHash, slot, era);
+        
         if (isRollbackEpochValid(epoch)) {
             String[] filesToUse = getRollbackFiles(rollbackFiles);
             verifyRollback(filesToUse);
@@ -206,5 +211,38 @@ public class DBCommands {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Validates that epoch and manual rollback point options are used correctly.
+     * Manual rollback point information should only be provided when block table is not available.
+     * 
+     * @param epoch The epoch number (always required)
+     * @param block Manual block number (optional)
+     * @param blockHash Manual block hash (optional)
+     * @param slot Manual slot number (optional)
+     * @param era Manual era (optional)
+     * @throws IllegalArgumentException if manual rollback point is provided when block table is available
+     */
+    private void validateMutuallyExclusiveOptions(int epoch, Long block, String blockHash, Long slot, Integer era) {
+        boolean hasManualBlock = block != null || blockHash != null || slot != null || era != null;
+        boolean hasConfigBlock = rollbackPointBlock != null || rollbackPointBlockHash != null || 
+                               rollbackPointSlot != null || rollbackPointEra != null;
+        
+        boolean blockTableExists = databaseUtils.tableExists("block");
+        
+        if ((hasManualBlock || hasConfigBlock) && blockTableExists) {
+            String errorMsg = String.format(
+                "Error: Manual rollback point information should not be provided when block table is available. " +
+                "You provided epoch=%d and manual rollback point information, but block table exists in the database. " +
+                "Please use epoch-based rollback instead:\n" +
+                "rollback-data --epoch %d\n" +
+                "Note: Manual rollback point is only needed when block table is not available in the database.",
+                epoch, epoch
+            );
+            
+            writeLn(error(errorMsg));
+            throw new IllegalArgumentException("Manual rollback point should not be used when block table is available");
+        }
     }
 }
