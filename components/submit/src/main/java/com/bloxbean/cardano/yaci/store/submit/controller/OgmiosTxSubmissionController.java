@@ -41,18 +41,14 @@ public class OgmiosTxSubmissionController {
 
     private ResponseEntity<String> ogmiosTxSubmission(byte[] cborTx) {
         try {
-            Result<String> result = ogmiosService.submitTx(cborTx);
-            if (result.isSuccessful()) {
-                return ResponseEntity.accepted()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("\"" + result.getValue() + "\"");
-            } else {
-                return ResponseEntity.badRequest()
-                        .body(result.getResponse());
-            }
+            String txHash = ogmiosService.submitTx(cborTx);
+            return ResponseEntity.accepted()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("\"" + txHash + "\"");
         } catch (Exception e) {
             return ResponseEntity.badRequest()
-                    .body(e.getMessage());
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("\"" + e.getMessage() + "\"");
         }
     }
 }
