@@ -51,6 +51,9 @@ public class DBCommands {
     @Value("${store.admin-cli.db.rollback.point.era")
     private Integer rollbackPointEra;
 
+    @Value("${store.utxo.pruning-enabled:false}")
+    private boolean utxoPruningEnabled;
+
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
         writeLn(info("Start to apply index ..."));
@@ -77,7 +80,8 @@ public class DBCommands {
                          @Option(longNames = "slot", description = "Slot number for rollback point (required when block table is not available)") Long slot,
                          @Option(longNames = "era", description = "Era for rollback point (required when block table is not available)") Integer era) {
         writeLn(info("Start to rollback data ..."));
-        
+        validatePruningConfiguration();
+
         validateMutuallyExclusiveOptions(epoch, block, blockHash, slot, era);
         
         if (isRollbackEpochValid(epoch)) {
@@ -243,6 +247,23 @@ public class DBCommands {
             
             writeLn(error(errorMsg));
             throw new IllegalArgumentException("Manual rollback point should not be used when block table is available");
+        }
+    }
+
+    /**
+     * Validates that UTXO pruning configuration is safe for rollback operations
+     */
+    private void validatePruningConfiguration() {
+        if (utxoPruningEnabled) {
+            String warnMsg = String.format(
+                "WARNING: UTXO pruning is enabled (store.utxo.pruning-enabled=true). " +
+                "Rollback operations are not safe when UTXO pruning is enabled because:\n" +
+                "1. Historical UTXOs needed for rollback may have been pruned\n" +
+                "2. Application may fail to start after rollback due to missing historical data\n" +
+                "3. You can only rollback up to the last pruning point + 1"
+            );
+            
+            writeLn(warn(warnMsg));
         }
     }
 }
