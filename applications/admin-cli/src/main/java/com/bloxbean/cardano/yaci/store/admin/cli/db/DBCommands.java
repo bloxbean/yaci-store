@@ -70,7 +70,7 @@ public class DBCommands {
 
     @Command(description = "Rollback data to a previous epoch")
     public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                         @Option(longNames = "event-publisher-id", defaultValue = "1000", description = "Event Publisher ID") long eventPublisherId,
+                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
                          @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
                          @Option(longNames = "block", description = "Block number for rollback point (required when block table is not available)") Long block,
                          @Option(longNames = "block-hash", description = "Block hash for rollback point (required when block table is not available)") String blockHash,
