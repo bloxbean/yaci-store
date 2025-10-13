@@ -63,8 +63,4 @@ public class TxSubmissionService implements TxSubmitter {
         }
     }
 
-    @Override
-    public String getName() {
-        return "LocalNode";
-    }
 }

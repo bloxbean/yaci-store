@@ -60,11 +60,6 @@ public class OgmiosService implements TxSubmitter {
         }
     }
 
-    @Override
-    public String getName() {
-        return "Ogmios";
-    }
-
     public Either<JsonNode, JsonNode> evaluateTx(byte[] cborTx, Set<Utxo> additionalUtxos) throws ApiException {
         if (log.isDebugEnabled())
             log.debug("Evaluating tx ..." + ogmiosUrl);

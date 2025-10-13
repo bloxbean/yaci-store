@@ -5,9 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
-import com.bloxbean.cardano.yaci.store.submit.service.SmartTxSubmissionService;
 import com.bloxbean.cardano.yaci.store.submit.service.TxLifecycleService;
-import com.bloxbean.cardano.yaci.store.submit.storage.impl.mapper.SubmittedTransactionMapper;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.SubmittedTransactionRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,7 +43,6 @@ import java.util.Optional;
 @Slf4j
 public class TxLifecycleController {
     
-    private final SmartTxSubmissionService smartSubmissionService;
     private final TxLifecycleService lifecycleService;
     private final CursorService cursorService;
     
@@ -55,7 +52,7 @@ public class TxLifecycleController {
     @PostMapping(value = "/submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     @Operation(summary = "Submit transaction with lifecycle tracking (CBOR)")
     public ResponseEntity<SubmittedTransaction> submitTxCbor(@RequestBody byte[] txBytes) {
-        SubmittedTransaction result = smartSubmissionService.submitTransaction(txBytes);
+        SubmittedTransaction result = lifecycleService.submitTransaction(txBytes);
         
         if (result.getStatus() == TxStatus.FAILED) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);

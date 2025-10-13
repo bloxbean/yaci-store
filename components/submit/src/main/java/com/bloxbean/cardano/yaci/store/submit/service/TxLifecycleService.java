@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.submit.service;
 
+import com.bloxbean.cardano.client.transaction.util.TransactionUtil;
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatusUpdateRequest;
@@ -27,6 +28,7 @@ public class TxLifecycleService {
     
     private final SubmittedTransactionRepository repository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TxSubmitter txSubmitter;
     
     /**
      * Create a new submitted transaction record.
@@ -202,6 +204,27 @@ public class TxLifecycleService {
     public Optional<SubmittedTransaction> getTransaction(String txHash) {
         return repository.findById(txHash)
                 .map(SubmittedTransactionMapper::toSubmittedTransaction);
+    }
+    
+    /**
+     * Submit transaction and track its lifecycle.
+     * This method combines transaction submission with automatic lifecycle tracking.
+     * 
+     * @param cborTx Transaction in CBOR format
+     * @return SubmittedTransaction with lifecycle tracking
+     * @throws UnsupportedOperationException if no transaction submitter is configured
+     */
+    @Transactional
+    public SubmittedTransaction submitTransaction(byte[] cborTx) {
+        try {
+            String txHash = txSubmitter.submitTx(cborTx);
+            log.info("Transaction accepted via {}: {}", txSubmitter.getName(), txHash);
+            return createSubmittedTransaction(txHash);
+        } catch (Exception e) {
+            log.error("Error submitting transaction via {}: {}", txSubmitter.getName(), e.getMessage());
+            String txHash = TransactionUtil.getTxHash(cborTx);
+            return markAsFailed(txHash, e.getMessage());
+        }
     }
     
     /**
