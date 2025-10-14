@@ -5,11 +5,23 @@ dependencyManagement {
 }
 
 dependencies {
+
     api project(":stores:utxo")
     api project(":stores-api:utxo-api")
+    api project(":stores-api:blocks-api")
+    api project(":stores-api:transaction-api")
+    api project(":stores-api:assets-api")
+    api project(":stores-api:staking-api")
+    api project(":stores-api:epoch-api")
+    api project(":aggregates:epoch-aggr")
+    api project(":aggregates:account")
+    api project(":aggregates:adapot")
+    api project(":aggregates:governance-aggr")
 
-    implementation 'org.springframework.ai:spring-ai-starter-mcp-server'
-    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server:1.0.3'
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc:1.0.3'
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
 
     testImplementation project(':starters:spring-boot-starter')
 }

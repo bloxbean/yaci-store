@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.starter.account;
+package com.bloxbean.cardano.yaci.store.starter.mcp.server;
 
 import lombok.Getter;
 import lombok.Setter;

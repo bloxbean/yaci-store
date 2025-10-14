@@ -27,7 +27,7 @@ dependencies {
 
     implementation project(':starters:admin-spring-boot-starter')
     implementation project(':components:dbutils')
-    implementation project(':aggregates:mcp-server')
+    implementation project(':starters:mcp-server-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

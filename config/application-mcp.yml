@@ -1,0 +1,15 @@
+# MCP Server Configuration - Exposes Yaci Store data to AI agents
+spring:
+  ai:
+    mcp:
+      server:
+        name: yaci-store-mcp-server
+        version: 2.0.0
+        type: SYNC
+        instructions: "This server provides Cardano blockchain data access through Yaci Store. Use the available tools to query blocks, transactions, UTXOs, assets, epochs, staking pools, and accounts."
+        sse-endpoint: /mcp/sse
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
