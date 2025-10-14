@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.common;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -15,12 +15,12 @@ import java.util.Collection;
 
 @Slf4j
 public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T>, FilterPlugin<T>, PreActionPlugin<T>, PostActionPlugin<T>, EventHandlerPlugin<T> {
-    public static final String INIT_VALUE_CACHE_KEY = "__init_plugin__init_value";
+    public static final String INIT_VALUE_STATE_KEY = "__init_plugin__init_value";
     private final String name;
     private final PluginDef pluginDef;
     private final PluginType pluginType;
     private final Engine engine;
-    private final PluginCacheService cacheService;
+    private final PluginStateService stateService;
     private final VariableProviderFactory variableProviderFactory;
     private final GlobalScriptContextRegistry globalScriptContextRegistry;
     private final ContextProvider contextProvider;
@@ -33,7 +33,7 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
     public GraalPolyglotScriptStorePlugin(Engine engine,
                                           PluginDef pluginDef,
                                           PluginType pluginType,
-                                          PluginCacheService pluginCacheService,
+                                          PluginStateService pluginStateService,
                                           VariableProviderFactory variableProviderFactory,
                                           GlobalScriptContextRegistry globalScriptContextRegistry,
                                           ContextProvider contextProvider) {
@@ -41,7 +41,7 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
         this.name = pluginDef.getName();
         this.pluginDef = pluginDef;
         this.pluginType = pluginType;
-        this.cacheService = pluginCacheService;
+        this.stateService = pluginStateService;
         this.variableProviderFactory = variableProviderFactory;
         this.contextProvider = contextProvider;
         this.globalScriptContextRegistry = globalScriptContextRegistry;
@@ -116,9 +116,9 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
         //TODO check if we need to close the context
         if (initValue != null) {
 
-            var global = cacheService.global();
+            var global = stateService.global();
             if (global != null) {
-                global.put(language() + INIT_VALUE_CACHE_KEY, initValue);
+                global.put(language() + INIT_VALUE_STATE_KEY, initValue);
             }
         }
     }
@@ -254,6 +254,11 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                 .allowAllAccess(true)
                 .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build())
                 .allowHostAccess(HostAccess.ALL)
+                .allowHostClassLookup(className -> true)
+                .allowHostClassLoading(true)
+                .allowCreateThread(true)
+                .allowCreateProcess(true)
+                .allowExperimentalOptions(true)
                 .engine(engine);
 
         preCreateContext(cb);
@@ -272,19 +277,20 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                         String key = entry.getKey();
                         Object value = entry.getValue();
 
-                        log.info("Setting variable {} = {}", key, value);
+                        if (log.isTraceEnabled())
+                            log.trace("Setting variable {} = {}", key, value);
 
                         if (!binding.hasMember(key))
                             binding.putMember(key, value);
                     });
         }
 
-        binding.putMember("cache", cacheService.forPlugin(name));
+        binding.putMember("state", stateService.forPlugin(name));
 
-        var globalCache = cacheService.global();
+        var globalState = stateService.global();
         //TODO -- review if we need this or any perfomance issue
-        if (globalCache != null) {
-            Value __initVal = (Value)globalCache.get(language() + INIT_VALUE_CACHE_KEY);
+        if (globalState != null) {
+            Value __initVal = (Value)globalState.get(language() + INIT_VALUE_STATE_KEY);
             if (__initVal != null) {
                 binding.putMember("__init", __initVal);
             }

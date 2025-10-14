@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.plugin.api;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
+
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 
 /**
  * Interface for plugin that can be implemented by various plugin types. event handler, filter, init, post-action, pre-action, etc.

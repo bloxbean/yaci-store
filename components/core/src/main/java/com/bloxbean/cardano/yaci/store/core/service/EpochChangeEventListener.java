@@ -32,7 +32,7 @@ public class EpochChangeEventListener {
 
         //Publish epoch transition individual calculation events
         var preEpochTransitionEvent = PreEpochTransitionEvent.builder()
-                .metadata(epochChangeEvent.getEventMetadata())
+                .metadata(epochChangeEvent.getMetadata())
                 .previousEpoch(epochChangeEvent.getPreviousEpoch())
                 .epoch(epochChangeEvent.getEpoch())
                 .previousEra(epochChangeEvent.getPreviousEra())
@@ -43,7 +43,7 @@ public class EpochChangeEventListener {
 
         //Publish epoch transition commit event
         var epochTransitionCommitEvent = EpochTransitionCommitEvent.builder()
-                .metadata(epochChangeEvent.getEventMetadata())
+                .metadata(epochChangeEvent.getMetadata())
                 .previousEpoch(epochChangeEvent.getPreviousEpoch())
                 .epoch(epochChangeEvent.getEpoch())
                 .previousEra(epochChangeEvent.getPreviousEra())

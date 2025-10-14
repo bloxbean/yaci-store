@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.js;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextSupplier;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
@@ -22,19 +22,19 @@ import java.util.List;
 @Slf4j
 public class JsPolyglotPluginFactory implements PluginFactory {
     private PluginContextUtil pluginContextUtil;
-    private PluginCacheService pluginCacheService;
+    private PluginStateService pluginStateService;
     private VariableProviderFactory variableProviderFactory;
     private ContextProvider contextProvider;
     private GlobalScriptContextRegistry globalScriptContextRegistry;
     private Engine engine;
 
     public JsPolyglotPluginFactory(PluginContextUtil pluginContextUtil,
-                                   PluginCacheService pluginCacheService,
+                                   PluginStateService pluginStateService,
                                    VariableProviderFactory variableProviderFactory,
                                    ContextProvider contextProvider,
                                    GlobalScriptContextRegistry globalScriptContextRegistry) {
         this.pluginContextUtil = pluginContextUtil;
-        this.pluginCacheService = pluginCacheService;
+        this.pluginStateService = pluginStateService;
         this.variableProviderFactory = variableProviderFactory;
         this.contextProvider = contextProvider;
         this.globalScriptContextRegistry = globalScriptContextRegistry;
@@ -89,6 +89,8 @@ public class JsPolyglotPluginFactory implements PluginFactory {
                         .allowAllAccess(true)
                         .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build())
                         .allowHostAccess(HostAccess.ALL)
+                        .allowHostClassLookup(className -> true)
+                        .allowHostClassLoading(true)
                         .allowCreateThread(true)
                         .allowCreateProcess(true)
                         .allowExperimentalOptions(true)
@@ -96,10 +98,25 @@ public class JsPolyglotPluginFactory implements PluginFactory {
 
                 var ctx = cb.build();
 
-                ctx.eval(source);
+                var binding = ctx.getBindings(getLang());
+                var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
+                if (variables != null) {
+                    variables.entrySet()
+                            .stream()
+                            .forEach(entry -> {
+                                String key = entry.getKey();
+                                Object value = entry.getValue();
 
-                ctx.getBindings(getLang()).putMember("util", pluginContextUtil);
-                ctx.getBindings(getLang()).putMember("global_cache", pluginCacheService.global());
+                                if (log.isTraceEnabled())
+                                    log.trace("Setting variable {} = {}", key, value);
+
+                                if (!binding.hasMember(key))
+                                    binding.putMember(key, value);
+                            });
+                }
+                binding.putMember("global_state", pluginStateService.global());
+
+                ctx.eval(source);
 
                 return ctx;
             };
@@ -116,10 +133,10 @@ public class JsPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> InitPlugin createInitPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.INIT, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No expression or script found in init definition for js plugin: " + def);
@@ -128,10 +145,10 @@ public class JsPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.FILTER, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No expression or script found in filter definition for js plugin: " + def);
@@ -142,7 +159,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
@@ -153,7 +170,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for js plugin: " + def);
@@ -164,7 +181,7 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null)
-            return new JsScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, pluginCacheService, variableProviderFactory,
+            return new JsScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, pluginStateService, variableProviderFactory,
                     contextProvider, globalScriptContextRegistry);
         else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for js plugin: " + def);

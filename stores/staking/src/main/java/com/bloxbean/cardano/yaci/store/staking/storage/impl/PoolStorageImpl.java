@@ -14,13 +14,13 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class PoolStorageImpl implements PoolStorage {
-    private final static String FILTER_POOL_SAVE = "staking.pool.save";
+    private final static String PLUGIN_POOL_SAVE = "staking.pool.save";
 
     private final PoolStatusRepository poolStatusRepository;
     private final PoolMapper poolMapper;
 
     @Override
-    @Plugin(key = FILTER_POOL_SAVE)
+    @Plugin(key = PLUGIN_POOL_SAVE)
     public void save(List<Pool> poolStatuses) {
         if (poolStatuses == null || poolStatuses.isEmpty())
             return;

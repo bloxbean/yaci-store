@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.account.service;
 
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import static org.jooq.impl.DSL.*;
  * Service to take balance snapshot for list of addresses
  */
 @Component
+@ReadOnly(false)
 @RequiredArgsConstructor
 @Slf4j
 public class AddressBalanceSnapshotService {

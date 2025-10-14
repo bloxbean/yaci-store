@@ -26,7 +26,7 @@ import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.SCRIPT;
 
 @Slf4j
 public class ScriptStorageImpl implements ScriptStorage {
-    private final static String FILTER_SCRIPT_SAVE = "script.save";
+    private final static String PLUGIN_SCRIPT_SAVE = "script.save";
 
     private final ScriptRepository scriptRepository;
     private final ScriptMapper scriptMapper;
@@ -58,7 +58,7 @@ public class ScriptStorageImpl implements ScriptStorage {
     }
 
     @Override
-    @Plugin(key = FILTER_SCRIPT_SAVE)
+    @Plugin(key = PLUGIN_SCRIPT_SAVE)
     public List<Script> saveScripts(List<Script> scripts) {
         if (scripts != null && !scripts.isEmpty())
             scriptCache.addAll(scripts);

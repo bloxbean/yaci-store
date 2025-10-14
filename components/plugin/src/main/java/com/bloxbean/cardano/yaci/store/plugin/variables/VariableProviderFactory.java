@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.plugin.variables;
 
+import com.bloxbean.cardano.yaci.store.plugin.api.VariableProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

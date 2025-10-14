@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
-import com.bloxbean.cardano.yaci.store.plugin.api.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 

@@ -16,15 +16,15 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class PoolCertificateStorageImpl implements PoolCertificateStorage {
-    private final static String FILTER_POOL_REGISTRATION_SAVE = "staking.pool_registration.save";
-    private final static String FILTER_POOL_RETIREMENT_SAVE = "staking.pool_retirement.save";
+    private final static String PLUGIN_POOL_REGISTRATION_SAVE = "staking.pool_registration.save";
+    private final static String PLUGIN_POOL_RETIREMENT_SAVE = "staking.pool_retirement.save";
 
     private final PoolRegistrationRepository poolRegistrationRepository;
     private final PoolRetirementRepository poolRetirementRepository;
     private final PoolMapper mapper;
 
     @Override
-    @Plugin(key = FILTER_POOL_REGISTRATION_SAVE)
+    @Plugin(key = PLUGIN_POOL_REGISTRATION_SAVE)
     public void savePoolRegistrations(List<PoolRegistration> poolRegistrations) {
         List<PoolRegistrationEnity> poolRegistrationEnities = poolRegistrations.stream()
                 .map(mapper::toPoolRegistrationEntity)
@@ -34,7 +34,7 @@ public class PoolCertificateStorageImpl implements PoolCertificateStorage {
     }
 
     @Override
-    @Plugin(key = FILTER_POOL_RETIREMENT_SAVE)
+    @Plugin(key = PLUGIN_POOL_RETIREMENT_SAVE)
     public void savePoolRetirements(List<PoolRetirement> poolRetirements) {
         List<PoolRetirementEntity> poolRetirementEntities = poolRetirements.stream()
                 .map(mapper::toPoolRetirementEntity)

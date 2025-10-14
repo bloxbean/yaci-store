@@ -11,7 +11,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.core.service.ChainTipService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.epoch.annotation.LocalEpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
@@ -38,7 +38,7 @@ import static com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration.STOR
 @Slf4j
 public class LocalEpochParamService {
     private final LocalClientProviderManager localClientProviderManager;
-    private final EraService eraService;
+    private final ChainTipService chainTipService;
     private final LocalEpochParamsStorage localProtocolParamsStorage;
 
     private DomainMapper domainMapper = DomainMapper.INSTANCE;
@@ -47,10 +47,10 @@ public class LocalEpochParamService {
     private Era era;
 
     public LocalEpochParamService(LocalClientProviderManager localClientProviderManager,
-                                  LocalEpochParamsStorage localProtocolParamsStorage, EraService eraService) {
+                                  LocalEpochParamsStorage localProtocolParamsStorage, ChainTipService chainTipService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localProtocolParamsStorage = localProtocolParamsStorage;
-        this.eraService = eraService;
+        this.chainTipService = chainTipService;
         log.info("ProtocolParamService initialized >>>");
     }
 
@@ -84,7 +84,7 @@ public class LocalEpochParamService {
      */
     @EventListener
     public void epochEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode())
+        if (!epochChangeEvent.getMetadata().isSyncMode())
             return;
 
         era = Era.valueOf(epochChangeEvent.getEra().name());
@@ -99,7 +99,7 @@ public class LocalEpochParamService {
     }
 
     public synchronized void fetchAndSetCurrentProtocolParams() {
-        Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        Optional<Tuple<Tip, Integer>> epochAndTip = chainTipService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
             log.error("Epoch is null. Cannot fetch protocol params");
             return;

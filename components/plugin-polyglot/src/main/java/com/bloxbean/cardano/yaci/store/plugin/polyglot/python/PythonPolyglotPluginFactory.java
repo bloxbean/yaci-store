@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot.python;
 
-import com.bloxbean.cardano.yaci.store.common.plugin.PluginDef;
-import com.bloxbean.cardano.yaci.store.common.plugin.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextSupplier;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
@@ -19,7 +19,7 @@ import java.util.List;
 @Slf4j
 public class PythonPolyglotPluginFactory implements PluginFactory {
     private PluginContextUtil pluginContextUtil;
-    private PluginCacheService pluginCacheService;
+    private PluginStateService pluginStateService;
     private VariableProviderFactory variableProviderFactory;
     private ContextProvider contextProvider;
     private GlobalScriptContextRegistry globalScriptContextRegistry;
@@ -28,12 +28,12 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
     private String venvPath;
 
     public PythonPolyglotPluginFactory(PluginContextUtil pluginContextUtil,
-                                       PluginCacheService pluginCacheService,
+                                       PluginStateService pluginStateService,
                                        VariableProviderFactory variableProviderFactory,
                                        ContextProvider contextProvider,
                                        GlobalScriptContextRegistry globalScriptContextRegistry) {
         this.pluginContextUtil = pluginContextUtil;
-        this.pluginCacheService = pluginCacheService;
+        this.pluginStateService = pluginStateService;
         this.variableProviderFactory = variableProviderFactory;
         this.contextProvider = contextProvider;
         this.globalScriptContextRegistry = globalScriptContextRegistry;
@@ -89,6 +89,8 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
                         .allowAllAccess(true)
                         .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build())
                         .allowHostAccess(HostAccess.ALL)
+                        .allowHostClassLookup(className -> true)
+                        .allowHostClassLoading(true)
                         .allowCreateThread(true)
                         .allowCreateProcess(true)
                         .allowExperimentalOptions(true)
@@ -103,10 +105,25 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
 
                 var ctx = cb.build();
 
-                ctx.eval(source);
+                var binding = ctx.getBindings(getLang());
+                var variables = variableProviderFactory != null? variableProviderFactory.getVariables(): null;
+                if (variables != null) {
+                    variables.entrySet()
+                            .stream()
+                            .forEach(entry -> {
+                                String key = entry.getKey();
+                                Object value = entry.getValue();
 
-                ctx.getBindings(getLang()).putMember("util", pluginContextUtil);
-                ctx.getBindings(getLang()).putMember("global_cache", pluginCacheService.global());
+                                if (log.isTraceEnabled())
+                                    log.trace("Setting variable {} = {}", key, value);
+
+                                if (!binding.hasMember(key))
+                                    binding.putMember(key, value);
+                            });
+                }
+                binding.putMember("global_state", pluginStateService.global());
+
+                ctx.eval(source);
 
                 return ctx;
             };
@@ -132,7 +149,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for init plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.INIT, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.INIT, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in init python plugin: " + def);
@@ -141,10 +158,10 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
     @Override
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         if (def.getExpression() != null)
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.FILTER, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No expression or script found in filter definition for python plugin: " + def);
@@ -155,7 +172,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for post-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.POST_ACTION, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider,  globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for python plugin: " + def);
@@ -166,7 +183,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for pre-action plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.PRE_ACTION, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in filter definition for python plugin: " + def);
@@ -177,7 +194,7 @@ public class PythonPolyglotPluginFactory implements PluginFactory {
         if (def.getExpression() != null)
             throw new IllegalArgumentException("Use script or inline-script for event-handler plugin. {}" + def);
         else if (def.getInlineScript() != null || def.getScript() != null) {
-            return new PythonScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, venvPath, pluginCacheService,
+            return new PythonScriptStorePlugin<>(engine, def, PluginType.EVENT_HANDLER, venvPath, pluginStateService,
                     variableProviderFactory, contextProvider, globalScriptContextRegistry);
         } else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for python plugin: " + def);

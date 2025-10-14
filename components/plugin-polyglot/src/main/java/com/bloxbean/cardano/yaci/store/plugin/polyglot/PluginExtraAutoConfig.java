@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.plugin.polyglot;
 
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginFactory;
-import com.bloxbean.cardano.yaci.store.plugin.cache.PluginCacheService;
+import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvider;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.PolyglotContextPoolFactory;
@@ -37,7 +37,7 @@ public class PluginExtraAutoConfig {
 
     @Bean
     public PluginFactory JsPluginFactory(PluginContextUtil pluginContextUtil,
-                                         PluginCacheService pluginCacheService,
+                                         PluginStateService pluginCacheService,
                                          VariableProviderFactory variableProviderFactory,
                                          ContextProvider contextProvider,
                                          GlobalScriptContextRegistry globalScriptContextRegistry) {
@@ -47,7 +47,7 @@ public class PluginExtraAutoConfig {
 
     @Bean
     public PluginFactory pythonPluginFactory(PluginContextUtil pluginContextUtil,
-                                             PluginCacheService pluginCacheService,
+                                             PluginStateService pluginCacheService,
                                              VariableProviderFactory variableProviderFactory,
                                              ContextProvider contextProvider,
                                              GlobalScriptContextRegistry globalScriptContextRegistry) {

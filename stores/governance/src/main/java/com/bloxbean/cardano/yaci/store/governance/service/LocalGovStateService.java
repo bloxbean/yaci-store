@@ -16,10 +16,11 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.core.service.ChainTipService;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.events.BlockHeaderEvent;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
@@ -27,7 +28,6 @@ import com.bloxbean.cardano.yaci.store.governance.annotation.LocalGovState;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.domain.local.*;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governance.storage.local.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.Nullable;
@@ -67,7 +67,7 @@ public class LocalGovStateService {
     private final GovActionProposalStorage govActionProposalStorage;
     private final LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage;
     private final PlatformTransactionManager transactionManager;
-    private final EraService eraService;
+    private final ChainTipService chainTipService;
     private TransactionTemplate transactionTemplate;
 
     @Getter
@@ -82,7 +82,7 @@ public class LocalGovStateService {
                                 GovActionProposalStorage govActionProposalStorage,
                                 LocalTreasuryWithdrawalStorage localTreasuryWithdrawalStorage, LocalConstitutionStorageReader localConstitutionStorageReader,
                                 PlatformTransactionManager transactionManager,
-                                EraService eraService) {
+                                ChainTipService chainTipService) {
         this.localClientProviderManager = localClientProviderManager;
         this.localGovActionProposalStatusStorage = localGovActionProposalStatusStorage;
         this.localConstitutionStorage = localConstitutionStorage;
@@ -92,7 +92,7 @@ public class LocalGovStateService {
         this.localHardForkInitiationStorage = localHardForkInitiationStorage;
         this.govActionProposalStorage = govActionProposalStorage;
         this.transactionManager = transactionManager;
-        this.eraService = eraService;
+        this.chainTipService = chainTipService;
 
         log.info("LocalGovActionStateService initialized >>>");
     }
@@ -120,7 +120,7 @@ public class LocalGovStateService {
 
     @EventListener
     public void handleEpochChangeEvent(EpochChangeEvent epochChangeEvent) {
-        if (!epochChangeEvent.getEventMetadata().isSyncMode()) {
+        if (!epochChangeEvent.getMetadata().isSyncMode()) {
             return;
         }
 
@@ -177,7 +177,7 @@ public class LocalGovStateService {
     }
 
     private void handleGovStateQueryResult(GovStateQueryResult govStateQueryResult) {
-        Optional<Tuple<Tip, Integer>> epochAndTip = eraService.getTipAndCurrentEpoch();
+        Optional<Tuple<Tip, Integer>> epochAndTip = chainTipService.getTipAndCurrentEpoch();
         if (epochAndTip.isEmpty()) {
             log.error("Tip is null. Cannot fetch gov state");
             return;

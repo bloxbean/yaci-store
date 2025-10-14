@@ -1,9 +1,10 @@
 package com.bloxbean.cardano.yaci.store.plugin.util;
 
-import kong.unirest.core.Unirest;
+import com.bloxbean.cardano.yaci.store.plugin.http.PluginHttpClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -11,24 +12,34 @@ import org.springframework.web.client.RestTemplate;
 @RequiredArgsConstructor
 public class PluginContextUtil {
 
-    private final JdbcTemplate jdbcTemplate;
-    private final RestTemplate restTemplate;
-    private final Environment environment;
+    public final JdbcTemplate jdbc;
+    public final NamedParameterJdbcTemplate namedJdbc;
+    public final RestTemplate rest;
+    public final Environment env;
+    public final PluginHttpClient http;
+    public final Locker locker;
 
     public JdbcTemplate getJdbc() {
-        return jdbcTemplate;
+        return jdbc;
+    }
+
+    public NamedParameterJdbcTemplate getNamedJdbc() {
+        return namedJdbc;
     }
 
     public RestTemplate getRest() {
-        return restTemplate;
+        return rest;
     }
 
     public Environment getEnv() {
-        return environment;
+        return env;
     }
 
-    public Class getHttp() {
-        return Unirest.class;
+    public PluginHttpClient getHttp() {
+        return http;
     }
 
+    public Locker getLocker() {
+        return locker;
+    }
 }
