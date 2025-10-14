@@ -36,23 +36,35 @@ public class DBCommands {
     private final RollbackService rollbackService;
     private final DatabaseUtils databaseUtils;
 
-    @Value("${store.admin-cli.db.rollback.rollback-files")
+    @Value("${store.admin-cli.db.rollback.rollback-files:rollback.yml}")
     private String rollbackFiles;
 
-    @Value("${store.admin-cli.db.rollback.point.block")
+    @Value("${store.admin-cli.db.rollback.point.block:#{null}}")
     private Long rollbackPointBlock;
 
-    @Value("${store.admin-cli.db.rollback.point.block-hash}")
+    @Value("${store.admin-cli.db.rollback.point.block-hash:#{null}}")
     private String rollbackPointBlockHash;
 
-    @Value("${store.admin-cli.db.rollback.point.slot}")
+    @Value("${store.admin-cli.db.rollback.point.slot:#{null}}")
     private Long rollbackPointSlot;
 
-    @Value("${store.admin-cli.db.rollback.point.era")
+    @Value("${store.admin-cli.db.rollback.point.era:#{null}}")
     private Integer rollbackPointEra;
 
     @Value("${store.utxo.pruning-enabled:false}")
     private boolean utxoPruningEnabled;
+
+    @Value("${store.transaction.pruning-enabled:false}")
+    private boolean transactionPruningEnabled;
+
+    @Value("${store.adapot.reward-pruning-enabled:false}")
+    private boolean rewardPruningEnabled;
+
+    @Value("${store.adapot.epoch-stake-pruning-enabled:false}")
+    private boolean epochStakePruningEnabled;
+
+    @Value("${store.account.pruning-enabled:false}")
+    private boolean accountPruningEnabled;
 
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
@@ -251,19 +263,61 @@ public class DBCommands {
     }
 
     /**
-     * Validates that UTXO pruning configuration is safe for rollback operations
+     * Validates that pruning configurations are safe for rollback operations.
+     * Checks all types of pruning: UTXO, Transaction, Reward, Epoch Stake, and Account Balance.
      */
     private void validatePruningConfiguration() {
+        boolean anyPruningEnabled = false;
+        StringBuilder warningMsg = new StringBuilder();
+        
         if (utxoPruningEnabled) {
-            String warnMsg = String.format(
-                "WARNING: UTXO pruning is enabled (store.utxo.pruning-enabled=true). " +
-                "Rollback operations are not safe when UTXO pruning is enabled because:\n" +
-                "1. Historical UTXOs needed for rollback may have been pruned\n" +
-                "2. Application may fail to start after rollback due to missing historical data\n" +
-                "3. You can only rollback up to the last pruning point + 1"
+            anyPruningEnabled = true;
+            warningMsg.append("- UTXO Pruning (store.utxo.pruning-enabled=true)\n")
+                     .append("  → Historical UTXOs may have been pruned\n")
+                     .append("  → Rollback limited to last pruning point + 1\n\n");
+        }
+        
+        if (transactionPruningEnabled) {
+            anyPruningEnabled = true;
+            warningMsg.append("- Transaction Pruning (store.transaction.pruning-enabled=true)\n")
+                     .append("  → Transaction and witness records may have been deleted\n")
+                     .append("  → Historical transaction data may be incomplete after rollback\n\n");
+        }
+        
+        if (rewardPruningEnabled) {
+            anyPruningEnabled = true;
+            warningMsg.append("- Reward Pruning (store.adapot.reward-pruning-enabled=true)\n")
+                     .append("  → Withdrawn reward records may have been pruned\n")
+                     .append("  → Reward history may be incomplete after rollback\n\n");
+        }
+        
+        if (epochStakePruningEnabled) {
+            anyPruningEnabled = true;
+            warningMsg.append("- Epoch Stake Pruning (store.adapot.epoch-stake-pruning-enabled=true)\n")
+                     .append("  → Old epoch stake records may have been deleted\n")
+                     .append("  → Stake snapshots may be incomplete for old epochs\n\n");
+        }
+        
+        if (accountPruningEnabled) {
+            anyPruningEnabled = true;
+            warningMsg.append("- Account Balance Pruning (store.account.pruning-enabled=true)\n")
+                     .append("  → Historical address and stake balance records may have been pruned\n")
+                     .append("  → Balance history may be incomplete after rollback\n\n");
+        }
+        
+        if (anyPruningEnabled) {
+            String fullWarning = String.format(
+                "\n⚠️  WARNING: DATA PRUNING IS ENABLED ⚠️\n\n" +
+                "%s" +
+                "ROLLBACK RISKS:\n" +
+                "1. Historical data needed for rollback may have been permanently deleted\n" +
+                "2. Application may fail to start after rollback due to missing data\n" +
+                "3. You can only safely rollback to points AFTER the last pruning operation\n" +
+                "4. Consider disabling pruning before performing rollbacks\n",
+                warningMsg.toString()
             );
             
-            writeLn(warn(warnMsg));
+            writeLn(warn(fullWarning));
         }
     }
 }
