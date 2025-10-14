@@ -1,3 +1,6 @@
+import ZoomableImage from '../../../components/ZoomableImage'
+import ZoomableDiagram from './ZoomableDiagram'
+
 &nbsp;
 
 # 🧠 Yaci Store - Design
@@ -17,57 +20,7 @@ Yaci Store is designed as a modular, event-driven blockchain indexing system for
 ---
 
 ## 🏛️ Architecture Overview
-
-import ZoomableDiagram from './ZoomableDiagram'
-
-<ZoomableDiagram>
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#cccccc', 'lineColor': '#666666', 'secondaryColor': '#f9f9f9', 'tertiaryColor': '#ffffff', 'background': '#ffffff', 'mainBkg': '#ffffff', 'secondBkg': '#f9f9f9', 'tertiaryBkg': '#ffffff'}, 'flowchart': {'htmlLabels': true}, 'fontFamily': 'arial', 'fontSize': '18px'}}%%
-flowchart TD
-    %% Simple top-down flow
-    CardanoNode["🌐 Cardano Node"]
-    
-    Core["⚙️ Core Module<br/>Data Processing & Events"]
-    
-    Stores["🏪 Stores Layer<br/>Block | UTxO | TX | Stake | Assets<br/>Epoch | Scripts | Ledger | Gov"]
-    
-    EventBus["📡 Event Bus<br/>Inter-Component Communication"]
-    
-    subgraph Output["🔄 OUTPUT LAYER"]
-        RestAPI["🌐 REST APIs"]
-        Aggregates["📊 Aggregates"] 
-        TxSubmit["📤 TX Submit"]
-    end
-    
-    Database["💾 Database<br/>PostgreSQL | MySQL | H2"]
-    
-    %% Clean linear flow
-    CardanoNode --> Core
-    Core --> Stores
-    Stores --> EventBus
-    EventBus --> RestAPI
-    EventBus --> Aggregates
-    EventBus --> TxSubmit
-    Core --> Database
-    Stores --> Database
-    
-    %% Clean, simple styling
-    style CardanoNode fill:#f8f9fa,stroke:#495057,stroke-width:3px,color:#000000,font-size:20px
-    style Core fill:#e3f2fd,stroke:#1976d2,stroke-width:3px,color:#000000,font-size:20px
-    style Stores fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px,color:#000000,font-size:20px
-    style EventBus fill:#eceff1,stroke:#546e7a,stroke-width:3px,color:#000000,font-size:20px
-    style Output fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
-    style Database fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000000,font-size:20px
-    
-    style RestAPI fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000000,font-size:18px
-    style Aggregates fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000,font-size:18px
-    style TxSubmit fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000000,font-size:18px
-```
-
-</ZoomableDiagram>
-
----
+<ZoomableImage src="/images/component-diagram.png" alt="High Level Design" />
 
 ### 🧱 Core Module
 
@@ -78,11 +31,6 @@ The core module is the backbone of Yaci Store. It serves as the primary interfac
 - **Event Broadcasting**: Publishes Spring events for processed blocks and transactions
 - **State Management**: Tracks current processing point in the database
 - **Rollback Handling**: Manages blockchain reorganizations and rollbacks
-
-**Event Types:**
-- `BlockEvent`: Published when a new block is processed
-- `TransactionEvent`: Published for each transaction in a block
-- `RollbackEvent`: Published when a rollback occurs
 
 ---
 
@@ -168,70 +116,7 @@ The submit module enables transaction submission directly to Cardano nodes.
 ## 🧩 Stores - Components
 
 ### 🧬 Store Design
-
-<ZoomableDiagram>
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#cccccc', 'lineColor': '#666666', 'secondaryColor': '#f9f9f9', 'tertiaryColor': '#ffffff', 'background': '#ffffff', 'mainBkg': '#ffffff', 'secondBkg': '#f9f9f9', 'tertiaryBkg': '#ffffff'}, 'flowchart': {'htmlLabels': true}, 'fontFamily': 'arial', 'fontSize': '14px'}}%%
-flowchart LR
-    %% Bottom Event Bus
-    EventBus["EventBus<br/>[Component: Spring Boot Lib]"]
-    
-    %% Processor in center
-    Processor["Processor<br/><br/>Receive Event from Core<br/>and transform"]
-    
-    %% Controller on right
-    Controller["Controller"]
-    
-    %% Storage API in center-right
-    StorageAPI["Storage Api"]
-    
-    %% Domain Models (dotted circle)
-    DomainModels["Domain<br/>models"]
-    
-    %% Storage Implementations on left
-    subgraph StorageLayer[" "]
-        JPA["JPA Storage Impl<br/>JPA Default"]
-        RedisImpl["Redis Storage Impl<br/>Redis"]
-        MongoImpl["Mongo Storage Impl<br/>MongoDB"]
-    end
-    
-    %% Database icons on far left
-    RDBMS["RDBMS<br/>PostgreSQL<br/>MySQL H2"]
-    RedisDB["Redis"]
-    MongoDB["MongoDB"]
-    
-    %% Connections with dotted lines
-    EventBus -.-> Processor
-    Processor -.-> StorageAPI
-    StorageAPI -.-> Controller
-    StorageAPI -.-> JPA
-    StorageAPI -.-> RedisImpl  
-    StorageAPI -.-> MongoImpl
-    StorageAPI -.-> DomainModels
-    
-    RDBMS -.-> JPA
-    RedisDB -.-> RedisImpl
-    MongoDB -.-> MongoImpl
-    
-    %% Styling to match reference image
-    style EventBus fill:#4dd0e1,stroke:#006064,stroke-width:2px,color:#000000,font-size:14px
-    style Processor fill:#64b5f6,stroke:#0d47a1,stroke-width:2px,color:#000000,font-size:14px
-    style Controller fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:14px
-    style StorageAPI fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:14px
-    style DomainModels fill:#ffffff,stroke:#1976d2,stroke-width:2px,stroke-dasharray: 5 5,color:#000000,font-size:14px
-    
-    style StorageLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:3px,color:#000000
-    style JPA fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:14px
-    style RedisImpl fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:14px
-    style MongoImpl fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:14px
-    
-    style RDBMS fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000,font-size:12px
-    style RedisDB fill:#ffcdd2,stroke:#d32f2f,stroke-width:2px,color:#000000,font-size:12px
-    style MongoDB fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#000000,font-size:12px
-```
-
-</ZoomableDiagram>
+<ZoomableImage src="/images/store-design.png" alt="Store Design" />
 
 A store is composed of the following components:
 
@@ -265,142 +150,24 @@ If you are using Yaci Store as a library in your application with your own domai
 
 ## 🔁 Idempotency
 
-Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box modules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
+Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box modules are idempotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
 
 ---
 
 ## 🧵 Sequential Block Processing
-
-<ZoomableDiagram>
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#cccccc', 'lineColor': '#666666', 'secondaryColor': '#f9f9f9', 'tertiaryColor': '#ffffff', 'background': '#ffffff', 'mainBkg': '#ffffff', 'secondBkg': '#f9f9f9', 'tertiaryBkg': '#ffffff'}, 'flowchart': {'htmlLabels': true}, 'fontFamily': 'arial', 'fontSize': '28px'}}%%
-flowchart TD
-    subgraph CardanoChain["🔗 Cardano Chain"]
-        BN["Block N<br/>Tx: 50<br/>Slot: 1000000"]
-        BN1["Block N+1<br/>Tx: 75<br/>Slot: 1000001"]
-        BN2["Block N+2<br/>Tx: 120<br/>Slot: 1000002"]
-        BN3["Block N+3<br/>Tx: 95<br/>Slot: 1000003"]
-        
-        BN --> BN1 --> BN2 --> BN3
-    end
-    
-    subgraph CoreModule["⚙️ Core Module"]
-        RBN["📖 Read Block N"]
-        RBN1["📖 Read Block N+1"]
-        RBN2["📖 Read Block N+2"]
-        
-        PEN["📡 Publish Event N"]
-        PEN1["📡 Publish Event N+1"]
-        PEN2["📡 Publish Event N+2"]
-        
-        WN["⏳ Wait for All Stores N"]
-        WN1["⏳ Wait for All Stores N+1"]
-        WN2["⏳ Wait for All Stores N+2"]
-        
-        RBN --> PEN --> WN
-        RBN1 --> PEN1 --> WN1
-        RBN2 --> PEN2 --> WN2
-        
-        WN --> RBN1
-        WN1 --> RBN2
-    end
-    
-    subgraph StoresLayer["🏪 Stores Layer"]
-        subgraph SequentialProcessing["Sequential Processing"]
-            PN["⚙️ Process Block N"]
-            PN1["⚙️ Process Block N+1"]
-            PN2["⚙️ Process Block N+2"]
-            
-            PN --> PN1 --> PN2
-        end
-        
-        subgraph StoreTypes["Store Types"]
-            BS["🏬 Block Store"]
-            US["🏬 UTxO Store"]
-            TS["🏬 Transaction Store"]
-            AS["🏬 Assets Store"]
-            SS["🏬 Staking Store"]
-            ScS["🏬 Scripts Store"]
-        end
-        
-        subgraph DataStorage["Data Storage"]
-            SDN["💾 Store Data N"]
-            SDN1["💾 Store Data N+1"]
-            SDN2["💾 Store Data N+2"]
-            
-            SDN --> SDN1 --> SDN2
-        end
-    end
-    
-    BN --> RBN
-    BN1 --> RBN1
-    BN2 --> RBN2
-    
-    PEN --> PN
-    PEN1 --> PN1
-    PEN2 --> PN2
-    
-    PN --> SDN
-    PN1 --> SDN1
-    PN2 --> SDN2
-    
-    SDN --> WN
-    SDN1 --> WN1
-    SDN2 --> WN2
-    
-    style BN fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN1 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN2 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN3 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style RBN fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style RBN1 fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style RBN2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style PEN fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style PEN1 fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style PEN2 fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style WN fill:#f3e5f5,stroke:#7b1fa2,stroke-width:5px,color:#000000
-    style WN1 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:5px,color:#000000
-    style WN2 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:5px,color:#000000
-    style PN fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style PN1 fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style PN2 fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style BS fill:#e8eaf6,stroke:#3f51b5,stroke-width:5px,color:#000000
-    style US fill:#e1f5fe,stroke:#0277bd,stroke-width:5px,color:#000000
-    style TS fill:#e0f2f1,stroke:#00695c,stroke-width:5px,color:#000000
-    style AS fill:#eceff1,stroke:#546e7a,stroke-width:5px,color:#000000
-    style SS fill:#ffebee,stroke:#d32f2f,stroke-width:5px,color:#000000
-    style ScS fill:#f5f5f5,stroke:#616161,stroke-width:5px,color:#000000
-    style SDN fill:#eceff1,stroke:#455a64,stroke-width:5px,color:#000000
-    style SDN1 fill:#eceff1,stroke:#455a64,stroke-width:5px,color:#000000
-    style SDN2 fill:#eceff1,stroke:#455a64,stroke-width:5px,color:#000000
-```
-
-</ZoomableDiagram>
+<ZoomableImage src="/images/store-sequential-diagram.png" alt="Sequential Processing" />
 
 <div style={{
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: '1fr',
   gap: '2rem',
   marginTop: '1rem'
 }}>
 
 <div>
 
-**✅ Advantages:**
-- Simple and predictable processing order
-- Easy rollback handling
-- Guaranteed data consistency
-- Lower memory usage
-
-</div>
-
-<div>
-
-**⚠️ Limitations:**
-- Slower overall throughput
-- Underutilizes system resources
-- Processing bottlenecks affect entire chain
+- Cardano Node → Publisher emits per-block events: Block Header, Transaction, Mint/Burn, Script, AuxData, Update, Governance.
+- Stores consume these events in order and persist to their own tables.
 
 </div>
 
@@ -410,175 +177,19 @@ flowchart TD
 
 ## 🧶 Parallel Block Processing
 
-<ZoomableDiagram>
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#cccccc', 'lineColor': '#666666', 'secondaryColor': '#f9f9f9', 'tertiaryColor': '#ffffff', 'background': '#ffffff', 'mainBkg': '#ffffff', 'secondBkg': '#f9f9f9', 'tertiaryBkg': '#ffffff'}, 'flowchart': {'htmlLabels': true}, 'fontFamily': 'arial', 'fontSize': '28px'}}%%
-flowchart TD
-    subgraph CardanoChain["🔗 Cardano Chain"]
-        BN["Block N<br/>Tx: 50<br/>Slot: 1000000"]
-        BN1["Block N+1<br/>Tx: 75<br/>Slot: 1000001"]
-        BN2["Block N+2<br/>Tx: 120<br/>Slot: 1000002"]
-        BN3["Block N+3<br/>Tx: 95<br/>Slot: 1000003"]
-        
-        BN --> BN1 --> BN2 --> BN3
-    end
-    
-    subgraph CoreModule["⚙️ Core Module"]
-        RBN["📖 Block N"]
-        RBN1["📖 Block N+1"]
-        RBN2["📖 Block N+2"]
-        RBN3["📖 Block N+3"]
-        
-        EN["📡 Event N"]
-        EN1["📡 Event N+1"]
-        EN2["📡 Event N+2"]
-        EN3["📡 Event N+3"]
-        
-        PD["🚀 Parallel Dispatch"]
-        
-        RBN --> EN
-        RBN1 --> EN1
-        RBN2 --> EN2
-        RBN3 --> EN3
-        
-        EN --> PD
-        EN1 --> PD
-        EN2 --> PD
-        EN3 --> PD
-    end
-    
-    subgraph StoresLayer["🏪 Stores Layer - Parallel Processing"]
-        subgraph ThreadPool1["Thread Pool 1"]
-            BS["🏬 Block Store"]
-            BSN["🔄 Process N"]
-            BSN1["🔄 Process N+1"]
-            BSN2["🔄 Process N+2"]
-        end
-        
-        subgraph ThreadPool2["Thread Pool 2"]
-            US["🏬 UTxO Store"]
-            USN["🔄 Process N"]
-            USN1["🔄 Process N+1"]
-            USN2["🔄 Process N+2"]
-        end
-        
-        subgraph ThreadPool3["Thread Pool 3"]
-            AS["🏬 Assets Store"]
-            ASN["🔄 Process N"]
-            ASN1["🔄 Process N+1"]
-            ASN2["🔄 Process N+2"]
-        end
-        
-        subgraph ThreadPool4["Thread Pool 4"]
-            TS["🏬 Tx Store"]
-            TSN["🔄 Process N"]
-            TSN1["🔄 Process N+1"]
-            TSN2["🔄 Process N+2"]
-        end
-        
-        subgraph ThreadPool5["Thread Pool 5"]
-            SS["🏬 Stake Store"]
-            SSN["🔄 Process N"]
-            SSN1["🔄 Process N+1"]
-            SSN2["🔄 Process N+2"]
-        end
-        
-        subgraph ThreadPool6["Thread Pool 6"]
-            ScS["🏬 Script Store"]
-            ScSN["🔄 Process N"]
-            ScSN1["🔄 Process N+1"]
-            ScSN2["🔄 Process N+2"]
-        end
-        
-        CDS["💾 Concurrent Data Storage<br/>with Slot-based Ordering"]
-    end
-    
-    BN --> RBN
-    BN1 --> RBN1
-    BN2 --> RBN2
-    BN3 --> RBN3
-    
-    PD --> BSN
-    PD --> USN
-    PD --> ASN
-    PD --> TSN
-    PD --> SSN
-    PD --> ScSN
-    
-    BSN --> CDS
-    USN --> CDS
-    ASN --> CDS
-    TSN --> CDS
-    SSN --> CDS
-    ScSN --> CDS
-    
-    style BN fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN1 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN2 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style BN3 fill:#e3f2fd,stroke:#1976d2,stroke-width:5px,color:#000000
-    style RBN fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style RBN1 fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style RBN2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style RBN3 fill:#e8f5e8,stroke:#2e7d32,stroke-width:5px,color:#000000
-    style EN fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style EN1 fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style EN2 fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style EN3 fill:#e0f7fa,stroke:#00695c,stroke-width:5px,color:#000000
-    style PD fill:#f3e5f5,stroke:#7b1fa2,stroke-width:5px,color:#000000
-    style BS fill:#e8eaf6,stroke:#3f51b5,stroke-width:5px,color:#000000
-    style US fill:#e1f5fe,stroke:#0277bd,stroke-width:5px,color:#000000
-    style AS fill:#eceff1,stroke:#546e7a,stroke-width:5px,color:#000000
-    style TS fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style SS fill:#ffebee,stroke:#d32f2f,stroke-width:5px,color:#000000
-    style ScS fill:#f5f5f5,stroke:#616161,stroke-width:5px,color:#000000
-    style BSN fill:#e8eaf6,stroke:#3f51b5,stroke-width:5px,color:#000000
-    style BSN1 fill:#e8eaf6,stroke:#3f51b5,stroke-width:5px,color:#000000
-    style BSN2 fill:#e8eaf6,stroke:#3f51b5,stroke-width:5px,color:#000000
-    style USN fill:#e1f5fe,stroke:#0277bd,stroke-width:5px,color:#000000
-    style USN1 fill:#e1f5fe,stroke:#0277bd,stroke-width:5px,color:#000000
-    style USN2 fill:#e1f5fe,stroke:#0277bd,stroke-width:5px,color:#000000
-    style ASN fill:#eceff1,stroke:#546e7a,stroke-width:5px,color:#000000
-    style ASN1 fill:#eceff1,stroke:#546e7a,stroke-width:5px,color:#000000
-    style ASN2 fill:#eceff1,stroke:#546e7a,stroke-width:5px,color:#000000
-    style TSN fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style TSN1 fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style TSN2 fill:#fce4ec,stroke:#c2185b,stroke-width:5px,color:#000000
-    style SSN fill:#ffebee,stroke:#d32f2f,stroke-width:5px,color:#000000
-    style SSN1 fill:#ffebee,stroke:#d32f2f,stroke-width:5px,color:#000000
-    style SSN2 fill:#ffebee,stroke:#d32f2f,stroke-width:5px,color:#000000
-    style ScSN fill:#f5f5f5,stroke:#616161,stroke-width:5px,color:#000000
-    style ScSN1 fill:#f5f5f5,stroke:#616161,stroke-width:5px,color:#000000
-    style ScSN2 fill:#f5f5f5,stroke:#616161,stroke-width:5px,color:#000000
-    style CDS fill:#eceff1,stroke:#455a64,stroke-width:5px,color:#000000
-```
-
-</ZoomableDiagram>
+<ZoomableImage src="/images/store-parallel-diagram.png" alt="Parallel Processing" />
 
 <div style={{
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: '1fr',
   gap: '2rem',
   marginTop: '1rem'
 }}>
 
 <div>
 
-**✅ Advantages:**
-- Higher throughput and performance
-- Better resource utilization
-- Independent store processing
-- Scalable with available CPU cores
-
-</div>
-
-<div>
-
-**⚠️ Considerations:**
-- More complex rollback coordination
-- Increased memory usage
-- Requires careful synchronization
-- Store interdependencies need management
+- Publisher groups blocks into batches processed on multiple threads, each batch emits events .
+- Stores consume batches concurrently and write to storage
 
 </div>
 
