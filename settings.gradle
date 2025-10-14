@@ -76,6 +76,7 @@ include ':starters:epoch-aggr-spring-boot-starter'
 include ':starters:governance-aggr-spring-boot-starter'
 include ':starters:admin-spring-boot-starter'
 include ':starters:adapot-spring-boot-starter'
+include ':starters:cip139-spring-boot-starter'
 
 include ':extensions:storage:utxo-rocksdb'
 include ':extensions:storage:account-rocksdb'
@@ -86,5 +87,7 @@ project(':extensions:cip-139:cip139-epoch').projectDir = new File('extensions/ci
 include ':extensions:cip-139:cip139-utxo'
 project(':extensions:cip-139:cip139-utxo').projectDir = new File('extensions/cip-139/utxo')
 
+include ':extensions:cip-139:cip139-transaction'
+project(':extensions:cip-139:cip139-transaction').projectDir = new File('extensions/cip-139/transaction')
 
 include 'e2e-tests'

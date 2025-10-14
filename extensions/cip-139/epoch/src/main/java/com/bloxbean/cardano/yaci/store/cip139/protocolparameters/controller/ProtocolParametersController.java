@@ -10,10 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
@@ -21,14 +18,14 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(name = "CIP-139 Protocol Parameters")
 @RequestMapping("${cip139.apiPrefix}/protocol_parameters")
-@ConditionalOnExpression("${extensions.cip139.protocolparameters.enabled:true}")
+@ConditionalOnExpression("${store.extensions.cip139.protocolparameters.enabled:true}")
 public class ProtocolParametersController {
 
     private final ProtocolParametersService protocolParametersService;
 
     @PostConstruct
     public void postConstruct() {
-        log.info("EpochController initialized >>>");
+        log.info("CIP-139 EpochController initialized >>>");
     }
 
     @GetMapping("latest")
@@ -38,11 +35,11 @@ public class ProtocolParametersController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found"));
     }
 
-    @GetMapping("{number}")
+    @GetMapping("epoch")
     @Operation(summary = "Specific Epoch's Protocol Parameters", description = "Get the protocol parameters of a specific epoch.")
-    public ProtocolParametersDto getProtocolParamsByEpochNo(@PathVariable Integer number) {
-        return protocolParametersService.getProtocolParams(number)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found for epoch: " + number));
+    public ProtocolParametersDto getProtocolParamsByEpochNo(@RequestParam(name = "u_int32") Integer epoch) {
+        return protocolParametersService.getProtocolParams(epoch)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol params not found for epoch: " + epoch));
     }
 
 }

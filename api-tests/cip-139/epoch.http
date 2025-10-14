@@ -1,0 +1,31 @@
+
+###
+### Get latest epoch params
+GET {{base_url}}/api/v1/cip139/protocol_parameters/latest
+
+> {%
+    client.test("Get epoch parameters", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.min_fee_a === 44, "Min Fin A is not 44. Actual value: " + response.body.min_fee_a)
+        client.assert(response.body.min_fee_b === 155381, "Min Fin A is not 44. Actual value: " + response.body.min_fee_b)
+        client.assert(response.body.coins_per_utxo_size === "4310", "coins_per_utxo_size is not 4310. Actual value: " + response.body.coins_per_utxo_size)
+        client.assert(response.body.cost_models.PlutusV1 !== null, "Plutus V1 Cost model is null")
+        client.assert(response.body.cost_models.PlutusV2 !== null, "Plutus V2 Cost model is null")
+    });
+%}
+
+###
+### Get epoch params
+GET {{base_url}}/api/v1/cip139/{{current_epoch}}/parameters
+
+> {%
+    client.test("Get epoch parameters by epoch", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.min_fee_a === 44, "Min Fin A is not 44. Actual value: " + response.body.min_fee_a)
+        client.assert(response.body.min_fee_b === 155381, "Min Fin A is not 44. Actual value: " + response.body.min_fee_b)
+        client.assert(response.body.coins_per_utxo_size === "4310", "coins_per_utxo_size is not 4310. Actual value: " + response.body.coins_per_utxo_size)
+        client.assert(response.body.cost_models.PlutusV1 !== null, "Plutus V1 Cost model is null")
+        client.assert(response.body.cost_models.PlutusV2 !== null, "Plutus V2 Cost model is null")
+    });
+%}
+

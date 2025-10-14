@@ -34,8 +34,11 @@ spring:
 
 apiPrefix: /api/v1
 
+
 logging:
   file:
     name: ./logs/yaci-store.log
+
+
 
 

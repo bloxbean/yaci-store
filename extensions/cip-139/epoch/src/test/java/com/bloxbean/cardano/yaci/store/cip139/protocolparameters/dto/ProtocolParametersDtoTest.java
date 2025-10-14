@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -73,5 +74,68 @@ class ProtocolParametersDtoTest {
 
         ProtocolParametersDto protocolParametersDto = ProtocolParametersDto.fromDomain(protocolParams);
 
+        // Validate all fields are correctly mapped
+        assertEquals(String.valueOf(100), protocolParametersDto.getMinfeeA());
+        assertEquals(String.valueOf(200), protocolParametersDto.getMinfeeB());
+        assertEquals(1000, protocolParametersDto.getMaxBlockBodySize());
+        assertEquals(2000, protocolParametersDto.getMaxTxSize());
+        assertEquals(3000, protocolParametersDto.getMaxBlockHeaderSize());
+        assertEquals(BigInteger.valueOf(4000).toString(), protocolParametersDto.getKeyDeposit());
+        assertEquals(BigInteger.valueOf(5000).toString(), protocolParametersDto.getPoolDeposit());
+        assertEquals(100, protocolParametersDto.getMaxEpoch());
+        assertEquals(String.valueOf(200), protocolParametersDto.getNOpt());
+        
+        // Validate UnitInterval fields
+        assertNotNull(protocolParametersDto.getPoolPledgeInfluence());
+        assertEquals("30/100", protocolParametersDto.getPoolPledgeInfluence().getNumerator() + "/" + protocolParametersDto.getPoolPledgeInfluence().getDenominator());
+        
+        assertNotNull(protocolParametersDto.getExpansionRate());
+        assertEquals("40/100", protocolParametersDto.getExpansionRate().getNumerator() + "/" + protocolParametersDto.getExpansionRate().getDenominator());
+        
+        assertNotNull(protocolParametersDto.getTreasuryGrowthRate());
+        assertEquals("50/100", protocolParametersDto.getTreasuryGrowthRate().getNumerator() + "/" + protocolParametersDto.getTreasuryGrowthRate().getDenominator());
+        
+        assertNotNull(protocolParametersDto.getD());
+        assertEquals("60/100", protocolParametersDto.getD().getNumerator() + "/" + protocolParametersDto.getD().getDenominator());
+        
+        assertEquals(2, protocolParametersDto.getProtocolVersion().major());
+        assertEquals(3, protocolParametersDto.getProtocolVersion().minor());
+        assertEquals(BigInteger.valueOf(6000).toString(), protocolParametersDto.getMinPoolCost());
+        assertEquals(BigInteger.valueOf(7000).toString(), protocolParametersDto.getAdaPerUtxoByte());
+        assertEquals(new ProtocolParametersDto.Unit("8000", "9000"), protocolParametersDto.getMaxTxExUnits());
+        assertEquals(new ProtocolParametersDto.Unit("10000", "11000"), protocolParametersDto.getMaxBlockExUnits());
+        assertEquals(8000, protocolParametersDto.getMaxValueSize());
+        assertEquals(10000, protocolParametersDto.getMaxCollateralInputs());
+
+        // Validate PoolVotingThresholds
+        assertNotNull(protocolParametersDto.getPoolVotingThresholds());
+        List<UnitInterval> poolThresholds = protocolParametersDto.getPoolVotingThresholds().items();
+        // Order is: [pvtMotionNoConfidence, pvtCommitteeNormal, pvtCommitteeNoConfidence, pvtHardForkInitiation, ...]
+        assertEquals("40/100", poolThresholds.get(0).getNumerator() + "/" + poolThresholds.get(0).getDenominator());  // pvtMotionNoConfidence
+        assertEquals("10/100", poolThresholds.get(1).getNumerator() + "/" + poolThresholds.get(1).getDenominator());  // pvtCommitteeNormal
+        assertEquals("20/100", poolThresholds.get(2).getNumerator() + "/" + poolThresholds.get(2).getDenominator());  // pvtCommitteeNoConfidence
+        assertEquals("30/100", poolThresholds.get(3).getNumerator() + "/" + poolThresholds.get(3).getDenominator());  // pvtHardForkInitiation
+
+        // Validate DrepVoteThresholds
+        assertNotNull(protocolParametersDto.getDrepVotingThresholds());
+        List<UnitInterval> drepThresholds = protocolParametersDto.getDrepVotingThresholds().items();
+        assertEquals("10/100", drepThresholds.get(0).getNumerator() + "/" + drepThresholds.get(0).getDenominator());
+        assertEquals("20/100", drepThresholds.get(1).getNumerator() + "/" + drepThresholds.get(1).getDenominator());
+        assertEquals("30/100", drepThresholds.get(2).getNumerator() + "/" + drepThresholds.get(2).getDenominator());
+        assertEquals("40/100", drepThresholds.get(3).getNumerator() + "/" + drepThresholds.get(3).getDenominator());
+        assertEquals("50/100", drepThresholds.get(4).getNumerator() + "/" + drepThresholds.get(4).getDenominator());
+        assertEquals("60/100", drepThresholds.get(5).getNumerator() + "/" + drepThresholds.get(5).getDenominator());
+        assertEquals("70/100", drepThresholds.get(6).getNumerator() + "/" + drepThresholds.get(6).getDenominator());
+        assertEquals("80/100", drepThresholds.get(7).getNumerator() + "/" + drepThresholds.get(7).getDenominator());
+        assertEquals("90/100", drepThresholds.get(8).getNumerator() + "/" + drepThresholds.get(8).getDenominator());
+        assertEquals("10/100", drepThresholds.get(9).getNumerator() + "/" + drepThresholds.get(9).getDenominator());
+        
+        // Validate remaining fields
+        assertEquals(String.valueOf(1000), protocolParametersDto.getCommitteeMinSize());
+        assertEquals(10, protocolParametersDto.getCommitteeMaxTermLength());
+        assertEquals(5000, protocolParametersDto.getGovActionLifetime());
+        assertEquals(BigInteger.valueOf(6000).toString(), protocolParametersDto.getGovActionDeposit());
+        assertEquals(BigInteger.valueOf(10000).toString(), protocolParametersDto.getDrepDeposit());
+        assertEquals(7000, protocolParametersDto.getDrepActivity());
     }
 }

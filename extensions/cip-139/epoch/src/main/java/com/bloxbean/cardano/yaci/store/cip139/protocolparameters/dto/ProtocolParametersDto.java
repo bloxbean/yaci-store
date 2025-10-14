@@ -70,28 +70,30 @@ public class ProtocolParametersDto {
     private Integer drepActivity;
     private UnitInterval minFeeRefScriptCostPerByte;
 
-    private record ExecutionCosts(
+    record ExecutionCosts(
             NonNegativeInterval memPrice,
             NonNegativeInterval stepPrice
     ) {}
 
-    private record Unit(
+    record Unit(
             String mem,
             String steps
     ) {}
 
-    private record ProtocolVersion(
+    record ProtocolVersion(
             Integer major,
             Integer minor
     ) {}
 
-    private record Threshold(List<UnitInterval> items) {
+    record Threshold(List<UnitInterval> items) {
         public Threshold(List<UnitInterval> items) {
-            this.items = items != null ? List.copyOf(items) : List.of();
+            this.items = items != null
+                    ? Collections.unmodifiableList(new ArrayList<>(items))
+                    : List.of();
         }
     }
 
-    private record CostModels(Map<String, List<String>> costModels) {
+    record CostModels(Map<String, List<String>> costModels) {
 
     }
 
@@ -142,6 +144,7 @@ public class ProtocolParametersDto {
                 .poolVotingThresholds(poolVotingThresholds)
                 .drepVotingThresholds(drepVotingThresholds)
                 .committeeMinSize(String.valueOf(protocolParams.getCommitteeMinSize()))
+                .committeeMaxTermLength(protocolParams.getCommitteeMaxTermLength())
                 .govActionLifetime(protocolParams.getGovActionLifetime())
                 .govActionDeposit(String.valueOf(protocolParams.getGovActionDeposit()))
                 .drepDeposit(String.valueOf(protocolParams.getDrepDeposit()))
@@ -152,44 +155,45 @@ public class ProtocolParametersDto {
 
     private static Map<String, List<String>> createCostModelsMap(Map<String,long[]> costModels) {
         Map<String, List<String>> costModelsMap = new HashMap<>();
-        for (String costModel: COST_MODEL_LIST) {
-            long[] costModelLongArray = costModels.get(costModel);
-            List<String> costModelStringList = Arrays.stream(costModelLongArray)
-                    .mapToObj(String::valueOf)
-                    .toList();
-            costModelsMap.put(costModel, costModelStringList);
+        if ( costModels != null && !costModels.isEmpty()) {
+            for (String costModel : COST_MODEL_LIST) {
+                long[] costModelLongArray = costModels.get(costModel);
+                List<String> costModelStringList = Arrays.stream(costModelLongArray)
+                        .mapToObj(String::valueOf)
+                        .toList();
+                costModelsMap.put(costModel, costModelStringList);
+            }
         }
         return costModelsMap;
     }
 
     private static List<UnitInterval> createDrepVotingThresholdsList(DrepVoteThresholds drepVoteThresholds) {
         List<UnitInterval> items = new ArrayList<>();
-        items.add(drepVoteThresholds.getDvtMotionNoConfidence());
-        items.add(drepVoteThresholds.getDvtCommitteeNormal());
-        items.add(drepVoteThresholds.getDvtCommitteeNoConfidence());
-        items.add(drepVoteThresholds.getDvtUpdateToConstitution());
-        items.add(drepVoteThresholds.getDvtHardForkInitiation());
-        items.add(drepVoteThresholds.getDvtPPNetworkGroup());
-        items.add(drepVoteThresholds.getDvtPPEconomicGroup());
-        items.add(drepVoteThresholds.getDvtPPTechnicalGroup());
-        items.add(drepVoteThresholds.getDvtPPGovGroup());
-        items.add(drepVoteThresholds.getDvtTreasuryWithdrawal());
+        if ( drepVoteThresholds != null ) {
+            items.add(drepVoteThresholds.getDvtMotionNoConfidence());
+            items.add(drepVoteThresholds.getDvtCommitteeNormal());
+            items.add(drepVoteThresholds.getDvtCommitteeNoConfidence());
+            items.add(drepVoteThresholds.getDvtUpdateToConstitution());
+            items.add(drepVoteThresholds.getDvtHardForkInitiation());
+            items.add(drepVoteThresholds.getDvtPPNetworkGroup());
+            items.add(drepVoteThresholds.getDvtPPEconomicGroup());
+            items.add(drepVoteThresholds.getDvtPPTechnicalGroup());
+            items.add(drepVoteThresholds.getDvtPPGovGroup());
+            items.add(drepVoteThresholds.getDvtTreasuryWithdrawal());
+        }
         return items;
     }
 
     private static List<UnitInterval> createPoolVotingThresholdsList(PoolVotingThresholds poolVotingThresholds) {
         List<UnitInterval> items = new ArrayList<>();
-        items.add(poolVotingThresholds.getPvtMotionNoConfidence());
-        items.add(poolVotingThresholds.getPvtCommitteeNormal());
-        items.add(poolVotingThresholds.getPvtCommitteeNoConfidence());
-        items.add(poolVotingThresholds.getPvtHardForkInitiation());
-        items.add(poolVotingThresholds.getPvtPPSecurityGroup());
+        if ( poolVotingThresholds != null ) {
+            items.add(poolVotingThresholds.getPvtMotionNoConfidence());
+            items.add(poolVotingThresholds.getPvtCommitteeNormal());
+            items.add(poolVotingThresholds.getPvtCommitteeNoConfidence());
+            items.add(poolVotingThresholds.getPvtHardForkInitiation());
+            items.add(poolVotingThresholds.getPvtPPSecurityGroup());
+        }
         return items;
     }
 
-    public static void main(String[] args) throws JsonProcessingException {
-        ProtocolParams protocolParams = new ProtocolParams();
-        ProtocolParametersDto protocolParametersDto = ProtocolParametersDto.fromDomain(protocolParams);
-        System.out.println(new ObjectMapper().writeValueAsString(protocolParametersDto));
-    }
 }
