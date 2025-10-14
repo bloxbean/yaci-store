@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.account.processor;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
@@ -23,12 +24,14 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -52,6 +55,7 @@ import static com.pivovarit.collectors.ParallelCollectors.parallel;
 import static java.util.stream.Collectors.toList;
 
 @Component
+@ReadOnly(false)
 @EnableIf(value = STORE_ACCOUNT_ENABLED, defaultValue = false)
 @Slf4j
 public class AccountBalanceProcessor {
@@ -66,6 +70,9 @@ public class AccountBalanceProcessor {
     private final ParallelExecutor parallelExecutor;
     private final PlatformTransactionManager transactionManager;
     private final MetricCollectorService metricCollectorService;
+    private final EraService eraService;
+
+    private volatile Integer firstConwayEpochCache;
 
     private int nAddrBalanceRecordToKeep = 3;
 
@@ -86,7 +93,8 @@ public class AccountBalanceProcessor {
                                    AddressBalanceSnapshotService addressBalanceSnapshotService,
                                    ParallelExecutor parallelExecutor,
                                    PlatformTransactionManager transactionManager,
-                                   MetricCollectorService metricCollectorService) {
+                                   MetricCollectorService metricCollectorService,
+                                   EraService eraService) {
         this.accountBalanceStorage = accountBalanceStorage;
         this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
         this.accountStoreProperties = accountStoreProperties;
@@ -98,6 +106,7 @@ public class AccountBalanceProcessor {
         this.parallelExecutor = parallelExecutor;
         this.transactionManager = transactionManager;
         this.metricCollectorService = metricCollectorService;
+        this.eraService = eraService;
 
         init();
     }
@@ -349,6 +358,32 @@ public class AccountBalanceProcessor {
                 .filter(Objects::nonNull)
                 .toList();
 
+        if (addressUtxoEvent.getMetadata().getEra().getValue() >= Era.Conway.getValue()) {
+            // For Conway era, if the UTXO epoch < firstConwayEpoch and address is a pointer address, set to null for stake address and stake credential
+            final Integer firstConwayEpoch = getOrInitFirstConwayEpoch();
+
+            if (firstConwayEpoch != null) {
+                inputAddressUtxos.forEach(addressUtxo -> {
+                    Integer utxoEpoch = addressUtxo.getEpoch();
+                    String ownerAddress = addressUtxo.getOwnerAddr();
+                    if (utxoEpoch != null && utxoEpoch < firstConwayEpoch  && ownerAddress != null && ownerAddress.startsWith("addr")) {
+                        try {
+                            Address addr = new Address(ownerAddress);
+                            if (addr.getAddressType() == AddressType.Ptr) {
+                                addressUtxo.setOwnerStakeAddr(null);
+                                addressUtxo.setOwnerStakeCredential(null);
+                            }
+                        } catch (Exception e) {
+                            log.error("Unable to parse address for pointer check: {}", addressUtxo.getOwnerAddr());
+                        }
+                    }
+                });
+            } else {
+                if (log.isDebugEnabled())
+                    log.debug("Conway epoch not determined; skipping set stake address to null (pointer address case) for pre-Conway UTXOs.");
+            }
+        }
+
         if (inputAddressUtxos.size() != inputKeys.size())
             throw new IllegalStateException("Unable to get inputs for all input keys for account balance calculation : " + inputKeys);
 
@@ -358,6 +393,38 @@ public class AccountBalanceProcessor {
                 .toList();
 
         return getAddressAmountMapForBlock(addressUtxoEvent.getMetadata(), inputAddressUtxos, outputAddressUtxos);
+    }
+
+    private Integer getOrInitFirstConwayEpoch() {
+        Integer cached = firstConwayEpochCache;
+        if (cached != null) return cached;
+
+        Integer computed = null;
+        try {
+            var eras = eraService.getEras();
+            if (eras != null && !eras.isEmpty()) {
+                for (var ce : eras) {
+                    if (ce.getEra() == Era.Conway) {
+                        computed = eraService.getEpochNo(Era.Conway, ce.getStartSlot());
+                        break;
+                    }
+                }
+
+                // If Conway is not present and the network starts after Conway (devnet starting from a future era),
+                // treat first Conway epoch as 0
+                if (computed == null) {
+                    var firstEra = eras.get(0);
+                    if (firstEra.getEra().getValue() > Era.Conway.getValue()) {
+                        computed = 0;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch first Conway epoch from EraService.");
+        }
+
+        firstConwayEpochCache = computed;
+        return computed;
     }
 
     /**

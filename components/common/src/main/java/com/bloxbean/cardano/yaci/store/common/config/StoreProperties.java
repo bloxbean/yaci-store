@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.config;
 
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -63,6 +64,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int cursorCleanupInterval = 3600;
 
     private int keepAliveInterval = 10000;
+
+    //Block receive delay threshold in seconds
+    @Builder.Default
+    private int blockReceiveDelaySeconds = 120;
 
     //Only required if the genesis hash can't be fetched
     private String defaultGenesisHash = "Genesis";
@@ -129,9 +134,21 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private Map<String, List<PluginDef>> preActions = new HashMap<>();
     private Map<String, List<PluginDef>> postActions = new HashMap<>();
     private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
+    private List<SchedulerPluginDef> schedulers = new ArrayList<>();
 
     private String pythonVenv;
     private List<ScriptRef> pluginGlobalScripts;
+    private String pluginFilesRootPath;
+    private boolean pluginFilesEnableLocks = true;
 
     private boolean metricsEnabled = true;
+
+    @Builder.Default
+    private boolean continueOnParseError = false;
+
+    //Auto-restart properties
+    private boolean autoRestartEnabled = true;
+    private long autoRestartDebounceWindowMs = 30000;
+    private int autoRestartMaxAttempts = 5;
+    private long autoRestartBackoffBaseMs = 5000;
 }

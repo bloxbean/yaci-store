@@ -1,0 +1,387 @@
+---
+navigation: false
+---
+
+# Getting Started with Yaci Store 2.0.0-beta1
+
+> **Note**: This documentation is for the **2.0.0-beta1** release. For the latest 2.x.x version, see the [main Getting Started guide](./getting-started-2.x.x.mdx).
+
+This was the **first beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+
+Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
+
+---
+
+## Status of Ledger State Data Accuracy (Beta1)
+
+Ledger State calculations include:
+- Epoch Stake and Rewards
+- ADAPot values
+- Governance State (dRep distribution, Proposal Status, dRep Status)
+
+### Reward Calculation and ADAPot Status
+
+- **Mainnet**:
+- ADAPots and rewards match up to epoch 545.
+- Mismatch in epoch 546:
+- Treasury: **-0.065 ADA** (-62,510 lovelace)
+- Reserves: **35.5 ADA** (35,580,032 lovelace)
+- _Note: This could be due to an incorrect status for the New Constitution governance action._
+
+- **Preprod**:
+- ADAPots and rewards match up to epoch 212 (current epoch at the time of writing).
+
+- **Preview**:
+- ADAPots and rewards match up to epoch 916 (current epoch at the time of writing).
+
+A few dRep distribution mismatches (for 5 dReps) were found on the Preview network during some earlier epochs.
+
+> 🔎 Mismatch details for all public networks can be found [here](../ledger-state-mismatches/2-0-0-beta1/2-0-0-beta1.mdx)..
+>
+> ⚠️ We also identified **some incorrect `DRep expiry` values** in Preprod and Preview. See [issue #536](https://github.com/bloxbean/yaci-store/issues/536).
+>
+> 🛠 We will address these issues in the next beta and continue to monitor results alongside DB Sync and the Cardano Node for upcoming epochs.
+
+---
+
+> **Note:**
+>
+> If you're testing ledger-state calculation, we recommend starting with **Preview** or **Preprod** networks for this release.
+>
+> For mainnet, you may also need to **tune your PostgreSQL configuration** though the default config will work but will take longer.
+In the next beta release we will provide the postgres configuration for mainnet sync.
+
+---
+
+## Known Issues or Limitations
+
+1. **Performance of Reward Calculation on Mainnet**
+- Ledger-state calculations currently happen **during epoch transition**.
+That means **rewards paid in epoch X are calculated during the transition from epoch X-1 to X**.
+- On Mainnet, this takes around **20–40 minutes** per transition (depends on your PostgreSQL resources).
+- In a future release, we plan to start **reward calculation in epoch X-1 after the stability window**, similar to how the Haskell node works.
+This will reduce the computation load during epoch boundaries.
+
+---
+
+## Out-of-the-Box Applications
+
+### 1. **Yaci Store App**
+- The **default indexer application**, includes all modules.
+- **Ledger-state calculation is disabled by default** but can be enabled via profile.
+
+### 2. **Ledger State App**
+- Contains only the modules needed for **ledger-state calculation**.
+- Excludes modules like metadata and script that are unnecessary for this purpose.
+
+### 3. **Yaci Store Admin CLI App**
+- CLI tool to **apply optional indexes after sync is complete**.
+- Optional indexes improve API query performance and are not applied during initial sync.
+
+---
+
+## Types of Distribution
+
+Yaci Store provides three types of distributions:
+
+1. **Yaci Store Zip Distribution (JARs)**
+2. **Yaci Store Docker Distribution**
+3. **Yaci Store Native (GraalVM) Distribution** *(Preview)*
+
+---
+
+### 1. Yaci Store Zip Distribution (JARs)
+
+Filename: `yaci-store-<version>.zip`
+
+Includes:
+- `yaci-store.jar`
+- `yaci-store-ledger-state.jar`
+- Config files (`application.properties`)
+
+#### Pre-requisites
+
+- Java 21 or Java 24 (Recommended)
+
+You can use [sdkman](https://sdkman.io/) to install Java 21 or 24.
+
+```bash
+sdk install java 24.0.1-tem
+sdk use java 24.0.1-tem
+```
+
+Check if JAVA_HOME env variable is set correctly:
+
+```bash
+echo $JAVA_HOME
+```
+
+#### Edit Config
+
+- Edit `application.properties` to set the Cardano network and Database connection settings
+- Check the following properties and update them accordingly
+```
+store.cardano.host=preview-node.world.dev.cardano.org
+store.cardano.port=30002
+store.cardano.protocol-magic=2
+```
+
+```
+spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_indexer?currentSchema=preview
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+#### Usage
+
+- **To run Yaci Store (without ledger-state):**
+```bash
+./bin/start.sh
+  ```
+
+- **To enable ledger-state calculation with all other on-chain data:**
+```bash
+./bin/start.sh ledger-state
+  ```
+
+- **To run Ledger State App only:**
+```bash
+./bin/start-ledger-state.sh
+  ```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+#### 1.1 Apply Optional Indexes
+
+After the initial sync is complete:
+
+```bash
+./bin/yaci-cli.sh
+```
+
+This launches the Admin CLI (`yaci-store-admin-cli.jar`). At the CLI prompt:
+
+```bash
+yaci-store> apply-indexes
+```
+
+---
+
+### 2. Yaci Store Docker Distribution (Beta1 Method)
+
+> **Note**: This is the **legacy Docker distribution method** for beta1. For the latest simplified Docker distribution, see the [main Getting Started guide](./getting-started-2.x.x.mdx).
+
+This ZIP includes Docker Compose files for:
+- PostgreSQL
+- Yaci Store app
+- Ledger State app
+
+You can choose between:
+- **Monolith setups** (run both Postgres and indexer app)
+- **App-specific setups** (connect to an external DB)
+
+#### Usage
+
+1. Edit `application.properties` to configure network settings.
+
+- Check the following properties and update them accordingly
+```
+store.cardano.host=preview-node.world.dev.cardano.org
+store.cardano.port=30002
+store.cardano.protocol-magic=2
+```
+
+2. Start containers:
+
+- **Yaci Store with Postgres**:
+```bash
+docker compose -f yaci-store-monolith.yml up
+  ```
+
+- **Yaci Store with Postgres with ledger-state calculation**:
+
+- Edit `env` file and uncomment the following property
+
+```
+SPRING_PROFILES_ACTIVE=ledger-state
+  ```
+
+- Run Yaci Store with ledger state profile
+
+```bash
+docker compose -f yaci-store-monolith.yml up
+  ```
+
+- **Ledger State with Postgres**:
+```bash
+docker compose -f yaci-store-ledger-state-monolith.yml up
+  ```
+
+- **Access PostgreSQL DB**:
+```bash
+./psql.sh postgres-compose.yml
+  ```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+#### 2.1 Connects to an external PostgreSQL DB
+
+Use docker compose file like `yaci-store.yml` or `yaci-store-ledger-state.yml` instead of `*-monolith.yml` if you want to connect to an external PostgreSQL DB.
+
+- Edit `yaci-store.yml` or `yaci-store-ledger-state.yml` to comment the database configuration in docker compose yml.
+
+```
+#    environment:
+#      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store}
+#      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
+#      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
+```
+
+- Edit `application.properties` to set the database connection settings.
+Make sure to use the **database host or IP address** instead of `localhost`, as the Docker container will not be able to connect to the host using `localhost`.
+Also, ensure that only the **PostgreSQL** configuration section is uncommented.
+
+```
+spring.datasource.url=jdbc:postgresql://192.168.0.2:5432/yaci_indexer?currentSchema=preview
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+##### 2.1.1 Usage
+- **Yaci Store**:
+```bash
+docker compose -f yaci-store.yml up
+  ```
+
+- **Yaci Store with ledger-state calculation**:
+
+- Edit `env` file and uncomment the following property
+
+```
+SPRING_PROFILES_ACTIVE=ledger-state
+  ```
+
+- Run Yaci Store with ledger state profile
+
+```bash
+docker compose -f yaci-store.yml up
+  ```
+
+- **Ledger State with Postgres**:
+```bash
+docker compose -f yaci-store-ledger-state.yml up
+  ```
+
+#### 2.2 Apply Indexes After Sync
+
+- Open `admin-cli.sh` and replace `${tag}` with the actual version number and correct image name.
+_(This is a known bug and will be fixed in the next release.)_
+
+Example:
+
+```
+docker run -it --volume ./application.properties:/app/config/application.properties bloxbean/yaci-store-admin-cli:2.0.0-beta1
+```
+
+- Edit `application.properties` to set the database connection settings.
+Make sure to use the **database host or IP address** instead of `localhost`, as the `admin-cli` Docker container will not be able to connect to the host using `localhost`.
+Also, ensure that only the **PostgreSQL** configuration section is uncommented.
+
+```
+spring.datasource.url=jdbc:postgresql://192.168.0.142:54333/yaci_store?currentSchema=yaci_store
+spring.datasource.username=yaci
+spring.datasource.password=dbpass
+```
+
+Once sync is complete:
+
+```bash
+./admin-cli.sh
+```
+
+This runs the Admin CLI in a container. Then, at the prompt:
+
+```bash
+yaci-store> apply-indexes
+```
+
+---
+
+### 3. Yaci Store Native (GraalVM) Distribution *(Preview)*
+
+Native binaries are available under a separate release tag:
+`<version>-native` (e.g., `2.0.0-beta1-native`)
+
+#### Download Format
+
+Look for platform-specific ZIP files in this format:
+
+```text
+yaci-store-<version>-<os>-<arch>-all.zip
+```
+
+Example:
+
+```text
+yaci-store-2.0.0-beta1-linux-x64-all.zip
+```
+
+> ⚠️ Only use the ZIP files ending with `-all`.
+> Ignore files ending with `n2c`.
+
+#### Setup
+
+1. Extract the ZIP.
+2. Edit `config/application.properties` to configure:
+- Cardano network info (host/port/protocol magic)
+- PostgreSQL connection settings
+
+3. Run the app:
+
+```bash
+./yaci-store
+```
+
+4. Run with ledger-state profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=ledger-state ./yaci-store
+```

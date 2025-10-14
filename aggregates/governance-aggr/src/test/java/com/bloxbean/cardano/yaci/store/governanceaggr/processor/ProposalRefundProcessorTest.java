@@ -133,9 +133,9 @@ class ProposalRefundProcessorTest {
         domainGovProposal5.setReturnAddress("stake_test1upnakjguet3zc7qzrw54p3nc3j8c7pd5v4w8x5evdzseygs9eeeee");
         domainGovProposal5.setDeposit(BigInteger.valueOf(5000));
 
-        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, 1))
-                .thenReturn(List.of(govProposal1));
         when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 1))
+                .thenReturn(List.of(govProposal1));
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, 1))
                 .thenReturn(List.of(govProposal3));
         when(proposalStateClient.getProposalsByStatusListAndEpoch(anyList(), eq(1)))
                 .thenReturn(List.of(govProposal1, govProposal2, govProposal3, govProposal4, govProposal5));
@@ -169,8 +169,8 @@ class ProposalRefundProcessorTest {
         verify(govActionProposalStorage).findByGovActionIds(govActionIdsCaptor.capture());
         List<GovActionId> capturedGovActionIds = govActionIdsCaptor.getValue();
 
-        assertEquals(3, capturedGovActionIds.size());
-        assertThat(capturedGovActionIds).containsExactlyInAnyOrder(proposal1.getGovActionId(),
+        assertEquals(4, capturedGovActionIds.size());
+        assertThat(capturedGovActionIds).containsExactlyInAnyOrder(proposal1.getGovActionId(), proposal2.getGovActionId(),
                 proposal3.getGovActionId(), proposal4.getGovActionId());
 
         ArgumentCaptor<RewardRestEvent> eventCaptor = ArgumentCaptor.forClass(RewardRestEvent.class);

@@ -1,0 +1,62 @@
+# Ledger state mismatch Summary
+
+_Last updated: 2025-07-11_
+
+This document summarizes known mismatches identified in the Ledger state calculations of Yaci Store.
+
+---
+
+## Preview
+
+### DRep distribution mismatches
+
+| Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note            |
+|:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:----------------|
+| 736        | drep1y285lm709qqh54a5z5t6vl2kaaxqmszpsxs36dgh3h2n7nqltj46y | 8f4fefcf28017a57b41517a67d56ef4c0dc04181a11d35178dd53f4c | Amount mismatch (vs DB Sync) |
+| 730–731    | drep1ygsusq7j0wx67tzcz9u50rh9l2w6pmmsqglpzzqathlf0rqm87es5 | 21c803d27b8daf2c581179478ee5fa9da0ef70023e11081d5dfe978c | Amount mismatch (vs DB Sync) |
+| 685–757    | drep1ytax4rwzvdwamnu67j2uk9z00660lpzcvmlys6266l9kt5c262k7m | fa6a8dc2635dddcf9af495cb144f7eb4ff845866fe48695ad7cb65d3 | Amount mismatch (vs DB Sync) |
+| 682–684    | drep1ytax4rwzvdwamnu67j2uk9z00660lpzcvmlys6266l9kt5c262k7m | fa6a8dc2635dddcf9af495cb144f7eb4ff845866fe48695ad7cb65d3 | Only in Yaci Store (not in Db Sync) |
+| 681–683    | drep1ytcw6qzpqqclx2yd0zy64ztvlkkhnf6yrzza8whgnq4vz5gh89626 | f0ed00410031f3288d7889aa896cfdad79a7441885d3bae8982ac151 | Only in Yaci Store (not in Db Sync) |
+| 743–762    | drep1a2r7cf9jfyrqcp2dahfw2aw5lwfd3tymvdc8y5v0ad2652mfcw7   | ea87ec24b249060c054dedd2e575d4fb92d8ac9b637072518feb55aa | Found in DB Sync but not in Yaci Store |
+| 709–830    | drep1ytkdk7j6g4jpnuamve0uy9kv2fyvlprdauv0ymtdpvkrt2gla0chu | ecdb7a5a456419f3bb665fc216cc5248cf846def18f26d6d0b2c35a9 | Amount mismatch (vs DB Sync) |
+
+### DRep active_until mismatches
+
+| Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note            |
+|:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:----------------|
+| 682–684    | drep1ytax4rwzvdwamnu67j2uk9z00660lpzcvmlys6266l9kt5c262k7m | fa6a8dc2635dddcf9af495cb144f7eb4ff845866fe48695ad7cb65d3 | Only in Yaci Store (not in Db Sync) |
+| 681–683    | drep1ytcw6qzpqqclx2yd0zy64ztvlkkhnf6yrzza8whgnq4vz5gh89626 | f0ed00410031f3288d7889aa896cfdad79a7441885d3bae8982ac151 | Only in Yaci Store (not in Db Sync) |
+| 743–762    | drep1a2r7cf9jfyrqcp2dahfw2aw5lwfd3tymvdc8y5v0ad2652mfcw7   | ea87ec24b249060c054dedd2e575d4fb92d8ac9b637072518feb55aa | Found in DB Sync but not in Yaci Store |
+---
+
+## Preprod
+
+### DRep active_until mismatches
+
+| Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note                                   |
+|:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:---------------------------------------|
+| 207        | drep1ytesfw7n2pq5ys2rk0m7fxxd2dyagf820wy24d82rdd9yxqfm4qjg | f304bbd35041424143b3f7e498cd5349d424ea7b88aab4ea1b5a5218 | active until is different from db sync |               |
+| 207        | drep1y2tc5kv5nspwutasa44c5qrlznt7h7vulxqhvr3005czsnsghulqt | 978a59949c02ee2fb0ed6b8a007f14d7ebf99cf981760e2f7d30284e | active until is different from db sync |
+| 207        | drep1y2urtnpqef68w3dm2xrggdsfpp98h00xmkf4qj78r70r3xq8lekef | b835cc20ca747745bb5186843609084a7bbde6dd93504bc71f9e3898 | active until is different from db sync |
+
+## Mainnet
+
+### DRep distribution mismatches
+
+**📊 Comprehensive Analysis Available**
+
+We have conducted an extensive analysis of DRep stake distribution across epochs 506-569 on Cardano mainnet. The comprehensive monitoring has successfully identified specific areas for improvement.
+
+**Key Findings:**
+- **Only 143 unique DReps** show discrepancies
+- **Detailed classification completed** with 90.9% being minor low-severity cases
+
+**📋 Raw Data Source:**
+- [📄 **Raw Mismatch Data**](https://gist.github.com/satran004/06eac89cffebe9aca856aeda810c0a2c) - Complete raw data file used for the analysis (10,036 lines)
+
+**📋 Detail:**
+- [📝 **Complete DRep List**](./mainnet/drep-distribution-detail) - All 143 DReps with detailed breakdown
+
+### DRep active_until mismatches
+
+For detail, check the [DRep active_until mismatches](./mainnet/drep-active-until-detail) page.

@@ -26,6 +26,8 @@ public class VotingProcedure extends BlockAwareDomain {
 
     private long index;
 
+    private int txIndex;
+
     private Long slot;
 
     private VoterType voterType;

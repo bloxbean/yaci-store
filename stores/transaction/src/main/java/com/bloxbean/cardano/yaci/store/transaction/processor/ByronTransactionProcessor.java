@@ -156,6 +156,8 @@ public class ByronTransactionProcessor {
             }
 
             if (txnList.size() > 0) {
+                transactionStorage.saveAll(txnList);
+
                 publisher.publishEvent(new TxnEvent(preCommitEvent.getMetadata(),
                         txnList));
             }

@@ -31,6 +31,12 @@ public class AdaPotAutoConfigProperties {
         private int epochStakeSafeEpochs = 8;
         private int epochStakePruningBatchSize = 3000;
 
+        // Reward Pruning Configuration
+        private boolean rewardPruningEnabled = false;
+        private int rewardPruningInterval = 86400;
+        private int rewardPruningSafeSlots = 43200; // 2160 blocks
+        private int rewardPruningBatchSize = 3000;
+
         private Metrics metrics = new Metrics();
     }
 

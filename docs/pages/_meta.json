@@ -1,6 +1,8 @@
 {
   "index": "Overview",
-  "getting-started-2.x.x": "Getting Started 2.x.x",
+  "getting-started": {
+    "title": "Getting Started"
+  },
   "design": "Design",
   "docker": "Docker",
   "build_run": "Build & Run",
@@ -8,10 +10,10 @@
     "title": "Usage"
   },
   "stores": "Stores",
-  "about": {
-    "title": "About",
-    "type": "page"
+  "plugins": {
+    "title": "Plugin Framework"
   },
   "other-configurations": "Other Configurations",
-  "ledger-state-mismatches": "Ledger State Mismatches"
+  "ledger-state-mismatches": "Ledger State Mismatches",
+  "showcase": "Showcase"
 }

@@ -1,9 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage;
 
-import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
-import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
-import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
+import com.bloxbean.cardano.yaci.store.adapot.domain.*;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.events.domain.InstantRewardType;
 
@@ -38,4 +35,6 @@ public interface RewardStorageReader {
 
     List<Reward> findRewardsByPoolHashAndSpendableEpoch(String poolHash, Integer spendableEpoch, int page, int count);
 
+    //Unwithdrawn Rewards
+    List<RewardInfo> findUnwithdrawnRewardsByAddresses(List<String> addresses, int page, int count);
 }

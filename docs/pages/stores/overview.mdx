@@ -1,1 +1,50 @@
-//TODO
+import { Callout } from 'nextra/components'
+
+# Stores Overview
+
+## Introduction
+
+Yaci Store is built on a modular architecture where different types of blockchain data are organized into separate modules called "stores". This design provides flexibility, scalability, and allows users to enable only the functionality they need.
+
+## Architecture Overview
+
+### Core Principles
+
+1. **Modularity**: Each store is independent and can be enabled/disabled based on requirements
+2. **Event-Driven**: Stores react to blockchain events (blocks, transactions, etc.) published by the sync engine
+3. **Parallel Processing**: Core stores process data in parallel for optimal performance
+4. **Extensibility**: Plugin framework allows customization without modifying core code
+
+### Data Flow
+
+```
+Cardano Node → Sync → Event Publisher →  Processors →  Storage implementations → Database
+                                             ↓                         ↓
+                                      Plugin Framework         Plugin Framework
+```
+
+## Store Categories
+
+### Core Stores
+
+These stores handle fundamental blockchain data and are enabled by default:
+
+- **Assets Store**: Manages native tokens, NFTs, and fungible tokens
+- **Blocks Store**: Stores block-related information
+- **Epoch Store**: Tracks epoch parameters, and epoch-specific data
+- **Governance Store**: Handles governance actions, proposals, votes, and DRep data
+- **Metadata Store**: Stores transaction metadata
+- **MIR Store**: Processes Move Instantaneous Rewards certificates
+- **Script Store**: Manages Plutus scripts, native scripts, and script references
+- **Staking Store**: Tracks stake pools, delegations, registrations, and rewards
+- **Transaction Store**: Stores transaction data
+- **UTxO Store**: Manages unspent transaction outputs and spending relationships
+
+### Aggregation Modules
+
+These modules perform complex calculations and are disabled by default:
+
+- **Account**: Calculates and maintains address balances over time
+- **Adapot**: Tracks ADA distribution across different pots (treasury, reserves, etc.) and calculate rewards
+- **Governance Aggregation**: Calculate governance-related state
+- **Epoch Aggregation**: Aggregates epoch level data

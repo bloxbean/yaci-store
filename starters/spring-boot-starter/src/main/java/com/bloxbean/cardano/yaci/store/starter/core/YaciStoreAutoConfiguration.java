@@ -59,15 +59,6 @@ public class YaciStoreAutoConfiguration {
 
     @Bean
     @ReadOnly(false)
-    public TipFinder tipFinder() {
-        TipFinder tipFinder = new TipFinder(properties.getCardano().getHost(), properties.getCardano().getPort(),
-                Point.ORIGIN, properties.getCardano().getProtocolMagic());
-        tipFinder.start();
-        return tipFinder;
-    }
-
-    @Bean
-    @ReadOnly(false)
     @Scope("prototype")
     public BlockRangeSync blockRangeSync() {
         log.info("Creating BlockRangeSync to fetch blocks");
@@ -209,7 +200,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setCursorCleanupInterval(properties.getCardano().getCursorCleanupInterval());
 
         storeProperties.setKeepAliveInterval(properties.getCardano().getKeepAliveInterval());
-
+        storeProperties.setBlockReceiveDelaySeconds(properties.getBlockReceiveDelaySeconds());
         storeProperties.setDefaultGenesisHash(properties.getCardano().getDefaultGenesisHash());
 
         //executor properties
@@ -251,11 +242,24 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setPreActions(properties.getPlugins().getPreActions());
         storeProperties.setPostActions(properties.getPlugins().getPostActions());
         storeProperties.setEventHandlers(properties.getPlugins().getEventHandlers());
+        storeProperties.setSchedulers(properties.getPlugins().getSchedulers());
 
         storeProperties.setPythonVenv(properties.getPlugins().getPython().getVenv());
         storeProperties.setPluginGlobalScripts(properties.getPlugins().getScripts());
 
+        //Plugin files settings
+        storeProperties.setPluginFilesRootPath(properties.getPlugins().getFiles().getRootPath());
+        storeProperties.setPluginFilesEnableLocks(properties.getPlugins().getFiles().isEnableLocks());
+
         storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
+
+        storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
+
+        //Auto-restart properties
+        storeProperties.setAutoRestartEnabled(properties.getAutoRestart().isEnabled());
+        storeProperties.setAutoRestartDebounceWindowMs(properties.getAutoRestart().getDebounceWindowMs());
+        storeProperties.setAutoRestartMaxAttempts(properties.getAutoRestart().getMaxAttempts());
+        storeProperties.setAutoRestartBackoffBaseMs(properties.getAutoRestart().getBackoffBaseMs());
 
         return storeProperties;
     }

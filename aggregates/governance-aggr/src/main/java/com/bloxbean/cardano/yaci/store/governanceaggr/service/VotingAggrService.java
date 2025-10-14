@@ -188,7 +188,7 @@ public class VotingAggrService {
                         selectOne()
                                 .from(DREP_DIST)
                                 .where(DREP_DIST.DREP_HASH.eq(VOTING_PROCEDURE.VOTER_HASH))
-                                .and(DREP_DIST.EPOCH.eq(epoch))
+                                .and(DREP_DIST.EPOCH.eq(epoch + 1))
                 )
                 .fetch();
 

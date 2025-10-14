@@ -3,10 +3,13 @@ package com.bloxbean.cardano.yaci.store.plugin.core;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.scheduler.SchedulerService;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -23,6 +26,9 @@ public class PluginRegistry {
     private final List<PluginFactory> factories;
     private final VariableProviderFactory variableProviderFactory;
 
+    @Autowired(required = false)
+    private SchedulerService schedulerService;
+
     // filterKey -> List of filter instances
     // filterKey is the <store_name>.<target>.<action> (e.g. "utxo.unspent.save" or "utxo.spent.save")
     private final Map<String, InitPlugin> initPlugins = new ConcurrentHashMap<>();
@@ -30,6 +36,7 @@ public class PluginRegistry {
     private final Map<String, List<PreActionPlugin<?>>> preActions = new ConcurrentHashMap<>();
     private final Map<String, List<PostActionPlugin<?>>> postActions = new ConcurrentHashMap<>();
     private final Map<String, List<EventHandlerPlugin<?>>> eventHandlers = new ConcurrentHashMap<>();
+    private final Map<String, SchedulerPlugin<?>> schedulerPlugins = new ConcurrentHashMap<>();
 
     public PluginRegistry(StoreProperties storeProperties,
                           List<PluginFactory> factories,
@@ -55,6 +62,7 @@ public class PluginRegistry {
         initPreActionPlugins();
         initPostActionPlugins();
         initEventHandlersPlugins();
+        initSchedulerPlugins();
     }
 
    private void initVariableProviders() {
@@ -232,6 +240,47 @@ public class PluginRegistry {
 
     public List<EventHandlerPlugin<?>> getEventHandlerPlugins(String key) {
         return eventHandlers.getOrDefault(key, Collections.emptyList());
+    }
+
+    private void initSchedulerPlugins() {
+        List<SchedulerPluginDef> schedulerDefs = storeProperties.getSchedulers();
+        if (schedulerDefs == null || schedulerDefs.isEmpty()) {
+            log.info("No scheduler plugin definitions found in configuration.");
+            return;
+        }
+
+        if (schedulerService == null) {
+            log.warn("SchedulerService not available, skipping scheduler plugin initialization");
+            return;
+        }
+
+        for (var schedulerDef : schedulerDefs) {
+            try {
+                var factory = factories.stream()
+                        .filter(f -> f.getLang().equals(schedulerDef.getLang()))
+                        .findFirst()
+                        .orElseThrow(() ->
+                                new IllegalArgumentException("Unknown scheduler plugin language: " + schedulerDef.getLang() + ", plugin: " + schedulerDef));
+
+                SchedulerPlugin<?> schedulerPlugin = factory.createSchedulerPlugin(schedulerDef);
+                log.info("Created scheduler plugin: {} with language: {}", schedulerDef.getName(), schedulerDef.getLang());
+
+                // Store in registry
+                schedulerPlugins.put(schedulerDef.getName(), schedulerPlugin);
+
+                // Register with scheduler service
+                schedulerService.registerScheduler(schedulerDef.getName(), schedulerPlugin, schedulerDef);
+
+            } catch (Exception e) {
+                log.error("Failed to initialize scheduler plugin: {}", schedulerDef.getName(), e);
+            }
+        }
+
+        log.info("Initialized {} scheduler plugins", schedulerPlugins.size());
+    }
+
+    public SchedulerPlugin<?> getSchedulerPlugin(String name) {
+        return schedulerPlugins.get(name);
     }
 
     @Override

@@ -36,6 +36,19 @@ public class AdaPotProperties {
     @Builder.Default
     private int epochStakePruningBatchSize = 3000;
 
+    // Reward Pruning Configuration
+    @Builder.Default
+    private boolean rewardPruningEnabled = false;
+
+    @Builder.Default
+    private int rewardPruningInterval = 86400;
+
+    @Builder.Default
+    private int rewardPruningSafeSlots = 43200;
+
+    @Builder.Default
+    private int rewardPruningBatchSize = 3000;
+
     @Builder.Default
     private boolean metricsEnabled = true;
 

@@ -7,9 +7,11 @@ import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.pool.ContextProvid
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GlobalScriptContextRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.polyglot.common.GraalPolyglotScriptStorePlugin;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 
+@Slf4j
 public class JsScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T> {
     private final static String LANGUAGE = "js";
 
@@ -34,18 +36,29 @@ public class JsScriptStorePlugin<T> extends GraalPolyglotScriptStorePlugin<T> {
     }
 
     public String wrapInFunction(String script, String fnName) {
-        var argName = "items";
-        if (getPluginType() == PluginType.EVENT_HANDLER)
-            argName = "event";
+        if (getPluginType() == PluginType.SCHEDULER) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("function ").append(fnName).append("() {\n");
+            for (String line : script.split("\\R")) {
+                sb.append("    ").append(line).append('\n');
+            }
+            sb.append("}\n");
+            log.debug(sb.toString());
+            return sb.toString();
+        } else {
+            var argName = "items";
+            if (getPluginType() == PluginType.EVENT_HANDLER)
+                argName = "event";
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("function ").append(fnName).append("(" + argName + ") {\n");
-        for (String line : script.split("\\R")) {
-            sb.append("    ").append(line).append('\n');
+            StringBuilder sb = new StringBuilder();
+            sb.append("function ").append(fnName).append("(" + argName + ") {\n");
+            for (String line : script.split("\\R")) {
+                sb.append("    ").append(line).append('\n');
+            }
+            sb.append("}\n");
+            log.debug(sb.toString());
+            return sb.toString();
         }
-        sb.append("}\n");
-        System.out.println(sb.toString());
-        return sb.toString();
     }
 
 }

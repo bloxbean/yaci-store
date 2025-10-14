@@ -25,7 +25,7 @@ public class DelegationVoteDataService {
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public List<DelegationVote> getDelegationVotesByDRepTypeAndAddressList(List<String> addressList, DrepType drepType, Integer epoch) {
         Field<Integer> rn = rowNumber()
-                .over(partitionBy(DELEGATION_VOTE.ADDRESS).orderBy(DELEGATION_VOTE.SLOT.desc(), DELEGATION_VOTE.TX_INDEX.desc(), DELEGATION_VOTE.CERT_INDEX))
+                .over(partitionBy(DELEGATION_VOTE.ADDRESS).orderBy(DELEGATION_VOTE.SLOT.desc(), DELEGATION_VOTE.TX_INDEX.desc(), DELEGATION_VOTE.CERT_INDEX.desc()))
                 .as("rn");
 
         Table<?> subquery = dsl.select(DELEGATION_VOTE.TX_HASH,

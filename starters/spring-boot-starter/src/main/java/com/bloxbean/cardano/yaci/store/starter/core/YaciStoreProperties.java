@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.starter.core;
 
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,9 +26,14 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+    private boolean continueOnParseError = false;
 
     private Plugins plugins = new Plugins();
     private Metrics metrics = new Metrics();
+    private AutoRestart autoRestart = new AutoRestart();
+
+    //Block receive delay threshold in seconds for health check
+    private int blockReceiveDelaySeconds = 120;
 
     @Getter
     @Setter
@@ -127,8 +133,10 @@ public class YaciStoreProperties {
         private Map<String, List<PluginDef>> preActions = new HashMap<>();
         private Map<String, List<PluginDef>> postActions = new HashMap<>();
         private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
+        private List<SchedulerPluginDef> schedulers = new ArrayList<>();
 
         private PythonSettings python = new PythonSettings();
+        private FileSettings files = new FileSettings();
     }
 
     @Getter
@@ -142,4 +150,21 @@ public class YaciStoreProperties {
     public static final class Metrics {
         boolean enabled = true;
     }
+
+    @Getter
+    @Setter
+    public static final class FileSettings {
+        private String rootPath = "./plugins/files";
+        private boolean enableLocks = true;
+    }
+
+    @Getter
+    @Setter
+    public static final class AutoRestart {
+        private boolean enabled = true;
+        private long debounceWindowMs = 30000;
+        private int maxAttempts = 5;
+        private long backoffBaseMs = 5000;
+    }
+
 }

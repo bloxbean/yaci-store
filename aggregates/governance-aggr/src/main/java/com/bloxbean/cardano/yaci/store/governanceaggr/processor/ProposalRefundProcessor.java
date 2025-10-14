@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrConfiguration.STORE_GOVERNANCEAGGR_ENABLED;
 
@@ -62,10 +63,13 @@ public class ProposalRefundProcessor {
         rewardStorage.deleteRewardRest(epoch, RewardRestType.proposal_refund);
         rewardStorage.deleteUnclaimedRewardRest(epoch, RewardRestType.proposal_refund);
 
+        List<Proposal> newProposalsCreatedInPrevEpoch = getNewProposalsCreatedInPrevEpoch(epoch);
         List<Proposal> expiredProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, epoch);
         List<Proposal> ratifiedProposalsInThisEpoch = getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, epoch);
-        List<Proposal> proposalListInThisEpoch = getProposalsByStatusListAndEpoch(
-                List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED, GovActionStatus.EXPIRED), epoch);
+        List<Proposal> proposalListInThisEpoch = Stream.concat(
+                getProposalsByStatusListAndEpoch(List.of(GovActionStatus.ACTIVE, GovActionStatus.RATIFIED, GovActionStatus.EXPIRED), epoch).stream(),
+                newProposalsCreatedInPrevEpoch.stream())
+                .toList();
 
         Map<GovActionId, Proposal> siblingsOrDescendantsBePrunedInNextEpoch = new HashMap<>();
 
@@ -75,7 +79,7 @@ public class ProposalRefundProcessor {
         );
 
         ratifiedProposalsInThisEpoch.forEach(proposal ->
-                ProposalUtils.findDescendantsAndSiblings(proposal, proposalListInThisEpoch)
+                ProposalUtils.findSiblingsAndTheirDescendants(proposal, proposalListInThisEpoch)
                         .forEach(p -> siblingsOrDescendantsBePrunedInNextEpoch.putIfAbsent(p.getGovActionId(), p))
         );
 
@@ -156,6 +160,15 @@ public class ProposalRefundProcessor {
                 .map(this::mapToProposal)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
+                .toList();
+    }
+
+    private List<Proposal> getNewProposalsCreatedInPrevEpoch(int epoch) {
+        return govActionProposalStorage.findByEpoch(epoch)
+                .stream()
+                .map(proposalMapper::toGovActionProposal)
+                .filter(Optional::isPresent)
+                .map(govActionProposal -> proposalMapper.toProposal(govActionProposal.get()))
                 .toList();
     }
 

@@ -186,4 +186,15 @@ public class JsPolyglotPluginFactory implements PluginFactory {
         else
             throw new IllegalArgumentException("No script or inline-script found in event-handler definition for js plugin: " + def);
     }
+
+    @Override
+    public <T> SchedulerPlugin<T> createSchedulerPlugin(PluginDef def) {
+        if (def.getExpression() != null)
+            throw new IllegalArgumentException("Use script or inline-script for scheduler plugin. {}" + def);
+        else if (def.getInlineScript() != null || def.getScript() != null)
+            return new JsScriptStorePlugin<>(engine, def, PluginType.SCHEDULER, pluginStateService, variableProviderFactory,
+                    contextProvider, globalScriptContextRegistry);
+        else
+            throw new IllegalArgumentException("No script or inline-script found in scheduler definition for js plugin: " + def);
+    }
 }

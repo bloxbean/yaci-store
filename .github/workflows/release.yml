@@ -22,7 +22,7 @@ jobs:
         run: |
           ARTIFACT_VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
           echo "VERSION=${ARTIFACT_VERSION}" >> $GITHUB_ENV
-          echo "tag=${ARTIFACT_VERSION}" > docker/.env
+          echo "tag=${ARTIFACT_VERSION}" > docker/compose/.env
       - name: Build with Gradle
         run: ./gradlew clean build distZip dockerZip
       - name: Decode GPG Key
@@ -31,7 +31,7 @@ jobs:
           echo "${{secrets.SIGNING_KEY}}" > ~/.gradle/secring.gpg.b64
           base64 -d ~/.gradle/secring.gpg.b64 > ~/.gradle/secring.gpg
       - name: Publish package
-        run: ./gradlew publish -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) --warn --stacktrace
+        run: ./gradlew publishToSonatype closeSonatypeStagingRepository -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) --warn --stacktrace
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}

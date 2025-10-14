@@ -1,12 +1,16 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr;
 
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.*;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.*;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepDistStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorageReader;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepDistStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.DRepStorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.GovActionProposalStatusStorageImpl;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.GovActionProposalStatusStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepDistMapper;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.DRepExpiryMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.GovActionProposalStatusMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepDistRepository;
-import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.DRepExpiryRepository;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
 import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -45,12 +49,6 @@ public class GovernanceAggrConfiguration {
     @ConditionalOnMissingBean
     public DRepDistStorageReader dRepDistStorage(DRepDistRepository dRepDistRepository, DRepDistMapper dRepDistMapper) {
         return new DRepDistStorageReaderImpl(dRepDistRepository, dRepDistMapper);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public DRepExpiryStorage dRepExpiryStorage(DRepExpiryRepository dRepExpiryRepository, DRepExpiryMapper dRepExpiryMapper, DSLContext dslContext) {
-        return new DRepExpiryStorageImpl(dRepExpiryRepository, dRepExpiryMapper, dslContext);
     }
 
     @Bean

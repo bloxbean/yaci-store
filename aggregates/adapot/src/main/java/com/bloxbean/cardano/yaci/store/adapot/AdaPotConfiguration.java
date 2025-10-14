@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 public class AdaPotConfiguration {
     public final static String STORE_ADAPOT_ENABLED = "store.adapot.enabled";
     public final static String STORE_ADAPOT_EPOCH_STAKE_PRUNING_ENABLED = "store.adapot.epoch-stake-pruning-enabled";
+    public final static String STORE_ADAPOT_REWARD_PRUNING_ENABLED = "store.adapot.reward-pruning-enabled";
 
     @Bean
     @ConditionalOnMissingBean
@@ -63,8 +64,9 @@ public class AdaPotConfiguration {
     public RewardStorageReader rewardStorageReader(InstantRewardRepository instantRewardRepository, RewardRepository rewardRepository,
                                                    RewardRestRepository rewardRestRepository,
                                                    UnclaimedRewardRestRepository unclaimedRewardRestRepository,
-                                                   Mapper rewardMapper) {
-        return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardRestRepository, unclaimedRewardRestRepository, rewardMapper);
+                                                   Mapper rewardMapper,
+                                                   DSLContext dslContext) {
+        return new RewardStorageReaderImpl(instantRewardRepository, rewardRepository, rewardRestRepository, unclaimedRewardRestRepository, rewardMapper, dslContext);
     }
 
     @Bean
