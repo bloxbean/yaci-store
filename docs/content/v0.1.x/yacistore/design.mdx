@@ -32,11 +32,6 @@ The core module is the backbone of Yaci Store. It serves as the primary interfac
 - **State Management**: Tracks current processing point in the database
 - **Rollback Handling**: Manages blockchain reorganizations and rollbacks
 
-**Event Types:**
-- `BlockEvent`: Published when a new block is processed
-- `TransactionEvent`: Published for each transaction in a block
-- `RollbackEvent`: Published when a rollback occurs
-
 ---
 
 ### 🏬 Stores
@@ -155,7 +150,7 @@ If you are using Yaci Store as a library in your application with your own domai
 
 ## 🔁 Idempotency
 
-Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box modules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
+Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box modules are idempotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
 
 ---
 
@@ -164,27 +159,15 @@ Though Yaci Store ensures that the same event is not published more than once, i
 
 <div style={{
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: '1fr',
   gap: '2rem',
   marginTop: '1rem'
 }}>
 
 <div>
 
-**✅ Advantages:**
-- Simple and predictable processing order
-- Easy rollback handling
-- Guaranteed data consistency
-- Lower memory usage
-
-</div>
-
-<div>
-
-**⚠️ Limitations:**
-- Slower overall throughput
-- Underutilizes system resources
-- Processing bottlenecks affect entire chain
+- Cardano Node → Publisher emits per-block events: Block Header, Transaction, Mint/Burn, Script, AuxData, Update, Governance.
+- Stores consume these events in order and persist to their own tables.
 
 </div>
 
@@ -198,28 +181,15 @@ Though Yaci Store ensures that the same event is not published more than once, i
 
 <div style={{
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: '1fr',
   gap: '2rem',
   marginTop: '1rem'
 }}>
 
 <div>
 
-**✅ Advantages:**
-- Higher throughput and performance
-- Better resource utilization
-- Independent store processing
-- Scalable with available CPU cores
-
-</div>
-
-<div>
-
-**⚠️ Considerations:**
-- More complex rollback coordination
-- Increased memory usage
-- Requires careful synchronization
-- Store interdependencies need management
+- Publisher groups blocks into batches processed on multiple threads, each batch emits events .
+- Stores consume batches concurrently and write to storage
 
 </div>
 
