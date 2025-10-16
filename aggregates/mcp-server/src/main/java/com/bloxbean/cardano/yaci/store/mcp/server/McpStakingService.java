@@ -22,7 +22,11 @@ public class McpStakingService {
     private final PoolService poolService;
 
     @Tool(name = "pool-registrations",
-            description = "Get a paginated list of stake pool registrations. Returns pool registration certificates with pool parameters like pledge, cost, margin, relay info, and metadata. Page is 0-based.")
+            description = "Get a paginated list of stake pool registrations. " +
+                         "Returns pool registration certificates with pool parameters like pledge, cost, margin, relay info, and metadata. " +
+                         "IMPORTANT: If metadata_url is present, fetch and summarize it to provide pool information including pool name, description, ticker, and homepage. " +
+                         "The metadata typically contains the pool's branding and operator information that helps users identify and evaluate the pool. " +
+                         "Page is 0-based.")
     public List<PoolRegistration> getPoolRegistrations(int page, int count) {
         return poolService.getPoolRegistrations(page, count);
     }
@@ -43,7 +47,9 @@ public class McpStakingService {
             description = "Get detailed information for a specific stake pool at a given epoch. " +
                          "Pool ID can be in bech32 (pool1...) or hex format. " +
                          "If epoch is null, uses the latest available epoch. " +
-                         "Returns pool parameters, metadata, relays, owners, and rewards address.")
+                         "Returns pool parameters, metadata, relays, owners, and rewards address. " +
+                         "IMPORTANT: If metadata_url is present, fetch and summarize it to provide complete pool information including pool name, description, ticker, homepage, and extended description. " +
+                         "The pool metadata helps users understand the pool's brand, operator identity, and operational details.")
     public PoolDetails getPoolDetails(String poolId, Integer epoch) {
         // Use a recent epoch if null - pool details don't change frequently
         int effectiveEpoch = (epoch != null) ? epoch : Integer.MAX_VALUE;

@@ -21,8 +21,10 @@ public class ColumnWhitelist {
             "is_collateral_return", "amounts", "update_datetime"
         )),
         Map.entry("transaction", Set.of(
-            "tx_hash", "epoch", "slot", "block", "block_hash", "block_index",
-            "fee", "invalid", "total_output", "tx_size", "script_size"
+            "tx_hash", "epoch", "slot", "block", "block_hash", "block_time",
+            "fee", "invalid", "tx_index", "ttl", "total_collateral", "treasury_donation",
+            "auxiliary_datahash", "script_datahash", "network_id",
+            "validity_interval_start", "update_datetime"
         )),
         Map.entry("block", Set.of(
             "number", "hash", "epoch", "slot", "epoch_slot", "slot_leader",

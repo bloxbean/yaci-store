@@ -234,7 +234,10 @@ public class McpUtxoAggregationService {
     @Tool(name = "asset-balance-by-address",
           description = "Get balance of a specific asset for address(es). " +
                         "Asset format: policyId + assetName (hex). " +
-                        "Returns holder count and total quantity.")
+                        "Returns holder count and total quantity. " +
+                        "IMPORTANT: Use the 'assetUnit' parameter to fetch token metadata from: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<assetUnit>.json " +
+                        "Present balance as 'You hold X.XXX TokenName (TICKER)' using decimals for proper display.")
     public AssetBalanceSummary getAssetBalance(
         @ToolParam(description = "Address or comma-separated addresses") String addresses,
         @ToolParam(description = "Asset unit (policyId + assetName in hex)") String assetUnit
@@ -268,7 +271,10 @@ public class McpUtxoAggregationService {
 
     @Tool(name = "stake-address-portfolio",
           description = "Get complete portfolio for a stake address including all assets. " +
-                        "Returns ADA balance, asset holdings, and UTXO distribution across all delegated addresses.")
+                        "Returns ADA balance, asset holdings, and UTXO distribution across all delegated addresses. " +
+                        "IMPORTANT: For each asset in the portfolio, fetch token registry metadata using asset_unit: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
+                        "Create a complete portfolio view showing 'ADA: X.XXX, TokenName (TICKER): Y.YYY, ...' with all tokens identified by name.")
     public StakeAddressPortfolio getStakeAddressPortfolio(
         @ToolParam(description = "Stake address (stake1...)") String stakeAddress
     ) {
@@ -335,6 +341,9 @@ public class McpUtxoAggregationService {
           description = "Get asset balance as of a specific epoch (point-in-time query). " +
                         "Returns quantity of specific asset that existed at the END of that epoch. " +
                         "Filters UTXOs spent during or before the target epoch. " +
+                        "IMPORTANT: Fetch token registry metadata using 'assetUnit' parameter to provide historical context: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<assetUnit>.json " +
+                        "Present as 'At epoch X, held Y.YYY TokenName (TICKER)' for clear historical analysis. " +
                         "Essential for historical asset holding analysis.")
     public HistoricalBalanceSummary getAssetBalanceAtEpoch(
         @ToolParam(description = "Address or comma-separated addresses") String addresses,
@@ -386,6 +395,10 @@ public class McpUtxoAggregationService {
     @Tool(name = "multi-asset-summary",
           description = "Get summary of all assets held by address(es). " +
                         "Returns list of all native tokens and NFTs with quantities. " +
+                        "IMPORTANT: For each asset returned, use 'asset_unit' to fetch token registry metadata: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
+                        "Display holdings as 'X.XXX TokenName (TICKER)' using decimals field for proper formatting. " +
+                        "This transforms raw portfolio data into human-readable token names for better UX. " +
                         "Excludes lovelace - use utxo-balance-summary for ADA. " +
                         "Perfect for portfolio overview and asset discovery.")
     public List<AssetHolding> getMultiAssetSummary(

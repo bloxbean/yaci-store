@@ -37,6 +37,9 @@ public class McpAssetAggregationService {
     @Tool(name = "tokens-with-min-holders",
           description = "Find tokens that have at least a specified number of unique holders. " +
                         "Returns list of tokens (policy_id, asset_name) with holder counts. " +
+                        "IMPORTANT: Each token includes 'asset_unit' which can be used to fetch Cardano Token Registry metadata from: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
+                        "Fetch registry data to display 'TokenName (TICKER)' instead of hex values, helping identify legitimate vs unknown tokens. " +
                         "Useful for discovering popular tokens and NFT collections. " +
                         "Note: Only returns currently unspent UTXOs (active holdings). " +
                         "Limit parameter controls how many results to return (default: 20). " +
@@ -80,6 +83,9 @@ public class McpAssetAggregationService {
           description = "Get detailed holder statistics for a specific token by asset unit. " +
                         "Returns holder count, total supply, and UTXO distribution. " +
                         "Asset unit format: policyId + assetName (hex). " +
+                        "IMPORTANT: Use the 'asset_unit' (same as input parameter) to fetch token registry metadata: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<assetUnit>.json " +
+                        "Extract 'name', 'ticker', 'decimals' to present holder stats as 'X holders of TokenName (TICKER) with Y.YYY total supply'. " +
                         "Only counts currently unspent UTXOs (active holdings). " +
                         "Uses pre-aggregated token_holder_summary view for optimal performance.")
     public TokenHolderStats getTokenHolderStats(
@@ -121,6 +127,10 @@ public class McpAssetAggregationService {
     @Tool(name = "token-holder-stats-by-policy",
           description = "Get holder statistics for all tokens under a specific policy ID. " +
                         "Returns list of all assets in the policy with their holder counts. " +
+                        "IMPORTANT: Each asset includes 'asset_unit' for token registry lookups. " +
+                        "For NFT collections, fetch registry metadata for each asset to display collection with human-readable names: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
+                        "This helps present NFT collections as 'Collection Item #1', 'Collection Item #2', etc. instead of hex values. " +
                         "Useful for analyzing NFT collections or multi-asset policies. " +
                         "Only counts currently unspent UTXOs (active holdings). " +
                         "Uses pre-aggregated token_holder_summary view for optimal performance.")
@@ -158,8 +168,10 @@ public class McpAssetAggregationService {
     @Tool(name = "find-tokens-by-policy-history",
           description = "Find all tokens minted under a specific policy ID from the assets table. " +
                         "Returns complete mint/burn history including tokens with zero current supply. " +
-                        "Useful for: discovering all tokens in a policy, analyzing mint/burn patterns, " +
-                        "finding burned/delisted tokens. " +
+                        "IMPORTANT: Each token includes 'unit' field for registry lookups. " +
+                        "Fetch token metadata from: https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<unit>.json " +
+                        "This is especially useful for finding burned/delisted tokens that may still have registry entries. " +
+                        "Useful for: discovering all tokens in a policy, analyzing mint/burn patterns, finding burned/delisted tokens. " +
                         "Aggregates by policy and asset_name, showing net quantity (mints - burns).")
     public List<AssetMintInfo> findTokensByPolicyHistory(
         @ToolParam(description = "Policy ID (hex)") String policyId,
@@ -208,8 +220,11 @@ public class McpAssetAggregationService {
     @Tool(name = "find-recent-token-mints",
           description = "Find recently minted tokens across all policies. " +
                         "Returns tokens that had mint transactions within the specified slot range. " +
-                        "Useful for: discovering new token launches, monitoring minting activity, " +
-                        "tracking new NFT collections. " +
+                        "IMPORTANT: For each newly minted token, use the 'unit' field to fetch registry metadata: " +
+                        "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<unit>.json " +
+                        "Present new tokens with their verified names: 'Recently minted: TokenName (TICKER) - Description'. " +
+                        "This helps users discover legitimate new token launches vs spam/scam tokens. " +
+                        "Useful for: discovering new token launches, monitoring minting activity, tracking new NFT collections. " +
                         "Results grouped by policy and asset, showing aggregated mint data.")
     public List<AssetMintInfo> findRecentTokenMints(
         @ToolParam(description = "Number of recent slots to search (e.g., 7200 slots = ~2 hours)") Long slotRange,

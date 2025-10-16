@@ -51,6 +51,7 @@ public class SchemaDiscoveryService {
         tables.add(createPoolUpdateSchema());
         tables.add(createStakeRegistrationSchema());
         tables.add(createDelegationSchema());
+        tables.add(createAssetsSchema());
 
         // Flattened UTXO views for simplified asset queries
         tables.add(createUtxoAssetsFlatSchema());
@@ -139,6 +140,101 @@ public class SchemaDiscoveryService {
             ]
             groupBy: ["owner_addr"]
             ```
+
+            ## 🔍 TOKEN ANALYSIS DECISION GUIDE
+
+            **CRITICAL: Choose the correct table based on what you want to analyze!**
+
+            ### Question: "What tokens were minted/burned recently?"
+            ✅ USE: `assets` table
+            - Tracks mint and burn events ONLY
+            - Filter by slot range for time period
+            - quantity > 0 = minting, quantity < 0 = burning
+            - Example: "Find tokens minted in last hour"
+            ```
+            table: assets
+            filters: [
+              {column: "slot", operator: "GT", value: <slot_1hr_ago>},
+              {column: "quantity", operator: "GT", value: 0}
+            ]
+            groupBy: ["policy", "asset_name", "unit"]
+            ```
+
+            ### Question: "What tokens does this address currently hold?"
+            ✅ USE: `utxo_assets_unspent` view
+            - Pre-filtered to unspent UTXOs (current holdings)
+            - No JOIN needed
+            - Example: "Show my portfolio"
+            ```
+            table: utxo_assets_unspent
+            selectFields: [
+              {column: "policy_id"},
+              {column: "asset_name"},
+              {column: "quantity", function: "SUM", alias: "total"}
+            ]
+            filters: [{column: "owner_addr", operator: "EQ", value: "addr1..."}]
+            groupBy: ["policy_id", "asset_name"]
+            ```
+
+            ### Question: "What tokens with 100+ holders exist?"
+            ✅ USE: `token_holder_summary` view
+            - Pre-aggregated statistics (FASTEST!)
+            - No aggregation needed
+            - Example: "Find popular tokens"
+            ```
+            table: token_holder_summary
+            filters: [{column: "holder_count", operator: "GTE", value: 100}]
+            orderBy: [{column: "holder_count", direction: "DESC"}]
+            ```
+
+            ### Question: "How many times was this token transferred in last week?"
+            ✅ USE: `utxo_assets_flat` view
+            - Shows all UTXOs (spent and unspent) with asset info
+            - Filter by time period
+            - COUNT spent UTXOs = transfer count
+            - Example: "Token transfer activity"
+            ```
+            table: utxo_assets_flat
+            selectFields: [{column: "tx_hash", function: "COUNT", alias: "transfers"}]
+            filters: [
+              {column: "policy_id", operator: "EQ", value: "abc123..."},
+              {column: "is_spent", operator: "EQ", value: true},
+              {column: "slot", operator: "GT", value: <slot_1week_ago>}
+            ]
+            ```
+
+            ### Question: "What's the minting history of a specific token?"
+            ✅ USE: `assets` table
+            - All mint/burn events for the token
+            - Shows when and how much was minted/burned
+            - Example: "Token supply timeline"
+            ```
+            table: assets
+            selectFields: [
+              {column: "slot"},
+              {column: "quantity"},
+              {column: "tx_hash"}
+            ]
+            filters: [{column: "unit", operator: "EQ", value: "<policy+name_hex>"}]
+            orderBy: [{column: "slot", direction: "ASC"}]
+            ```
+
+            ### Quick Reference Table:
+
+            | Query Type | Table to Use | Why |
+            |------------|--------------|-----|
+            | Mint/burn events | `assets` | Only table with mint/burn records |
+            | Current holdings | `utxo_assets_unspent` | Pre-filtered to unspent |
+            | Transfer activity | `utxo_assets_flat` | Shows all UTXOs with spent status |
+            | Token popularity | `token_holder_summary` | Pre-aggregated stats |
+            | ADA balance only | `address_lovelace_balance` | No JSONB overhead |
+            | Complex UTXO queries | `address_utxo` | Full UTXO data with JSONB |
+
+            ⚠️ COMMON MISTAKES TO AVOID:
+            1. ❌ Using `assets` table for "transactions with token X" → Use `utxo_assets_flat`
+            2. ❌ Using `address_utxo` for "tokens with N+ holders" → Use `token_holder_summary`
+            3. ❌ Aggregating `utxo_assets_flat` when `token_holder_summary` already has it
+            4. ❌ Using table name "asset" (singular) → Correct name is "assets" (plural)
 
             ## Common Patterns
 
@@ -341,7 +437,7 @@ public class SchemaDiscoveryService {
     private TableSchema createTransactionSchema() {
         return new TableSchema(
             "transaction",
-            "All transactions on the blockchain. Use for transaction-level analytics.",
+            "All transactions on the blockchain. Use for transaction-level analytics, fee trends, and network usage patterns.",
             tableWhitelist.getPrimaryKeys("transaction"),
             List.of(
                 new ColumnSchema("tx_hash", "string", "Unique transaction hash"),
@@ -358,9 +454,29 @@ public class SchemaDiscoveryService {
             ),
             List.of(
                 new QueryPattern(
-                    "Aggregate transactions by epoch",
-                    "GROUP BY epoch, aggregate COUNT, SUM(fee)",
-                    "Use for network statistics and fee analysis"
+                    "Network fee trends by epoch",
+                    "GROUP BY epoch, aggregate COUNT, SUM(fee), AVG(fee)",
+                    "Example: {table: 'transaction', selectFields: [{column: 'epoch'}, {column: 'tx_hash', function: 'COUNT', alias: 'tx_count'}, {column: 'fee', function: 'SUM', alias: 'total_fees'}, {column: 'fee', function: 'AVG', alias: 'avg_fee'}], groupBy: [{column: 'epoch'}], orderBy: [{column: 'epoch', direction: 'DESC'}], limit: 10}"
+                ),
+                new QueryPattern(
+                    "High-value transactions",
+                    "Filter total_output > threshold, ORDER BY total_output DESC",
+                    "Example: {table: 'transaction', selectFields: [{column: 'tx_hash'}, {column: 'total_output'}, {column: 'fee'}, {column: 'slot'}], filters: [{column: 'total_output', operator: 'GT', value: 1000000000000}], orderBy: [{column: 'total_output', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Failed transactions in time range",
+                    "Filter invalid = true, slot BETWEEN start AND end",
+                    "Example: {table: 'transaction', selectFields: [{column: 'tx_hash'}, {column: 'slot'}, {column: 'fee'}], filters: [{column: 'invalid', operator: 'EQ', value: true, logicalOp: 'AND'}, {column: 'slot', operator: 'BETWEEN', value: [<start_slot>, <end_slot>], logicalOp: 'AND'}], orderBy: [{column: 'slot', direction: 'DESC'}]}"
+                ),
+                new QueryPattern(
+                    "Smart contract usage trends",
+                    "Filter script_size > 0, GROUP BY epoch, COUNT(*)",
+                    "Example: {table: 'transaction', selectFields: [{column: 'epoch'}, {column: 'tx_hash', function: 'COUNT', alias: 'script_tx_count'}], filters: [{column: 'script_size', operator: 'GT', value: 0}], groupBy: [{column: 'epoch'}], orderBy: [{column: 'epoch', direction: 'DESC'}]}"
+                ),
+                new QueryPattern(
+                    "Large transaction analysis",
+                    "Filter tx_size > threshold, for block space usage",
+                    "Example: {table: 'transaction', selectFields: [{column: 'tx_hash'}, {column: 'tx_size'}, {column: 'fee'}, {column: 'epoch'}], filters: [{column: 'tx_size', operator: 'GT', value: 10000}], orderBy: [{column: 'tx_size', direction: 'DESC'}], limit: 50}"
                 )
             )
         );
@@ -369,7 +485,7 @@ public class SchemaDiscoveryService {
     private TableSchema createBlockSchema() {
         return new TableSchema(
             "block",
-            "Blockchain blocks. Use for block production and pool performance analysis.",
+            "Blockchain blocks. Use for block production, pool performance analysis, and network capacity monitoring.",
             tableWhitelist.getPrimaryKeys("block"),
             List.of(
                 new ColumnSchema("number", "bigint", "Block number (height)"),
@@ -389,8 +505,33 @@ public class SchemaDiscoveryService {
             List.of(
                 new QueryPattern(
                     "Pool performance by epoch",
-                    "GROUP BY slot_leader, epoch",
-                    "Count blocks produced by each pool per epoch"
+                    "GROUP BY slot_leader, epoch, COUNT blocks per pool",
+                    "Example: {table: 'block', selectFields: [{column: 'slot_leader'}, {column: 'epoch'}, {column: 'number', function: 'COUNT', alias: 'blocks_produced'}], groupBy: [{column: 'slot_leader'}, {column: 'epoch'}], orderBy: [{column: 'blocks_produced', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Top block producers by fee collection",
+                    "GROUP BY slot_leader, SUM(total_fees), ORDER BY total_fees DESC",
+                    "Example: {table: 'block', selectFields: [{column: 'slot_leader'}, {column: 'total_fees', function: 'SUM', alias: 'total_fees_earned'}, {column: 'number', function: 'COUNT', alias: 'block_count'}], groupBy: [{column: 'slot_leader'}], orderBy: [{column: 'total_fees_earned', direction: 'DESC'}], limit: 10}"
+                ),
+                new QueryPattern(
+                    "Block fullness analysis",
+                    "Filter body_size > threshold to find heavily loaded blocks",
+                    "Example: {table: 'block', selectFields: [{column: 'number'}, {column: 'body_size'}, {column: 'no_of_txs'}, {column: 'slot_leader'}, {column: 'epoch'}], filters: [{column: 'body_size', operator: 'GT', value: 80000}], orderBy: [{column: 'body_size', direction: 'DESC'}], limit: 50}"
+                ),
+                new QueryPattern(
+                    "Recent blocks by specific pool",
+                    "Filter slot_leader = pool_id, ORDER BY slot DESC",
+                    "Example: {table: 'block', selectFields: [{column: 'number'}, {column: 'slot'}, {column: 'no_of_txs'}, {column: 'total_fees'}], filters: [{column: 'slot_leader', operator: 'EQ', value: '<pool_id>'}], orderBy: [{column: 'slot', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Empty blocks detection",
+                    "Filter no_of_txs = 0, for slot lottery analysis",
+                    "Example: {table: 'block', selectFields: [{column: 'number'}, {column: 'slot_leader'}, {column: 'epoch'}, {column: 'slot'}], filters: [{column: 'no_of_txs', operator: 'EQ', value: 0}], orderBy: [{column: 'slot', direction: 'DESC'}]}"
+                ),
+                new QueryPattern(
+                    "Block production velocity",
+                    "GROUP BY epoch, COUNT blocks, AVG time between blocks",
+                    "Example: {table: 'block', selectFields: [{column: 'epoch'}, {column: 'number', function: 'COUNT', alias: 'total_blocks'}], groupBy: [{column: 'epoch'}], orderBy: [{column: 'epoch', direction: 'DESC'}]}"
                 )
             )
         );
@@ -422,7 +563,7 @@ public class SchemaDiscoveryService {
     private TableSchema createEpochSchema() {
         return new TableSchema(
             "epoch",
-            "Epoch-level aggregated data. Use for epoch statistics.",
+            "Epoch-level aggregated data. Use for epoch statistics, network growth analysis, and historical trends. Pre-aggregated for fast queries.",
             tableWhitelist.getPrimaryKeys("epoch"),
             List.of(
                 new ColumnSchema("no", "integer", "Epoch number"),
@@ -433,7 +574,33 @@ public class SchemaDiscoveryService {
                 new ColumnSchema("out_sum", "bigint", "Total output in epoch"),
                 new ColumnSchema("fees", "bigint", "Total fees in epoch")
             ),
-            List.of()
+            List.of(
+                new QueryPattern(
+                    "Network growth over time",
+                    "Select epoch metrics, ORDER BY no ASC to see historical progression",
+                    "Example: {table: 'epoch', selectFields: [{column: 'no'}, {column: 'tx_count'}, {column: 'fees'}, {column: 'block_count'}], orderBy: [{column: 'no', direction: 'ASC'}], limit: 100}"
+                ),
+                new QueryPattern(
+                    "Recent epoch statistics",
+                    "ORDER BY no DESC, LIMIT 10 for most recent epochs",
+                    "Example: {table: 'epoch', selectFields: [{column: 'no'}, {column: 'tx_count'}, {column: 'block_count'}, {column: 'fees'}], orderBy: [{column: 'no', direction: 'DESC'}], limit: 10}"
+                ),
+                new QueryPattern(
+                    "High activity epochs",
+                    "Filter tx_count > threshold to find busy epochs",
+                    "Example: {table: 'epoch', selectFields: [{column: 'no'}, {column: 'tx_count'}, {column: 'fees'}], filters: [{column: 'tx_count', operator: 'GT', value: 100000}], orderBy: [{column: 'tx_count', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Fee revenue analysis",
+                    "Analyze fees column, compute averages and trends",
+                    "Example: {table: 'epoch', selectFields: [{column: 'no'}, {column: 'fees'}, {column: 'tx_count'}], filters: [{column: 'no', operator: 'GTE', value: 450}], orderBy: [{column: 'no', direction: 'ASC'}]}"
+                ),
+                new QueryPattern(
+                    "Network efficiency trends",
+                    "Compare tx_count vs fees over time periods",
+                    "Example: {table: 'epoch', selectFields: [{column: 'no'}, {column: 'tx_count'}, {column: 'fees'}, {column: 'block_count'}], filters: [{column: 'no', operator: 'BETWEEN', value: [400, 450]}], orderBy: [{column: 'no', direction: 'ASC'}]}"
+                )
+            )
         );
     }
 
@@ -648,6 +815,58 @@ public class SchemaDiscoveryService {
                     "Balance history by epoch",
                     "Filter owner_addr and is_spent = false, GROUP BY epoch",
                     "Track ADA balance changes over time"
+                )
+            )
+        );
+    }
+
+    private TableSchema createAssetsSchema() {
+        return new TableSchema(
+            "assets",
+            "Token mint and burn events ONLY. Records when tokens are created or destroyed. " +
+            "⚠️ IMPORTANT: This table does NOT track token transfers/movements! " +
+            "USE THIS FOR: Minting activity, burn events, token supply changes, new token discovery. " +
+            "DO NOT USE FOR: Token transfers (use utxo_assets_flat), current holdings (use utxo_assets_unspent), or holder stats (use token_holder_summary).",
+            tableWhitelist.getPrimaryKeys("assets"),
+            List.of(
+                new ColumnSchema("id", "uuid", "Unique mint/burn event ID"),
+                new ColumnSchema("slot", "bigint", "Slot when token was minted/burned"),
+                new ColumnSchema("tx_hash", "string", "Transaction hash of mint/burn"),
+                new ColumnSchema("policy", "string", "Token policy ID (hex)"),
+                new ColumnSchema("asset_name", "string", "Token asset name (hex)"),
+                new ColumnSchema("unit", "string", "Asset unit (policy + asset_name concatenated) - USE THIS for token registry lookups!"),
+                new ColumnSchema("fingerprint", "string", "CIP-14 asset fingerprint (asset1...)"),
+                new ColumnSchema("quantity", "bigint", "Amount minted (+) or burned (-). Negative values indicate burning."),
+                new ColumnSchema("mint_type", "string", "MINT or BURN"),
+                new ColumnSchema("block", "bigint", "Block number"),
+                new ColumnSchema("block_time", "bigint", "Block timestamp (Unix epoch)"),
+                new ColumnSchema("update_datetime", "timestamp", "Last update time")
+            ),
+            List.of(
+                new QueryPattern(
+                    "Find tokens minted in last hour",
+                    "Filter slot > (current_slot - 7200), quantity > 0, GROUP BY policy, asset_name, unit, COUNT(*)",
+                    "Example: {table: 'assets', selectFields: [{column: 'policy'}, {column: 'asset_name'}, {column: 'unit'}, {column: 'tx_hash', function: 'COUNT', alias: 'mint_count'}], filters: [{column: 'slot', operator: 'GT', value: <slot_1hr_ago>, logicalOp: 'AND'}, {column: 'quantity', operator: 'GT', value: 0, logicalOp: 'AND'}], groupBy: [{column: 'policy'}, {column: 'asset_name'}, {column: 'unit'}], orderBy: [{column: 'mint_count', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Most minted tokens by quantity",
+                    "Filter quantity > 0, GROUP BY unit, SUM(quantity), ORDER BY sum DESC",
+                    "Example: {table: 'assets', selectFields: [{column: 'policy'}, {column: 'asset_name'}, {column: 'unit'}, {column: 'quantity', function: 'SUM', alias: 'total_minted'}], filters: [{column: 'quantity', operator: 'GT', value: 0}], groupBy: [{column: 'policy'}, {column: 'asset_name'}, {column: 'unit'}], orderBy: [{column: 'total_minted', direction: 'DESC'}], limit: 20}"
+                ),
+                new QueryPattern(
+                    "Track token supply changes",
+                    "GROUP BY unit, SUM(quantity) for net supply (positive = net minting, negative = net burning)",
+                    "Example: {table: 'assets', selectFields: [{column: 'unit'}, {column: 'quantity', function: 'SUM', alias: 'net_supply'}], groupBy: [{column: 'unit'}], orderBy: [{column: 'net_supply', direction: 'DESC'}]}"
+                ),
+                new QueryPattern(
+                    "Burn events for specific policy",
+                    "Filter policy = '<policy_id>' AND quantity < 0",
+                    "Example: {table: 'assets', selectFields: [{column: 'asset_name'}, {column: 'unit'}, {column: 'quantity'}, {column: 'slot'}], filters: [{column: 'policy', operator: 'EQ', value: '<policy_hex>', logicalOp: 'AND'}, {column: 'quantity', operator: 'LT', value: 0, logicalOp: 'AND'}], orderBy: [{column: 'slot', direction: 'DESC'}]}"
+                ),
+                new QueryPattern(
+                    "Minting velocity analysis",
+                    "COUNT mints per time period, GROUP BY epoch or time ranges",
+                    "Shows how fast tokens are being minted over time"
                 )
             )
         );
