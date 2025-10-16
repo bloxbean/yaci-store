@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class TransactionService {
+public class Cip139TransactionService {
 
     private final TransactionStorageReader transactionStorageReader;
     private final TransactionWitnessStorageReader transactionWitnessStorageReader;

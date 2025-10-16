@@ -21,10 +21,24 @@ public class Cip139Properties {
         public static final class Cip139  {
 
             private ProtocolParameters protocolParameters = new ProtocolParameters();
+            private Transaction transaction = new Transaction();
+            private Utxo utxo = new Utxo();
 
             @Getter
             @Setter
             public static final class ProtocolParameters {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Transaction {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Utxo {
                 private boolean enabled = true;
             }
 

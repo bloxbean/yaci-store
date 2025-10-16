@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.cip139.transaction.controller;
 
 import com.bloxbean.cardano.yaci.store.cip139.transaction.dto.TransactionDto;
-import com.bloxbean.cardano.yaci.store.cip139.transaction.service.TransactionService;
+import com.bloxbean.cardano.yaci.store.cip139.transaction.service.Cip139TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
@@ -20,10 +20,10 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Tag(name = "CIP-139 Transaction")
 @RequestMapping("${cip139.apiPrefix}/transaction")
-@ConditionalOnExpression("${extensions.cip139.transaction.enabled:true}")
-public class TransactionController {
+@ConditionalOnExpression("${store.extensions.cip139.transaction.enabled:true}")
+public class Cip139TransactionController {
 
-    private final TransactionService transactionService;
+    private final Cip139TransactionService cip139TransactionService;
 
     @PostConstruct
     public void postConstruct() {
@@ -33,7 +33,7 @@ public class TransactionController {
     @GetMapping("hash")
     @Operation(summary = "Specific Transaction for a given Hash.", description = "Get the transaction with the supplied transaction hash.")
     public TransactionDto getTransactionByHash(@RequestParam(name = "transaction_hash") String hash) {
-        return transactionService.getTransactionByHash(hash)
+        return cip139TransactionService.getTransactionByHash(hash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found for hash: " + hash));
     }
 

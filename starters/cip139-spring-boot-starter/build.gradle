@@ -1,6 +1,8 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":extensions:cip-139:cip139-epoch")
+    api project(":extensions:cip-139:cip139-transaction")
+    api project(":extensions:cip-139:cip139-utxo")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }

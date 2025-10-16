@@ -10,6 +10,6 @@ import org.springframework.context.annotation.Configuration;
         matchIfMissing = true
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.cip139.protocolparameters"})
-public class ProtocolParametersConfiguration {
+public class CIP139ProtocolParametersConfiguration {
 
 }

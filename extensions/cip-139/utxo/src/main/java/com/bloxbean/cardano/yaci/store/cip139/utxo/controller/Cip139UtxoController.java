@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.cip139.utxo.controller;
 
 import com.bloxbean.cardano.yaci.store.cip139.utxo.dto.UtxoDto;
-import com.bloxbean.cardano.yaci.store.cip139.utxo.service.UtxoService;
+import com.bloxbean.cardano.yaci.store.cip139.utxo.service.Cip139UtxoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
@@ -18,10 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "CIP-139 Utxos")
 @RequestMapping("${cip139.apiPrefix}/utxos")
-@ConditionalOnExpression("${extensions.cip139.utxos.enabled:true}")
-public class UtxoController {
+@ConditionalOnExpression("${store.extensions.cip139.utxo.enabled:true}")
+public class Cip139UtxoController {
 
-    private UtxoService utxoService;
+    private final Cip139UtxoService cip139UtxoService;
 
     @PostConstruct
     public void postConstruct() {
@@ -31,31 +31,31 @@ public class UtxoController {
     @GetMapping("asset")
     @Operation(summary = "Get Utxos by Asset", description = "Get all UTxOs that contain some of the specified asset.")
     public UtxoDto getUtxosByAsset(@RequestParam(name = "asset_name") String assetName, @RequestParam(name = "minting_policy_hash") String mintingPolicyHash) {
-        return utxoService.getUtxoByAsset(assetName, mintingPolicyHash);
+        return cip139UtxoService.getUtxoByAsset(assetName, mintingPolicyHash);
     }
 
     @GetMapping("transaction_hash")
     @Operation(summary = "Get Utxos by Transaction Hash", description = "Get all UTxOs produced by the transaction.")
     public UtxoDto getUtxosByTransactionHash(String txnHash) {
-        return utxoService.getUtxoByTransactionHash(txnHash);
+        return cip139UtxoService.getUtxoByTransactionHash(txnHash);
     }
 
     @GetMapping("address")
     @Operation(summary = "Get Utxos by Address", description = "Get all the utxos given a address.")
     public UtxoDto getUtxosByAddress(@RequestParam(name = "address") String address) {
-        return utxoService.getUtxoByAddress(address);
+        return cip139UtxoService.getUtxoByAddress(address);
     }
 
     @GetMapping("payment_credential")
     @Operation(summary = "Get Utxos for a Payment Credential", description = "Get all UTxOs present at the addresses which use the payment credential.")
     public UtxoDto getUtxosByPaymentCredential(@RequestParam(name = "tag", defaultValue = "pubkey_hash") String tag, @RequestParam(name = "value") String paymentCredential ) {
-        return utxoService.getUtxoByPaymentCredential(paymentCredential);
+        return cip139UtxoService.getUtxoByPaymentCredential(paymentCredential);
     }
 
     @GetMapping("stake_credential")
     @Operation(summary = "Get Utxos for a Stake Credential", description = "Get all UTxOs present at the addresses which use the stake credential.")
     public UtxoDto getUtxosByStakeCredential(@RequestParam(name = "reward_address") String rewardAddress) {
-        return utxoService.getUtxoByStakeCredential(rewardAddress);
+        return cip139UtxoService.getUtxoByStakeCredential(rewardAddress);
     }
 
 }

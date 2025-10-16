@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class ProtocolParametersService {
+public class Cip139ProtocolParametersService {
 
     private final EpochParamStorage epochParamStorage;
 

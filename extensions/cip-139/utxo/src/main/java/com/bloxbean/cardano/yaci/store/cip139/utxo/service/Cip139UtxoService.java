@@ -16,11 +16,11 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class UtxoService {
+public class Cip139UtxoService {
 
     private static final int RECORDS_PER_PAGE_COUNT = 100;
-    private TransactionStorageReader transactionStorageReader;
-    private UtxoStorageReader utxoStorageReader;
+    private final TransactionStorageReader transactionStorageReader;
+    private final UtxoStorageReader utxoStorageReader;
 
     public UtxoDto getUtxoByTransactionHash(String txHash){
         Optional<Txn> txnOptional = transactionStorageReader.getTransactionByTxHash(txHash);
