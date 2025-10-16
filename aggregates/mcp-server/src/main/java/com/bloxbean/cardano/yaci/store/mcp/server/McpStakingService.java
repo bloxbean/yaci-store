@@ -40,9 +40,16 @@ public class McpStakingService {
     }
 
     @Tool(name = "pool-details",
-            description = "Get detailed information for a specific stake pool at a given epoch. Pool ID can be in bech32 (pool1...) or hex format. Returns pool parameters, metadata, relays, owners, and rewards address.")
-    public PoolDetails getPoolDetails(String poolId, int epoch) {
-        return poolService.getPoolDetails(poolId, epoch)
-                .orElseThrow(() -> new RuntimeException("Pool details not found for poolId: " + poolId + " at epoch: " + epoch));
+            description = "Get detailed information for a specific stake pool at a given epoch. " +
+                         "Pool ID can be in bech32 (pool1...) or hex format. " +
+                         "If epoch is null, uses the latest available epoch. " +
+                         "Returns pool parameters, metadata, relays, owners, and rewards address.")
+    public PoolDetails getPoolDetails(String poolId, Integer epoch) {
+        // Use a recent epoch if null - pool details don't change frequently
+        int effectiveEpoch = (epoch != null) ? epoch : Integer.MAX_VALUE;
+
+        return poolService.getPoolDetails(poolId, effectiveEpoch)
+                .orElseThrow(() -> new RuntimeException("Pool details not found for poolId: " + poolId +
+                    (epoch != null ? " at epoch: " + epoch : " (latest epoch)")));
     }
 }

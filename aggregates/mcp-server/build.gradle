@@ -22,6 +22,7 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc:1.0.3'
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 
     testImplementation project(':starters:spring-boot-starter')
 }
