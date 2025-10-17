@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.mcp.server;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.metadata.MetadataBuilder;
 import com.bloxbean.cardano.client.metadata.cbor.CBORMetadata;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
@@ -155,6 +157,58 @@ public class McpCardanoUtilService {
             log.warn("Failed to convert datum CBOR to JSON", e);
             return ConversionResult.failure(cborHex, "datum",
                 "Conversion failed: " + e.getMessage());
+        }
+    }
+
+    @Tool(name = "extract-stake-address",
+          description = "Extract the stake address from a Cardano address (bech32 format). " +
+                       "Supports different address types: " +
+                       "- Base address (addr1...): Returns the associated stake address (stake1...) " +
+                       "- Stake address (stake1...): Returns the same stake address " +
+                       "- Enterprise address (addr1...): Returns null (no stake component) " +
+                       "- Pointer address: Returns null (uses on-chain pointer, not embedded stake) " +
+                       "Useful for finding which stake address is associated with a payment address, " +
+                       "or for querying stake-related data (delegation, rewards) for an address.")
+    public String extractStakeAddress(
+        @ToolParam(description = "Cardano address in bech32 format (addr1... or stake1...)") String address
+    ) {
+        log.debug("Extracting stake address from: {}", address);
+
+        if (address == null || address.trim().isEmpty()) {
+            log.warn("Input address is null or empty");
+            return null;
+        }
+
+        try {
+            // Parse the address
+            Address addr = new Address(address);
+
+            // If it's already a stake address, return it
+            if (address.startsWith("stake")) {
+                log.debug("Input is already a stake address: {}", address);
+                return address;
+            }
+
+            // Try to get the delegation credential (stake part) from the address
+            var delegationCredential = addr.getDelegationCredential();
+
+            if (delegationCredential.isEmpty()) {
+                log.debug("Address has no stake component (enterprise or pointer address): {}", address);
+                return null;
+            }
+
+            // Create stake address from the delegation credential
+            String stakeAddress = AddressProvider.getRewardAddress(
+                delegationCredential.get(),
+                addr.getNetwork()
+            ).toBech32();
+
+            log.debug("Extracted stake address: {} from base address: {}", stakeAddress, address);
+            return stakeAddress;
+
+        } catch (Exception e) {
+            log.warn("Failed to extract stake address from: {}", address, e);
+            return null;
         }
     }
 }
