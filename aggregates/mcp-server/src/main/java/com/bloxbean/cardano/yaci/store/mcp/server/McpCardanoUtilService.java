@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.mcp.server;
 
 import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.metadata.MetadataBuilder;
 import com.bloxbean.cardano.client.metadata.cbor.CBORMetadata;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
@@ -208,6 +210,46 @@ public class McpCardanoUtilService {
 
         } catch (Exception e) {
             log.warn("Failed to extract stake address from: {}", address, e);
+            return null;
+        }
+    }
+
+    @Tool(name = "script-hash-to-address",
+          description = "Convert a script hash to a Cardano enterprise address (bech32 format). " +
+                       "Enterprise addresses contain only the payment credential (no staking component). " +
+                       "IMPORTANT: Requires network specification - mainnet vs testnet addresses have different prefixes. " +
+                       "Returns: " +
+                       "- Mainnet: addr1... " +
+                       "- Testnet (preprod/preview): addr_test1... " +
+                       "Perfect for: " +
+                       "- Converting script hashes from script-usage-stats to queryable addresses " +
+                       "- Finding UTXOs locked at a script address " +
+                       "- Querying contract TVL using the address " +
+                       "- Linking script analytics to on-chain data")
+    public String scriptHashToAddress(
+        @ToolParam(description = "Script hash in hex format (from script-usage-stats or other tools)")
+        String scriptHash,
+
+        @ToolParam(description = "Network flag: true for mainnet, false for testnet (preprod/preview)")
+        boolean isMainnet
+    ) {
+        log.debug("Converting script hash to address: {}, isMainnet={}", scriptHash, isMainnet);
+
+        if (scriptHash == null || scriptHash.trim().isEmpty()) {
+            log.warn("Input script hash is null or empty");
+            return null;
+        }
+
+        try {
+            var credential = Credential.fromScript(scriptHash);
+            String address = AddressProvider.getEntAddress(credential, isMainnet? Networks.mainnet(): Networks.testnet())
+                            .toBech32();
+
+            log.warn("script-hash-to-address not yet implemented - awaiting user implementation");
+            return address;
+
+        } catch (Exception e) {
+            log.error("Failed to convert script hash to address: {}", scriptHash, e);
             return null;
         }
     }
