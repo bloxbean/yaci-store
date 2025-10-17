@@ -13,14 +13,88 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
 /**
- * MCP utility service for Cardano data conversions.
- * Provides tools to convert CBOR to JSON for metadata and datums.
+ * MCP utility service for Cardano data conversions and unit conventions.
+ * Provides tools to convert CBOR to JSON for metadata and datums, and explains Cardano amount units.
  * Essential for developers debugging and analyzing on-chain data.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class McpCardanoUtilService {
+
+    @Tool(name = "cardano-amount-units-info",
+          description = "⚠️ IMPORTANT: Read this FIRST when working with Cardano monetary amounts! " +
+                       "Explains the unit conventions (lovelace vs ADA) used across ALL Yaci Store MCP tools. " +
+                       "This is CRITICAL for correctly interpreting and presenting monetary values to users. " +
+                       "ALWAYS call this tool before presenting any balance, fee, stake, or reward amounts.")
+    public String getAmountUnitsInfo() {
+        return """
+            ════════════════════════════════════════════════════════════════
+            CARDANO AMOUNT UNITS - READ THIS FIRST!
+            ════════════════════════════════════════════════════════════════
+
+            ALL MONETARY AMOUNTS IN YACI STORE ARE IN LOVELACE (NOT ADA!)
+
+            1 ADA = 1,000,000 lovelace
+
+            ════════════════════════════════════════════════════════════════
+            WHAT IS LOVELACE?
+            ════════════════════════════════════════════════════════════════
+            Lovelace is the smallest unit of ADA (like satoshis for Bitcoin).
+            All blockchain amounts are stored in lovelace for precision.
+
+            ════════════════════════════════════════════════════════════════
+            AFFECTED FIELDS (ALL IN LOVELACE):
+            ════════════════════════════════════════════════════════════════
+            - balance, amount, value
+            - fee, total_fees
+            - deposit, total_deposit
+            - stake, total_stake, delegated_stake
+            - reward, total_rewards
+            - voting_power, drep_voting_power, spo_stake
+            - treasury amounts, withdrawal amounts
+
+            ════════════════════════════════════════════════════════════════
+            CONVERSION FORMULAS:
+            ════════════════════════════════════════════════════════════════
+            Lovelace → ADA: divide by 1,000,000
+            ADA → Lovelace: multiply by 1,000,000
+
+            Examples:
+            - 5000000 lovelace = 5 ADA
+            - 1500000000 lovelace = 1,500 ADA
+            - 250000 lovelace = 0.25 ADA
+
+            ════════════════════════════════════════════════════════════════
+            IMPORTANT EXCEPTIONS:
+            ════════════════════════════════════════════════════════════════
+            - Native tokens/assets: Use their own decimals (check metadata)
+            - NFTs: Usually 0 decimals (quantity = actual count)
+            - Token amounts: NOT in lovelace (only ADA is in lovelace)
+
+            ════════════════════════════════════════════════════════════════
+            GOLDEN RULE:
+            ════════════════════════════════════════════════════════════════
+            When presenting ANY amount to users:
+            1. Check if it's ADA (lovelace) or a native token
+            2. If ADA: ALWAYS convert lovelace to ADA (÷ 1,000,000)
+            3. If token: Check token metadata for decimals
+            4. Display with clear unit label (e.g., "5.0 ADA" not "5000000")
+
+            ════════════════════════════════════════════════════════════════
+            """;
+    }
+
+    @Tool(name = "convert-lovelace-to-ada",
+          description = "Convert lovelace amount to ADA with proper decimal formatting. " +
+                       "Use this whenever you need to present lovelace amounts to users. " +
+                       "Returns formatted string with ADA unit label.")
+    public String convertLovelaceToAda(
+        @ToolParam(description = "Amount in lovelace") long lovelace
+    ) {
+        double ada = lovelace / 1_000_000.0;
+        return String.format("%.6f ADA (%,d lovelace)", ada, lovelace);
+    }
 
     @Tool(name = "convert-metadata-cbor-to-json",
           description = "Convert transaction metadata CBOR hex to readable JSON format. " +

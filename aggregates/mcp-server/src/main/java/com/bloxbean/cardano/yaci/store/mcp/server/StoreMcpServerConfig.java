@@ -31,7 +31,7 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpStakingService mcpStakingService,
             @Autowired(required = false) McpAccountService mcpAccountService,
             @Autowired(required = false) McpAdaPotService mcpAdaPotService,
-            @Autowired(required = false) McpGovernanceAggrService mcpGovernanceAggrService,
+            @Autowired(required = false) McpGovernanceService mcpGovernanceAggrService,
             @Autowired(required = false) McpMetadataService mcpMetadataService,
             @Autowired(required = false) McpDatumService mcpDatumService,
             @Autowired(required = false) McpCardanoUtilService mcpCardanoUtilService,
@@ -42,6 +42,7 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpBlockAggregationService blockAggregationService,
             @Autowired(required = false) McpAssetAggregationService assetAggregationService,
             @Autowired(required = false) McpPoolAggregationService poolAggregationService,
+            @Autowired(required = false) McpGovernanceAggregationService governanceAggregationService,
             @Autowired(required = false) SchemaDiscoveryService schemaDiscoveryService,
             @Autowired(required = false)DynamicAggregationService dynamicAggregationService
             ) {
@@ -77,6 +78,7 @@ public class StoreMcpServerConfig {
         if (blockAggregationService != null) toolObjects.add(blockAggregationService);
         if (assetAggregationService != null) toolObjects.add(assetAggregationService);
         if (poolAggregationService != null) toolObjects.add(poolAggregationService);
+        if (governanceAggregationService != null) toolObjects.add(governanceAggregationService);
 
         if (schemaDiscoveryService != null) toolObjects.add(schemaDiscoveryService);
         if (dynamicAggregationService != null) toolObjects.add(dynamicAggregationService);
