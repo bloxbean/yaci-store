@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.submit.SubmitLifecycleProperties;
 import com.bloxbean.cardano.yaci.store.submit.SubmitStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatusUpdateRequest;
@@ -13,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.submit.storage.impl.model.SubmittedTransa
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.SubmittedTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -48,12 +48,7 @@ public class TxLifecycleProcessor {
     private final TxLifecycleService lifecycleService;
     private final SubmittedTransactionRepository repository;
     private final CursorService cursorService;
-    
-    @Value("${store.submit.lifecycle.success-block-depth:15}")
-    private int successBlockDepth;
-    
-    @Value("${store.submit.lifecycle.finalized-block-depth:2160}")
-    private int finalizedBlockDepth;
+    private final SubmitLifecycleProperties properties;
     
     // ========================================================================
     // EVENT LISTENERS
@@ -138,7 +133,7 @@ public class TxLifecycleProcessor {
         }
         
         // Find CONFIRMED transactions where confirmed_block_number <= currentBlock - successBlockDepth
-        Long maxBlockNumber = currentBlock - successBlockDepth;
+        Long maxBlockNumber = currentBlock - properties.getSuccessBlockDepth();
         
         List<SubmittedTransactionEntity> eligibleTxs = 
                 repository.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.CONFIRMED, maxBlockNumber);
@@ -175,7 +170,7 @@ public class TxLifecycleProcessor {
         }
         
         // Find SUCCESS transactions where confirmed_block_number <= currentBlock - finalizedBlockDepth
-        Long maxBlockNumber = currentBlock - finalizedBlockDepth;
+        Long maxBlockNumber = currentBlock - properties.getFinalizedBlockDepth();
         
         List<SubmittedTransactionEntity> eligibleTxs = 
                 repository.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.SUCCESS, maxBlockNumber);

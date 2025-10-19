@@ -28,7 +28,7 @@ import java.sql.Timestamp;
         prefix = "store.submit.lifecycle.eventlog",
         name = "enabled",
         havingValue = "true",
-        matchIfMissing = true  // Enabled by default - critical for audit
+        matchIfMissing = true
 )
 @RequiredArgsConstructor
 @Slf4j

@@ -19,24 +19,6 @@ import java.util.concurrent.Executor;
 @EnableAsync
 @Slf4j
 public class TxNotificationConfiguration {
-    
-    /**
-     * RestTemplate for webhook notifications.
-     * Only created if webhook is enabled.
-     */
-    @Bean
-    @ConditionalOnProperty(
-            prefix = "store.submit.lifecycle.webhook",
-            name = "enabled",
-            havingValue = "true"
-    )
-    public RestTemplate webhookRestTemplate(RestTemplateBuilder builder) {
-        return builder
-                .setConnectTimeout(Duration.ofMillis(5000))
-                .setReadTimeout(Duration.ofMillis(10000))
-                .build();
-    }
-    
     /**
      * Async executor for notification channels.
      * Ensures notifications don't block the main transaction flow.
