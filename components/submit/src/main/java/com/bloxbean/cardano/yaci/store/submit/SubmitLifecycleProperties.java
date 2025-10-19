@@ -43,9 +43,19 @@ public class SubmitLifecycleProperties {
     private long finalizedCheckIntervalMs = 3600000;
     
     /**
-     * WebSocket configuration.
+     * WebSocket notification configuration.
      */
     private WebSocketConfig websocket = new WebSocketConfig();
+    
+    /**
+     * Webhook notification configuration.
+     */
+    private WebhookConfig webhook = new WebhookConfig();
+    
+    /**
+     * Event log (audit trail) configuration.
+     */
+    private EventLogConfig eventlog = new EventLogConfig();
     
     @Data
     public static class WebSocketConfig {
@@ -61,5 +71,48 @@ public class SubmitLifecycleProperties {
          */
         private String endpoint = "/ws/tx-lifecycle";
     }
+    
+    @Data
+    public static class WebhookConfig {
+        /**
+         * Enable webhook notifications for status updates.
+         * Default: false
+         */
+        private boolean enabled = false;
+        
+        /**
+         * Webhook URL to send transaction status updates.
+         * Example: https://your-app.com/api/webhooks/tx-lifecycle
+         */
+        private String url;
+        
+        /**
+         * Optional webhook secret for authentication (Bearer token).
+         * If configured, will be sent as "Authorization: Bearer {secret}" header.
+         */
+        private String secret;
+        
+        /**
+         * HTTP request timeout in milliseconds.
+         * Default: 5000 ms (5 seconds)
+         */
+        private int timeoutMs = 5000;
+    }
+    
+    @Data
+    public static class EventLogConfig {
+        /**
+         * Enable event log (audit trail) for transaction status updates.
+         * Default: true (recommended for audit trail and debugging)
+         */
+        private boolean enabled = true;
+        
+        /**
+         * Retention period for event logs in days.
+         * Events older than this will be automatically deleted.
+         * Default: 90 days
+         * Set to 0 to disable auto-cleanup.
+         */
+        private int retentionDays = 90;
+    }
 }
-

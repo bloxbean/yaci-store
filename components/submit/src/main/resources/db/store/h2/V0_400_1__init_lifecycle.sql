@@ -20,7 +20,7 @@ create table submitted_transaction
     finalized_at            timestamp,
     
     -- Error tracking
-    error_message           text,
+    error_message           clob,
     
     update_datetime         timestamp default current_timestamp
 );
@@ -28,18 +28,3 @@ create table submitted_transaction
 -- Indexes for performance
 CREATE INDEX idx_submitted_tx_status 
     ON submitted_transaction(status);
-    
-CREATE INDEX idx_submitted_tx_submitted_at 
-    ON submitted_transaction(submitted_at);
-    
-CREATE INDEX idx_submitted_tx_confirmed_slot 
-    ON submitted_transaction(confirmed_slot);
-    
-CREATE INDEX idx_submitted_tx_confirmed_block 
-    ON submitted_transaction(confirmed_block_number);
-
--- Index for efficient FINALIZED transition query
-CREATE INDEX idx_submitted_tx_success_eligible 
-    ON submitted_transaction(status, confirmed_block_number) 
-    WHERE status = 'SUCCESS';
-

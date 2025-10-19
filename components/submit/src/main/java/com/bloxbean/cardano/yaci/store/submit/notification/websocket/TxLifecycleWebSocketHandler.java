@@ -1,5 +1,6 @@
-package com.bloxbean.cardano.yaci.store.submit.websocket;
+package com.bloxbean.cardano.yaci.store.submit.notification.websocket;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +66,10 @@ public class TxLifecycleWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         try {
-            Map<String, Object> payload = objectMapper.readValue(message.getPayload(), Map.class);
+            Map<String, Object> payload = objectMapper.readValue(
+                    message.getPayload(), 
+                    new TypeReference<Map<String, Object>>() {}
+            );
             String action = (String) payload.get("action");
             
             if ("subscribe".equals(action)) {

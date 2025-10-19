@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.websocket;
+package com.bloxbean.cardano.yaci.store.submit.notification.websocket;
 
 import com.bloxbean.cardano.yaci.store.submit.SubmitLifecycleProperties;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class TxLifecycleWebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         String endpoint = properties.getWebsocket().getEndpoint();
         registry.addHandler(webSocketHandler, endpoint)
-                .setAllowedOrigins("*");  // Configure based on security requirements
+                .setAllowedOrigins("*");
     }
 }
 

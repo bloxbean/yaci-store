@@ -21,4 +21,20 @@ store:
       websocket:
         enabled: false
         endpoint: /ws/tx-lifecycle
+      
+      # Webhook notifications (OPTIONAL)
+      webhook:
+        enabled: false
+        # Webhook endpoint URL to receive transaction status updates
+        url: https://your-app.com/api/webhooks/tx-lifecycle
+        # Optional: Bearer token for webhook authentication
+        secret: your-webhook-secret
+        # HTTP request timeout in milliseconds
+        timeout-ms: 5000
+      
+      # Event Log (Audit Trail) - RECOMMENDED
+      eventlog:
+        enabled: true  # Default: true - important for audit trail
+        # Optional: Auto-cleanup old events (in days, 0 = disabled)
+        retention-days: 90
 

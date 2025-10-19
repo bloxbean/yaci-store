@@ -1,18 +1,18 @@
-package com.bloxbean.cardano.yaci.store.submit.websocket;
+package com.bloxbean.cardano.yaci.store.submit.notification;
 
 import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.websocket.TxLifecycleWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Event listener that broadcasts transaction status updates to WebSocket clients.
- * Only enabled when WebSocket is configured.
+ * WebSocket notification channel implementation.
+ * Broadcasts transaction status updates to connected WebSocket clients.
  */
 @Component
 @ConditionalOnProperty(
@@ -23,15 +23,28 @@ import java.util.Map;
 )
 @RequiredArgsConstructor
 @Slf4j
-public class TxStatusUpdateEventListener {
+public class WebSocketNotificationChannel implements TxNotificationChannel {
     
     private final TxLifecycleWebSocketHandler webSocketHandler;
     
-    @EventListener
-    public void handleStatusUpdateEvent(TxStatusUpdateEvent event) {
+    @Override
+    public void notify(TxStatusUpdateEvent event) {
         log.debug("Broadcasting status update via WebSocket: txHash={}, status={}", 
                 event.getTxHash(), event.getNewStatus());
         
+        Map<String, Object> payload = buildPayload(event);
+        webSocketHandler.broadcastStatusUpdate(event.getTxHash(), payload);
+    }
+    
+    @Override
+    public String getChannelName() {
+        return "WebSocket";
+    }
+    
+    /**
+     * Build WebSocket payload from event.
+     */
+    private Map<String, Object> buildPayload(TxStatusUpdateEvent event) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("previousStatus", event.getPreviousStatus());
         payload.put("newStatus", event.getNewStatus());
@@ -48,7 +61,7 @@ public class TxStatusUpdateEventListener {
             payload.put("errorMessage", event.getTransaction().getErrorMessage());
         }
         
-        webSocketHandler.broadcastStatusUpdate(event.getTxHash(), payload);
+        return payload;
     }
 }
 
