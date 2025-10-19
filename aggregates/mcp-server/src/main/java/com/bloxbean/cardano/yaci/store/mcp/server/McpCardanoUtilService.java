@@ -9,6 +9,11 @@ import com.bloxbean.cardano.client.metadata.cbor.CBORMetadata;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.plutus.spec.serializers.PlutusDataJsonConverter;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.CardanoNetworkInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.ConversionResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +30,33 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 @Slf4j
 public class McpCardanoUtilService {
+    private final GenesisConfig genesisConfig;
+    private final StoreProperties storeProperties;
+
+    @Tool(name = "cardano-network-info",
+          description = "⚠️ CRITICAL: Read this FIRST when calculating slot ranges or time periods! " +
+                       "Provides network genesis configuration including slot duration and epoch length. " +
+                       "ESSENTIAL for correctly converting time ranges to slot numbers. " +
+                       "ALWAYS call this tool before querying data by slot ranges (e.g., 'last 24 hours'). " +
+                       "Prevents slot calculation errors that cause incorrect time range queries.")
+    public CardanoNetworkInfo getCardanoNetworkInfo() {
+        long protocolMagic = storeProperties.getProtocolMagic();
+        NetworkType networkType = NetworkType.fromProtocolMagic(protocolMagic);
+
+        double shelleySlotLength = genesisConfig.slotDuration(Era.Shelley);
+        long byronSlotLength = (long) genesisConfig.slotDuration(Era.Byron);
+        long epochLength = genesisConfig.getEpochLength();
+        long startTime = genesisConfig.getStartTime(protocolMagic);
+
+        return CardanoNetworkInfo.create(
+            networkType.name(),
+            protocolMagic,
+            shelleySlotLength,
+            byronSlotLength,
+            epochLength,
+            startTime
+        );
+    }
 
     @Tool(name = "cardano-amount-units-info",
           description = "⚠️ IMPORTANT: Read this FIRST when working with Cardano monetary amounts! " +

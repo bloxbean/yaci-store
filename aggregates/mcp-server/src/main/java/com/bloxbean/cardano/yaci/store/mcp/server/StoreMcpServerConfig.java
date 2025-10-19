@@ -45,6 +45,7 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpGovernanceAggregationService governanceAggregationService,
             @Autowired(required = false) McpContractAggregationService contractAggregationService,
             @Autowired(required = false) McpAddressAggregationService addressAggregationService,
+            @Autowired(required = false) McpTokenAnalyticsService tokenAnalyticsService,
             @Autowired(required = false) SchemaDiscoveryService schemaDiscoveryService,
             @Autowired(required = false)DynamicAggregationService dynamicAggregationService
             ) {
@@ -83,6 +84,7 @@ public class StoreMcpServerConfig {
         if (governanceAggregationService != null) toolObjects.add(governanceAggregationService);
         if (contractAggregationService != null) toolObjects.add(contractAggregationService);
         if (addressAggregationService != null) toolObjects.add(addressAggregationService);
+        if (tokenAnalyticsService != null) toolObjects.add(tokenAnalyticsService);
 
         if (schemaDiscoveryService != null) toolObjects.add(schemaDiscoveryService);
         if (dynamicAggregationService != null) toolObjects.add(dynamicAggregationService);
