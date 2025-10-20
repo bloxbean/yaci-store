@@ -47,7 +47,8 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpAddressAggregationService addressAggregationService,
             @Autowired(required = false) McpTokenAnalyticsService tokenAnalyticsService,
             @Autowired(required = false) SchemaDiscoveryService schemaDiscoveryService,
-            @Autowired(required = false)DynamicAggregationService dynamicAggregationService
+            @Autowired(required = false)DynamicAggregationService dynamicAggregationService,
+            @Autowired(required = false)McpExternalMetadataService mcpExternalMetadataService
             ) {
         List<Object> toolObjects = new ArrayList<>();
 
@@ -88,6 +89,7 @@ public class StoreMcpServerConfig {
 
         if (schemaDiscoveryService != null) toolObjects.add(schemaDiscoveryService);
         if (dynamicAggregationService != null) toolObjects.add(dynamicAggregationService);
+        if (mcpExternalMetadataService != null) toolObjects.add(mcpExternalMetadataService);
 
         return MethodToolCallbackProvider.builder()
                 .toolObjects(toolObjects.toArray(new Object[0]))
