@@ -45,14 +45,16 @@ import java.util.Map;
 public class McpTokenAnalyticsService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Tool(name = "token-holder-distribution",
-          description = "Analyze token holder distribution with whale detection and concentration metrics. " +
-                        "Returns holder count, top holders list, and Gini coefficient for inequality analysis. " +
-                        "All quantities in whole units (BigInteger) to prevent LLM confusion. " +
-                        "Gini coefficient: 0 = perfect equality, 1 = perfect inequality (>0.5 = high concentration). " +
-                        "Top 10 concentration shows % of supply held by largest holders (whale indicator). " +
-                        "Essential for: whale watching, token fairness analysis, market intelligence. " +
-                        "Only counts currently unspent UTXOs (active holdings).")
+    // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
+    // TODO: Re-enable when alternative strategy is implemented for token holder statistics
+    // @Tool(name = "token-holder-distribution",
+    //       description = "Analyze token holder distribution with whale detection and concentration metrics. " +
+    //                     "Returns holder count, top holders list, and Gini coefficient for inequality analysis. " +
+    //                     "All quantities in whole units (BigInteger) to prevent LLM confusion. " +
+    //                     "Gini coefficient: 0 = perfect equality, 1 = perfect inequality (>0.5 = high concentration). " +
+    //                     "Top 10 concentration shows % of supply held by largest holders (whale indicator). " +
+    //                     "Essential for: whale watching, token fairness analysis, market intelligence. " +
+    //                     "Only counts currently unspent UTXOs (active holdings).")
     public TokenHolderDistribution getTokenHolderDistribution(
         @ToolParam(description = "Asset unit (policyId + assetName in hex)") String assetUnit,
         @ToolParam(description = "Number of top holders to return (default: 10, max: 50)") Integer topN

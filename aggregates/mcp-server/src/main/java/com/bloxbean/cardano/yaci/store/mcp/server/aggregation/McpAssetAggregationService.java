@@ -34,16 +34,20 @@ import java.util.Map;
 public class McpAssetAggregationService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Tool(name = "tokens-with-min-holders",
-          description = "Find tokens that have at least a specified number of unique holders. " +
-                        "Returns list of tokens (policy_id, asset_name) with holder counts. " +
-                        "IMPORTANT: Each token includes 'asset_unit' field. Use the 'get-token-registry-metadata' tool " +
-                        "with this asset_unit to fetch verified token names, tickers, and metadata. " +
-                        "Display as 'TokenName (TICKER)' instead of hex values to help identify legitimate vs unknown tokens. " +
-                        "Useful for discovering popular tokens and NFT collections. " +
-                        "Note: Only returns currently unspent UTXOs (active holdings). " +
-                        "Limit parameter controls how many results to return (default: 20). " +
-                        "Uses pre-aggregated token_holder_summary view for optimal performance.")
+    // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
+    // TODO: Re-enable when alternative strategy is implemented for token holder statistics
+    // @Tool(name = "tokens-with-min-holders",
+    //       description = "Find tokens that have at least a specified number of unique holders. " +
+    //                     "Returns list of tokens (policy_id, asset_name) with holder counts. " +
+    //                     "IMPORTANT Token Name Enrichment: Each token includes 'asset_unit' field. " +
+    //                     "- If result has <10 tokens: Automatically use 'get-token-registry-metadata' for each to display 'TokenName (TICKER)' " +
+    //                     "- If result has 10+ tokens: First show results with hex values. Then ask user if they want human-readable names. " +
+    //                     "  If yes, use 'get-token-registry-metadata-batch' with compact=true for efficient bulk fetching. " +
+    //                     "This prevents context exhaustion on large result sets. " +
+    //                     "Useful for discovering popular tokens and NFT collections. " +
+    //                     "Note: Only returns currently unspent UTXOs (active holdings). " +
+    //                     "Limit parameter controls how many results to return (default: 20). " +
+    //                     "Uses pre-aggregated token_holder_summary view for optimal performance.")
     public List<TokenHolderStats> getTokensWithMinHolders(
         @ToolParam(description = "Minimum number of unique holders required") int minHolders,
         @ToolParam(description = "Maximum number of results to return (default: 20)") Integer limit
@@ -79,14 +83,16 @@ public class McpAssetAggregationService {
         );
     }
 
-    @Tool(name = "token-holder-stats",
-          description = "Get detailed holder statistics for a specific token by asset unit. " +
-                        "Returns holder count, total supply, and UTXO distribution. " +
-                        "Asset unit format: policyId + assetName (hex). " +
-                        "IMPORTANT: Use the 'get-token-registry-metadata' tool with the returned 'asset_unit' to fetch " +
-                        "verified token names, tickers, and decimals. Present holder stats as 'X holders of TokenName (TICKER) with Y.YYY total supply'. " +
-                        "Only counts currently unspent UTXOs (active holdings). " +
-                        "Uses pre-aggregated token_holder_summary view for optimal performance.")
+    // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
+    // TODO: Re-enable when alternative strategy is implemented for token holder statistics
+    // @Tool(name = "token-holder-stats",
+    //       description = "Get detailed holder statistics for a specific token by asset unit. " +
+    //                     "Returns holder count, total supply, and UTXO distribution. " +
+    //                     "Asset unit format: policyId + assetName (hex). " +
+    //                     "IMPORTANT: Use the 'get-token-registry-metadata' tool with the returned 'asset_unit' to fetch " +
+    //                     "verified token names, tickers, and decimals. Present holder stats as 'X holders of TokenName (TICKER) with Y.YYY total supply'. " +
+    //                     "Only counts currently unspent UTXOs (active holdings). " +
+    //                     "Uses pre-aggregated token_holder_summary view for optimal performance.")
     public TokenHolderStats getTokenHolderStats(
         @ToolParam(description = "Asset unit (policyId + assetName in hex)") String assetUnit
     ) {
@@ -123,15 +129,19 @@ public class McpAssetAggregationService {
         return results.get(0);
     }
 
-    @Tool(name = "token-holder-stats-by-policy",
-          description = "Get holder statistics for all tokens under a specific policy ID. " +
-                        "Returns list of all assets in the policy with their holder counts. " +
-                        "IMPORTANT: Each asset includes 'asset_unit' field. Use 'get-token-registry-metadata' tool " +
-                        "for each asset_unit to fetch human-readable names and metadata. " +
-                        "For NFT collections, this helps present items as 'Collection Item #1', 'Collection Item #2', etc. instead of hex values. " +
-                        "Useful for analyzing NFT collections or multi-asset policies. " +
-                        "Only counts currently unspent UTXOs (active holdings). " +
-                        "Uses pre-aggregated token_holder_summary view for optimal performance.")
+    // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
+    // TODO: Re-enable when alternative strategy is implemented for token holder statistics
+    // @Tool(name = "token-holder-stats-by-policy",
+    //       description = "Get holder statistics for all tokens under a specific policy ID. " +
+    //                     "Returns list of all assets in the policy with their holder counts. " +
+    //                     "IMPORTANT Token Name Enrichment: Each asset includes 'asset_unit' field. " +
+    //                     "- If result has <10 tokens: Automatically use 'get-token-registry-metadata' for each to display names " +
+    //                     "- If result has 10+ tokens: Show hex values first, then ask user if they want names. " +
+    //                     "  If yes, use 'get-token-registry-metadata-batch' with compact=true for efficient bulk fetching. " +
+    //                     "For NFT collections, this helps present items as 'Collection Item #1', 'Collection Item #2', etc. " +
+    //                     "Useful for analyzing NFT collections or multi-asset policies. " +
+    //                     "Only counts currently unspent UTXOs (active holdings). " +
+    //                     "Uses pre-aggregated token_holder_summary view for optimal performance.")
     public List<TokenHolderStats> getTokenHolderStatsByPolicy(
         @ToolParam(description = "Policy ID (hex)") String policyId
     ) {
@@ -166,8 +176,10 @@ public class McpAssetAggregationService {
     @Tool(name = "find-tokens-by-policy-history",
           description = "Find all tokens minted under a specific policy ID from the assets table. " +
                         "Returns complete mint/burn history including tokens with zero current supply. " +
-                        "IMPORTANT: Each token includes 'unit' field. Use 'get-token-registry-metadata' tool " +
-                        "with this unit value to fetch verified token names and metadata. " +
+                        "IMPORTANT Token Name Enrichment: Each token includes 'unit' field. " +
+                        "- If result has <10 tokens: Automatically use 'get-token-registry-metadata' to display names " +
+                        "- If result has 10+ tokens: Show hex values first, then ask user if they want names. " +
+                        "  If yes, use 'get-token-registry-metadata-batch' with compact=true for efficient bulk fetching. " +
                         "This is especially useful for finding burned/delisted tokens that may still have registry entries. " +
                         "Useful for: discovering all tokens in a policy, analyzing mint/burn patterns, finding burned/delisted tokens. " +
                         "Aggregates by policy and asset_name, showing net quantity (mints - burns).")
@@ -218,9 +230,10 @@ public class McpAssetAggregationService {
     @Tool(name = "find-recent-token-mints",
           description = "Find recently minted tokens across all policies. " +
                         "Returns tokens that had mint transactions within the specified slot range. " +
-                        "IMPORTANT: For each newly minted token, use 'get-token-registry-metadata' tool with the 'unit' field " +
-                        "to fetch verified token names, tickers, and descriptions. " +
-                        "Present new tokens with their verified names: 'Recently minted: TokenName (TICKER) - Description'. " +
+                        "IMPORTANT Token Name Enrichment: For each newly minted token, the 'unit' field is provided. " +
+                        "- If result has <10 tokens: Automatically use 'get-token-registry-metadata' to display verified names: 'Recently minted: TokenName (TICKER)' " +
+                        "- If result has 10+ tokens: Show hex values first, then ask user if they want names. " +
+                        "  If yes, use 'get-token-registry-metadata-batch' with compact=true for efficient bulk fetching. " +
                         "This helps users discover legitimate new token launches vs spam/scam tokens. " +
                         "Useful for: discovering new token launches, monitoring minting activity, tracking new NFT collections. " +
                         "Results grouped by policy and asset, showing aggregated mint data.")
