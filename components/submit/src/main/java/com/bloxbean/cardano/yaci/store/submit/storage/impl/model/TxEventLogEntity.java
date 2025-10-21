@@ -18,7 +18,7 @@ import java.sql.Timestamp;
 @Entity
 @Table(name = "tx_event_log")
 @EqualsAndHashCode(callSuper = false)
-public class TxEventLogEntity extends BaseEntity {
+public class TxEventLogEntity {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

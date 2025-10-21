@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.submit.SubmitLifecycleProperties;
 import com.bloxbean.cardano.yaci.store.submit.SubmitStoreConfiguration;
+import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatusUpdateRequest;
 import com.bloxbean.cardano.yaci.store.submit.service.TxLifecycleService;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Unified processor for transaction lifecycle management.
@@ -46,7 +48,6 @@ import java.util.Optional;
 public class TxLifecycleProcessor {
     
     private final TxLifecycleService lifecycleService;
-    private final SubmittedTransactionRepository repository;
     private final CursorService cursorService;
     private final SubmitLifecycleProperties properties;
     
@@ -72,8 +73,16 @@ public class TxLifecycleProcessor {
             log.warn("TransactionEvent missing slot or block number, skipping confirmation");
             return;
         }
+
+        Set<String> existingSubmittedTxs = lifecycleService.findExistingTxs(
+                event.getTransactions().stream()
+                        .map(tx -> tx.getBody().getTxHash())
+                        .toList()
+        );
         
-        event.getTransactions().forEach(transaction -> {
+        event.getTransactions()
+                .stream().filter(transaction -> existingSubmittedTxs.contains(transaction.getBody().getTxHash()))
+                .forEach(transaction -> {
             String txHash = transaction.getBody().getTxHash();
             
             // Try to mark as confirmed
@@ -97,13 +106,13 @@ public class TxLifecycleProcessor {
         log.info("Processing rollback for submitted transactions, rollback to slot: {}", rollbackSlot);
         
         // Find all transactions confirmed after the rollback slot
-        List<SubmittedTransactionEntity> affectedTxs = repository.findByConfirmedSlotGreaterThan(rollbackSlot);
-        
+        Set<String> affectedTxs = lifecycleService.findTxConfirmedAfterSlot(rollbackSlot);
+
         log.info("Found {} submitted transactions to rollback", affectedTxs.size());
         
-        affectedTxs.forEach(tx -> {
+        affectedTxs.forEach(txHash -> {
             String reason = String.format("Chain reorganization: rollback to slot %d", rollbackSlot);
-            TxStatusUpdateRequest request = TxStatusUpdateRequest.rolledBack(tx.getTxHash(), reason);
+            TxStatusUpdateRequest request = TxStatusUpdateRequest.rolledBack(txHash, reason);
             lifecycleService.updateStatus(request);
         });
         
@@ -134,16 +143,15 @@ public class TxLifecycleProcessor {
         
         // Find CONFIRMED transactions where confirmed_block_number <= currentBlock - successBlockDepth
         Long maxBlockNumber = currentBlock - properties.getSuccessBlockDepth();
-        
-        List<SubmittedTransactionEntity> eligibleTxs = 
-                repository.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.CONFIRMED, maxBlockNumber);
+        Set<String> eligibleTxs =
+                lifecycleService.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.CONFIRMED, maxBlockNumber);
         
         if (!eligibleTxs.isEmpty()) {
             log.info("Found {} CONFIRMED transactions eligible for SUCCESS state (current block: {}, threshold: {})", 
                     eligibleTxs.size(), currentBlock, maxBlockNumber);
             
-            eligibleTxs.forEach(tx -> {
-                TxStatusUpdateRequest request = TxStatusUpdateRequest.success(tx.getTxHash());
+            eligibleTxs.forEach(txHash -> {
+                TxStatusUpdateRequest request = TxStatusUpdateRequest.success(txHash);
                 lifecycleService.updateStatus(request);
             });
             
@@ -172,15 +180,15 @@ public class TxLifecycleProcessor {
         // Find SUCCESS transactions where confirmed_block_number <= currentBlock - finalizedBlockDepth
         Long maxBlockNumber = currentBlock - properties.getFinalizedBlockDepth();
         
-        List<SubmittedTransactionEntity> eligibleTxs = 
-                repository.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.SUCCESS, maxBlockNumber);
+        Set<String> eligibleTxs =
+                lifecycleService.findByStatusAndConfirmedBlockNumberLessThan(TxStatus.SUCCESS, maxBlockNumber);
         
         if (!eligibleTxs.isEmpty()) {
             log.info("Found {} SUCCESS transactions eligible for FINALIZED state (current block: {}, threshold: {})", 
                     eligibleTxs.size(), currentBlock, maxBlockNumber);
             
-            eligibleTxs.forEach(tx -> {
-                TxStatusUpdateRequest request = TxStatusUpdateRequest.finalized(tx.getTxHash());
+            eligibleTxs.forEach(txHash -> {
+                TxStatusUpdateRequest request = TxStatusUpdateRequest.finalized(txHash);
                 lifecycleService.updateStatus(request);
             });
             

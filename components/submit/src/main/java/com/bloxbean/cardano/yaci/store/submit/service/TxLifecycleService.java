@@ -15,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing transaction lifecycle.
@@ -29,7 +32,30 @@ public class TxLifecycleService {
     private final SubmittedTransactionRepository repository;
     private final ApplicationEventPublisher eventPublisher;
     private final TxSubmitter txSubmitter;
-    
+
+    @Transactional(readOnly = true)
+    public Set<String> findExistingTxs(List<String> txHashes) {
+        return repository.findByTxHashIn(txHashes).stream()
+                .map(SubmittedTransactionEntity::getTxHash)
+                .collect(Collectors.toSet());
+
+    }
+
+    @Transactional(readOnly = true)
+    public Set<String> findTxConfirmedAfterSlot(Long slost) {
+        return repository.findByConfirmedSlotGreaterThan(slost).stream()
+                .map(SubmittedTransactionEntity::getTxHash)
+                .collect(Collectors.toSet());
+    }
+
+    public Set<String> findByStatusAndConfirmedBlockNumberLessThan(
+            TxStatus status,
+            Long maxBlockNumber
+    ) {
+        return repository.findByStatusAndConfirmedBlockNumberLessThan(status, maxBlockNumber).stream()
+                .map(SubmittedTransactionEntity::getTxHash)
+                .collect(Collectors.toSet());
+    }
     /**
      * Create a new submitted transaction record.
      */
@@ -51,7 +77,7 @@ public class TxLifecycleService {
         
         return transaction;
     }
-    
+
     /**
      * Update transaction status with validation.
      * 

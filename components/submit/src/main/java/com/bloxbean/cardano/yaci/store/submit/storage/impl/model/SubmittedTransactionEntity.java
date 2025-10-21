@@ -19,7 +19,7 @@ import java.sql.Timestamp;
 @Entity
 @Table(name = "submitted_transaction")
 @EqualsAndHashCode(callSuper = false)
-public class SubmittedTransactionEntity extends BaseEntity {
+public class SubmittedTransactionEntity {
     
     @Id
     @Column(name = "tx_hash", nullable = false, length = 64)
@@ -53,5 +53,9 @@ public class SubmittedTransactionEntity extends BaseEntity {
     // Error tracking
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    // Update tracking
+    @Column(name = "update_datetime")
+    private Timestamp updateDatetime;
 }
 
