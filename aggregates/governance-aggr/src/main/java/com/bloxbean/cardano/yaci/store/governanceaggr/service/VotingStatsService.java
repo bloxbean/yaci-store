@@ -49,13 +49,31 @@ public class VotingStatsService {
             GovActionType type = proposal.getGovAction().getType();
 
             try {
-                out.put(govActionId, computeForSingleProposal(aggregatedVotingData, type, committeeMembers, isInBootstrapPhase));
+                ProposalVotingStats stats = computeForSingleProposal(aggregatedVotingData, type, committeeMembers, isInBootstrapPhase);
+                // Invariant check: drep_total_no_stake == drep_no_vote_stake + drep_do_not_vote_stake + drep_no_confidence_stake
+                logDRepNoInvariant(govActionId, stats);
+                out.put(govActionId, stats);
             } catch (Exception e) {
                 log.warn("Failed to compute voting stats for {}: {}", govActionId, e.getMessage());
                 out.put(govActionId, zeroStats());
             }
         }
         return out;
+    }
+
+    private void logDRepNoInvariant(GovActionId govActionId, ProposalVotingStats stats) {
+        if (stats == null) return;
+
+        var totalNo = nz(stats.getDrepTotalNoStake());
+        var noVote = nz(stats.getDrepNoVoteStake());
+        var doNotVote = nz(stats.getDrepDoNotVoteStake());
+        var noConfidence = nz(stats.getDrepNoConfidenceStake());
+
+        var sum = noVote.add(doNotVote).add(noConfidence);
+        if (totalNo.compareTo(sum) != 0) {
+            log.warn("Invariant mismatch (DRep total_no) for {}: total_no={}, no_vote={}, do_not_vote={}, no_confidence={}, sum={}",
+                    govActionId, totalNo, noVote, doNotVote, noConfidence, sum);
+        }
     }
 
     private ProposalVotingStats computeForSingleProposal(AggregatedVotingData aggregatedVotingData,
@@ -116,6 +134,7 @@ public class VotingStatsService {
 
         BigInteger spoYesVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getYesVoteStake()) : BigInteger.ZERO;
         BigInteger spoAbstainVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getAbstainVoteStake()) : BigInteger.ZERO;
+        BigInteger spoNoVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getNoVoteStake()) : BigInteger.ZERO;
         BigInteger spoDoNotVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getDoNotVoteStake()) : BigInteger.ZERO;
 
         // Committee stats
@@ -140,7 +159,7 @@ public class VotingStatsService {
                 .spoTotalNoStake(spoTotalNoStake)
                 .spoTotalAbstainStake(spoTotalAbstainStake)
                 .spoYesVoteStake(spoYesVoteStake)
-                .spoNoVoteStake(spoTotalNoStake)
+                .spoNoVoteStake(spoNoVoteStake)
                 .spoAbstainVoteStake(spoAbstainVoteStake)
                 .spoDoNotVoteStake(spoDoNotVoteStake)
                 .drepTotalYesStake(drepTotalYesStake)
