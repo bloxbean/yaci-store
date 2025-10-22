@@ -85,7 +85,7 @@ public class StoreMcpServerConfig {
         if (governanceAggregationService != null) toolObjects.add(governanceAggregationService);
         if (contractAggregationService != null) toolObjects.add(contractAggregationService);
         if (addressAggregationService != null) toolObjects.add(addressAggregationService);
-        if (tokenAnalyticsService != null) toolObjects.add(tokenAnalyticsService);
+        //if (tokenAnalyticsService != null) toolObjects.add(tokenAnalyticsService);
 
         if (schemaDiscoveryService != null) toolObjects.add(schemaDiscoveryService);
         if (dynamicAggregationService != null) toolObjects.add(dynamicAggregationService);
