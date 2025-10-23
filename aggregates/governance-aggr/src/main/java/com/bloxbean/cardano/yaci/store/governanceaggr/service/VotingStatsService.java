@@ -115,6 +115,7 @@ public class VotingStatsService {
         }
 
         BigInteger spoYesVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getYesVoteStake()) : BigInteger.ZERO;
+        BigInteger spoNoVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getNoVoteStake()) : BigInteger.ZERO;
         BigInteger spoAbstainVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getAbstainVoteStake()) : BigInteger.ZERO;
         BigInteger spoDoNotVoteStake = aggregatedVotingData.spoVotes() != null ? nz(aggregatedVotingData.spoVotes().getDoNotVoteStake()) : BigInteger.ZERO;
 
@@ -140,7 +141,7 @@ public class VotingStatsService {
                 .spoTotalNoStake(spoTotalNoStake)
                 .spoTotalAbstainStake(spoTotalAbstainStake)
                 .spoYesVoteStake(spoYesVoteStake)
-                .spoNoVoteStake(spoTotalNoStake)
+                .spoNoVoteStake(spoNoVoteStake)
                 .spoAbstainVoteStake(spoAbstainVoteStake)
                 .spoDoNotVoteStake(spoDoNotVoteStake)
                 .drepTotalYesStake(drepTotalYesStake)
