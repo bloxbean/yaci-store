@@ -1,213 +1,86 @@
-# Governance Rules
+# governance-rules
 
-## Overview
+Purpose-built library for evaluating Cardano Conway (CIP-1694) governance proposals. It determines per-epoch proposal outcomes (RATIFIED/ACTIVE/EXPIRED) and which proposals must be dropped at the epoch boundary, mirroring cardano-ledger semantics at a high level.
 
-This module contains only rules / logic to derive governance ratification results and provide java apis for the caller,
-it is a stateless module and only implements rule logic. Like given a gov action, voting results, decide the result.
+## What & Why
+- What: A lightweight, reusable rules engine that:
+  - Sorts and evaluates active proposals using action priority and delay semantics.
+  - Computes DRep/SPO/Committee tallies against protocol thresholds to ratify or continue/reject proposals.
+  - Propagates proposal drops across purpose-specific dependency chains (siblings/descendants) at epoch boundaries.
+- Why: Provide a clean, library-style API so other services (e.g., yaci-store governance-aggr) can plug in snapshot data and obtain deterministic results consistent with the ledger’s RATIFY rule.
 
-## RatificationResult
+## Quickstart
+```java
+// 1) Build GovernanceEvaluationInput from your snapshot data
+GovernanceEvaluationInput input = GovernanceEvaluationInput.builder()
+    .currentProposals(List.of(
+        ProposalContext.builder()
+            .govAction(govAction)                    // com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction
+            .votingData(votingData)                  // VotingData with DRep/SPO/Committee votes
+            .govActionId(govActionId)
+            .proposalSlot(slot)
+            .maxAllowedVotingEpoch(proposalEpoch + govActionLifetime)
+            .build()
+    ))
+    .currentEpoch(currentEpoch)
+    .protocolParams(protocolParams)                  // Includes DRep/Pool thresholds
+    .committee(committee)                            // Members, threshold, state
+    .isBootstrapPhase(isBootstrap)
+    .treasury(treasury)
+    .lastEnactedGovActionIds(lastEnactedByPurpose)   // Map<ProposalType, GovActionId>
+    .build();
 
-Basically, when evaluating whether a governance action can be ratified or not, there are three possible outcomes.
-These outcomes are represented through the RatificationResult enum.
+// 2) Evaluate
+GovernanceEvaluationService service = new GovernanceEvaluationService();
+GovernanceEvaluationResult result = service.evaluateGovernanceState(input);
 
-The `RatificationResult` enumeration represents the possible outcomes of a ratification process. The possible values are:
+// 3) Consume output
+result.getProposalResults();     // List<ProposalEvaluationResult> (ACCEPT/CONTINUE/REJECT)
+result.getProposalsToDropNext(); // Proposals to drop at the epoch boundary
+result.isActionRatificationDelayed(); // True if a delaying action was ACCEPT in this epoch
+```
 
-- `ACCEPT`: The governance action is accepted.
-- `REJECT`: The governance action is rejected.
-- `CONTINUE`: the governance action is kept for further voting.
+## Concepts and I/O
+- Input
+  - `currentProposals`: List of `ProposalContext` (GovAction, VotingData, GovActionId, slot, maxAllowedVotingEpoch).
+  - Governance state: `currentEpoch`, `ProtocolParams` (thresholds), `ConstitutionCommittee` (members/threshold/state), `isBootstrapPhase`, `treasury`, `lastEnactedGovActionIds`.
+- Output
+  - `proposalResults`: ACCEPT (RATIFIED), CONTINUE (ACTIVE), REJECT (EXPIRED) per proposal.
+  - `proposalsToDropNext`: proposals that must be dropped at the epoch boundary (cascade via siblings/descendants by purpose).
+  - `isActionRatificationDelayed`: true if any delaying action (NoConfidence/UpdateCommittee/NewConstitution/HardFork) was ACCEPT at the epoch boundary.
 
-You can obtain this ratification result through the APIs of the `GovActionRatifier` class.
+## Core API (at-a-glance)
+- `GovernanceEvaluationService`
+  - `evaluateGovernanceState(GovernanceEvaluationInput)` → `GovernanceEvaluationResult`
+  - Sorts proposals by action priority, applies ratification rules per action, and computes drop set.
+- `VoteTallyCalculator`
+  - Helpers to compute DRep/SPO/Committee tallies consistently with ledger rules; reused by evaluators and reporting.
+- `VotingData`
+  - Encapsulates DRep/SPO/Committee votes; different actions consume different subsets.
+- `RatificationEvaluatorFactory`
+  - Dispatches to action-specific evaluators (HardFork/ParameterChange/UpdateCommittee/NewConstitution/NoConfidence/TreasuryWithdrawals/InfoAction).
+- `ProposalDropService`
+  - Computes proposals to drop at the epoch boundary (expired descendants, ratified siblings and their descendants).
 
-## GovActionRatifier API
+## Integration with yaci-store (governance-aggr)
+- governance-aggr builds `AggregatedGovernanceData` (proposals + votes + committee + params + treasury) and maps it to `GovernanceEvaluationInput`.
+- It calls `GovernanceEvaluationService` at epoch boundary to compute proposal status and uses `ProposalDropService` to pre-filter active proposals before evaluation.
+- See:
+  - `.../governanceaggr/processor/ProposalStateProcessor.java`
+  - `.../governanceaggr/storage/impl/mapper/GovernanceEvaluationInputMapper.java`
+  - `.../governanceaggr/service/ProposalCollectionService.java`
 
-The `GovActionRatifier` class provides several public methods that can be used to determine the ratification result for different types of governance actions. Here are the available methods:
+## Guarantees & Compatibility
+- Ledger-aligned behaviors (high level):
+  - Action priority ordering; delaying actions semantics.
+  - DRep/SPO/Committee tallies and thresholds, including bootstrap-phase behavior.
+  - `prevActionAsExpected`, `validCommitteeTerm`, and treasury withdrawal bounds.
+- Limitations / notes:
+  - Lifecycle boundaries depend on `maxAllowedVotingEpoch` supplied by caller; ensure it matches network params.
+  - Provide consistent snapshot inputs (thresholds, stake, votes) for deterministic outcomes.
 
-### getRatificationResult
-
-This method determines the ratification result for a governance action.
-
-Parameters:
-- `govAction`: The governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `ccState`: The current Constitution Committee state.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result.
-
-Note: For `HardForkInitiation` all SPOs that didn't vote are considered as `No` votes. 
-Whereas, for all other `GovAction`s, SPOs that didn't vote are considered as `Abstain` votes.
-
-### getRatificationResultForNoConfidenceAction
-
-This method determines the ratification result for a No Confidence governance action.
-
-Parameters:
-- `noConfidence`: The No Confidence governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the No Confidence action.
-
-### getRatificationResultForUpdateCommitteeAction
-
-This method determines the ratification result for an Update Committee governance action.
-
-Parameters:
-- `updateCommittee`: The Update Committee governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `ccState`: The current Constitution Committee state.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the Update Committee action.
-
-### getRatificationResultForHardForkInitiationAction
-
-This method determines the ratification result for a Hard Fork Initiation governance action.
-
-Parameters:
-- `hardForkInitiationAction`: The Hard Fork Initiation governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the Hard Fork Initiation action.
-
-### getRatificationResultForNewConstitutionAction
-
-This method determines the ratification result for a New Constitution governance action.
-
-Parameters:
-- `newConstitution`: The New Constitution governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the New Constitution action.
-
-### getRatificationResultForTreasuryWithdrawalsAction
-
-This method determines the ratification result for a Treasury Withdrawals governance action.
-
-Parameters:
-- `treasuryWithdrawalsAction`: The Treasury Withdrawals governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the Treasury Withdrawals action.
-
-### getRatificationResultForParameterChangeAction
-
-This method determines the ratification result for a Protocol Parameters Change governance action.
-
-Parameters:
-- `parameterChangeAction`: The Parameter Change governance action for which ratification result is needed.
-- `expiredEpoch`: The epoch in which the governance action will expire
-- `ccYesVote`: The total votes of the Constitution Committee that voted 'Yes': the number of registered, unexpired, unresigned committee members that voted yes.
-- `ccNoVote`: The total votes of the Constitution Committee that voted 'No': the number of registered, unexpired, unresigned committee members that voted no, plus the number of registered, unexpired, unresigned committee members that did not vote for this action.
-- `ccThreshold`: The threshold of the Constitution Committee.
-- `spoYesVoteStake`: The total delegated stake from SPO that voted 'Yes'.
-- `spoAbstainVoteStake`: The total delegated stake from SPO that voted 'Abstain'.
-- `spoTotalStake`: The total delegated stake from SPO.
-- `dRepYesVoteStake`: The total stake of registered dReps that voted 'Yes', plus the AlwaysNoConfidence dRep, in case the action is NoConfidence.
-- `dRepNoVoteStake`: The total stake of registered dReps that voted 'No', plus registered dReps that did not vote for this action, plus the AlwaysNoConfidence dRep.
-- `lastEnactedGovActionId`: The last enacted governance action ID of the same purpose.
-- `isActionRatificationDelayed`: Indicates whether a previously enacted governance action delays the ratification
-  of the current action. Certain governance actions delay
-  the ratification of all other actions until the first epoch after their enactment.These actions are::
-  - **Motion of No-Confidence**
-  - **Election of a New Constitutional Committee**
-  - **Constitutional Change**
-  - **Hard-Fork (Protocol Version Change)**
-- `currentEpochParam`: The current epoch parameters.
-
-Returns:
-- The ratification result for the Parameter Change action.
+## Further Reading
+- Architecture and design (mapping to ledger and action-specific rules): planned docs
+  - ARCHITECTURE.md — rationale, layering, and data flow
+  - LEDGER-MAPPING.md — references to cardano-ledger (Ratify/actionPriority/delayingAction/tally)
+  - RULES.md — action-by-action acceptance criteria and examples
