@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.mcp.server.aggregation;
 
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.ProposalApiService;
+import com.bloxbean.cardano.yaci.store.governance.storage.impl.CommitteeMemberStorageImpl;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.*;
 import com.bloxbean.cardano.yaci.store.mcp.server.util.McpModelConverter;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +27,7 @@ import java.util.Map;
 public class McpGovernanceAggregationService {
     private final ProposalApiService proposalApiService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final CommitteeMemberStorageImpl committeeMemberStorage;
 
     @Tool(name = "votes-by-proposal",
             description = "Get all votes cast on a specific governance proposal. " +
@@ -457,7 +458,9 @@ public class McpGovernanceAggregationService {
         StringBuilder sql = new StringBuilder("""
             SELECT DISTINCT
                 gap.tx_hash,
-                gap.idx as index
+                gap.idx as index,
+                gap.epoch,
+                gap.slot
             FROM gov_action_proposal gap
             """);
 
@@ -803,5 +806,73 @@ public class McpGovernanceAggregationService {
         log.info("Returning vote summary for proposal: {}#{} - {} total votes in {}ms",
                  govActionTxHash, govActionIndex, summary.totalVotes(), queryTime);
         return summary;
+    }
+
+    @Tool(name = "governance-eligibility-by-epoch",
+            description = "Get comprehensive statistics on eligible governance participants (DReps, SPOs, Constitutional Committee) at a specific epoch. " +
+                    "Returns total counts of eligible voters for each participant category. " +
+                    "CRITICAL for calculating historical governance participation rates: use these baseline numbers with proposal-vote-summary to compute participation percentages. " +
+                    "Example: proposal-vote-summary shows 18 DRep votes, governance-eligibility-by-epoch shows 27 eligible DReps at the proposal's expiry epoch → participation rate = 18/27 = 66.7%. " +
+                    "Works for any epoch - use proposal's expiry_epoch or enacted_epoch to analyze historical participation. " +
+                    "DRep eligibility is based on active_until >= epoch and excludes predefined options (NO_CONFIDENCE/ABSTAIN). " +
+                    "SPO eligibility is based on having delegated stake in epoch_stake. " +
+                    "CC member eligibility is based on their term boundaries (start_epoch <= epoch < expired_epoch).")
+    public GovernanceEligibility getGovernanceEligibilityByEpoch(
+            @ToolParam(description = "Epoch number for which to calculate eligible voters") Integer epoch
+    ) {
+        log.debug("Getting governance eligibility for epoch: {}", epoch);
+
+        if (epoch == null || epoch < 0) {
+            throw new IllegalArgumentException("Epoch must be a non-negative integer");
+        }
+
+        // Single optimized CTE query to get all eligibility counts
+        String sql = """
+            WITH drep_stats AS (
+              SELECT
+                COUNT(DISTINCT drep_hash) FILTER (WHERE active_until >= :epoch
+                                                    AND drep_type NOT IN ('NO_CONFIDENCE', 'ABSTAIN')) as eligible_dreps
+              FROM drep_dist
+              WHERE epoch = :epoch
+            ),
+            spo_stats AS (
+              SELECT
+                COUNT(DISTINCT pool_id) as eligible_spos
+              FROM epoch_stake
+              WHERE active_epoch = :epoch
+            )
+            SELECT
+              :epoch as epoch,
+              d.eligible_dreps,
+              s.eligible_spos              
+            FROM drep_stats d, spo_stats s
+            """;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("epoch", epoch);
+
+        long ccMembers = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch)
+                .stream().count();
+
+        List<GovernanceEligibility> results = jdbcTemplate.query(sql, params, (rs, rowNum) ->
+            new GovernanceEligibility(
+                rs.getInt("epoch"),
+                rs.getInt("eligible_dreps"),
+                rs.getInt("eligible_spos"),
+                (int) ccMembers
+            )
+        );
+
+        if (results.isEmpty()) {
+            log.warn("No governance eligibility data found for epoch: {}", epoch);
+            // Return zeros if no data found (epoch might be in the future or before governance started)
+            return new GovernanceEligibility(epoch, 0, 0, 0);
+        }
+
+        GovernanceEligibility eligibility = results.get(0);
+        log.debug("Governance eligibility for epoch {}: {} DReps, {} SPOs, {} CC members",
+                epoch, eligibility.eligibleDReps(), eligibility.eligibleSPOs(), eligibility.eligibleCCMembers());
+
+        return eligibility;
     }
 }

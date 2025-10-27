@@ -70,12 +70,12 @@ public class McpMetadataService {
     public List<TransactionMetadata> getMetadataByLabel(
         @ToolParam(description = "Metadata label (e.g., '721' for NFTs, '20' for FTs)") String label,
         @ToolParam(description = "Page number (0-based, default: 0)") Integer page,
-        @ToolParam(description = "Results per page (default: 50, max: 200)") Integer count
+        @ToolParam(description = "Results per page (default: 10, max: 200)") Integer count
     ) {
         log.debug("Getting metadata for label: {}, page: {}, count: {}", label, page, count);
 
         int effectivePage = (page != null && page >= 0) ? page : 0;
-        int effectiveCount = (count != null && count > 0) ? Math.min(count, 200) : 50;
+        int effectiveCount = (count != null && count > 0) ? Math.min(count, 200) : 10;
         int offset = effectivePage * effectiveCount;
 
         String sql = """
