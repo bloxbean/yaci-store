@@ -437,8 +437,12 @@ public class McpCardanoUtilService {
         if (normalizedSlot == null && normalizedBlockTime == null) {
             throw new IllegalArgumentException("Either slot or blockTime must be provided");
         }
+
+        // If both provided, prioritize blockTime (more direct timestamp value)
         if (normalizedSlot != null && normalizedBlockTime != null) {
-            throw new IllegalArgumentException("Provide either slot OR blockTime, not both. Got slot=" + normalizedSlot + ", blockTime=" + normalizedBlockTime);
+            log.debug("Both slot ({}) and blockTime ({}) provided - using blockTime (more direct timestamp)",
+                    normalizedSlot, normalizedBlockTime);
+            normalizedSlot = null; // Ignore slot when both are present
         }
 
         // If slot provided, convert to block_time first
