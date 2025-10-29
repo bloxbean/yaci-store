@@ -839,7 +839,7 @@ public class McpGovernanceAggregationService {
               SELECT
                 COUNT(DISTINCT pool_id) as eligible_spos
               FROM epoch_stake
-              WHERE active_epoch = :epoch
+              WHERE active_epoch = :spo_epoch 
             )
             SELECT
               :epoch as epoch,
@@ -850,6 +850,7 @@ public class McpGovernanceAggregationService {
 
         Map<String, Object> params = new HashMap<>();
         params.put("epoch", epoch);
+        params.put("spo_epoch", epoch + 1);
 
         long ccMembers = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch)
                 .stream().count();

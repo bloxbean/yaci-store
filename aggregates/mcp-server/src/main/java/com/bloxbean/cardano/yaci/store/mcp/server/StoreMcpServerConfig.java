@@ -35,6 +35,7 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpMetadataService mcpMetadataService,
             @Autowired(required = false) McpDatumService mcpDatumService,
             @Autowired(required = false) McpCardanoUtilService mcpCardanoUtilService,
+            @Autowired(required = false) McpDAppRegistryService mcpDAppRegistryService,
             // Aggregation Services (Phase 1-3)
             @Autowired(required = false) McpUtxoAggregationService utxoAggregationService,
             @Autowired(required = false) McpScriptAnalyticsService scriptAnalyticsService,
@@ -73,6 +74,10 @@ public class StoreMcpServerConfig {
         if (mcpCardanoUtilService != null) {
             log.info("Registering McpCardanoUtilService");
             toolObjects.add(mcpCardanoUtilService);
+        }
+        if (mcpDAppRegistryService != null) {
+            log.info("Registering McpDAppRegistryService");
+            toolObjects.add(mcpDAppRegistryService);
         }
 
         // Register aggregation services

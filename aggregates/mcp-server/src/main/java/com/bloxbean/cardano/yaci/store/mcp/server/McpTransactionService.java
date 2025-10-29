@@ -32,14 +32,16 @@ public class McpTransactionService {
     private final AddressNetActivityService addressActivityService;
 
     @Tool(name = "transaction-by-hash",
-            description = "Get complete transaction details by transaction hash. Returns comprehensive information including inputs, outputs, fees, UTXOs, collateral, reference inputs, metadata, and script information.")
+            description = "Get complete transaction details by transaction hash. Returns comprehensive information including inputs, outputs, fees, UTXOs, collateral, reference inputs, metadata, and script information. " +
+                         "⏰ Note: block_time is Unix timestamp in SECONDS. Use 'cardano-blockchain-time-info' tool for timezone conversions.")
     public TransactionDetails getTransactionByHash(String txHash) {
         return transactionService.getTransaction(txHash)
                 .orElseThrow(() -> new RuntimeException("Transaction not found with hash: " + txHash));
     }
 
     @Tool(name = "transactions-list",
-            description = "Get a paginated list of recent transactions in descending order (most recent first). Returns transaction summaries including hash, block, slot, output addresses, total output, and fees. Page is 0-based.")
+            description = "Get a paginated list of recent transactions in descending order (most recent first). Returns transaction summaries including hash, block, slot, output addresses, total output, and fees. Page is 0-based. " +
+                         "⏰ Note: block_time is Unix timestamp in SECONDS. Use 'cardano-blockchain-time-info' tool for timezone conversions.")
     public TransactionPage getTransactions(int page, int count) {
         return transactionService.getTransactions(page, count);
     }

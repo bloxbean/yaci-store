@@ -13,18 +13,66 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.BlockchainTimeInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.CardanoNetworkInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.ConversionResult;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.SlotTimeInfo;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.TimestampFormatted;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * MCP utility service for Cardano data conversions and unit conventions.
- * Provides tools to convert CBOR to JSON for metadata and datums, and explains Cardano amount units.
+ * Provides tools to convert CBOR to JSON for metadata and datums, explains Cardano amount units,
+ * and handles timestamp/slot conversions.
  * Essential for developers debugging and analyzing on-chain data.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * ⚠️ CRITICAL TIMESTAMP HANDLING RULES FOR LLMs:
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * 1. ALL block_time VALUES = Unix timestamp in SECONDS (NOT milliseconds!)
+ *    - To convert to milliseconds: block_time * 1000
+ *    - This applies to ALL timestamps returned by Yaci Store MCP tools
+ *
+ * 2. SLOT TO TIMESTAMP CONVERSION:
+ *    - For slot-only data: Use 'cardano-slot-to-timestamp' tool
+ *    - Requires era information (BYRON or SHELLEY)
+ *
+ * 3. ERA RULES:
+ *    - Byron blocks: Use Era.BYRON
+ *    - All post-Byron (Shelley/Allegra/Mary/Alonzo/Babbage/Conway): Use Era.SHELLEY
+ *    - When in doubt, use SHELLEY for modern blocks
+ *
+ * 4. TIMEZONE DISPLAY:
+ *    - ALWAYS display times in user's local timezone
+ *    - Infer timezone from user context (e.g., "Singapore time" → "Asia/Singapore")
+ *    - If unknown, ask user or default to UTC
+ *
+ * 5. RECOMMENDED TOOLS:
+ *    - Use 'cardano-blockchain-time-info' for comprehensive one-stop conversion
+ *    - Use 'cardano-format-timestamp' for simple timestamp → local time
+ *    - Use 'cardano-slot-to-timestamp' for slot → timestamp
+ *    - Batch tool available for up to 50 slots: 'cardano-slots-to-timestamps-batch'
+ *
+ * 6. COMMON MISTAKES TO AVOID:
+ *    - ❌ Don't treat block_time as milliseconds (it's seconds!)
+ *    - ❌ Don't display UTC when user asks for local time
+ *    - ❌ Don't add/subtract hours manually - use timezone tools
+ *    - ❌ Don't exceed 50 slots in batch conversions
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 @Service
 @RequiredArgsConstructor
@@ -32,6 +80,7 @@ import org.springframework.stereotype.Service;
 public class McpCardanoUtilService {
     private final GenesisConfig genesisConfig;
     private final StoreProperties storeProperties;
+    private final EraService eraService;
 
     @Tool(name = "cardano-network-info",
           description = "⚠️ CRITICAL: Read this FIRST when calculating slot ranges or time periods! " +
@@ -284,5 +333,207 @@ public class McpCardanoUtilService {
             log.error("Failed to convert script hash to address: {}", scriptHash, e);
             return null;
         }
+    }
+
+    @Tool(name = "cardano-slot-to-timestamp",
+          description = "⏰ Convert Cardano slot number to Unix timestamp. " +
+                       "IMPORTANT: Returns timestamp in SECONDS (multiply by 1000 for milliseconds). " +
+                       "Era handling: Use 'BYRON' for Byron blocks, 'SHELLEY' for all post-Byron blocks (Shelley/Allegra/Mary/Alonzo/Babbage/Conway). " +
+                       "Automatically calculates block time using network genesis configuration and era-specific slot duration. " +
+                       "Returns both seconds and milliseconds format plus ISO 8601 UTC time.")
+    public SlotTimeInfo convertSlotToTimestamp(
+        @ToolParam(description = "Slot number to convert") Long slot,
+        @ToolParam(description = "Era: 'BYRON' or 'SHELLEY' (default: SHELLEY for modern blocks)") String era
+    ) {
+        log.debug("Converting slot {} to timestamp, era={}", slot, era);
+
+        if (slot == null || slot < 0) {
+            throw new IllegalArgumentException("Slot must be a non-negative number. Received: " + slot);
+        }
+
+        // Default to SHELLEY if not specified
+        String effectiveEra = (era != null && era.trim().equalsIgnoreCase("BYRON")) ? "BYRON" : "SHELLEY";
+        Era eraEnum = effectiveEra.equals("BYRON") ? Era.Byron : Era.Shelley;
+
+        // Use EraService to get block time (in seconds)
+        long timestampSeconds = eraService.blockTime(eraEnum, slot);
+        long timestampMillis = timestampSeconds * 1000;
+
+        // Format as ISO 8601 UTC
+        Instant instant = Instant.ofEpochSecond(timestampSeconds);
+        String utcTime = instant.toString();
+
+        log.debug("Converted slot {} to timestamp: {} seconds ({} ms), UTC: {}",
+                  slot, timestampSeconds, timestampMillis, utcTime);
+
+        return new SlotTimeInfo(slot, timestampSeconds, timestampMillis, utcTime, effectiveEra);
+    }
+
+    @Tool(name = "cardano-format-timestamp",
+          description = "⏰ Convert Unix timestamp (in SECONDS) to human-readable local time. " +
+                       "CRITICAL: Input must be in SECONDS (Yaci Store block_time format), not milliseconds! " +
+                       "Supports timezone IDs like 'Asia/Singapore', 'America/New_York', 'Europe/London', 'UTC'. " +
+                       "Returns formatted time with timezone info, perfect for displaying blockchain times to users. " +
+                       "Defaults to UTC if no timezone specified.")
+    public TimestampFormatted formatTimestamp(
+        @ToolParam(description = "Unix timestamp in SECONDS (block_time from Yaci Store)") Long timestampSeconds,
+        @ToolParam(description = "Timezone ID (e.g., 'Asia/Singapore', 'UTC') - defaults to UTC") String timezone
+    ) {
+        log.debug("Formatting timestamp {} seconds with timezone {}", timestampSeconds, timezone);
+
+        if (timestampSeconds == null || timestampSeconds < 0) {
+            throw new IllegalArgumentException("Timestamp must be a non-negative number in seconds. Received: " + timestampSeconds);
+        }
+
+        // Default to UTC if not specified
+        String effectiveTimezone = (timezone != null && !timezone.trim().isEmpty()) ? timezone : "UTC";
+
+        try {
+            ZoneId zoneId = ZoneId.of(effectiveTimezone);
+            long timestampMillis = timestampSeconds * 1000;
+
+            Instant instant = Instant.ofEpochSecond(timestampSeconds);
+            ZonedDateTime zonedDateTime = ZonedDateTime.ofInstant(instant, zoneId);
+
+            // Format: "October 29, 2025 at 11:08:26 AM SGT"
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy 'at' hh:mm:ss a z");
+            String formattedTime = zonedDateTime.format(formatter);
+
+            // Also provide UTC for reference
+            String utcTime = instant.toString();
+
+            log.debug("Formatted timestamp: {} → {}", timestampSeconds, formattedTime);
+
+            return new TimestampFormatted(timestampSeconds, timestampMillis, formattedTime, effectiveTimezone, utcTime);
+
+        } catch (Exception e) {
+            log.error("Failed to format timestamp with timezone {}: {}", effectiveTimezone, e.getMessage());
+            throw new IllegalArgumentException("Invalid timezone: " + effectiveTimezone + ". Use format like 'Asia/Singapore' or 'UTC'");
+        }
+    }
+
+    @Tool(name = "cardano-blockchain-time-info",
+          description = "⏰ COMPREHENSIVE time converter - handles both slots and block_time values. " +
+                       "⚠️ USE THIS FIRST when displaying blockchain times to users! " +
+                       "Accepts either slot number OR block_time timestamp (in SECONDS). " +
+                       "Automatically detects era and applies correct conversions. " +
+                       "Returns complete time breakdown: UTC + formatted local time + all formats + helpful notes. " +
+                       "Perfect one-stop tool for any blockchain time display needs. " +
+                       "IMPORTANT: When providing blockTime only, do NOT provide slot parameter at all (not even 0 or null).")
+    public BlockchainTimeInfo getBlockchainTimeInfo(
+        @ToolParam(description = "Slot number (OPTIONAL - omit entirely if using blockTime)") Long slot,
+        @ToolParam(description = "Block time in SECONDS (OPTIONAL - omit entirely if using slot)") Long blockTime,
+        @ToolParam(description = "Era: 'BYRON' or 'SHELLEY' (required if using slot, ignored for blockTime)") String era,
+        @ToolParam(description = "Timezone ID (e.g., 'Asia/Singapore', 'UTC') - defaults to UTC") String timezone
+    ) {
+        log.debug("Getting blockchain time info: slot={}, blockTime={}, era={}, timezone={}",
+                  slot, blockTime, era, timezone);
+
+        // Normalize: treat 0 as null for slot (since slot 0 is genesis and rarely used)
+        Long normalizedSlot = (slot != null && slot == 0) ? null : slot;
+        Long normalizedBlockTime = (blockTime != null && blockTime == 0) ? null : blockTime;
+
+        // Validate inputs
+        if (normalizedSlot == null && normalizedBlockTime == null) {
+            throw new IllegalArgumentException("Either slot or blockTime must be provided");
+        }
+        if (normalizedSlot != null && normalizedBlockTime != null) {
+            throw new IllegalArgumentException("Provide either slot OR blockTime, not both. Got slot=" + normalizedSlot + ", blockTime=" + normalizedBlockTime);
+        }
+
+        // If slot provided, convert to block_time first
+        Long effectiveBlockTime = normalizedBlockTime;
+        String effectiveEra;
+
+        if (normalizedSlot != null) {
+            String slotEra = (era != null && era.trim().equalsIgnoreCase("BYRON")) ? "BYRON" : "SHELLEY";
+            Era eraEnum = slotEra.equals("BYRON") ? Era.Byron : Era.Shelley;
+            effectiveBlockTime = eraService.blockTime(eraEnum, normalizedSlot);
+            effectiveEra = slotEra;
+            log.debug("Converted slot {} to block_time: {} seconds (era: {})", normalizedSlot, effectiveBlockTime, effectiveEra);
+        } else {
+            // For blockTime only, we don't know the exact era, but for modern blocks it's SHELLEY
+            effectiveEra = "SHELLEY (assumed for modern blocks)";
+        }
+
+        // Format the timestamp
+        String effectiveTimezone = (timezone != null && !timezone.trim().isEmpty()) ? timezone : "UTC";
+
+        try {
+            ZoneId zoneId = ZoneId.of(effectiveTimezone);
+            Instant instant = Instant.ofEpochSecond(effectiveBlockTime);
+            ZonedDateTime zonedDateTime = ZonedDateTime.ofInstant(instant, zoneId);
+
+            // Format: "October 29, 2025 at 11:08:26 AM SGT"
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy 'at' hh:mm:ss a z");
+            String localTime = zonedDateTime.format(formatter);
+
+            // UTC format
+            String utcTime = instant.toString();
+
+            log.debug("Blockchain time info created: {} seconds → {} ({})", effectiveBlockTime, localTime, effectiveTimezone);
+
+            return BlockchainTimeInfo.create(slot, effectiveBlockTime, utcTime, localTime, effectiveTimezone, effectiveEra);
+
+        } catch (Exception e) {
+            log.error("Failed to get blockchain time info: {}", e.getMessage());
+            throw new IllegalArgumentException("Invalid timezone: " + effectiveTimezone + ". Use format like 'Asia/Singapore' or 'UTC'");
+        }
+    }
+
+    @Tool(name = "cardano-slots-to-timestamps-batch",
+          description = "⏰ Convert multiple slot numbers to timestamps in one call (MAX 50 slots). " +
+                       "⚠️ DoS Protection: Limited to 50 slots per batch to prevent resource exhaustion. " +
+                       "Efficiently converts a list of slots to timestamps with full time information. " +
+                       "Each result includes seconds, milliseconds, and ISO 8601 UTC time. " +
+                       "Use this for analyzing multiple blocks or time points efficiently. " +
+                       "Era handling: Use 'BYRON' for Byron blocks, 'SHELLEY' for all post-Byron blocks.")
+    public List<SlotTimeInfo> convertSlotsBatch(
+        @ToolParam(description = "List of slot numbers to convert (max 50 slots)") List<Long> slots,
+        @ToolParam(description = "Era: 'BYRON' or 'SHELLEY' (default: SHELLEY)") String era
+    ) {
+        log.debug("Batch converting {} slots to timestamps, era={}", slots != null ? slots.size() : 0, era);
+
+        // Validate inputs
+        if (slots == null || slots.isEmpty()) {
+            throw new IllegalArgumentException("Slots list cannot be null or empty");
+        }
+        if (slots.size() > 50) {
+            throw new IllegalArgumentException(
+                "Batch size limited to 50 slots to prevent resource exhaustion. Received: " + slots.size() +
+                ". Please split into smaller batches or use single conversion tool.");
+        }
+
+        // Default to SHELLEY if not specified
+        String effectiveEra = (era != null && era.trim().equalsIgnoreCase("BYRON")) ? "BYRON" : "SHELLEY";
+        Era eraEnum = effectiveEra.equals("BYRON") ? Era.Byron : Era.Shelley;
+
+        List<SlotTimeInfo> results = new ArrayList<>();
+
+        for (Long slot : slots) {
+            if (slot == null || slot < 0) {
+                log.warn("Skipping invalid slot: {}", slot);
+                continue;
+            }
+
+            try {
+                // Use EraService to get block time (in seconds)
+                long timestampSeconds = eraService.blockTime(eraEnum, slot);
+                long timestampMillis = timestampSeconds * 1000;
+
+                // Format as ISO 8601 UTC
+                Instant instant = Instant.ofEpochSecond(timestampSeconds);
+                String utcTime = instant.toString();
+
+                results.add(new SlotTimeInfo(slot, timestampSeconds, timestampMillis, utcTime, effectiveEra));
+
+            } catch (Exception e) {
+                log.error("Failed to convert slot {} to timestamp: {}", slot, e.getMessage());
+                // Continue processing other slots
+            }
+        }
+
+        log.debug("Batch converted {} slots successfully", results.size());
+        return results;
     }
 }

@@ -23,21 +23,24 @@ public class McpEpochService {
     private final EpochParamService epochParamService;
 
     @Tool(name = "current-epoch",
-            description = "Get the current epoch information. Returns epoch number, start/end time, block count, transaction count, total output, total fees, and max slot.")
+            description = "Get the current epoch information. Returns epoch number, start/end time, block count, transaction count, total output, total fees, and max slot. " +
+                         "⏰ Note: start_time and end_time are Unix timestamps in SECONDS. Use 'cardano-blockchain-time-info' tool for timezone conversions.")
     public Epoch getCurrentEpoch() {
         return epochStorageReader.findRecentEpoch()
                 .orElseThrow(() -> new RuntimeException("No epoch data available"));
     }
 
     @Tool(name = "epoch-by-number",
-            description = "Get epoch details by epoch number. Returns comprehensive epoch statistics including time boundaries, blocks, transactions, fees, and output amounts.")
+            description = "Get epoch details by epoch number. Returns comprehensive epoch statistics including time boundaries, blocks, transactions, fees, and output amounts. " +
+                         "⏰ Note: start_time and end_time are Unix timestamps in SECONDS. Use 'cardano-blockchain-time-info' tool for timezone conversions.")
     public Epoch getEpochByNumber(int epochNumber) {
         return epochStorageReader.findByNumber(epochNumber)
                 .orElseThrow(() -> new RuntimeException("Epoch not found: " + epochNumber));
     }
 
     @Tool(name = "epochs-list",
-            description = "Get a paginated list of epochs in descending order (most recent first). Returns epoch summaries with statistics. Page is 0-based. Useful for analyzing epoch history.")
+            description = "Get a paginated list of epochs in descending order (most recent first). Returns epoch summaries with statistics. Page is 0-based. Useful for analyzing epoch history. " +
+                         "⏰ Note: start_time and end_time are Unix timestamps in SECONDS. Use 'cardano-blockchain-time-info' tool for timezone conversions.")
     public EpochsPage getEpochs(int page, int count) {
         return epochStorageReader.findEpochs(page, count);
     }
