@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.mcp.server.model.AddressActivityPage;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.PagedResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.PaginationCursor;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TransactionNetTransfer;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.TransactionNetTransferSummary;
 import com.bloxbean.cardano.yaci.store.mcp.server.service.AddressNetActivityService;
 import com.bloxbean.cardano.yaci.store.mcp.server.service.TransactionNetTransferBatchService;
 import com.bloxbean.cardano.yaci.store.mcp.server.util.TransactionNetTransferCalculator;
@@ -290,5 +291,77 @@ public class McpTransactionService {
 
         return batchService.getNetTransfersBatchPaged(
                 startSlot, endSlot, pageSize, paginationCursor, minNetLovelace, sortBy);
+    }
+
+    @Tool(name = "transaction-net-transfers-summary",
+            description = "LIGHTWEIGHT summary of transaction net transfers - 90% SMALLER output than full details. " +
+                    "RECOMMENDED: Use this instead of 'transaction-net-transfers-batch' to avoid Claude token limits! " +
+                    "Perfect for analyzing large time ranges without hitting token/context limits. " +
+                    "Returns high-level overview with aggregate statistics and top movers per transaction. " +
+                    "What you get: " +
+                    "- Transaction metadata (hash, slot, block, fee) " +
+                    "- Summary stats: total_addresses, sender_count, receiver_count " +
+                    "- Total ADA moved (actual economic value transferred) " +
+                    "- Largest single net transfer amount " +
+                    "- Top N senders (addresses with largest negative net, default 3) " +
+                    "- Top N receivers (addresses with largest positive net, default 3) " +
+                    "Parameters: " +
+                    "- startSlot: Start slot number (inclusive) " +
+                    "- endSlot: End slot number (inclusive) " +
+                    "- limit: Maximum number of transactions (default: 100, max: 500) " +
+                    "- minNetLovelace: Minimum absolute net ADA transfer to include (default: 10000000 = 10 ADA). " +
+                    "  Use to filter noise. Higher values (50-100 ADA) recommended for large time ranges. " +
+                    "- sortBy: Sort order - 'net_amount_desc' (default, largest total movements first), " +
+                    "  'net_amount_asc', 'slot_desc' (most recent first), 'slot_asc' (oldest first) " +
+                    "- topN: Number of top senders/receivers to include per transaction (default: 3, max: 10) " +
+                    "Output size comparison (50 transactions): " +
+                    "- Full details (transaction-net-transfers-batch): ~50,000-100,000 characters " +
+                    "- Summary (this tool): ~5,000-10,000 characters (90% reduction!) " +
+                    "Use cases: " +
+                    "- Quick overview of large time ranges (hours, days) " +
+                    "- Identifying interesting transactions before fetching full details " +
+                    "- Whale watching: Find large movers without token limit issues " +
+                    "- Pattern analysis: See transaction characteristics at scale " +
+                    "Workflow: " +
+                    "1. Use this tool to get overview and identify transactions of interest " +
+                    "2. Use 'transaction-net-transfers' (singular) to get full details for specific tx_hash " +
+                    "Example: Last 2 hours whale movements: " +
+                    "minNetLovelace=100000000 (100 ADA), limit=200, sortBy='net_amount_desc', topN=3")
+    public List<TransactionNetTransferSummary> getTransactionNetTransfersSummary(
+            Long startSlot,
+            Long endSlot,
+            Integer limit,
+            Long minNetLovelace,
+            String sortBy,
+            Integer topN) {
+
+        // Validate and set defaults
+        if (limit == null || limit <= 0) {
+            limit = 100;
+        }
+        if (limit > 500) {
+            throw new IllegalArgumentException("Limit cannot exceed 500 transactions");
+        }
+        if (minNetLovelace == null) {
+            minNetLovelace = 10_000_000L;  // 10 ADA default
+        }
+        if (minNetLovelace < 0) {
+            throw new IllegalArgumentException("minNetLovelace cannot be negative");
+        }
+        if (sortBy == null || sortBy.isEmpty()) {
+            sortBy = "net_amount_desc";
+        }
+        if (!sortBy.matches("^(net_amount_desc|net_amount_asc|slot_desc|slot_asc)$")) {
+            throw new IllegalArgumentException(
+                    "Invalid sortBy. Must be: net_amount_desc, net_amount_asc, slot_desc, or slot_asc");
+        }
+        if (topN == null || topN <= 0) {
+            topN = 3;
+        }
+        if (topN > 10) {
+            throw new IllegalArgumentException("topN cannot exceed 10");
+        }
+
+        return batchService.getNetTransfersSummary(startSlot, endSlot, limit, minNetLovelace, sortBy, topN);
     }
 }

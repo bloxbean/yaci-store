@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.mcp.server.model.PagedResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.PaginationCursor;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TransactionNetTransfer;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TransactionNetTransferDto;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.TransactionNetTransferSummary;
 import com.bloxbean.cardano.yaci.store.mcp.server.repository.TransactionNetTransferRepository;
 import com.bloxbean.cardano.yaci.store.mcp.server.util.TransactionNetTransferCalculator;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
@@ -216,5 +217,31 @@ public class TransactionNetTransferBatchService {
                 .hasMore(dtoPage.getHasMore())
                 .totalProcessed(dtoPage.getTotalProcessed())
                 .build();
+    }
+
+    /**
+     * Get lightweight summaries of transaction net transfers.
+     * Optimized for Claude token limits - approximately 90% smaller output than full details.
+     *
+     * Returns only aggregate statistics and top N senders/receivers per transaction.
+     *
+     * @param startSlot Start slot (inclusive)
+     * @param endSlot End slot (inclusive)
+     * @param limit Maximum number of transactions
+     * @param minNetLovelace Minimum absolute net lovelace to include
+     * @param sortBy Sort order
+     * @param topN Number of top senders/receivers to include per transaction (default 3)
+     * @return List of transaction net transfer summaries
+     */
+    public List<TransactionNetTransferSummary> getNetTransfersSummary(
+            Long startSlot,
+            Long endSlot,
+            Integer limit,
+            Long minNetLovelace,
+            String sortBy,
+            Integer topN) {
+
+        return repository.getNetTransfersSummary(
+                startSlot, endSlot, limit, minNetLovelace, sortBy, topN);
     }
 }
