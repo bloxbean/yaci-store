@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.mcp.server.config.DAppRegistryProperties;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppSearchResult;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppSummary;
 import com.bloxbean.cardano.yaci.store.mcp.server.service.ExternalDAppRegistryFetcher;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -176,27 +177,43 @@ public class McpDAppRegistryService {
     }
 
     @Tool(name = "dapp-list-by-category",
-          description = "📋 List all known DApps in a specific category. " +
-                       "Categories: DEX, NFT Marketplace, Lending, NFT Collection, Wallet, Identity, Gaming, etc. " +
+          description = "📋 List known DApps in a specific category (lightweight summary). " +
+                       "Categories: DEX, NFT Marketplace, Lending, NFT Collection, Wallet, Identity, Gaming, AI, etc. " +
                        "Use 'All' or empty string to see all categories. " +
-                       "Useful for discovering similar DApps or browsing ecosystem. " +
-                       "Returns DApp names with descriptions and identifiers. " +
+                       "Returns only name, display name, and category (no addresses/policy IDs). " +
+                       "⚠️ Limited to 10 random DApps if more exist (to prevent token overflow). " +
+                       "Use 'dapp-lookup' to get full details for a specific DApp. " +
                        "Automatically filters by current network.")
-    public List<DAppInfo> listDAppsByCategory(
+    public List<DAppSummary> listDAppsByCategory(
         @ToolParam(description = "Category: 'DEX', 'NFT Marketplace', 'Lending', 'All', etc. (default: 'All')") String category
     ) {
         log.debug("Listing DApps by category: {}", category);
 
         List<DAppInfo> networkDApps = dappsByNetwork.getOrDefault(currentNetwork, new ArrayList<>());
 
+        // Filter by category
+        List<DAppInfo> filtered;
         if (category == null || category.trim().isEmpty() || category.equalsIgnoreCase("All")) {
-            return networkDApps;
+            filtered = new ArrayList<>(networkDApps);
+        } else {
+            String searchCategory = category.trim();
+            filtered = networkDApps.stream()
+                .filter(dapp -> dapp.category().equalsIgnoreCase(searchCategory))
+                .collect(Collectors.toList());
         }
 
-        String searchCategory = category.trim();
+        // Limit to 10 random items if too many
+        int originalSize = filtered.size();
+        if (originalSize > 10) {
+            Collections.shuffle(filtered);
+            filtered = filtered.subList(0, 10);
+            log.info("Limited DApp list to 10 random items from {} total for category '{}'",
+                    originalSize, category != null ? category : "All");
+        }
 
-        return networkDApps.stream()
-            .filter(dapp -> dapp.category().equalsIgnoreCase(searchCategory))
+        // Convert to lightweight summary
+        return filtered.stream()
+            .map(dapp -> new DAppSummary(dapp.name(), dapp.displayName(), dapp.category()))
             .collect(Collectors.toList());
     }
 
@@ -262,18 +279,31 @@ public class McpDAppRegistryService {
     }
 
     @Tool(name = "dapp-list-all",
-          description = "📚 List all known DApps in the registry for current network. " +
-                       "Returns comprehensive list with names, categories, and identifiers. " +
-                       "Useful for showing ecosystem overview or finding available DApps. " +
-                       "Currently shows DApps for: " +
-                       "mainnet (DEX: Minswap, SundaeSwap, WingRiders, MuesliSwap, Genius Yield | " +
-                       "NFT Marketplaces: JPG Store, CNFT.io | " +
-                       "Lending: Liqwid, Indigo | " +
-                       "NFT Collections: SpaceBudz)")
-    public List<DAppInfo> listAllDApps() {
+          description = "📚 List all known DApps in the registry for current network (lightweight summary). " +
+                       "Returns only name, display name, and category for each DApp (no addresses/policy IDs). " +
+                       "⚠️ Limited to 10 random DApps if more exist (to prevent token overflow). " +
+                       "Use 'dapp-lookup' to get full details (addresses, policy IDs) for a specific DApp. " +
+                       "Use 'dapp-list-by-category' to filter by category. " +
+                       "Available categories: DEX, NFT Marketplace, Lending, NFT Collection, AI, etc.")
+    public List<DAppSummary> listAllDApps() {
         log.debug("Listing all DApps for network: {}", currentNetwork);
 
-        return dappsByNetwork.getOrDefault(currentNetwork, new ArrayList<>());
+        List<DAppInfo> networkDApps = new ArrayList<>(
+            dappsByNetwork.getOrDefault(currentNetwork, new ArrayList<>())
+        );
+
+        // Limit to 10 random items if too many
+        int originalSize = networkDApps.size();
+        if (originalSize > 10) {
+            Collections.shuffle(networkDApps);
+            networkDApps = networkDApps.subList(0, 10);
+            log.info("Limited DApp list to 10 random items from {} total DApps", originalSize);
+        }
+
+        // Convert to lightweight summary
+        return networkDApps.stream()
+            .map(dapp -> new DAppSummary(dapp.name(), dapp.displayName(), dapp.category()))
+            .collect(Collectors.toList());
     }
 
     /**
