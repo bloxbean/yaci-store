@@ -43,12 +43,12 @@ public class DrepDataComparator {
 
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
     static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeDBUser = "<indexer_user>";
+    static String storeDBPassword = "<indexer_password>";
 
     // Utility function to convert a byte array to a hex string.
     private static String bytesToHex(byte[] bytes) {
@@ -147,6 +147,7 @@ public class DrepDataComparator {
         }
 
         boolean mismatch = false;
+        int mismatchCount = 0; // track number of mismatches for this epoch
 
         // Compare the results between DB Sync and Indexer.
         logLine("Comparing results:");
@@ -160,11 +161,14 @@ public class DrepDataComparator {
                    // System.out.println("Match found for hash: " + hash + " - Amount: " + amountDbSync);
                 } else {
                     mismatch = true;
+                    mismatchCount++;
                     logLine("Mismatch for hash: " + hash +
                             " - DB Sync Amount: " + amountDbSync + ", Indexer Amount: " + amountIndexer);
                     logLine("DRep Id: " + drepHashToIdMap.get(hash));
                 }
             } else {
+                mismatch = true;
+                mismatchCount++;
                 logLine("Hash " + hash + " found in DB Sync but not in Indexer -- amount : " + amountDbSync);
                 logLine("DRep Id: " + drepHashToIdMap.get(hash));
             }
@@ -174,6 +178,7 @@ public class DrepDataComparator {
         for (String hash : indexerResults.keySet()) {
             if (!dbSyncResults.containsKey(hash)) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Hash " + hash + " found in Indexer but not in DB Sync -- amount : " + indexerResults.get(hash));
                 logLine("DRep Id: " + drepHashToIdMap.get(hash));
             }
@@ -184,6 +189,7 @@ public class DrepDataComparator {
             // System.out.println("Match found for abstain amount: " + dbSyncAbstainAmount);
         } else {
             mismatch = true;
+            mismatchCount++;
             logLine("Mismatch for abstain amount: DB Sync Amount: " + dbSyncAbstainAmount +
                     ", Indexer Amount: " + indexerAbstainAmount);
         }
@@ -193,12 +199,13 @@ public class DrepDataComparator {
             // System.out.println("Match found for no confidence amount: " + dbSyncNoConfidenceAmount);
         } else {
             mismatch = true;
+            mismatchCount++;
             logLine("Mismatch for no confidence amount: DB Sync Amount: " + dbSyncNoConfidenceAmount +
                     ", Indexer Amount: " + indexerNoConfidenceAmount);
         }
 
         if (mismatch) {
-            logLine("❌ There are mismatches between DB Sync and Indexer results.");
+            logLine("❌ Mismatches found: " + mismatchCount + " between DB Sync and Indexer results.");
         } else {
             logLine("✅ All results match between DB Sync and Indexer.");
         }
