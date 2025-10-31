@@ -431,7 +431,8 @@ public class DRepDistService {
                     sum(
                       COALESCE(sab.quantity, 0) 
                           + COALESCE(r.withdrawable_reward, 0) 
-                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0)
+                          + COALESCE(ir.insta_withdrawable_reward, 0)
                           + COALESCE(apd.deposit, 0)
                           - COALESCE(dpd.deposit, 0)
                           + COALESCE(rr.withdrawable_reward_rest, 0)
@@ -443,6 +444,7 @@ public class DRepDistService {
                   from
                     ss_drep_ranked_delegations rd
                     left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_insta_spendable_rewards ir ON rd.address = ir.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
@@ -476,6 +478,7 @@ public class DRepDistService {
                     sum(
                       COALESCE(sab.quantity, 0)
                           + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0)
                           + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
                           + COALESCE(apd.deposit, 0)
                           - COALESCE(dpd.deposit, 0)
@@ -488,6 +491,7 @@ public class DRepDistService {
                   from
                     ss_drep_ranked_delegations rd
                     left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_insta_spendable_rewards ir ON rd.address = ir.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
