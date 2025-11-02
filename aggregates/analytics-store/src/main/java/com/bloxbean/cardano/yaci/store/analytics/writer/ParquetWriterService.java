@@ -1,0 +1,151 @@
+package com.bloxbean.cardano.yaci.store.analytics.writer;
+
+import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Service;
+
+import javax.sql.DataSource;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+/**
+ * Parquet storage writer using DuckDB's postgres_scanner extension.
+ *
+ * This implementation exports PostgreSQL data directly to Parquet files without
+ * using a lakehouse catalog. Files are organized in Hive-style partitions.
+ *
+ * Output structure:
+ * - {export-path}/transactions/date=2024-01-15/data.parquet
+ * - {export-path}/transaction_outputs/date=2024-01-15/data.parquet
+ *
+ * Features:
+ * - Direct Parquet export via DuckDB COPY command
+ * - Configurable compression (ZSTD, SNAPPY, GZIP, etc.)
+ * - Connection pooling for performance
+ * - Hive-style partitioning (compatible with Spark, Presto, etc.)
+ */
+@Service("parquetWriter")
+@Slf4j
+@ConditionalOnProperty(prefix = "yaci.store.analytics.storage", name = "type", havingValue = "parquet", matchIfMissing = true)
+public class ParquetWriterService implements StorageWriter {
+
+    private final DataSource duckDbDataSource;
+    private final AnalyticsStoreProperties properties;
+    private final DuckDbConnectionHelper connectionHelper;
+
+    public ParquetWriterService(@Qualifier("duckDbDataSource") DataSource duckDbDataSource,
+                                AnalyticsStoreProperties properties,
+                                DuckDbConnectionHelper connectionHelper) {
+        this.duckDbDataSource = duckDbDataSource;
+        this.properties = properties;
+        this.connectionHelper = connectionHelper;
+        log.info("Initialized ParquetWriterService (direct Parquet export)");
+    }
+
+    @Override
+    public ExportResult export(String query, String outputPath) {
+        long startTime = System.currentTimeMillis();
+
+        try {
+            // Ensure output directory exists
+            Path outputFile = Paths.get(outputPath);
+            Files.createDirectories(outputFile.getParent());
+
+            // Get DuckDB connection from pool
+            try (Connection duckConn = duckDbDataSource.getConnection();
+                 Statement stmt = duckConn.createStatement()) {
+
+                // Setup PostgreSQL connection using helper
+                if (!connectionHelper.isDatabaseAttached(duckConn, "pg")) {
+                    log.debug("PostgreSQL not attached, setting up connection");
+                    connectionHelper.installPostgresScanner(duckConn);
+                    connectionHelper.attachSourceDatabase(duckConn, "pg");
+
+                    // Set schema context so unqualified table names resolve correctly
+                    String pgSchema = connectionHelper.getSourceCredentials().getSchema();
+                    if (pgSchema != null && !pgSchema.isEmpty()) {
+                        stmt.execute(String.format("SET schema 'pg.%s'", pgSchema));
+                        log.debug("Set DuckDB schema context to: pg.{}", pgSchema);
+                    }
+                } else {
+                    log.debug("PostgreSQL already attached, reusing connection");
+                }
+
+                // Export to Parquet with configurable compression
+                String codec = properties.getParquetExport().getCodec();
+                int compressionLevel = properties.getParquetExport().getCompressionLevel();
+                int rowGroupSize = properties.getParquetExport().getRowGroupSize();
+
+                String exportCmd;
+                if ("ZSTD".equalsIgnoreCase(codec)) {
+                    // ZSTD supports compression level
+                    if (rowGroupSize > 0) {
+                        exportCmd = String.format(
+                            "COPY (%s) TO '%s' (FORMAT PARQUET, CODEC '%s', COMPRESSION_LEVEL %d, ROW_GROUP_SIZE %d)",
+                            query, outputPath, codec.toUpperCase(), compressionLevel, rowGroupSize
+                        );
+                    } else {
+                        exportCmd = String.format(
+                            "COPY (%s) TO '%s' (FORMAT PARQUET, CODEC '%s', COMPRESSION_LEVEL %d)",
+                            query, outputPath, codec.toUpperCase(), compressionLevel
+                        );
+                    }
+                } else {
+                    // Other codecs don't support compression level
+                    if (rowGroupSize > 0) {
+                        exportCmd = String.format(
+                            "COPY (%s) TO '%s' (FORMAT PARQUET, COMPRESSION '%s', ROW_GROUP_SIZE %d)",
+                            query, outputPath, codec.toUpperCase(), rowGroupSize
+                        );
+                    } else {
+                        exportCmd = String.format(
+                            "COPY (%s) TO '%s' (FORMAT PARQUET, COMPRESSION '%s')",
+                            query, outputPath, codec.toUpperCase()
+                        );
+                    }
+                }
+
+                log.debug("Exporting with codec: {}, level: {}, rowGroupSize: {}",
+                    codec, compressionLevel, rowGroupSize > 0 ? rowGroupSize : "default");
+                stmt.execute(exportCmd);
+
+                // Get row count
+                long rowCount = getRowCount(stmt, query);
+                long fileSize = Files.size(outputFile);
+                long duration = System.currentTimeMillis() - startTime;
+
+                log.info("Successfully exported {} rows to {} ({} bytes) in {} ms using {}",
+                    rowCount, outputPath, fileSize, duration, getStorageFormat());
+
+                return new ExportResult(outputPath, rowCount, fileSize, duration);
+            }
+        } catch (Exception e) {
+            log.error("Failed to export to Parquet: {}", e.getMessage(), e);
+            throw new RuntimeException("Export to Parquet failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public String getStorageFormat() {
+        return "PARQUET";
+    }
+
+    /**
+     * Get row count from a query by wrapping it in COUNT(*)
+     */
+    private long getRowCount(Statement stmt, String query) throws SQLException {
+        String countQuery = String.format("SELECT COUNT(*) FROM (%s) AS count_query", query);
+        var rs = stmt.executeQuery(countQuery);
+        if (rs.next()) {
+            return rs.getLong(1);
+        }
+        return 0;
+    }
+}

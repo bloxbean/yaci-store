@@ -1,0 +1,27 @@
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+    api project(":components:core")
+    api project(":stores:blocks")
+
+    implementation(libs.duckdb.jdbc)  // Note: dash becomes dot in Gradle version catalog
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // For FlywayConfigurationCustomizer
+    compileOnly 'org.flywaydb:flyway-core'
+
+    testImplementation project(':starters:spring-boot-starter')
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.h2database:h2'  // For unit tests
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Analytics Store'
+                description = 'Analytics data export and storage infrastructure'
+            }
+        }
+    }
+}
