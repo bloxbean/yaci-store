@@ -14,8 +14,11 @@ import javax.sql.DataSource;
  * Configuration for DuckDB DataSources with connection pooling.
  *
  * Creates separate pooled DataSources for DuckDB:
- * - Writer DataSource: Single connection for exports (file locking requirement)
+ * - Writer DataSource: For export operations
  * - Reader DataSource: Multiple connections for concurrent analytical queries
+ *
+ * For DuckDB catalog type: All connections point to the same catalog file
+ * For PostgreSQL catalog type: In-memory connections with ATTACH to remote catalog
  */
 @Configuration
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
@@ -28,24 +31,19 @@ public class DuckDbDataSourceConfig {
      * Create DuckDB Writer DataSource with HikariCP connection pooling.
      *
      * Used for export operations that write to DuckLake catalog.
-     * Pool size limited to 1 for DuckDB file-based catalogs due to file locking.
-     * PostgreSQL catalogs can use larger pool sizes.
+     * For DuckDB catalog: connects to catalog file (shared across connections)
+     * For PostgreSQL catalog: in-memory with ATTACH
      */
     @Bean(name = "duckDbWriterDataSource")
     @ConfigurationProperties("yaci.store.analytics.duckdb.writer.datasource")
     public DataSource duckDbWriterDataSource() {
+        String jdbcUrl = buildJdbcUrl();
+
         HikariDataSource dataSource = DataSourceBuilder.create()
                 .type(HikariDataSource.class)
                 .driverClassName("org.duckdb.DuckDBDriver")
-                .url("jdbc:duckdb:")
+                .url(jdbcUrl)
                 .build();
-
-        // For DuckDB file-based catalogs, limit pool to 1 connection (file locking limitation)
-        if ("ducklake".equalsIgnoreCase(properties.getStorage().getType()) &&
-            "duckdb".equalsIgnoreCase(properties.getDucklake().getCatalogType())) {
-            dataSource.setMaximumPoolSize(1);
-            dataSource.setMinimumIdle(1);
-        }
 
         return dataSource;
     }
@@ -57,16 +55,21 @@ public class DuckDbDataSourceConfig {
      * Supports multiple concurrent readers for optimal query throughput.
      * Pool size defaults to available processor cores but can be configured.
      *
+     * For DuckDB catalog: connects to catalog file (shared across connections)
+     * For PostgreSQL catalog: in-memory with ATTACH
+     *
      * Note: Read-only mode is enforced at the DuckDB ATTACH level (READ_ONLY option),
      * not at the connection level. DuckDB doesn't support connection-level read-only mode.
      */
     @Bean(name = "duckDbReaderDataSource")
     @ConditionalOnProperty(prefix = "yaci.store.analytics.storage", name = "type", havingValue = "ducklake")
     public DataSource duckDbReaderDataSource() {
+        String jdbcUrl = buildJdbcUrl();
+
         HikariDataSource dataSource = DataSourceBuilder.create()
                 .type(HikariDataSource.class)
                 .driverClassName("org.duckdb.DuckDBDriver")
-                .url("jdbc:duckdb:")
+                .url(jdbcUrl)
                 .build();
 
         // Configure pool size for concurrent reads
@@ -75,5 +78,25 @@ public class DuckDbDataSourceConfig {
         dataSource.setMinimumIdle(Math.min(2, poolSize));
 
         return dataSource;
+    }
+
+    /**
+     * Build JDBC URL based on catalog type.
+     *
+     * For DuckDB catalog: jdbc:duckdb:/path/to/catalog.db (all connections share file)
+     *   - Catalog file is pre-initialized by DuckDbCatalogPreInitializer
+     *   - All pooled connections connect to the same file
+     *
+     * For PostgreSQL catalog: jdbc:duckdb: (in-memory, uses ATTACH for catalog)
+     */
+    private String buildJdbcUrl() {
+        if ("duckdb".equalsIgnoreCase(properties.getDucklake().getCatalogType())) {
+            // Connect to catalog file - all connections share same database
+            String catalogPath = properties.getDucklake().getCatalogPath();
+            return "jdbc:duckdb:" + catalogPath;
+        } else {
+            // PostgreSQL catalog - use in-memory + ATTACH
+            return "jdbc:duckdb:";
+        }
     }
 }
