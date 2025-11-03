@@ -1,7 +1,7 @@
 import org.gradle.internal.os.OperatingSystem
 
 plugins {
-    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'org.springframework.boot' version "${springBootAppVersion}"
     id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
     id "com.gorylenko.gradle-git-properties" version "${gradleGitPropertiesVersion}"
 }
