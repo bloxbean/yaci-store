@@ -5,16 +5,23 @@ import com.bloxbean.cardano.yaci.store.api.blocks.dto.BlockDtoMapper;
 import com.bloxbean.cardano.yaci.store.api.blocks.service.BlockService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -28,6 +35,9 @@ public class BlockController {
 
     private final BlockService blockService;
     private final BlockDtoMapper dtoMapper;
+    
+    @Autowired(required = false)
+    private BlockCborStorageReader blockCborStorageReader;
 
     @GetMapping("{numberOrHash}")
     @Operation(summary = "Block Information by Number or Hash", description = "Get block information by number or hash.")
@@ -92,6 +102,61 @@ public class BlockController {
         return blockService.getLatestBlock()
                 .map(block -> ResponseEntity.ok(dtoMapper.toBlockDto(block)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+    
+    @GetMapping(value = "{blockHash}/cbor", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @Operation(
+        summary = "Block CBOR Data",
+        description = "Get raw CBOR bytes of a block. " +
+                     "This endpoint returns the original CBOR representation of the block, " +
+                     "which can be used for verification and debugging. " +
+                     "Note: This feature must be enabled via store.blocks.save-cbor=true"
+    )
+    public ResponseEntity<byte[]> getBlockCbor(
+            @PathVariable 
+            @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid block hash format") 
+            String blockHash) {
+        
+        if (blockCborStorageReader == null) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND, 
+                "Block CBOR feature is not enabled"
+            );
+        }
+        
+        byte[] cborData = blockCborStorageReader.getBlockCborByHash(blockHash)
+                .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, 
+                    "Block CBOR data not found. " +
+                    "Make sure store.blocks.save-cbor=true is enabled."
+                ));
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentLength(cborData.length);
+        headers.set("Content-Disposition", "attachment; filename=\"" + blockHash + ".cbor\"");
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(cborData);
+    }
+    
+    @GetMapping("{blockHash}/cbor/exists")
+    @Operation(
+        summary = "Check Block CBOR Existence",
+        description = "Check if CBOR data exists for a specific block"
+    )
+    public ResponseEntity<Boolean> checkBlockCborExists(
+            @PathVariable 
+            @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid block hash format") 
+            String blockHash) {
+        
+        if (blockCborStorageReader == null) {
+            return ResponseEntity.ok(false);
+        }
+        
+        boolean exists = blockCborStorageReader.cborExists(blockHash);
+        return ResponseEntity.ok(exists);
     }
 
 }
