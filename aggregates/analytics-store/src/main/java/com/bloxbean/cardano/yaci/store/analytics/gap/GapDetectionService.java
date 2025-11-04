@@ -115,11 +115,24 @@ public class GapDetectionService {
      * This ensures we don't export data for dates that are still being populated,
      * providing a safety buffer during initial blockchain synchronization.
      *
-     * @return Safe end date for exports as LocalDate
+     * The returned date is clamped to never be before genesis, even if the buffer
+     * period extends before the blockchain's start date.
+     *
+     * @return Safe end date for exports as LocalDate (>= genesis date)
      */
     public LocalDate getExportEndDate() {
         LocalDate latestSynced = getLatestSyncedDate();
         int bufferDays = properties.getContinuousSync().getBufferDays();
-        return latestSynced.minusDays(bufferDays);
+        LocalDate calculatedEndDate = latestSynced.minusDays(bufferDays);
+
+        // Ensure export end date is never before genesis
+        LocalDate genesisDate = getGenesisDate();
+        if (calculatedEndDate.isBefore(genesisDate)) {
+            log.debug("Export end date {} is before genesis {}, clamping to genesis",
+                calculatedEndDate, genesisDate);
+            return genesisDate;
+        }
+
+        return calculatedEndDate;
     }
 }

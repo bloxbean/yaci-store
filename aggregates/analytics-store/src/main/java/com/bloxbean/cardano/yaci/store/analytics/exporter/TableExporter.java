@@ -60,6 +60,23 @@ public interface TableExporter {
     PartitionStrategy getPartitionStrategy();
 
     /**
+     * Get the timestamp column name used for partitioning.
+     *
+     * This column is used by DuckLake to configure time-based partitioning.
+     * Most tables use "block_time", but some (like spent_outputs) use different
+     * timestamp columns (e.g., "spent_block_time").
+     *
+     * Examples:
+     * - transactions → "block_time"
+     * - transaction_outputs → "block_time"
+     * - address_balance → "block_time"
+     * - spent_outputs → "spent_block_time"
+     *
+     * @return Column name for partitioning (e.g., "block_time", "spent_block_time")
+     */
+    String getPartitionColumn();
+
+    /**
      * Export data for a specific partition.
      *
      * Implementations should:

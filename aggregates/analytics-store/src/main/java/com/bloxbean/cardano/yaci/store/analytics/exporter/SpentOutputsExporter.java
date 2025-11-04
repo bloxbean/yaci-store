@@ -37,12 +37,18 @@ public class SpentOutputsExporter extends AbstractTableExporter {
 
     @Override
     public String getTableName() {
-        return "spent_outputs";
+        return "tx_input";
     }
 
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.DAILY;
+    }
+
+    @Override
+    public String getPartitionColumn() {
+        // Spent outputs are partitioned by when they were spent, not created
+        return "spent_block_time";
     }
 
     /**
@@ -53,6 +59,7 @@ public class SpentOutputsExporter extends AbstractTableExporter {
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
+        String schema = getSourceSchema();
         return String.format("""
             SELECT
                 ti.tx_hash,
@@ -61,13 +68,14 @@ public class SpentOutputsExporter extends AbstractTableExporter {
                 ti.spent_at_slot,
                 ti.spent_at_block,
                 ti.spent_at_block_hash,
-                ti.spent_block_time,
+                to_timestamp(ti.spent_block_time) as spent_block_time,
                 ti.spent_epoch
-            FROM tx_input ti
+            FROM source_db.%s.tx_input ti
             WHERE ti.spent_at_slot >= %d
               AND ti.spent_at_slot < %d
             ORDER BY ti.spent_at_slot, ti.spent_tx_hash
             """,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

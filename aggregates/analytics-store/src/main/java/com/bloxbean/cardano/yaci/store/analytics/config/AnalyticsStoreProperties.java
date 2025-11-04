@@ -210,5 +210,43 @@ public class AnalyticsStoreProperties {
 
         // Note: DuckLake always uses 'public' schema for metadata tables
         // catalogSchema is not configurable - removed in favor of hardcoded 'public'
+
+        private DuckLakeExport export = new DuckLakeExport();
+
+        @Data
+        public static class DuckLakeExport {
+            /**
+             * Compression codec for DuckLake Parquet files.
+             * Options: SNAPPY, ZSTD, GZIP, LZ4, BROTLI, UNCOMPRESSED
+             *
+             * Recommended: ZSTD (best balance of compression ratio and speed)
+             * - ZSTD: 35-40% better compression than SNAPPY with minimal speed penalty
+             * - SNAPPY: Faster but larger files
+             * - GZIP: Better compression but slower queries
+             *
+             * Applied globally to all DuckLake tables via catalog settings.
+             */
+            private String codec = "ZSTD";
+
+            /**
+             * Compression level (only applicable for ZSTD).
+             * Range: 1-22 (default: 3)
+             * - 1-3: Fast compression, good for hot data
+             * - 4-9: Better compression, good for archival
+             * - 10+: Maximum compression, very slow
+             */
+            private int compressionLevel = 3;
+
+            /**
+             * Row group size (number of rows per row group).
+             * -1 = use DuckDB default (~122,880 rows or 128MB) - RECOMMENDED
+             *
+             * Tuning guidance:
+             * - Larger values (500K-1M): Better for sequential scans, uses more memory
+             * - Smaller values (50K-100K): Better for selective queries, less memory
+             * - Default (-1): Good balance for most workloads
+             */
+            private int rowGroupSize = -1;
+        }
     }
 }

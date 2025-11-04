@@ -104,7 +104,7 @@ public abstract class AbstractTableExporter implements TableExporter {
 
             // Execute export
             log.info("Exporting {} for partition {} using {}", getTableName(), partitionKey, storageWriter.getStorageFormat());
-            ExportResult result = storageWriter.export(query, outputPath);
+            ExportResult result = storageWriter.export(query, outputPath, getPartitionColumn());
 
             // Calculate checksum (skip for DuckLake - files are managed internally)
             String checksum = null;
@@ -125,6 +125,31 @@ public abstract class AbstractTableExporter implements TableExporter {
             stateService.markFailed(state, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Get the timestamp column name used for partitioning.
+     *
+     * Default implementation returns "block_time" which is used by most tables.
+     * Override this method in exporters that use a different timestamp column.
+     *
+     * @return Column name for partitioning (default: "block_time")
+     */
+    @Override
+    public String getPartitionColumn() {
+        return "block_time";
+    }
+
+    /**
+     * Get the source database schema name.
+     *
+     * This is used by exporters to construct fully qualified table names:
+     * source_db.{schema}.table_name
+     *
+     * @return Schema name (e.g., "mainnet", "preprod", "preview")
+     */
+    protected String getSourceSchema() {
+        return storageWriter.getSourceSchema();
     }
 
     /**
