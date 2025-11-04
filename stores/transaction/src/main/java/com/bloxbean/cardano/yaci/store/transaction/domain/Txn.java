@@ -43,4 +43,11 @@ public class Txn extends BlockAwareDomain {
     private List<UtxoKey> referenceInputs;
     private BigInteger treasuryDonation;
     private Boolean invalid;
+    
+    /**
+     * Raw CBOR bytes of the transaction body.
+     * This field is only populated when Yaci is configured to return CBOR data.
+     * See: YaciConfig.INSTANCE.setReturnTxBodyCbor(true)
+     */
+    private byte[] txBodyCbor;
 }

@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 
@@ -22,6 +25,9 @@ class TransactionStorageReaderImplTest {
     @Autowired
     private TxnEntityRepository txnEntityRepository;
 
+    @MockBean
+    private TransactionCborStorage transactionCborStorage;
+
     private TransactionStorage transactionStorage;
     private TransactionStorageReader transactionStorageReader;
 
@@ -31,7 +37,19 @@ class TransactionStorageReaderImplTest {
     void setUp() {
         mapper = new TxnMapperImpl();
         transactionStorageReader = new TransactionStorageReaderImpl(txnEntityRepository, mapper, null);
-        transactionStorage = new TransactionStorageImpl(txnEntityRepository, mapper, null);
+        
+        // Create TransactionStoreProperties with CBOR disabled for tests
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .saveCbor(false) // Disable CBOR in tests to avoid CBOR storage calls
+                .build();
+        
+        transactionStorage = new TransactionStorageImpl(
+                txnEntityRepository, 
+                transactionCborStorage, 
+                mapper, 
+                null, // DSLContext not needed for this test (CBOR disabled)
+                properties
+        );
     }
 
     @Test

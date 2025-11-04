@@ -1,12 +1,17 @@
 package com.bloxbean.cardano.yaci.store.blocks;
 
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.RollbackStorage;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockCborStorageImpl;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockCborStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.RollbackStorageImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockCborRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.RollbackRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -36,8 +41,17 @@ public class BlocksStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockStorage blockStorage(BlockRepository blockRepository, BlockMapper blockMapper) {
-        return new BlockStorageImpl(blockRepository, blockMapper);
+    public BlockCborStorage blockCborStorage(BlockCborRepository blockCborRepository) {
+        return new BlockCborStorageImpl(blockCborRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BlockStorage blockStorage(BlockRepository blockRepository,
+                                     BlockCborStorage blockCborStorage,
+                                     BlockMapper blockMapper,
+                                     BlocksStoreProperties blocksStoreProperties) {
+        return new BlockStorageImpl(blockRepository, blockCborStorage, blockMapper, blocksStoreProperties);
     }
 
     @Bean
@@ -50,5 +64,11 @@ public class BlocksStoreConfiguration {
     @ConditionalOnMissingBean
     public RollbackStorage rollbackStorage(RollbackRepository rollbackRepository) {
         return new RollbackStorageImpl(rollbackRepository);
+    }
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public BlockCborStorageReader blockCborStorageReader(BlockCborRepository blockCborRepository) {
+        return new BlockCborStorageReaderImpl(blockCborRepository);
     }
 }

@@ -41,4 +41,11 @@ public class Block {
     private String protocolVersion;
     private int noOfTxs;
     private String slotLeader;
+    
+    /**
+     * Raw CBOR bytes of the block.
+     * This field is only populated when Yaci is configured to return CBOR data.
+     * See: YaciConfig.INSTANCE.setReturnBlockCbor(true)
+     */
+    private byte[] blockCbor;
 }

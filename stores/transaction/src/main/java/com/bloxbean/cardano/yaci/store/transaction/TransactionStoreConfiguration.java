@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.WithdrawalRepository;
@@ -38,8 +39,17 @@ public class TransactionStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository, TxnMapper txnMapper) {
-        return new TransactionStorageImpl(txnEntityRepository, txnMapper, dslContext);
+    public TransactionCborStorage transactionCborStorage(TxnCborRepository txnCborRepository) {
+        return new TransactionCborStorageImpl(txnCborRepository, dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository,
+                                                 TransactionCborStorage transactionCborStorage,
+                                                 TxnMapper txnMapper,
+                                                 TransactionStoreProperties transactionStoreProperties) {
+        return new TransactionStorageImpl(txnEntityRepository, transactionCborStorage, txnMapper, dslContext, transactionStoreProperties);
     }
 
     @Bean
@@ -77,5 +87,11 @@ public class TransactionStoreConfiguration {
     public InvalidTransactionStorage invalidTransactionStorage(InvalidTransactionRepository invalidTransactionRepository,
                                                                TxnMapper txnMapper) {
         return new InvalidTransactionStorageImpl(invalidTransactionRepository, txnMapper);
+    }
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public TransactionCborStorageReader transactionCborStorageReader(TxnCborRepository txnCborRepository) {
+        return new TransactionCborStorageReaderImpl(txnCborRepository);
     }
 }

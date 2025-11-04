@@ -27,4 +27,27 @@ public class TransactionStoreProperties {
      */
     @Builder.Default
     private boolean saveWitness = false;
+
+    /**
+     * Enable/disable saving of transaction CBOR data.
+     * When enabled, raw CBOR bytes of transactions will be stored in a separate table.
+     * This is useful for transaction verification, multi-party protocols, and trustless validation.
+     * Note: This significantly increases storage requirements.
+     */
+    @Builder.Default
+    private boolean saveCbor = false;
+
+    /**
+     * Enable/disable pruning of transaction CBOR data.
+     * When enabled, CBOR data older than cborRetentionSlots will be automatically deleted.
+     */
+    @Builder.Default
+    private boolean cborPruningEnabled = false;
+
+    /**
+     * Retention period for CBOR data in slots (default: 129600 = ~30 days).
+     * CBOR data older than this will be pruned if cborPruningEnabled is true.
+     */
+    @Builder.Default
+    private int cborRetentionSlots = 129600; // 30 days worth of slots
 }

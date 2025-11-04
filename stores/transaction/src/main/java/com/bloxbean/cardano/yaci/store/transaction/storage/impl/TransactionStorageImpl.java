@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
@@ -22,24 +24,44 @@ public class TransactionStorageImpl implements TransactionStorage {
     private final static String PLUGIN_TRANSACTION_SAVE = "transaction.save";
 
     private final TxnEntityRepository txnEntityRepository;
+    private final TransactionCborStorage transactionCborStorage;
     private final TxnMapper mapper;
     private final DSLContext dsl;
+    private final TransactionStoreProperties transactionStoreProperties;
 
     @Override
     @Plugin(key = PLUGIN_TRANSACTION_SAVE)
+    @Transactional
     public void saveAll(List<Txn> txnList) {
-        List<TxnEntity> txnEntities = txnList.stream().map(mapper::toTxnEntity).collect(Collectors.toList());
+        List<TxnEntity> txnEntities = txnList.stream()
+                .map(mapper::toTxnEntity)
+                .collect(Collectors.toList());
         txnEntityRepository.saveAll(txnEntities);
+        
+        if (transactionStoreProperties.isSaveCbor()) {
+            transactionCborStorage.saveAll(txnList);
+        }
     }
 
     @Override
+    @Transactional
     public int deleteBySlotGreaterThan(long slot) {
+        if (transactionStoreProperties.isSaveCbor()) {
+            transactionCborStorage.deleteBySlotGreaterThan(slot);
+        }
+        
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Transactional
     public int deleteBySlotLessThan(long slot) {
-        return dsl.deleteFrom(TRANSACTION).where(TRANSACTION.SLOT.lessThan(slot)).execute();
+        if (transactionStoreProperties.isSaveCbor()) {
+            transactionCborStorage.deleteBySlotLessThan(slot);
+        }
+        
+        return dsl.deleteFrom(TRANSACTION)
+                .where(TRANSACTION.SLOT.lessThan(slot))
+                .execute();
     }
 }
