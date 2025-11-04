@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blocks.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockCborEntity;
@@ -60,17 +61,17 @@ public class BlockStorageImpl implements BlockStorage {
     }
     
     @Override
-    public void saveCbor(Block block) {
-        if (block.getBlockCbor() != null && block.getBlockCbor().length > 0) {
+    public void saveCbor(BlockCbor blockCbor) {
+        if (blockCbor.getCborData() != null && blockCbor.getCborData().length > 0) {
             BlockCborEntity cborEntity = BlockCborEntity.builder()
-                    .blockHash(block.getHash())
-                    .cborData(block.getBlockCbor())
-                    .cborSize(block.getBlockCbor().length)
-                    .slot(block.getSlot())
+                    .blockHash(blockCbor.getBlockHash())
+                    .cborData(blockCbor.getCborData())
+                    .cborSize(blockCbor.getCborSize())
+                    .slot(blockCbor.getSlot())
                     .build();
             
             blockCborRepository.save(cborEntity);
-            log.debug("Saved CBOR data for block {}", block.getHash());
+            log.debug("Saved CBOR data for block {}", blockCbor.getBlockHash());
         }
     }
 }

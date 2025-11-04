@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage;
 
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
+
 import java.util.Optional;
 
 /**
@@ -11,9 +13,9 @@ public interface BlockCborStorageReader {
      * Get block CBOR data by block hash
      * 
      * @param blockHash Block hash
-     * @return CBOR data bytes, or empty if not found or CBOR storage is disabled
+     * @return BlockCbor domain object, or empty if not found
      */
-    Optional<byte[]> getBlockCborByHash(String blockHash);
+    Optional<BlockCbor> getBlockCborByHash(String blockHash);
     
     /**
      * Check if CBOR data exists for a block

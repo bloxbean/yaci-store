@@ -95,7 +95,7 @@ public class TransactionController {
             );
         }
         
-        byte[] cborData = transactionCborStorageReader.getTxCborByHash(txHash)
+        var txnCbor = transactionCborStorageReader.getTxCborByHash(txHash)
                 .orElseThrow(() -> new ResponseStatusException(
                     HttpStatus.NOT_FOUND, 
                     "Transaction CBOR data not found. " +
@@ -104,12 +104,12 @@ public class TransactionController {
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        headers.setContentLength(cborData.length);
+        headers.setContentLength(txnCbor.getCborData().length);
         headers.set("Content-Disposition", "attachment; filename=\"" + txHash + ".cbor\"");
         
         return ResponseEntity.ok()
                 .headers(headers)
-                .body(cborData);
+                .body(txnCbor.getCborData());
     }
     
     @GetMapping("{txHash}/cbor/exists")

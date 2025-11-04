@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnCborEntity;
@@ -67,14 +68,14 @@ public class TransactionStorageImpl implements TransactionStorage {
     }
     
     @Override
-    public void saveCbor(List<Txn> txnList) {
-        List<TxnCborEntity> cborEntities = txnList.stream()
-                .filter(txn -> txn.getTxBodyCbor() != null && txn.getTxBodyCbor().length > 0)
-                .map(txn -> TxnCborEntity.builder()
-                        .txHash(txn.getTxHash())
-                        .cborData(txn.getTxBodyCbor())
-                        .cborSize(txn.getTxBodyCbor().length)
-                        .slot(txn.getSlot())
+    public void saveCbor(List<TxnCbor> txnCborList) {
+        List<TxnCborEntity> cborEntities = txnCborList.stream()
+                .filter(txnCbor -> txnCbor.getCborData() != null && txnCbor.getCborData().length > 0)
+                .map(txnCbor -> TxnCborEntity.builder()
+                        .txHash(txnCbor.getTxHash())
+                        .cborData(txnCbor.getCborData())
+                        .cborSize(txnCbor.getCborSize())
+                        .slot(txnCbor.getSlot())
                         .build())
                 .collect(Collectors.toList());
         

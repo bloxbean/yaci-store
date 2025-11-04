@@ -124,7 +124,7 @@ public class BlockController {
             );
         }
         
-        byte[] cborData = blockCborStorageReader.getBlockCborByHash(blockHash)
+        var blockCbor = blockCborStorageReader.getBlockCborByHash(blockHash)
                 .orElseThrow(() -> new ResponseStatusException(
                     HttpStatus.NOT_FOUND, 
                     "Block CBOR data not found. " +
@@ -133,12 +133,12 @@ public class BlockController {
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        headers.setContentLength(cborData.length);
+        headers.setContentLength(blockCbor.getCborData().length);
         headers.set("Content-Disposition", "attachment; filename=\"" + blockHash + ".cbor\"");
         
         return ResponseEntity.ok()
                 .headers(headers)
-                .body(cborData);
+                .body(blockCbor.getCborData());
     }
     
     @GetMapping("{blockHash}/cbor/exists")

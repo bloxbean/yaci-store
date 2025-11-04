@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,9 +14,14 @@ public class TransactionCborStorageReaderImpl implements TransactionCborStorageR
     private final TxnCborRepository txnCborRepository;
 
     @Override
-    public Optional<byte[]> getTxCborByHash(String txHash) {
+    public Optional<TxnCbor> getTxCborByHash(String txHash) {
         return txnCborRepository.findByTxHash(txHash)
-                .map(entity -> entity.getCborData());
+                .map(entity -> TxnCbor.builder()
+                        .txHash(entity.getTxHash())
+                        .cborData(entity.getCborData())
+                        .cborSize(entity.getCborSize())
+                        .slot(entity.getSlot())
+                        .build());
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockCborRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,9 +14,14 @@ public class BlockCborStorageReaderImpl implements BlockCborStorageReader {
     private final BlockCborRepository blockCborRepository;
 
     @Override
-    public Optional<byte[]> getBlockCborByHash(String blockHash) {
+    public Optional<BlockCbor> getBlockCborByHash(String blockHash) {
         return blockCborRepository.findByBlockHash(blockHash)
-                .map(entity -> entity.getCborData());
+                .map(entity -> BlockCbor.builder()
+                        .blockHash(entity.getBlockHash())
+                        .cborData(entity.getCborData())
+                        .cborSize(entity.getCborSize())
+                        .slot(entity.getSlot())
+                        .build());
     }
 
     @Override

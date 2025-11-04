@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage;
 
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 
 import java.util.List;
 
@@ -13,5 +14,5 @@ public interface TransactionStorage {
      * Save transaction CBOR data
      * This method is called from processor layer when CBOR storage is enabled
      */
-    void saveCbor(List<Txn> txnList);
+    void saveCbor(List<TxnCbor> txnCborList);
 }

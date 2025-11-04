@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage;
 
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
+
 import java.util.Optional;
 
 /**
@@ -11,9 +13,9 @@ public interface TransactionCborStorageReader {
      * Get transaction CBOR data by transaction hash
      * 
      * @param txHash Transaction hash
-     * @return CBOR data bytes, or empty if not found or CBOR storage is disabled
+     * @return TxnCbor domain object, or empty if not found
      */
-    Optional<byte[]> getTxCborByHash(String txHash);
+    Optional<TxnCbor> getTxCborByHash(String txHash);
     
     /**
      * Check if CBOR data exists for a transaction

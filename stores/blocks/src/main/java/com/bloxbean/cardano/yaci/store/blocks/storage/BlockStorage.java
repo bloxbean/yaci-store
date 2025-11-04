@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,5 +17,5 @@ public interface BlockStorage {
      * Save block CBOR data
      * This method is called from processor layer when CBOR storage is enabled
      */
-    void saveCbor(Block block);
+    void saveCbor(BlockCbor blockCbor);
 }
