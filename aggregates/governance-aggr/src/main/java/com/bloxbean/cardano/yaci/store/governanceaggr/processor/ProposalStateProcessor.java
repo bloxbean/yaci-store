@@ -74,6 +74,7 @@ public class ProposalStateProcessor {
 
             if (aggregatorGovernanceData == null) {
                 log.info("No proposals found for evaluation in epoch: {}", currentEpoch);
+                publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
                 return;
             }
 
