@@ -11,4 +11,10 @@ public interface BlockStorage {
     List<Block> findBlocksByEpoch(int epochNumber);
 
     int deleteBySlotGreaterThan(long slot);
+    
+    /**
+     * Save block CBOR data
+     * This method is called from processor layer when CBOR storage is enabled
+     */
+    void saveCbor(Block block);
 }

@@ -2,10 +2,11 @@ package com.bloxbean.cardano.yaci.store.blocks.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockCborEntity;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
+import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockCborRepository;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
 public class BlockStorageImpl implements BlockStorage {
     private final static String PLUGIN_BLOCK_SAVE = "block.save";
     private final BlockRepository blockRepository;
-    private final BlockCborStorage blockCborStorage;
+    private final BlockCborRepository blockCborRepository;
     private final BlockMapper blockDetailsMapper;
     private final BlocksStoreProperties blocksStoreProperties;
 
@@ -42,10 +43,10 @@ public class BlockStorageImpl implements BlockStorage {
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        if (blocksStoreProperties.isSaveCbor()) {
-            blockCborStorage.deleteBySlotGreaterThan(slot);
-        }
+        // Delete CBOR data first
+        blockCborRepository.deleteBySlotGreaterThan(slot);
         
+        // Delete block data
         return blockRepository.deleteBySlotGreaterThan(slot);
     }
 
@@ -53,11 +54,23 @@ public class BlockStorageImpl implements BlockStorage {
     @Plugin(key = PLUGIN_BLOCK_SAVE)
     @Transactional
     public void save(Block block) {
+        // Save parsed block data
         BlockEntity blockEntity = blockDetailsMapper.toBlockEntity(block);
         blockRepository.save(blockEntity);
-        
-        if (blocksStoreProperties.isSaveCbor()) {
-            blockCborStorage.save(block);
+    }
+    
+    @Override
+    public void saveCbor(Block block) {
+        if (block.getBlockCbor() != null && block.getBlockCbor().length > 0) {
+            BlockCborEntity cborEntity = BlockCborEntity.builder()
+                    .blockHash(block.getHash())
+                    .cborData(block.getBlockCbor())
+                    .cborSize(block.getBlockCbor().length)
+                    .slot(block.getSlot())
+                    .build();
+            
+            blockCborRepository.save(cborEntity);
+            log.debug("Saved CBOR data for block {}", block.getHash());
         }
     }
 }

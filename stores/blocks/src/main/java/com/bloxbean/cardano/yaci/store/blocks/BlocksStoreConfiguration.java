@@ -1,11 +1,9 @@
 package com.bloxbean.cardano.yaci.store.blocks;
 
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.blocks.storage.RollbackStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockCborStorageImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockCborStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.BlockStorageReaderImpl;
@@ -41,17 +39,11 @@ public class BlocksStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockCborStorage blockCborStorage(BlockCborRepository blockCborRepository) {
-        return new BlockCborStorageImpl(blockCborRepository);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public BlockStorage blockStorage(BlockRepository blockRepository,
-                                     BlockCborStorage blockCborStorage,
+                                     BlockCborRepository blockCborRepository,
                                      BlockMapper blockMapper,
                                      BlocksStoreProperties blocksStoreProperties) {
-        return new BlockStorageImpl(blockRepository, blockCborStorage, blockMapper, blocksStoreProperties);
+        return new BlockStorageImpl(blockRepository, blockCborRepository, blockMapper, blocksStoreProperties);
     }
 
     @Bean

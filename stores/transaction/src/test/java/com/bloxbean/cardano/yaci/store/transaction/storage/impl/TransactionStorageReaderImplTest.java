@@ -2,11 +2,11 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapperImpl;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class TransactionStorageReaderImplTest {
     private TxnEntityRepository txnEntityRepository;
 
     @MockBean
-    private TransactionCborStorage transactionCborStorage;
+    private TxnCborRepository txnCborRepository;
 
     private TransactionStorage transactionStorage;
     private TransactionStorageReader transactionStorageReader;
@@ -38,16 +38,16 @@ class TransactionStorageReaderImplTest {
         mapper = new TxnMapperImpl();
         transactionStorageReader = new TransactionStorageReaderImpl(txnEntityRepository, mapper, null);
         
-        // Create TransactionStoreProperties with CBOR disabled for tests
+        // Create TransactionStoreProperties
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .saveCbor(false) // Disable CBOR in tests to avoid CBOR storage calls
+                .saveCbor(false)
                 .build();
         
         transactionStorage = new TransactionStorageImpl(
                 txnEntityRepository, 
-                transactionCborStorage, 
+                txnCborRepository, 
                 mapper, 
-                null, // DSLContext not needed for this test (CBOR disabled)
+                null, // DSLContext not needed for this test
                 properties
         );
     }

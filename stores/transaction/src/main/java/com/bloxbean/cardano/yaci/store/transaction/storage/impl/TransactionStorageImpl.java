@@ -3,10 +3,11 @@ package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
-import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnCborEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnEntity;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION_CBOR;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -24,7 +26,7 @@ public class TransactionStorageImpl implements TransactionStorage {
     private final static String PLUGIN_TRANSACTION_SAVE = "transaction.save";
 
     private final TxnEntityRepository txnEntityRepository;
-    private final TransactionCborStorage transactionCborStorage;
+    private final TxnCborRepository txnCborRepository;
     private final TxnMapper mapper;
     private final DSLContext dsl;
     private final TransactionStoreProperties transactionStoreProperties;
@@ -33,35 +35,52 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Plugin(key = PLUGIN_TRANSACTION_SAVE)
     @Transactional
     public void saveAll(List<Txn> txnList) {
+        // Save parsed transaction data
         List<TxnEntity> txnEntities = txnList.stream()
                 .map(mapper::toTxnEntity)
                 .collect(Collectors.toList());
         txnEntityRepository.saveAll(txnEntities);
-        
-        if (transactionStoreProperties.isSaveCbor()) {
-            transactionCborStorage.saveAll(txnList);
-        }
     }
 
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        if (transactionStoreProperties.isSaveCbor()) {
-            transactionCborStorage.deleteBySlotGreaterThan(slot);
-        }
+        // Delete CBOR data first
+        txnCborRepository.deleteBySlotGreaterThan(slot);
         
+        // Delete transaction data
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Transactional
     public int deleteBySlotLessThan(long slot) {
-        if (transactionStoreProperties.isSaveCbor()) {
-            transactionCborStorage.deleteBySlotLessThan(slot);
-        }
+        // Delete CBOR data first
+        dsl.deleteFrom(TRANSACTION_CBOR)
+                .where(TRANSACTION_CBOR.SLOT.lessThan(slot))
+                .execute();
         
+        // Delete transaction data
         return dsl.deleteFrom(TRANSACTION)
                 .where(TRANSACTION.SLOT.lessThan(slot))
                 .execute();
+    }
+    
+    @Override
+    public void saveCbor(List<Txn> txnList) {
+        List<TxnCborEntity> cborEntities = txnList.stream()
+                .filter(txn -> txn.getTxBodyCbor() != null && txn.getTxBodyCbor().length > 0)
+                .map(txn -> TxnCborEntity.builder()
+                        .txHash(txn.getTxHash())
+                        .cborData(txn.getTxBodyCbor())
+                        .cborSize(txn.getTxBodyCbor().length)
+                        .slot(txn.getSlot())
+                        .build())
+                .collect(Collectors.toList());
+        
+        if (!cborEntities.isEmpty()) {
+            txnCborRepository.saveAll(cborEntities);
+            log.debug("Saved CBOR data for {} transactions", cborEntities.size());
+        }
     }
 }
