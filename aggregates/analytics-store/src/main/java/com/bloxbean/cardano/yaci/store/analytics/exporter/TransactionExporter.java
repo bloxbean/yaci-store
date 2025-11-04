@@ -36,7 +36,7 @@ public class TransactionExporter extends AbstractTableExporter {
 
     @Override
     public String getTableName() {
-        return "transactions";
+        return "transaction";
     }
 
     @Override
@@ -52,6 +52,7 @@ public class TransactionExporter extends AbstractTableExporter {
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
+        String schema = getSourceSchema();
         return String.format("""
             SELECT
                 t.tx_hash,
@@ -59,7 +60,7 @@ public class TransactionExporter extends AbstractTableExporter {
                 t.block,
                 t.slot,
                 t.epoch,
-                t.block_time,
+                to_timestamp(t.block_time) as block_time,
                 t.tx_index,
                 t.fee,
                 t.invalid,
@@ -77,11 +78,12 @@ public class TransactionExporter extends AbstractTableExporter {
                 t.collateral_return,
                 t.collateral_return_json,
                 t.required_signers
-            FROM transaction t
+            FROM source_db.%s.transaction t
             WHERE t.slot >= %d
               AND t.slot < %d
             ORDER BY t.slot, t.tx_hash
             """,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

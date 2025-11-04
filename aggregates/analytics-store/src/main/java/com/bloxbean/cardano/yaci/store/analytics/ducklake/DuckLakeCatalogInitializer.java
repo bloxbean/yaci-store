@@ -61,6 +61,9 @@ public class DuckLakeCatalogInitializer {
             // Verify catalog is accessible
             verifyCatalog(conn);
 
+            // Configure catalog compression settings
+            connectionHelper.configureDuckLakeCatalogSettings(conn);
+
             log.info("✅ DuckLake catalog initialized successfully");
             log.debug("DuckDB connection will close now, releasing any attached PostgreSQL connections");
 

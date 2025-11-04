@@ -58,7 +58,7 @@ public class DuckLakeWriterService implements StorageWriter {
     }
 
     @Override
-    public ExportResult export(String query, String outputPath) {
+    public ExportResult export(String query, String outputPath, String partitionColumn) {
         long startTime = System.currentTimeMillis();
 
         try (Connection conn = duckDbDataSource.getConnection()) {
@@ -66,33 +66,35 @@ public class DuckLakeWriterService implements StorageWriter {
             // readOnly=false for write operations
             connectionHelper.prepareConnectionForDuckLake(conn, true, false);
 
-            // Ensure output directory exists
-            Path outputDir = Paths.get(outputPath).getParent();
-            if (outputDir != null && !Files.exists(outputDir)) {
-                Files.createDirectories(outputDir);
-            }
-
             // Extract table name from output path
             // Format: ./data/analytics/transactions/date=2024-01-15/data.parquet
             String tableName = extractTableNameFromPath(outputPath);
 
             // Create table if it doesn't exist (using schema from query)
-            createTableIfNotExists(conn, tableName, query);
+            boolean isNewTable = createTableIfNotExists(conn, tableName, query);
+
+            // Configure partitioning for newly created tables
+            // DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation
+            if (isNewTable) {
+                configurePartitioning(conn, tableName, outputPath, partitionColumn);
+            }
 
             // Export data using DuckLake INSERT
             long rowCount = exportWithDuckLake(conn, tableName, query);
 
-            // Get file size
-            long fileSize = Files.exists(Paths.get(outputPath)) ? Files.size(Paths.get(outputPath)) : 0;
+            // Note: DuckLake manages its own files with UUID names in partition directories
+            // The outputPath is used only for partition detection, not actual file placement
+            // File size is not easily calculable as DuckLake may create multiple files
+            long fileSize = 0;
 
             long duration = System.currentTimeMillis() - startTime;
 
-            log.info("DuckLake export completed: {} ({} rows, {} bytes, {}ms)",
-                    outputPath, rowCount, fileSize, duration);
+            log.info("DuckLake export completed for table '{}': {} rows, {}ms",
+                    tableName, rowCount, duration);
 
             return new ExportResult(outputPath, rowCount, fileSize, duration);
 
-        } catch (SQLException | IOException e) {
+        } catch (SQLException e) {
             log.error("Failed to export to DuckLake: {}", e.getMessage(), e);
             throw new RuntimeException("DuckLake export failed: " + e.getMessage(), e);
         }
@@ -103,12 +105,18 @@ public class DuckLakeWriterService implements StorageWriter {
         return "DUCKLAKE";
     }
 
+    @Override
+    public String getSourceSchema() {
+        return connectionHelper.getSourceCredentials().getSchema();
+    }
 
     /**
      * Create DuckLake table if it doesn't exist.
      * Uses CREATE TABLE AS SELECT with LIMIT 0 to create empty table with correct schema.
+     *
+     * @return true if table was created, false if it already existed
      */
-    private void createTableIfNotExists(Connection conn, String tableName, String query) throws SQLException {
+    private boolean createTableIfNotExists(Connection conn, String tableName, String query) throws SQLException {
         // Check if table exists using DuckDB's duckdb_tables()
         String checkSql = String.format(
                 "SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = 'ducklake_catalog' AND table_name = '%s';",
@@ -119,7 +127,7 @@ public class DuckLakeWriterService implements StorageWriter {
              ResultSet rs = stmt.executeQuery(checkSql)) {
             if (rs.next() && rs.getInt(1) > 0) {
                 log.debug("DuckLake table '{}' already exists", tableName);
-                return;
+                return false;  // Table already exists
             }
         }
 
@@ -131,14 +139,71 @@ public class DuckLakeWriterService implements StorageWriter {
         );
         connectionHelper.executeSql(conn, createTableSql);
         log.info("Created DuckLake table: {}", tableName);
+    return true;  // Table was newly created
+    }
+
+    /**
+     * Configure partitioning for a DuckLake table based on the output path format and partition column.
+     *
+     * DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation.
+     * Partition configuration is derived from:
+     * - Path format: "date=" → day() transform, "epoch=" → identity transform
+     * - Partition column: Provided by the exporter (e.g., "block_time", "spent_block_time")
+     *
+     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()),
+     * so the day() transform can be applied directly without nested function calls.
+     *
+     * DuckLake will create Hive-style partitions like:
+     * - main/transactions/block_time_day=2024-01-15/ducklake-{uuid}.parquet
+     * - main/spent_outputs/spent_block_time_day=2024-01-15/ducklake-{uuid}.parquet
+     * - main/rewards/epoch=450/ducklake-{uuid}.parquet
+     *
+     * @param conn DuckDB connection
+     * @param tableName Table name to configure
+     * @param outputPath Output path containing partition format (date= or epoch=)
+     * @param partitionColumn Column name for time-based partitioning (e.g., "block_time", "spent_block_time")
+     */
+    private void configurePartitioning(Connection conn, String tableName, String outputPath, String partitionColumn) throws SQLException {
+        String alterSql = null;
+        String partitionDesc = null;
+
+        // Extract partition type from path format
+        if (outputPath.contains("date=")) {
+            // Date-based partitioning: Use day() transform on TIMESTAMP column
+            // Column is already TIMESTAMP type (cast in exporter's buildQuery())
+            // Result: {column}_day=2024-01-15 partitions
+            alterSql = String.format(
+                    "ALTER TABLE %s SET PARTITIONED BY (day(%s));",
+                    tableName, partitionColumn
+            );
+            partitionDesc = String.format("day(%s)", partitionColumn);
+
+        } else if (outputPath.contains("epoch=")) {
+            // Epoch-based partitioning: Use epoch column directly (identity transform)
+            // Result: epoch=450 partitions
+            alterSql = String.format(
+                    "ALTER TABLE %s SET PARTITIONED BY (epoch);",
+                    tableName
+            );
+            partitionDesc = "epoch";
+        }
+
+        // Execute partition configuration if applicable
+        if (alterSql != null) {
+            connectionHelper.executeSql(conn, alterSql);
+            log.info("Configured DuckLake table '{}' with {} partitioning", tableName, partitionDesc);
+        } else {
+            log.warn("Could not determine partition type from path: {}", outputPath);
+        }
     }
 
     /**
      * Export data using DuckLake INSERT.
      */
     private long exportWithDuckLake(Connection conn, String tableName, String query) throws SQLException {
-        // DuckLake manages Parquet settings internally - no need to set compression settings
-        // DuckLake uses optimal defaults for Parquet files
+        // Compression settings are configured globally at catalog level
+        // See DuckLakeCatalogInitializer which calls configureDuckLakeCatalogSettings()
+        // Settings are applied to all Parquet files written by DuckLake
 
         // Insert data into DuckLake table (we're already using ducklake_catalog database)
         String insertSql = String.format(

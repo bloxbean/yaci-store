@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-
 /**
  * Exporter for transaction outputs with flattened JSONB amounts.
  *
@@ -37,7 +36,7 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
 
     @Override
     public String getTableName() {
-        return "transaction_outputs";
+        return "address_utxo";
     }
 
     @Override
@@ -60,6 +59,7 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
+        String schema = getSourceSchema();
         return String.format("""
             SELECT
                 tx_hash,
@@ -80,12 +80,13 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
                 epoch,
                 slot,
                 block_hash,
-                block_time
-            FROM address_utxo_flattened
+                to_timestamp(block_time) as block_time
+            FROM source_db.%s.address_utxo_flattened
             WHERE slot >= %d
               AND slot < %d
             ORDER BY slot, tx_hash, output_index
             """,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

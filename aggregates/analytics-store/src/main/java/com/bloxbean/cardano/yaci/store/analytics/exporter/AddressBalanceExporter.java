@@ -52,23 +52,24 @@ public class AddressBalanceExporter extends AbstractTableExporter {
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
+        String schema = getSourceSchema();
         return String.format("""
             SELECT
                 ab.address,
                 ab.quantity,
                 ab.unit,
-                ab.block_time,
+                to_timestamp(ab.block_time) as block_time,
                 ab.block,
                 ab.epoch,
                 ab.slot,
                 ab.addr_full
-            FROM address_balance ab
+            FROM source_db.%s.address_balance ab
             INNER JOIN (
                 SELECT
                     address,
                     unit,
                     MAX(slot) as max_slot
-                FROM address_balance
+                FROM source_db.%s.address_balance
                 WHERE slot >= %d
                   AND slot < %d
                 GROUP BY address, unit
@@ -78,6 +79,7 @@ public class AddressBalanceExporter extends AbstractTableExporter {
                AND ab.slot = latest.max_slot
             ORDER BY ab.address, ab.unit
             """,
+            schema, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

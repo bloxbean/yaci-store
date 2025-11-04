@@ -24,10 +24,11 @@ public interface StorageWriter {
      *
      * @param query SQL query to execute (can include WHERE clause for partitioning)
      * @param outputPath Path where the data will be written (format depends on implementation)
+     * @param partitionColumn Column name used for time-based partitioning (e.g., "block_time", "spent_block_time")
      * @return ExportResult containing export statistics
      * @throws RuntimeException if export fails
      */
-    ExportResult export(String query, String outputPath);
+    ExportResult export(String query, String outputPath, String partitionColumn);
 
     /**
      * Get the storage format name for logging/monitoring.
@@ -35,4 +36,14 @@ public interface StorageWriter {
      * @return Storage format identifier (e.g., "PARQUET", "DUCKLAKE")
      */
     String getStorageFormat();
+
+    /**
+     * Get the source database schema name.
+     *
+     * This schema is used to construct fully qualified table names in queries.
+     * For example: source_db.{schema}.table_name
+     *
+     * @return Schema name (e.g., "mainnet", "preprod", "preview")
+     */
+    String getSourceSchema();
 }

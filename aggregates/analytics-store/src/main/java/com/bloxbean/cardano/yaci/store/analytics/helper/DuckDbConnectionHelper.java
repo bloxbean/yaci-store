@@ -475,6 +475,67 @@ public class DuckDbConnectionHelper {
     }
 
     /**
+     * Configure DuckLake catalog compression settings.
+     *
+     * Sets global compression options for all Parquet files created by DuckLake.
+     * Should be called once after catalog initialization.
+     *
+     * Configuration is applied using DuckLake's set_option() API:
+     * - parquet_compression: Codec (zstd, snappy, gzip, etc.)
+     * - parquet_compression_level: Compression intensity (ZSTD only)
+     * - parquet_row_group_size: Rows per row group
+     *
+     * These settings affect all Parquet files written by DuckLake going forward.
+     * Existing files are not recompressed.
+     *
+     * @param conn DuckDB connection (must be prepared for DuckLake with catalog attached)
+     * @throws SQLException if configuration fails
+     */
+    public void configureDuckLakeCatalogSettings(Connection conn) throws SQLException {
+        String codec = properties.getDucklake().getExport().getCodec();
+        int compressionLevel = properties.getDucklake().getExport().getCompressionLevel();
+        int rowGroupSize = properties.getDucklake().getExport().getRowGroupSize();
+
+        log.debug("Configuring DuckLake catalog compression: codec={}, level={}, rowGroupSize={}",
+                codec, compressionLevel, rowGroupSize);
+
+        // Set global compression codec (lowercase required by DuckLake)
+        String setCodecSql = String.format(
+                "CALL ducklake_catalog.set_option('parquet_compression', '%s');",
+                codec.toLowerCase()
+        );
+        executeSql(conn, setCodecSql);
+        log.debug("Set DuckLake parquet_compression={}", codec.toLowerCase());
+
+        // Set compression level (only applicable for ZSTD)
+        if ("ZSTD".equalsIgnoreCase(codec)) {
+            String setLevelSql = String.format(
+                    "CALL ducklake_catalog.set_option('parquet_compression_level', %d);",
+                    compressionLevel
+            );
+            executeSql(conn, setLevelSql);
+            log.debug("Set DuckLake parquet_compression_level={}", compressionLevel);
+        }
+
+        // Set row group size if specified (skip if -1 = use default)
+        if (rowGroupSize > 0) {
+            String setRowGroupSql = String.format(
+                    "CALL ducklake_catalog.set_option('parquet_row_group_size', %d);",
+                    rowGroupSize
+            );
+            executeSql(conn, setRowGroupSql);
+            log.debug("Set DuckLake parquet_row_group_size={}", rowGroupSize);
+        } else {
+            log.debug("Using DuckLake default row group size (~122,880 rows)");
+        }
+
+        log.info("✅ Configured DuckLake catalog compression: codec={}, level={}, rowGroupSize={}",
+                codec, compressionLevel, rowGroupSize > 0 ? rowGroupSize : "default");
+    }
+
+    // ========== Private Helper Methods ==========
+
+    /**
      * Attach DuckDB file-based DuckLake catalog.
      *
      * @param readOnly If true, attaches catalog in READ_ONLY mode
