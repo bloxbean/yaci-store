@@ -6,7 +6,8 @@ create table transaction_cbor
     cbor_data       blob not null,
     cbor_size       integer,
     slot            bigint not null,
-    create_datetime timestamp default current_timestamp
+    create_datetime timestamp,
+    update_datetime timestamp
 );
 
 CREATE INDEX idx_transaction_cbor_slot ON transaction_cbor(slot);

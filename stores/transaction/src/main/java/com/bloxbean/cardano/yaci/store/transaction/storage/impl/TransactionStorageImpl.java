@@ -46,8 +46,10 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        // Delete CBOR data first
-        txnCborRepository.deleteBySlotGreaterThan(slot);
+        // Delete CBOR data first (if feature enabled)
+        if (transactionStoreProperties.isSaveCbor()) {
+            txnCborRepository.deleteBySlotGreaterThan(slot);
+        }
         
         // Delete transaction data
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
@@ -56,10 +58,12 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Override
     @Transactional
     public int deleteBySlotLessThan(long slot) {
-        // Delete CBOR data first
-        dsl.deleteFrom(TRANSACTION_CBOR)
-                .where(TRANSACTION_CBOR.SLOT.lessThan(slot))
-                .execute();
+        // Delete CBOR data first (if feature enabled)
+        if (transactionStoreProperties.isSaveCbor()) {
+            dsl.deleteFrom(TRANSACTION_CBOR)
+                    .where(TRANSACTION_CBOR.SLOT.lessThan(slot))
+                    .execute();
+        }
         
         // Delete transaction data
         return dsl.deleteFrom(TRANSACTION)

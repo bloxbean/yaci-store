@@ -44,8 +44,10 @@ public class BlockStorageImpl implements BlockStorage {
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        // Delete CBOR data first
-        blockCborRepository.deleteBySlotGreaterThan(slot);
+        // Delete CBOR data first (if feature enabled)
+        if (blocksStoreProperties.isSaveCbor()) {
+            blockCborRepository.deleteBySlotGreaterThan(slot);
+        }
         
         // Delete block data
         return blockRepository.deleteBySlotGreaterThan(slot);
