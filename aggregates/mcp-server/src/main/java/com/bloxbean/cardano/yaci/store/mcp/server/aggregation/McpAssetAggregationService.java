@@ -256,49 +256,65 @@ public class McpAssetAggregationService {
         String assetName,
 
         @ToolParam(description = "Enable partial matching using pattern search (e.g., finds 'DRIP' in 'MyDRIPToken'). Default: false (exact match only). WARNING: Slower on large datasets.")
-        Boolean partialMatch
+        Boolean partialMatch,
+
+        @ToolParam(description = "Optional policy ID to filter results (56-char hex). " +
+                                 "Use when multiple tokens share the same name and you want a specific one. " +
+                                 "Improves performance and disambiguates results.")
+        String policyId
     ) {
         boolean usePartialMatch = partialMatch != null && partialMatch;
 
-        log.debug("[ASSET SEARCH] Searching for asset name: {}, partial: {}", assetName, usePartialMatch);
+        log.debug("[ASSET SEARCH] Searching for asset name: {}, partial: {}, policyId: {}",
+                  assetName, usePartialMatch, policyId);
 
         String sql;
         Map<String, Object> params = new HashMap<>();
 
+        // Handle policy ID - convert empty string to null for proper SQL handling
+        String effectivePolicyId = (policyId != null && !policyId.trim().isEmpty()) ? policyId : null;
+        params.put("policyId", effectivePolicyId);
+
         if (usePartialMatch) {
-            // Pattern match - slower but flexible
+            // Pattern match - uses MATERIALIZED CTE to force correct execution plan
             sql = """
-                SELECT DISTINCT
+                WITH filtered AS MATERIALIZED (
+                    SELECT policy, asset_name, unit, fingerprint
+                    FROM assets
+                    WHERE asset_name ILIKE :searchPattern
+                      AND (NULLIF(:policyId, '') IS NULL OR policy = NULLIF(:policyId, ''))
+                )
+                SELECT
                     policy,
                     asset_name,
                     unit,
-                    fingerprint,
-                    (SELECT COUNT(*) FROM assets a2
-                     WHERE a2.policy = a.policy
-                       AND a2.asset_name = a.asset_name
-                       AND a2.unit = a.unit) as occurrence_count,
+                    MIN(fingerprint) as fingerprint,
+                    COUNT(*) as occurrence_count,
                     CASE WHEN LOWER(asset_name) = LOWER(:exactTerm) THEN 0 ELSE 1 END as match_priority
-                FROM assets a
-                WHERE asset_name ILIKE :searchPattern
+                FROM filtered
+                GROUP BY policy, asset_name, unit
                 ORDER BY match_priority, asset_name
                 LIMIT 10
                 """;
             params.put("searchPattern", "%" + assetName + "%");
             params.put("exactTerm", assetName);
         } else {
-            // Exact match - uses idx_assets_asset_name_lower efficiently
+            // Exact match - uses MATERIALIZED CTE to force idx_assets_asset_name_lower index usage
             sql = """
-                SELECT DISTINCT
+                WITH filtered AS MATERIALIZED (
+                    SELECT policy, asset_name, unit, fingerprint
+                    FROM assets
+                    WHERE LOWER(asset_name) = LOWER(:searchTerm)
+                      AND (NULLIF(:policyId, '') IS NULL OR policy = NULLIF(:policyId, ''))
+                )
+                SELECT
                     policy,
                     asset_name,
                     unit,
-                    fingerprint,
-                    (SELECT COUNT(*) FROM assets a2
-                     WHERE a2.policy = a.policy
-                       AND a2.asset_name = a.asset_name
-                       AND a2.unit = a.unit) as occurrence_count
-                FROM assets a
-                WHERE LOWER(asset_name) = LOWER(:searchTerm)
+                    MIN(fingerprint) as fingerprint,
+                    COUNT(*) as occurrence_count
+                FROM filtered
+                GROUP BY policy, asset_name, unit
                 ORDER BY policy
                 LIMIT 10
                 """;
