@@ -11,6 +11,7 @@ services:
       - ../config/application.properties:/app/config/application.properties
       - ../config/application-ledger-state.properties:/app/config/application-ledger-state.properties
       - ../config/application-plugins.yml:/app/config/application-plugins.yml
+      - ../config/application-mcp.yml:/app/config/application-mcp.yml
       - ../plugins/scripts:/app/plugins/scripts/
       - ../plugins/ext-jars:/app/plugins/ext-jars/
       - ../plugins/files:/app/plugins/files/
