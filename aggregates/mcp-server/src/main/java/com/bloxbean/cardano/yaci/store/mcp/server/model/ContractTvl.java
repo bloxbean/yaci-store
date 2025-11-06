@@ -26,7 +26,10 @@ public record ContractTvl(
     long addressCount,                   // Number of unique addresses (or UTXOs in fallback mode)
     BigInteger totalLovelace,            // Total ADA locked (in lovelace)
     BigDecimal totalAda,                 // Total ADA locked (human-readable)
-    Map<String, BigInteger> tokenBalances // Token unit -> quantity map
+    Map<String, BigInteger> tokenBalances, // Token unit -> quantity map
+    int totalTokenCount,                 // Total number of unique tokens (before limiting)
+    boolean tokensLimited,               // True if tokenBalances was truncated
+    String message                       // Optional message (e.g., truncation notice)
 ) {
     /**
      * Factory method to create ContractTvl with automatic lovelace to ADA conversion.
@@ -36,7 +39,16 @@ public record ContractTvl(
             String scriptType,
             long addressCount,
             BigInteger totalLovelace,
-            Map<String, BigInteger> tokenBalances) {
+            Map<String, BigInteger> tokenBalances,
+            int totalTokenCount,
+            boolean tokensLimited) {
+
+        String message = null;
+        if (tokensLimited && totalTokenCount > tokenBalances.size()) {
+            message = String.format("Note: Contract has %d unique tokens, but only top %d by quantity are returned. " +
+                    "Set includeTokens=true and increase maxTokens parameter to retrieve more.",
+                    totalTokenCount, tokenBalances.size());
+        }
 
         return new ContractTvl(
                 scriptHash,
@@ -44,7 +56,10 @@ public record ContractTvl(
                 addressCount,
                 totalLovelace,
                 lovelaceToAda(totalLovelace),
-                tokenBalances
+                tokenBalances,
+                totalTokenCount,
+                tokensLimited,
+                message
         );
     }
 }

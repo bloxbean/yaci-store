@@ -20,7 +20,9 @@ public record ContractTvlSnapshot(
     String scriptHash,
     long addressCount,
     BigInteger totalLovelace,
-    Map<String, BigInteger> tokenBalances
+    Map<String, BigInteger> tokenBalances,
+    int totalTokenCount,                 // Total number of unique tokens (before limiting)
+    boolean tokensLimited                // True if tokenBalances was truncated
 ) {
     /**
      * Get human-readable ADA amount.
