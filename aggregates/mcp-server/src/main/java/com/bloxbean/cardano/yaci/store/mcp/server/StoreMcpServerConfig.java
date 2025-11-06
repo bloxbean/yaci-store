@@ -38,6 +38,7 @@ public class StoreMcpServerConfig {
             @Autowired(required = false) McpDAppRegistryService mcpDAppRegistryService,
             // Aggregation Services (Phase 1-3)
             @Autowired(required = false) McpUtxoAggregationService utxoAggregationService,
+            @Autowired(required = false) McpBalanceAggregationService balanceAggregationService,
             @Autowired(required = false) McpScriptAnalyticsService scriptAnalyticsService,
             @Autowired(required = false) McpTransactionAggregationService transactionAggregationService,
             @Autowired(required = false) McpBlockAggregationService blockAggregationService,
@@ -82,6 +83,10 @@ public class StoreMcpServerConfig {
 
         // Register aggregation services
         if (utxoAggregationService != null) toolObjects.add(utxoAggregationService);
+        if (balanceAggregationService != null) {
+            log.info("Registering McpBalanceAggregationService (balance-table-only tools)");
+            toolObjects.add(balanceAggregationService);
+        }
         if (scriptAnalyticsService != null) toolObjects.add(scriptAnalyticsService);
         if (transactionAggregationService != null) toolObjects.add(transactionAggregationService);
         if (blockAggregationService != null) toolObjects.add(blockAggregationService);

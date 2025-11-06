@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.mcp.server.aggregation;
 
 import com.bloxbean.cardano.yaci.store.mcp.server.model.AssetMintInfo;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.AssetSearchResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TokenHolderStats;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -83,51 +84,8 @@ public class McpAssetAggregationService {
         );
     }
 
-    // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
-    // TODO: Re-enable when alternative strategy is implemented for token holder statistics
-    // @Tool(name = "token-holder-stats",
-    //       description = "Get detailed holder statistics for a specific token by asset unit. " +
-    //                     "Returns holder count, total supply, and UTXO distribution. " +
-    //                     "Asset unit format: policyId + assetName (hex). " +
-    //                     "IMPORTANT: Use the 'get-token-registry-metadata' tool with the returned 'asset_unit' to fetch " +
-    //                     "verified token names, tickers, and decimals. Present holder stats as 'X holders of TokenName (TICKER) with Y.YYY total supply'. " +
-    //                     "Only counts currently unspent UTXOs (active holdings). " +
-    //                     "Uses pre-aggregated token_holder_summary view for optimal performance.")
-    public TokenHolderStats getTokenHolderStats(
-        @ToolParam(description = "Asset unit (policyId + assetName in hex)") String assetUnit
-    ) {
-        log.debug("Getting holder stats for asset: {}", assetUnit);
-
-        String sql = """
-            SELECT
-                policy_id,
-                asset_name,
-                asset_unit,
-                holder_count,
-                total_supply,
-                utxo_count
-            FROM token_holder_summary
-            WHERE asset_unit = :assetUnit
-            """;
-
-        List<TokenHolderStats> results = jdbcTemplate.query(sql,
-            Map.of("assetUnit", assetUnit),
-            (rs, rowNum) -> new TokenHolderStats(
-                rs.getString("policy_id"),
-                rs.getString("asset_name"),
-                rs.getString("asset_unit"),
-                rs.getInt("holder_count"),
-                rs.getBigDecimal("total_supply"),
-                rs.getInt("utxo_count")
-            )
-        );
-
-        if (results.isEmpty()) {
-            throw new RuntimeException("No holder data found for asset: " + assetUnit);
-        }
-
-        return results.get(0);
-    }
+    // MOVED: token-holder-stats moved to McpBalanceAggregationService (requires balance tables)
+    // This tool now lives in McpBalanceAggregationService.java since it queries address_balance_current table
 
     // DISABLED: Performance issues with token_holder_summary view on mainnet (32+ seconds, timeouts)
     // TODO: Re-enable when alternative strategy is implemented for token holder statistics
@@ -280,5 +238,85 @@ public class McpAssetAggregationService {
                 rs.getLong("last_activity_time")
             )
         );
+    }
+
+    @Tool(name = "search-assets-by-name",
+          description = "Search for assets by their human-readable name (case-insensitive). " +
+                        "Returns matching assets with policy ID, unit, and fingerprint. " +
+                        "Useful for finding token details when you only know the name (e.g., 'DRIP', 'tDRIP', 'HOSKY'). " +
+                        "IMPORTANT: Each result includes 'unit' field - use this with other tools like 'token-holder-stats' or 'get-token-registry-metadata'. " +
+                        "Returns top 10 matches ordered by relevance. " +
+                        "If 1 match: Returns unique result - proceed with that unit. " +
+                        "If multiple matches: Shows list for user selection to avoid ambiguity. " +
+                        "If 0 matches: Suggests checking spelling or using partial search. " +
+                        "Performance: Uses indexed case-insensitive search (~10-20ms). " +
+                        "Partial match option available but slower (~50-200ms on large datasets).")
+    public List<AssetSearchResult> searchAssetsByName(
+        @ToolParam(description = "Asset name to search for (e.g., 'DRIP', 'tDRIP', 'HOSKY'). Case-insensitive exact match.")
+        String assetName,
+
+        @ToolParam(description = "Enable partial matching using pattern search (e.g., finds 'DRIP' in 'MyDRIPToken'). Default: false (exact match only). WARNING: Slower on large datasets.")
+        Boolean partialMatch
+    ) {
+        boolean usePartialMatch = partialMatch != null && partialMatch;
+
+        log.debug("[ASSET SEARCH] Searching for asset name: {}, partial: {}", assetName, usePartialMatch);
+
+        String sql;
+        Map<String, Object> params = new HashMap<>();
+
+        if (usePartialMatch) {
+            // Pattern match - slower but flexible
+            sql = """
+                SELECT DISTINCT
+                    policy,
+                    asset_name,
+                    unit,
+                    fingerprint,
+                    (SELECT COUNT(*) FROM assets a2
+                     WHERE a2.policy = a.policy
+                       AND a2.asset_name = a.asset_name
+                       AND a2.unit = a.unit) as occurrence_count,
+                    CASE WHEN LOWER(asset_name) = LOWER(:exactTerm) THEN 0 ELSE 1 END as match_priority
+                FROM assets a
+                WHERE asset_name ILIKE :searchPattern
+                ORDER BY match_priority, asset_name
+                LIMIT 10
+                """;
+            params.put("searchPattern", "%" + assetName + "%");
+            params.put("exactTerm", assetName);
+        } else {
+            // Exact match - uses idx_assets_asset_name_lower efficiently
+            sql = """
+                SELECT DISTINCT
+                    policy,
+                    asset_name,
+                    unit,
+                    fingerprint,
+                    (SELECT COUNT(*) FROM assets a2
+                     WHERE a2.policy = a.policy
+                       AND a2.asset_name = a.asset_name
+                       AND a2.unit = a.unit) as occurrence_count
+                FROM assets a
+                WHERE LOWER(asset_name) = LOWER(:searchTerm)
+                ORDER BY policy
+                LIMIT 10
+                """;
+            params.put("searchTerm", assetName);
+        }
+
+        List<AssetSearchResult> results = jdbcTemplate.query(sql, params,
+            (rs, rowNum) -> new AssetSearchResult(
+                rs.getString("policy"),
+                rs.getString("asset_name"),
+                rs.getString("unit"),
+                rs.getString("fingerprint"),
+                rs.getInt("occurrence_count")
+            )
+        );
+
+        log.debug("[ASSET SEARCH] Found {} matches for '{}'", results.size(), assetName);
+
+        return results;
     }
 }

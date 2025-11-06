@@ -53,3 +53,22 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_abc_policy_prefix_addr
 -- 4) LIKE 'policyid%' instead of LEFT(unit,56)=...
 -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_abc_unit_like
 --     ON address_balance_current (unit varchar_pattern_ops);
+
+
+-- ============================================
+-- OPTIONAL: ADDRESS BALANCE HISTORY INDEX
+-- ============================================
+
+-- 5) Historical address balance by epoch (OPTIONAL - may improve epoch queries)
+--    Query pattern:
+--    SELECT quantity, slot, block_time
+--    FROM address_balance
+--    WHERE address = $1 AND unit = $2 AND epoch = $3
+--    ORDER BY slot DESC
+--    LIMIT 1;
+--
+--    Note: PK (address, unit, slot) already covers slot-based queries efficiently.
+--    This index is only useful if you frequently query by epoch instead of slot.
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ab_address_unit_epoch
+    ON address_balance (address, unit, epoch, slot DESC);
