@@ -19,6 +19,7 @@ import com.bloxbean.cardano.yaci.store.mcp.server.model.CardanoNetworkInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.ConversionResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.SlotTimeInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TimestampFormatted;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.TimestampSlotInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -410,6 +411,81 @@ public class McpCardanoUtilService {
             log.error("Failed to format timestamp with timezone {}: {}", effectiveTimezone, e.getMessage());
             throw new IllegalArgumentException("Invalid timezone: " + effectiveTimezone + ". Use format like 'Asia/Singapore' or 'UTC'");
         }
+    }
+
+    @Tool(name = "cardano-timestamp-to-slot",
+          description = "⏰ Convert Unix timestamp to Cardano slot number with automatic era detection. " +
+                       "Accepts timestamps in SECONDS or MILLISECONDS (auto-detects format). " +
+                       "Returns slot number, detected era, and validation information. " +
+                       "CRITICAL for LLMs: Use this to find slot numbers when you have dates/times and need to query blockchain data. " +
+                       "Example: 'last 24 hours' → convert current time to slot, then subtract 86400 slots (Shelley). " +
+                       "Validates conversion accuracy by round-trip check.")
+    public TimestampSlotInfo convertTimestampToSlot(
+        @ToolParam(description = "Unix timestamp (in seconds or milliseconds - will auto-detect)") Long timestamp,
+        @ToolParam(description = "Force interpretation: true=seconds, false=milliseconds, null=auto-detect (default: null)") Boolean isSeconds
+    ) {
+        log.debug("Converting timestamp to slot: {}, isSeconds={}", timestamp, isSeconds);
+
+        if (timestamp == null || timestamp <= 0) {
+            throw new IllegalArgumentException("Timestamp must be a positive number");
+        }
+
+        // Step 1: Auto-detect seconds vs milliseconds
+        Long timestampSeconds;
+        String validationNote;
+
+        if (isSeconds == null) {
+            // Auto-detect: if > 10 billion, assume milliseconds (corresponds to year 2286)
+            if (timestamp > 10_000_000_000L) {
+                timestampSeconds = timestamp / 1000;
+                validationNote = "Auto-detected milliseconds (timestamp > 10 billion). Converted to seconds: " + timestampSeconds;
+                log.debug("Auto-detected milliseconds: {} → {} seconds", timestamp, timestampSeconds);
+            } else {
+                timestampSeconds = timestamp;
+                validationNote = "Auto-detected seconds (timestamp <= 10 billion)";
+                log.debug("Auto-detected seconds: {}", timestampSeconds);
+            }
+        } else if (isSeconds) {
+            timestampSeconds = timestamp;
+            validationNote = "User specified seconds";
+        } else {
+            timestampSeconds = timestamp / 1000;
+            validationNote = "User specified milliseconds. Converted to seconds: " + timestampSeconds;
+        }
+
+        // Step 2: Call eraService.slotFromTime() to get slot
+        Long calculatedSlot = eraService.slotFromTime(timestampSeconds);
+        log.debug("Calculated slot: {} for timestamp: {}", calculatedSlot, timestampSeconds);
+
+        // Step 3: Detect era by comparing timestamp with Shelley start time
+        Long shelleyStartTime = eraService.shelleyEraStartTime();
+        String detectedEra = timestampSeconds < shelleyStartTime ? "BYRON" : "SHELLEY";
+        Era eraEnum = detectedEra.equals("BYRON") ? Era.Byron : Era.Shelley;
+        log.debug("Detected era: {} (shelleyStartTime: {}, timestamp: {})",
+                  detectedEra, shelleyStartTime, timestampSeconds);
+
+        // Step 4: Validate by round-trip conversion
+        Long validatedTimestamp = eraService.blockTime(eraEnum, calculatedSlot);
+        long timeDifference = Math.abs(validatedTimestamp - timestampSeconds);
+
+        if (timeDifference > 1) {
+            log.warn("Round-trip validation failed: original={}, validated={}, difference={}s",
+                    timestampSeconds, validatedTimestamp, timeDifference);
+            validationNote += " | WARNING: Round-trip difference of " + timeDifference + " seconds. " +
+                            "Timestamp may be between slots (slots are discrete: 1s for Shelley, 20s for Byron).";
+        } else {
+            validationNote += " | Validated: round-trip check passed (difference: " + timeDifference + "s)";
+        }
+
+        log.debug("Timestamp to slot conversion complete: {} → slot {}", timestampSeconds, calculatedSlot);
+
+        return TimestampSlotInfo.create(
+            timestamp,
+            timestampSeconds,
+            calculatedSlot,
+            detectedEra,
+            validationNote
+        );
     }
 
     @Tool(name = "cardano-blockchain-time-info",
