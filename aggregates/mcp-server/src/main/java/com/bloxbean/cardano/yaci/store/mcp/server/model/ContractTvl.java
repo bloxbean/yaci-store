@@ -13,13 +13,17 @@ import static com.bloxbean.cardano.client.common.ADAConversionUtil.lovelaceToAda
 /**
  * Total Value Locked (TVL) estimation for a smart contract.
  * Includes both ADA and native tokens locked in UTXOs at script addresses.
+ *
+ * Note: addressCount field represents different things depending on mode:
+ * - Optimized mode (balance tables): Number of unique addresses with balances
+ * - Fallback mode (UTXO): Number of unspent UTXOs
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record ContractTvl(
     String scriptHash,
     String scriptType,
-    Long utxoCount,                      // Number of UTXOs locked at script address
+    long addressCount,                   // Number of unique addresses (or UTXOs in fallback mode)
     BigInteger totalLovelace,            // Total ADA locked (in lovelace)
     BigDecimal totalAda,                 // Total ADA locked (human-readable)
     Map<String, BigInteger> tokenBalances // Token unit -> quantity map
@@ -30,14 +34,14 @@ public record ContractTvl(
     public static ContractTvl create(
             String scriptHash,
             String scriptType,
-            Long utxoCount,
+            long addressCount,
             BigInteger totalLovelace,
             Map<String, BigInteger> tokenBalances) {
 
         return new ContractTvl(
                 scriptHash,
                 scriptType,
-                utxoCount,
+                addressCount,
                 totalLovelace,
                 lovelaceToAda(totalLovelace),
                 tokenBalances
