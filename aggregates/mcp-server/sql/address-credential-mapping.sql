@@ -5,7 +5,9 @@
 -- and Franken address aggregation
 --
 -- Usage: Required for optimized contract-tvl-estimation tool
--- Refresh: Every epoch or on-demand
+-- Refresh Strategy:
+--   - Automatic: Scheduled daily at 2:00 AM via McpMaterializedViewRefreshService
+--   - Manual: REFRESH MATERIALIZED VIEW CONCURRENTLY address_credential_mapping;
 -- ============================================
 
 -- Create materialized view

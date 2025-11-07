@@ -523,8 +523,9 @@ public class McpUtxoAggregationService {
 
     @Tool(name = "stake-address-portfolio",
           description = "Get complete portfolio for a stake address including all assets. " +
-                        "Returns ADA balance, asset holdings, and UTXO distribution across all delegated addresses. " +
-                        "IMPORTANT: For each asset in the portfolio, fetch token registry metadata using asset_unit: " +
+                        "Returns ADA balance and TOP 50 ASSETS by quantity (ordered by highest holdings first). " +
+                        "⚠️ IMPORTANT: Only returns top 50 assets to prevent context overflow. Check 'message' field for total count. " +
+                        "For each asset in the portfolio, fetch token registry metadata using asset_unit: " +
                         "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
                         "Create a complete portfolio view showing 'ADA: X.XXX, TokenName (TICKER): Y.YYY, ...' with all tokens identified by name.")
     public StakeAddressPortfolio getStakeAddressPortfolio(
@@ -551,7 +552,28 @@ public class McpUtxoAggregationService {
         Map<String, Object> adaResult = jdbcTemplate.queryForMap(adaSql,
             Map.of("stakeAddress", stakeAddress));
 
-        // Query 2: All assets (excluding lovelace)
+        // Query 2: Count total assets
+        String countSql = """
+            SELECT COUNT(*) as total_assets
+            FROM (
+                SELECT elem->>'unit' as asset_unit
+                FROM address_utxo,
+                     jsonb_array_elements(amounts) as elem
+                WHERE owner_stake_addr = :stakeAddress
+                  AND elem->>'unit' != 'lovelace'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM tx_input
+                      WHERE tx_input.tx_hash = address_utxo.tx_hash
+                      AND tx_input.output_index = address_utxo.output_index
+                  )
+                GROUP BY elem->>'unit'
+            ) sub
+            """;
+
+        Integer totalAssetCount = jdbcTemplate.queryForObject(countSql,
+            Map.of("stakeAddress", stakeAddress), Integer.class);
+
+        // Query 3: Top 50 assets by quantity (excluding lovelace)
         String assetsSql = """
             SELECT
                 elem->>'unit' as asset_unit,
@@ -569,6 +591,7 @@ public class McpUtxoAggregationService {
               )
             GROUP BY elem->>'unit', elem->>'policy_id', elem->>'asset_name'
             ORDER BY quantity DESC
+            LIMIT 50
             """;
 
         List<AssetHolding> assets = jdbcTemplate.query(assetsSql,
@@ -581,11 +604,21 @@ public class McpUtxoAggregationService {
             )
         );
 
+        // Build message based on total asset count
+        int actualCount = (totalAssetCount != null) ? totalAssetCount : 0;
+        String message = (actualCount > 50)
+            ? String.format("Portfolio contains %d total assets. Showing top 50 by quantity. " +
+                           "Additional %d assets are not shown to prevent context overflow.",
+                           actualCount, actualCount - 50)
+            : String.format("Portfolio contains %d assets (all shown).", actualCount);
+
         return new StakeAddressPortfolio(
             stakeAddress,
             ((Number) adaResult.get("utxo_count")).longValue(),
             new BigDecimal(adaResult.get("total_lovelace").toString()),
-            assets
+            actualCount,
+            assets,
+            message
         );
     }
 
@@ -734,9 +767,10 @@ public class McpUtxoAggregationService {
     }
 
     @Tool(name = "multi-asset-summary",
-          description = "Get summary of all assets held by address(es). " +
-                        "Returns list of all native tokens and NFTs with quantities. " +
-                        "IMPORTANT: For each asset returned, use 'asset_unit' to fetch token registry metadata: " +
+          description = "Get summary of assets held by address(es). " +
+                        "Returns TOP 50 ASSETS by quantity (ordered by highest holdings first). " +
+                        "⚠️ IMPORTANT: Only returns top 50 assets to prevent context overflow. Check 'message' field for total count. " +
+                        "For each asset returned, use 'asset_unit' to fetch token registry metadata: " +
                         "https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/refs/heads/master/mappings/<asset_unit>.json " +
                         "Display holdings as 'X.XXX TokenName (TICKER)' using decimals field for proper formatting. " +
                         "This transforms raw portfolio data into human-readable token names for better UX. " +
@@ -744,7 +778,7 @@ public class McpUtxoAggregationService {
                         "Perfect for portfolio overview and asset discovery. " +
                         "Supports Franken address search via searchByPaymentCredential=true to aggregate balances " +
                         "across all addresses sharing the same payment credential but different stake credentials.")
-    public List<AssetHolding> getMultiAssetSummary(
+    public MultiAssetSummary getMultiAssetSummary(
         @ToolParam(description = "Address or comma-separated addresses") String addresses,
         @ToolParam(description = "If true, aggregate by payment credential (Franken addresses). Default: false") Boolean searchByPaymentCredential
     ) {
@@ -760,12 +794,27 @@ public class McpUtxoAggregationService {
 
     /**
      * Optimized multi-asset summary using address_balance_current table.
-     * 10-100x faster than UTXO aggregation - direct unit/quantity lookup without JSONB.
+     * Returns top 50 assets by quantity to prevent context overflow.
      * Attempts to decode asset names from hex to UTF-8 for better display.
      */
-    private List<AssetHolding> getMultiAssetSummaryOptimized(String addresses) {
+    private MultiAssetSummary getMultiAssetSummaryOptimized(String addresses) {
         log.debug("[OPTIMIZED] Getting multi-asset summary for addresses: {}", addresses);
 
+        Map<String, Object> params = new HashMap<>();
+        params.put("addresses", addresses.split(","));
+
+        // Query 1: Count total assets
+        String countSql = """
+            SELECT COUNT(DISTINCT unit) as total_assets
+            FROM address_balance_current
+            WHERE address = ANY(:addresses)
+              AND unit != 'lovelace'
+              AND quantity > 0
+            """;
+
+        Integer totalAssetCount = jdbcTemplate.queryForObject(countSql, params, Integer.class);
+
+        // Query 2: Top 50 assets by quantity
         String sql = """
             SELECT
                 unit as asset_unit,
@@ -776,12 +825,10 @@ public class McpUtxoAggregationService {
               AND quantity > 0
             GROUP BY unit
             ORDER BY quantity DESC
+            LIMIT 50
             """;
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("addresses", addresses.split(","));
-
-        return jdbcTemplate.query(sql, params,
+        List<AssetHolding> assets = jdbcTemplate.query(sql, params,
             (rs, rowNum) -> {
                 String assetUnit = rs.getString("asset_unit");
                 String policyId = assetUnit.substring(0, 56); // First 56 hex chars = policy ID
@@ -807,21 +854,53 @@ public class McpUtxoAggregationService {
                 );
             }
         );
+
+        // Build message based on total asset count
+        int actualCount = (totalAssetCount != null) ? totalAssetCount : 0;
+        String message = (actualCount > 50)
+            ? String.format("Address(es) hold %d total assets. Showing top 50 by quantity. " +
+                           "Additional %d assets are not shown to prevent context overflow.",
+                           actualCount, actualCount - 50)
+            : String.format("Address(es) hold %d assets (all shown).", actualCount);
+
+        return new MultiAssetSummary(actualCount, assets, message);
     }
 
     /**
      * Traditional multi-asset summary using address_utxo table with JSONB unnesting.
-     * Slower but supports payment credential search.
+     * Returns top 50 assets by quantity to prevent context overflow.
+     * Supports payment credential search.
      */
-    private List<AssetHolding> getMultiAssetSummaryFromUtxo(String addresses, boolean usePaymentCredential) {
+    private MultiAssetSummary getMultiAssetSummaryFromUtxo(String addresses, boolean usePaymentCredential) {
         log.debug("[UTXO] Getting multi-asset summary for addresses: {}, searchByPaymentCredential: {}",
                   addresses, usePaymentCredential);
 
+        String countSql;
         String sql;
         Map<String, Object> params = new HashMap<>();
 
         if (usePaymentCredential) {
             List<String> credentials = extractPaymentCredentials(addresses);
+
+            // Count total assets
+            countSql = """
+                SELECT COUNT(*) as total_assets
+                FROM (
+                    SELECT elem->>'unit' as asset_unit
+                    FROM address_utxo,
+                         jsonb_array_elements(amounts) as elem
+                    WHERE owner_payment_credential = ANY(:credentials)
+                      AND elem->>'unit' != 'lovelace'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM tx_input
+                          WHERE tx_input.tx_hash = address_utxo.tx_hash
+                          AND tx_input.output_index = address_utxo.output_index
+                      )
+                    GROUP BY elem->>'unit'
+                ) sub
+                """;
+
+            // Top 50 assets
             sql = """
                 SELECT
                     elem->>'unit' as asset_unit,
@@ -839,9 +918,29 @@ public class McpUtxoAggregationService {
                   )
                 GROUP BY elem->>'unit', elem->>'policy_id', elem->>'asset_name'
                 ORDER BY quantity DESC
+                LIMIT 50
                 """;
             params.put("credentials", credentials.toArray(new String[0]));
         } else {
+            // Count total assets
+            countSql = """
+                SELECT COUNT(*) as total_assets
+                FROM (
+                    SELECT elem->>'unit' as asset_unit
+                    FROM address_utxo,
+                         jsonb_array_elements(amounts) as elem
+                    WHERE owner_addr = ANY(:addresses)
+                      AND elem->>'unit' != 'lovelace'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM tx_input
+                          WHERE tx_input.tx_hash = address_utxo.tx_hash
+                          AND tx_input.output_index = address_utxo.output_index
+                      )
+                    GROUP BY elem->>'unit'
+                ) sub
+                """;
+
+            // Top 50 assets
             sql = """
                 SELECT
                     elem->>'unit' as asset_unit,
@@ -859,11 +958,16 @@ public class McpUtxoAggregationService {
                   )
                 GROUP BY elem->>'unit', elem->>'policy_id', elem->>'asset_name'
                 ORDER BY quantity DESC
+                LIMIT 50
                 """;
             params.put("addresses", addresses.split(","));
         }
 
-        return jdbcTemplate.query(sql, params,
+        // Get total count
+        Integer totalAssetCount = jdbcTemplate.queryForObject(countSql, params, Integer.class);
+
+        // Get top 50 assets
+        List<AssetHolding> assets = jdbcTemplate.query(sql, params,
             (rs, rowNum) -> new AssetHolding(
                 rs.getString("asset_unit"),
                 rs.getString("policy_id"),
@@ -871,5 +975,15 @@ public class McpUtxoAggregationService {
                 rs.getBigDecimal("quantity")
             )
         );
+
+        // Build message based on total asset count
+        int actualCount = (totalAssetCount != null) ? totalAssetCount : 0;
+        String message = (actualCount > 50)
+            ? String.format("Address(es) hold %d total assets. Showing top 50 by quantity. " +
+                           "Additional %d assets are not shown to prevent context overflow.",
+                           actualCount, actualCount - 50)
+            : String.format("Address(es) hold %d assets (all shown).", actualCount);
+
+        return new MultiAssetSummary(actualCount, assets, message);
     }
 }

@@ -15,6 +15,74 @@ spring:
 
 store:
   mcp-server:
+    enabled: true
+
+    # Tool category configuration
+    # All tools are enabled by default (matchIfMissing=true in code)
+    # Uncomment and set to false to disable specific tool categories
+    tools:
+      blocks:
+        enabled: true
+      transactions:
+        enabled: true
+      utxos:
+        enabled: true
+      assets:
+        enabled: true
+      epochs:
+        enabled: true
+      staking:
+        enabled: true
+      accounts:
+        enabled: true
+      adapot:
+        enabled: true
+      governance-aggr:
+        enabled: true
+      contract-aggr:
+        enabled: true
+      external-metadata:
+        enabled: true
+
+    # Aggregation configuration
+    aggregation:
+      enabled: true
+
+      # Tier 1: Predefined aggregations (production-ready)
+      predefined:
+        enabled: true
+
+      token-analytics:
+        enabled: true
+      # Token Holder Summary Materialized View
+      token-holder-summary:
+        enabled: true
+        # Every 3 hours at minute 0 (12:00, 3:00, 6:00, 9:00)
+        refresh-cron: "0 0 */3 * * *"
+
+      # Address Credential Mapping Materialized View
+      address-credential-mapping:
+        enabled: true
+        # Daily at 2:00 AM
+        refresh-cron: "0 0 2 * * *"
+
+      # Address Token Diversity Materialized View
+      address-token-diversity:
+        enabled: true
+        # Every 12 hours at minute 0 (12:00 AM, 12:00 PM)
+        refresh-cron: "0 0 */12 * * *"
+
+      # Tier 2: Dynamic Query Builder (Flexible - For Power Users)
+      # WARNING: This feature is powerful but requires careful use. Only enable in trusted environments.
+      dynamic-query:
+        enabled: true
+        max-result-size: 10000          # Maximum result set size (rows)
+        timeout-seconds: 30             # Query execution timeout
+        max-joins: 3                    # Maximum number of JOINs allowed
+        max-filters: 20                 # Maximum filter conditions (WHERE + HAVING)
+        max-group-by: 10                # Maximum GROUP BY columns
+        max-select-fields: 50           # Maximum SELECT fields
+
     dapp-registry:
       enabled: true
       external-registry:

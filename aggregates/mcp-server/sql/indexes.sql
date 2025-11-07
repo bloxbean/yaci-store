@@ -201,3 +201,9 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_assets_asset_name_lower
 --    - Creating indexes may take significant time
 --    - CONCURRENTLY allows queries to continue during creation
 --    - Monitor with: SELECT * FROM pg_stat_progress_create_index;
+
+
+-- Required by McpAssetAggregationService.top-holders-by-policy
+CREATE INDEX CONCURRENTLY idx_balance_policy_id
+    ON address_balance_current ((LEFT(unit, 56)))
+    WHERE quantity > 0;
