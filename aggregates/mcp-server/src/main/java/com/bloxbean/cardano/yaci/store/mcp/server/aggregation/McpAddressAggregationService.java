@@ -54,15 +54,47 @@ public class McpAddressAggregationService {
     private static final BigInteger ONE_ADA = BigInteger.valueOf(1_000_000); // 1 ADA = 1,000,000 lovelace
 
     @Tool(name = "address-portfolio-summary",
-          description = "Get complete portfolio for an address: ADA balance + all native tokens + NFTs. " +
+          description = "Get complete portfolio for an address: ADA balance + native tokens + NFTs. " +
                         "Returns BOTH lovelace and ADA units to prevent confusion. " +
+                        "⚠️ CONTEXT MANAGEMENT: By default returns 20 tokens to conserve context. " +
+                        "RECOMMENDED WORKFLOW: " +
+                        "(1) First call: Use maxTokens=10 for quick overview. " +
+                        "(2) If user wants more detail: maxTokens=30. " +
+                        "(3) If user wants comprehensive view: maxTokens=50-100. " +
+                        "(4) Analyzing multiple addresses: Keep maxTokens=10 per address. " +
+                        "Use tokenSort='random' for variety to discover different tokens each call. " +
+                        "Use skipTokens=true for ADA-only analysis (much faster, no token data). " +
                         "All token quantities are in whole units (no decimals). " +
                         "Only includes unspent UTXOs (current holdings). " +
                         "Essential for wallet apps and portfolio tracking.")
     public AddressPortfolio getAddressPortfolioSummary(
-        @ToolParam(description = "Cardano address (addr1... or addr_test...)") String address
+        @ToolParam(description = "Cardano address (addr1... or addr_test...)") String address,
+        @ToolParam(description = "Skip token analysis entirely (default: false). Set true for ADA-only, much faster queries.") Boolean skipTokens,
+        @ToolParam(description = "Token sort method: 'quantity' (default, show top holdings first) or 'random' (random selection for variety)") String tokenSort,
+        @ToolParam(description = "Max tokens to return (default: 20, max: 100, min: 1). " +
+                                 "⚠️ STRATEGY: Start with 10-20 for overview, increase only if user needs more detail. " +
+                                 "Each token ~50 chars, so 50 tokens = ~2.5KB context.") Integer maxTokens
     ) {
-        log.debug("Getting portfolio summary for address: {}", address);
+        // Normalize parameters
+        boolean shouldSkipTokens = skipTokens != null && skipTokens;
+        String effectiveTokenSort = (tokenSort != null && tokenSort.equalsIgnoreCase("random")) ? "random" : "quantity";
+
+        // Normalize and validate maxTokens: default 20, min 1, max 100
+        int effectiveMaxTokens = 20; // Default
+        if (maxTokens != null) {
+            if (maxTokens < 1) {
+                effectiveMaxTokens = 1;
+                log.warn("maxTokens {} is below minimum, using 1", maxTokens);
+            } else if (maxTokens > 100) {
+                effectiveMaxTokens = 100;
+                log.warn("maxTokens {} exceeds maximum, using 100", maxTokens);
+            } else {
+                effectiveMaxTokens = maxTokens;
+            }
+        }
+
+        log.debug("Getting portfolio summary for address: {}, skipTokens: {}, tokenSort: {}, maxTokens: {}",
+                  address, shouldSkipTokens, effectiveTokenSort, effectiveMaxTokens);
 
         // Query to get ADA balance and UTXO count from unspent UTXOs
         String adaQuery = """
@@ -87,52 +119,119 @@ public class McpAddressAggregationService {
         BigDecimal totalAda = new BigDecimal(totalLovelace)
             .divide(new BigDecimal(ONE_ADA), 6, RoundingMode.HALF_UP);
 
-        // Query to aggregate native tokens from unspent UTXOs
-        String tokenQuery = """
-            WITH unspent_utxos AS (
-                SELECT u.amounts
-                FROM address_utxo u
-                LEFT JOIN tx_input ti ON u.tx_hash = ti.tx_hash AND u.output_index = ti.output_index
-                WHERE ti.tx_hash IS NULL
-                  AND u.owner_addr = :address
-                  AND u.amounts IS NOT NULL
-            )
-            SELECT
-                (elem->>'unit') as unit,
-                (elem->>'policy_id') as policy_id,
-                (elem->>'asset_name') as asset_name,
-                SUM((elem->>'quantity')::numeric) as total_quantity
-            FROM unspent_utxos
-            CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
-            WHERE (elem->>'unit') != 'lovelace'
-            GROUP BY unit, policy_id, asset_name
-            ORDER BY unit
-            """;
+        // Initialize token-related variables
+        List<TokenBalance> nativeTokens = new java.util.ArrayList<>();
+        int totalTokenCount = 0;
+        int nftCount = 0;
+        String message = null;
 
-        List<TokenBalance> nativeTokens = jdbcTemplate.query(tokenQuery, params,
-            (rs, rowNum) -> {
-                String unit = rs.getString("unit");
-                String policyId = rs.getString("policy_id");
-                String assetNameHex = rs.getString("asset_name");
-                BigInteger quantity = rs.getBigDecimal("total_quantity").toBigInteger();
+        if (shouldSkipTokens) {
+            // Count tokens but don't fetch them
+            String tokenCountQuery = """
+                WITH unspent_utxos AS (
+                    SELECT u.amounts
+                    FROM address_utxo u
+                    LEFT JOIN tx_input ti ON u.tx_hash = ti.tx_hash AND u.output_index = ti.output_index
+                    WHERE ti.tx_hash IS NULL
+                      AND u.owner_addr = :address
+                      AND u.amounts IS NOT NULL
+                )
+                SELECT COUNT(DISTINCT (elem->>'unit')) as token_count
+                FROM unspent_utxos
+                CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
+                WHERE (elem->>'unit') != 'lovelace'
+                """;
 
-                // Try to decode asset name from hex to UTF-8
-                String assetName = decodeAssetName(assetNameHex);
+            Map<String, Object> countResult = jdbcTemplate.queryForMap(tokenCountQuery, params);
+            totalTokenCount = ((Number) countResult.get("token_count")).intValue();
 
-                return new TokenBalance(
-                    unit,
-                    policyId,
-                    assetName,
-                    assetNameHex,
-                    quantity
-                );
+            message = String.format("⚠️ Token analysis skipped. Address holds %d unique tokens. Set skipTokens=false to include tokens.",
+                                  totalTokenCount);
+
+            log.debug("Skipped token analysis. Total token count: {}", totalTokenCount);
+
+        } else {
+            // First, count total unique tokens
+            String tokenCountQuery = """
+                WITH unspent_utxos AS (
+                    SELECT u.amounts
+                    FROM address_utxo u
+                    LEFT JOIN tx_input ti ON u.tx_hash = ti.tx_hash AND u.output_index = ti.output_index
+                    WHERE ti.tx_hash IS NULL
+                      AND u.owner_addr = :address
+                      AND u.amounts IS NOT NULL
+                )
+                SELECT COUNT(DISTINCT (elem->>'unit')) as token_count
+                FROM unspent_utxos
+                CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
+                WHERE (elem->>'unit') != 'lovelace'
+                """;
+
+            Map<String, Object> countResult = jdbcTemplate.queryForMap(tokenCountQuery, params);
+            totalTokenCount = ((Number) countResult.get("token_count")).intValue();
+
+            // Then, fetch tokens with appropriate ordering and limit
+            String orderClause = effectiveTokenSort.equals("random")
+                ? "ORDER BY RANDOM()"
+                : "ORDER BY total_quantity DESC";
+
+            String tokenQuery = String.format("""
+                WITH unspent_utxos AS (
+                    SELECT u.amounts
+                    FROM address_utxo u
+                    LEFT JOIN tx_input ti ON u.tx_hash = ti.tx_hash AND u.output_index = ti.output_index
+                    WHERE ti.tx_hash IS NULL
+                      AND u.owner_addr = :address
+                      AND u.amounts IS NOT NULL
+                )
+                SELECT
+                    (elem->>'unit') as unit,
+                    (elem->>'policy_id') as policy_id,
+                    (elem->>'asset_name') as asset_name,
+                    SUM((elem->>'quantity')::numeric) as total_quantity
+                FROM unspent_utxos
+                CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
+                WHERE (elem->>'unit') != 'lovelace'
+                GROUP BY unit, policy_id, asset_name
+                %s
+                LIMIT %d
+                """, orderClause, effectiveMaxTokens);
+
+            nativeTokens = jdbcTemplate.query(tokenQuery, params,
+                (rs, rowNum) -> {
+                    String unit = rs.getString("unit");
+                    String policyId = rs.getString("policy_id");
+                    String assetNameHex = rs.getString("asset_name");
+                    BigInteger quantity = rs.getBigDecimal("total_quantity").toBigInteger();
+
+                    // Try to decode asset name from hex to UTF-8
+                    String assetName = decodeAssetName(assetNameHex);
+
+                    return new TokenBalance(
+                        unit,
+                        policyId,
+                        assetName,
+                        assetNameHex,
+                        quantity
+                    );
+                }
+            );
+
+            // Count NFTs (tokens with quantity = 1)
+            nftCount = (int) nativeTokens.stream()
+                .filter(token -> token.quantity().equals(BigInteger.ONE))
+                .count();
+
+            // Set message if tokens were limited
+            if (totalTokenCount > effectiveMaxTokens) {
+                message = String.format("⚠️ Address holds %d unique tokens. Showing %d tokens sorted by %s. " +
+                                      "Increase maxTokens parameter (max: 100) for more, or use skipTokens=true for ADA-only analysis.",
+                                      totalTokenCount, effectiveMaxTokens, effectiveTokenSort);
             }
-        );
 
-        // Count NFTs (tokens with quantity = 1)
-        int nftCount = (int) nativeTokens.stream()
-            .filter(token -> token.quantity().equals(BigInteger.ONE))
-            .count();
+            log.debug("Fetched {} tokens (total: {}, maxTokens: {}), NFTs: {}",
+                     nativeTokens.size(), totalTokenCount, effectiveMaxTokens, nftCount);
+        }
 
         return new AddressPortfolio(
             address,
@@ -140,7 +239,9 @@ public class McpAddressAggregationService {
             totalAda,
             nativeTokens,
             nftCount,
-            utxoCount
+            utxoCount,
+            totalTokenCount,
+            message
         );
     }
 
@@ -333,18 +434,50 @@ public class McpAddressAggregationService {
     }
 
     @Tool(name = "address-nft-collection",
-          description = "Get all NFTs owned by an address, grouped by collection (policy ID). " +
+          description = "Get NFTs owned by an address, grouped by collection (policy ID). " +
                         "NFTs are tokens with quantity = 1. " +
-                        "Shows collection count, NFT count per collection, and individual NFT details. " +
+                        "⚠️ CONTEXT MANAGEMENT: Returns 5 collections × 5 NFTs = 25 NFTs by default. " +
+                        "RECOMMENDED WORKFLOW: " +
+                        "(1) First call: maxCollections=5, maxNFTsPerCollection=3 (15 NFTs overview). " +
+                        "(2) More detail: maxCollections=10, maxNFTsPerCollection=5 (50 NFTs). " +
+                        "(3) Comprehensive: maxCollections=20, maxNFTsPerCollection=10 (200 NFTs max). " +
+                        "Shows totals so user knows what's hidden. " +
+                        "Use collectionSort='random' for variety. " +
                         "Only includes unspent UTXOs (current holdings). " +
                         "Essential for NFT galleries, collection tracking, and portfolio visualization.")
     public AddressNFTPortfolio getAddressNFTCollection(
-        @ToolParam(description = "Cardano address (addr1... or addr_test...)") String address
+        @ToolParam(description = "Cardano address (addr1... or addr_test...)") String address,
+        @ToolParam(description = "Max collections to return (default: 5, max: 20, min: 1). Start with 5 for overview.") Integer maxCollections,
+        @ToolParam(description = "Max NFTs per collection (default: 5, max: 20, min: 1). Start with 3-5 for overview.") Integer maxNFTsPerCollection,
+        @ToolParam(description = "Collection sort: 'size' (default, largest first) or 'random' (variety)") String collectionSort,
+        @ToolParam(description = "NFT sort within collection: 'unit' (default, alphabetical) or 'random' (variety)") String nftSort
     ) {
-        log.debug("Getting NFT collection for address: {}", address);
+        // Normalize and validate parameters
+        int effectiveMaxCollections = 5; // Default
+        if (maxCollections != null) {
+            if (maxCollections < 1) effectiveMaxCollections = 1;
+            else if (maxCollections > 20) effectiveMaxCollections = 20;
+            else effectiveMaxCollections = maxCollections;
+        }
 
-        // Query to get all NFTs (tokens with quantity = 1) from unspent UTXOs
-        String nftQuery = """
+        int effectiveMaxNFTsPerCollection = 5; // Default
+        if (maxNFTsPerCollection != null) {
+            if (maxNFTsPerCollection < 1) effectiveMaxNFTsPerCollection = 1;
+            else if (maxNFTsPerCollection > 20) effectiveMaxNFTsPerCollection = 20;
+            else effectiveMaxNFTsPerCollection = maxNFTsPerCollection;
+        }
+
+        String effectiveCollectionSort = (collectionSort != null && collectionSort.equalsIgnoreCase("random")) ? "random" : "size";
+        String effectiveNftSort = (nftSort != null && nftSort.equalsIgnoreCase("random")) ? "random" : "unit";
+
+        log.debug("Getting NFT collection for address: {}, maxCollections: {}, maxNFTsPerCollection: {}, collectionSort: {}, nftSort: {}",
+                  address, effectiveMaxCollections, effectiveMaxNFTsPerCollection, effectiveCollectionSort, effectiveNftSort);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("address", address);
+
+        // Step 1: Get total counts (NFTs and collections)
+        String countsQuery = """
             WITH unspent_utxos AS (
                 SELECT u.amounts
                 FROM address_utxo u
@@ -352,23 +485,86 @@ public class McpAddressAggregationService {
                 WHERE ti.tx_hash IS NULL
                   AND u.owner_addr = :address
                   AND u.amounts IS NOT NULL
+            ),
+            nft_data AS (
+                SELECT
+                    (elem->>'policy_id') as policy_id
+                FROM unspent_utxos
+                CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
+                WHERE (elem->>'unit') != 'lovelace'
+                  AND (elem->>'quantity')::numeric = 1
             )
             SELECT
-                (elem->>'unit') as unit,
-                (elem->>'policy_id') as policy_id,
-                (elem->>'asset_name') as asset_name,
-                (elem->>'quantity')::numeric as quantity
-            FROM unspent_utxos
-            CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
-            WHERE (elem->>'unit') != 'lovelace'
-              AND (elem->>'quantity')::numeric = 1
-            ORDER BY policy_id, unit
+                COUNT(*) as total_nft_count,
+                COUNT(DISTINCT policy_id) as total_collection_count
+            FROM nft_data
             """;
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("address", address);
+        Map<String, Object> countsResult = jdbcTemplate.queryForMap(countsQuery, params);
+        int totalNFTCount = ((Number) countsResult.get("total_nft_count")).intValue();
+        int totalCollectionCount = ((Number) countsResult.get("total_collection_count")).intValue();
 
-        List<NFT> allNFTs = jdbcTemplate.query(nftQuery, params,
+        log.debug("Total NFTs: {}, Total Collections: {}", totalNFTCount, totalCollectionCount);
+
+        // Step 2: Get limited NFTs with per-collection limiting
+        String collectionOrderClause = effectiveCollectionSort.equals("random")
+            ? "ORDER BY RANDOM()"
+            : "ORDER BY collection_nft_count DESC";
+
+        String nftOrderClause = effectiveNftSort.equals("random")
+            ? "RANDOM()"
+            : "unit";
+
+        String nftQuery = String.format("""
+            WITH unspent_utxos AS (
+                SELECT u.amounts
+                FROM address_utxo u
+                LEFT JOIN tx_input ti ON u.tx_hash = ti.tx_hash AND u.output_index = ti.output_index
+                WHERE ti.tx_hash IS NULL
+                  AND u.owner_addr = :address
+                  AND u.amounts IS NOT NULL
+            ),
+            all_nfts AS (
+                SELECT
+                    (elem->>'unit') as unit,
+                    (elem->>'policy_id') as policy_id,
+                    (elem->>'asset_name') as asset_name,
+                    (elem->>'quantity')::numeric as quantity
+                FROM unspent_utxos
+                CROSS JOIN LATERAL jsonb_array_elements(amounts) AS elem
+                WHERE (elem->>'unit') != 'lovelace'
+                  AND (elem->>'quantity')::numeric = 1
+            ),
+            collection_sizes AS (
+                SELECT
+                    policy_id,
+                    COUNT(*) as collection_nft_count
+                FROM all_nfts
+                GROUP BY policy_id
+            ),
+            top_collections AS (
+                SELECT policy_id, collection_nft_count
+                FROM collection_sizes
+                %s
+                LIMIT %d
+            ),
+            limited_nfts AS (
+                SELECT
+                    n.unit,
+                    n.policy_id,
+                    n.asset_name,
+                    n.quantity,
+                    ROW_NUMBER() OVER (PARTITION BY n.policy_id ORDER BY %s) as rn
+                FROM all_nfts n
+                INNER JOIN top_collections tc ON n.policy_id = tc.policy_id
+            )
+            SELECT unit, policy_id, asset_name, quantity
+            FROM limited_nfts
+            WHERE rn <= %d
+            ORDER BY policy_id, rn
+            """, collectionOrderClause, effectiveMaxCollections, nftOrderClause, effectiveMaxNFTsPerCollection);
+
+        List<NFT> limitedNFTs = jdbcTemplate.query(nftQuery, params,
             (rs, rowNum) -> {
                 String unit = rs.getString("unit");
                 String policyId = rs.getString("policy_id");
@@ -390,7 +586,7 @@ public class McpAddressAggregationService {
 
         // Group NFTs by policy ID (collection)
         Map<String, List<NFT>> nftsByPolicyId = new HashMap<>();
-        for (NFT nft : allNFTs) {
+        for (NFT nft : limitedNFTs) {
             nftsByPolicyId.computeIfAbsent(nft.policyId(), k -> new ArrayList<>()).add(nft);
         }
 
@@ -403,11 +599,36 @@ public class McpAddressAggregationService {
             ))
             .toList();
 
+        // Calculate what's shown
+        int collectionsShown = collections.size();
+        int nftsShown = limitedNFTs.size();
+
+        // Build message if anything was limited
+        String message = null;
+        if (totalNFTCount > nftsShown || totalCollectionCount > collectionsShown) {
+            int hiddenCollections = totalCollectionCount - collectionsShown;
+            int hiddenNFTs = totalNFTCount - nftsShown;
+
+            message = String.format(
+                "📊 Portfolio Summary: You own %d NFTs across %d collections.\n" +
+                "Showing %d NFTs from %d collections (%d NFTs shown).\n" +
+                "Hidden: %d collections with %d NFTs not shown.\n" +
+                "Increase maxCollections (max: 20) or maxNFTsPerCollection (max: 20) for more.",
+                totalNFTCount, totalCollectionCount,
+                effectiveMaxNFTsPerCollection, collectionsShown, nftsShown,
+                hiddenCollections, hiddenNFTs
+            );
+        }
+
+        log.debug("Returned {} collections with {} NFTs (total: {} collections, {} NFTs)",
+                 collectionsShown, nftsShown, totalCollectionCount, totalNFTCount);
+
         return new AddressNFTPortfolio(
             address,
-            allNFTs.size(),
-            collections.size(),
-            collections
+            totalNFTCount,
+            totalCollectionCount,
+            collections,
+            message
         );
     }
 }
