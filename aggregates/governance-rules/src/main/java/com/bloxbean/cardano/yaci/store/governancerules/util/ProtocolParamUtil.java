@@ -10,9 +10,9 @@ public class ProtocolParamUtil {
     private ProtocolParamUtil() {
     }
 
+    // reference: https://github.com/IntersectMBO/cardano-ledger/blob/master/eras/conway/impl/src/Cardano/Ledger/Conway/PParams.hs
     public static List<ProtocolParamGroup> getGroupsWithNonNullField(ProtocolParamUpdate params) {
         List<ProtocolParamGroup> groups = new ArrayList<>();
-        // todo: Economic: refScriptCostStride, refScriptCostMultiplier
         if (isNonNull(params.getMinFeeA(), params.getMinFeeB(), params.getKeyDeposit(), params.getPoolDeposit(),
                 params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep(), params.getAdaPerUtxoByte(),
                 params.getExpansionRate(), params.getTreasuryGrowthRate())) {

@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
@@ -18,10 +19,12 @@ import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsU
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.Proposal;
+
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
+import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -428,7 +431,8 @@ public class DRepDistService {
                     sum(
                       COALESCE(sab.quantity, 0) 
                           + COALESCE(r.withdrawable_reward, 0) 
-                          + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
+                          + COALESCE(pr.pool_refund_withdrawable_reward, 0)
+                          + COALESCE(ir.insta_withdrawable_reward, 0)
                           + COALESCE(apd.deposit, 0)
                           - COALESCE(dpd.deposit, 0)
                           + COALESCE(rr.withdrawable_reward_rest, 0)
@@ -440,6 +444,7 @@ public class DRepDistService {
                   from
                     ss_drep_ranked_delegations rd
                     left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_insta_spendable_rewards ir ON rd.address = ir.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
@@ -473,6 +478,7 @@ public class DRepDistService {
                     sum(
                       COALESCE(sab.quantity, 0)
                           + COALESCE(r.withdrawable_reward, 0) 
+                          + COALESCE(ir.insta_withdrawable_reward, 0)
                           + COALESCE(pr.pool_refund_withdrawable_reward, 0) 
                           + COALESCE(apd.deposit, 0)
                           - COALESCE(dpd.deposit, 0)
@@ -485,6 +491,7 @@ public class DRepDistService {
                   from
                     ss_drep_ranked_delegations rd
                     left join ss_pool_rewards r on rd.address = r.address
+                    left join ss_insta_spendable_rewards ir ON rd.address = ir.address
                     left join ss_gov_pool_refund_rewards pr on rd.address = pr.address
                     left join ss_gov_active_proposal_deposits  apd on apd.return_address = rd.address
                     left join ss_gov_scheduled_to_drop_proposal_deposits dpd on dpd.return_address = rd.address
@@ -555,38 +562,43 @@ public class DRepDistService {
 
     private Set<GovActionId> getActiveProposalsScheduledToDrop(int currentEpoch) {
         int prevEpoch = currentEpoch - 1;
-        
-        List<Proposal> newProposals = govActionProposalStorage.findByEpoch(prevEpoch)
+
+        List<GovActionProposal> expiredProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, prevEpoch);
+        List<Proposal> expiredProposals = expiredProposalsInPrevSnapshot
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        List<GovActionProposal> ratifiedProposalsInPrevSnapshot = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch);
+        List<Proposal> ratifiedProposals = ratifiedProposalsInPrevSnapshot
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        List<GovActionProposal> activeProposalsInPrevEpoch =  getActiveProposalsInEpoch(prevEpoch);
+        List<Proposal> activeProposals = activeProposalsInPrevEpoch
+                .stream()
+                .map(proposalMapper::toProposalInGovRule)
+                .toList();
+
+        return new ProposalDropService()
+                .getProposalsBeDropped(activeProposals, expiredProposals, ratifiedProposals)
+                .stream()
+                .map(Proposal::getGovActionId)
+                .collect(Collectors.toSet());
+    }
+
+    private List<GovActionProposal> getActiveProposalsInEpoch(int epoch) {
+        List<GovActionProposal> newProposals = govActionProposalStorage.findByEpoch(epoch)
                 .stream()
                 .map(proposalMapper::toGovActionProposal)
-                .flatMap(Optional::stream)
-                .map(proposalMapper::toProposal)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toList();
 
-        List<Proposal> ratifiedProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, prevEpoch).stream()
-                .map(proposalMapper::toProposal)
-                .toList();
-        List<Proposal> activeProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, prevEpoch).stream()
-                .map(proposalMapper::toProposal)
-                .toList();
-        List<Proposal> expiredProposals = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.EXPIRED, prevEpoch).stream()
-                .map(proposalMapper::toProposal)
-                .toList();
+        List<GovActionProposal> activeProposals = proposalStateClient
+                .getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, epoch);
 
-        List<Proposal> activeOrNewCreatedProposals = Stream.concat(activeProposals.stream(), newProposals.stream()).toList();
-
-        Set<GovActionId> proposalsToBeDropped = new HashSet<>();
-
-        for (Proposal proposal : expiredProposals) {
-            List<Proposal> proposalsToPrune = ProposalUtils.findDescendants(proposal, activeOrNewCreatedProposals);
-            proposalsToPrune.forEach(p -> proposalsToBeDropped.add(p.getGovActionId()));
-        }
-
-        for (Proposal proposal : ratifiedProposals) {
-            List<Proposal> proposalsToPrune = ProposalUtils.findSiblingsAndTheirDescendants(proposal, activeOrNewCreatedProposals);
-            proposalsToPrune.forEach(p -> {proposalsToBeDropped.add(p.getGovActionId());});
-        }
-
-        return proposalsToBeDropped;
+        return Stream.concat(newProposals.stream(), activeProposals.stream()).toList();
     }
 }
