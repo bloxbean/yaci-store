@@ -81,7 +81,7 @@ create table reward
     spendable_epoch integer,
     slot            bigint,
     update_datetime timestamp,
-    primary key (address, earned_epoch, type, pool_id)
+    primary key (address, earned_epoch, type, pool_id, spendable_epoch)
 );
 
 create index idx_reward_slot

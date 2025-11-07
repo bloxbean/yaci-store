@@ -30,6 +30,15 @@ public class StakeSnapshotService {
             jdbcTemplate.update("SET LOCAL synchronous_commit = off", Map.of());
             tableType = "UNLOGGED";
             log.info("Postgres detected. Using UNLOGGED table for temp tables");
+
+            // Increase work_mem for complex snapshot queries with joins and window functions
+            // This setting only affects the current transaction and automatically resets after
+            try {
+                jdbcTemplate.update("SET LOCAL work_mem = '512MB'", Map.of());
+                log.debug("Increased work_mem to 512MB for stake snapshot operations");
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
         }
 
         jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));

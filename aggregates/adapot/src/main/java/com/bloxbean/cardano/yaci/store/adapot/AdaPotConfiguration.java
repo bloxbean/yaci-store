@@ -81,4 +81,10 @@ public class AdaPotConfiguration {
         return new AdaPotJobStorageImpl(adaPotJobRepository, rewardCalcJobMapper);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public PartitionManager partitionManager(DSLContext dslContext) {
+        return new PostgresPartitionManager(dslContext);
+    }
+
 }

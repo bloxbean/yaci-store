@@ -70,7 +70,7 @@ create table instant_reward
 create index idx_instant_reward_slot
     on instant_reward (slot);
 
-drop table if exists reward;
+drop table if exists reward cascade;
 create table reward
 (
     address         varchar(255),
@@ -81,8 +81,11 @@ create table reward
     spendable_epoch integer,
     slot            bigint,
     update_datetime timestamp,
-    primary key (address, earned_epoch, type, pool_id)
-);
+    primary key (address, earned_epoch, type, pool_id, spendable_epoch)
+) partition by range (spendable_epoch);
+
+create table reward_default
+    partition of reward default;
 
 create index idx_reward_slot
     on reward (slot);
