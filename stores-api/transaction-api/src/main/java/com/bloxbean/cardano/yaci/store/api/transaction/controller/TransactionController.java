@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HexFormat;
+
 import java.util.List;
 
 @Slf4j
@@ -112,21 +114,34 @@ public class TransactionController {
                 .body(txnCbor.getCborData());
     }
     
-    @GetMapping("{txHash}/cbor/exists")
+    @GetMapping(value = "{txHash}/cbor/hex", produces = MediaType.TEXT_PLAIN_VALUE)
     @Operation(
-        summary = "Check Transaction CBOR Existence",
-        description = "Check if CBOR data exists for a specific transaction"
+        summary = "Transaction CBOR Data (Hex Format)",
+        description = "Get raw CBOR bytes of a transaction as hexadecimal string. " +
+                     "This is useful for JSON-based clients that cannot handle binary data. " +
+                     "Returns the CBOR data encoded as hex string. " +
+                     "Note: This feature must be enabled via store.transaction.save-cbor=true"
     )
-    public ResponseEntity<Boolean> checkTransactionCborExists(
+    public ResponseEntity<String> getTransactionCborHex(
             @PathVariable 
             @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid transaction hash format") 
             String txHash) {
         
         if (transactionCborStorageReader == null) {
-            return ResponseEntity.ok(false);
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND, 
+                "Transaction CBOR feature is not enabled"
+            );
         }
         
-        boolean exists = transactionCborStorageReader.cborExists(txHash);
-        return ResponseEntity.ok(exists);
+        var txnCbor = transactionCborStorageReader.getTxCborByHash(txHash)
+                .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, 
+                    "Transaction CBOR data not found. " +
+                    "Make sure store.transaction.save-cbor=true is enabled."
+                ));
+        
+        String cborHex = HexFormat.of().formatHex(txnCbor.getCborData());
+        return ResponseEntity.ok(cborHex);
     }
 }

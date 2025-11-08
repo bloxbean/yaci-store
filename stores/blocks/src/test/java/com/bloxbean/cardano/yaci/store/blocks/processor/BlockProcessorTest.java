@@ -1,12 +1,13 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.*;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -20,10 +21,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BlockProcessorTest {
     @Mock
     private BlockStorage blockStorage;
+    @Mock
+    private BlocksStoreProperties blocksStoreProperties;
     @InjectMocks
     private BlockProcessor blockProcessor;
     @Captor
     ArgumentCaptor<Block> blockArgCaptor;
+
+    @BeforeEach
+    void setUp() {
+        // Mock BlocksStoreProperties to disable CBOR saving by default
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(false);
+    }
 
     @Test
     void givenBlockEvent_shouldHandleBlockEventAndSaveBlock() {

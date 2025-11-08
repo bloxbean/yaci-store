@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
@@ -68,6 +69,8 @@ public class TransactionProcessor {
     public void handleTransactionEvent(TransactionEvent event) {
         List<Transaction> transactions = event.getTransactions();
         List<Txn> txList = new ArrayList<>();
+        List<TxnCbor> txnCborList = new ArrayList<>();
+        boolean saveCborEnabled = transactionStoreProperties.isSaveCbor();
 
         var txIndex = new AtomicInteger(0);
         transactions.forEach(transaction -> {
@@ -124,6 +127,10 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
+            if (saveCborEnabled) {
+                collectTransactionCbor(transaction, txnCborList);
+            }
+
             if (fee == null && transaction.isInvalid()) { //will be resolved in pre-commit event as it can't be resolved now due to parallel processing.
                 invalidUnresolvedFeeTxns.add(new Tuple<>(txn, transaction));
             } else {
@@ -139,6 +146,10 @@ public class TransactionProcessor {
 
             //Publish txn event for valid transactions
             publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
+        }
+
+        if (saveCborEnabled && !txnCborList.isEmpty()) {
+            transactionStorage.saveCbor(txnCborList);
         }
 
     }
@@ -251,6 +262,27 @@ public class TransactionProcessor {
             log.error("Error generating keyhash for key : " + pubKey, e);
         }
         return null;
+    }
+
+    private void collectTransactionCbor(Transaction transaction, List<TxnCbor> txnCborList) {
+        if (transaction == null || transaction.getBody() == null) {
+            return;
+        }
+
+        String cborHex = transaction.getBody().getCbor();
+        if (cborHex == null || cborHex.isEmpty()) {
+            log.debug("No CBOR data available for transaction {} (YaciConfig.INSTANCE.setReturnTxBodyCbor(true) may not be set)", transaction.getTxHash());
+            return;
+        }
+
+        byte[] cborData = HexUtil.decodeHexString(cborHex);
+
+        txnCborList.add(TxnCbor.builder()
+                .txHash(transaction.getTxHash())
+                .cborData(cborData)
+                .cborSize(cborData.length)
+                .slot(transaction.getSlot())
+                .build());
     }
 
 

@@ -38,6 +38,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String ogmiosUrl;
     private String mempoolMonitoringEnabled;
 
+    private boolean returnTxBodyCbor;
+    private boolean returnBlockCbor;
+
     private long syncStartSlot;
     private String syncStartBlockhash;
     private long syncStartByronBlockNumber;

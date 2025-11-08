@@ -36,7 +36,6 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Plugin(key = PLUGIN_TRANSACTION_SAVE)
     @Transactional
     public void saveAll(List<Txn> txnList) {
-        // Save parsed transaction data
         List<TxnEntity> txnEntities = txnList.stream()
                 .map(mapper::toTxnEntity)
                 .collect(Collectors.toList());
@@ -46,26 +45,21 @@ public class TransactionStorageImpl implements TransactionStorage {
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        // Delete CBOR data first (if feature enabled)
         if (transactionStoreProperties.isSaveCbor()) {
             txnCborRepository.deleteBySlotGreaterThan(slot);
         }
         
-        // Delete transaction data
         return txnEntityRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Transactional
     public int deleteBySlotLessThan(long slot) {
-        // Delete CBOR data first (if feature enabled)
         if (transactionStoreProperties.isSaveCbor()) {
             dsl.deleteFrom(TRANSACTION_CBOR)
                     .where(TRANSACTION_CBOR.SLOT.lessThan(slot))
                     .execute();
         }
-        
-        // Delete transaction data
         return dsl.deleteFrom(TRANSACTION)
                 .where(TRANSACTION.SLOT.lessThan(slot))
                 .execute();
@@ -85,7 +79,6 @@ public class TransactionStorageImpl implements TransactionStorage {
         
         if (!cborEntities.isEmpty()) {
             txnCborRepository.saveAll(cborEntities);
-            log.debug("Saved CBOR data for {} transactions", cborEntities.size());
         }
     }
 }

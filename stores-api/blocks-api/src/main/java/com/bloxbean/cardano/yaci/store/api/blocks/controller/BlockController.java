@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HexFormat;
 import java.util.List;
 
 @Slf4j
@@ -141,22 +142,35 @@ public class BlockController {
                 .body(blockCbor.getCborData());
     }
     
-    @GetMapping("{blockHash}/cbor/exists")
+    @GetMapping(value = "{blockHash}/cbor/hex", produces = MediaType.TEXT_PLAIN_VALUE)
     @Operation(
-        summary = "Check Block CBOR Existence",
-        description = "Check if CBOR data exists for a specific block"
+        summary = "Block CBOR Data (Hex Format)",
+        description = "Get raw CBOR bytes of a block as hexadecimal string. " +
+                     "This is useful for JSON-based clients that cannot handle binary data. " +
+                     "Returns the CBOR data encoded as hex string. " +
+                     "Note: This feature must be enabled via store.blocks.save-cbor=true"
     )
-    public ResponseEntity<Boolean> checkBlockCborExists(
+    public ResponseEntity<String> getBlockCborHex(
             @PathVariable 
             @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid block hash format") 
             String blockHash) {
         
         if (blockCborStorageReader == null) {
-            return ResponseEntity.ok(false);
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND, 
+                "Block CBOR feature is not enabled"
+            );
         }
         
-        boolean exists = blockCborStorageReader.cborExists(blockHash);
-        return ResponseEntity.ok(exists);
+        var blockCbor = blockCborStorageReader.getBlockCborByHash(blockHash)
+                .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, 
+                    "Block CBOR data not found. " +
+                    "Make sure store.blocks.save-cbor=true is enabled."
+                ));
+        
+        String cborHex = HexFormat.of().formatHex(blockCbor.getCborData());
+        return ResponseEntity.ok(cborHex);
     }
 
 }

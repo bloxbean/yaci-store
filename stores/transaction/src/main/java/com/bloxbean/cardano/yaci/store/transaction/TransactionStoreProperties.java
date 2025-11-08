@@ -45,9 +45,10 @@ public class TransactionStoreProperties {
     private boolean cborPruningEnabled = false;
 
     /**
-     * Retention period for CBOR data in slots (default: 129600 = ~30 days).
+     * Retention period for CBOR data in slots.
+     * Default: 2,592,000 slots = 30 days (1 slot = 1 second on Cardano mainnet).
      * CBOR data older than this will be pruned if cborPruningEnabled is true.
      */
     @Builder.Default
-    private int cborRetentionSlots = 129600; // 30 days worth of slots
+    private int cborRetentionSlots = 2592000; // 30 days (30 * 24 * 60 * 60 slots)
 }
