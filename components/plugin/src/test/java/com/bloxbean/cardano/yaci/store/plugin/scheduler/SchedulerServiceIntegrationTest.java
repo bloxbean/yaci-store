@@ -9,7 +9,8 @@ import com.bloxbean.cardano.yaci.store.plugin.impl.mvel.MvelStorePluginFactory;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,16 +25,16 @@ public class SchedulerServiceIntegrationTest {
     private SchedulerService schedulerService;
     private PluginStateService pluginStateService;
     private MvelStorePluginFactory mvelFactory;
-    private ThreadPoolTaskScheduler taskScheduler;
+    private TaskScheduler taskScheduler;
     private StoreProperties storeProperties;
 
     @BeforeEach
     void setup() {
-        // Setup task scheduler
-        taskScheduler = new ThreadPoolTaskScheduler();
-        taskScheduler.setPoolSize(5);
-        taskScheduler.setThreadNamePrefix("test-scheduler-");
-        taskScheduler.initialize();
+        // Setup task scheduler with virtual threads (matching production config)
+        SimpleAsyncTaskScheduler scheduler = new SimpleAsyncTaskScheduler();
+        scheduler.setThreadNamePrefix("test-scheduler-");
+        scheduler.setVirtualThreads(true);
+        taskScheduler = scheduler;
 
         // Setup plugin state service
         PluginStateConfig pluginStateConfig = new PluginStateConfig();
