@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.submit;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -29,6 +30,7 @@ public class SubmitStoreConfiguration {
     public static final String STORE_SUBMIT_ENABLED = "store.submit.enabled == 'true' || store.submit.enabled == true || store.submit.enabled == null";
 
     @Bean
+    @ConditionalOnMissingBean(RestTemplate.class)
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
                 .setConnectTimeout(Duration.ofMillis(5000))
