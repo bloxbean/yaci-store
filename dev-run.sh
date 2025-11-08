@@ -32,7 +32,7 @@ heading() {
 
 # Display usage
 usage() {
-    cat << EOF
+    echo -e "$(cat << EOF
 ${BLUE}Yaci Store Development Runner${NC}
 
 Usage: $0 [OPTIONS]
@@ -82,6 +82,7 @@ ${GREEN}PLUGIN SUPPORT:${NC}
   - Auto-detected from: components/plugin-polyglot/build/libs/
 
 EOF
+)"
     exit 0
 }
 
