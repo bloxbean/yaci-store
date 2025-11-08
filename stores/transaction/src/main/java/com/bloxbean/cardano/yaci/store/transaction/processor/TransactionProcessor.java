@@ -24,6 +24,7 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.domain.event.TxnEvent;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +53,7 @@ public class TransactionProcessor {
     public static final String ATTRIBUTES = "attributes";
 
     private final TransactionStorage transactionStorage;
+    private final TransactionCborStorage transactionCborStorage;
 
     private final TransactionWitnessStorage transactionWitnessStorage;
     private final InvalidTransactionStorage invalidTransactionStorage;
@@ -149,7 +151,7 @@ public class TransactionProcessor {
         }
 
         if (saveCborEnabled && !txnCborList.isEmpty()) {
-            transactionStorage.saveCbor(txnCborList);
+            transactionCborStorage.save(txnCborList);
         }
 
     }

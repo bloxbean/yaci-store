@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -30,10 +31,14 @@ import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.ST
 @Slf4j
 public class BlockProcessor {
     private final BlockStorage blockStorage;
+    private final BlockCborStorage blockCborStorage;
     private final BlocksStoreProperties blocksStoreProperties;
 
-    public BlockProcessor(BlockStorage blockStorage, BlocksStoreProperties blocksStoreProperties) {
+    public BlockProcessor(BlockStorage blockStorage,
+                          BlockCborStorage blockCborStorage,
+                          BlocksStoreProperties blocksStoreProperties) {
         this.blockStorage = blockStorage;
+        this.blockCborStorage = blockCborStorage;
         this.blocksStoreProperties = blocksStoreProperties;
     }
 
@@ -80,7 +85,6 @@ public class BlockProcessor {
 
         blockStorage.save(block);
 
-        // Save CBOR data if enabled
         if (blocksStoreProperties.isSaveCbor()) {
             saveBlockCbor(blockEvent, blockHeader.getHeaderBody().getBlockHash(), slot);
         }
@@ -109,7 +113,7 @@ public class BlockProcessor {
                 .slot(slot)
                 .build();
 
-        blockStorage.saveCbor(blockCbor);
+        blockCborStorage.save(blockCbor);
     }
 
     public void handleTransaction(Block block, List<TransactionBody> transactionBodies) {
@@ -136,10 +140,13 @@ public class BlockProcessor {
     @EventListener
     @Order(1)
     @Transactional
-    //TODO -- add test
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
         int count = blockStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-
         log.info("Rollback -- {} block records", count);
+
+        if (blocksStoreProperties.isSaveCbor()) {
+            int cborDeleted = blockCborStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+            log.info("Rollback -- {} block_cbor records", cborDeleted);
+        }
     }
 }

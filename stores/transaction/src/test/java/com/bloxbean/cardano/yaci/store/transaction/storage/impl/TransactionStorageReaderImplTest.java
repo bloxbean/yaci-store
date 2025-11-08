@@ -25,9 +25,6 @@ class TransactionStorageReaderImplTest {
     @Autowired
     private TxnEntityRepository txnEntityRepository;
 
-    @MockBean
-    private TxnCborRepository txnCborRepository;
-
     private TransactionStorage transactionStorage;
     private TransactionStorageReader transactionStorageReader;
 
@@ -37,18 +34,11 @@ class TransactionStorageReaderImplTest {
     void setUp() {
         mapper = new TxnMapperImpl();
         transactionStorageReader = new TransactionStorageReaderImpl(txnEntityRepository, mapper, null);
-        
-        // Create TransactionStoreProperties
-        TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .saveCbor(false)
-                .build();
-        
+
         transactionStorage = new TransactionStorageImpl(
-                txnEntityRepository, 
-                txnCborRepository, 
-                mapper, 
-                null, // DSLContext not needed for this test
-                properties
+                txnEntityRepository,
+                mapper,
+                null // DSLContext not needed for this test
         );
     }
 

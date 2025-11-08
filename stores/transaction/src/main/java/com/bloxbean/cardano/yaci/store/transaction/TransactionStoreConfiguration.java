@@ -40,10 +40,15 @@ public class TransactionStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TransactionStorage transactionStorage(TxnEntityRepository txnEntityRepository,
-                                                 TxnCborRepository txnCborRepository,
-                                                 TxnMapper txnMapper,
-                                                 TransactionStoreProperties transactionStoreProperties) {
-        return new TransactionStorageImpl(txnEntityRepository, txnCborRepository, txnMapper, dslContext, transactionStoreProperties);
+                                                 TxnMapper txnMapper) {
+        return new TransactionStorageImpl(txnEntityRepository, txnMapper, dslContext);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TransactionCborStorage transactionCborStorage(TxnCborRepository txnCborRepository,
+                                                         TransactionStoreProperties transactionStoreProperties) {
+        return new TransactionCborStorageImpl(txnCborRepository, transactionStoreProperties);
     }
 
     @Bean

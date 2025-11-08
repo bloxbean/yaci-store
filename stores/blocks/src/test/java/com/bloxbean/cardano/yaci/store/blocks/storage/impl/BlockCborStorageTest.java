@@ -2,12 +2,9 @@ package com.bloxbean.cardano.yaci.store.blocks.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapper;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.mapper.BlockMapperImpl;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockCborRepository;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,38 +27,29 @@ import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.BEFORE_TE
 class BlockCborStorageTest {
 
     @Autowired
-    private BlockRepository blockRepository;
-
-    @Autowired
     private BlockCborRepository blockCborRepository;
 
-    private BlockStorage blockStorage;
+    private BlockCborStorage blockCborStorage;
     private BlockCborStorageReader blockCborStorageReader;
 
-    private BlockMapper mapper;
     private BlocksStoreProperties properties;
 
     @BeforeEach
     void setUp() {
-        mapper = new BlockMapperImpl();
-        
         properties = BlocksStoreProperties.builder()
                 .saveCbor(true)
                 .build();
-        
-        blockStorage = new BlockStorageImpl(
-                blockRepository,
+
+        blockCborStorage = new BlockCborStorageImpl(
                 blockCborRepository,
-                mapper,
                 properties
         );
-        
+
         blockCborStorageReader = new BlockCborStorageReaderImpl(blockCborRepository);
     }
 
     @Test
     void shouldSaveCborData() {
-        // Given
         byte[] cborData = new byte[]{0x01, 0x02, 0x03, 0x04, 0x05};
         BlockCbor blockCbor = BlockCbor.builder()
                 .blockHash("block123abc")
@@ -70,10 +58,8 @@ class BlockCborStorageTest {
                 .slot(54321L)
                 .build();
 
-        // When
-        blockStorage.saveCbor(blockCbor);
+        blockCborStorage.save(blockCbor);
 
-        // Then
         Optional<BlockCbor> retrieved = blockCborStorageReader.getBlockCborByHash("block123abc");
         assertThat(retrieved).isPresent();
         assertThat(retrieved.get().getBlockHash()).isEqualTo("block123abc");
@@ -84,73 +70,65 @@ class BlockCborStorageTest {
 
     @Test
     void shouldCheckCborExists() {
-        // Given
         BlockCbor blockCbor = BlockCbor.builder()
                 .blockHash("existsblock")
                 .cborData(new byte[]{0x0A, 0x0B})
                 .cborSize(2)
                 .slot(999L)
                 .build();
-        
-        blockStorage.saveCbor(blockCbor);
 
-        // When & Then
+        blockCborStorage.save(blockCbor);
+
         assertThat(blockCborStorageReader.cborExists("existsblock")).isTrue();
         assertThat(blockCborStorageReader.cborExists("nonexistent")).isFalse();
     }
 
     @Test
     void shouldDeleteCborBySlotGreaterThan() {
-        // Given
         BlockCbor cbor1 = BlockCbor.builder()
                 .blockHash("block1")
                 .cborData(new byte[]{0x01})
                 .cborSize(1)
                 .slot(100L)
                 .build();
-        
+
         BlockCbor cbor2 = BlockCbor.builder()
                 .blockHash("block2")
                 .cborData(new byte[]{0x02})
                 .cborSize(1)
                 .slot(300L)
                 .build();
-        
-        blockStorage.saveCbor(cbor1);
-        blockStorage.saveCbor(cbor2);
 
-        // When: Delete slot > 200
-        int deleted = blockStorage.deleteBySlotGreaterThan(200L);
+        blockCborStorage.save(cbor1);
+        blockCborStorage.save(cbor2);
 
-        // Then: Only block2 (slot 300) should be deleted
+        int deleted = blockCborStorage.deleteBySlotGreaterThan(200L);
+
+        assertThat(deleted).isEqualTo(1);
         assertThat(blockCborStorageReader.cborExists("block1")).isTrue();
         assertThat(blockCborStorageReader.cborExists("block2")).isFalse();
     }
 
     @Test
     void shouldNotSaveEmptyCborData() {
-        // Given: CBOR with null data
         BlockCbor emptyCbor = BlockCbor.builder()
                 .blockHash("emptyblock")
                 .cborData(null)
                 .slot(100L)
                 .build();
 
-        // When
-        blockStorage.saveCbor(emptyCbor);
+        blockCborStorage.save(emptyCbor);
 
-        // Then: Should not be saved
         assertThat(blockCborStorageReader.cborExists("emptyblock")).isFalse();
     }
 
     @Test
     void shouldHandleLargeCborData() {
-        // Given: Large CBOR data (simulate block with many transactions)
-        byte[] largeCborData = new byte[1024 * 100]; // 100KB
+        byte[] largeCborData = new byte[1024 * 100];
         for (int i = 0; i < largeCborData.length; i++) {
             largeCborData[i] = (byte) (i % 256);
         }
-        
+
         BlockCbor largeCbor = BlockCbor.builder()
                 .blockHash("largeblock")
                 .cborData(largeCborData)
@@ -158,10 +136,8 @@ class BlockCborStorageTest {
                 .slot(5000L)
                 .build();
 
-        // When
-        blockStorage.saveCbor(largeCbor);
+        blockCborStorage.save(largeCbor);
 
-        // Then
         Optional<BlockCbor> retrieved = blockCborStorageReader.getBlockCborByHash("largeblock");
         assertThat(retrieved).isPresent();
         assertThat(retrieved.get().getCborSize()).isEqualTo(1024 * 100);

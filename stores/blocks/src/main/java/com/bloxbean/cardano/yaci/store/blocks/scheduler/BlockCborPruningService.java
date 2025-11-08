@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blocks.scheduler;
 
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
-import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockCborRepository;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import jakarta.annotation.PostConstruct;
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 @Slf4j
 public class BlockCborPruningService {
-    private final BlockCborRepository blockCborRepository;
+    private final BlockCborStorage blockCborStorage;
     private final CursorService cursorService;
     private final BlocksStoreProperties blocksStoreProperties;
 
@@ -83,7 +83,7 @@ public class BlockCborPruningService {
                 
                 if (pruneBeforeSlot > 0) {
                     long t1 = System.currentTimeMillis();
-                    int deletedCount = blockCborRepository.deleteBySlotLessThan(pruneBeforeSlot);
+                    int deletedCount = blockCborStorage.deleteBySlotLessThan(pruneBeforeSlot);
                     long t2 = System.currentTimeMillis();
                     
                     log.info("Deleted {} block CBOR records before slot {} (retention: {} slots), Time taken: {} ms",

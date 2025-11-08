@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
@@ -42,6 +43,8 @@ class TransactionProcessorTest {
     @Mock
     private TransactionStorage transactionStorage;
     @Mock
+    private TransactionCborStorage transactionCborStorage;
+    @Mock
     private TransactionWitnessStorage transactionWitnessStorage;
 
     private FeeResolver feeResolver;
@@ -65,8 +68,9 @@ class TransactionProcessorTest {
         feeResolver = new FeeResolver(new DummyUtxoClient());
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
                 .saveWitness(true)
+                .saveCbor(true)
                 .build();
-        transactionProcessor = new TransactionProcessor(transactionStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher, properties);
+        transactionProcessor = new TransactionProcessor(transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage, new ObjectMapper(), feeResolver, publisher, properties);
     }
 
     @Test
@@ -187,7 +191,7 @@ class TransactionProcessorTest {
                 .build();
 
         TransactionProcessor processorWithDisabledWitnessSaving = new TransactionProcessor(
-                transactionStorage, transactionWitnessStorage, invalidTransactionStorage,
+                transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage,
                 new ObjectMapper(), feeResolver, publisher, properties);
 
         List<VkeyWitness> vkeyWitnesses = List.of(VkeyWitness.builder()

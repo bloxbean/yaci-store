@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.transaction.scheduler;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
-import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 @Slf4j
 public class TransactionCborPruningService {
-    private final TxnCborRepository txnCborRepository;
+    private final TransactionCborStorage transactionCborStorage;
     private final CursorService cursorService;
     private final TransactionStoreProperties transactionStoreProperties;
 
@@ -83,7 +83,7 @@ public class TransactionCborPruningService {
                 
                 if (pruneBeforeSlot > 0) {
                     long t1 = System.currentTimeMillis();
-                    int deletedCount = txnCborRepository.deleteBySlotLessThan(pruneBeforeSlot);
+                    int deletedCount = transactionCborStorage.deleteBySlotLessThan(pruneBeforeSlot);
                     long t2 = System.currentTimeMillis();
                     
                     log.info("Deleted {} transaction CBOR records before slot {} (retention: {} slots), Time taken: {} ms",
