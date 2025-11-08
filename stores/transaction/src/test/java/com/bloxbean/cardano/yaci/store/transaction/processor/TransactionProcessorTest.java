@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.transaction.processor;
 
 import com.bloxbean.cardano.yaci.core.model.*;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
@@ -10,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
+import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnWitness;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
@@ -20,10 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -62,6 +61,10 @@ class TransactionProcessorTest {
     private ArgumentCaptor<List<TxnWitness>> txnWitnessesCaptor;
     @Captor
     private ArgumentCaptor<InvalidTransaction> invalidTxCaptor;
+    @Captor
+    private ArgumentCaptor<List<TxnCbor>> txnCborCaptor;
+
+    private static final String TX_CBOR_HEX = "A1B2C3";
 
     @BeforeEach
     public void setup() {
@@ -84,8 +87,9 @@ class TransactionProcessorTest {
 
         verify(transactionStorage, Mockito.times(1)).saveAll(txnListCaptor.capture());
         verify(invalidTransactionStorage, Mockito.never()).save(invalidTxCaptor.capture());
-        List<Txn> txnList = txnListCaptor.getValue();
+        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
 
+        List<Txn> txnList = txnListCaptor.getValue();
         assertThat(txnList).hasSize(1);
 
         assertThat(txnList.get(0).getBlockHash()).isEqualTo(eventMetadata().getBlockHash());
@@ -119,17 +123,13 @@ class TransactionProcessorTest {
                 "eeee529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(txnList.get(0).getCollateralInputs()).map(UtxoKey::getOutputIndex).contains(0, 4);
 
-        assertThat(txnList.get(0).getReferenceInputs()).hasSize(2);
-        assertThat(txnList.get(0).getReferenceInputs()).map(UtxoKey::getTxHash).contains(
-                "c3e9dcc6c638b78c2591f74cfca27fba728e56c18e0b5a61a2a0cc900592c59f",
-                "5fb81bcabefefdb725a26fc9825d517ba79a05f86f845fda42b3f0f54b7ab90b");
-        assertThat(txnList.get(0).getReferenceInputs()).map(UtxoKey::getOutputIndex).contains(0, 1);
-
-        assertThat(txnList.get(0).getCollateralReturnJson().getAddress()).isEqualTo("addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc");
-        assertThat(txnList.get(0).getCollateralReturnJson().getAmounts()).hasSize(1);
-        assertThat(txnList.get(0).getCollateralReturnJson().getAmounts().get(0).getQuantity()).isEqualTo(BigInteger.valueOf(500));
-        assertThat(txnList.get(0).getCollateralReturnJson().getAmounts().get(0).getAssetName()).isEqualTo(LOVELACE);
-        assertThat(txnList.get(0).getCollateralReturnJson().getAmounts().get(0).getUnit()).isEqualTo(LOVELACE);
+        List<TxnCbor> savedCbor = txnCborCaptor.getValue();
+        assertThat(savedCbor).singleElement().satisfies(txnCbor -> {
+            assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+            assertThat(txnCbor.getSlot()).isEqualTo(eventMetadata().getSlot());
+            assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX));
+            assertThat(txnCbor.getCborSize()).isEqualTo(3);
+        });
     }
 
     @Test
@@ -217,6 +217,7 @@ class TransactionProcessorTest {
 
         // Verify that no witnesses were saved
         verify(transactionWitnessStorage, Mockito.never()).saveAll(any());
+        verify(transactionCborStorage, Mockito.never()).save(any());
     }
 
     @Test
@@ -284,6 +285,7 @@ class TransactionProcessorTest {
                         .auxiliaryDataHash("6497b33b10fa2619c6efbd9f874ecd1c91badb10bf70850732aab45b90524d9e")
                         .scriptDataHash("aaaab33b10fa2619c6efbd9f874ecd1c91badb10bf70850732aab45b90524d9e")
                         .totalCollateral(BigInteger.ONE)
+                        .cbor(TX_CBOR_HEX)
                         .referenceInputs(
                                 Set.of(
                                         new TransactionInput("c3e9dcc6c638b78c2591f74cfca27fba728e56c18e0b5a61a2a0cc900592c59f", 0),
