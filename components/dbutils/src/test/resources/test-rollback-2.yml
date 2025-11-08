@@ -1,0 +1,57 @@
+rollback:
+  tables:
+    - name: "pool"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+        
+    - name: "stake_registration"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+        
+    - name: "delegation"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+        
+    - name: "reward"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+        
+    - name: "drep_dist"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+        
+    - name: "gov_action_proposal_status"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+        
+    - name: "gov_epoch_activity"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+        
+    - name: "committee_state"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="

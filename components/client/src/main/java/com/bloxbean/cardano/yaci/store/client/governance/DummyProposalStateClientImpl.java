@@ -30,9 +30,4 @@ public class DummyProposalStateClientImpl implements ProposalStateClient {
         return Optional.empty();
     }
 
-    @Override
-    public Optional<Integer> getLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch) {
-        return Optional.empty();
-    }
-
 }

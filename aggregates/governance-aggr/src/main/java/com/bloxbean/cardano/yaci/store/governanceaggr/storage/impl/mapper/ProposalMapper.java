@@ -26,6 +26,7 @@ public class ProposalMapper {
         this.objectMapper.registerModule(module);
     }
 
+    // TODO: remove this method after refactoring
     public Proposal toProposal(GovActionProposal govActionProposal) {
         return Proposal.builder()
                 .type(govActionProposal.getGovAction().getType())
@@ -34,6 +35,17 @@ public class ProposalMapper {
                         .transactionId(govActionProposal.getTxHash())
                         .build())
                 .previousGovActionId(getPrevGovActionId(govActionProposal))
+                .build();
+    }
+
+    public com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal toProposalInGovRule(GovActionProposal govActionProposal) {
+        return com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal.builder()
+                .type(govActionProposal.getGovAction().getType())
+                .govActionId(GovActionId.builder()
+                        .gov_action_index(govActionProposal.getIndex())
+                        .transactionId(govActionProposal.getTxHash())
+                        .build())
+                .prevGovActionId(getPrevGovActionId(govActionProposal))
                 .build();
     }
 
