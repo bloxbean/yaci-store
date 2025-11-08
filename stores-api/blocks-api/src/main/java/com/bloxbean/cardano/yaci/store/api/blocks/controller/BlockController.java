@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.blocks.controller;
 
 import com.bloxbean.cardano.yaci.store.api.blocks.dto.BlockDto;
 import com.bloxbean.cardano.yaci.store.api.blocks.dto.BlockDtoMapper;
+import com.bloxbean.cardano.yaci.store.api.blocks.dto.CborHexResponse;
 import com.bloxbean.cardano.yaci.store.api.blocks.service.BlockService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlocksPage;
 import com.bloxbean.cardano.yaci.store.blocks.domain.PoolBlock;
@@ -142,15 +143,15 @@ public class BlockController {
                 .body(blockCbor.getCborData());
     }
     
-    @GetMapping(value = "{blockHash}/cbor/hex", produces = MediaType.TEXT_PLAIN_VALUE)
+    @GetMapping(value = "{blockHash}/cbor/hex", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
         summary = "Block CBOR Data (Hex Format)",
         description = "Get raw CBOR bytes of a block as hexadecimal string. " +
                      "This is useful for JSON-based clients that cannot handle binary data. " +
-                     "Returns the CBOR data encoded as hex string. " +
+                     "Returns the CBOR data encoded as hex string inside JSON body. " +
                      "Note: This feature must be enabled via store.blocks.save-cbor=true"
     )
-    public ResponseEntity<String> getBlockCborHex(
+    public ResponseEntity<CborHexResponse> getBlockCborHex(
             @PathVariable 
             @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid block hash format") 
             String blockHash) {
@@ -170,7 +171,8 @@ public class BlockController {
                 ));
         
         String cborHex = HexFormat.of().formatHex(blockCbor.getCborData());
-        return ResponseEntity.ok(cborHex);
+
+        return ResponseEntity.ok(CborHexResponse.builder().cborHex(cborHex).build());
     }
 
 }

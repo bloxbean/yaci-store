@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.transaction.controller;
 
+import com.bloxbean.cardano.yaci.store.api.transaction.dto.CborHexResponse;
 import com.bloxbean.cardano.yaci.store.api.transaction.service.TransactionService;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionDetails;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TransactionPage;
@@ -114,15 +115,15 @@ public class TransactionController {
                 .body(txnCbor.getCborData());
     }
     
-    @GetMapping(value = "{txHash}/cbor/hex", produces = MediaType.TEXT_PLAIN_VALUE)
+    @GetMapping(value = "{txHash}/cbor/hex", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
         summary = "Transaction CBOR Data (Hex Format)",
         description = "Get raw CBOR bytes of a transaction as hexadecimal string. " +
                      "This is useful for JSON-based clients that cannot handle binary data. " +
-                     "Returns the CBOR data encoded as hex string. " +
+                     "Returns the CBOR data encoded as hex string inside JSON body. " +
                      "Note: This feature must be enabled via store.transaction.save-cbor=true"
     )
-    public ResponseEntity<String> getTransactionCborHex(
+    public ResponseEntity<CborHexResponse> getTransactionCborHex(
             @PathVariable 
             @Pattern(regexp = "^[0-9a-fA-F]{64}$", message = "Invalid transaction hash format") 
             String txHash) {
@@ -142,6 +143,6 @@ public class TransactionController {
                 ));
         
         String cborHex = HexFormat.of().formatHex(txnCbor.getCborData());
-        return ResponseEntity.ok(cborHex);
+        return ResponseEntity.ok(CborHexResponse.builder().cborHex(cborHex).build());
     }
 }
