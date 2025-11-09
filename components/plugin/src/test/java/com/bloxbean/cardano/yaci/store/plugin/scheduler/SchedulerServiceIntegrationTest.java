@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Integration test for SchedulerService with actual scheduling
@@ -206,6 +207,70 @@ public class SchedulerServiceIntegrationTest {
         SchedulerService.SchedulerExecutionInfo info = statuses.get("test-cancel-scheduler");
         assertThat(info).isNotNull();
         assertThat(info.getStatus()).isEqualTo(SchedulerService.SchedulerStatus.CANCELLED);
+    }
+
+    @Test
+    void testCronScheduler() throws InterruptedException {
+        // Create scheduler with cron expression (every 2 seconds)
+        SchedulerPluginDef schedulerDef = new SchedulerPluginDef();
+        schedulerDef.setName("test-cron-scheduler");
+        schedulerDef.setLang("mvel");
+        schedulerDef.setInlineScript("""
+            counter = state.get('counter');
+            if (counter == null) {
+                counter = 0;
+            }
+            counter = counter + 1;
+            state.put('counter', counter);
+            state.put('lastExecution', executionTime);
+            logger.info("CRON scheduler executed, counter: " + counter);
+            """);
+        schedulerDef.setExitOnError(false);
+
+        // Cron: every 2 seconds (*/2 * * * * ?)
+        SchedulerPluginDef.ScheduleConfig schedule = new SchedulerPluginDef.ScheduleConfig();
+        schedule.setType(SchedulerPluginDef.ScheduleType.CRON);
+        schedule.setValue("*/2 * * * * ?");
+        schedulerDef.setSchedule(schedule);
+
+        SchedulerPlugin<?> plugin = mvelFactory.createSchedulerPlugin(schedulerDef);
+        schedulerService.registerScheduler(schedulerDef.getName(), plugin, schedulerDef);
+
+        // Wait for at least 2 executions (5 seconds should give us 2-3 executions)
+        Thread.sleep(5000);
+
+        var pluginState = pluginStateService.forPlugin("test-cron-scheduler");
+        Integer counter = (Integer) pluginState.get("counter");
+        assertThat(counter).isNotNull();
+        assertThat(counter).isGreaterThanOrEqualTo(2);
+
+        Long lastExecution = (Long) pluginState.get("lastExecution");
+        assertThat(lastExecution).isNotNull();
+        assertThat(lastExecution).isGreaterThan(0);
+
+        // Clean up
+        schedulerService.cancelScheduler(schedulerDef.getName());
+    }
+
+    @Test
+    void testInvalidCronExpression() {
+        SchedulerPluginDef schedulerDef = new SchedulerPluginDef();
+        schedulerDef.setName("test-invalid-cron");
+        schedulerDef.setLang("mvel");
+        schedulerDef.setInlineScript("state.put('test', true);");
+        schedulerDef.setExitOnError(false);
+
+        SchedulerPluginDef.ScheduleConfig schedule = new SchedulerPluginDef.ScheduleConfig();
+        schedule.setType(SchedulerPluginDef.ScheduleType.CRON);
+        schedule.setValue("INVALID CRON");
+        schedulerDef.setSchedule(schedule);
+
+        SchedulerPlugin<?> plugin = mvelFactory.createSchedulerPlugin(schedulerDef);
+
+        assertThatThrownBy(() ->
+                schedulerService.registerScheduler(schedulerDef.getName(), plugin, schedulerDef))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid cron expression");
     }
 
     // TODO: Add error handling test - requires better MVEL error simulation

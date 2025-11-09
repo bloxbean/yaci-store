@@ -8,6 +8,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -18,7 +19,7 @@ import java.util.concurrent.ScheduledFuture;
 
 /**
  * Service responsible for managing and executing scheduler plugins.
- * Supports interval-based scheduling for MVP.
+ * Supports INTERVAL and CRON scheduling.
  */
 @Slf4j
 @Service
@@ -48,6 +49,10 @@ public class SchedulerService {
         try {
             schedulePlugin(name, plugin, schedulerDef);
             log.info("Scheduled plugin: {} with schedule: {}", name, schedulerDef.getSchedule());
+        } catch (IllegalArgumentException e) {
+            // Re-throw validation errors (e.g., invalid cron expression)
+            log.error("Failed to schedule plugin due to invalid configuration: {}", name, e);
+            throw e;
         } catch (Exception e) {
             log.error("Failed to schedule plugin: {}", name, e);
             handleSchedulerError(name, e, plugin.getPluginDef().getExitOnError());
@@ -71,18 +76,20 @@ public class SchedulerService {
             case INTERVAL:
                 long intervalSeconds = Long.parseLong(schedule.getValue());
                 future = taskScheduler.scheduleAtFixedRate(task, Duration.ofSeconds(intervalSeconds));
-                log.debug("Scheduled {} with interval of {} seconds", pluginName, intervalSeconds);
+                log.info("Scheduled {} with interval of {} seconds", pluginName, intervalSeconds);
                 break;
 
             case CRON:
-                // TODO: Implement in future enhancement
-                log.warn("CRON scheduling not yet implemented for plugin: {}", pluginName);
-                return;
-
-            case BLOCK:
-                // TODO: Implement in future enhancement
-                log.warn("BLOCK scheduling not yet implemented for plugin: {}", pluginName);
-                return;
+                String cronExpression = schedule.getValue();
+                try {
+                    CronTrigger cronTrigger = new CronTrigger(cronExpression);
+                    future = taskScheduler.schedule(task, cronTrigger);
+                    log.info("Scheduled {} with cron expression: {}", pluginName, cronExpression);
+                } catch (IllegalArgumentException e) {
+                    log.error("Invalid cron expression '{}' for plugin: {}", cronExpression, pluginName, e);
+                    throw new IllegalArgumentException("Invalid cron expression: " + cronExpression, e);
+                }
+                break;
 
             default:
                 throw new IllegalArgumentException("Unsupported schedule type: " + schedule.getType());
