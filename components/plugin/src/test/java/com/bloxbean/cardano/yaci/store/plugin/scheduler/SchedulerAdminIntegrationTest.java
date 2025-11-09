@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateConfig;
 import com.bloxbean.cardano.yaci.store.plugin.cache.PluginStateService;
 import com.bloxbean.cardano.yaci.store.plugin.impl.mvel.MvelStorePluginFactory;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ public class SchedulerAdminIntegrationTest {
     private MvelStorePluginFactory mvelFactory;
     private TaskScheduler taskScheduler;
     private StoreProperties storeProperties;
+    private PluginMetricsCollector metricsCollector;
 
     @BeforeEach
     void setup() {
@@ -50,8 +52,11 @@ public class SchedulerAdminIntegrationTest {
         // Setup MVEL factory
         mvelFactory = new MvelStorePluginFactory(pluginStateService, variableProviderFactory);
 
+        // Setup metrics collector (no MeterRegistry for tests)
+        metricsCollector = new PluginMetricsCollector(storeProperties, null);
+
         // Create scheduler service
-        schedulerService = new SchedulerService(taskScheduler, storeProperties);
+        schedulerService = new SchedulerService(taskScheduler, storeProperties, metricsCollector);
     }
 
     @Test

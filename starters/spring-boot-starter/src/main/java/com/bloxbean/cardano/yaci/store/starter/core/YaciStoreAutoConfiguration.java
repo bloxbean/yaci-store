@@ -253,6 +253,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setPluginFilesEnableLocks(properties.getPlugins().getFiles().isEnableLocks());
 
         storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
+        storeProperties.setPluginMetricsEnabled(properties.getPlugins().getMetrics().isEnabled());
+        storeProperties.setPluginApiEnabled(properties.getPlugins().isApiEnabled());
 
         storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
 

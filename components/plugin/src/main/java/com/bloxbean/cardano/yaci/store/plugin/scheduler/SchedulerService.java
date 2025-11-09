@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.plugin.scheduler;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
 import com.bloxbean.cardano.yaci.store.plugin.api.SchedulerPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import jakarta.annotation.PreDestroy;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class SchedulerService {
 
     private final TaskScheduler taskScheduler;
     private final StoreProperties storeProperties;
+    private final PluginMetricsCollector metricsCollector;
 
     // Track scheduled tasks
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -122,6 +125,7 @@ public class SchedulerService {
      */
     private void executeScheduler(String pluginName, SchedulerPlugin<?> plugin, SchedulerPluginDef pluginDef) {
         long startTime = System.currentTimeMillis();
+        boolean success = false;
 
         try {
             // Update execution info
@@ -141,6 +145,7 @@ public class SchedulerService {
             try {
                 // Execute plugin (no parameters - variables are injected)
                 plugin.execute();
+                success = true;
 
                 long duration = System.currentTimeMillis() - startTime;
 
@@ -166,6 +171,18 @@ public class SchedulerService {
                 info.incrementFailureCount();
             }
             throw e;
+        } finally {
+            // Record in unified metrics collector (alongside existing SchedulerExecutionInfo)
+            long endTime = System.currentTimeMillis();
+            metricsCollector.recordExecution(
+                pluginName,
+                PluginType.SCHEDULER,
+                pluginDef.getLang(),
+                startTime,
+                endTime,
+                success,
+                null
+            );
         }
     }
 
