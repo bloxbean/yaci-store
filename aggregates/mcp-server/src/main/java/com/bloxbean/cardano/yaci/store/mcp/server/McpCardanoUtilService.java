@@ -8,15 +8,18 @@ import com.bloxbean.cardano.client.metadata.MetadataBuilder;
 import com.bloxbean.cardano.client.metadata.cbor.CBORMetadata;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.plutus.spec.serializers.PlutusDataJsonConverter;
+import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.BlockchainTimeInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.CardanoNetworkInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.ConversionResult;
+import com.bloxbean.cardano.yaci.store.mcp.server.model.GovActionIdResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.SlotTimeInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TimestampFormatted;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.TimestampSlotInfo;
@@ -386,6 +389,40 @@ public class McpCardanoUtilService {
 
         } catch (Exception e) {
             log.error("Failed to extract payment credential hash from address: {}", address, e);
+            return null;
+        }
+    }
+
+    @Tool(name = "gov-action-id-from-bech32",
+          description = "Convert a CIP-129 bech32 governance action ID to transaction hash and index. " +
+                       "Governance action IDs in bech32 format (gov_action1...) are user-friendly identifiers for proposals. " +
+                       "This tool extracts the underlying transaction hash and governance action index. " +
+                       "Useful when users provide proposal IDs in bech32 format and you need to query proposal details. " +
+                       "Example: gov_action1... → {txHash: 'abc123...', index: 0} " +
+                       "Use the returned txHash and index with other governance tools like proposal-by-id or votes-by-proposal.")
+    public GovActionIdResult govActionIdFromBech32(
+        @ToolParam(description = "Governance action ID in bech32 format (gov_action1...)") String govActionIdBech32
+    ) {
+        log.debug("Converting gov_action_id from bech32: {}", govActionIdBech32);
+
+        if (govActionIdBech32 == null || govActionIdBech32.trim().isEmpty()) {
+            log.warn("Input gov_action_id is null or empty");
+            return null;
+        }
+
+        try {
+            GovActionId govActionId = GovUtil.toGovActionIdFromBech32(govActionIdBech32);
+
+            String txHash = govActionId.getTransactionId();
+            Integer index = govActionId.getGovActionIndex();
+
+            log.debug("Converted gov_action_id: {} → txHash: {}, index: {}",
+                     govActionIdBech32, txHash, index);
+
+            return GovActionIdResult.create(txHash, index, govActionIdBech32);
+
+        } catch (Exception e) {
+            log.error("Failed to convert gov_action_id from bech32: {}", govActionIdBech32, e);
             return null;
         }
     }
