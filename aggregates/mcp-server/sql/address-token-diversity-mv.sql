@@ -61,6 +61,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_addr_diversity_mv_ada
     ON address_token_diversity_mv (ada_balance DESC, unique_token_count DESC)
     INCLUDE (address, unique_policy_count);
 
+-- Index 4: UNIQUE INDEX FOR CONCURRENT REFRESH
+-- PostgreSQL requires a unique index (with NO WHERE clause) to support
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY operations.
+-- Uses address as the natural primary key (one row per unique address from GROUP BY).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_addr_diversity_mv_address_unique
+    ON address_token_diversity_mv (address);
+
 
 -- ============================================
 -- QUERY EXAMPLES

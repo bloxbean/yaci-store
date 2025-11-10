@@ -55,6 +55,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_holder_mv_holders
     ON token_holder_summary_mv (holder_count DESC, total_supply DESC)
     INCLUDE (policy_id, asset_name, asset_unit, utxo_count);
 
+-- Index 3: UNIQUE INDEX FOR CONCURRENT REFRESH
+-- PostgreSQL requires a unique index (with NO WHERE clause) to support
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY operations.
+-- Uses asset_unit as the natural primary key (one row per unique token).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_token_holder_mv_unit_unique
+    ON token_holder_summary_mv (asset_unit);
+
 
 -- ============================================
 -- QUERY EXAMPLES
