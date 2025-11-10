@@ -121,7 +121,7 @@ Once started, you can verify the MCP server is running by checking:
    tail -f logs/ledger-state.log
    ```
 
-2. **MCP Endpoint**: The MCP server should be accessible (default port configuration in your setup)
+2. **MCP Endpoint**: The MCP server should be accessible (default port configuration in your setup) Example: http://localhost:8080/sse
 
 ## Stopping Yaci Store
 
