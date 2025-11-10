@@ -336,6 +336,60 @@ public class McpCardanoUtilService {
         }
     }
 
+    @Tool(name = "address-to-payment-hash",
+          description = "Extract the payment credential hash from a Cardano address (bech32 format). " +
+                       "Returns the payment credential hash in hex format for both key-based and script-based addresses. " +
+                       "This is the REVERSE operation of script-hash-to-address. " +
+                       "Useful for: " +
+                       "- Finding the payment credential from any address " +
+                       "- Querying UTXOs by payment credential " +
+                       "- Reversing address lookups to get the underlying hash " +
+                       "- Analyzing address composition and credential types " +
+                       "Supports: enterprise addresses (addr1...), base addresses (addr1...), testnet addresses (addr_test1...). " +
+                       "Returns null for: stake addresses (stake1..., no payment credential), pointer addresses. " +
+                       "Returns hex-encoded hash (56 characters) for both script and key credentials.")
+    public String addressToPaymentHash(
+        @ToolParam(description = "Cardano address in bech32 format (addr1... or addr_test1...)")
+        String address
+    ) {
+        log.debug("Extracting payment credential hash from address: {}", address);
+
+        if (address == null || address.trim().isEmpty()) {
+            log.warn("Input address is null or empty");
+            return null;
+        }
+
+        try {
+            // Parse the address
+            Address addr = new Address(address);
+
+            // Stake addresses don't have payment credentials, only delegation credentials
+            if (address.startsWith("stake")) {
+                log.debug("Stake address has no payment credential: {}", address);
+                return null;
+            }
+
+            // Extract payment credential
+            var paymentCredential = addr.getPaymentCredential();
+
+            if (paymentCredential.isEmpty()) {
+                log.warn("Address has no payment credential: {}", address);
+                return null;
+            }
+
+            // Get the hash from the payment credential (works for both key and script credentials)
+            byte[] credentialBytes = paymentCredential.get().getBytes();
+            String hash = HexUtil.encodeHexString(credentialBytes);
+
+            log.debug("Extracted payment credential hash: {} from address: {}", hash, address);
+            return hash;
+
+        } catch (Exception e) {
+            log.error("Failed to extract payment credential hash from address: {}", address, e);
+            return null;
+        }
+    }
+
     @Tool(name = "cardano-slot-to-timestamp",
           description = "⏰ Convert Cardano slot number to Unix timestamp. " +
                        "IMPORTANT: Returns timestamp in SECONDS (multiply by 1000 for milliseconds). " +
