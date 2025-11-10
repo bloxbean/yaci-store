@@ -124,6 +124,8 @@ public class YaciStoreProperties {
     public static final class Plugins {
         private boolean enabled = true;
         private boolean exitOnError = true;
+        private Metrics metrics = new Metrics();
+        private boolean apiEnabled = true;
 
         private List<Class> variableProviders = new ArrayList<>();
         private List<ScriptRef> scripts = new ArrayList<>();

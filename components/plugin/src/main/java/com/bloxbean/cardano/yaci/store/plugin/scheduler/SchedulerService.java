@@ -1,10 +1,13 @@
 package com.bloxbean.cardano.yaci.store.plugin.scheduler;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
 import com.bloxbean.cardano.yaci.store.plugin.api.SchedulerPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import jakarta.annotation.PreDestroy;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
@@ -28,6 +31,7 @@ public class SchedulerService {
 
     private final TaskScheduler taskScheduler;
     private final StoreProperties storeProperties;
+    private final PluginMetricsCollector metricsCollector;
 
     // Track scheduled tasks
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -96,7 +100,10 @@ public class SchedulerService {
         }
 
         scheduledTasks.put(pluginName, future);
-        executionInfo.put(pluginName, new SchedulerExecutionInfo(pluginName));
+        SchedulerExecutionInfo info = new SchedulerExecutionInfo(pluginName);
+        info.setScheduleType(schedule.getType());
+        info.setScheduleValue(schedule.getValue());
+        executionInfo.put(pluginName, info);
     }
 
     /**
@@ -105,7 +112,7 @@ public class SchedulerService {
     private Runnable createSchedulerTask(String pluginName, SchedulerPlugin<?> plugin, SchedulerPluginDef pluginDef) {
         return () -> {
             try {
-                executeScheduler(pluginName, plugin, pluginDef, false);
+                executeScheduler(pluginName, plugin, pluginDef);
             } catch (Exception e) {
                 log.error("Error executing scheduler plugin: {}", pluginName, e);
                 handleSchedulerError(pluginName, e, pluginDef.getExitOnError());
@@ -116,8 +123,9 @@ public class SchedulerService {
     /**
      * Execute a scheduler plugin
      */
-    private void executeScheduler(String pluginName, SchedulerPlugin<?> plugin, SchedulerPluginDef pluginDef, boolean isManualTrigger) {
+    private void executeScheduler(String pluginName, SchedulerPlugin<?> plugin, SchedulerPluginDef pluginDef) {
         long startTime = System.currentTimeMillis();
+        boolean success = false;
 
         try {
             // Update execution info
@@ -129,7 +137,7 @@ public class SchedulerService {
             }
 
             // Prepare variables for injection
-            Map<String, Object> variables = prepareSchedulerVariables(pluginName, pluginDef, startTime, isManualTrigger);
+            Map<String, Object> variables = prepareSchedulerVariables(pluginName, pluginDef, startTime);
 
             // Set variables in thread-local context for the plugin to access
             injectVariables(variables);
@@ -137,12 +145,17 @@ public class SchedulerService {
             try {
                 // Execute plugin (no parameters - variables are injected)
                 plugin.execute();
+                success = true;
+
+                long duration = System.currentTimeMillis() - startTime;
 
                 if (info != null) {
                     info.setStatus(SchedulerStatus.COMPLETED);
+                    info.setLastExecutionDuration(duration);
+                    info.updateAverageExecutionDuration(duration);
+                    info.incrementSuccessCount();
                 }
 
-                long duration = System.currentTimeMillis() - startTime;
                 log.debug("Successfully executed scheduler plugin: {} in {}ms", pluginName, duration);
 
             } finally {
@@ -155,20 +168,32 @@ public class SchedulerService {
             if (info != null) {
                 info.setStatus(SchedulerStatus.FAILED);
                 info.setLastError(e.getMessage());
+                info.incrementFailureCount();
             }
             throw e;
+        } finally {
+            // Record in unified metrics collector (alongside existing SchedulerExecutionInfo)
+            long endTime = System.currentTimeMillis();
+            metricsCollector.recordExecution(
+                pluginName,
+                PluginType.SCHEDULER,
+                pluginDef.getLang(),
+                startTime,
+                endTime,
+                success,
+                null
+            );
         }
     }
 
     /**
      * Prepare variables for scheduler execution
      */
-    private Map<String, Object> prepareSchedulerVariables(String pluginName, SchedulerPluginDef pluginDef, long executionTime, boolean isManualTrigger) {
+    private Map<String, Object> prepareSchedulerVariables(String pluginName, SchedulerPluginDef pluginDef, long executionTime) {
         Map<String, Object> variables = new HashMap<>();
 
         // Scheduler-specific variables
         variables.put("executionTime", executionTime);
-        variables.put("isManualTrigger", isManualTrigger);
 
         // TODO: Add current block info when blockchain integration is available
         variables.put("currentBlock", 0L);  // Placeholder
@@ -230,20 +255,24 @@ public class SchedulerService {
     }
 
     /**
-     * Cancel a scheduled task
+     * Cancel a scheduled task and remove it from tracking
+     * (executionInfo is preserved for historical purposes)
      */
     public void cancelScheduler(String pluginName) {
         ScheduledFuture<?> future = scheduledTasks.get(pluginName);
         if (future != null) {
             future.cancel(false);
             scheduledTasks.remove(pluginName);
+            // Remove from plugins map to prevent memory leak
+            schedulerPlugins.remove(pluginName);
 
+            // Keep executionInfo for historical purposes but mark as CANCELLED
             SchedulerExecutionInfo info = executionInfo.get(pluginName);
             if (info != null) {
                 info.setStatus(SchedulerStatus.CANCELLED);
             }
 
-            log.info("Cancelled scheduler: {}", pluginName);
+            log.info("Cancelled scheduler: {} (removed from active schedulers)", pluginName);
         }
     }
 
@@ -262,15 +291,23 @@ public class SchedulerService {
         }
     }
 
+
     /**
      * Information about scheduler execution
      */
+    @Data
     public static class SchedulerExecutionInfo {
         private final String name;
         private long executionCount = 0;
+        private long successCount = 0;
+        private long failureCount = 0;
         private Long lastExecutionTime;
+        private Long lastExecutionDuration;
+        private Double averageExecutionDuration;
         private String lastError;
         private SchedulerStatus status = SchedulerStatus.SCHEDULED;
+        private SchedulerPluginDef.ScheduleType scheduleType;
+        private String scheduleValue;
 
         public SchedulerExecutionInfo(String name) {
             this.name = name;
@@ -280,15 +317,22 @@ public class SchedulerService {
             this.executionCount++;
         }
 
-        // Getters and setters
-        public String getName() { return name; }
-        public long getExecutionCount() { return executionCount; }
-        public Long getLastExecutionTime() { return lastExecutionTime; }
-        public void setLastExecutionTime(Long time) { this.lastExecutionTime = time; }
-        public String getLastError() { return lastError; }
-        public void setLastError(String error) { this.lastError = error; }
-        public SchedulerStatus getStatus() { return status; }
-        public void setStatus(SchedulerStatus status) { this.status = status; }
+        public synchronized void incrementSuccessCount() {
+            this.successCount++;
+        }
+
+        public synchronized void incrementFailureCount() {
+            this.failureCount++;
+        }
+
+        public synchronized void updateAverageExecutionDuration(long duration) {
+            if (averageExecutionDuration == null) {
+                averageExecutionDuration = (double) duration;
+            } else {
+                // Rolling average: (old_avg * (n-1) + new_value) / n
+                averageExecutionDuration = (averageExecutionDuration * (executionCount - 1) + duration) / executionCount;
+            }
+        }
     }
 
     /**

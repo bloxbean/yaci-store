@@ -150,6 +150,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
 
     private boolean metricsEnabled = true;
 
+    private boolean pluginMetricsEnabled = true;
+    private boolean pluginApiEnabled = true;
+
     @Builder.Default
     private boolean continueOnParseError = false;
 
