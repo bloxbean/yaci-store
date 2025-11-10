@@ -760,9 +760,9 @@ public class McpGovernanceAggregationService {
                 COUNT(*) FILTER (WHERE vote = 'YES') as yes_votes,
                 COUNT(*) FILTER (WHERE vote = 'NO') as no_votes,
                 COUNT(*) FILTER (WHERE vote = 'ABSTAIN') as abstain_votes,
-                COUNT(*) FILTER (WHERE voter_type = 'DREP') as drep_votes,
-                COUNT(*) FILTER (WHERE voter_type = 'SPO') as spo_votes,
-                COUNT(*) FILTER (WHERE voter_type = 'COMMITTEE') as committee_votes
+                COUNT(*) FILTER (WHERE voter_type LIKE 'DREP%') as drep_votes,
+                COUNT(*) FILTER (WHERE voter_type LIKE 'STAKING_POOL%') as spo_votes,
+                COUNT(*) FILTER (WHERE voter_type LIKE 'CONSTITUTIONAL_COMMITTEE%') as committee_votes
             FROM latest_votes
             """;
 
