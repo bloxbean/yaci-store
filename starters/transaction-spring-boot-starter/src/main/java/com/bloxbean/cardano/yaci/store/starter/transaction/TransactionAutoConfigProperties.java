@@ -52,10 +52,10 @@ public class TransactionAutoConfigProperties {
 
       /**
        * Retention period for CBOR data in slots.
-       * Default: 2,592,000 slots = 30 days (1 slot = 1 second on Cardano mainnet).
+       * Default: 43,200 slots (~5 days based on 2160 safe blocks).
        * CBOR data older than this will be pruned if cborPruningEnabled is true.
        */
-      private int cborRetentionSlots = 2592000; // 30 days (30 * 24 * 60 * 60 slots)
+      private int cborRetentionSlots = 43200; // 20 * 2160 slots
     }
 
     @Getter
