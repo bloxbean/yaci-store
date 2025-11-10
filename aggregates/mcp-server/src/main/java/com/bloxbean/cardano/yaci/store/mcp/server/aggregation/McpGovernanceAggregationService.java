@@ -742,9 +742,19 @@ public class McpGovernanceAggregationService {
         long startTime = System.currentTimeMillis();
         log.info("Starting vote summary for proposal: {}#{}", govActionTxHash, govActionIndex);
 
-        // Optimized query using COUNT(*) FILTER for better performance
-        // This leverages the composite index on (gov_action_tx_hash, gov_action_index)
+        // Per CIP-1694, voters can vote multiple times on the same proposal.
+        // Only the latest vote (highest slot) from each voter should count.
+        // The CTE deduplicates votes using DISTINCT ON to get only the most recent vote per voter.
         String sql = """
+            WITH latest_votes AS (
+                SELECT DISTINCT ON (voter_hash, voter_type, gov_action_tx_hash, gov_action_index)
+                    vote,
+                    voter_type
+                FROM voting_procedure
+                WHERE gov_action_tx_hash = :govActionTxHash
+                  AND gov_action_index = :govActionIndex
+                ORDER BY voter_hash, voter_type, gov_action_tx_hash, gov_action_index, slot DESC
+            )
             SELECT
                 COUNT(*) as total_votes,
                 COUNT(*) FILTER (WHERE vote = 'YES') as yes_votes,
@@ -753,9 +763,7 @@ public class McpGovernanceAggregationService {
                 COUNT(*) FILTER (WHERE voter_type = 'DREP') as drep_votes,
                 COUNT(*) FILTER (WHERE voter_type = 'SPO') as spo_votes,
                 COUNT(*) FILTER (WHERE voter_type = 'COMMITTEE') as committee_votes
-            FROM voting_procedure
-            WHERE gov_action_tx_hash = :govActionTxHash
-              AND gov_action_index = :govActionIndex
+            FROM latest_votes
             """;
 
         Map<String, Object> params = new HashMap<>();
@@ -814,7 +822,7 @@ public class McpGovernanceAggregationService {
                     "CRITICAL for calculating historical governance participation rates: use these baseline numbers with proposal-vote-summary to compute participation percentages. " +
                     "Example: proposal-vote-summary shows 18 DRep votes, governance-eligibility-by-epoch shows 27 eligible DReps at the proposal's expiry epoch → participation rate = 18/27 = 66.7%. " +
                     "Works for any epoch - use proposal's expiry_epoch or enacted_epoch to analyze historical participation. " +
-                    "DRep eligibility is based on active_until >= epoch and excludes predefined options (NO_CONFIDENCE/ABSTAIN). " +
+                    "DRep eligibility: All registered DReps in drep_dist table (excludes predefined options NO_CONFIDENCE/ABSTAIN). Note: DReps with 0 voting power (stake) are excluded as they don't appear in drep_dist. " +
                     "SPO eligibility is based on having delegated stake in epoch_stake. " +
                     "CC member eligibility is based on their term boundaries (start_epoch <= epoch < expired_epoch).")
     public GovernanceEligibility getGovernanceEligibilityByEpoch(
@@ -830,8 +838,7 @@ public class McpGovernanceAggregationService {
         String sql = """
             WITH drep_stats AS (
               SELECT
-                COUNT(DISTINCT drep_hash) FILTER (WHERE active_until >= :epoch
-                                                    AND drep_type NOT IN ('NO_CONFIDENCE', 'ABSTAIN')) as eligible_dreps
+                COUNT(DISTINCT drep_hash) FILTER (WHERE drep_type NOT IN ('NO_CONFIDENCE', 'ABSTAIN')) as eligible_dreps
               FROM drep_dist
               WHERE epoch = :epoch
             ),
