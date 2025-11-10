@@ -62,6 +62,9 @@ public class PluginAspect {
             items = c;
         }
 
+        // Save original items before filtering (for error recovery)
+        Collection<Object> originalItems = new ArrayList<>(items);
+
         for (FilterPlugin<?> f : filters) {
             FilterPlugin<Object> sf = (FilterPlugin<Object>) f;
             long startTime = System.currentTimeMillis();
@@ -76,9 +79,12 @@ public class PluginAspect {
                 metricsCollector.recordItemsProcessed(f.getName(), initialSize);
 
             } catch (Exception e) {
+                log.error("Filter {} failed: {}", f.getName(), e.getMessage());
                 if (shouldExitOnError(f.getPluginDef())) {
                     throw e;
                 }
+                // Restore original items on non-fatal error
+                items = originalItems;
             } finally {
                 // Record execution metrics
                 long endTime = System.currentTimeMillis();
@@ -107,6 +113,9 @@ public class PluginAspect {
 
         // Apply pre-filters
         if (!preActions.isEmpty()) {
+            // Save items before preActions (for error recovery)
+            Collection<Object> itemsBeforePreActions = new ArrayList<>(items);
+
             for (PreActionPlugin preStoreFilter: preActions) {
                 long startTime = System.currentTimeMillis();
                 boolean success = false;
@@ -119,11 +128,12 @@ public class PluginAspect {
                     metricsCollector.recordItemsProcessed(preStoreFilter.getName(), items.size());
 
                 } catch (Exception e) {
-                    //TODO : Should we throw exception or just log it?
-                    log.error("Error executing pre-filter {}: {}", preStoreFilter.getName(), e.getMessage());
+                    log.error("PreAction {} failed: {}", preStoreFilter.getName(), e.getMessage());
                     if (shouldExitOnError(preStoreFilter.getPluginDef())) {
                         throw e;
                     }
+                    // Restore items before preActions on non-fatal error
+                    items = itemsBeforePreActions;
                 } finally {
                     // Record execution metrics
                     long endTime = System.currentTimeMillis();
