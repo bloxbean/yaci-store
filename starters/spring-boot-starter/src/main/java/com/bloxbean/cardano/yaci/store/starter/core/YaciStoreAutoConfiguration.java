@@ -244,6 +244,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setEventHandlers(properties.getPlugins().getEventHandlers());
         storeProperties.setSchedulers(properties.getPlugins().getSchedulers());
 
+        storeProperties.setSchedulerTaskTerminationTimeoutSeconds(properties.getPlugins().getScheduler().getTaskTerminationTimeoutSeconds());
         storeProperties.setPythonVenv(properties.getPlugins().getPython().getVenv());
         storeProperties.setPluginGlobalScripts(properties.getPlugins().getScripts());
 
@@ -252,6 +253,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setPluginFilesEnableLocks(properties.getPlugins().getFiles().isEnableLocks());
 
         storeProperties.setMetricsEnabled(properties.getMetrics().isEnabled());
+        storeProperties.setPluginMetricsEnabled(properties.getPlugins().getMetrics().isEnabled());
+        storeProperties.setPluginApiEnabled(properties.getPlugins().isApiEnabled());
 
         storeProperties.setContinueOnParseError(properties.isContinueOnParseError());
 

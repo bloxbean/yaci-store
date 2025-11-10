@@ -156,7 +156,6 @@ public abstract class  GraalPolyglotScriptStorePlugin<T> implements InitPlugin<T
                     if (targetFn == null || !targetFn.canExecute()) {
                         throw new IllegalArgumentException(pluginType.name() + " Function not found: " + functionName);
                     }
-                    targetFn.execute(items);
                     Value result = targetFn.execute(items);
 
                     var resultProxy = result.as(Collection.class);

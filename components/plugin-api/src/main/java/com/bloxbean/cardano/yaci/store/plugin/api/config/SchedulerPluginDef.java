@@ -25,7 +25,6 @@ public class SchedulerPluginDef extends PluginDef {
 
     public enum ScheduleType {
         INTERVAL,
-        CRON,
-        BLOCK
+        CRON
     }
 }
