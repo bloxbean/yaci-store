@@ -36,7 +36,7 @@ public class BlocksStoreAutoConfigProperties {
 
        /**
         * Retention period for CBOR data in slots.
-        * Default: 43,200 slots (~5 days based on 2160 safe blocks).
+        * Default: 43,200 slots (based on 2160 safe blocks).
         * CBOR data older than this will be pruned if cborPruningEnabled is true.
         */
        private int cborRetentionSlots = 43200; // 20 * 2160 slots
