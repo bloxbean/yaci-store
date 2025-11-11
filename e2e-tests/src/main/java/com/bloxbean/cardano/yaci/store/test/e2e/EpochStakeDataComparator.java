@@ -41,14 +41,14 @@ public class EpochStakeDataComparator {
 
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
-    public static void compareEpochStakeForEpoch(int epoch) {
+    public static int compareEpochStakeForEpoch(int epoch) {
         String dbSyncQuery = "SELECT sa.view, es.amount, encode(ph.hash_raw, 'hex') as pool_id " +
                 "FROM epoch_stake es " +
                 "INNER JOIN stake_address sa ON sa.id = es.addr_id " +
@@ -63,6 +63,7 @@ public class EpochStakeDataComparator {
         Map<String, EpochStakeData> storeMap = new HashMap<>();
 
         boolean mismatch = false;
+        int mismatchCount = 0;
 
         // Fetch from DB Sync
         try (Connection conn = DriverManager.getConnection(dbSyncUrl, dbSyncUser, dbSyncPassword);
@@ -113,12 +114,14 @@ public class EpochStakeDataComparator {
                 EpochStakeData storeData = storeMap.get(key);
                 if (!dbData.equals(storeData)) {
                     mismatch = true;
+                    mismatchCount++;
                     logLine("Mismatch for key: " + key);
                     logLine("  → DB Sync   : " + dbData);
                     logLine("  → Yaci Store: " + storeData);
                 }
             } else {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Key " + key + " found in DB Sync but not in Yaci Store.");
             }
         }
@@ -126,15 +129,17 @@ public class EpochStakeDataComparator {
         for (String key : storeMap.keySet()) {
             if (!dbSyncMap.containsKey(key)) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Key " + key + " found in Yaci Store but not in DB Sync.");
             }
         }
 
         if (mismatch) {
-            logLine("❌ Mismatch found in epoch_stake for epoch " + epoch);
+            logLine("❌ Mismatches found: " + mismatchCount + " in epoch_stake for epoch " + epoch);
         } else {
             logLine("✅ All epoch_stake data matches for epoch " + epoch);
         }
+        return mismatchCount;
     }
 
     private static class EpochStakeData {
@@ -174,12 +179,23 @@ public class EpochStakeDataComparator {
     }
 
     public static void main(String[] args) throws InterruptedException {
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, Math.abs(endEpoch - startEpoch) + 1);
+
         for (int i = startEpoch; i >= endEpoch; i--) {
             logLine("\n============ Comparing epoch_stake for epoch: " + i + " ============");
-            compareEpochStakeForEpoch(i);
+            int epochMismatch = compareEpochStakeForEpoch(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
             logLine("============ Finished epoch: " + i + " ============");
             Thread.sleep(5000); // Sleep for 5 seconds between epochs to avoid overwhelming the DB
         }
+
+        logLine("\n===== Epoch Stake Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
     }
 
     private static synchronized void logLine(String message) {
@@ -205,23 +221,3 @@ public class EpochStakeDataComparator {
         }
     }
 }
-
-/*
-============ Comparing epoch_stake for epoch: 575 ============
-Mismatch for key: stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv_abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b
-  → DB Sync   : EpochStakeData{address='stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv', amount=20046355289, poolId='abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b'}
-  → Yaci Store: EpochStakeData{address='stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv', amount=20021355289, poolId='abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b'}
-❌ Mismatch found in epoch_stake for epoch 575
-============ Finished epoch: 575 ============
- */
-
-
-/*
-Comparing epoch_stake for epoch: 574 ============
-Mismatch for key: stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv_abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b
-  → DB Sync   : EpochStakeData{address='stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv', amount=20031715318, poolId='abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b'}
-  → Yaci Store: EpochStakeData{address='stake1ux7pt9adw8z46tgqn2f8fvurrhk325gcm4mf75mkmmxpx6gae9mzv', amount=20006715318, poolId='abacadaba9f12a8b5382fc370e4e7e69421fb59831bb4ecca3a11d9b'}
-❌ Mismatch found in epoch_stake for epoch 574
-============ Finished epoch: 574 ============
-
- */

@@ -45,13 +45,13 @@ public class RewardRestDataComparator {
     }
 
     // Connection details for the two databases (update these with your real values)
-    static String dbSyncUrl = "jdbc:postgresql://10.4.10.112:5588/cexplorer?currentSchema=public";
-    static String dbSyncUser = "dbsync";
-    static String dbSyncPassword = "dbsync";
+    static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
+    static String dbSyncUser = "<dbsync_user>";
+    static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://10.4.10.112:54334/ledger_sync?currentSchema=refactor_preview";
-    static String storeDBUser = "cardano-master";
-    static String storeDBPassword = "dbpass";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
@@ -65,7 +65,7 @@ public class RewardRestDataComparator {
         return hash.toLowerCase();
     }
 
-    public static void compareRewardRestForEpoch(int epoch) {
+    public static int compareRewardRestForEpoch(int epoch) {
         String dbSyncQuery = "SELECT sa.view, rr.type, rr.earned_epoch, rr.amount, rr.spendable_epoch " +
                 "FROM reward_rest rr " +
                 "INNER JOIN stake_address sa ON sa.id = rr.addr_id " +
@@ -80,6 +80,7 @@ public class RewardRestDataComparator {
         Map<RewardRestData, Integer> storeMap = new HashMap<>();
 
         boolean mismatch = false;
+        int mismatchCount = 0;
 
         // Fetch from DB Sync
         try (Connection conn = DriverManager.getConnection(dbSyncUrl, dbSyncUser, dbSyncPassword);
@@ -135,9 +136,11 @@ public class RewardRestDataComparator {
             Integer storeCount = storeMap.get(data);
             if (storeCount == null) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Entry present only in DB Sync: " + data + " (count=" + dbCount + ")");
             } else if (!storeCount.equals(dbCount)) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Count mismatch for: " + data + " → DB Sync=" + dbCount + ", Yaci Store=" + storeCount);
             }
         }
@@ -148,15 +151,17 @@ public class RewardRestDataComparator {
             Integer dbCount = dbSyncMap.get(data);
             if (dbCount == null) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Entry present only in Yaci Store: " + data + " (count=" + storeCount + ")");
             }
         }
 
         if (mismatch) {
-            logLine("❌ Mismatch found in reward_rest for epoch " + epoch + " (type=" + rewardType + ")");
+            logLine("❌ Mismatches found: " + mismatchCount + " in reward_rest for epoch " + epoch + " (type=" + rewardType + ")");
         } else {
             logLine("✅ All reward_rest data matches for epoch " + epoch + " (type=" + rewardType + ")");
         }
+        return mismatchCount;
     }
 
     private static class RewardRestData {
@@ -211,11 +216,22 @@ public class RewardRestDataComparator {
             logLine("Using default reward_rest type: " + rewardType);
         }
 
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
             logLine("\n============ Comparing reward_rest for epoch: " + i + " (type=" + rewardType + ") ============");
-            compareRewardRestForEpoch(i);
+            int epochMismatch = compareRewardRestForEpoch(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
             logLine("============ Finished epoch: " + i + " (type=" + rewardType + ") ============");
         }
+
+        logLine("\n===== RewardRest Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
     }
 
     private static synchronized void logLine(String message) {

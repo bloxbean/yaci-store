@@ -46,9 +46,9 @@ public class DrepDataComparator {
     static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "<indexer_user>";
-    static String storeDBPassword = "<indexer_password>";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     // Utility function to convert a byte array to a hex string.
     private static String bytesToHex(byte[] bytes) {
@@ -69,7 +69,7 @@ public class DrepDataComparator {
         return hash.toLowerCase();
     }
 
-    public static void compareDrepDistData(int epoch) {
+    public static int compareDrepDistData(int epoch) {
         String dbSyncQuery = "SELECT dh.raw, d.amount, dh.view FROM drep_distr d " +
                 "INNER JOIN drep_hash dh ON dh.id = d.hash_id " +
                 "WHERE d.epoch_no = ?";
@@ -209,16 +209,28 @@ public class DrepDataComparator {
         } else {
             logLine("✅ All results match between DB Sync and Indexer.");
         }
+        return mismatchCount;
     }
 
     public static void main(String[] args) {
         DrepDataComparator comparator = new DrepDataComparator();
 
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
             logLine("\n############ Comparing drep dist data for epoch: " + i + " ############");
-            comparator.compareDrepDistData(i);
+            int epochMismatch = comparator.compareDrepDistData(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
             logLine("############ Finished comparing drep dist data for epoch: " + i + " ############");
         }
+
+        logLine("\n===== Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
 
     }
 

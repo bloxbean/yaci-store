@@ -43,12 +43,12 @@ public class DrepActiveUntilComparator {
 
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
@@ -62,7 +62,7 @@ public class DrepActiveUntilComparator {
         return hash.toLowerCase();
     }
 
-    public static void compareActiveUntilForEpoch(int epoch) {
+    public static int compareActiveUntilForEpoch(int epoch) {
         String dbSyncQuery = "SELECT dh.raw, d.active_until FROM drep_distr d " +
                 "INNER JOIN drep_hash dh ON dh.id = d.hash_id WHERE d.epoch_no = ? and d.active_until is not null";
 
@@ -72,6 +72,7 @@ public class DrepActiveUntilComparator {
         Map<String, Integer> indexerMap = new HashMap<>();
 
         boolean mismatch = false;
+        int mismatchCount = 0;
 
         // Fetch from DB Sync
         try (Connection conn = DriverManager.getConnection(dbSyncUrl, dbSyncUser, dbSyncPassword);
@@ -121,12 +122,14 @@ public class DrepActiveUntilComparator {
                 Integer storeValue = indexerMap.get(hash);
                 if (!equalsNullableInt(dbValue, storeValue)) {
                     mismatch = true;
+                    mismatchCount++;
                     logLine("Mismatch for hash: " + hash);
                     logLine("  → DB Sync   : active_until = " + dbValue);
                     logLine("  → Yaci Store: active_until = " + storeValue);
                 }
             } else {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Hash " + hash + " found in DB Sync but not in Yaci Store.");
             }
         }
@@ -134,15 +137,17 @@ public class DrepActiveUntilComparator {
         for (String hash : indexerMap.keySet()) {
             if (!dbSyncMap.containsKey(hash)) {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Hash " + hash + " found in Yaci Store but not in DB Sync.");
             }
         }
 
         if (mismatch) {
-            logLine("❌ Mismatch found in active_until for epoch " + epoch);
+            logLine("❌ Mismatches found: " + mismatchCount + " in active_until for epoch " + epoch);
         } else {
             logLine("✅ All active_until values match for epoch " + epoch);
         }
+        return mismatchCount;
     }
 
     private static boolean equalsNullableInt(Integer a, Integer b) {
@@ -150,11 +155,22 @@ public class DrepActiveUntilComparator {
     }
 
     public static void main(String[] args) {
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
             logLine("\n============ Comparing active_until for epoch: " + i + " ============");
-            compareActiveUntilForEpoch(i);
+            int epochMismatch = compareActiveUntilForEpoch(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
             logLine("============ Finished epoch: " + i + " ============");
         }
+
+        logLine("\n===== Drep ActiveUntil Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
     }
 
     private static synchronized void logLine(String message) {

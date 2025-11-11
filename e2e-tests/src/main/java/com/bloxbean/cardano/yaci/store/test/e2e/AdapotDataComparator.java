@@ -19,12 +19,12 @@ public class AdapotDataComparator {
 
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     private static final Path LOG_DIR = Paths.get("logs");
     private static final DateTimeFormatter LOG_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -42,7 +42,7 @@ public class AdapotDataComparator {
         }
     }
 
-    public static void compareAdapotData(int epoch) {
+    public static int compareAdapotData(int epoch) {
         String dbSyncQuery = "SELECT treasury, reserves " +
                 "FROM ada_pots " +
                 "WHERE epoch_no = ? " +
@@ -68,11 +68,11 @@ public class AdapotDataComparator {
                 dbSyncReserves = rs.getBigDecimal("reserves");
             } else {
                 logLine("No data found in DB Sync for epoch: " + epoch);
-                return;
+                return 0;
             }
         } catch (SQLException e) {
             logErrorToFile("DB Sync query error for epoch " + epoch, e);
-            return;
+            return 0;
         }
 
         try (Connection conn = DriverManager.getConnection(storeUrl, storeDBUser, storeDBPassword);
@@ -86,14 +86,15 @@ public class AdapotDataComparator {
                 storeReserves = rs.getBigDecimal("reserves");
             } else {
                 logLine("No data found in Yaci Store for epoch: " + epoch);
-                return;
+                return 0;
             }
         } catch (SQLException e) {
             logErrorToFile("Yaci Store query error for epoch " + epoch, e);
-            return;
+            return 0;
         }
 
         boolean mismatch = false;
+        int mismatchCount = 0;
         logLine("Comparing adapot data for epoch " + epoch + ":");
 
         if (dbSyncTreasury != null && storeTreasury != null) {
@@ -101,10 +102,12 @@ public class AdapotDataComparator {
                 // Match
             } else {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Mismatch in Treasury - DB Sync: " + dbSyncTreasury + ", Yaci Store: " + storeTreasury);
             }
         } else {
             mismatch = true;
+            mismatchCount++;
             logLine("Treasury data missing for epoch " + epoch);
         }
 
@@ -113,28 +116,42 @@ public class AdapotDataComparator {
                 // Match
             } else {
                 mismatch = true;
+                mismatchCount++;
                 logLine("Mismatch in Reserves - DB Sync: " + dbSyncReserves + ", Yaci Store: " + storeReserves);
             }
         } else {
             mismatch = true;
+            mismatchCount++;
             logLine("Reserves data missing for epoch " + epoch);
         }
 
         if (mismatch) {
-            logLine("❌ There are mismatches in adapot data for epoch " + epoch);
+            logLine("❌ Mismatches found: " + mismatchCount + " in adapot data for epoch " + epoch);
         } else {
             logLine("✅ Adapot data matches for epoch " + epoch);
         }
+        return mismatchCount;
     }
 
     public static void main(String[] args) {
         AdapotDataComparator comparator = new AdapotDataComparator();
 
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
             logLine("\n############ Comparing adapot data for epoch: " + i + " ############");
-            comparator.compareAdapotData(i);
+            int epochMismatch = comparator.compareAdapotData(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
             logLine("############ Finished comparing adapot data for epoch: " + i + " ############");
         }
+
+        logLine("\n===== Adapot Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
     }
 
     private static synchronized void logLine(String message) {
