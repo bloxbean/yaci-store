@@ -2,9 +2,11 @@ package com.bloxbean.cardano.yaci.store.test.e2e;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigInteger;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -16,25 +18,21 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * The DrepActiveUntilComparator class is responsible for comparing active_until value (drep)
-  between two database systems: DB Sync and Yaci Store database.
- */
 @Slf4j
-public class DrepActiveUntilComparator {
+public class EpochStakeDataComparator {
     static int startEpoch = 740;
     static int endEpoch = 902;
 
     private static final Path LOG_DIR = Paths.get("logs");
     private static final DateTimeFormatter LOG_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     private static final String RUN_TS = LocalDateTime.now().format(LOG_TS_FORMAT);
-    private static final Path LOG_FILE = LOG_DIR.resolve("drep_active_until_compare-" + RUN_TS + ".log");
+    private static final Path LOG_FILE = LOG_DIR.resolve("epoch_stake_compare-" + RUN_TS + ".log");
 
     static {
         try {
             if (!Files.exists(LOG_DIR)) Files.createDirectories(LOG_DIR);
             if (!Files.exists(LOG_FILE)) Files.createFile(LOG_FILE);
-            logLine("===== Start DrepActiveUntil comparison run =====");
+            logLine("===== Start EpochStake comparison run =====");
             logLine("Log file: " + LOG_FILE.toAbsolutePath());
         } catch (IOException e) {
             System.err.println("Failed to initialize log file: " + e.getMessage());
@@ -50,26 +48,19 @@ public class DrepActiveUntilComparator {
     static String storeDBUser = "<store_user>";
     static String storeDBPassword = "<store_password>";
 
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) sb.append(String.format("%02x", b));
-        return sb.toString();
-    }
+    public static int compareEpochStakeForEpoch(int epoch) {
+        String dbSyncQuery = "SELECT sa.view, es.amount, encode(ph.hash_raw, 'hex') as pool_id " +
+                "FROM epoch_stake es " +
+                "INNER JOIN stake_address sa ON sa.id = es.addr_id " +
+                "INNER JOIN pool_hash ph ON ph.id = es.pool_id " +
+                "WHERE es.epoch_no = ? ORDER BY sa.view, encode(ph.hash_raw, 'hex') , amount";
 
-    private static String normalizeHash(String hash) {
-        if (hash == null) return null;
-        if (hash.startsWith("0x") || hash.startsWith("0X")) hash = hash.substring(2);
-        return hash.toLowerCase();
-    }
+        String storeQuery = "SELECT address, amount, pool_id " +
+                "FROM epoch_stake " +
+                "WHERE active_epoch = ? ORDER BY address, pool_id, amount";
 
-    public static int compareActiveUntilForEpoch(int epoch) {
-        String dbSyncQuery = "SELECT dh.raw, d.active_until FROM drep_distr d " +
-                "INNER JOIN drep_hash dh ON dh.id = d.hash_id WHERE d.epoch_no = ? and d.active_until is not null";
-
-        String indexerQuery = "SELECT drep_hash, active_until FROM drep_dist WHERE epoch = ? and drep_type not in ('ABSTAIN', 'NO_CONFIDENCE')";
-
-        Map<String, Integer> dbSyncMap = new HashMap<>();
-        Map<String, Integer> indexerMap = new HashMap<>();
+        Map<String, EpochStakeData> dbSyncMap = new HashMap<>();
+        Map<String, EpochStakeData> storeMap = new HashMap<>();
 
         boolean mismatch = false;
         int mismatchCount = 0;
@@ -82,31 +73,32 @@ public class DrepActiveUntilComparator {
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                byte[] hashBytes = rs.getBytes("raw");
-                String hash = hashBytes != null ? normalizeHash(bytesToHex(hashBytes)) : null;
-                Integer activeUntil = rs.getObject("active_until") != null ? rs.getInt("active_until") : null;
+                String address = rs.getString("view");
+                BigInteger amount = new BigInteger(rs.getString("amount"));
+                String poolId = rs.getString("pool_id");
 
-                if (hash != null)
-                    dbSyncMap.put(hash, activeUntil);
+                String key = address + "_" + poolId;
+                dbSyncMap.put(key, new EpochStakeData(address, amount, poolId));
             }
         } catch (SQLException e) {
-            log.error("Error while fetching data from DB Sync for epoch {}" , epoch, e);
+            log.error("Error while fetching data from DB Sync for epoch {}", epoch, e);
             logErrorToFile("DB Sync query error for epoch " + epoch, e);
         }
 
         // Fetch from Yaci Store
         try (Connection conn = DriverManager.getConnection(storeUrl, storeDBUser, storeDBPassword);
-             PreparedStatement ps = conn.prepareStatement(indexerQuery)) {
+             PreparedStatement ps = conn.prepareStatement(storeQuery)) {
 
             ps.setInt(1, epoch);
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                String hash = normalizeHash(rs.getString("drep_hash"));
-                Integer activeUntil = rs.getObject("active_until") != null ? rs.getInt("active_until") : null;
+                String address = rs.getString("address");
+                BigInteger amount = rs.getBigDecimal("amount").toBigInteger();
+                String poolId = rs.getString("pool_id");
 
-                if (hash != null)
-                    indexerMap.put(hash, activeUntil);
+                String key = address + "_" + poolId;
+                storeMap.put(key, new EpochStakeData(address, amount, poolId));
             }
         } catch (SQLException e) {
             log.error("Error while fetching data from Yaci Store for epoch {}", epoch, e);
@@ -114,60 +106,93 @@ public class DrepActiveUntilComparator {
         }
 
         // Compare results
-        for (Map.Entry<String, Integer> entry : dbSyncMap.entrySet()) {
-            String hash = entry.getKey();
-            Integer dbValue = entry.getValue();
+        for (Map.Entry<String, EpochStakeData> entry : dbSyncMap.entrySet()) {
+            String key = entry.getKey();
+            EpochStakeData dbData = entry.getValue();
 
-            if (indexerMap.containsKey(hash)) {
-                Integer storeValue = indexerMap.get(hash);
-                if (!equalsNullableInt(dbValue, storeValue)) {
+            if (storeMap.containsKey(key)) {
+                EpochStakeData storeData = storeMap.get(key);
+                if (!dbData.equals(storeData)) {
                     mismatch = true;
                     mismatchCount++;
-                    logLine("Mismatch for hash: " + hash);
-                    logLine("  → DB Sync   : active_until = " + dbValue);
-                    logLine("  → Yaci Store: active_until = " + storeValue);
+                    logLine("Mismatch for key: " + key);
+                    logLine("  → DB Sync   : " + dbData);
+                    logLine("  → Yaci Store: " + storeData);
                 }
             } else {
                 mismatch = true;
                 mismatchCount++;
-                logLine("Hash " + hash + " found in DB Sync but not in Yaci Store.");
+                logLine("Key " + key + " found in DB Sync but not in Yaci Store.");
             }
         }
 
-        for (String hash : indexerMap.keySet()) {
-            if (!dbSyncMap.containsKey(hash)) {
+        for (String key : storeMap.keySet()) {
+            if (!dbSyncMap.containsKey(key)) {
                 mismatch = true;
                 mismatchCount++;
-                logLine("Hash " + hash + " found in Yaci Store but not in DB Sync.");
+                logLine("Key " + key + " found in Yaci Store but not in DB Sync.");
             }
         }
 
         if (mismatch) {
-            logLine("❌ Mismatches found: " + mismatchCount + " in active_until for epoch " + epoch);
+            logLine("❌ Mismatches found: " + mismatchCount + " in epoch_stake for epoch " + epoch);
         } else {
-            logLine("✅ All active_until values match for epoch " + epoch);
+            logLine("✅ All epoch_stake data matches for epoch " + epoch);
         }
         return mismatchCount;
     }
 
-    private static boolean equalsNullableInt(Integer a, Integer b) {
-        return (a == null && b == null) || (a != null && a.equals(b));
+    private static class EpochStakeData {
+        String address;
+        BigInteger amount;
+        String poolId;
+
+        public EpochStakeData(String address, BigInteger amount, String poolId) {
+            this.address = address;
+            this.amount = amount;
+            this.poolId = poolId;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EpochStakeData that = (EpochStakeData) o;
+            return Objects.equals(address, that.address) &&
+                    Objects.equals(amount, that.amount) &&
+                    Objects.equals(poolId, that.poolId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(address, amount, poolId);
+        }
+
+        @Override
+        public String toString() {
+            return "EpochStakeData{" +
+                    "address='" + address + '\'' +
+                    ", amount=" + amount +
+                    ", poolId='" + poolId + '\'' +
+                    '}';
+        }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         int totalMismatchCount = 0;
         int epochsWithMismatch = 0;
-        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+        int totalEpochs = Math.max(0, Math.abs(endEpoch - startEpoch) + 1);
 
-        for (int i = startEpoch; i <= endEpoch; i++) {
-            logLine("\n============ Comparing active_until for epoch: " + i + " ============");
-            int epochMismatch = compareActiveUntilForEpoch(i);
+        for (int i = startEpoch; i >= endEpoch; i--) {
+            logLine("\n============ Comparing epoch_stake for epoch: " + i + " ============");
+            int epochMismatch = compareEpochStakeForEpoch(i);
             if (epochMismatch > 0) epochsWithMismatch++;
             totalMismatchCount += epochMismatch;
             logLine("============ Finished epoch: " + i + " ============");
+            Thread.sleep(5000); // Sleep for 5 seconds between epochs to avoid overwhelming the DB
         }
 
-        logLine("\n===== Drep ActiveUntil Comparison Summary =====");
+        logLine("\n===== Epoch Stake Comparison Summary =====");
         logLine("Epochs compared: " + totalEpochs);
         logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
         logLine("Total mismatches across all epochs: " + totalMismatchCount);
