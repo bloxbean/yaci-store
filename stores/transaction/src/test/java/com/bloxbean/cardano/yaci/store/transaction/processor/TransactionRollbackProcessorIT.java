@@ -3,7 +3,9 @@ package com.bloxbean.cardano.yaci.store.transaction.processor;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnCborEntity;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.InvalidTransactionRepository;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnWitnessRepository;
 import org.junit.jupiter.api.Test;
@@ -12,10 +14,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.jdbc.SqlGroup;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.BEFORE_TEST_METHOD;
 
-@SpringBootTest
+@SpringBootTest(properties = "store.transaction.save-cbor=true")
 class TransactionRollbackProcessorIT {
 
     @Autowired
@@ -26,6 +30,9 @@ class TransactionRollbackProcessorIT {
 
     @Autowired
     private InvalidTransactionRepository invalidTransactionRepository;
+
+    @Autowired
+    private TxnCborRepository txnCborRepository;
 
     @Autowired
     private TransactionRollbackProcessor transactionRollbackProcessor;
@@ -39,6 +46,19 @@ class TransactionRollbackProcessorIT {
             @Sql(value = "classpath:scripts/transaction_witness_data.sql", executionPhase = BEFORE_TEST_METHOD)
     })
     void handleRollBackEvent() {
+        txnCborRepository.save(TxnCborEntity.builder()
+                .txHash("e43b09f3d95f83aadc4d7436c5c9067ff04ab876b6ed8acbbed1c0ab49743869")
+                .slot(10811653L)
+                .cborData(new byte[]{0x01, 0x02})
+                .cborSize(2)
+                .build());
+        txnCborRepository.save(TxnCborEntity.builder()
+                .txHash("dbcec01a23519abe2c308f7ad72ec9b25a0f725bf7cccb76b1ca0defd6f19f7b")
+                .slot(10811083L)
+                .cborData(new byte[]{0x03, 0x04})
+                .cborSize(2)
+                .build());
+
         RollbackEvent rollbackEvent = RollbackEvent.builder()
                 .rollbackTo(new Point(10811083, "dbcec01a23519abe2c308f7ad72ec9b25a0f725bf7cccb76b1ca0defd6f19f7b"))
                 .currentPoint(new Point(10811653, "e43b09f3d95f83aadc4d7436c5c9067ff04ab876b6ed8acbbed1c0ab49743869"))
@@ -50,6 +70,12 @@ class TransactionRollbackProcessorIT {
         int countWitness = txnWitnessRepository.findAll().size();
         assertThat(countEntity).isEqualTo(3);
         assertThat(countWitness).isEqualTo(9);
+
+        Optional<TxnCborEntity> deletedCbor = txnCborRepository.findById("e43b09f3d95f83aadc4d7436c5c9067ff04ab876b6ed8acbbed1c0ab49743869");
+        Optional<TxnCborEntity> remainingCbor = txnCborRepository.findById("dbcec01a23519abe2c308f7ad72ec9b25a0f725bf7cccb76b1ca0defd6f19f7b");
+        assertThat(deletedCbor).isEmpty();
+        assertThat(remainingCbor).isPresent();
+        assertThat(transactionStoreProperties.isSaveCbor()).isTrue();
     }
 
     @Test
@@ -57,6 +83,13 @@ class TransactionRollbackProcessorIT {
             @Sql(value = "classpath:scripts/invalid_transaction_data.sql", executionPhase = BEFORE_TEST_METHOD)
     })
     void givenRollbackEvent_shouldDeleteInvalidTransactions() throws Exception {
+        txnCborRepository.save(TxnCborEntity.builder()
+                .txHash("96bb7918a219dbe0cb01d3962b78a883931da27b5a4987af7c1bd964d7ffc6ff")
+                .slot(13133974L)
+                .cborData(new byte[]{0x05})
+                .cborSize(1)
+                .build());
+
         RollbackEvent rollbackEvent = RollbackEvent.builder()
                 .rollbackTo(new Point(13133973, "96bb7918a219dbe0cb01d3962b78a883931da27b5a4987af7c1bd964d7ffc6ff"))
                 .currentPoint(new Point(13518703, "5470beb0a38e7793db667269e55ed74b339d35db57e640d8f82de831ee348ba0"))
@@ -66,5 +99,6 @@ class TransactionRollbackProcessorIT {
 
         int count = invalidTransactionRepository.findAll().size();
         assertThat(count).isEqualTo(12);
+        assertThat(txnCborRepository.findById("96bb7918a219dbe0cb01d3962b78a883931da27b5a4987af7c1bd964d7ffc6ff")).isEmpty();
     }
 }

@@ -30,6 +30,8 @@ public class SpringBootTestApplication {
 
     @Bean
     public TransactionStoreProperties transactionStoreProperties() {
-        return new TransactionStoreProperties();
+        return TransactionStoreProperties.builder()
+                .saveCbor(true)
+                .build();
     }
 }

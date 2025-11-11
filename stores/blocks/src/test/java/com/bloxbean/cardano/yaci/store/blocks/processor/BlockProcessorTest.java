@@ -1,12 +1,16 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.*;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -20,10 +24,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BlockProcessorTest {
     @Mock
     private BlockStorage blockStorage;
+    @Mock
+    private BlockCborStorage blockCborStorage;
+    @Mock
+    private BlocksStoreProperties blocksStoreProperties;
     @InjectMocks
     private BlockProcessor blockProcessor;
     @Captor
     ArgumentCaptor<Block> blockArgCaptor;
+    @Captor
+    ArgumentCaptor<BlockCbor> blockCborCaptor;
+
+    @BeforeEach
+    void setUp() {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(false);
+    }
 
     @Test
     void givenBlockEvent_shouldHandleBlockEventAndSaveBlock() {
@@ -31,6 +46,7 @@ class BlockProcessorTest {
         blockProcessor.handleBlockHeaderEvent(blockEvent());
 
         Mockito.verify(blockStorage, Mockito.times(1)).save(blockArgCaptor.capture());
+        Mockito.verify(blockCborStorage, Mockito.never()).save(Mockito.any());
 
         Block block = blockArgCaptor.getValue();
 
@@ -59,6 +75,21 @@ class BlockProcessorTest {
         assertThat(block.getOpcertKesPeriod()).isZero();
         assertThat(block.getOpCertSigma()).isEqualTo("2afe39cf023b5f25961b2e4b9148d533c6677c9c48b81e5d5a2cf52e32040f77683e81f0722baa5dea2ba0a425c5b43e4bb912c34a2f826ef4cc639cb3778a0f");
         assertThat(block.getOpCertSeqNumber()).isZero();
+    }
+
+    @Test
+    void givenBlockEvent_whenCborEnabled_shouldPersistBlockCbor() {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(true);
+
+        blockProcessor.handleBlockHeaderEvent(blockEvent());
+
+        Mockito.verify(blockCborStorage).save(blockCborCaptor.capture());
+        BlockCbor blockCbor = blockCborCaptor.getValue();
+
+        assertThat(blockCbor.getBlockHash()).isEqualTo("d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937");
+        assertThat(blockCbor.getSlot()).isEqualTo(86880);
+        assertThat(blockCbor.getCborData()).isEqualTo(HexUtil.decodeHexString("A1B2C3"));
+        assertThat(blockCbor.getCborSize()).isEqualTo(3);
     }
 
     private BlockEvent blockEvent() {
@@ -107,6 +138,7 @@ class BlockProcessorTest {
                                         .build())
                                 .build())
                         .transactionBodies(new ArrayList<>())
+                        .cbor("A1B2C3")
                         .build())
                 .build();
     }

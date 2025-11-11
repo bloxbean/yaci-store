@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.core;
 
+import com.bloxbean.cardano.yaci.core.config.YaciConfig;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
 import com.bloxbean.cardano.yaci.store.client.governance.DummyProposalStateClientImpl;
@@ -16,6 +17,7 @@ import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderPoolObjectFactory;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
@@ -55,7 +57,16 @@ public class YaciStoreAutoConfiguration {
         System.setProperty("org.jooq.no-tips", "true");
     }
 
-    //configuration
+    @PostConstruct
+    public void configureYaciConfig() {
+        YaciConfig yaciConfig = YaciConfig.INSTANCE;
+
+        boolean returnTxBodyCbor = properties.getCardano().isReturnTxBodyCbor();
+        boolean returnBlockCbor = properties.getCardano().isReturnBlockCbor();
+
+        yaciConfig.setReturnTxBodyCbor(returnTxBodyCbor);
+        yaciConfig.setReturnBlockCbor(returnBlockCbor);
+    }
 
     @Bean
     @ReadOnly(false)
@@ -176,6 +187,8 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setSubmitApiUrl(properties.getCardano().getSubmitApiUrl());
         storeProperties.setOgmiosUrl(properties.getCardano().getOgmiosUrl());
         storeProperties.setMempoolMonitoringEnabled(properties.getCardano().getMempoolMonitoringEnabled());
+        storeProperties.setReturnTxBodyCbor(properties.getCardano().isReturnTxBodyCbor());
+        storeProperties.setReturnBlockCbor(properties.getCardano().isReturnBlockCbor());
 
         storeProperties.setShelleyStartSlot(properties.getCardano().getShelleyStartSlot());
         storeProperties.setShelleyStartBlockhash(properties.getCardano().getShelleyStartBlockhash());

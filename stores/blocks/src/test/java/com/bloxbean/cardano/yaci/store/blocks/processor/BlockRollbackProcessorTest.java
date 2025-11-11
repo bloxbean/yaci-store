@@ -1,8 +1,11 @@
 package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,11 +17,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class BlockRollbackProcessorTest {
     @Mock
     private BlockStorage blockStorage;
+    @Mock
+    private BlockCborStorage blockCborStorage;
+    @Mock
+    private BlocksStoreProperties blocksStoreProperties;
+
     @InjectMocks
     private BlockProcessor blockProcessor;
 
+    @BeforeEach
+    void setUp() {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(false);
+    }
+
     @Test
-    void handleRollbackEvent() {
+    void handleRollbackEvent_whenSaveCborDisabled_shouldSkipCborDeletion() {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
                 .rollbackTo(new Point(86880, "d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937"))
                 .currentPoint(new Point(90000, "d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937"))
@@ -26,5 +39,20 @@ class BlockRollbackProcessorTest {
 
         blockProcessor.handleRollbackEvent(rollbackEvent);
         Mockito.verify(blockStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verifyNoInteractions(blockCborStorage);
+    }
+
+    @Test
+    void handleRollbackEvent_whenSaveCborEnabled_shouldDeleteCbor() {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(true);
+        RollbackEvent rollbackEvent = RollbackEvent.builder()
+                .rollbackTo(new Point(86880, "d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937"))
+                .currentPoint(new Point(90000, "d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937"))
+                .build();
+
+        blockProcessor.handleRollbackEvent(rollbackEvent);
+
+        Mockito.verify(blockStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        Mockito.verify(blockCborStorage, Mockito.times(1)).deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
     }
 }

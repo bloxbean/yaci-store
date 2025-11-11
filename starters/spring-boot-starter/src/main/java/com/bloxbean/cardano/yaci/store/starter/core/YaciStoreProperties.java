@@ -66,6 +66,9 @@ public class YaciStoreProperties {
 
         private boolean devkitNode;
 
+        private boolean returnTxBodyCbor;
+        private boolean returnBlockCbor;
+
         private int blockDiffToStartSyncProtocol = 2000;
 
         private int cursorNoOfBlocksToKeep = 2160;
