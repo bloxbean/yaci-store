@@ -1,0 +1,96 @@
+&nbsp;
+
+## 🧮 Ledger State - Aggregation App
+
+Using `yaci-store-aggregation-app`, you can track account balance related data. As account balance calculation is a resource-intensive task, this application should be run separately.
+
+Like the main application, place `application.properties` in a folder named `config` in the same directory as the jar file. The application will automatically detect the configuration file.
+
+👉 Swagger UI: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
+
+---
+
+## 🧭 Modes of Operation
+
+### ⚙️ Mode 1 - Companion Mode
+
+🔹 **Reads UTxOs from the main database** and **writes account balance** to the **same database**.
+
+In this mode, the aggregation app starts from the genesis block but only writes account balance data. It reads UTxOs from the database (already synced by `yaci-store-all` or `yaci-store-utxo-indexer`).
+
+> **Note:** Ensure this app is started _after_ the main app has synced for some time.
+
+**Run:**
+```bash
+java -jar yaci-store-aggregation-app-<version>.jar
+```
+
+**Clean balance data and restart from genesis:**
+```bash
+java -Dstore.aggr.clean-db-before-start=true -jar yaci-store-aggregation-app-<version>.jar
+```
+
+---
+
+### ⚙️ Mode 2 - Standalone Mode
+
+🔹 **Writes UTxOs and account balances to a separate database**.
+
+Does not depend on `yaci-store-all` or `utxo-indexer` to run.
+
+➡️ Requires additional `application-aggr.properties` (download from releases).
+
+Place both files in `config/` folder:
+- `application.properties`
+- `application-aggr.properties`
+
+Edit:
+- `application.properties`: database connection for balance data
+- `application-aggr.properties`:
+  ```properties
+  store.account.enabled=true
+  store.extensions.utxo-storage-type=default
+  spring.flyway.locations=classpath:db/store/{vendor}
+  spring.flyway.out-of-order=true
+  logging.file.name=./logs/yaci-store-aggr.log
+  ```
+
+**Run with aggr profile:**
+```bash
+java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
+```
+
+**Clean and restart:**
+```bash
+java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
+```
+
+---
+
+### 🧪 Mode 3 - Standalone with RocksDB (Experimental)
+
+🔹 **Stores UTxOs in embedded RocksDB**, account balances in a **separate database**.
+
+➡️ Still requires `application-aggr.properties`
+
+Place both files in `config/` folder. Update properties:
+```properties
+store.account.enabled=true
+spring.flyway.locations=classpath:db/store/{vendor}
+spring.flyway.out-of-order=true
+logging.file.name=./logs/yaci-store-aggr.log
+store.rocksdb.base-dir=./rocksdb
+store.extensions.utxo-storage-type=rocksdb
+store.extensions.rocksdb-utxo-storage.write-batch-size=3000
+store.extensions.rocksdb-utxo-storage.parallel-write=true
+```
+
+**Run with aggr profile:**
+```bash
+java -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
+```
+
+**Clean and restart:**
+```bash
+java -Dstore.aggr.clean-db-before-start=true -Dspring.profiles.active=aggr -jar yaci-store-aggregation-app-<version>.jar
+```

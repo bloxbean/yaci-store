@@ -1,0 +1,144 @@
+&nbsp;
+
+# 🧾 Ledger State Mismatches
+
+**Last updated:** January 2025
+
+This document details known discrepancies in Ledger state calculations for Yaci Store across different networks (Mainnet and Preprod). These mismatches help developers and researchers understand potential synchronization challenges when working with Yaci Store.
+
+<div style={{
+  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
+  padding: '1rem',
+  borderRadius: '8px',
+  border: '1px solid rgba(34, 197, 94, 0.2)',
+  marginBottom: '1.5rem'
+}}>
+
+💡 **Version-Specific Information**: Many issues documented below have been **resolved in v2.0.0-beta3**. See version-specific sections for current status.
+
+**Quick Links:**
+- [v2.0.0-beta1 Issues](/knownIssues/ledgerStateMismatch/2-beta-1) - Historical issues (mostly resolved)
+- [v2.0.0-beta3 Issues](/knownIssues/ledgerStateMismatch/2-beta-3) - Current status and remaining items
+- [Migration Guide](/changelogs#migration-guide) - How to upgrade between versions
+
+</div>
+
+---
+
+## 📊 Overview
+
+The following categories of mismatches have been identified across different versions:
+
+### Current Status (v2.0.0-beta3)
+1. **✅ Treasury and Reserves** - **Resolved**: Major epoch 546 issues fixed
+2. **✅ Governance Proposal Status** - **Resolved**: Critical discrepancies addressed  
+3. **🔶 DRep Distribution** - **Improved**: Most issues resolved, minor edge cases remain
+4. **🔶 DRep active_until** - **Improved**: Historical bug fixed, monitoring ongoing
+
+### Historical Issues (v2.0.0-beta1)
+1. **❌ Treasury and Reserves** - Major calculation mismatches (epoch 546)
+2. **❌ Governance Proposal Status** - Critical status discrepancies
+3. **❌ DRep Distribution** - Widespread distribution mismatches
+4. **❌ DRep active_until** - Known bug affecting multiple epochs
+
+---
+
+## 🌐 Mainnet Findings
+
+### 💰 Treasury and Reserves (ADAPot) Mismatches
+
+Treasury and Reserves calculations match up to epoch 545. A significant mismatch was detected for epoch 546:
+
+| Epoch | Category  | DB Sync Value            | Yaci Store Value          | Difference  |
+|-------|-----------|---------------------------|---------------------------|-------------|
+| 546   | Treasury  | 1,703,528,717,038,308     | 1,703,528,716,975,798     | 62,510      |
+| 546   | Reserves  | 7,323,776,141,502,598     | 7,323,776,177,082,630     | 35,580,032  |
+
+> ⚠️ **Impact:** Treasury shows Yaci Store with 62,510 ADA less, while Reserves shows 35,580,032 ADA more than DB Sync.
+
+### 🗳️ Governance Proposal Status Mismatches
+
+The following governance action shows a status discrepancy between Yaci Store and DB Sync/Koios:
+
+| Governance Action Type | Transaction Hash | DB Sync/Koios Status | Yaci Store Status | Notes |
+|------------------------|------------------|---------------------|-------------------|-------|
+| Constitution Change    | `8c653ee5c9800e6d31e79b5a7f7d4400c81d44717ad4db633dc18d4c07e4a4fd` | Enacted (epoch 542) | Expired | Critical governance action status difference |
+
+> 💡 **Analysis:** This represents a significant discrepancy where Yaci Store marked the constitutional change as expired, while the official DB Sync recognized it as enacted in epoch 542.
+
+---
+
+## 🧪 Preprod Network Findings
+
+### 👤 DRep active_until Mismatches
+
+Multiple DRep IDs showed different "active until" values compared to db-sync in epoch 224:
+
+> 🐛 **Known Bug:** In epoch 224, a bug caused active_until values to be one epoch earlier than db-sync for affected DReps.
+
+### 🔍 DRep Distribution Mismatches (Epochs 681-830)
+
+The following table shows comprehensive DRep distribution discrepancies across multiple epochs:
+
+| Epoch(s)   | DRep ID | DRep Hash | Mismatch Type |
+|------------|---------|-----------|---------------|
+| 736        | `drep1y285lm709qqh54a5z5t6vl2kaaxqmszpsxs36dgh3h2n7nqltj46y` | `8f4fefcf28017a57b41517a67d56ef4c0dc04181a11d35178dd53f4c` | Amount mismatch (vs DB Sync) |
+| 730–731    | `drep1ygsusq7j0wx67tzcz9u50rh9l2w6pmmsqglpzzqathlf0rqm87es5` | `21c803d27b8daf2c581179478ee5fa9da0ef70023e11081d5dfe978c` | Amount mismatch (vs DB Sync) |
+| 685–757    | `drep1ytax4rwzvdwamnu67j2uk9z00660lpzcvmlys6266l9kt5c262k7m` | `fa6a8dc2635dddcf9af495cb144f7eb4ff845866fe48695ad7cb65d3` | Amount mismatch (vs DB Sync) |
+| 682–684    | `drep1ytax4rwzvdwamnu67j2uk9z00660lpzcvmlys6266l9kt5c262k7m` | `fa6a8dc2635dddcf9af495cb144f7eb4ff845866fe48695ad7cb65d3` | Only in Yaci Store (not in DB Sync) |
+| 681–683    | `drep1ytcw6qzpqqclx2yd0zy64ztvlkkhnf6yrzza8whgnq4vz5gh89626` | `f0ed00410031f3288d7889aa896cfdad79a7441885d3bae8982ac151` | Only in Yaci Store (not in DB Sync) |
+| 709–830    | `drep1ytkdk7j6g4jpnuamve0uy9kv2fyvlprdauv0ymtdpvkrt2gla0chu` | `ecdb7a5a456419f3bb665fc216cc5248cf846def18f26d6d0b2c35a9` | Amount mismatch (vs DB Sync) |
+
+---
+
+## 🔧 Mismatch Categories Explained
+
+### Amount Mismatches
+- **Description:** Stake amounts differ between Yaci Store and DB Sync for the same DRep
+- **Impact:** May affect delegation calculations and rewards distribution
+
+### Entries Only in Yaci Store
+- **Description:** DRep entries exist in Yaci Store but not in DB Sync for specific epochs
+- **Impact:** Could indicate synchronization timing differences or parsing discrepancies
+
+### Entries Only in DB Sync
+- **Description:** DRep entries exist in DB Sync but not in Yaci Store
+- **Impact:** May result in incomplete delegation data in Yaci Store
+
+---
+
+## 📈 Recommendations for Developers
+
+### For Application Developers
+1. **Be aware** of these known discrepancies when building governance-related features
+2. **Implement fallback mechanisms** when critical accuracy is required
+3. **Cross-reference** with multiple data sources for governance actions
+
+### For Infrastructure Operators
+1. **Monitor** ledger state consistency regularly
+2. **Report new mismatches** to the Yaci Store development team
+3. **Consider the impact** on downstream applications and services
+
+### For Researchers
+1. **Account for these variations** in academic analysis
+2. **Document methodology** when choosing between data sources
+3. **Contribute findings** back to the community for transparency
+
+---
+
+## 🚨 Reporting New Issues
+
+If you discover additional ledger state mismatches:
+
+1. **Document the mismatch** with epoch, transaction hash, and specific values
+2. **Compare against DB Sync** or other authoritative sources
+3. **Report via GitHub Issues** in the [Yaci Store repository](https://github.com/bloxbean/yaci-store)
+4. **Include network information** (Mainnet, Preprod, Preview)
+
+---
+
+## 🔄 Status Tracking
+
+This document serves as a transparent record of known synchronization challenges. Regular updates ensure the community stays informed about data consistency across the Cardano ecosystem.
+
+> 📅 **Update Schedule:** This document is reviewed and updated monthly or when significant new mismatches are discovered.
