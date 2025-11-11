@@ -46,9 +46,8 @@ public class TransactionStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TransactionCborStorage transactionCborStorage(TxnCborRepository txnCborRepository,
-                                                         TransactionStoreProperties transactionStoreProperties) {
-        return new TransactionCborStorageImpl(txnCborRepository, transactionStoreProperties);
+    public TransactionCborStorage transactionCborStorage(TxnCborRepository txnCborRepository) {
+        return new TransactionCborStorageImpl(txnCborRepository);
     }
 
     @Bean

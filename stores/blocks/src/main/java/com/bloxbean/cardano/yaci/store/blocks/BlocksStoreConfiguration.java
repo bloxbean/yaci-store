@@ -49,9 +49,8 @@ public class BlocksStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public BlockCborStorage blockCborStorage(BlockCborRepository blockCborRepository,
-                                             BlocksStoreProperties blocksStoreProperties) {
-        return new BlockCborStorageImpl(blockCborRepository, blocksStoreProperties);
+    public BlockCborStorage blockCborStorage(BlockCborRepository blockCborRepository) {
+        return new BlockCborStorageImpl(blockCborRepository);
     }
 
     @Bean

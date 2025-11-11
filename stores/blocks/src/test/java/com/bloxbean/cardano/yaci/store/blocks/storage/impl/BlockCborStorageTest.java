@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.blocks.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorageReader;
@@ -32,19 +31,9 @@ class BlockCborStorageTest {
     private BlockCborStorage blockCborStorage;
     private BlockCborStorageReader blockCborStorageReader;
 
-    private BlocksStoreProperties properties;
-
     @BeforeEach
     void setUp() {
-        properties = BlocksStoreProperties.builder()
-                .saveCbor(true)
-                .build();
-
-        blockCborStorage = new BlockCborStorageImpl(
-                blockCborRepository,
-                properties
-        );
-
+        blockCborStorage = new BlockCborStorageImpl(blockCborRepository);
         blockCborStorageReader = new BlockCborStorageReaderImpl(blockCborRepository);
     }
 

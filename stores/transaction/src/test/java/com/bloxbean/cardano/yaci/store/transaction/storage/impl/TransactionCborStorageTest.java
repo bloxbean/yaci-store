@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorageReader;
@@ -33,19 +32,9 @@ class TransactionCborStorageTest {
     private TransactionCborStorage transactionCborStorage;
     private TransactionCborStorageReader transactionCborStorageReader;
 
-    private TransactionStoreProperties properties;
-
     @BeforeEach
     void setUp() {
-        properties = TransactionStoreProperties.builder()
-                .saveCbor(true)
-                .build();
-
-        transactionCborStorage = new TransactionCborStorageImpl(
-                txnCborRepository,
-                properties
-        );
-
+        transactionCborStorage = new TransactionCborStorageImpl(txnCborRepository);
         transactionCborStorageReader = new TransactionCborStorageReaderImpl(txnCborRepository);
     }
 

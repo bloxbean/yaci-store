@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
-import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxnCbor;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.model.TxnCborEntity;
@@ -17,12 +16,11 @@ import java.util.stream.Collectors;
 public class TransactionCborStorageImpl implements TransactionCborStorage {
 
     private final TxnCborRepository txnCborRepository;
-    private final TransactionStoreProperties transactionStoreProperties;
 
     @Override
     @Transactional
     public void save(List<TxnCbor> txnCborList) {
-        if (!transactionStoreProperties.isSaveCbor() || txnCborList == null || txnCborList.isEmpty()) {
+        if (txnCborList == null || txnCborList.isEmpty()) {
             return;
         }
 
@@ -46,18 +44,12 @@ public class TransactionCborStorageImpl implements TransactionCborStorage {
     @Override
     @Transactional
     public int deleteBySlotGreaterThan(long slot) {
-        if (!transactionStoreProperties.isSaveCbor()) {
-            return 0;
-        }
         return txnCborRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Transactional
     public int deleteBySlotLessThan(long slot) {
-        if (!transactionStoreProperties.isSaveCbor()) {
-            return 0;
-        }
         return txnCborRepository.deleteBySlotLessThan(slot);
     }
 }
