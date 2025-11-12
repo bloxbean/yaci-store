@@ -66,6 +66,9 @@ public class YaciStoreProperties {
 
         private boolean devkitNode;
 
+        private boolean returnTxBodyCbor;
+        private boolean returnBlockCbor;
+
         private int blockDiffToStartSyncProtocol = 2000;
 
         private int cursorNoOfBlocksToKeep = 2160;
@@ -124,6 +127,8 @@ public class YaciStoreProperties {
     public static final class Plugins {
         private boolean enabled = true;
         private boolean exitOnError = true;
+        private Metrics metrics = new Metrics();
+        private boolean apiEnabled = true;
 
         private List<Class> variableProviders = new ArrayList<>();
         private List<ScriptRef> scripts = new ArrayList<>();
@@ -135,6 +140,7 @@ public class YaciStoreProperties {
         private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
         private List<SchedulerPluginDef> schedulers = new ArrayList<>();
 
+        private Scheduler scheduler = new Scheduler();
         private PythonSettings python = new PythonSettings();
         private FileSettings files = new FileSettings();
     }
@@ -156,6 +162,16 @@ public class YaciStoreProperties {
     public static final class FileSettings {
         private String rootPath = "./plugins/files";
         private boolean enableLocks = true;
+    }
+
+    @Getter
+    @Setter
+    public static final class Scheduler {
+        /**
+         * Task termination timeout in seconds for scheduler plugins during shutdown.
+         * Default: 300 seconds (5 minutes)
+         */
+        private int taskTerminationTimeoutSeconds = 300;
     }
 
     @Getter

@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.plugin.api.*;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.SchedulerPluginDef;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.ScriptRef;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import com.bloxbean.cardano.yaci.store.plugin.scheduler.SchedulerService;
 import com.bloxbean.cardano.yaci.store.plugin.variables.VariableProviderFactory;
 import jakarta.annotation.PostConstruct;
@@ -25,6 +26,7 @@ public class PluginRegistry {
     private final StoreProperties storeProperties;
     private final List<PluginFactory> factories;
     private final VariableProviderFactory variableProviderFactory;
+    private final PluginMetricsCollector metricsCollector;
 
     @Autowired(required = false)
     private SchedulerService schedulerService;
@@ -40,10 +42,12 @@ public class PluginRegistry {
 
     public PluginRegistry(StoreProperties storeProperties,
                           List<PluginFactory> factories,
-                          VariableProviderFactory variableProviderFactory) {
+                          VariableProviderFactory variableProviderFactory,
+                          PluginMetricsCollector metricsCollector) {
         this.storeProperties = storeProperties;
         this.factories      = factories;
         this.variableProviderFactory = variableProviderFactory;
+        this.metricsCollector = metricsCollector;
 
         log.info("PluginRegistry created with {} factories", factories);
     }
@@ -120,7 +124,35 @@ public class PluginRegistry {
                 continue;
 
             var initPlugin = factory.createInitPlugin(plugiDef);
-            initPlugin.initPlugin();
+
+            // Initialize metrics entry for this INIT plugin
+            metricsCollector.initializePlugin(
+                plugiDef.getName(),
+                PluginType.INIT,
+                factory.getLang()
+            );
+
+            // Track execution metrics
+            long startTime = System.currentTimeMillis();
+            boolean success = false;
+            try {
+                initPlugin.initPlugin();
+                success = true;
+            } catch (Exception e) {
+                log.error("INIT plugin execution failed: " + plugiDef.getName(), e);
+                throw e; // Re-throw since INIT failure is critical
+            } finally {
+                long endTime = System.currentTimeMillis();
+                metricsCollector.recordExecution(
+                    plugiDef.getName(),
+                    PluginType.INIT,
+                    factory.getLang(),
+                    startTime,
+                    endTime,
+                    success,
+                    null
+                );
+            }
 
             initPlugins.put(factory.getLang(), initPlugin);
         }
@@ -143,6 +175,10 @@ public class PluginRegistry {
                                         new IllegalArgumentException("Unknown filter type: " + def.getLang() + ", filter: " + def));
                         FilterPlugin<?> filter = factory.createFilterPlugin(def);
                         log.info("Registered filter {} for filter key '{}'", def.getName(), storeKey);
+
+                        // Initialize metrics entry for this plugin
+                        metricsCollector.initializePlugin(def.getName(), PluginType.FILTER, def.getLang());
+
                         return filter;
                     })
                     .collect(Collectors.toList());
@@ -168,6 +204,10 @@ public class PluginRegistry {
                                         new IllegalArgumentException("Unknown pre-action type: " + def.getLang() + ", pre-action: " + def));
                         PreActionPlugin<?> filter = (PreActionPlugin<?>) factory.createPreActionPlugin(def);
                         log.info("Registered pre-action {} for pre-action key '{}'", def.getName(), storeKey);
+
+                        // Initialize metrics entry for this plugin
+                        metricsCollector.initializePlugin(def.getName(), PluginType.PRE_ACTION, def.getLang());
+
                         return filter;
                     })
                     .collect(Collectors.toList());
@@ -193,6 +233,10 @@ public class PluginRegistry {
                                         new IllegalArgumentException("Unknown post-action type: " + def.getLang() + ", post-action: " + def));
                         PostActionPlugin<?> filter = (PostActionPlugin<?>) factory.createPostActionPlugin(def);
                         log.info("Registered post-action {} for post-action key '{}'", def.getName(), storeKey);
+
+                        // Initialize metrics entry for this plugin
+                        metricsCollector.initializePlugin(def.getName(), PluginType.POST_ACTION, def.getLang());
+
                         return filter;
                     })
                     .collect(Collectors.toList());
@@ -218,6 +262,10 @@ public class PluginRegistry {
                                         new IllegalArgumentException("Unknown event-handler type: " + def.getLang() + ", event-handler: " + def));
                         EventHandlerPlugin<?> filter = (EventHandlerPlugin<?>) factory.createEventHandlerPlugin(def);
                         log.info("Registered event-handler {} for key '{}'", def.getName(), key);
+
+                        // Initialize metrics entry for this plugin
+                        metricsCollector.initializePlugin(def.getName(), PluginType.EVENT_HANDLER, def.getLang());
+
                         return filter;
                     })
                     .collect(Collectors.toList());
@@ -264,6 +312,9 @@ public class PluginRegistry {
 
                 SchedulerPlugin<?> schedulerPlugin = factory.createSchedulerPlugin(schedulerDef);
                 log.info("Created scheduler plugin: {} with language: {}", schedulerDef.getName(), schedulerDef.getLang());
+
+                // Initialize metrics entry for this plugin
+                metricsCollector.initializePlugin(schedulerDef.getName(), PluginType.SCHEDULER, schedulerDef.getLang());
 
                 // Store in registry
                 schedulerPlugins.put(schedulerDef.getName(), schedulerPlugin);

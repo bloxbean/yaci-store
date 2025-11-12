@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.impl.model.BlockEntity;
 import com.bloxbean.cardano.yaci.store.blocks.storage.impl.repository.BlockRepository;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,12 +34,14 @@ public class BlockStorageImpl implements BlockStorage {
     }
 
     @Override
+    @Transactional
     public int deleteBySlotGreaterThan(long slot) {
         return blockRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Plugin(key = PLUGIN_BLOCK_SAVE)
+    @Transactional
     public void save(Block block) {
         BlockEntity blockEntity = blockDetailsMapper.toBlockEntity(block);
         blockRepository.save(blockEntity);

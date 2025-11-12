@@ -1,15 +1,18 @@
 package com.bloxbean.cardano.yaci.store.transaction.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapper;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.mapper.TxnMapperImpl;
+import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnCborRepository;
 import com.bloxbean.cardano.yaci.store.transaction.storage.impl.repository.TxnEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 
@@ -31,7 +34,12 @@ class TransactionStorageReaderImplTest {
     void setUp() {
         mapper = new TxnMapperImpl();
         transactionStorageReader = new TransactionStorageReaderImpl(txnEntityRepository, mapper, null);
-        transactionStorage = new TransactionStorageImpl(txnEntityRepository, mapper, null);
+
+        transactionStorage = new TransactionStorageImpl(
+                txnEntityRepository,
+                mapper,
+                null // DSLContext not needed for this test
+        );
     }
 
     @Test

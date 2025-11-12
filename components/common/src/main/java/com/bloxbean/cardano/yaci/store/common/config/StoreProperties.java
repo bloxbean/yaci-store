@@ -38,6 +38,9 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private String ogmiosUrl;
     private String mempoolMonitoringEnabled;
 
+    private boolean returnTxBodyCbor;
+    private boolean returnBlockCbor;
+
     private long syncStartSlot;
     private String syncStartBlockhash;
     private long syncStartByronBlockNumber;
@@ -136,12 +139,22 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private Map<String, List<PluginDef>> eventHandlers = new HashMap<>();
     private List<SchedulerPluginDef> schedulers = new ArrayList<>();
 
+    /**
+     * Task termination timeout in seconds for scheduler plugins during shutdown.
+     * Default: 300 seconds (5 minutes)
+     */
+    @Builder.Default
+    private int schedulerTaskTerminationTimeoutSeconds = 300;
+
     private String pythonVenv;
     private List<ScriptRef> pluginGlobalScripts;
     private String pluginFilesRootPath;
     private boolean pluginFilesEnableLocks = true;
 
     private boolean metricsEnabled = true;
+
+    private boolean pluginMetricsEnabled = true;
+    private boolean pluginApiEnabled = true;
 
     @Builder.Default
     private boolean continueOnParseError = false;
