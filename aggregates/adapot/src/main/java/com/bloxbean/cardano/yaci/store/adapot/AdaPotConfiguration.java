@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.AdaPotMapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.Mapper;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.*;
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -55,8 +56,10 @@ public class AdaPotConfiguration {
                                        RewardRestRepository rewardRestRepository,
                                        RewardRepository rewardRepository,
                                        UnclaimedRewardRestRepository unclaimedRewardRestRepository,
-                                       Mapper rewardMapper, DSLContext dslContext) {
-        return new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, unclaimedRewardRestRepository, rewardMapper, dslContext);
+                                       Mapper rewardMapper,
+                                       DSLContext dslContext,
+                                       AdaPotProperties adaPotProperties) {
+        return new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, unclaimedRewardRestRepository, rewardMapper, dslContext, adaPotProperties);
     }
 
     @Bean
@@ -84,7 +87,10 @@ public class AdaPotConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public PartitionManager partitionManager(DSLContext dslContext) {
-        return new PostgresPartitionManager(dslContext);
+        if (dslContext.dialect().family() == SQLDialect.POSTGRES) {
+            return new PostgresPartitionManager(dslContext);
+        }
+        return new NoOpPartitionManager();
     }
 
 }

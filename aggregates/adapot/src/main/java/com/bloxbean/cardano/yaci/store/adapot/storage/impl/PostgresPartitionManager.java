@@ -19,8 +19,6 @@ import java.util.concurrent.ConcurrentMap;
  * corresponding indexes on all existing partitions and any future partitions. No manual
  * index creation is needed on individual partitions.</p>
  *
- * <p><b>Memory:</b> The ensuredEpochs map is intentionally unbounded as epochs grow slowly
- * (~73 per year). Memory impact is negligible: ~4 years = ~300 epochs = ~2.4KB.</p>
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -39,11 +37,6 @@ public class PostgresPartitionManager implements PartitionManager {
     public void ensureRewardPartition(int spendableEpoch) {
         if (spendableEpoch < 0) {
             log.debug("Skipping partition creation for negative epoch: {}", spendableEpoch);
-            return;
-        }
-
-        if (dsl.dialect().family() != SQLDialect.POSTGRES) {
-            log.debug("Partitioning is only supported for PostgreSQL, current dialect: {}", dsl.dialect().family());
             return;
         }
 

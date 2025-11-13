@@ -11,6 +11,8 @@ import com.bloxbean.cardano.yaci.store.adapot.snapshot.DepositSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.PartitionManager;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.domain.StakeSnapshotTakenEvent;
@@ -50,6 +52,7 @@ public class AdaPotJobProcessor {
     private final TransactionStorageReader transactionStorageReader;
     private final ApplicationEventPublisher publisher;
     private final PartitionManager partitionManager;
+    private final DSLContext dsl;
 
     public boolean processJob(AdaPotJob job) throws InterruptedException {
         // Set job status to STARTED and update in the database
@@ -190,7 +193,10 @@ public class AdaPotJobProcessor {
 
             //update rewards
             start = Instant.now();
-            partitionManager.ensureRewardPartition(epoch);
+            // Ensure partition exists for PostgreSQL (other databases use regular tables)
+            if (dsl.dialect().family() == SQLDialect.POSTGRES) {
+                partitionManager.ensureRewardPartition(epoch);
+            }
             epochRewardCalculationService.updateEpochRewards(epoch, epochCalculationResult);
             end = Instant.now();
             job.setUpdateRewardTime(end.toEpochMilli() - start.toEpochMilli());

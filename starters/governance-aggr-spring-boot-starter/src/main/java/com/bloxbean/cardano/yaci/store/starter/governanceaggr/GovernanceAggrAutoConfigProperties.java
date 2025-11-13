@@ -17,6 +17,10 @@ public class GovernanceAggrAutoConfigProperties {
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
         private boolean devnetConwayBootstrapAvailable = false;
+
+        // PostgreSQL Memory Configuration for DRep Distribution Snapshot Operations
+        // Default is null to use PostgreSQL defaults
+        private String drepDistWorkMem;
     }
 
     @Getter
