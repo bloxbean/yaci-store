@@ -1,0 +1,39 @@
+
+### @name getLatestEpochParamsBlockfrost
+### Get latest epoch params from Blockfrost
+GET https://cardano-preprod.blockfrost.io/api/v0/epochs/latest/parameters
+project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostLatestEpochParamsResponse", response.body);
+
+    client.test("Get latest epoch parameters", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+
+### @name getLatestEpochParamsYaci
+### Get latest epoch params from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/latest/parameters
+
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostLatestEpochResponse = client.global.get("blockfrostLatestEpochParamsResponse");
+    const yaciLatestEpochParamsResponse = response.body;
+
+    client.test("Compare specific epoch with latest", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Example 1: Compare a specific property
+        //client.assert(latestEpochResponse.min_fee_a === specificEpochResponse.min_fee_a, "min_fee_a is different between epochs");
+
+        // Example 2: Compare the full response bodies
+        //const areEqual = JSON.stringify(latestEpochResponse) === JSON.stringify(specificEpochResponse);
+        //client.log("Are the full responses equal? " + areEqual);
+        // You could assert this, but be aware that some fields might differ (like the epoch number itself)
+        // client.assert(areEqual, "The two epoch responses are not identical");
+    });
+%}
