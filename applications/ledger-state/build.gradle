@@ -17,8 +17,8 @@ dependencies {
     //For governance data aggr
     implementation project(':starters:governance-aggr-spring-boot-starter')
 
-    implementation project(':extensions:utxo-rocksdb')
-    implementation project(':extensions:account-rocksdb')
+    implementation project(':extensions:storage:utxo-rocksdb')
+    implementation project(':extensions:storage:account-rocksdb')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-batch'
