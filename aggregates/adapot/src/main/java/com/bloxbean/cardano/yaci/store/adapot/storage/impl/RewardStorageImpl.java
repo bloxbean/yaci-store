@@ -57,15 +57,15 @@ public class RewardStorageImpl implements RewardStorage {
                         .set(REWARD.POOL_ID, reward.getPoolId())
                         .set(REWARD.AMOUNT, reward.getAmount())
                         .set(REWARD.SPENDABLE_EPOCH, reward.getSpendableEpoch())
+                        .set(REWARD.SLOT, reward.getSlot())
+                        .onDuplicateKeyUpdate()
+                        .set(REWARD.ADDRESS, reward.getAddress())
+                        .set(REWARD.EARNED_EPOCH, reward.getEarnedEpoch())
+                        .set(REWARD.TYPE, reward.getType().toString())
+                        .set(REWARD.POOL_ID, reward.getPoolId())
+                        .set(REWARD.AMOUNT, reward.getAmount())
+                        .set(REWARD.SPENDABLE_EPOCH, reward.getSpendableEpoch())
                         .set(REWARD.SLOT, reward.getSlot())).toList();
-//                        .onDuplicateKeyUpdate()
-//                        .set(REWARD.ADDRESS, reward.getAddress())
-//                        .set(REWARD.EARNED_EPOCH, reward.getEarnedEpoch())
-//                        .set(REWARD.TYPE, reward.getType().toString())
-//                        .set(REWARD.POOL_ID, reward.getPoolId())
-//                        .set(REWARD.AMOUNT, reward.getAmount())
-//                        .set(REWARD.SPENDABLE_EPOCH, reward.getSpendableEpoch())
-//                        .set(REWARD.SLOT, reward.getSlot())).toList();
 
         dsl.batch(inserts).execute();
     }
