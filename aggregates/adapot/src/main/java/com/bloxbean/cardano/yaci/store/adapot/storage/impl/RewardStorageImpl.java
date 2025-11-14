@@ -72,6 +72,8 @@ public class RewardStorageImpl implements RewardStorage {
 
     @Override
     public void bulkSaveRewards(List<Reward> rewards, int batchSize) {
+        saveRewards(rewards);
+        /**
         var currentTime = LocalDateTime.now();
         var rewardRecords = rewards.stream()
                 .map(reward -> {
@@ -98,6 +100,7 @@ public class RewardStorageImpl implements RewardStorage {
         } catch (IOException e) {
             throw new RuntimeException("Reward data could not be loaded", e);
         }
+         **/
     }
 
     /**
