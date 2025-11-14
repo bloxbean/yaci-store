@@ -72,6 +72,26 @@ public class RewardStorageImpl implements RewardStorage {
 
     @Override
     public void bulkSaveRewards(List<Reward> rewards, int batchSize) {
+
+        if (dsl.dialect().family() == SQLDialect.POSTGRES) {
+            try {
+                String workMem = adaPotProperties.getRewardBulkLoadWorkMem();
+                String maintenanceWorkMem = adaPotProperties.getRewardBulkLoadMaintenanceWorkMem();
+
+                if (workMem != null && !workMem.isBlank()) {
+                    dsl.execute("SET LOCAL work_mem = '" + workMem + "'");
+                    log.info("Set work_mem to {} for bulk COPY operation", workMem);
+                }
+
+                if (maintenanceWorkMem != null && !maintenanceWorkMem.isBlank()) {
+                    dsl.execute("SET LOCAL maintenance_work_mem = '" + maintenanceWorkMem + "'");
+                    log.debug("Set maintenance_work_mem to {} for bulk COPY operation", maintenanceWorkMem);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
+        }
+
         saveRewards(rewards);
         /**
         var currentTime = LocalDateTime.now();
