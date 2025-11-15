@@ -20,6 +20,16 @@ public class AdaPotProperties {
 
     private boolean bulkUpdateRewardWithCopy = true;
 
+    // PostgreSQL Bulk Load Memory Configuration for Reward Operations
+    // Default is null to use PostgreSQL defaults (backward compatible, works with low-memory setups)
+    private String rewardBulkLoadWorkMem;
+
+    private String rewardBulkLoadMaintenanceWorkMem;
+
+    // PostgreSQL Memory Configuration for Stake Snapshot Operations
+    // Default is null to use PostgreSQL defaults (backward compatible, works with low-memory setups)
+    private String stakeSnapshotWorkMem;
+
     @Builder.Default
     private boolean verifyAdapotCalcValues = true;
 

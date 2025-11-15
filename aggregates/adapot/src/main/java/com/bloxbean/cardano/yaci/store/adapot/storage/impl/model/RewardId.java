@@ -22,4 +22,7 @@ public class RewardId implements Serializable {
 
     @Column(name = "pool_id")
     private String poolId;
+
+    @Column(name = "spendable_epoch")
+    private Integer spendableEpoch;
 }

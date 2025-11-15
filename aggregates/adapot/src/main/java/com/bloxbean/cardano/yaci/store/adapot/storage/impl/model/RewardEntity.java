@@ -39,6 +39,7 @@ public class RewardEntity {
     @Column(name = "amount")
     private BigInteger amount;
 
+    @Id
     @Column(name = "spendable_epoch")
     private Integer spendableEpoch;
 

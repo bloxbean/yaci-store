@@ -18,11 +18,11 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsUtil;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
+import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.mapper.ProposalMapper;
-import com.bloxbean.cardano.yaci.store.governanceaggr.util.ProposalUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +54,7 @@ public class DRepDistService {
     private final EraGenesisProtocolParamsUtil eraGenesisProtocolParamsUtil;
     private final DRepExpiryService dRepExpiryService;
     private final AdaPotJobStorage adaPotJobStorage;
+    private final GovernanceAggrProperties governanceAggrProperties;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -103,6 +104,19 @@ public class DRepDistService {
             jdbcTemplate.update("SET LOCAL synchronous_commit = off", Map.of());
             tableType = "UNLOGGED";
             log.info("Postgres detected. Using UNLOGGED table for temp tables");
+
+            // Increase work_mem for complex DRep distribution queries
+            // This setting only affects the current transaction and automatically resets after
+            // Only set if configured (null/empty means use PostgreSQL defaults)
+            try {
+                String workMem = governanceAggrProperties.getDrepDistWorkMem();
+                if (workMem != null && !workMem.isBlank()) {
+                    jdbcTemplate.update("SET LOCAL work_mem = '" + workMem + "'", Map.of());
+                    log.info("Set work_mem to {} for DRep distribution operations", workMem);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
         }
 
         // Delete existing snapshot data if any for the epoch using jdbc template

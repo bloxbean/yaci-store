@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.MapperImpl;
@@ -37,7 +38,7 @@ class RewardStorageImplTest {
 
     @BeforeEach
     public void setup() {
-        rewardStorage = new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, unclaimedRewardRestRepository, new MapperImpl(), null);
+        rewardStorage = new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository, unclaimedRewardRestRepository, new MapperImpl(), null, new AdaPotProperties());
     }
 
     @Test

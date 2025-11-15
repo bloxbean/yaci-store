@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.InstantReward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.Reward;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
@@ -12,9 +13,11 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRest
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +27,7 @@ import java.util.List;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
 
 @RequiredArgsConstructor
+@Slf4j
 public class RewardStorageImpl implements RewardStorage {
     private final InstantRewardRepository instantRewardRepository;
     private final RewardRestRepository rewardRestRepository;
@@ -31,6 +35,7 @@ public class RewardStorageImpl implements RewardStorage {
     private final UnclaimedRewardRestRepository unclaimedRewardRestRepository;
     private final Mapper mapper;
     private final DSLContext dsl;
+    private final AdaPotProperties adaPotProperties;
 
     @Override
     public void saveInstantRewards(List<InstantReward> rewards) {
@@ -67,6 +72,32 @@ public class RewardStorageImpl implements RewardStorage {
 
     @Override
     public void bulkSaveRewards(List<Reward> rewards, int batchSize) {
+
+        if (dsl.dialect().family() == SQLDialect.POSTGRES) {
+            try {
+                String workMem = adaPotProperties.getRewardBulkLoadWorkMem();
+                String maintenanceWorkMem = adaPotProperties.getRewardBulkLoadMaintenanceWorkMem();
+
+                if (workMem != null && !workMem.isBlank()) {
+                    dsl.execute("SET LOCAL work_mem = '" + workMem + "'");
+                    log.info("Set work_mem to {} for bulk COPY operation", workMem);
+                }
+
+                if (maintenanceWorkMem != null && !maintenanceWorkMem.isBlank()) {
+                    dsl.execute("SET LOCAL maintenance_work_mem = '" + maintenanceWorkMem + "'");
+                    log.debug("Set maintenance_work_mem to {} for bulk COPY operation", maintenanceWorkMem);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
+        }
+
+        log.info("Calling save rewards...");
+        long t1 = System.currentTimeMillis();
+        saveRewards(rewards);
+        System.out.println("End save rewards >> " + (System.currentTimeMillis() - t1));
+
+        /**
         var currentTime = LocalDateTime.now();
         var rewardRecords = rewards.stream()
                 .map(reward -> {
@@ -93,11 +124,51 @@ public class RewardStorageImpl implements RewardStorage {
         } catch (IOException e) {
             throw new RuntimeException("Reward data could not be loaded", e);
         }
+         **/
     }
 
-    public void bulkSaveRewardsWithCopy(List<Reward> rewards) {
+    /**
+     * Simplified bulk save using PostgreSQL COPY protocol.
+     *
+     * This method uses a straightforward approach:
+     * 1. Generate CSV data in memory
+     * 2. COPY to parent reward table (PostgreSQL routes to correct partition)
+     * 3. Let PostgreSQL handle index maintenance automatically
+     *
+     * Note: Old reward data for the epoch is deleted by the caller (EpochRewardCalculationService)
+     * before this method is invoked, so no duplicate key errors should occur.
+     *
+     */
+    public void bulkSaveRewardsWithCopy(List<Reward> rewards, int spendableEpoch) {
+        long startTotal = System.currentTimeMillis();
+
+        // Increase work_mem for PostgreSQL bulk operations to prevent disk-based temp files
+        // This setting only affects the current transaction and automatically resets after
+        // Only set if configured (null/empty means use PostgreSQL defaults)
+        if (dsl.dialect().family() == SQLDialect.POSTGRES) {
+            try {
+                String workMem = adaPotProperties.getRewardBulkLoadWorkMem();
+                String maintenanceWorkMem = adaPotProperties.getRewardBulkLoadMaintenanceWorkMem();
+
+                if (workMem != null && !workMem.isBlank()) {
+                    dsl.execute("SET LOCAL work_mem = '" + workMem + "'");
+                    log.info("Set work_mem to {} for bulk COPY operation", workMem);
+                }
+
+                if (maintenanceWorkMem != null && !maintenanceWorkMem.isBlank()) {
+                    dsl.execute("SET LOCAL maintenance_work_mem = '" + maintenanceWorkMem + "'");
+                    log.debug("Set maintenance_work_mem to {} for bulk COPY operation", maintenanceWorkMem);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
+        }
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         LocalDateTime now = LocalDateTime.now();
+
+        // Generate CSV data
+        long startCsv = System.currentTimeMillis();
         try (CSVPrinter csv = new CSVPrinter(
                 new OutputStreamWriter(baos, StandardCharsets.UTF_8),
                 CSVFormat.DEFAULT
@@ -128,10 +199,14 @@ public class RewardStorageImpl implements RewardStorage {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to write CSV for rewards", e);
         }
+        long csvTime = System.currentTimeMillis() - startCsv;
+        long csvSizeBytes = baos.size();
 
+        // COPY to parent table (PostgreSQL automatically routes to correct partition)
+        long startCopy = System.currentTimeMillis();
         try (var in = new ByteArrayInputStream(baos.toByteArray())) {
             dsl.loadInto(REWARD)
-                    .loadCSV(in)              // <— triggers COPY FROM STDIN on Postgres
+                    .loadCSV(in)
                     .fields(
                             REWARD.ADDRESS,
                             REWARD.EARNED_EPOCH,
@@ -146,6 +221,15 @@ public class RewardStorageImpl implements RewardStorage {
         } catch (IOException e) {
             throw new RuntimeException("Reward data could not be loaded via COPY", e);
         }
+        long copyTime = System.currentTimeMillis() - startCopy;
+
+        long totalTime = System.currentTimeMillis() - startTotal;
+
+        log.info("Bulk COPY complete - Rows: {}, Total: {}ms", rewards.size(), totalTime);
+        log.info("  └─ CSV generation: {}ms (size: {} MB)", csvTime, String.format("%.2f", csvSizeBytes / 1024.0 / 1024.0));
+        log.info("  └─ COPY execution: {}ms ({} rows/sec)",
+                 copyTime,
+                 copyTime > 0 ? String.format("%.0f", rewards.size() * 1000.0 / copyTime) : "N/A");
     }
 
     @Override
