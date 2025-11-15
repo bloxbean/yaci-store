@@ -37,3 +37,8 @@ GET {{base_url}}/api/v1/blockfrost/epochs/latest/parameters
         // client.assert(areEqual, "The two epoch responses are not identical");
     });
 %}
+
+
+### @name getSpecificEpochParamsYaci
+### Get specific epoch params from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/193/parameters
