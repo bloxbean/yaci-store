@@ -92,6 +92,12 @@ public class RewardStorageImpl implements RewardStorage {
             }
         }
 
+        log.info("Calling save rewards...");
+        long t1 = System.currentTimeMillis();
+        saveRewards(rewards);
+        System.out.println("End save rewards >> " + (System.currentTimeMillis() - t1));
+
+        /**
         var currentTime = LocalDateTime.now();
         var rewardRecords = rewards.stream()
                 .map(reward -> {
@@ -118,6 +124,7 @@ public class RewardStorageImpl implements RewardStorage {
         } catch (IOException e) {
             throw new RuntimeException("Reward data could not be loaded", e);
         }
+         **/
     }
 
     /**
