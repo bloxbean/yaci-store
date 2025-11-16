@@ -68,7 +68,7 @@ public class EventLogNotificationChannel implements TxNotificationChannel {
         TxEventLogEntity.TxEventLogEntityBuilder builder = TxEventLogEntity.builder()
                 .txHash(event.getTxHash())
                 .previousStatus(event.getPreviousStatus())
-                .newStatus(event.getNewStatus())
+                .currentStatus(event.getNewStatus())
                 .message(event.getMessage())
                 .eventTimestamp(new Timestamp(event.getTimestamp()));
         

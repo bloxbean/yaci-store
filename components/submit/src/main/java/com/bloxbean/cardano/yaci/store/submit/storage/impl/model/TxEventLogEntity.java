@@ -33,8 +33,8 @@ public class TxEventLogEntity {
     private TxStatus previousStatus;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "new_status", nullable = false, length = 20)
-    private TxStatus newStatus;
+    @Column(name = "current_status", nullable = false, length = 20)
+    private TxStatus currentStatus;
     
     @Column(name = "message", columnDefinition = "TEXT")
     private String message;
