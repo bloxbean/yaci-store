@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.submit.notification.websocket;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket handler for real-time transaction lifecycle updates.
- * Clients can connect to receive status update notifications.
+ * Broadcasts ALL transaction status updates to all connected clients.
+ * No subscription needed - just connect and receive all events.
  */
 @Component
 @ConditionalOnProperty(
@@ -35,19 +35,18 @@ public class TxLifecycleWebSocketHandler extends TextWebSocketHandler {
     // Store active sessions: sessionId -> WebSocketSession
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     
-    // Store subscriptions: txHash -> Set<sessionId>
-    private final Map<String, ConcurrentHashMap<String, Boolean>> subscriptions = new ConcurrentHashMap<>();
-    
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         sessions.put(session.getId(), session);
-        log.info("WebSocket connection established: {}", session.getId());
+        log.info("WebSocket connection established: sessionId={}, total_sessions={}", 
+                session.getId(), sessions.size());
         
         // Send welcome message
         Map<String, Object> welcome = Map.of(
                 "type", "connected",
-                "message", "Transaction lifecycle WebSocket connected",
-                "sessionId", session.getId()
+                "message", "Connected to Transaction Lifecycle WebSocket. You will receive all transaction status updates.",
+                "sessionId", session.getId(),
+                "connectedClients", sessions.size()
         );
         sendMessage(session, welcome);
     }
@@ -57,96 +56,52 @@ public class TxLifecycleWebSocketHandler extends TextWebSocketHandler {
         String sessionId = session.getId();
         sessions.remove(sessionId);
         
-        // Remove all subscriptions for this session
-        subscriptions.values().forEach(subs -> subs.remove(sessionId));
-        
-        log.info("WebSocket connection closed: {}, status: {}", sessionId, status);
-    }
-    
-    @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        try {
-            Map<String, Object> payload = objectMapper.readValue(
-                    message.getPayload(), 
-                    new TypeReference<Map<String, Object>>() {}
-            );
-            String action = (String) payload.get("action");
-            
-            if ("subscribe".equals(action)) {
-                String txHash = (String) payload.get("txHash");
-                subscribe(session.getId(), txHash);
-                
-                Map<String, Object> response = Map.of(
-                        "type", "subscribed",
-                        "txHash", txHash
-                );
-                sendMessage(session, response);
-                
-            } else if ("unsubscribe".equals(action)) {
-                String txHash = (String) payload.get("txHash");
-                unsubscribe(session.getId(), txHash);
-                
-                Map<String, Object> response = Map.of(
-                        "type", "unsubscribed",
-                        "txHash", txHash
-                );
-                sendMessage(session, response);
-            }
-        } catch (Exception e) {
-            log.error("Error handling WebSocket message", e);
-            Map<String, Object> error = Map.of(
-                    "type", "error",
-                    "message", e.getMessage()
-            );
-            sendMessage(session, error);
-        }
+        log.info("WebSocket connection closed: sessionId={}, status={}, remaining_sessions={}", 
+                sessionId, status, sessions.size());
     }
     
     /**
-     * Subscribe a session to a specific transaction.
+     * Broadcast a transaction status update to ALL connected sessions.
+     * 
+     * @param txHash the transaction hash
+     * @param statusUpdate the status update payload
      */
-    private void subscribe(String sessionId, String txHash) {
-        subscriptions.computeIfAbsent(txHash, k -> new ConcurrentHashMap<>())
-                .put(sessionId, true);
-        log.debug("Session {} subscribed to txHash: {}", sessionId, txHash);
-    }
-    
-    /**
-     * Unsubscribe a session from a specific transaction.
-     */
-    private void unsubscribe(String sessionId, String txHash) {
-        ConcurrentHashMap<String, Boolean> subs = subscriptions.get(txHash);
-        if (subs != null) {
-            subs.remove(sessionId);
-            if (subs.isEmpty()) {
-                subscriptions.remove(txHash);
-            }
-        }
-        log.debug("Session {} unsubscribed from txHash: {}", sessionId, txHash);
-    }
-    
-    /**
-     * Broadcast a status update to all subscribed sessions.
-     */
-    public void broadcastStatusUpdate(String txHash, Map<String, Object> statusUpdate) {
-        ConcurrentHashMap<String, Boolean> subs = subscriptions.get(txHash);
-        if (subs == null || subs.isEmpty()) {
+    public void broadcastToAll(String txHash, Map<String, Object> statusUpdate) {
+        if (sessions.isEmpty()) {
+            log.debug("No active WebSocket sessions to broadcast to");
             return;
         }
         
         statusUpdate.put("type", "status_update");
         statusUpdate.put("txHash", txHash);
         
-        subs.keySet().forEach(sessionId -> {
-            WebSocketSession session = sessions.get(sessionId);
+        int successCount = 0;
+        int failureCount = 0;
+        
+        for (Map.Entry<String, WebSocketSession> entry : sessions.entrySet()) {
+            String sessionId = entry.getKey();
+            WebSocketSession session = entry.getValue();
+            
             if (session != null && session.isOpen()) {
                 try {
                     sendMessage(session, statusUpdate);
+                    successCount++;
+                    log.debug("Broadcasted status update to session: sessionId={}, txHash={}, status={}", 
+                            sessionId, txHash, statusUpdate.get("newStatus"));
                 } catch (Exception e) {
-                    log.error("Error sending status update to session: {}", sessionId, e);
+                    failureCount++;
+                    log.error("Failed to send status update to session: sessionId={}, txHash={}", 
+                            sessionId, txHash, e);
                 }
+            } else {
+                failureCount++;
+                log.warn("Session not open, removing: sessionId={}", sessionId);
+                sessions.remove(sessionId);
             }
-        });
+        }
+        
+        log.info("Broadcasted transaction update: txHash={}, status={}, success={}, failed={}, total_sessions={}", 
+                txHash, statusUpdate.get("newStatus"), successCount, failureCount, sessions.size());
     }
     
     /**
@@ -155,6 +110,13 @@ public class TxLifecycleWebSocketHandler extends TextWebSocketHandler {
     private void sendMessage(WebSocketSession session, Map<String, Object> message) throws IOException {
         String json = objectMapper.writeValueAsString(message);
         session.sendMessage(new TextMessage(json));
+    }
+    
+    /**
+     * Get the number of active WebSocket connections.
+     */
+    public int getActiveConnectionCount() {
+        return sessions.size();
     }
 }
 

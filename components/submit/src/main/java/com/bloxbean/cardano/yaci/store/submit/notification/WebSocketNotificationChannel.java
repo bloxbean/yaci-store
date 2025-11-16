@@ -29,11 +29,11 @@ public class WebSocketNotificationChannel implements TxNotificationChannel {
     
     @Override
     public void notify(TxStatusUpdateEvent event) {
-        log.debug("Broadcasting status update via WebSocket: txHash={}, status={}", 
+        log.debug("Broadcasting status update via WebSocket to all clients: txHash={}, status={}", 
                 event.getTxHash(), event.getNewStatus());
         
         Map<String, Object> payload = buildPayload(event);
-        webSocketHandler.broadcastStatusUpdate(event.getTxHash(), payload);
+        webSocketHandler.broadcastToAll(event.getTxHash(), payload);
     }
     
     @Override
