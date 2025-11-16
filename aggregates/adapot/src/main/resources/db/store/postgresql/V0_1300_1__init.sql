@@ -38,7 +38,7 @@ create table adapot_jobs
 create index idx_adapot_jobs_slot
     on adapot_jobs (slot);
 
-drop table if exists epoch_stake;
+drop table if exists epoch_stake cascade;
 create table epoch_stake
 (
     epoch              integer,
@@ -49,7 +49,10 @@ create table epoch_stake
     active_epoch       integer,
     create_datetime    timestamp,
     primary key (epoch, address)
-);
+) partition by range (epoch);
+
+create table epoch_stake_default
+    partition of epoch_stake default;
 
 create index epoch_stake_active_epoch_address_index
     on epoch_stake (active_epoch, address);

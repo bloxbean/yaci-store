@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobExtraInfo;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
+import com.bloxbean.cardano.yaci.store.adapot.storage.PartitionManager;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -55,6 +56,7 @@ public class DRepDistService {
     private final DRepExpiryService dRepExpiryService;
     private final AdaPotJobStorage adaPotJobStorage;
     private final GovernanceAggrProperties governanceAggrProperties;
+    private final PartitionManager partitionManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -65,6 +67,9 @@ public class DRepDistService {
         if (eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue()) {
             return;
         }
+
+        // Ensure partition exists for this epoch before taking snapshot
+        partitionManager.ensureDRepDistPartition(currentEpoch);
 
         boolean isInBootstrapPhase = true;
         int maxBootstrapPhaseEpoch = 0;

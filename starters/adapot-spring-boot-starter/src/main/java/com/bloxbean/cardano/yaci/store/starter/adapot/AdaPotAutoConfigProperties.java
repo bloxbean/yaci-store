@@ -20,7 +20,7 @@ public class AdaPotAutoConfigProperties {
         //Batch size for updating rewards in the db
         private int updateRewardDbBatchSize = 200;
         private boolean bulkUpdateReward = true;
-        private boolean bulkUpdateRewardWithCopy = true;
+        private boolean bulkUpdateRewardWithCopy = false;
 
         // PostgreSQL Bulk Load Memory Configuration for Reward Operations
         // Default is null to use PostgreSQL defaults
