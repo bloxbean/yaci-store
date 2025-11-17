@@ -16,6 +16,18 @@ public class NoOpPartitionManager implements PartitionManager {
     @Override
     public void ensureRewardPartition(int spendableEpoch) {
         // No-op - partitioning is not supported for non-PostgreSQL databases
-        log.trace("Partition creation skipped - not using PostgreSQL");
+        log.trace("Reward partition creation skipped - not using PostgreSQL");
+    }
+
+    @Override
+    public void ensureEpochStakePartition(int epoch) {
+        // No-op - partitioning is not supported for non-PostgreSQL databases
+        log.trace("Epoch stake partition creation skipped - not using PostgreSQL");
+    }
+
+    @Override
+    public void ensureDRepDistPartition(int epoch) {
+        // No-op - partitioning is not supported for non-PostgreSQL databases
+        log.trace("DRep dist partition creation skipped - not using PostgreSQL");
     }
 }

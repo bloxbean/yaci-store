@@ -18,7 +18,7 @@ public class AdaPotProperties {
 
     private boolean bulkUpdateReward = true;
 
-    private boolean bulkUpdateRewardWithCopy = true;
+    private boolean bulkUpdateRewardWithCopy = false;
 
     // PostgreSQL Bulk Load Memory Configuration for Reward Operations
     // Default is null to use PostgreSQL defaults (backward compatible, works with low-memory setups)
