@@ -70,6 +70,29 @@ public class RewardStorageImpl implements RewardStorage {
         dsl.batch(inserts).execute();
     }
 
+    /**
+     * Bulk saves reward records using batch insert operations with optional PostgreSQL memory optimizations.
+     * <p>
+     * This is the default bulk save method used when storing rewards after AdaPot calculation.
+     * It uses jOOQ batch inserts with ON DUPLICATE KEY UPDATE semantics to handle duplicate records.
+     * </p>
+     * <p>
+     * <b>PostgreSQL-specific optimizations:</b>
+     * </p>
+     * <ul>
+     *   <li>Sets {@code work_mem} from {@code rewardBulkLoadWorkMem} property to optimize sorting and hash operations</li>
+     *   <li>Sets {@code maintenance_work_mem} from {@code rewardBulkLoadMaintenanceWorkMem} property to optimize index maintenance</li>
+     *   <li>Memory settings are applied using {@code SET LOCAL} and auto-reset after the transaction</li>
+     *   <li>Gracefully falls back to default PostgreSQL settings if configuration fails</li>
+     * </ul>
+     * <p>
+     * For non-PostgreSQL databases, no memory optimizations are applied and the method proceeds with standard batch inserts.
+     * </p>
+     *
+     * @param rewards List of reward records to store
+     * @param batchSize Batch size parameter (currently not used by this implementation)
+     * @see #bulkSaveRewardsWithCopy(List, int) for an alternative PostgreSQL COPY-based approach
+     */
     @Override
     public void bulkSaveRewards(List<Reward> rewards, int batchSize) {
 
@@ -92,51 +115,19 @@ public class RewardStorageImpl implements RewardStorage {
             }
         }
 
-        log.info("Calling save rewards...");
+        log.info("Start: Invoke saveRewards ");
         long t1 = System.currentTimeMillis();
         saveRewards(rewards);
-        System.out.println("End save rewards >> " + (System.currentTimeMillis() - t1));
-
-        /**
-        var currentTime = LocalDateTime.now();
-        var rewardRecords = rewards.stream()
-                .map(reward -> {
-                    var rewardRecord = dsl.newRecord(REWARD);
-                    rewardRecord.setAddress(reward.getAddress());
-                    rewardRecord.setEarnedEpoch(reward.getEarnedEpoch());
-                    rewardRecord.setType(reward.getType().toString());
-                    rewardRecord.setPoolId(reward.getPoolId());
-                    rewardRecord.setAmount(reward.getAmount());
-                    rewardRecord.setSpendableEpoch(reward.getSpendableEpoch());
-                    rewardRecord.setSlot(reward.getSlot());
-                    rewardRecord.setUpdateDatetime(currentTime);
-                    return rewardRecord;
-                });
-
-        try {
-            dsl.loadInto(REWARD)
-                    //.bulkAfter(batchSize)
-                    //.batchAfter(batchSize)
-                    .commitAfter(batchSize)
-                    .loadRecords(rewardRecords)
-                    .fields(REWARD.ADDRESS, REWARD.EARNED_EPOCH, REWARD.TYPE, REWARD.POOL_ID, REWARD.AMOUNT, REWARD.SPENDABLE_EPOCH, REWARD.SLOT)
-                    .execute();
-        } catch (IOException e) {
-            throw new RuntimeException("Reward data could not be loaded", e);
-        }
-         **/
+        log.info("End: saveRewards" + (System.currentTimeMillis() - t1));
     }
 
     /**
      * Simplified bulk save using PostgreSQL COPY protocol.
      *
-     * This method uses a straightforward approach:
+     * This method uses the following approach:
      * 1. Generate CSV data in memory
      * 2. COPY to parent reward table (PostgreSQL routes to correct partition)
      * 3. Let PostgreSQL handle index maintenance automatically
-     *
-     * Note: Old reward data for the epoch is deleted by the caller (EpochRewardCalculationService)
-     * before this method is invoked, so no duplicate key errors should occur.
      *
      */
     public void bulkSaveRewardsWithCopy(List<Reward> rewards, int spendableEpoch) {
