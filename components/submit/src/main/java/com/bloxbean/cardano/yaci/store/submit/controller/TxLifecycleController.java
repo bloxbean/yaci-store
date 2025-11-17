@@ -1,12 +1,14 @@
 package com.bloxbean.cardano.yaci.store.submit.controller;
 
+import com.bloxbean.cardano.client.exception.CborSerializationException;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.service.TxLifecycleService;
-import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.SubmittedTransactionRepository;
+import com.bloxbean.cardano.yaci.store.submit.service.TxPlanBuildService;
+import com.bloxbean.cardano.yaci.store.submit.service.TxPlanBuildService.TxPlanBuildResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
@@ -15,15 +17,11 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -45,6 +43,7 @@ public class TxLifecycleController {
     
     private final TxLifecycleService lifecycleService;
     private final CursorService cursorService;
+    private final Optional<TxPlanBuildService> txPlanBuildService;
     
     /**
      * Submit transaction with lifecycle tracking (CBOR format).
@@ -107,6 +106,21 @@ public class TxLifecycleController {
                 .build();
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Build unsigned transaction from TxPlan YAML.
+     */
+    @PostMapping(value = "/plan/build", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Build unsigned transaction from YAML TxPlan")
+    public ResponseEntity<?> buildTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
+        if (txPlanBuildService.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "TxPlan builder not enabled. Configure store.cardano.ogmios-url."));
+        }
+
+        TxPlanBuildResult result = txPlanBuildService.get().buildFromYaml(txPlanYaml);
+        return ResponseEntity.ok(result);
     }
 
     /**
