@@ -50,6 +50,8 @@ public class ProposalStateProcessor {
 
     @EventListener
     @Transactional
+    // TODO: In this method, extract part of the logic into a separate method that takes the epoch as a parameter
+    //  and only returns the proposal status; this will be better for testing and debugging.
     public void handleProposalState(StakeSnapshotTakenEvent stakeSnapshotTakenEvent) {
         if (eraService.getEraForEpoch(stakeSnapshotTakenEvent.getEpoch()).getValue() < Era.Conway.getValue()) {
             return;
