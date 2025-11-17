@@ -38,7 +38,7 @@ create table adapot_jobs
 create index idx_adapot_jobs_slot
     on adapot_jobs (slot);
 
-drop table if exists epoch_stake;
+drop table if exists epoch_stake cascade;
 create table epoch_stake
 (
     epoch              integer,
@@ -49,7 +49,10 @@ create table epoch_stake
     active_epoch       integer,
     create_datetime    timestamp,
     primary key (epoch, address)
-);
+) partition by range (epoch);
+
+create table epoch_stake_default
+    partition of epoch_stake default;
 
 create index epoch_stake_active_epoch_address_index
     on epoch_stake (active_epoch, address);
@@ -70,7 +73,7 @@ create table instant_reward
 create index idx_instant_reward_slot
     on instant_reward (slot);
 
-drop table if exists reward;
+drop table if exists reward cascade;
 create table reward
 (
     address         varchar(255),
@@ -81,8 +84,11 @@ create table reward
     spendable_epoch integer,
     slot            bigint,
     update_datetime timestamp,
-    primary key (address, earned_epoch, type, pool_id)
-);
+    primary key (address, earned_epoch, type, pool_id, spendable_epoch)
+) partition by range (spendable_epoch);
+
+create table reward_default
+    partition of reward default;
 
 create index idx_reward_slot
     on reward (slot);
