@@ -67,8 +67,10 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block_cbor WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM transaction_cbor WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM adapot_jobs WHERE slot > :slot"), any(SqlParameterSource.class));
@@ -106,7 +108,7 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM adapot_jobs WHERE slot > :slot"), any(SqlParameterSource.class));
@@ -152,7 +154,7 @@ class RollbackServiceTest {
         assertNotNull(result);
         assertTrue(result.getSecond());
 
-        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
     }
 
     @Test
@@ -210,7 +212,7 @@ class RollbackServiceTest {
 
         // Verify cursor_ and account_config were NOT modified
         verify(jdbcTemplate, never()).getJdbcTemplate();
-        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
     }
 
     @Test
@@ -241,7 +243,7 @@ class RollbackServiceTest {
         assertFalse(result.getSecond()); // Should be false due to failure
         assertFalse(result.getFirst().isEmpty()); // Should have failed actions
         assertEquals(1, result.getFirst().size());
-        assertEquals("asset", result.getFirst().get(0).getTableName());
+        assertEquals("assets", result.getFirst().get(0).getTableName());
     }
 
     @Test
@@ -253,10 +255,10 @@ class RollbackServiceTest {
                 .rollbackLedgerState(false)
                 .build();
 
-        // Only "block" and "asset" tables exist
+        // Only "block" and "assets" tables exist
         when(databaseUtils.tableExists(anyString())).thenAnswer(invocation -> {
             String tableName = invocation.getArgument(0);
-            return "block".equals(tableName) || "asset".equals(tableName) || "cursor_".equals(tableName) || "account_config".equals(tableName);
+            return "block".equals(tableName) || "assets".equals(tableName) || "cursor_".equals(tableName) || "account_config".equals(tableName);
         });
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
                 createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
@@ -272,7 +274,7 @@ class RollbackServiceTest {
         assertTrue(result.getSecond());
 
         // Should only execute for existing tables
-        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM asset WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block WHERE slot > :slot"), any(SqlParameterSource.class));
         // Other tables should be skipped
         verify(jdbcTemplate, never()).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
@@ -280,17 +282,17 @@ class RollbackServiceTest {
 
     @Test
     void testVerifyRollbackActions_WithMixedTables_ShouldReturnCorrectLists() {
-        when(databaseUtils.tableExists("asset")).thenReturn(true);
+        when(databaseUtils.tableExists("assets")).thenReturn(true);
         when(databaseUtils.tableExists("block")).thenReturn(true);
         when(databaseUtils.tableExists("non_existent_table")).thenReturn(false);
         when(databaseUtils.tableExists("another_missing_table")).thenReturn(false);
 
-        List<String> tableNames = List.of("asset", "block", "non_existent_table", "another_missing_table");
+        List<String> tableNames = List.of("assets", "block", "non_existent_table", "another_missing_table");
         Pair<List<String>, List<String>> result = rollbackService.verifyRollbackActions(tableNames);
 
         assertNotNull(result);
         assertEquals(2, result.getFirst().size());
-        assertTrue(result.getFirst().contains("asset"));
+        assertTrue(result.getFirst().contains("assets"));
         assertTrue(result.getFirst().contains("block"));
 
         assertEquals(2, result.getSecond().size());
