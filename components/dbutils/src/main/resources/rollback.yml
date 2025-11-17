@@ -1,6 +1,6 @@
 rollback:
   tables:
-    - name: "asset"
+    - name: "assets"
       operation: "DELETE"
       condition:
         type: "slot"
@@ -13,7 +13,14 @@ rollback:
         type: "slot"
         column: "slot"
         operator: ">"
-        
+
+    - name: "block_cbor"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
     - name: "protocol_params_proposal"
       operation: "DELETE"
       condition:
@@ -160,7 +167,14 @@ rollback:
         type: "slot"
         column: "slot"
         operator: ">"
-        
+
+    - name: "transaction_cbor"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
     - name: "transaction_witness"
       operation: "DELETE"
       condition:
@@ -202,7 +216,14 @@ rollback:
         type: "slot"
         column: "slot"
         operator: ">"
-        
+
+    - name: "address"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
     - name: "address_balance"
       operation: "DELETE"
       condition:
