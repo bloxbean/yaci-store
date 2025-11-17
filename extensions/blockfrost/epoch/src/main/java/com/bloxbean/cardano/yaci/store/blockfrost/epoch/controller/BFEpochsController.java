@@ -1,12 +1,15 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.epoch.controller;
 
 import com.bloxbean.cardano.yaci.store.api.epoch.service.EpochParamService;
+import com.bloxbean.cardano.yaci.store.blockfrost.epoch.dto.BFProtocolParamsDto;
+import com.bloxbean.cardano.yaci.store.blockfrost.epoch.mapper.BFProtocolParamMapper;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.mvel2.ast.Proto;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +26,10 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnExpression("${store.extensions.blockfrost.epoch.enabled:true}")
 public class BFEpochsController {
 
+    private final BFProtocolParamMapper bfProtocolParamMapper = BFProtocolParamMapper.INSTANCE;
     private final EpochParamService epochParamService;
+
+
 
     @PostConstruct
     public void postConstruct() {
@@ -32,15 +38,17 @@ public class BFEpochsController {
 
     @GetMapping("latest/parameters")
     @Operation(summary = "Latest epoch protocol parameters", description = "Return the protocol parameters for the latest epoch.")
-    public ProtocolParamsDto getLatestProtocolParams() {
+    public BFProtocolParamsDto getLatestProtocolParams() {
         return epochParamService.getLatestProtocolParams()
+                .map(bfProtocolParamMapper::toBFProtocolParamsDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The requested component has not been found."));
     }
 
     @GetMapping("{number}/parameters")
     @Operation(summary = "Specific Epoch's Protocol Parameters", description = "Return the protocol parameters for the epoch specified.")
-    public ProtocolParamsDto getProtocolParamsByEpochNo(@PathVariable Integer number) {
+    public BFProtocolParamsDto getProtocolParamsByEpochNo(@PathVariable Integer number) {
         return epochParamService.getProtocolParams(number)
+                .map(bfProtocolParamMapper::toBFProtocolParamsDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Protocol parameters not found for epoch: " + number));
     }
 
