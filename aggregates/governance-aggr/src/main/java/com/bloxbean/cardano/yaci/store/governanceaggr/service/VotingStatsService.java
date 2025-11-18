@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,6 +138,17 @@ public class VotingStatsService {
             ccDoNotVote = ccTallies.getDoNotVoteCount();
         }
 
+        // approval ratios
+        BigDecimal drepApprovalRatio = drepTotalYesStake.equals(BigInteger.ZERO) ?
+                BigDecimal.ZERO :
+                new BigDecimal(drepTotalYesStake).divide(new BigDecimal(drepTotalYesStake.add(drepTotalNoStake)), 4, RoundingMode.HALF_UP);
+        BigDecimal spoApprovalRatio = spoTotalYesStake.equals(BigInteger.ZERO) ?
+                BigDecimal.ZERO :
+                new BigDecimal(spoTotalYesStake).divide(new BigDecimal(spoTotalYesStake.add(spoTotalNoStake)), 4, RoundingMode.HALF_UP);
+        BigDecimal ccApprovalRatio = ccYes == 0 ?
+                BigDecimal.ZERO :
+                new BigDecimal(ccYes).divide(new BigDecimal(ccYes + ccNo + ccDoNotVote), 4, RoundingMode.HALF_UP);
+
         return ProposalVotingStats.builder()
                 .spoTotalYesStake(spoTotalYesStake)
                 .spoTotalNoStake(spoTotalNoStake)
@@ -144,6 +157,7 @@ public class VotingStatsService {
                 .spoNoVoteStake(spoNoVoteStake)
                 .spoAbstainVoteStake(spoAbstainVoteStake)
                 .spoDoNotVoteStake(spoDoNotVoteStake)
+                .spoApprovalRatio(spoApprovalRatio)
                 .drepTotalYesStake(drepTotalYesStake)
                 .drepTotalNoStake(drepTotalNoStake)
                 .drepTotalAbstainStake(drepTotalAbstainStake)
@@ -154,10 +168,12 @@ public class VotingStatsService {
                 .drepAutoAbstainStake(drepAutoAbstainStake)
                 .drepDoNotVoteStake(drepNotVoteStake)
                 .drepNoConfidenceStake(drepNoConfidenceStake)
+                .drepApprovalRatio(drepApprovalRatio)
                 .ccYes(ccYes)
                 .ccNo(ccNo)
                 .ccAbstain(ccAbstain)
                 .ccDoNotVote(ccDoNotVote)
+                .ccApprovalRatio(ccApprovalRatio)
                 .build();
     }
 
