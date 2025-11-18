@@ -1,12 +1,12 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.service;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
@@ -25,12 +25,19 @@ import java.util.stream.Collectors;
 public class ProposalApiService {
     private final GovActionProposalStorageReader proposalReader;
     private final GovActionProposalStatusStorageReader statusReader;
-    private final EpochParamStorage epochParamStorage;
+    private final AdaPotJobStorage adaPotJobStorage;
 
     public List<ProposalDto> getProposals(int page, int count, Order order) {
         List<GovActionProposal> proposals = proposalReader.findAll(page, count, order);
 
-        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+        List<AdaPotJob> lastJob = adaPotJobStorage.getRecentCompletedJobs(1);
+        Integer maxCompletedAdaPotJobEpoch = lastJob.isEmpty() ? null : lastJob.getFirst().getEpoch();
+
+        if (maxCompletedAdaPotJobEpoch == null) {
+            return proposals.stream()
+                    .map(p -> buildProposalDto(p, ProposalStatus.LIVE, new ProposalVotingStats()))
+                    .toList();
+        }
 
         List<GovActionId> ids = proposals.stream()
                 .map(p -> new GovActionId(p.getTxHash(), (int) p.getIndex()))
@@ -55,25 +62,11 @@ public class ProposalApiService {
                         proposalStatus = ProposalStatus.LIVE;
                         votingStats = new ProposalVotingStats();
                     } else {
-                        proposalStatus = toProposalStatus(status, maxEpoch);
+                        proposalStatus = toProposalStatus(status, maxCompletedAdaPotJobEpoch);
                         votingStats = status.getVotingStats();
                     }
 
-                    return new ProposalDto(
-                            p.getTxHash(),
-                            (int) p.getIndex(),
-                            p.getSlot(),
-                            p.getDeposit(),
-                            p.getReturnAddress(),
-                            p.getDetails(),
-                            p.getAnchorUrl(),
-                            p.getAnchorHash(),
-                            proposalStatus,
-                            votingStats,
-                            p.getEpoch(),
-                            p.getBlockNumber(),
-                            p.getBlockTime()
-                    );
+                    return buildProposalDto(p, proposalStatus, votingStats);
                 })
                 .toList();
     }
@@ -83,19 +76,32 @@ public class ProposalApiService {
         if (proposalOpt.isEmpty())
             return Optional.empty();
 
-        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+        List<AdaPotJob> lastJob = adaPotJobStorage.getRecentCompletedJobs(1);
+        Integer maxCompletedAdaPotJobEpoch = lastJob.isEmpty() ? null : lastJob.getFirst().getEpoch();
 
         GovActionProposal proposal = proposalOpt.get();
+        if (maxCompletedAdaPotJobEpoch == null) {
+            return Optional.of(buildProposalDto(proposal, ProposalStatus.LIVE, new ProposalVotingStats()));
+        }
 
         GovActionId id = new GovActionId(txHash, index);
         List<GovActionProposalStatus> statusList = statusReader.findLatestStatusesForProposals(List.of(id));
 
         GovActionProposalStatus status = statusList.isEmpty() ? null : statusList.get(0);
 
-        ProposalStatus proposalStatus = status == null ? ProposalStatus.LIVE : toProposalStatus(status, maxEpoch);
+        ProposalStatus proposalStatus = status == null ? ProposalStatus.LIVE : toProposalStatus(status, maxCompletedAdaPotJobEpoch);
         ProposalVotingStats votingStats = status == null ? new ProposalVotingStats() : status.getVotingStats();
 
-        ProposalDto dto = new ProposalDto(
+        ProposalDto dto = buildProposalDto(proposal, proposalStatus, votingStats);
+
+        return Optional.of(dto);
+    }
+
+    private ProposalDto buildProposalDto(GovActionProposal proposal,
+                                         ProposalStatus status,
+                                         ProposalVotingStats votingStats) {
+
+        return new ProposalDto(
                 proposal.getTxHash(),
                 (int) proposal.getIndex(),
                 proposal.getSlot(),
@@ -104,24 +110,22 @@ public class ProposalApiService {
                 proposal.getDetails(),
                 proposal.getAnchorUrl(),
                 proposal.getAnchorHash(),
-                proposalStatus,
+                status,
                 votingStats,
                 proposal.getEpoch(),
                 proposal.getBlockNumber(),
                 proposal.getBlockTime()
         );
-
-        return Optional.of(dto);
     }
 
-    private ProposalStatus toProposalStatus(GovActionProposalStatus govActionProposalStatus, int currentEpoch) {
+    private ProposalStatus toProposalStatus(GovActionProposalStatus govActionProposalStatus, int maxCompletedAdaPobJobEpoch) {
         if (govActionProposalStatus == null) return null;
 
         if (govActionProposalStatus.getStatus() == GovActionStatus.ACTIVE) {
-            if (govActionProposalStatus.getEpoch() == currentEpoch || govActionProposalStatus.getEpoch() == currentEpoch - 1) {
-                return ProposalStatus.LIVE;
+            if (govActionProposalStatus.getEpoch() < maxCompletedAdaPobJobEpoch) {
+                return ProposalStatus.DROPPED;
             } else {
-                return ProposalStatus.EXPIRED;
+                return ProposalStatus.LIVE;
             }
         }
 
@@ -130,7 +134,7 @@ public class ProposalApiService {
         }
 
         if (govActionProposalStatus.getStatus() == GovActionStatus.RATIFIED) {
-            if (govActionProposalStatus.getEpoch() < currentEpoch) {
+            if (govActionProposalStatus.getEpoch() < maxCompletedAdaPobJobEpoch) {
                 return ProposalStatus.ENACTED;
             } else {
                 return ProposalStatus.RATIFIED;

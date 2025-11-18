@@ -1,13 +1,8 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
-import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
-import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorageReader;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.Field;
