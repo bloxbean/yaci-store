@@ -33,6 +33,7 @@ public class QuickTxConfiguration {
     public static final String QUICKTX_TX_PROCESSOR_BEAN = "submitQuickTxTransactionProcessor";
 
     @Bean(name = QUICKTX_UTXO_SUPPLIER_BEAN)
+    @ConditionalOnBean(UtxoStorageReader.class)
     @ConditionalOnMissingBean(name = QUICKTX_UTXO_SUPPLIER_BEAN)
     public UtxoSupplier submitQuickTxUtxoSupplier(UtxoStorageReader reader) {
         log.info("QuickTx UtxoSupplier enabled using Yaci Store UTXO data");
@@ -40,6 +41,7 @@ public class QuickTxConfiguration {
     }
 
     @Bean(name = QUICKTX_PROTOCOL_SUPPLIER_BEAN)
+    @ConditionalOnBean(EpochParamStorage.class)
     @ConditionalOnMissingBean(name = QUICKTX_PROTOCOL_SUPPLIER_BEAN)
     public ProtocolParamsSupplier submitQuickTxProtocolParamsSupplier(EpochParamStorage storage,
                                                                       ObjectMapper objectMapper) {
