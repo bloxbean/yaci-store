@@ -35,7 +35,12 @@ public class EpochParamService {
     public Optional<ProtocolParamsDto> getProtocolParams(int epoch) {
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto);
+                .map(mapper::toProtocolParamsDto)
+                .map(protocolParamsDto -> {
+                    System.out.println("Setting epoch in param dto");
+                    protocolParamsDto.setEpoch(epoch);
+                    return protocolParamsDto;
+                });
     }
 
     public int getLatestEpoch() {

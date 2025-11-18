@@ -107,6 +107,110 @@ GET {{base_url}}/api/v1/blockfrost/epochs/latest/parameters
 %}
 
 
+### @name getSpecificEpochParamsBlockfrost
+### Get latest epoch params from Blockfrost
+GET https://cardano-preprod.blockfrost.io/api/v0/epochs/200/parameters
+project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostSpecificEpochParamsResponse", response.body);
+
+    client.test("Get specific epoch parameters", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+
 ### @name getSpecificEpochParamsYaci
 ### Get specific epoch params from Yaci Store
-GET {{base_url}}/api/v1/blockfrost/epochs/193/parameters
+GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostResponse = client.global.get("blockfrostSpecificEpochParamsResponse");
+    const yaciResponse = response.body;
+
+
+    client.test("Compare specific epoch with latest", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+
+        // Basic protocol parameters
+        client.assert(blockfrostResponse.epoch === yaciResponse.epoch, `epoch is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.epoch}, Yaci: ${yaciResponse.epoch})`);
+        client.assert(blockfrostResponse.min_fee_a === yaciResponse.min_fee_a, `min_fee_a is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.min_fee_a}, Yaci: ${yaciResponse.min_fee_a})`);
+        client.assert(blockfrostResponse.min_fee_b === yaciResponse.min_fee_b, `min_fee_b is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.min_fee_b}, Yaci: ${yaciResponse.min_fee_b})`);
+        client.assert(blockfrostResponse.max_block_size === yaciResponse.max_block_size, `max_block_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_block_size}, Yaci: ${yaciResponse.max_block_size})`);
+        client.assert(blockfrostResponse.max_tx_size === yaciResponse.max_tx_size, `max_tx_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_tx_size}, Yaci: ${yaciResponse.max_tx_size})`);
+        client.assert(blockfrostResponse.max_block_header_size === yaciResponse.max_block_header_size, `max_block_header_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_block_header_size}, Yaci: ${yaciResponse.max_block_header_size})`);
+        client.assert(blockfrostResponse.key_deposit === yaciResponse.key_deposit, `key_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.key_deposit}, Yaci: ${yaciResponse.key_deposit})`);
+        client.assert(blockfrostResponse.pool_deposit === yaciResponse.pool_deposit, `pool_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pool_deposit}, Yaci: ${yaciResponse.pool_deposit})`);
+        client.assert(blockfrostResponse.a0 === yaciResponse.a0, `a0 is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.a0}, Yaci: ${yaciResponse.a0})`);
+        client.assert(blockfrostResponse.rho === yaciResponse.rho, `rho is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.rho}, Yaci: ${yaciResponse.rho})`);
+        client.assert(blockfrostResponse.tau === yaciResponse.tau, `tau is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.tau}, Yaci: ${yaciResponse.tau})`);
+        client.assert(blockfrostResponse.protocol_major_ver === yaciResponse.protocol_major_ver, `protocol_major_ver is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.protocol_major_ver}, Yaci: ${yaciResponse.protocol_major_ver})`);
+        client.assert(blockfrostResponse.protocol_minor_ver === yaciResponse.protocol_minor_ver, `protocol_minor_ver is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.protocol_minor_ver}, Yaci: ${yaciResponse.protocol_minor_ver})`);
+        client.assert(blockfrostResponse.min_pool_cost === yaciResponse.min_pool_cost, `min_pool_cost is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.min_pool_cost}, Yaci: ${yaciResponse.min_pool_cost})`);
+
+        // Cost models - only compare array sizes
+        client.assert(blockfrostResponse.cost_models_raw.PlutusV1.length === yaciResponse.cost_models_raw.PlutusV1.length, `PlutusV1 cost_models_raw array size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.cost_models_raw.PlutusV1.length}, Yaci: ${yaciResponse.cost_models_raw.PlutusV1.length})`);
+        client.assert(blockfrostResponse.cost_models_raw.PlutusV2.length === yaciResponse.cost_models_raw.PlutusV2.length, `PlutusV2 cost_models_raw array size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.cost_models_raw.PlutusV2.length}, Yaci: ${yaciResponse.cost_models_raw.PlutusV2.length})`);
+        client.assert(blockfrostResponse.cost_models_raw.PlutusV3.length === yaciResponse.cost_models_raw.PlutusV3.length, `PlutusV3 cost_models_raw array size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.cost_models_raw.PlutusV3.length}, Yaci: ${yaciResponse.cost_models_raw.PlutusV3.length})`);
+
+        // Execution limits
+        client.assert(blockfrostResponse.price_mem === yaciResponse.price_mem, `price_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.price_mem}, Yaci: ${yaciResponse.price_mem})`);
+        client.assert(blockfrostResponse.price_step === yaciResponse.price_step, `price_step is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.price_step}, Yaci: ${yaciResponse.price_step})`);
+
+        //TODO: Needs to be fixed in core calculations
+        //client.assert(blockfrostLatestEpochResponse.max_tx_ex_mem === yaciLatestEpochParamsResponse.max_tx_ex_mem, `max_tx_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.max_tx_ex_mem}, Yaci: ${yaciLatestEpochParamsResponse.max_tx_ex_mem})`);
+
+        client.assert(blockfrostResponse.max_tx_ex_steps === yaciResponse.max_tx_ex_steps, `max_tx_ex_steps is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_tx_ex_steps}, Yaci: ${yaciResponse.max_tx_ex_steps})`);
+
+        //TODO: Needs to be fixed in core calculations
+        //client.assert(blockfrostLatestEpochResponse.max_block_ex_mem === yaciLatestEpochParamsResponse.max_block_ex_mem, `max_block_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.max_block_ex_mem}, Yaci: ${yaciLatestEpochParamsResponse.max_block_ex_mem})`);
+
+        client.assert(blockfrostResponse.max_block_ex_steps === yaciResponse.max_block_ex_steps, `max_block_ex_steps is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_block_ex_steps}, Yaci: ${yaciResponse.max_block_ex_steps})`);
+        client.assert(blockfrostResponse.max_val_size === yaciResponse.max_val_size, `max_val_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_val_size}, Yaci: ${yaciResponse.max_val_size})`);
+        client.assert(blockfrostResponse.collateral_percent === yaciResponse.collateral_percent, `collateral_percent is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.collateral_percent}, Yaci: ${yaciResponse.collateral_percent})`);
+        client.assert(blockfrostResponse.max_collateral_inputs === yaciResponse.max_collateral_inputs, `max_collateral_inputs is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_collateral_inputs}, Yaci: ${yaciResponse.max_collateral_inputs})`);
+        client.assert(blockfrostResponse.coins_per_utxo_size === yaciResponse.coins_per_utxo_size, `coins_per_utxo_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.coins_per_utxo_size}, Yaci: ${yaciResponse.coins_per_utxo_size})`);
+
+        // Governance - Pool voting thresholds
+        client.assert(blockfrostResponse.pvt_motion_no_confidence === yaciResponse.pvt_motion_no_confidence, `pvt_motion_no_confidence is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvt_motion_no_confidence}, Yaci: ${yaciResponse.pvt_motion_no_confidence})`);
+        client.assert(blockfrostResponse.pvt_committee_normal === yaciResponse.pvt_committee_normal, `pvt_committee_normal is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvt_committee_normal}, Yaci: ${yaciResponse.pvt_committee_normal})`);
+        client.assert(blockfrostResponse.pvt_committee_no_confidence === yaciResponse.pvt_committee_no_confidence, `pvt_committee_no_confidence is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvt_committee_no_confidence}, Yaci: ${yaciResponse.pvt_committee_no_confidence})`);
+        client.assert(blockfrostResponse.pvt_hard_fork_initiation === yaciResponse.pvt_hard_fork_initiation, `pvt_hard_fork_initiation is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvt_hard_fork_initiation}, Yaci: ${yaciResponse.pvt_hard_fork_initiation})`);
+
+        // Governance - DRep voting thresholds
+        client.assert(blockfrostResponse.dvt_motion_no_confidence === yaciResponse.dvt_motion_no_confidence, `dvt_motion_no_confidence is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_motion_no_confidence}, Yaci: ${yaciResponse.dvt_motion_no_confidence})`);
+        client.assert(blockfrostResponse.dvt_committee_normal === yaciResponse.dvt_committee_normal, `dvt_committee_normal is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_committee_normal}, Yaci: ${yaciResponse.dvt_committee_normal})`);
+        client.assert(blockfrostResponse.dvt_committee_no_confidence === yaciResponse.dvt_committee_no_confidence, `dvt_committee_no_confidence is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_committee_no_confidence}, Yaci: ${yaciResponse.dvt_committee_no_confidence})`);
+        client.assert(blockfrostResponse.dvt_update_to_constitution === yaciResponse.dvt_update_to_constitution, `dvt_update_to_constitution is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_update_to_constitution}, Yaci: ${yaciResponse.dvt_update_to_constitution})`);
+        client.assert(blockfrostResponse.dvt_hard_fork_initiation === yaciResponse.dvt_hard_fork_initiation, `dvt_hard_fork_initiation is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_hard_fork_initiation}, Yaci: ${yaciResponse.dvt_hard_fork_initiation})`);
+        client.assert(blockfrostResponse.dvt_treasury_withdrawal === yaciResponse.dvt_treasury_withdrawal, `dvt_treasury_withdrawal is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_treasury_withdrawal}, Yaci: ${yaciResponse.dvt_treasury_withdrawal})`);
+
+        // Governance - Committee and action parameters
+        client.assert(blockfrostResponse.committee_min_size === yaciResponse.committee_min_size, `committee_min_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.committee_min_size}, Yaci: ${yaciResponse.committee_min_size})`);
+        client.assert(blockfrostResponse.committee_max_term_length === yaciResponse.committee_max_term_length, `committee_max_term_length is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.committee_max_term_length}, Yaci: ${yaciResponse.committee_max_term_length})`);
+        client.assert(blockfrostResponse.gov_action_lifetime === yaciResponse.gov_action_lifetime, `gov_action_lifetime is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.gov_action_lifetime}, Yaci: ${yaciResponse.gov_action_lifetime})`);
+
+        //TODO: Needs to be fixed in core calculations
+        //client.assert(blockfrostLatestEpochResponse.gov_action_deposit === yaciLatestEpochParamsResponse.gov_action_deposit, `gov_action_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.gov_action_deposit}, Yaci: ${yaciLatestEpochParamsResponse.gov_action_deposit})`);
+        //client.assert(blockfrostLatestEpochResponse.drep_deposit === yaciLatestEpochParamsResponse.drep_deposit, `drep_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.drep_deposit}, Yaci: ${yaciLatestEpochParamsResponse.drep_deposit})`);
+
+        client.assert(blockfrostResponse.drep_activity === yaciResponse.drep_activity, `drep_activity is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.drep_activity}, Yaci: ${yaciResponse.drep_activity})`);
+
+        // Other parameters
+        client.assert(blockfrostResponse.min_fee_ref_script_cost_per_byte === yaciResponse.min_fee_ref_script_cost_per_byte, `min_fee_ref_script_cost_per_byte is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.min_fee_ref_script_cost_per_byte}, Yaci: ${yaciResponse.min_fee_ref_script_cost_per_byte})`);
+        client.assert(blockfrostResponse.e_max === yaciResponse.e_max, `e_max is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.e_max}, Yaci: ${yaciResponse.e_max})`);
+        client.assert(blockfrostResponse.n_opt === yaciResponse.n_opt, `n_opt is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.n_opt}, Yaci: ${yaciResponse.n_opt})`);
+        client.assert(blockfrostResponse.pvt_p_p_security_group === yaciResponse.pvt_p_p_security_group, `pvt_p_p_security_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvt_p_p_security_group}, Yaci: ${yaciResponse.pvt_p_p_security_group})`);
+        client.assert(blockfrostResponse.dvt_p_p_network_group === yaciResponse.dvt_p_p_network_group, `dvt_p_p_network_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_p_p_network_group}, Yaci: ${yaciResponse.dvt_p_p_network_group})`);
+        client.assert(blockfrostResponse.dvt_p_p_economic_group === yaciResponse.dvt_p_p_economic_group, `dvt_p_p_economic_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_p_p_economic_group}, Yaci: ${yaciResponse.dvt_p_p_economic_group})`);
+        client.assert(blockfrostResponse.dvt_p_p_technical_group === yaciResponse.dvt_p_p_technical_group, `dvt_p_p_technical_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_p_p_technical_group}, Yaci: ${yaciResponse.dvt_p_p_technical_group})`);
+        client.assert(blockfrostResponse.dvt_p_p_gov_group === yaciResponse.dvt_p_p_gov_group, `dvt_p_p_gov_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.dvt_p_p_gov_group}, Yaci: ${yaciResponse.dvt_p_p_gov_group})`);
+        client.assert(blockfrostResponse.pvtpp_security_group === yaciResponse.pvtpp_security_group, `pvtpp_security_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvtpp_security_group}, Yaci: ${yaciResponse.pvtpp_security_group})`);
+
+
+    });
+%}
