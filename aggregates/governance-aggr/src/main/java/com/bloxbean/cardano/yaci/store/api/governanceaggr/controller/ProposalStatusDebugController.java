@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.controller;
 
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
-import com.bloxbean.cardano.yaci.store.governanceaggr.processor.ProposalStatusProcessor;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,10 +18,11 @@ import java.util.List;
 @Tag(name = "Proposal Debug API", description = "APIs for proposal related data.")
 @Profile({"debug"})
 public class ProposalStatusDebugController {
-    private final ProposalStatusProcessor proposalStatusProcessor;
+    // TODO: use ProposalStateProcessor
 
     @GetMapping("/proposal-status/{epoch}")
     public List<GovActionProposalStatus> processProposalStatus(int epoch) {
-        return proposalStatusProcessor.evaluateProposalStatus(epoch);
+        // TODO: Implement this
+        return List.of();
     }
 }
