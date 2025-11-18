@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governancerules.voting.committee;
 
+import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VoteTallyCalculator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
@@ -7,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
 
@@ -37,7 +39,7 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         }
         
         BigDecimal acceptedRatio = BigDecimal.valueOf(yesVotes)
-                .divide(BigDecimal.valueOf(totalExcludingAbstain), 2, BigDecimal.ROUND_HALF_UP);
+                .divide(BigDecimal.valueOf(totalExcludingAbstain), 4, RoundingMode.HALF_UP);
 
         return acceptedRatio.compareTo(threshold) >= 0 ?
                 VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
