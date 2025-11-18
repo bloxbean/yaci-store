@@ -238,7 +238,7 @@ public class DRepStorageReaderImpl implements DRepStorageReader {
                 ? DRepStatus.ACTIVE
                 : DRepStatus.INACTIVE;
 
-        if (status == DRepStatus.INACTIVE || status == DRepStatus.RETIRED) {
+        if (status == DRepStatus.RETIRED) {
             votingPower = BigInteger.ZERO;
         }
 

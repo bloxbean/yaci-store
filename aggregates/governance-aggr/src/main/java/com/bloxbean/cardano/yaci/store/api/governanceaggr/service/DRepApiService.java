@@ -2,8 +2,9 @@ package com.bloxbean.cardano.yaci.store.api.governanceaggr.service;
 
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.DRepDetailsDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.SpecialDRepDto;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.DRepStorageReader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,22 +16,34 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class DRepApiService {
     private final DRepStorageReader dRepStorageReader;
-    private final EpochParamStorage epochParamStorage;
+    private final BlockStorage blockStorage;
 
     public List<DRepDetailsDto> getDReps(int page,  int count, Order order) {
-        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+        Integer maxEpoch = blockStorage.findRecentBlock().map(Block::getEpochNumber).orElse(null);
+
+        if (maxEpoch == null) {
+            return List.of();
+        }
 
         return dRepStorageReader.getDReps(maxEpoch, page, count, order);
     }
 
     public Optional<DRepDetailsDto> getDRepDetailsByDRepId(String drepId) {
-        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+        Integer maxEpoch = blockStorage.findRecentBlock().map(Block::getEpochNumber).orElse(null);
+
+        if (maxEpoch == null) {
+            return Optional.empty();
+        }
 
         return dRepStorageReader.getDRepDetailsByDRepId(drepId, maxEpoch);
     }
 
     public List<SpecialDRepDto> getAutoAbstainAndNoConfidenceDRepDetail() {
-        Integer maxEpoch = epochParamStorage.getMaxEpoch();
+        Integer maxEpoch = blockStorage.findRecentBlock().map(Block::getEpochNumber).orElse(null);
+
+        if (maxEpoch == null) {
+            return List.of();
+        }
 
         return dRepStorageReader.getSpecialDRepDetail(maxEpoch);
     }
