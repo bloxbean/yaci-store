@@ -4,5 +4,6 @@ public enum ProposalStatus {
     LIVE,
     RATIFIED,
     EXPIRED,
+    DROPPED,
     ENACTED
 }
