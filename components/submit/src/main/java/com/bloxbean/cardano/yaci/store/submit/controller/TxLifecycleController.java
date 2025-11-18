@@ -109,14 +109,14 @@ public class TxLifecycleController {
     }
 
     /**
-     * Build unsigned transaction from TxPlan YAML.
+     * Build unsigned transaction from YAML.
      */
-    @PostMapping(value = "/plan/build", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Build unsigned transaction from YAML TxPlan")
+    @PostMapping(value = "/build", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Build unsigned transaction from YAML")
     public ResponseEntity<?> buildTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
         if (txPlanBuildService.isEmpty()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("error", "TxPlan builder not enabled. Configure store.cardano.ogmios-url."));
+                    .body(Map.of("error", "Tx builder not enabled. Ensure store.cardano.ogmios-url is set and store.utxo / store.epoch modules are enabled."));
         }
 
         TxPlanBuildResult result = txPlanBuildService.get().buildFromYaml(txPlanYaml);
@@ -142,4 +142,3 @@ public class TxLifecycleController {
         private String errorMessage;
     }
 }
-

@@ -3,8 +3,8 @@ dependencies {
     api project(":components:core")
     api project(":components:events")
     implementation libs.cardano.client.backend.ogmios
-    implementation libs.cardano.client.backend.blockfrost
-    implementation libs.cardano.client.quicktx
+    implementation project(":stores:utxo")
+    implementation project(":stores:epoch")
 
     implementation(libs.vavr)
     implementation libs.hibernate.types
