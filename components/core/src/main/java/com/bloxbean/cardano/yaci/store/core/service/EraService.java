@@ -147,6 +147,32 @@ public class EraService {
     }
 
     /**
+     * Convert epoch time (seconds) to absolute slot number.
+     * Handles both Byron and Shelley/post-Shelley eras automatically by comparing
+     * the input time with Shelley era start time.
+     *
+     * This is the inverse operation of blockTime(Era, slot).
+     *
+     * @param epochSeconds Unix timestamp in seconds
+     * @return Absolute slot number
+     */
+    public long slotFromTime(long epochSeconds) {
+        long shelleyStartTime = shelleyEraStartTime();
+
+        if (epochSeconds < shelleyStartTime) {
+            // Byron era
+            long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
+            double slotDuration = genesisConfig.slotDuration(Era.Byron);
+            return Math.round((epochSeconds - startTime) / slotDuration);
+        } else {
+            // Shelley/post-Shelley era
+            long firstShelleySlot = firstShelleySlot();
+            double slotDuration = genesisConfig.slotDuration(Era.Shelley);
+            return firstShelleySlot + Math.round((epochSeconds - shelleyStartTime) / slotDuration);
+        }
+    }
+
+    /**
      * Find all the eras stored in the database.
      *
      * @return
