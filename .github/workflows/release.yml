@@ -42,8 +42,6 @@ jobs:
           files: |
             applications/build/dist/yaci-store-${{env.VERSION}}.zip
             applications/build/dist/yaci-store-docker-${{env.VERSION}}.zip
-            applications/utxo-indexer/build/libs/yaci-store-utxo-indexer-${{env.VERSION}}.jar            
-            applications/admin/build/libs/yaci-store-admin-${{env.VERSION}}.jar
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
