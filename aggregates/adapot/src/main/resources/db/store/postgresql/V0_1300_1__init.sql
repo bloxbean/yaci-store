@@ -54,9 +54,6 @@ create table epoch_stake
 create table epoch_stake_default
     partition of epoch_stake default;
 
-create index epoch_stake_active_epoch_address_index
-    on epoch_stake (active_epoch, address);
-
 drop table if exists instant_reward;
 create table instant_reward
 (
