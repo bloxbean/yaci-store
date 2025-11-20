@@ -1,0 +1,30 @@
+@plan_fee_payer = addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h
+@plan_receiver = addr_test1qqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5v9frnmht7uwrl073q4jvq20z82kh4rksyns540azhndqexqpvhgqr
+
+###
+### Build unsigned transaction from a TxPlan YAML document
+POST {{submit_url}}/api/v1/tx/lifecycle/plan/build
+Content-Type: text/plain
+
+version: 1.0
+context:
+  fee_payer: {{plan_fee_payer}}
+transaction:
+  - tx:
+      from: {{plan_fee_payer}}
+      intents:
+        - type: payment
+          to: {{plan_receiver}}
+          amount:
+            unit: lovelace
+            quantity: 1000000
+
+> {%
+  client.test("TxPlan builder returns unsigned transaction body", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+    client.assert(response.body !== null, "Response body is null");
+    client.assert(response.body.txBodyCbor !== null, "txBodyCbor is null");
+    client.assert(response.body.txBodyCbor.length > 0, "txBodyCbor is empty");
+    client.assert(/^[0-9a-fA-F]+$/.test(response.body.txBodyCbor), "txBodyCbor is not a hex string");
+  });
+%}
