@@ -80,15 +80,24 @@ First, let's get the Yaci Store Docker distribution.
    ├── yaci-store.sh          # Main script to start/stop Yaci Store
    ├── admin-cli.sh           # Admin operations
    ├── monitoring.sh          # Optional monitoring stack
-   ├── psql.sh               # Quick database access
+   ├── psql.sh                # Quick database access
+   ├── LICENSE                # License
    ├── compose/              # Docker compose files
    │   ├── .env             # Docker image versions
+   │   ├── admin-cli-compose.yml
+   │   ├── monitoring.yml
+   │   ├── postgres-compose.yml
+   │   ├── postgres-compose-minimal.yml
+   │   ├── yaci-store.yml
    │   └── yaci-store-monolith.yml
    ├── config/              # Configuration files
    │   ├── env              # Environment variables
    │   ├── application.properties
+   │   ├── application-ledger-state.properties
    │   └── application-plugins.yml
-   └── plugin-scripts/      # Where we'll put our custom plugins
+   └── plugins/      # Where we'll put our custom plugins
+       ├── ext-jars
+       └── scripts
    ```
 
 <Callout type="info">
@@ -119,7 +128,7 @@ Now let's configure Yaci Store to connect to the Cardano preprod testnet.
    **What do these settings mean?**
    - `host`: The Cardano node you'll connect to (we're using a public preprod node)
    - `port`: The port number for the node connection
-   - `protocol-magic`: Network identifier (1 = preprod, 764824073 = mainnet)
+   - `protocol-magic`: Network identifier (1 = preprod, 2 = preview, 764824073 = mainnet)
 
 3. **Verify database settings**
 
@@ -166,8 +175,8 @@ Since we only want to track one address, let's disable stores we don't need. Thi
 
    ```properties
    # Start syncing from a recent slot (adjust to current preprod slot)
-   store.cardano.sync-start-slot=66258805
-   store.cardano.sync-start-blockhash=b8c42698bf654d37ce8cfcf180bacfb464146db8e0b8e7cc71f0e000fea86f82
+   store.cardano.sync-start-slot=107886907
+   store.cardano.sync-start-blockhash=c115a0b8de76f6343ba059596aa729313363192c0ad93a088eb6db80b607cc29
    ```
 
    <Callout type="info">
@@ -216,39 +225,34 @@ Now comes the fun part - writing the JavaScript plugins that will filter UTXOs b
 
 We'll create three plugin files:
 
-### 5.1 Create the Address Filter Plugin
+### 5.1 Create the Address Filter
 
-1. **Create a new file** `plugin-scripts/filter-by-address.js`
+1. **Create a new file** `plugins/scripts/filter-by-address.js`
 
 2. **Add this code:**
 
    ```javascript
-   /**
-    * Filter Plugin: Only save UTXOs for a specific address
-    *
-    * This plugin runs before UTXOs are saved to the database.
-    * It returns true only for UTXOs that match our target address.
-    */
-   function filterByAddress(context, items) {
-     // Get the target address from configuration
-     var targetAddress = context.config.get("address.filter");
+    /**
+     * Filters a list of UTXO items by a specific address
+     * @param {Array} items - List of UTXO items to filter
+     * @return {Array} List of filtered UTXOs that match the address filter
+     */
+    function filterByAddress(items) {
+      // Get the target address from configuration
+        // Get the address filter from environment configuration
+        const address = env.getProperty("address.filter");
 
-     if (!targetAddress) {
-       context.console.error("ERROR: 'address.filter' not configured!");
-       return false;
-     }
+        // Filter UTXOs by owner address using functional approach
+        const filteredUtxos = items.filter(item => item.getOwnerAddr() === address);
 
-     // Filter the items to only include our target address
-     var filtered = items.stream()
-       .filter(function(item) {
-         return item.ownerAddr === targetAddress;
-       })
-       .toArray();
+        // If any UTXOs were found, update global state and log the count
+        if (filteredUtxos.length > 0) {
+            global_state.put("utxo.found", true);
+            //console.log("Utxo found : " + filteredUtxos.length);
+        }
 
-     context.console.info("Filtered " + filtered.length + " UTXOs for address: " + targetAddress);
-
-     return filtered;
-   }
+        return filteredUtxos;
+    }
    ```
 
    **What does this do?**
@@ -258,128 +262,126 @@ We'll create three plugin files:
 
 ### 5.2 Create the Commit Event Handler
 
-1. **Create a new file** `plugin-scripts/handle-commit.js`
+1. **Create a new file** `plugins/scripts/handle-commit.js`
 
 2. **Add this code:**
 
    ```javascript
    /**
-    * Event Handler: Clean up orphaned tx_inputs on blockchain commits
-    *
-    * When the blockchain commits, we need to clean up any tx_input records
-    * that don't belong to our target address.
+     * Handles commit events by cleaning up additional transaction inputs
+     *
+     * APPROACH: Since tx_input records don't have address filtering and Yaci Store processes
+     * blocks in parallel batches (100 blocks during initial sync, 1 block at tip), tx_input
+     * records may be inserted before their corresponding UTXO entries in address_utxo table.
+     * The CommitEvent is published at the end of each batch and handlers are processed
+     * sequentially, making it the perfect place to delete orphaned tx_input records.
+     *
+     * @param {Object} event - The commit event containing metadata like slot number
     */
-   function handleCommitEvent(context, event) {
-     var targetAddress = context.config.get("address.filter");
+   function handleCommitEvent(event) {
+      // Get the last processed slot from global_state, default to 0 if not set
+       let last_tx_inputs_slot = global_state.get("last_tx_inputs_slot");
+       if (last_tx_inputs_slot === null || last_tx_inputs_slot === undefined) {
+           last_tx_inputs_slot = 0;
+       }
 
-     if (!targetAddress) {
-       return;
-     }
+       console.log("Deleting additional tx inputs after slot: " + last_tx_inputs_slot);
 
-     var blockNumber = event.metadata.block;
+       // SQL query to delete orphaned tx_input records
+       // Only deletes records that are not referenced by address_utxo table
+       const sql = "DELETE FROM tx_input ti " +
+               "WHERE ti.spent_at_slot > :given_slot " +
+               "AND NOT EXISTS ( " +
+               "  SELECT 1 FROM address_utxo au " +
+               "  WHERE au.tx_hash = ti.tx_hash " +
+               "    AND au.output_index = ti.output_index " +
+               ")";
 
-     // Clean up tx_inputs that don't match our address
-     var deleteSql = `
-       DELETE FROM tx_input
-       WHERE block_number = :blockNumber
-       AND address != :targetAddress
-     `;
+       // Set parameters for the SQL query
+       const params = { "given_slot": last_tx_inputs_slot };
 
-     var params = {
-       blockNumber: blockNumber,
-       targetAddress: targetAddress
-     };
+       // Execute the delete operation and get count of deleted records
+       const count = named_jdbc.update(sql, params);
 
-     var deleted = context.named_jdbc.update(deleteSql, params);
+       // Log the number of deleted records if any were found
+       if (count > 0) {
+           console.log("Deleted " + count + " additional tx inputs.");
+       }
 
-     if (deleted > 0) {
-       context.console.info("Cleaned up " + deleted + " tx_inputs for block " + blockNumber);
-     }
+       // Update the last processed slot to current event slot
+       global_state.put("last_tx_inputs_slot", event.getMetadata().getSlot());
+
    }
    ```
 
    **What does this do?**
-   - Runs when a block is committed to the database
    - Deletes any transaction inputs that don't belong to our target address
-   - Keeps the database clean and efficient
 
-### 5.3 Create the Discord Notification Plugin (Optional)
+### 5.3 Create the Rollback event Handler
+
+1. **Create a new file** `plugins/scripts/handle-rollback.js`
+
+2. **Add this code:**
+
+   ```javascript
+    function handleRollbackEvent(event) {
+        //Reset last_tx_input_slot used in CommitEvent to delete additional tx inputs
+        console.log("Utxo by address plugin handleRollbackEvent: " + event.getRollbackTo().getSlot());
+        global_state.put("last_tx_inputs_slot", event.getRollbackTo().getSlot());
+    }
+   ```
+### 5.4 Create the Discord Notification (Optional)
 
 This plugin sends you a Discord message when your address balance changes!
 
-1. **Create a new file** `plugin-scripts/notify-discord.js`
+1. **Create a new file** `plugins/scripts/notify-discord.js`
 
 2. **Add this code:**
 
    ```javascript
    /**
-    * Post-Action Plugin: Send Discord notifications on balance changes
-    *
-    * This runs AFTER UTXOs are saved to the database.
-    * It calculates the balance and sends a Discord notification.
+    * Sends Discord notification when balance changes for the monitored address
+    * @param {Object} event - The commit event containing metadata like block number
     */
-   function sendDiscordNotificationOnBalanceChange(context, items) {
-     var webhookUrl = context.config.get("discord.webhook.url");
+    function sendDiscordNotificationOnBalanceChange(event) {
+        const utxoFound = global_state.get("utxo.found");
 
-     if (!webhookUrl) {
-       // No webhook configured, skip notification
-       return;
-     }
+        if (utxoFound !== null && utxoFound) {
+             global_state.remove("utxo.found");
 
-     var targetAddress = context.config.get("address.filter");
+             // Skip sending notification if not at tip yet
+             if (!event.getMetadata().isSyncMode()) {
+                 return;
+             }
 
-     // Calculate total balance from database
-     var balanceSql = `
-       SELECT COALESCE(SUM(amounts[1].quantity), 0) as total_lovelace
-       FROM address_utxo
-       WHERE owner_addr = :address
-     `;
+             const address = env.getProperty("address.filter");
 
-     var result = context.named_jdbc.queryForMap(balanceSql, { address: targetAddress });
-     var balanceLovelace = result.total_lovelace;
-     var balanceAda = balanceLovelace / 1000000.0;
+             const sql = "SELECT SUM(au.lovelace_amount) AS balance " +
+                  "FROM address_utxo au " +
+                  "WHERE au.owner_addr = :address " +
+                  "AND NOT EXISTS (SELECT 1 FROM tx_input ti WHERE ti.tx_hash = au.tx_hash AND ti.output_index = au.output_index)";
 
-     // Send Discord notification
-     var message = {
-       content: "💰 Balance Update for Address",
-       embeds: [{
-         title: "Address Balance Changed",
-         description: "A new UTXO has been added to the tracked address",
-         color: 3447003,
-         fields: [
-           {
-             name: "Address",
-             value: targetAddress,
-             inline: false
-           },
-           {
-             name: "Current Balance",
-             value: balanceAda.toFixed(6) + " ADA",
-             inline: true
-           },
-           {
-             name: "Lovelace",
-             value: balanceLovelace.toString(),
-             inline: true
-           }
-         ],
-         timestamp: new Date().toISOString()
-       }]
-     };
+             const params = { "address": address };
 
-     try {
-       context.http.postJson(webhookUrl, message);
-       context.console.info("Discord notification sent - Balance: " + balanceAda + " ADA");
-     } catch (error) {
-       context.console.error("Failed to send Discord notification: " + error);
-     }
-   }
+             const result = named_jdbc.queryForMap(sql, params);
+             const balance = result["balance"];
+
+             const discordUrl = env.getProperty("discord.webhook.url");
+
+             const jsonData = {
+                 "content": `💰 Unspent UTXO Balance: ${balance} Lovelace at Block: ${event.getMetadata().getBlock()}\n Address: ${address}`
+             };
+
+             const response = http.postJson(discordUrl, jsonData, { "Content-Type": "application/json" });
+             console.log("Discord response: " + response);
+        }
+    }
    ```
 
-   **What does this do?**
-   - Calculates the current balance of your address from the database
-   - Formats a nice Discord embed message
-   - Sends it to your Discord webhook whenever a UTXO is added
+      **What does this do?**
+       - Calculates the current balance of your address from the database
+       - Formats a nice Discord embed message
+       - Sends it to your Discord webhook whenever a UTXO is added
 
 ---
 
@@ -391,7 +393,7 @@ Now let's wire up these plugins in the configuration.
 
 2. **Replace the contents with this configuration:**
 
-   ```yaml
+```yaml
    store:
      plugins:
        enabled: true
@@ -411,18 +413,21 @@ Now let's wire up these plugins in the configuration.
            - name: "Clean Orphaned TxInputs"
              lang: js
              script:
-               file: /app/plugin-scripts/handle-commit.js
+               file: /app/plugins/scripts/handle-commit.js
                function: handleCommitEvent
-
-       # Post-action plugins run AFTER data is saved
-       post-actions:
-         utxo.unspent.save:
-           - name: "Discord Balance Notification"
+           - name: "Send Balance Change Notification"
              lang: js
              script:
-               file: /app/plugin-scripts/notify-discord.js
+               file: /app/plugins/scripts/notify-discord.js
                function: sendDiscordNotificationOnBalanceChange
-   ```
+
+         RollbackEvent:
+           - name: "Handle Rollback Event"
+             lang: js
+             script:
+               file: /app/plugins/scripts/handle-rollback.js
+               function: handleRollbackEvent
+```
 
 3. **Set your target address in `config/application.properties`**
 
@@ -474,28 +479,6 @@ Time to launch everything!
    ```bash
    ./yaci-store.sh logs:yaci-store
    ```
-
-   You should see output like:
-
-   ```
-   INFO  - Starting synchronization from slot 66258805
-   INFO  - Connected to preprod-node.play.dev.cardano.org:3001
-   INFO  - Plugin 'Filter UTXOs by Address' loaded successfully
-   INFO  - Filtered 0 UTXOs for address: addr_test1...
-   ```
-
-   <Callout type="success">
-   If you see "Plugin loaded successfully", your plugins are working! Press `Ctrl+C` to exit the logs (this won't stop Yaci Store).
-   </Callout>
-
-3. **Check service status**
-
-   ```bash
-   ./yaci-store.sh status
-   ```
-
-   Both `yaci-store-postgres` and `yaci-store` should be "Up".
-
 ---
 
 ## Step 8: Query Your Data
@@ -516,64 +499,41 @@ Let's verify that everything is working by querying the database!
    SET search_path TO yaci_store;
    ```
 
-3. **Check UTXOs for your address**
+3. **Check UTXOs for the monitored address**
 
    ```sql
    SELECT
      owner_addr,
-     amounts[1].quantity as lovelace,
+     lovelace_amount  as lovelace
+     amounts,
      tx_hash,
      output_index,
      slot
    FROM address_utxo
-   WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
+   WHERE owner_addr = <monitored_address>
    ORDER BY slot DESC
    LIMIT 10;
    ```
 
    **What you'll see:**
    - All UTXOs currently available at your tracked address
-   - The amount of lovelace in each UTXO
+   - The amounts in each UTXO
    - The transaction hash and output index
    - The slot number when it was created
 
-4. **Calculate total balance**
+4. **Calculate address balance**
 
    ```sql
-   SELECT
-     owner_addr,
-     SUM(amounts[1].quantity) as total_lovelace,
-     SUM(amounts[1].quantity) / 1000000.0 as total_ada,
-     COUNT(*) as utxo_count
-   FROM address_utxo
-   WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
-   GROUP BY owner_addr;
+   SELECT SUM(au.lovelace_amount) AS balance
+   FROM address_utxo au
+   WHERE au.owner_addr = <monitored_address>
+   AND
+   NOT EXISTS
+      (SELECT 1 FROM tx_input ti
+       WHERE ti.tx_hash = au.tx_hash AND ti.output_index = au.output_index);
    ```
 
-   This shows:
-   - Total balance in lovelace
-   - Total balance in ADA
-   - Number of UTXOs
-
-5. **See transaction history**
-
-   ```sql
-   SELECT
-     block,
-     slot,
-     tx_hash,
-     block_time
-   FROM tx
-   WHERE tx_hash IN (
-     SELECT DISTINCT tx_hash
-     FROM address_utxo
-     WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
-   )
-   ORDER BY slot DESC
-   LIMIT 20;
-   ```
-
-6. **Exit the database console**
+5. **Exit the database console**
 
    ```sql
    \q
@@ -626,7 +586,7 @@ Want to track a different address? Just:
 Check that you:
 - Uncommented the plugin loader line in `config/env`
 - Set `store.plugins.enabled=true` in `config/application-plugins.yml`
-- Used the correct file paths (they should start with `/app/plugin-scripts/`)
+- Used the correct file paths (they should start with `/app/plugins/scripts/`)
 
 ### No data appearing?
 
