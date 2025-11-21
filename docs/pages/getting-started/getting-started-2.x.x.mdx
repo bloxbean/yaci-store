@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Getting Started with Yaci Store 2.x.x
 
 ## Current Version: 2.0.0-beta5
@@ -26,7 +28,7 @@ We will update this section with any discrepancies for future mismatches.
 
 ### Governance State Data
 
-Governance action proposal statuses are correctly calculated up to recent epochs and are matching. However, there are some known mismatches in dRep distribution and dRep `active_until` values. For a detailed breakdown and the latest mismatch reports, see [the 2.0.0-beta3 mismatch summary](../../ledger-state-mismatches/2-0-0-beta3/2-0-0-beta3). We will be working on fixing these in future releases.
+Governance action proposal statuses are correctly calculated up to recent epochs and are matching. However, there are some known mismatches in dRep distribution and dRep `active_until` values. For a detailed breakdown and the latest mismatch reports, see [the 2.0.0-beta5 mismatch summary](../../ledger-state-mismatches/2-0-0-beta5/2-0-0-beta5). We will be working on fixing these in future releases.
 
 ---
 
@@ -47,6 +49,7 @@ While governance state data calculation has some mismatches, and even though rew
 ### 2. **Yaci Store Admin CLI App**
 - CLI tool to **apply optional indexes after sync is complete**.
 - Optional indexes improve API query performance and are not applied during initial sync.
+- Supports rollback to a previous epoch
 
 ---
 
@@ -181,6 +184,43 @@ Block No: 4746  , Era: Shelley
 ### Total balance processing and saving time 1 ###
 ```
 
+#### 🗄️ PostgreSQL Configuration for Ledger-State (Optional but Recommended)
+
+For optimal performance when running ledger-state calculation, especially on mainnet, you should tune your PostgreSQL configuration. While the default configuration will work, sync time will be significantly longer without these optimizations.
+
+##### 1. Increase PostgreSQL Shared Memory
+
+Edit `compose/postgres-compose.yml` and change the `shm_size` setting:
+
+```yaml
+shm_size: 4g  # Change from 2g to 4g (will work with 2g but sync time will be longer)
+```
+
+##### 2. Enable PostgreSQL Bulk Load Optimizations
+
+Uncomment the following properties in `config/application-ledger-state.properties`:
+
+```properties
+## Reward Bulk Load Operations
+store.adapot.reward-bulk-load-work-mem=1GB
+store.adapot.reward-bulk-load-maintenance-work-mem=2GB
+
+## Stake Snapshot Operations
+store.adapot.stake-snapshot-work-mem=512MB
+
+## DRep Distribution Snapshot Operations
+store.governance-aggr.drep-dist-work-mem=512MB
+```
+
+##### 3. Restart the Application
+
+After making these changes, restart Yaci Store:
+
+```bash
+./yaci-store.sh stop
+./yaci-store.sh start
+```
+
 #### 🛠️ Admin Operations
 
 Use `admin-cli.sh` to run administrative tasks like applying indexes or rolling back to a specific epoch.
@@ -228,6 +268,26 @@ Use `monitoring.sh` to start or stop the monitoring stack.
 ```bash
 ./monitoring.sh stop
 ```
+
+##### Troubleshooting
+
+<Callout type="warning">
+**Grafana Permission Error**
+
+If Grafana fails to start with the error:
+```
+grafana | mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied
+grafana | GF_PATHS_DATA='/var/lib/grafana' is not writable.
+```
+
+This is a permission issue with the Grafana data directory. Fix it by running:
+
+```bash
+sudo chown -R 472:472 ./grafana
+```
+
+The user ID `472` is the default Grafana user in the Docker container.
+</Callout>
 
 ##### 🔍 Accessing PostgreSQL
 
@@ -382,7 +442,7 @@ SPRING_PROFILES_ACTIVE=ledger-state ./yaci-store
 1. **Performance of Reward Calculation on Mainnet**
    - Ledger-state calculations currently happen **during epoch transition**.
      That means **rewards paid in epoch X are calculated during the transition from epoch X-1 to X**.
-   - On Mainnet, this takes around **20–40 minutes** per transition (depends on your PostgreSQL resources).
+   - On Mainnet, this takes around **15–30 minutes** per transition (depends on your PostgreSQL resources).
    - In a future release, we plan to start **reward calculation in epoch X-1 after the stability window**, similar to how the Haskell node works.
      This will reduce the computation load during epoch boundaries.
 
@@ -390,5 +450,14 @@ SPRING_PROFILES_ACTIVE=ledger-state ./yaci-store
 
 > **Note:**
 >
-> If you are running ledger-state calculation for mainnet, you may also need to **tune your PostgreSQL configuration** though the default config will work but will take longer.
-> In the next beta release we will provide the postgres configuration for mainnet sync.
+> If you are running ledger-state calculation for mainnet, you should **tune your PostgreSQL configuration** for optimal performance. While the default config will work, sync time will be significantly longer without these optimizations.
+>
+> **For Docker Distribution users:** See the [PostgreSQL Configuration section](#️-postgresql-configuration-for-ledger-state-optional-but-recommended) in the Docker setup instructions above.
+>
+> **For Standalone Distribution users (Zip or Native):**
+> 1. Increase PostgreSQL shared memory to 4GB or more (minimum 2GB recommended)
+> 2. Configure the following PostgreSQL-related properties in your application configuration (application-ledger-state.properties):
+>    - `store.adapot.reward-bulk-load-work-mem=1GB`
+>    - `store.adapot.reward-bulk-load-maintenance-work-mem=2GB`
+>    - `store.adapot.stake-snapshot-work-mem=512MB`
+>    - `store.governance-aggr.drep-dist-work-mem=512MB`
