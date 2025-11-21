@@ -1,0 +1,688 @@
+---
+title: "Tracking UTXOs for a Specific Address"
+---
+
+import { Callout } from 'nextra/components'
+
+# Tracking UTXOs for a Specific Address
+
+## Introduction
+
+Welcome to your first hands-on tutorial with Yaci Store! In this guide, you'll learn how to set up a lightweight Cardano indexer that tracks transactions and UTXOs (Unspent Transaction Outputs) for a specific address.
+
+**What is Yaci Store?**
+Yaci Store is a Cardano blockchain indexer that reads data from the blockchain and stores it in a PostgreSQL database. Think of it as a specialized tool that helps you extract and organize blockchain data for your applications.
+
+**What will you build?**
+By the end of this tutorial, you'll have a running Yaci Store instance that:
+- Synchronizes with the Cardano blockchain
+- Tracks UTXOs only for one specific address (ignoring everything else)
+- Stores the data in an easily queryable database
+- Optionally sends you Discord notifications when the address balance changes
+
+**Why is this useful?**
+Instead of indexing the entire Cardano blockchain (which requires significant storage and processing power), you can focus on just the data you need. This is perfect for:
+- Monitoring a treasury wallet
+- Tracking payments to a specific address
+- Building lightweight applications that only care about one address
+- Development and testing with minimal resource requirements
+
+**What you'll learn:**
+- How to set up Yaci Store using Docker
+- How to configure and enable plugins
+- How to write custom filtering logic
+- How to query blockchain data from the database
+
+Let's get started!
+
+---
+
+## Prerequisites
+
+Before we begin, make sure you have:
+
+- **Docker and Docker Compose** installed on your system
+  - [Install Docker Desktop](https://www.docker.com/products/docker-desktop/) for Mac or Windows
+  - [Install Docker Engine](https://docs.docker.com/engine/install/) for Linux
+- **Basic familiarity** with Cardano addresses
+- **Estimated time:** 20-30 minutes
+
+<Callout type="info">
+This tutorial uses the Cardano **preprod** testnet, which is perfect for learning without dealing with real ADA or requiring extensive storage.
+</Callout>
+
+---
+
+## Step 1: Download Yaci Store
+
+First, let's get the Yaci Store Docker distribution.
+
+1. **Download the latest release**
+
+   Visit the [Yaci Store releases page](https://github.com/bloxbean/yaci-store/releases) and download the Docker distribution archive (look for `yaci-store-docker-<version>.zip`).
+
+   For example: `yaci-store-docker-2.0.0-beta5.zip`
+
+2. **Extract the archive**
+
+   ```bash
+   # For .tar.gz files
+   unzip yaci-store-docker-<version>.zip
+   cd yaci-store-docker-<version>
+   ```
+
+3. **Explore the directory structure**
+
+   You should see the following files and folders:
+
+   ```
+   yaci-store/
+   ├── yaci-store.sh          # Main script to start/stop Yaci Store
+   ├── admin-cli.sh           # Admin operations
+   ├── monitoring.sh          # Optional monitoring stack
+   ├── psql.sh               # Quick database access
+   ├── compose/              # Docker compose files
+   │   ├── .env             # Docker image versions
+   │   └── yaci-store-monolith.yml
+   ├── config/              # Configuration files
+   │   ├── env              # Environment variables
+   │   ├── application.properties
+   │   └── application-plugins.yml
+   └── plugin-scripts/      # Where we'll put our custom plugins
+   ```
+
+<Callout type="info">
+The `yaci-store.sh` script is your main interface. It handles starting, stopping, and managing the Docker containers for you.
+</Callout>
+
+---
+
+## Step 2: Configure Network Connection
+
+Now let's configure Yaci Store to connect to the Cardano preprod testnet.
+
+1. **Edit the main configuration file**
+
+   Open `config/application.properties` in your text editor.
+
+2. **Set the network connection**
+
+   Find the Cardano network configuration section and set these values:
+
+   ```properties
+   # Cardano Network Configuration
+   store.cardano.host=preprod-node.play.dev.cardano.org
+   store.cardano.port=3001
+   store.cardano.protocol-magic=1
+   ```
+
+   **What do these settings mean?**
+   - `host`: The Cardano node you'll connect to (we're using a public preprod node)
+   - `port`: The port number for the node connection
+   - `protocol-magic`: Network identifier (1 = preprod, 764824073 = mainnet)
+
+3. **Verify database settings**
+
+   The Docker distribution comes pre-configured for database access. You should see:
+
+   ```properties
+   spring.datasource.url=jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store
+   spring.datasource.username=yaci
+   spring.datasource.password=dbpass
+   ```
+
+   <Callout type="warning">
+   These are development credentials. For production use, change the database password!
+   </Callout>
+
+---
+
+## Step 3: Optimize for Address Tracking
+
+Since we only want to track one address, let's disable stores we don't need. This dramatically reduces resource usage.
+
+1. **Continue editing `config/application.properties`**
+
+2. **Disable unnecessary stores**
+
+   Add or modify these settings:
+
+   ```properties
+   # Disable stores we don't need
+   store.assets.enabled=false
+   store.blocks.enabled=false
+   store.metadata.enabled=false
+   store.script.enabled=false
+   store.staking.enabled=false
+   store.governance.enabled=false
+
+   # Keep the UTXO store enabled (we need this!)
+   store.utxo.enabled=true
+   ```
+
+3. **Set a recent starting point** (optional but recommended)
+
+   Instead of syncing from the beginning of the blockchain, we can start from a recent point:
+
+   ```properties
+   # Start syncing from a recent slot (adjust to current preprod slot)
+   store.cardano.sync-start-slot=66258805
+   store.cardano.sync-start-blockhash=b8c42698bf654d37ce8cfcf180bacfb464146db8e0b8e7cc71f0e000fea86f82
+   ```
+
+   <Callout type="info">
+   To get the latest preprod slot and block hash, visit [Cardano Explorer (Preprod)](https://preprod.cardanoscan.io/) or use a recent block. This allows you to start syncing quickly without processing historical data.
+   </Callout>
+
+4. **Save the file**
+
+---
+
+## Step 4: Enable the Plugin System
+
+Yaci Store uses a plugin system to extend its functionality. Let's enable it.
+
+### 4.1 Enable Plugin Loading
+
+1. **Edit `config/env`**
+
+   Find and uncomment (remove the `#` at the beginning) this line:
+
+   ```bash
+   JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+   ```
+
+   This tells Yaci Store to load plugins from the `plugins` directory.
+
+### 4.2 Enable Plugins in Configuration
+
+1. **Edit `config/application-plugins.yml`**
+
+2. **Enable the plugin system**
+
+   Make sure this is set:
+
+   ```yaml
+   store:
+     plugins:
+       enabled: true
+   ```
+
+---
+
+## Step 5: Create the Plugin Scripts
+
+Now comes the fun part - writing the JavaScript plugins that will filter UTXOs by address!
+
+We'll create three plugin files:
+
+### 5.1 Create the Address Filter Plugin
+
+1. **Create a new file** `plugin-scripts/filter-by-address.js`
+
+2. **Add this code:**
+
+   ```javascript
+   /**
+    * Filter Plugin: Only save UTXOs for a specific address
+    *
+    * This plugin runs before UTXOs are saved to the database.
+    * It returns true only for UTXOs that match our target address.
+    */
+   function filterByAddress(context, items) {
+     // Get the target address from configuration
+     var targetAddress = context.config.get("address.filter");
+
+     if (!targetAddress) {
+       context.console.error("ERROR: 'address.filter' not configured!");
+       return false;
+     }
+
+     // Filter the items to only include our target address
+     var filtered = items.stream()
+       .filter(function(item) {
+         return item.ownerAddr === targetAddress;
+       })
+       .toArray();
+
+     context.console.info("Filtered " + filtered.length + " UTXOs for address: " + targetAddress);
+
+     return filtered;
+   }
+   ```
+
+   **What does this do?**
+   - Gets the target address from your configuration
+   - Filters incoming UTXOs to only keep ones for that address
+   - Returns the filtered list (which is what gets saved to the database)
+
+### 5.2 Create the Commit Event Handler
+
+1. **Create a new file** `plugin-scripts/handle-commit.js`
+
+2. **Add this code:**
+
+   ```javascript
+   /**
+    * Event Handler: Clean up orphaned tx_inputs on blockchain commits
+    *
+    * When the blockchain commits, we need to clean up any tx_input records
+    * that don't belong to our target address.
+    */
+   function handleCommitEvent(context, event) {
+     var targetAddress = context.config.get("address.filter");
+
+     if (!targetAddress) {
+       return;
+     }
+
+     var blockNumber = event.metadata.block;
+
+     // Clean up tx_inputs that don't match our address
+     var deleteSql = `
+       DELETE FROM tx_input
+       WHERE block_number = :blockNumber
+       AND address != :targetAddress
+     `;
+
+     var params = {
+       blockNumber: blockNumber,
+       targetAddress: targetAddress
+     };
+
+     var deleted = context.named_jdbc.update(deleteSql, params);
+
+     if (deleted > 0) {
+       context.console.info("Cleaned up " + deleted + " tx_inputs for block " + blockNumber);
+     }
+   }
+   ```
+
+   **What does this do?**
+   - Runs when a block is committed to the database
+   - Deletes any transaction inputs that don't belong to our target address
+   - Keeps the database clean and efficient
+
+### 5.3 Create the Discord Notification Plugin (Optional)
+
+This plugin sends you a Discord message when your address balance changes!
+
+1. **Create a new file** `plugin-scripts/notify-discord.js`
+
+2. **Add this code:**
+
+   ```javascript
+   /**
+    * Post-Action Plugin: Send Discord notifications on balance changes
+    *
+    * This runs AFTER UTXOs are saved to the database.
+    * It calculates the balance and sends a Discord notification.
+    */
+   function sendDiscordNotificationOnBalanceChange(context, items) {
+     var webhookUrl = context.config.get("discord.webhook.url");
+
+     if (!webhookUrl) {
+       // No webhook configured, skip notification
+       return;
+     }
+
+     var targetAddress = context.config.get("address.filter");
+
+     // Calculate total balance from database
+     var balanceSql = `
+       SELECT COALESCE(SUM(amounts[1].quantity), 0) as total_lovelace
+       FROM address_utxo
+       WHERE owner_addr = :address
+     `;
+
+     var result = context.named_jdbc.queryForMap(balanceSql, { address: targetAddress });
+     var balanceLovelace = result.total_lovelace;
+     var balanceAda = balanceLovelace / 1000000.0;
+
+     // Send Discord notification
+     var message = {
+       content: "💰 Balance Update for Address",
+       embeds: [{
+         title: "Address Balance Changed",
+         description: "A new UTXO has been added to the tracked address",
+         color: 3447003,
+         fields: [
+           {
+             name: "Address",
+             value: targetAddress,
+             inline: false
+           },
+           {
+             name: "Current Balance",
+             value: balanceAda.toFixed(6) + " ADA",
+             inline: true
+           },
+           {
+             name: "Lovelace",
+             value: balanceLovelace.toString(),
+             inline: true
+           }
+         ],
+         timestamp: new Date().toISOString()
+       }]
+     };
+
+     try {
+       context.http.postJson(webhookUrl, message);
+       context.console.info("Discord notification sent - Balance: " + balanceAda + " ADA");
+     } catch (error) {
+       context.console.error("Failed to send Discord notification: " + error);
+     }
+   }
+   ```
+
+   **What does this do?**
+   - Calculates the current balance of your address from the database
+   - Formats a nice Discord embed message
+   - Sends it to your Discord webhook whenever a UTXO is added
+
+---
+
+## Step 6: Configure the Plugins
+
+Now let's wire up these plugins in the configuration.
+
+1. **Edit `config/application-plugins.yml`**
+
+2. **Replace the contents with this configuration:**
+
+   ```yaml
+   store:
+     plugins:
+       enabled: true
+
+       # Filter plugins run BEFORE data is saved
+       filters:
+         utxo.unspent.save:
+           - name: "Filter UTXOs by Address"
+             lang: js
+             script:
+               file: /app/plugin-scripts/filter-by-address.js
+               function: filterByAddress
+
+       # Event handlers react to blockchain events
+       event-handlers:
+         CommitEvent:
+           - name: "Clean Orphaned TxInputs"
+             lang: js
+             script:
+               file: /app/plugin-scripts/handle-commit.js
+               function: handleCommitEvent
+
+       # Post-action plugins run AFTER data is saved
+       post-actions:
+         utxo.unspent.save:
+           - name: "Discord Balance Notification"
+             lang: js
+             script:
+               file: /app/plugin-scripts/notify-discord.js
+               function: sendDiscordNotificationOnBalanceChange
+   ```
+
+3. **Set your target address in `config/application.properties`**
+
+   Add this line (replace with the address you want to track):
+
+   ```properties
+   # The Cardano address to track
+   address.filter=addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw
+   ```
+
+   <Callout type="info">
+   This is a preprod testnet address. Replace it with any preprod address you want to track! You can get test ADA from the [Cardano Testnet Faucet](https://docs.cardano.org/cardano-testnet/tools/faucet/).
+   </Callout>
+
+4. **(Optional) Set up Discord webhook**
+
+   If you want balance notifications, add this to `config/application.properties`:
+
+   ```properties
+   # Optional: Discord webhook URL for notifications
+   discord.webhook.url=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+   ```
+
+   To create a Discord webhook:
+   - Go to your Discord server settings
+   - Navigate to Integrations → Webhooks
+   - Create a new webhook and copy the URL
+
+---
+
+## Step 7: Start Yaci Store
+
+Time to launch everything!
+
+1. **Start Yaci Store**
+
+   ```bash
+   ./yaci-store.sh start
+   ```
+
+   This will:
+   - Pull the necessary Docker images (first time only)
+   - Start PostgreSQL database
+   - Start Yaci Store application
+   - Begin synchronizing with the blockchain
+
+2. **Watch the logs**
+
+   ```bash
+   ./yaci-store.sh logs:yaci-store
+   ```
+
+   You should see output like:
+
+   ```
+   INFO  - Starting synchronization from slot 66258805
+   INFO  - Connected to preprod-node.play.dev.cardano.org:3001
+   INFO  - Plugin 'Filter UTXOs by Address' loaded successfully
+   INFO  - Filtered 0 UTXOs for address: addr_test1...
+   ```
+
+   <Callout type="success">
+   If you see "Plugin loaded successfully", your plugins are working! Press `Ctrl+C` to exit the logs (this won't stop Yaci Store).
+   </Callout>
+
+3. **Check service status**
+
+   ```bash
+   ./yaci-store.sh status
+   ```
+
+   Both `yaci-store-postgres` and `yaci-store` should be "Up".
+
+---
+
+## Step 8: Query Your Data
+
+Let's verify that everything is working by querying the database!
+
+1. **Connect to the database**
+
+   ```bash
+   ./psql.sh
+   ```
+
+   This opens a PostgreSQL console connected to your Yaci Store database.
+
+2. **Set the schema**
+
+   ```sql
+   SET search_path TO yaci_store;
+   ```
+
+3. **Check UTXOs for your address**
+
+   ```sql
+   SELECT
+     owner_addr,
+     amounts[1].quantity as lovelace,
+     tx_hash,
+     output_index,
+     slot
+   FROM address_utxo
+   WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
+   ORDER BY slot DESC
+   LIMIT 10;
+   ```
+
+   **What you'll see:**
+   - All UTXOs currently available at your tracked address
+   - The amount of lovelace in each UTXO
+   - The transaction hash and output index
+   - The slot number when it was created
+
+4. **Calculate total balance**
+
+   ```sql
+   SELECT
+     owner_addr,
+     SUM(amounts[1].quantity) as total_lovelace,
+     SUM(amounts[1].quantity) / 1000000.0 as total_ada,
+     COUNT(*) as utxo_count
+   FROM address_utxo
+   WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
+   GROUP BY owner_addr;
+   ```
+
+   This shows:
+   - Total balance in lovelace
+   - Total balance in ADA
+   - Number of UTXOs
+
+5. **See transaction history**
+
+   ```sql
+   SELECT
+     block,
+     slot,
+     tx_hash,
+     block_time
+   FROM tx
+   WHERE tx_hash IN (
+     SELECT DISTINCT tx_hash
+     FROM address_utxo
+     WHERE owner_addr = 'addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw'
+   )
+   ORDER BY slot DESC
+   LIMIT 20;
+   ```
+
+6. **Exit the database console**
+
+   ```sql
+   \q
+   ```
+
+<Callout type="info">
+If you don't see any data yet, the address might not have received any transactions since your sync starting point. Try sending some test ADA to your tracked address from the [testnet faucet](https://docs.cardano.org/cardano-testnet/tools/faucet/)!
+</Callout>
+
+---
+
+## Step 9: Understanding Your Setup
+
+### What's happening behind the scenes?
+
+1. **Yaci Store connects to the Cardano node** and requests blockchain data starting from your configured slot
+
+2. **The node streams blocks** containing all transactions and UTXOs
+
+3. **Your filter plugin runs** for every UTXO before it's saved:
+   - If the UTXO belongs to your address → it gets saved
+   - If it belongs to any other address → it's discarded
+
+4. **The commit event handler** cleans up any transaction input records that don't match your address
+
+5. **The notification plugin** (if configured) sends you a Discord message whenever new UTXOs arrive
+
+### Resource usage
+
+Because you're only tracking one address:
+- **Database size:** Very small (megabytes instead of gigabytes)
+- **CPU usage:** Minimal
+- **Memory:** ~1-2GB for the Docker containers
+- **Sync time:** Fast (only processes blocks with relevant transactions)
+
+### Customizing for your needs
+
+Want to track a different address? Just:
+1. Stop Yaci Store: `./yaci-store.sh stop`
+2. Change `address.filter` in `config/application.properties`
+3. Reset the database: `./admin-cli.sh reset-db` (warning: deletes all data!)
+4. Start again: `./yaci-store.sh start`
+
+---
+
+## Troubleshooting
+
+### Plugins not loading?
+
+Check that you:
+- Uncommented the plugin loader line in `config/env`
+- Set `store.plugins.enabled=true` in `config/application-plugins.yml`
+- Used the correct file paths (they should start with `/app/plugin-scripts/`)
+
+### No data appearing?
+
+Verify:
+- Your `address.filter` is set correctly
+- The address has received transactions after your sync starting slot
+- Yaci Store is connected to the network (check logs)
+
+### Discord notifications not working?
+
+- Make sure your webhook URL is correct
+- Check that the address has actually received new UTXOs
+- Look at the logs for any error messages
+
+### Need to restart?
+
+```bash
+./yaci-store.sh stop
+./yaci-store.sh start
+```
+
+---
+
+## Next Steps
+
+Congratulations! You've successfully set up a Yaci Store instance with custom plugins.
+
+### Learn more
+
+- **[Plugin Framework Documentation](/plugins/plugin-getting-started)** - Dive deeper into plugin development
+- **[Plugin API Reference](/plugins/plugin_api-guide)** - Available context variables and functions
+- **[Database Access](/plugins/variables/database-access)** - Advanced database queries in plugins
+- **[HTTP Client](/plugins/variables/http-client)** - Make HTTP requests from plugins
+
+### Explore more plugins
+
+Check out the [yaci-store-plugins repository](https://github.com/bloxbean/yaci-store-plugins) for more examples.
+
+### Try these modifications
+
+- **Track multiple addresses:** Modify the filter to accept a list of addresses
+- **Add native token tracking:** Extend the queries to show native tokens (not just ADA)
+- **Add webhook notifications:** Send HTTP callbacks instead of Discord messages
+
+---
+
+## Summary
+
+In this tutorial, you learned:
+- ✅ How to download and set up Yaci Store with Docker
+- ✅ How to configure network connections and optimize settings
+- ✅ How to enable and write custom JavaScript plugins
+- ✅ How to filter blockchain data for specific addresses
+- ✅ How to query blockchain data from PostgreSQL
+- ✅ How to set up Discord notifications (optional)
+
+You now have a powerful, lightweight Cardano indexer that tracks exactly the data you need. This is just the beginning - the plugin system opens up endless possibilities for customizing Yaci Store to your specific use case!
+
+Happy indexing! 🚀

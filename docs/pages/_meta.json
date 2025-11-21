@@ -15,5 +15,8 @@
   },
   "other-configurations": "Other Configurations",
   "ledger-state-mismatches": "Ledger State Mismatches",
+  "tutorialsAndUseCases": {
+    "title": "Tutorials & Use Cases"
+  },
   "showcase": "Showcase"
 }
