@@ -158,25 +158,30 @@ Since we only want to track one address, let's disable stores we don't need. Thi
 
    ```properties
    # Disable stores we don't need
-   store.assets.enabled=false
-   store.blocks.enabled=false
-   store.metadata.enabled=false
-   store.script.enabled=false
-   store.staking.enabled=false
-   store.governance.enabled=false
+    store.assets.enabled=false
+    store.blocks.enabled=false
+    store.epoch.enabled=false
+    store.metadata.enabled=false
+    store.mir.enabled=false
+    store.script.enabled=false
+    store.staking.enabled=false
+    store.transaction.enabled=false
+    store.governance.enabled=false
 
-   # Keep the UTXO store enabled (we need this!)
-   store.utxo.enabled=true
+    # Keep the UTXO store enabled (we need this!)
+    store.utxo.enabled=true
    ```
 
 3. **Set a recent starting point** (optional but recommended)
 
-   Instead of syncing from the beginning of the blockchain, we can start from a recent point:
+   Instead of syncing from the beginning of the blockchain, we can start from a recent point. However, to get accurate balance or UTXOs for your selected address, you need to choose a point before the first transaction of that address. If it's a new address with no transactions, you can select the current tip.
+
+   The following configuration is based on the example address used in this tutorial. Change these values according to your selected address.
 
    ```properties
    # Start syncing from a recent slot (adjust to current preprod slot)
-   store.cardano.sync-start-slot=107886907
-   store.cardano.sync-start-blockhash=c115a0b8de76f6343ba059596aa729313363192c0ad93a088eb6db80b607cc29
+   store.cardano.sync-start-slot=107754724
+   store.cardano.sync-start-blockhash=534d3c2d1c3915523ea8843449dd91fcf4d647719d9ef2dc64a97d47be39447b
    ```
 
    <Callout type="info">
@@ -397,6 +402,9 @@ Now let's wire up these plugins in the configuration.
    store:
      plugins:
        enabled: true
+       api-enabled: false
+       metrics:
+        enabled: false
 
        # Filter plugins run BEFORE data is saved
        filters:
@@ -429,13 +437,17 @@ Now let's wire up these plugins in the configuration.
                function: handleRollbackEvent
 ```
 
+<Callout type="info">
+Note that the local `plugins` folder is mapped to `/app/plugins` for the Yaci Store docker distribution.
+</Callout>
+
 3. **Set your target address in `config/application.properties`**
 
    Add this line (replace with the address you want to track):
 
    ```properties
    # The Cardano address to track
-   address.filter=addr_test1wzc86g4ym366hkaphryqqvaptwznqkmk2gdqz9930u534pcx58ahw
+   address.filter=addr_test1qp5z7zmlw848szvmpe693ukfu9yq4t3we4s6u483j9sq4zr09qy27awlm22wdh98zm2le5l8yluezf5amygq5d6htj5qdx4p3k
    ```
 
    <Callout type="info">
@@ -504,7 +516,7 @@ Let's verify that everything is working by querying the database!
    ```sql
    SELECT
      owner_addr,
-     lovelace_amount  as lovelace
+     lovelace_amount  as lovelace,
      amounts,
      tx_hash,
      output_index,
@@ -574,7 +586,8 @@ Because you're only tracking one address:
 Want to track a different address? Just:
 1. Stop Yaci Store: `./yaci-store.sh stop`
 2. Change `address.filter` in `config/application.properties`
-3. Reset the database: `./admin-cli.sh reset-db` (warning: deletes all data!)
+3. Update `store.cardano.sync-start-slot` and `store.cardano.sync-start-blockhash` in `config/application.properties` (If required)
+3. Reset the database: `sudo rm -rf db-data`
 4. Start again: `./yaci-store.sh start`
 
 ---
