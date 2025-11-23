@@ -1,61 +1,42 @@
 package com.bloxbean.cardano.yaci.store.test.e2e.txs;
 
-import com.bloxbean.cardano.client.account.Account;
-import com.bloxbean.cardano.client.common.model.Networks;
-import com.bloxbean.cardano.yaci.store.core.service.BlockFetchService;
-import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.BaseE2ETest;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
-public class TxPlanBuilderIT extends BaseE2ETest {
+public class TxBuilderIT extends BaseE2ETest {
 
     private static final String SUBMIT_BASE_URL = "http://localhost:9999";
 
-    @MockBean
-    private BlockFetchService blockFetchService;
-
-    @MockBean
-    private StartService startService;
-
-    @BeforeAll
-    static void fundAccounts() {
-        Account fundAccount0 = new Account(Networks.testnet(), DEFAULT_MNEMONICS);
-        topUpFund(fundAccount0.baseAddress(), 50);
-    }
-
     @Test
     void buildUnsignedTxFromPlan_shouldReturnTxBodyCbor() {
+        topUpFund(account0.baseAddress(), 200);
         waitForFunds(account0.baseAddress());
 
-        String txPlanYaml = """
-                version: 1.0
-                context:
-                  fee_payer: %s
-                transaction:
-                  - tx:
-                      from: %s
-                      intents:
-                        - type: payment
-                          to: %s
-                          amount:
-                            unit: lovelace
-                            quantity: 1000000
-                """.formatted(account0.baseAddress(), account0.baseAddress(), account1.baseAddress());
+        String txYaml = """
+            version: 1.0
+            transaction:
+              - tx:
+                  from: %s
+                  intents:
+                    - type: payment
+                      address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+                      amounts:
+                        - unit: lovelace
+                          quantity: 2000000
+            """.formatted(account0.baseAddress());
 
         TxPlanResponse response = RestAssured.given()
                 .baseUri(SUBMIT_BASE_URL)
                 .contentType(ContentType.TEXT)
-                .body(txPlanYaml)
+                .body(txYaml)
                 .post("/api/v1/tx/lifecycle/build")
                 .then()
                 .statusCode(200)
