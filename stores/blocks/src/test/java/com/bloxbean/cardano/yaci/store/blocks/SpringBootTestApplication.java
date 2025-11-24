@@ -11,6 +11,7 @@ public class SpringBootTestApplication {
         var blocksStoreProperties = new BlocksStoreProperties();
         blocksStoreProperties.setEnabled(true);
         blocksStoreProperties.setMetricsEnabled(true);
+        blocksStoreProperties.setSaveCbor(true);
         return blocksStoreProperties;
     }
 }

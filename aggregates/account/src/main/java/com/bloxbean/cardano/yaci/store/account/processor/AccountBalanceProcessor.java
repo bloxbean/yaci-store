@@ -198,11 +198,18 @@ public class AccountBalanceProcessor {
 
             if (lastProcessedBlock != null
                     && !((firstBlockInBatchMetadata.getBlock() - lastProcessedBlock) <= 1)) { // 1 block diff or same block
-                log.warn("Account balance calculation will be ignored. " +
-                        "Please run the aggregation app to calculate the account balance for pending blocks.");
-                log.warn("The last processed block for account balance calculation is not the same as the expected last block.");
-                log.warn("Last processed block for account balance: {}", lastProcessedBlock);
-                log.warn("Current block: {}", sortedAddressEventUtxo.get(0).getMetadata().getBlock());
+                log.error("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨");
+                log.error("🚨 CRITICAL ERROR: Account balance calculation will be ignored! 🚨");
+                log.error("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨");
+                log.error("⚠️  The last processed block for account balance calculation is not the same as the expected last block.");
+                log.error("📊 Last processed block for account balance: {}", lastProcessedBlock);
+                log.error("📊 Current block: {}", sortedAddressEventUtxo.get(0).getMetadata().getBlock());
+                log.error("❌ Block gap detected: {} blocks", (firstBlockInBatchMetadata.getBlock() - lastProcessedBlock));
+                log.error("");
+                log.error("✅ RESOLUTION OPTION:");
+                log.error("   🔧 Use admin-cli tool's rollback feature to rollback to a previous epoch where account balance calculation is complete");
+                log.error("   🔄 After rollback, restart the application to resume from the rollback point.");
+                log.error("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨");
 
                 if (accountStoreProperties.getInitialBalanceSnapshotBlock() > 0) {
                     balanceSnapshotService.scheduleBalanceSnapshot();

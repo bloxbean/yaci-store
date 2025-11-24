@@ -17,20 +17,21 @@ public interface EpochStakeRepository extends JpaRepository<EpochStakeEntity, Ep
     @Query("select max(e.epoch) from EpochStakeEntity e")
     Optional<Integer> getMaxEpoch();
 
-    @Query("select sum(e.amount) from EpochStakeEntity e where e.activeEpoch = :epoch")
-    Optional<BigInteger> getTotalActiveStakeForEpoch(Integer epoch);
+    @Query("select sum(e.amount) from EpochStakeEntity e where e.epoch = :activeEpoch - 2")
+    Optional<BigInteger> getTotalActiveStakeForEpoch(Integer activeEpoch);
 
+    @Query("select e from EpochStakeEntity e where e.address = :address and e.epoch = :activeEpoch - 2")
     Optional<EpochStakeEntity> findByAddressAndActiveEpoch(String address, Integer activeEpoch);
 
-    @Query("select sum(e.amount) from EpochStakeEntity e where e.activeEpoch = :epoch and e.poolId = :poolId")
-    Optional<BigInteger> getActiveStakeByPoolAndEpoch(Integer epoch, String poolId);
+    @Query("select sum(e.amount) from EpochStakeEntity e where e.epoch = :activeEpoch - 2 and e.poolId = :poolId")
+    Optional<BigInteger> getActiveStakeByPoolAndEpoch(Integer activeEpoch, String poolId);
 
-    @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch")
-    List<EpochStakeEntity> getAllActiveStakesByEpoch(Integer epoch, Pageable pageable);
+    @Query("select e from EpochStakeEntity e where e.epoch = :activeEpoch - 2")
+    List<EpochStakeEntity> getAllActiveStakesByEpoch(Integer activeEpoch, Pageable pageable);
 
-    @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch and e.poolId = :poolId")
-    List<EpochStakeEntity> getAllByActiveEpochAndPool(Integer epoch, String poolId, Pageable pageable);
+    @Query("select e from EpochStakeEntity e where e.epoch = :activeEpoch - 2 and e.poolId = :poolId")
+    List<EpochStakeEntity> getAllByActiveEpochAndPool(Integer activeEpoch, String poolId, Pageable pageable);
 
-    @Query("select e from EpochStakeEntity e where e.activeEpoch = :epoch and e.poolId in :poolIds")
-    List<EpochStakeEntity> getAllByActiveEpochAndPools(Integer epoch, List<String> poolIds);
+    @Query("select e from EpochStakeEntity e where e.epoch = :activeEpoch - 2 and e.poolId in :poolIds")
+    List<EpochStakeEntity> getAllByActiveEpochAndPools(Integer activeEpoch, List<String> poolIds);
 }

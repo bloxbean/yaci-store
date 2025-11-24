@@ -97,6 +97,9 @@ public class ByronTransactionProcessor {
             } else {
                 txList.add(txn);
             }
+            
+            // TODO: Byron transactions don't expose CBOR data via yaci-core API yet.
+            // CBOR storage for Byron transactions is not supported at this time.
         }
 
         if (txList.size() > 0) {

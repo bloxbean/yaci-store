@@ -7,6 +7,8 @@ import co.nstant.in.cbor.model.Number;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
+import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
@@ -127,23 +129,30 @@ public class DomainMapperDecorator implements DomainMapper {
         protocolParamsDto.setPriceStep(safeRatio(protocolParams.getPriceStep()));
 
         //pvt
-        protocolParamsDto.setPvtMotionNoConfidence(safeRatio(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()));
-        protocolParamsDto.setPvtCommitteeNormal(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal()));
-        protocolParamsDto.setPvtCommitteeNoConfidence(safeRatio(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence()));
-        protocolParamsDto.setPvtHardForkInitiation(safeRatio(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation()));
-        protocolParamsDto.setPvtPPSecurityGroup(safeRatio(protocolParams.getPoolVotingThresholds().getPvtPPSecurityGroup()));
+        PoolVotingThresholds poolVotingThresholds = protocolParams.getPoolVotingThresholds();
+        if (poolVotingThresholds != null) {
+            protocolParamsDto.setPvtMotionNoConfidence(safeRatio(poolVotingThresholds.getPvtMotionNoConfidence()));
+            protocolParamsDto.setPvtCommitteeNormal(safeRatio(poolVotingThresholds.getPvtCommitteeNormal()));
+            protocolParamsDto.setPvtCommitteeNoConfidence(safeRatio(poolVotingThresholds.getPvtCommitteeNoConfidence()));
+            protocolParamsDto.setPvtHardForkInitiation(safeRatio(poolVotingThresholds.getPvtHardForkInitiation()));
+            protocolParamsDto.setPvtPPSecurityGroup(safeRatio(poolVotingThresholds.getPvtPPSecurityGroup()));
+        }
 
         //dvt
-        protocolParamsDto.setDvtMotionNoConfidence(safeRatio(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence()));
-        protocolParamsDto.setDvtCommitteeNormal(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal()));
-        protocolParamsDto.setDvtCommitteeNoConfidence(safeRatio(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence()));
-        protocolParamsDto.setDvtUpdateToConstitution(safeRatio(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution()));
-        protocolParamsDto.setDvtHardForkInitiation(safeRatio(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation()));
-        protocolParamsDto.setDvtPPNetworkGroup(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup()));
-        protocolParamsDto.setDvtPPEconomicGroup(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup()));
-        protocolParamsDto.setDvtPPTechnicalGroup(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup()));
-        protocolParamsDto.setDvtPPGovGroup(safeRatio(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup()));
-        protocolParamsDto.setDvtTreasuryWithdrawal(safeRatio(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal()));
+        DrepVoteThresholds drepVotingThresholds = protocolParams.getDrepVotingThresholds();
+
+        if (drepVotingThresholds != null) {
+            protocolParamsDto.setDvtMotionNoConfidence(safeRatio(drepVotingThresholds.getDvtMotionNoConfidence()));
+            protocolParamsDto.setDvtCommitteeNormal(safeRatio(drepVotingThresholds.getDvtCommitteeNormal()));
+            protocolParamsDto.setDvtCommitteeNoConfidence(safeRatio(drepVotingThresholds.getDvtCommitteeNoConfidence()));
+            protocolParamsDto.setDvtUpdateToConstitution(safeRatio(drepVotingThresholds.getDvtUpdateToConstitution()));
+            protocolParamsDto.setDvtHardForkInitiation(safeRatio(drepVotingThresholds.getDvtHardForkInitiation()));
+            protocolParamsDto.setDvtPPNetworkGroup(safeRatio(drepVotingThresholds.getDvtPPNetworkGroup()));
+            protocolParamsDto.setDvtPPEconomicGroup(safeRatio(drepVotingThresholds.getDvtPPEconomicGroup()));
+            protocolParamsDto.setDvtPPTechnicalGroup(safeRatio(drepVotingThresholds.getDvtPPTechnicalGroup()));
+            protocolParamsDto.setDvtPPGovGroup(safeRatio(drepVotingThresholds.getDvtPPGovGroup()));
+            protocolParamsDto.setDvtTreasuryWithdrawal(safeRatio(drepVotingThresholds.getDvtTreasuryWithdrawal()));
+        }
 
         protocolParamsDto.setMinFeeRefScriptCostPerByte(safeRatio(protocolParams.getMinFeeRefScriptCostPerByte()));
 

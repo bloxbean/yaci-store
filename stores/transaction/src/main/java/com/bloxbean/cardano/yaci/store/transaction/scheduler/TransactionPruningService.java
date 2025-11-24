@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EpochChangeEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import jakarta.annotation.PostConstruct;
@@ -32,6 +33,7 @@ import static com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfig
 public class TransactionPruningService {
     private final TransactionStorage transactionStorage;
     private final TransactionWitnessStorage transactionWitnessStorage;
+    private final TransactionCborStorage transactionCborStorage;
     private final CursorService cursorService;
     private final TransactionStoreProperties transactionStoreProperties;
 
@@ -79,10 +81,14 @@ public class TransactionPruningService {
                     var deleteTxCount =
                             transactionStorage.deleteBySlotLessThan(slot);
                     var deleteTxWitnessCount = transactionWitnessStorage.deleteBySlotLessThan(slot);
+                    var deleteTxCborCount = transactionCborStorage.deleteBySlotLessThan(slot);
                     // skip pruning invalid_transaction and withdrawn because these 2 tables do not have too much data
                     long t2 = System.currentTimeMillis();
                     log.info("Deleted {} transactions and {} transaction witnesses before slot {}, Time taken: {} ms",
                             deleteTxCount, deleteTxWitnessCount, slot, (t2 - t1));
+                    if (deleteTxCborCount > 0) {
+                        log.info("Deleted {} transaction_cbor records before slot {}", deleteTxCborCount, slot);
+                    }
                 }
             });
         } finally {

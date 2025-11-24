@@ -3,7 +3,11 @@ package com.bloxbean.cardano.yaci.store.blocks.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.*;
 import com.bloxbean.cardano.yaci.core.model.byron.payload.ByronTxPayload;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
@@ -22,11 +26,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class ByronBlockProcessorTest {
-    @InjectMocks
-    private ByronBlockProcessor byronBlockProcessor;
-
     @Mock
     private BlockStorage blockStorage;
+
+    @Mock
+    private BlockCborStorage blockCborStorage;
+
+    @Mock
+    private BlocksStoreProperties blocksStoreProperties;
+
+    @InjectMocks
+    private ByronBlockProcessor byronBlockProcessor;
 
     @Captor
     ArgumentCaptor<Block> argGenesisCaptor;
@@ -36,6 +46,9 @@ class ByronBlockProcessorTest {
 
     @Captor
     ArgumentCaptor<Block> byronEbArgCaptor;
+
+    @Captor
+    ArgumentCaptor<BlockCbor> blockCborCaptor;
 
     @Test
     void givenGenesisBlockEvent_shouldSaveBlock() throws Exception {
@@ -61,6 +74,8 @@ class ByronBlockProcessorTest {
 
     @Test
     void givenByronMainBlockEvent_shouldSaveBlock() throws Exception {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(false);
+
         ByronMainBlockEvent byronMainBlockEvent = ByronMainBlockEvent.builder()
                 .metadata(EventMetadata.builder()
                         .slot(95520)
@@ -84,6 +99,7 @@ class ByronBlockProcessorTest {
         byronBlockProcessor.handleByronMainBlockEvent(byronMainBlockEvent);
 
         Mockito.verify(blockStorage, Mockito.times(1)).save(argByronCaptor.capture());
+        Mockito.verifyNoInteractions(blockCborStorage);
 
         Block block = argByronCaptor.getValue();
 
@@ -96,6 +112,44 @@ class ByronBlockProcessorTest {
         assertThat(block.getTotalOutput()).isEqualTo(48000000);
         assertThat(block.getEpochSlot()).isEqualTo(2);
         assertThat(block.getEpochNumber()).isEqualTo(0);
+    }
+
+    @Test
+    void givenByronMainBlockEvent_whenCborEnabled_shouldSaveCbor() throws Exception {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(true);
+
+        String cborHex = "A1B2C3D4E5F6";
+        ByronMainBlockEvent byronMainBlockEvent = ByronMainBlockEvent.builder()
+                .metadata(EventMetadata.builder()
+                        .slot(95520)
+                        .block(1)
+                        .epochNumber(0)
+                        .epochSlot(2)
+                        .blockTime(1655778720)
+                        .slotLeader("d15422b2e8b60e500a82a8f4ceaa98b04e55a0171d1125f6c58f8758")
+                        .build())
+                .byronMainBlock(ByronMainBlock.builder()
+                        .header(ByronBlockHead.builder()
+                                .blockHash("4bbe984de25c79052af653c2424122a7b324b27143886849028789a597ce4ae6")
+                                .prevBlock("90a24bc18a5b0d5be239379248b0f5fe6e3f830c69604c8dff870d922d948bb1")
+                                .build())
+                        .body(ByronBlockBody.builder()
+                                .txPayload(txPayload())
+                                .build())
+                        .cbor(cborHex)
+                        .build())
+                .build();
+
+        byronBlockProcessor.handleByronMainBlockEvent(byronMainBlockEvent);
+
+        Mockito.verify(blockStorage, Mockito.times(1)).save(argByronCaptor.capture());
+        Mockito.verify(blockCborStorage, Mockito.times(1)).save(blockCborCaptor.capture());
+
+        BlockCbor blockCbor = blockCborCaptor.getValue();
+        assertThat(blockCbor.getBlockHash()).isEqualTo("4bbe984de25c79052af653c2424122a7b324b27143886849028789a597ce4ae6");
+        assertThat(blockCbor.getSlot()).isEqualTo(95520);
+        assertThat(blockCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(cborHex));
+        assertThat(blockCbor.getCborSize()).isEqualTo(6);
     }
 
     private List<ByronTxPayload> txPayload() {
@@ -125,6 +179,8 @@ class ByronBlockProcessorTest {
 
     @Test
     void givenByronEbBlockEvent_shouldSaveBlock() throws Exception {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(false);
+
         ByronEbBlockEvent byronEbBlockEvent = ByronEbBlockEvent.builder()
                 .byronEbBlock(ByronEbBlock.builder()
                         .header(ByronEbHead.builder()
@@ -144,6 +200,7 @@ class ByronBlockProcessorTest {
 
         byronBlockProcessor.handleByronEbBlockEvent(byronEbBlockEvent);
         Mockito.verify(blockStorage, Mockito.times(1)).save(byronEbArgCaptor.capture());
+        Mockito.verifyNoInteractions(blockCborStorage);
 
         Block block = byronEbArgCaptor.getValue();
 
@@ -155,5 +212,39 @@ class ByronBlockProcessorTest {
         assertThat(block.getSlotLeader()).isNull();
         assertThat(block.getEpochSlot()).isEqualTo(0);
         assertThat(block.getEpochNumber()).isEqualTo(0);
+    }
+
+    @Test
+    void givenByronEbBlockEvent_whenCborEnabled_shouldSaveCbor() throws Exception {
+        Mockito.when(blocksStoreProperties.isSaveCbor()).thenReturn(true);
+
+        String cborHex = "AABBCCDD";
+        ByronEbBlockEvent byronEbBlockEvent = ByronEbBlockEvent.builder()
+                .byronEbBlock(ByronEbBlock.builder()
+                        .header(ByronEbHead.builder()
+                                .prevBlock("d4b8de7a11d929a323373cbab6c1a9bdc931beffff11db111cf9d57356ee1937")
+                                .blockHash("9ad7ff320c9cf74e0f5ee78d22a85ce42bb0a487d0506bf60cfb5a91ea4497d2")
+                                .build())
+                        .cbor(cborHex)
+                        .build())
+                .metadata(EventMetadata.builder()
+                        .block(0)
+                        .slotLeader(null)
+                        .epochSlot(0)
+                        .epochNumber(0)
+                        .blockTime(1654041600)
+                        .slot(0)
+                        .build())
+                .build();
+
+        byronBlockProcessor.handleByronEbBlockEvent(byronEbBlockEvent);
+        Mockito.verify(blockStorage, Mockito.times(1)).save(byronEbArgCaptor.capture());
+        Mockito.verify(blockCborStorage, Mockito.times(1)).save(blockCborCaptor.capture());
+
+        BlockCbor blockCbor = blockCborCaptor.getValue();
+        assertThat(blockCbor.getBlockHash()).isEqualTo("9ad7ff320c9cf74e0f5ee78d22a85ce42bb0a487d0506bf60cfb5a91ea4497d2");
+        assertThat(blockCbor.getSlot()).isEqualTo(0);
+        assertThat(blockCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(cborHex));
+        assertThat(blockCbor.getCborSize()).isEqualTo(4);
     }
 }

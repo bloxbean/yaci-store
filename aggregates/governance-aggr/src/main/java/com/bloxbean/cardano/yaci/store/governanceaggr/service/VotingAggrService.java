@@ -15,7 +15,6 @@ import org.jooq.Row2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,11 +27,23 @@ import static org.jooq.impl.DSL.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+/*
+   Retrieves latest voting procedures per voter group
+ */
 public class VotingAggrService {
+
     private final DSLContext dsl;
     private final VotingProcedureRepository votingProcedureRepository;
     private final VotingProcedureMapper votingProcedureMapper;
 
+    /**
+     * Retrieve the latest voting procedures by Stake Pool Operators (SPOs)
+     * for the given list of governance action IDs, at or before the specified epoch.
+     *
+     * @param epoch        the specified epoch
+     * @param govActionIds list of governance action IDs
+     * @return list of {@link VotingProcedure} for each SPO and governance action ID
+     */
     @Transactional
     public List<VotingProcedure> getVotesBySPO(int epoch, List<GovActionId> govActionIds) {
         if (govActionIds == null || govActionIds.isEmpty()) {
@@ -80,13 +91,22 @@ public class VotingAggrService {
                         selectOne()
                                 .from(EPOCH_STAKE)
                                 .where(EPOCH_STAKE.POOL_ID.eq(VOTING_PROCEDURE.VOTER_HASH))
-                                .and(EPOCH_STAKE.ACTIVE_EPOCH.eq(epoch + 2))
+                                .and(EPOCH_STAKE.EPOCH.eq(epoch))
                 )
                 .fetch();
 
         return mapToVotingProcedures(result);
     }
 
+    /**
+     * Retrieve the latest voting procedures by Constitutional Committee members
+     * for the given list of governance action IDs, at or before the specified epoch.
+     *
+     * @param epoch            the specified epoch
+     * @param govActionIds     list of governance action IDs
+     * @param committeeHotKeys list of committee hot key hashes
+     * @return list of {@link VotingProcedure} for committee members
+     */
     @Transactional
     public List<VotingProcedure> getVotesByCommittee(int epoch, List<GovActionId> govActionIds, List<String> committeeHotKeys) {
         if (govActionIds == null || govActionIds.isEmpty()) {
@@ -140,6 +160,15 @@ public class VotingAggrService {
 
         return mapToVotingProcedures(result);
     }
+
+    /**
+     * Retrieve the latest voting procedures by Delegated Representatives (DReps)
+     * for the given list of governance action IDs, at or before the specified epoch.
+     *
+     * @param epoch        the specified epoch
+     * @param govActionIds list of governance action IDs
+     * @return list of {@link VotingProcedure} for each DRep and governance action ID
+     */
 
     @Transactional
     public List<VotingProcedure> getVotesByDRep(int epoch, List<GovActionId> govActionIds) {

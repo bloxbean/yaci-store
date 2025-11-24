@@ -20,5 +20,9 @@ logging:
 store:
   cardano:
     protocol-magic: 1
+  blocks:
+    save-cbor: true
+  transaction:
+    save-cbor: true
 
 

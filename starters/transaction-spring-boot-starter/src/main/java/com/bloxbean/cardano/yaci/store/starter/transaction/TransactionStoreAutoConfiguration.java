@@ -27,6 +27,9 @@ public class TransactionStoreAutoConfiguration {
         transactionStoreProperties.setPruningInterval(properties.getTransaction().getPruningInterval());
         transactionStoreProperties.setPruningSafeSlot(properties.getTransaction().getPruningSafeSlot());
         transactionStoreProperties.setSaveWitness(properties.getTransaction().isSaveWitness());
+        transactionStoreProperties.setSaveCbor(properties.getTransaction().isSaveCbor());
+        transactionStoreProperties.setCborPruningEnabled(properties.getTransaction().isCborPruningEnabled());
+        transactionStoreProperties.setCborRetentionSlots(properties.getTransaction().getCborRetentionSlots());
 
         return transactionStoreProperties;
     }

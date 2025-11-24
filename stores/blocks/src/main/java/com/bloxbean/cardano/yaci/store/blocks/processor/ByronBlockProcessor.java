@@ -3,7 +3,11 @@ package com.bloxbean.cardano.yaci.store.blocks.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock;
 import com.bloxbean.cardano.yaci.core.model.byron.ByronMainBlock;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent;
@@ -23,10 +27,16 @@ import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.ST
 @EnableIf(STORE_BLOCKS_ENABLED)
 @Slf4j
 public class ByronBlockProcessor {
-    private BlockStorage blockStorage;
+    private final BlockStorage blockStorage;
+    private final BlockCborStorage blockCborStorage;
+    private final BlocksStoreProperties blocksStoreProperties;
 
-    public ByronBlockProcessor(BlockStorage blockStorage) {
+    public ByronBlockProcessor(BlockStorage blockStorage,
+                               BlockCborStorage blockCborStorage,
+                               BlocksStoreProperties blocksStoreProperties) {
         this.blockStorage = blockStorage;
+        this.blockCborStorage = blockCborStorage;
+        this.blocksStoreProperties = blocksStoreProperties;
     }
 
     @EventListener
@@ -54,11 +64,12 @@ public class ByronBlockProcessor {
         ByronMainBlock byronBlock = event.getByronMainBlock();
 
         long slot = event.getMetadata().getSlot();
+        String blockHash = byronBlock.getHeader().getBlockHash();
 
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
                 .number(event.getMetadata().getBlock())
-                .hash(byronBlock.getHeader().getBlockHash())
+                .hash(blockHash)
                 .slot(slot)
                 .epochNumber(event.getMetadata().getEpochNumber())
                 .epochSlot((int) event.getMetadata().getEpochSlot())
@@ -80,6 +91,10 @@ public class ByronBlockProcessor {
         //fee = totalInput - totalOutput
 
         blockStorage.save(block);
+
+        if (blocksStoreProperties.isSaveCbor()) {
+            saveByronBlockCbor(event, blockHash, slot);
+        }
     }
 
     @EventListener
@@ -87,11 +102,14 @@ public class ByronBlockProcessor {
     @Transactional
     public void handleByronEbBlockEvent(ByronEbBlockEvent event) {
         ByronEbBlock byronEbBlock = event.getByronEbBlock();
+        String blockHash = byronEbBlock.getHeader().getBlockHash();
+        long slot = event.getMetadata().getSlot();
+
         Block block = Block.builder()
                 .era(Era.Byron.getValue())
                 .number(event.getMetadata().getBlock())
-                .hash(byronEbBlock.getHeader().getBlockHash())
-                .slot(event.getMetadata().getSlot())
+                .hash(blockHash)
+                .slot(slot)
                 .epochNumber(event.getMetadata().getEpochNumber())
                 .epochSlot((int) event.getMetadata().getEpochSlot())
                 .prevHash(byronEbBlock.getHeader().getPrevBlock())
@@ -100,5 +118,59 @@ public class ByronBlockProcessor {
                 .build();
 
         blockStorage.save(block);
+
+        if (blocksStoreProperties.isSaveCbor()) {
+            saveByronEbBlockCbor(event, blockHash, slot);
+        }
+    }
+
+    /**
+     * Save Byron main block CBOR data when CBOR storage is enabled.
+     * CBOR data is retrieved from ByronMainBlock.cbor field.
+     */
+    private void saveByronBlockCbor(ByronMainBlockEvent event, String blockHash, long slot) {
+        ByronMainBlock byronBlock = event.getByronMainBlock();
+
+        String cborHex = byronBlock.getCbor();
+        if (cborHex == null || cborHex.isEmpty()) {
+            log.debug("No CBOR data available for Byron block {} (YaciConfig.INSTANCE.setReturnBlockCbor(true) may not be set)", blockHash);
+            return;
+        }
+
+        byte[] cborData = HexUtil.decodeHexString(cborHex);
+
+        BlockCbor blockCbor = BlockCbor.builder()
+                .blockHash(blockHash)
+                .cborData(cborData)
+                .cborSize(cborData.length)
+                .slot(slot)
+                .build();
+
+        blockCborStorage.save(blockCbor);
+    }
+
+    /**
+     * Save Byron epoch boundary block CBOR data when CBOR storage is enabled.
+     * CBOR data is retrieved from ByronEbBlock.cbor field.
+     */
+    private void saveByronEbBlockCbor(ByronEbBlockEvent event, String blockHash, long slot) {
+        ByronEbBlock byronEbBlock = event.getByronEbBlock();
+
+        String cborHex = byronEbBlock.getCbor();
+        if (cborHex == null || cborHex.isEmpty()) {
+            log.debug("No CBOR data available for Byron EB block {} (YaciConfig.INSTANCE.setReturnBlockCbor(true) may not be set)", blockHash);
+            return;
+        }
+
+        byte[] cborData = HexUtil.decodeHexString(cborHex);
+
+        BlockCbor blockCbor = BlockCbor.builder()
+                .blockHash(blockHash)
+                .cborData(cborData)
+                .cborSize(cborData.length)
+                .slot(slot)
+                .build();
+
+        blockCborStorage.save(blockCbor);
     }
 }

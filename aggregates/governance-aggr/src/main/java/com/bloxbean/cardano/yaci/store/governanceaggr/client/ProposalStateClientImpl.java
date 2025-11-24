@@ -75,9 +75,4 @@ public class ProposalStateClientImpl implements ProposalStateClient {
             return proposalMapper.toGovActionProposal(govActionProposal);
         }
     }
-
-    @Override
-    public Optional<Integer> getLatestEpochWithStatusBefore(List<GovActionStatus> statusList, int epoch) {
-        return govActionProposalStatusStorage.findLatestEpochWithStatusBefore(statusList, epoch);
-    }
 }

@@ -25,6 +25,8 @@ public class GovernanceAggrStoreAutoConfiguration {
         governanceAggrProperties.setEnabled(properties.getGovernanceAggr().isEnabled());
         governanceAggrProperties.setDevnetConwayBootstrapAvailable(properties.getGovernanceAggr().isDevnetConwayBootstrapAvailable());
 
+        governanceAggrProperties.setDrepDistWorkMem(properties.getGovernanceAggr().getDrepDistWorkMem());
+
         return governanceAggrProperties;
     }
 }

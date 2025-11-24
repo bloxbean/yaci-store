@@ -4,6 +4,16 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * The DrepDataComparator class is responsible for comparing distributed representative (drep)
@@ -15,14 +25,30 @@ public class DrepDataComparator {
     static int startEpoch = 740;
     static int endEpoch = 902;
 
+    private static final Path LOG_DIR = Paths.get("logs");
+    private static final DateTimeFormatter LOG_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final String RUN_TS = LocalDateTime.now().format(LOG_TS_FORMAT);
+    private static final Path LOG_FILE = LOG_DIR.resolve("drep_dist_compare-" + RUN_TS + ".log");
+
+    static {
+        try {
+            if (!Files.exists(LOG_DIR)) Files.createDirectories(LOG_DIR);
+            if (!Files.exists(LOG_FILE)) Files.createFile(LOG_FILE);
+            logLine("===== Start DrepDist comparison run =====");
+            logLine("Log file: " + LOG_FILE.toAbsolutePath());
+        } catch (IOException e) {
+            System.err.println("Failed to initialize log file: " + e.getMessage());
+        }
+    }
+
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     // Utility function to convert a byte array to a hex string.
     private static String bytesToHex(byte[] bytes) {
@@ -43,7 +69,7 @@ public class DrepDataComparator {
         return hash.toLowerCase();
     }
 
-    public static void compareDrepDistData(int epoch) {
+    public static int compareDrepDistData(int epoch) {
         String dbSyncQuery = "SELECT dh.raw, d.amount, dh.view FROM drep_distr d " +
                 "INNER JOIN drep_hash dh ON dh.id = d.hash_id " +
                 "WHERE d.epoch_no = ?";
@@ -86,7 +112,7 @@ public class DrepDataComparator {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logErrorToFile("DB Sync query error for epoch " + epoch, e);
         }
 
         // Query Indexer (yaci-store)
@@ -117,13 +143,14 @@ public class DrepDataComparator {
 
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logErrorToFile("Yaci Store query error for epoch " + epoch, e);
         }
 
         boolean mismatch = false;
+        int mismatchCount = 0; // track number of mismatches for this epoch
 
         // Compare the results between DB Sync and Indexer.
-        System.out.println("Comparing results:");
+        logLine("Comparing results:");
         for (Map.Entry<String, BigDecimal> entry : dbSyncResults.entrySet()) {
             String hash = entry.getKey();
             BigDecimal amountDbSync = entry.getValue();
@@ -134,13 +161,16 @@ public class DrepDataComparator {
                    // System.out.println("Match found for hash: " + hash + " - Amount: " + amountDbSync);
                 } else {
                     mismatch = true;
-                    System.out.println("Mismatch for hash: " + hash +
+                    mismatchCount++;
+                    logLine("Mismatch for hash: " + hash +
                             " - DB Sync Amount: " + amountDbSync + ", Indexer Amount: " + amountIndexer);
-                    System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
+                    logLine("DRep Id: " + drepHashToIdMap.get(hash));
                 }
             } else {
-                System.out.println("Hash " + hash + " found in DB Sync but not in Indexer -- amount : " + amountDbSync);
-                System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
+                mismatch = true;
+                mismatchCount++;
+                logLine("Hash " + hash + " found in DB Sync but not in Indexer -- amount : " + amountDbSync);
+                logLine("DRep Id: " + drepHashToIdMap.get(hash));
             }
         }
 
@@ -148,8 +178,9 @@ public class DrepDataComparator {
         for (String hash : indexerResults.keySet()) {
             if (!dbSyncResults.containsKey(hash)) {
                 mismatch = true;
-                System.out.println("Hash " + hash + " found in Indexer but not in DB Sync -- amount : " + indexerResults.get(hash));
-                System.out.println("DRep Id: " + drepHashToIdMap.get(hash));
+                mismatchCount++;
+                logLine("Hash " + hash + " found in Indexer but not in DB Sync -- amount : " + indexerResults.get(hash));
+                logLine("DRep Id: " + drepHashToIdMap.get(hash));
             }
         }
 
@@ -158,7 +189,8 @@ public class DrepDataComparator {
             // System.out.println("Match found for abstain amount: " + dbSyncAbstainAmount);
         } else {
             mismatch = true;
-            System.out.println("Mismatch for abstain amount: DB Sync Amount: " + dbSyncAbstainAmount +
+            mismatchCount++;
+            logLine("Mismatch for abstain amount: DB Sync Amount: " + dbSyncAbstainAmount +
                     ", Indexer Amount: " + indexerAbstainAmount);
         }
 
@@ -167,25 +199,61 @@ public class DrepDataComparator {
             // System.out.println("Match found for no confidence amount: " + dbSyncNoConfidenceAmount);
         } else {
             mismatch = true;
-            System.out.println("Mismatch for no confidence amount: DB Sync Amount: " + dbSyncNoConfidenceAmount +
+            mismatchCount++;
+            logLine("Mismatch for no confidence amount: DB Sync Amount: " + dbSyncNoConfidenceAmount +
                     ", Indexer Amount: " + indexerNoConfidenceAmount);
         }
 
         if (mismatch) {
-            System.out.println("❌ There are mismatches between DB Sync and Indexer results.");
+            logLine("❌ Mismatches found: " + mismatchCount + " between DB Sync and Indexer results.");
         } else {
-            System.out.println("✅ All results match between DB Sync and Indexer.");
+            logLine("✅ All results match between DB Sync and Indexer.");
         }
+        return mismatchCount;
     }
 
     public static void main(String[] args) {
         DrepDataComparator comparator = new DrepDataComparator();
 
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
-            System.out.println("\n############ Comparing drep dist data for epoch: " + i + " ############");
-            comparator.compareDrepDistData(i);
-            System.out.println("############ Finished comparing drep dist data for epoch: " + i + " ############");
+            logLine("\n############ Comparing drep dist data for epoch: " + i + " ############");
+            int epochMismatch = comparator.compareDrepDistData(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
+            logLine("############ Finished comparing drep dist data for epoch: " + i + " ############");
         }
 
+        logLine("\n===== Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
+
+    }
+
+    private static synchronized void logLine(String message) {
+        System.out.println(message);
+        try {
+            Files.write(LOG_FILE, (message + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("Failed to write log line: " + e.getMessage());
+        }
+    }
+
+    private static synchronized void logErrorToFile(String message, Throwable t) {
+        System.err.println(message + ": " + t.getMessage());
+        try (StringWriter sw = new StringWriter(); PrintWriter pw = new PrintWriter(sw)) {
+            t.printStackTrace(pw);
+            String stack = sw.toString();
+            Files.write(LOG_FILE,
+                    (message + System.lineSeparator() + stack + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException ioe) {
+            System.err.println("Failed to write error log: " + ioe.getMessage());
+        }
     }
 }
