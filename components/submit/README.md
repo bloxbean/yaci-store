@@ -51,6 +51,12 @@ store:
       websocket:
         enabled: true
         endpoint: /ws/tx-lifecycle
+
+  # Required for TxPlan builder (QuickTx)
+  utxo:
+    enabled: true
+  epoch:
+    enabled: true
 ```
 
 ## REST API Endpoints
@@ -127,9 +133,75 @@ Get transaction lifecycle statistics.
 }
 ```
 
-## WebSocket Real-time Notifications
+### Build Unsigned Transaction from TxPlan (YAML)
 
-When WebSocket is enabled, clients can subscribe to real-time status updates.
+**POST** `/api/v1/tx/plan/build`
+
+Build an unsigned transaction from a YAML TxPlan definition using QuickTx.
+
+**Request (YAML):**
+```yaml
+version: 1.0
+context:
+  fee_payer: addr_test1qp...
+transaction:
+  - tx:
+      from: addr_test1qp...
+      intents:
+        - type: payment
+          to: addr_test1zr...
+          amount:
+            unit: lovelace
+            quantity: 5000000
+```
+
+**Response:**
+```json
+{
+  "txBodyCbor": "84a40081825820..."
+}
+```
+
+> Requires `store.cardano.ogmios-url` plus the local UTXO and Epoch modules (`store.utxo.enabled`, `store.epoch.enabled`). Signer references still require explicit addresses until a signer registry is configured.
+
+### Signer registry (experimental)
+
+Enable refs in TxPlan YAML (`from_ref`, `fee_payer_ref`, `signers`) by binding them to local accounts, remote signers, or address-only placeholders:
+
+```yaml
+store.submit.signer-registry.enabled: true
+store.submit.signer-registry.entries:
+  - ref: account://alice
+    type: account
+    scopes: [payment, stake]
+    account:
+      mnemonic: "${ALICE_MNEMONIC}"
+      account: 0
+      index: 0
+  - ref: address://treasury
+    type: address_only
+    scopes: [payment]
+    address:
+      address: addr_test1...
+  - ref: remote://ops
+    type: remote_signer
+    scopes: [payment, stake, policy]
+    remote:
+      key-id: ops-key-1
+      endpoint: ${REMOTE_SIGNER_ENDPOINT:https://remote-signer.example.com}
+      auth-token: ${REMOTE_SIGNER_TOKEN:}
+      verification-key: ${REMOTE_SIGNER_VKEY:}
+      address: ${REMOTE_SIGNER_ADDRESS:}
+```
+
+Notes:
+- `account` bindings resolve senders/fee payers and can produce signers for payment/stake/drep/committee scopes.
+- `address_only` bindings expose only an address (no signing) for build-only flows.
+- `remote_signer` delegates signing to a `RemoteSignerClient` bean; bring your own implementation (e.g., DripDropz remote-signer gRPC client) and wire it into Spring.
+
+## WebSocket Real-time Notifications (Broadcast Mode)
+
+🎯 **Broadcast Mode**: WebSocket automatically broadcasts ALL transaction status updates to all connected clients. No subscription needed!
 
 ### Connect
 
@@ -146,16 +218,9 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Subscribe to Transaction
+### Receive Status Updates (Automatic)
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'subscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
-
-### Receive Status Updates
+After connecting, you'll automatically receive ALL transaction updates:
 
 ```json
 {
@@ -170,14 +235,12 @@ ws.send(JSON.stringify({
 }
 ```
 
-### Unsubscribe
+### Benefits of Broadcast Mode
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'unsubscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
+- ✅ **Simple**: Just connect - no subscription messages needed
+- ✅ **Comprehensive**: Receive updates for all transactions in the system
+- ✅ **Perfect for**: Monitoring dashboards, audit systems, real-time displays
+- ✅ **Flexible**: Filter on client-side if you only care about specific transactions
 
 ## Architecture
 
@@ -291,4 +354,3 @@ tx.ifPresent(t -> {
 ## License
 
 Same as Yaci Store main project.
-
