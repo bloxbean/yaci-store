@@ -87,5 +87,7 @@ project(':extensions:blockfrost').projectDir = new File('extensions/blockfrost')
 include ':extensions:blockfrost:blockfrost-epoch'
 project(':extensions:blockfrost:blockfrost-epoch').projectDir = new File('extensions/blockfrost/epoch')
 
+include ':extensions:blockfrost:blockfrost-address'
+project(':extensions:blockfrost:blockfrost-address').projectDir = new File('extensions/blockfrost/address')
 
 include 'e2e-tests'
