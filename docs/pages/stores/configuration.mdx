@@ -257,6 +257,7 @@ By default, pruning is disabled for all stores. Enable pruning to automatically 
 store.utxo.pruning-enabled=true
 store.utxo.pruning.interval=600
 store.utxo.pruning-safe-blocks=2160
+store.utxo.pruning-batch-size=3000
 ```
 
 #### Transaction Pruning
@@ -265,6 +266,7 @@ store.utxo.pruning-safe-blocks=2160
 # Enable transaction pruning
 store.transaction.pruning-enabled=true
 store.transaction.pruning.interval=86400
+store.transaction.pruning-safe-slot=43200
 ```
 
 ### Transaction Witness Saving
@@ -274,13 +276,39 @@ store.transaction.pruning.interval=86400
 store.transaction.save-witness=false
 ```
 
+### Block & Transaction CBOR
+
+#### Enable CBOR bytes in transaction/block payload of Yaci
+
+```properties
+store.cardano.return-tx-body-cbor=true
+store.cardano.return-block-cbor=true
+```
+
+The above properties must be set to true as prerequisites for the following configuration.
+
+The following configs can be used to enable saving of block/transaction CBOR in the database and enable pruning (optional):
+
+```properties
+# Store and prune raw block CBOR
+store.blocks.save-cbor=false
+store.blocks.cbor-pruning-enabled=false
+store.blocks.cbor-retention-slots=43200
+
+# Store and prune raw transaction CBOR
+store.transaction.save-cbor=false
+store.transaction.cbor-pruning-enabled=false
+store.transaction.cbor-retention-slots=43200
+```
+
 #### Epoch Stake Pruning
 
 ```properties
 # Enable epoch stake pruning (for adapot module)
 store.adapot.epoch-stake-pruning-enabled=true
 store.adapot.epoch-stake-pruning-interval=86400
-store.adapot.epoch-stake-safe-epochs=4
+store.adapot.epoch-stake-safe-epochs=8
+store.adapot.epoch-stake-pruning-batch-size=3000
 ```
 
 ### Address Storage
@@ -385,6 +413,13 @@ management.endpoint.health.show-details=always
 # Logging configuration
 logging.file.name=./logs/yaci-store.log
 logging.level.com.bloxbean.cardano.yaci.store.core.service=INFO
+```
+
+### Enable Metrics in Block store
+
+```properties
+store.blocks.metrics.enabled=true
+store.blocks.metrics.update-interval=60000
 ```
 
 ## Next Steps
