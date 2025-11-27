@@ -96,6 +96,9 @@ cd yaci-store
 java -jar applications/all/build/libs/yaci-store-all-*.jar
 ```
 
+For running from source using Docker, see the guide at `docker/RUN_FROM_SOURCE.md` or:  
+https://github.com/bloxbean/yaci-store/blob/main/docker/RUN_FROM_SOURCE.md
+
 ## Pull Request Process
 
 1. **Update your branch** with the latest main branch
