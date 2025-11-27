@@ -76,8 +76,16 @@ include ':starters:epoch-aggr-spring-boot-starter'
 include ':starters:governance-aggr-spring-boot-starter'
 include ':starters:admin-spring-boot-starter'
 include ':starters:adapot-spring-boot-starter'
+include ':starters:blockfrost-spring-boot-starter'
 
-include ':extensions:utxo-rocksdb'
-include ':extensions:account-rocksdb'
+include ':extensions:storage:utxo-rocksdb'
+include ':extensions:storage:account-rocksdb'
+
+include ':extensions:blockfrost'
+project(':extensions:blockfrost').projectDir = new File('extensions/blockfrost')
+
+include ':extensions:blockfrost:blockfrost-epoch'
+project(':extensions:blockfrost:blockfrost-epoch').projectDir = new File('extensions/blockfrost/epoch')
+
 
 include 'e2e-tests'
