@@ -106,13 +106,6 @@ store.cardano.n2c-host=192.168.0.228
 store.cardano.n2c-port=31001
 ```
 
-### Include Cbor serializer (Optional)
-
-```properties
-store.cardano.return-tx-body-cbor=true 
-store.cardano.return-block-cbor=true 
-```
-
 ## Database Configuration
 
 ### H2 (Default - In-Memory / File-Based)
@@ -283,15 +276,24 @@ store.transaction.pruning-safe-slot=43200
 store.transaction.save-witness=false
 ```
 
-### Block & Transaction CBOR pruning
+### Block & Transaction CBOR
+
+#### Enable CBOR bytes in transaction/block payload of Yaci
+
+```properties
+store.cardano.return-tx-body-cbor=true
+store.cardano.return-block-cbor=true
+```
+
+The above properties must be set to true as prerequisites for the following configuration.
+
+The following configs can be used to enable saving of block/transaction CBOR in the database and enable pruning (optional):
 
 ```properties
 # Store and prune raw block CBOR
 store.blocks.save-cbor=false
 store.blocks.cbor-pruning-enabled=false
 store.blocks.cbor-retention-slots=43200
-store.blocks.metrics.enabled=true
-store.blocks.metrics.update-interval=60000
 
 # Store and prune raw transaction CBOR
 store.transaction.save-cbor=false
@@ -411,6 +413,13 @@ management.endpoint.health.show-details=always
 # Logging configuration
 logging.file.name=./logs/yaci-store.log
 logging.level.com.bloxbean.cardano.yaci.store.core.service=INFO
+```
+
+### Enable Metrics in Block store
+
+```properties
+store.blocks.metrics.enabled=true
+store.blocks.metrics.update-interval=60000
 ```
 
 ## Next Steps
