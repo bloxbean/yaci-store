@@ -13,6 +13,7 @@ public interface UtxoStorageReader {
 
     Optional<AddressUtxo> findById(String txHash, int outputIndex);
     List<AddressUtxo> findUtxoByAddress(String address, int page, int count, Order order);
+    List<AddressUtxo> findAllUtxoByAddress(String address);
     List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order);
     List<AddressUtxo> findUtxoByAddressAndAsset(String ownerAddress, String unit, int page, int count, Order order);
     List<AddressUtxo> findUtxoByPaymentCredential(String paymentCredential, int page, int count, Order order);
