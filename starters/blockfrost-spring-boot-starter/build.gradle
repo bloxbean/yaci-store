@@ -1,6 +1,7 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":extensions:blockfrost:blockfrost-epoch")
+    api project(":extensions:blockfrost:blockfrost-address")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }

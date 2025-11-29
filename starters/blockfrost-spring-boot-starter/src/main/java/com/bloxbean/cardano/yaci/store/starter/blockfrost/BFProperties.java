@@ -21,10 +21,17 @@ public class BFProperties {
         public static final class Blockfrost  {
 
             private Epoch epoch = new Epoch();
+            private Address address = new Address();
 
             @Getter
             @Setter
             public static final class Epoch {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Address {
                 private boolean enabled = true;
             }
 
