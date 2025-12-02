@@ -10,6 +10,9 @@ dependencies {
     implementation libs.hibernate.types
     
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation(libs.assertj.core)
 }
 
 publishing {

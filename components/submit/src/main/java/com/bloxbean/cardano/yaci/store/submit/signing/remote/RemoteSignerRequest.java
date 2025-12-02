@@ -12,7 +12,6 @@ public class RemoteSignerRequest {
     byte[] txBody;
     String endpoint;
     String authToken;
-    String hostPublicKey;
     String verificationKey;
     String address;
     Integer timeoutMs;

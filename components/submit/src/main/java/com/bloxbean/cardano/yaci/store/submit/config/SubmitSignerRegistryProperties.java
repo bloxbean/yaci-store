@@ -13,10 +13,11 @@ import java.util.Set;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 @ConfigurationProperties(prefix = "store.submit.signer-registry")
 public class SubmitSignerRegistryProperties {
+
     private boolean enabled;
 
     @Builder.Default
@@ -24,8 +25,8 @@ public class SubmitSignerRegistryProperties {
 
     @Data
     @Builder
-    @AllArgsConstructor
     @NoArgsConstructor
+    @AllArgsConstructor
     public static class Entry {
         private String ref;
         private SignerType type;
@@ -46,23 +47,13 @@ public class SubmitSignerRegistryProperties {
 
     @Data
     @Builder
-    @AllArgsConstructor
     @NoArgsConstructor
+    @AllArgsConstructor
     public static class AccountProperties {
-        /**
-         * Mnemonic for the local account/wallet.
-         */
         private String mnemonic;
-
-        /**
-         * Optional bech32 / hex private key material for account creation.
-         */
         private String bech32PrivateKey;
         private String rootKeyHex;
 
-        /**
-         * Derivation indexes when using mnemonic / root keys.
-         */
         @Builder.Default
         private int account = 0;
 
@@ -72,21 +63,20 @@ public class SubmitSignerRegistryProperties {
 
     @Data
     @Builder
-    @AllArgsConstructor
     @NoArgsConstructor
+    @AllArgsConstructor
     public static class AddressOnlyProperties {
         private String address;
     }
 
     @Data
     @Builder
-    @AllArgsConstructor
     @NoArgsConstructor
+    @AllArgsConstructor
     public static class RemoteSignerProperties {
         private String endpoint;
         private String authToken;
         private String keyId;
-        private String hostPublicKey;
         private String verificationKey;
         private String address;
         private Integer timeoutMs;

@@ -1,19 +1,17 @@
 package com.bloxbean.cardano.yaci.store.submit.signing;
 
-import com.bloxbean.cardano.client.exception.CborSerializationException;
+import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.function.TxSigner;
 import com.bloxbean.cardano.client.quicktx.signing.SignerBinding;
 import com.bloxbean.cardano.client.transaction.spec.Transaction;
 import com.bloxbean.cardano.client.transaction.spec.TransactionWitnessSet;
 import com.bloxbean.cardano.client.transaction.spec.VkeyWitness;
-import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.hdwallet.Wallet;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.RemoteSignerProperties;
 import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
 import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerRequest;
 import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerResponse;
-import lombok.RequiredArgsConstructor;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -23,14 +21,23 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Binding that delegates signing to an external remote-signer service.
+ * Binding that delegates signing to an external remote-signer service (HTTP in v1).
  */
-@RequiredArgsConstructor
 public class RemoteSignerBinding implements SignerBinding {
     private final String ref;
     private final Set<String> allowedScopes;
     private final RemoteSignerProperties properties;
     private final RemoteSignerClient client;
+
+    public RemoteSignerBinding(String ref,
+                               Set<String> allowedScopes,
+                               RemoteSignerProperties properties,
+                               RemoteSignerClient client) {
+        this.ref = ref;
+        this.allowedScopes = allowedScopes;
+        this.properties = properties;
+        this.client = client;
+    }
 
     @Override
     public TxSigner signerFor(String scope) {
@@ -53,12 +60,7 @@ public class RemoteSignerBinding implements SignerBinding {
     }
 
     private Transaction addRemoteWitness(String scope, Transaction tx) {
-        byte[] txBody;
-        try {
-            txBody = CborSerializationUtil.serialize(tx.getBody().serialize());
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to serialize transaction body for ref '%s'".formatted(ref), e);
-        }
+        byte[] txBody = serializeBody(tx);
 
         RemoteSignerRequest request = RemoteSignerRequest.builder()
                 .ref(ref)
@@ -67,7 +69,6 @@ public class RemoteSignerBinding implements SignerBinding {
                 .txBody(txBody)
                 .endpoint(properties.getEndpoint())
                 .authToken(properties.getAuthToken())
-                .hostPublicKey(properties.getHostPublicKey())
                 .verificationKey(properties.getVerificationKey())
                 .address(properties.getAddress())
                 .timeoutMs(properties.getTimeoutMs())
@@ -95,6 +96,14 @@ public class RemoteSignerBinding implements SignerBinding {
         tx.setWitnessSet(witnessSet);
 
         return tx;
+    }
+
+    private byte[] serializeBody(Transaction tx) {
+        try {
+            return CborSerializationUtil.serialize(tx.getBody().serialize());
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize transaction body for ref '%s'".formatted(ref), e);
+        }
     }
 
     private byte[] requireBytes(byte[] value, String name) {

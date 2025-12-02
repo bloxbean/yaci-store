@@ -30,6 +30,7 @@ public class AccountSignerBinding implements SignerBinding {
             case "drep" -> SignerProviders.drepKeySignerFrom(account);
             case "committeecold" -> SignerProviders.committeeColdKeySignerFrom(account);
             case "committeehot" -> SignerProviders.committeeHotKeySignerFrom(account);
+            case "policy" -> SignerProviders.signerFrom(account); // reuse payment key for policy if provided
             default -> throw new IllegalArgumentException("Unsupported scope '%s' for account signer".formatted(scope));
         };
     }

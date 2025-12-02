@@ -1,9 +1,8 @@
 package com.bloxbean.cardano.yaci.store.submit.signing;
 
 import com.bloxbean.cardano.client.function.TxSigner;
-import com.bloxbean.cardano.hdwallet.Wallet;
 import com.bloxbean.cardano.client.quicktx.signing.SignerBinding;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.hdwallet.Wallet;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Locale;
@@ -13,11 +12,16 @@ import java.util.Set;
 /**
  * Scoped binding that rejects scopes not present in the allowed set.
  */
-@RequiredArgsConstructor
 public class ScopedSignerBinding implements SignerBinding {
     private final String ref;
     private final SignerBinding delegate;
     private final Set<String> allowedScopes;
+
+    public ScopedSignerBinding(String ref, SignerBinding delegate, Set<String> allowedScopes) {
+        this.ref = ref;
+        this.delegate = delegate;
+        this.allowedScopes = allowedScopes;
+    }
 
     @Override
     public TxSigner signerFor(String scope) {

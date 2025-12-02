@@ -1,9 +1,8 @@
 package com.bloxbean.cardano.yaci.store.submit.signing;
 
 import com.bloxbean.cardano.client.function.TxSigner;
-import com.bloxbean.cardano.hdwallet.Wallet;
 import com.bloxbean.cardano.client.quicktx.signing.SignerBinding;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.hdwallet.Wallet;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Locale;
@@ -13,11 +12,16 @@ import java.util.Set;
 /**
  * Binding that only exposes an address (no signing). Useful for build-only flows.
  */
-@RequiredArgsConstructor
 public class AddressOnlySignerBinding implements SignerBinding {
     private final String ref;
     private final String address;
     private final Set<String> allowedScopes;
+
+    public AddressOnlySignerBinding(String ref, String address, Set<String> allowedScopes) {
+        this.ref = ref;
+        this.address = address;
+        this.allowedScopes = allowedScopes;
+    }
 
     @Override
     public TxSigner signerFor(String scope) {

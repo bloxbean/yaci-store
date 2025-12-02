@@ -8,16 +8,16 @@ import com.bloxbean.cardano.client.quicktx.signing.SignerBinding;
 import com.bloxbean.cardano.client.quicktx.signing.SignerRegistry;
 import com.bloxbean.cardano.client.quicktx.signing.SignerScopes;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.submit.signing.AddressOnlySignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.AccountSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.RemoteSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.ScopedSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.AccountProperties;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.AddressOnlyProperties;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.Entry;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.RemoteSignerProperties;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.SignerType;
+import com.bloxbean.cardano.yaci.store.submit.signing.AccountSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.signing.AddressOnlySignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.signing.RemoteSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.signing.ScopedSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -70,7 +70,6 @@ public class SignerRegistryConfiguration {
                         if (account == null) {
                             continue;
                         }
-
                         SignerBinding binding = new AccountSignerBinding(account);
                         binding = new ScopedSignerBinding(ref, binding, scopes);
                         registry.addCustom(ref, binding);
@@ -91,8 +90,8 @@ public class SignerRegistryConfiguration {
                             throw new IllegalStateException("Remote signer ref=" + ref + " configured but no RemoteSignerClient bean found");
                         }
                         RemoteSignerProperties remoteProps = entry.getRemote();
-                        if (remoteProps == null || !StringUtils.hasText(remoteProps.getKeyId())) {
-                            log.warn("Remote signer ref={} ignored: keyId missing", ref);
+                        if (remoteProps == null || !StringUtils.hasText(remoteProps.getKeyId()) || !StringUtils.hasText(remoteProps.getEndpoint())) {
+                            log.warn("Remote signer ref={} ignored: endpoint or keyId missing", ref);
                             continue;
                         }
 

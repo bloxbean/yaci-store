@@ -8,15 +8,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
-public class TxBuilderIT extends BaseE2ETest {
+public class TxBuilderSignerRegistryIT extends BaseE2ETest {
 
     private static final String SUBMIT_BASE_URL = "http://localhost:9999";
 
     @Test
-    void buildUnsignedTxFromPlan_shouldReturnTxBodyCbor() {
+    void buildTxPlan_withRemoteSignerRef_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
         waitForFunds(account0.baseAddress());
 
@@ -27,13 +28,15 @@ public class TxBuilderIT extends BaseE2ETest {
                   from: %s
                   intents:
                     - type: payment
-                      address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+                      address: %s
                       amounts:
                         - unit: lovelace
                           quantity: 2000000
-            """.formatted(account0.baseAddress());
+                  signers:
+                    - ref: remote://ops
+                      scopes: [payment]
+            """.formatted(account0.baseAddress(), account1.baseAddress());
 
-        System.out.println(txYaml);
         TxPlanResponse response = RestAssured.given()
                 .baseUri(SUBMIT_BASE_URL)
                 .contentType(ContentType.TEXT)

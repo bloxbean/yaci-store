@@ -133,13 +133,11 @@ Get transaction lifecycle statistics.
 }
 ```
 
-### Build Unsigned Transaction from TxPlan (YAML)
+## Build unsigned tx from TxPlan (QuickTx)
 
-**POST** `/api/v1/tx/plan/build`
+**POST** `/api/v1/tx/lifecycle/build`
 
-Build an unsigned transaction from a YAML TxPlan definition using QuickTx.
-
-**Request (YAML):**
+Request (YAML):
 ```yaml
 version: 1.0
 context:
@@ -155,53 +153,57 @@ transaction:
             quantity: 5000000
 ```
 
-**Response:**
+Response:
 ```json
 {
   "txBodyCbor": "84a40081825820..."
 }
 ```
 
-> Requires `store.cardano.ogmios-url` plus the local UTXO and Epoch modules (`store.utxo.enabled`, `store.epoch.enabled`). Signer references still require explicit addresses until a signer registry is configured.
+Requires Ogmios (`store.cardano.ogmios-url`) plus local UTXO and Epoch modules (`store.utxo.enabled`, `store.epoch.enabled`).
 
 ### Signer registry (experimental)
 
-Enable refs in TxPlan YAML (`from_ref`, `fee_payer_ref`, `signers`) by binding them to local accounts, remote signers, or address-only placeholders:
+Enable TxPlan `_ref` fields (`from_ref`, `fee_payer_ref`, `signers`) by binding them to accounts, address-only refs, or remote signers:
 
 ```yaml
-store.submit.signer-registry.enabled: true
-store.submit.signer-registry.entries:
-  - ref: account://alice
-    type: account
-    scopes: [payment, stake]
-    account:
-      mnemonic: "${ALICE_MNEMONIC}"
-      account: 0
-      index: 0
-  - ref: address://treasury
-    type: address_only
-    scopes: [payment]
-    address:
-      address: addr_test1...
-  - ref: remote://ops
-    type: remote_signer
-    scopes: [payment, stake, policy]
-    remote:
-      key-id: ops-key-1
-      endpoint: ${REMOTE_SIGNER_ENDPOINT:https://remote-signer.example.com}
-      auth-token: ${REMOTE_SIGNER_TOKEN:}
-      verification-key: ${REMOTE_SIGNER_VKEY:}
-      address: ${REMOTE_SIGNER_ADDRESS:}
+store:
+  submit:
+    signer-registry:
+      enabled: true
+      entries:
+        - ref: account://alice
+          type: account
+          scopes: [payment, stake]
+          account:
+            mnemonic: "${ALICE_MNEMONIC}"
+            account: 0
+            index: 0
+        - ref: address://treasury
+          type: address_only
+          scopes: [payment]
+          address:
+            address: addr_test1...
+        - ref: remote://ops
+          type: remote_signer
+          scopes: [payment, stake, policy]
+          remote:
+            endpoint: https://remote-signer.example.com
+            auth-token: ${REMOTE_SIGNER_TOKEN}
+            key-id: ops-key-1
+            verification-key: ${REMOTE_SIGNER_VKEY}
+            address: ${REMOTE_SIGNER_ADDRESS}
+            timeout-ms: 5000
 ```
 
 Notes:
-- `account` bindings resolve senders/fee payers and can produce signers for payment/stake/drep/committee scopes.
-- `address_only` bindings expose only an address (no signing) for build-only flows.
-- `remote_signer` delegates signing to a `RemoteSignerClient` bean; bring your own implementation (e.g., DripDropz remote-signer gRPC client) and wire it into Spring.
+- `account` entries produce local signers; `address_only` are build-only (no signing).
+- `remote_signer` delegates to a `RemoteSignerClient` bean; default HTTP client POSTs `{keyId, scope, txBody}` and expects `{signature, verificationKey?}`. Override the bean to integrate custom transports.
+- Dev stub: set `store.submit.stub-remote-signer.enabled=true` to expose `/stub-remote-signer/sign` (fake signature) for local testing.
 
-## WebSocket Real-time Notifications (Broadcast Mode)
+## WebSocket Real-time Notifications
 
-🎯 **Broadcast Mode**: WebSocket automatically broadcasts ALL transaction status updates to all connected clients. No subscription needed!
+When WebSocket is enabled, clients can subscribe to real-time status updates.
 
 ### Connect
 
