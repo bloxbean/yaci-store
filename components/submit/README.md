@@ -51,6 +51,12 @@ store:
       websocket:
         enabled: true
         endpoint: /ws/tx-lifecycle
+
+  # Required for TxPlan builder (QuickTx)
+  utxo:
+    enabled: true
+  epoch:
+    enabled: true
 ```
 
 ## REST API Endpoints
@@ -127,6 +133,74 @@ Get transaction lifecycle statistics.
 }
 ```
 
+## Build unsigned tx from TxPlan (QuickTx)
+
+**POST** `/api/v1/tx/lifecycle/build`
+
+Request (YAML):
+```yaml
+version: 1.0
+context:
+  fee_payer: addr_test1qp...
+transaction:
+  - tx:
+      from: addr_test1qp...
+      intents:
+        - type: payment
+          to: addr_test1zr...
+          amount:
+            unit: lovelace
+            quantity: 5000000
+```
+
+Response:
+```json
+{
+  "txBodyCbor": "84a40081825820..."
+}
+```
+
+Requires Ogmios (`store.cardano.ogmios-url`) plus local UTXO and Epoch modules (`store.utxo.enabled`, `store.epoch.enabled`).
+
+### Signer registry (experimental)
+
+Enable TxPlan `_ref` fields (`from_ref`, `fee_payer_ref`, `signers`) by binding them to accounts, address-only refs, or remote signers:
+
+```yaml
+store:
+  submit:
+    signer-registry:
+      enabled: true
+      entries:
+        - ref: account://alice
+          type: account
+          scopes: [payment, stake]
+          account:
+            mnemonic: "${ALICE_MNEMONIC}"
+            account: 0
+            index: 0
+        - ref: address://treasury
+          type: address_only
+          scopes: [payment]
+          address:
+            address: addr_test1...
+        - ref: remote://ops
+          type: remote_signer
+          scopes: [payment, stake, policy]
+          remote:
+            endpoint: https://remote-signer.example.com
+            auth-token: ${REMOTE_SIGNER_TOKEN}
+            key-id: ops-key-1
+            verification-key: ${REMOTE_SIGNER_VKEY}
+            address: ${REMOTE_SIGNER_ADDRESS}
+            timeout-ms: 5000
+```
+
+Notes:
+- `account` entries produce local signers; `address_only` are build-only (no signing).
+- `remote_signer` delegates to a `RemoteSignerClient` bean; default HTTP client POSTs `{keyId, scope, txBody}` and expects `{signature, verificationKey?}`. Override the bean to integrate custom transports.
+- Dev stub: set `store.submit.stub-remote-signer.enabled=true` to expose `/stub-remote-signer/sign` (fake signature) for local testing.
+
 ## WebSocket Real-time Notifications
 
 When WebSocket is enabled, clients can subscribe to real-time status updates.
@@ -146,16 +220,9 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Subscribe to Transaction
+### Receive Status Updates (Automatic)
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'subscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
-
-### Receive Status Updates
+After connecting, you'll automatically receive ALL transaction updates:
 
 ```json
 {
@@ -170,14 +237,12 @@ ws.send(JSON.stringify({
 }
 ```
 
-### Unsubscribe
+### Benefits of Broadcast Mode
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'unsubscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
+- ✅ **Simple**: Just connect - no subscription messages needed
+- ✅ **Comprehensive**: Receive updates for all transactions in the system
+- ✅ **Perfect for**: Monitoring dashboards, audit systems, real-time displays
+- ✅ **Flexible**: Filter on client-side if you only care about specific transactions
 
 ## Architecture
 
@@ -291,4 +356,3 @@ tx.ifPresent(t -> {
 ## License
 
 Same as Yaci Store main project.
-

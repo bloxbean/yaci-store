@@ -7,6 +7,10 @@ dependencies {
     implementation project(':starters:spring-boot-starter')
     implementation project(':starters:utxo-spring-boot-starter')
     implementation project(':starters:account-spring-boot-starter')
+    implementation project(':starters:submit-spring-boot-starter')
+    implementation project(':starters:blocks-spring-boot-starter')
+    implementation project(':starters:transaction-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
 
     //For rewards
     implementation project(':starters:adapot-spring-boot-starter')
