@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.dbutils.index.service;
 
-import com.bloxbean.cardano.yaci.core.model.Era;
-import com.bloxbean.cardano.yaci.store.dbutils.index.model.*;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackBlock;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
+import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +48,35 @@ public class RollbackService {
 
         for (RollbackConfig.TableRollbackDefinition tableDef : config.getTables()) {
             String tableName = tableDef.getName();
-            if (databaseUtils.tableExists(tableName)) {
-                String sql;
+            if (!databaseUtils.tableExists(tableName)) {
+                continue;
+            }
+
+            String sql;
+
+            if (context.isRollbackLedgerState()) {
+                // Todo: Special-case handling for ledger-state-only rollback.
+                //  For now this is implemented in code for a couple of tables (reward, adapot_jobs)
+                //  to keep the YAML rollback config simple. In the future, this behaviour could be
+                //  expressed via a small template DSL on top of RollbackConfig so that patterns like
+                //  "delete by slot with extra filters" or "update by epoch with extra filters" are
+                //  configurable without adding more hard-coded branches here. We should consider this.
+
+                // For reward table, keep 'refund' rewards and only delete non-refund rows
+                if ("reward".equalsIgnoreCase(tableName) && "DELETE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = "DELETE FROM reward WHERE slot > :slot AND type <> 'refund'";
+                }
+                // For adapot_jobs, reset status to STARTED for REWARD_CALC jobs from the rollback epoch onward
+                else if ("adapot_jobs".equalsIgnoreCase(tableName) && "UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = "UPDATE adapot_jobs SET status = 'STARTED' WHERE epoch >= :epoch AND type = 'REWARD_CALC'";
+                } else if ("UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildUpdateSql(tableDef);
+                } else if ("DELETE".equalsIgnoreCase(tableDef.getOperation())) {
+                    sql = buildDeleteSql(tableDef);
+                } else {
+                    throw new IllegalArgumentException("Invalid operation: " + tableDef.getOperation());
+                }
+            } else {
                 if ("UPDATE".equalsIgnoreCase(tableDef.getOperation())) {
                     sql = buildUpdateSql(tableDef);
                 } else if ("DELETE".equalsIgnoreCase(tableDef.getOperation())) {
@@ -55,14 +84,14 @@ public class RollbackService {
                 } else {
                     throw new IllegalArgumentException("Invalid operation: " + tableDef.getOperation());
                 }
+            }
 
-                log.info("Executing rollback on table '{}': {}", tableName, sql);
-                try {
-                    jdbcTemplate.update(sql, params);
-                } catch (Exception e) {
-                    log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
-                    failedRollbackActions.add(new TableRollbackAction(tableName, sql));
-                }
+            log.info("Executing rollback on table '{}': {}", tableName, sql);
+            try {
+                jdbcTemplate.update(sql, params);
+            } catch (Exception e) {
+                log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
+                failedRollbackActions.add(new TableRollbackAction(tableName, sql));
             }
         }
 
