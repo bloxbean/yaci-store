@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blockfrost.epoch.controller;
+package com.bloxbean.cardano.yaci.store.blockfrost.common.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.blockfrost.epoch.controller;
+package com.bloxbean.cardano.yaci.store.blockfrost.common.exception;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
