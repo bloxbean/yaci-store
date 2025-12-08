@@ -75,7 +75,7 @@ public class TransactionPruningService {
             cursorService.getCursor().ifPresent(cursor -> {
                 log.info("Current cursor: {}", cursor.getBlock());
 
-                var slot = cursor.getSlot() - transactionStoreProperties.getPruningSafeSlot();
+                var slot = cursor.getSlot() - transactionStoreProperties.getPruningSafeSlots();
                 if (slot > 0) {
                     long t1 = System.currentTimeMillis();
                     var deleteTxCount =

@@ -25,11 +25,11 @@ public class TransactionStoreAutoConfiguration {
 
         transactionStoreProperties.setPruningEnabled(properties.getTransaction().isPruningEnabled());
         transactionStoreProperties.setPruningInterval(properties.getTransaction().getPruningInterval());
-        transactionStoreProperties.setPruningSafeSlot(properties.getTransaction().getPruningSafeSlot());
+        transactionStoreProperties.setPruningSafeSlots(properties.getTransaction().getPruningSafeSlots());
         transactionStoreProperties.setSaveWitness(properties.getTransaction().isSaveWitness());
         transactionStoreProperties.setSaveCbor(properties.getTransaction().isSaveCbor());
         transactionStoreProperties.setCborPruningEnabled(properties.getTransaction().isCborPruningEnabled());
-        transactionStoreProperties.setCborRetentionSlots(properties.getTransaction().getCborRetentionSlots());
+        transactionStoreProperties.setCborPruningSafeSlots(properties.getTransaction().getCborPruningSafeSlots());
 
         return transactionStoreProperties;
     }

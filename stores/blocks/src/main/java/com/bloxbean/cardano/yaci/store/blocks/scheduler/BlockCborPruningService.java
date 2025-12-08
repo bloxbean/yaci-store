@@ -38,9 +38,9 @@ public class BlockCborPruningService {
     @PostConstruct
     public void init() {
         log.info("<< Block CBOR Pruning Service Enabled >>");
-        log.info("   Retention: {} slots (~{} days)", 
-                blocksStoreProperties.getCborRetentionSlots(),
-                blocksStoreProperties.getCborRetentionSlots() / 86400);
+        log.info("   Retention: {} slots (~{} days)",
+                blocksStoreProperties.getCborPruningSafeSlots(),
+                blocksStoreProperties.getCborPruningSafeSlots() / 86400);
     }
 
     @Scheduled(fixedRateString = "${store.blocks.cbor-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS)
@@ -78,7 +78,7 @@ public class BlockCborPruningService {
             cursorService.getCursor().ifPresent(cursor -> {
                 log.info("Current cursor for CBOR pruning: block={}, slot={}", cursor.getBlock(), cursor.getSlot());
 
-                long retentionSlots = blocksStoreProperties.getCborRetentionSlots();
+                long retentionSlots = blocksStoreProperties.getCborPruningSafeSlots();
                 long pruneBeforeSlot = cursor.getSlot() - retentionSlots;
                 
                 if (pruneBeforeSlot > 0) {
