@@ -4,6 +4,8 @@ package com.bloxbean.cardano.yaci.store.api.governanceaggr.controller;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.ProposalApiService;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -38,6 +40,18 @@ public class ProposalController {
                                                        @PathVariable int index) {
 
         return proposalApiService.getProposalById(txHash, index)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/proposals/gov-action-id/{govActionId}")
+    @Operation(description = "Get proposal by CIP-129 bech32 governance action ID",
+               summary = "Get proposal by CIP-129 gov_action_id")
+    public ResponseEntity<ProposalDto> getProposalByGovActionId(
+            @Parameter(description = "CIP-129 governance action ID in bech32 format", required = true, example = "gov_action1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+            @PathVariable String govActionId) {
+
+        return proposalApiService.getProposalByGovActionId(govActionId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

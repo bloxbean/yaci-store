@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.governanceaggr.dto;
 
+import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,4 +43,13 @@ public class ProposalDto {
     private Long blockNumber;
 
     private Long blockTime;
+
+    /**
+     * Get CIP-129 compliant governance action ID in bech32 format.
+     * This is a computed field derived from txHash and index.
+     * @return The governance action ID (e.g., "gov_action1...")
+     */
+    public String getGovActionId() {
+        return GovUtil.toGovActionIdBech32(txHash, index);
+    }
 }
