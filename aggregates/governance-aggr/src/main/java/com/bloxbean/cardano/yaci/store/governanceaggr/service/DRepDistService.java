@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsU
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDelegationExclusion;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
@@ -57,6 +58,7 @@ public class DRepDistService {
     private final AdaPotJobStorage adaPotJobStorage;
     private final GovernanceAggrProperties governanceAggrProperties;
     private final PartitionManager partitionManager;
+    private final DRepDelegationExclusionProvider dRepDelegationExclusionProvider;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -70,6 +72,9 @@ public class DRepDistService {
 
         // Ensure partition exists for this epoch before taking snapshot
         partitionManager.ensureDRepDistPartition(currentEpoch);
+
+        List<DRepDelegationExclusion> delegationExclusions = dRepDelegationExclusionProvider
+                .getExclusionsForNetwork(storeProperties.getProtocolMagic());
 
         boolean isInBootstrapPhase = true;
         int maxBootstrapPhaseEpoch = 0;
@@ -441,6 +446,8 @@ public class DRepDistService {
             """;
         }
 
+        String hardcodedDelegationExclusionCondition = buildDelegationExclusionCondition(delegationExclusions);
+
         String query1 = """
                   INSERT INTO drep_dist               
                   select
@@ -481,7 +488,7 @@ public class DRepDistService {
                                                  )
                   where
                     sd.address IS NULL
-                    """ + excludeDelegationCondition + """
+                    """ + excludeDelegationCondition + hardcodedDelegationExclusionCondition + """
                   group by
                     rd.drep_hash,
                     rd.drep_type,
@@ -540,6 +547,8 @@ public class DRepDistService {
             params.addValue("max_bootstrap_phase_epoch", maxBootstrapPhaseEpoch);
         }
 
+        addDelegationExclusionParams(params, delegationExclusions);
+
         long t1 = System.currentTimeMillis();
         jdbcTemplate.update(query1, params);
         jdbcTemplate.update(query2, params);
@@ -571,6 +580,63 @@ public class DRepDistService {
         log.info("DRep Stake Distribution snapshot for epoch : {} is taken", currentEpoch);
         log.info(">>>>>>>>>>>>>>>>>>>> DRep Stake Distribution Stake Snapshot taken for epoch : {} <<<<<<<<<<<<<<<<<<<<", currentEpoch);
         log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", currentEpoch, (t2 - t1));
+    }
+
+    private String buildDelegationExclusionCondition(List<DRepDelegationExclusion> exclusions) {
+        if (exclusions == null || exclusions.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder condition = new StringBuilder();
+        condition.append("\n                    and not (");
+
+        for (int i = 0; i < exclusions.size(); i++) {
+            DRepDelegationExclusion exclusion = exclusions.get(i);
+
+            if (i > 0) {
+                condition.append(" or");
+            }
+
+            condition.append(" (rd.address = :excl_address_").append(i)
+                    .append(" and rd.drep_hash = :excl_drep_hash_").append(i)
+                    .append(" and rd.drep_type = :excl_drep_type_").append(i);
+
+            if (exclusion.getSlot() != null) {
+                condition.append(" and rd.slot= :excl_slot_").append(i);
+            }
+
+            if (exclusion.getTxIndex() != null) {
+                condition.append(" and rd.tx_index = :excl_tx_index_").append(i);
+            }
+
+            if (exclusion.getCertIndex() != null) {
+                condition.append(" and rd.cert_index = :excl_cert_index_").append(i);
+            }
+
+            condition.append(")");
+        }
+
+        condition.append(")");
+        return condition.toString();
+    }
+
+    private void addDelegationExclusionParams(MapSqlParameterSource params, List<DRepDelegationExclusion> exclusions) {
+        if (exclusions == null || exclusions.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < exclusions.size(); i++) {
+            DRepDelegationExclusion exclusion = exclusions.get(i);
+
+            params.addValue("excl_address_" + i, exclusion.getAddress());
+            params.addValue("excl_drep_hash_" + i, exclusion.getDrepHash());
+             if (exclusion.getDrepType() != null) {
+                 params.addValue("excl_drep_type_" + i, exclusion.getDrepType().name());
+             }
+            params.addValue("excl_slot_" + i, exclusion.getSlot());
+            params.addValue("excl_tx_index_" + i, exclusion.getTxIndex());
+            params.addValue("excl_cert_index_" + i, exclusion.getCertIndex());
+        }
     }
 
     private boolean isPublicNetwork() {
