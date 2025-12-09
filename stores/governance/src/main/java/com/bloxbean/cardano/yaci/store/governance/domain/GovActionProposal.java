@@ -47,9 +47,12 @@ public class GovActionProposal extends BlockAwareDomain {
     /**
      * Get CIP-129 compliant governance action ID in bech32 format.
      * This is a computed field derived from txHash and index.
-     * @return The governance action ID (e.g., "gov_action1...")
+     * @return The governance action ID (e.g., "gov_action1..."), or null if txHash is null
      */
     public String getGovActionId() {
+        if (txHash == null) {
+            return null;
+        }
         return GovUtil.toGovActionIdBech32(txHash, (int) index);
     }
 }
