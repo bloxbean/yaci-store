@@ -1,0 +1,84 @@
+import { Callout } from 'nextra/components'
+
+# Admin CLI Overview
+
+The Yaci Store Admin CLI is a command-line interface tool designed for database administration and maintenance tasks. It provides essential commands for managing indexes and performing rollback operations on your Yaci Store database.
+
+## What is Admin CLI?
+
+Admin CLI is a Spring Shell-based application that allows you to:
+
+- **Manage Database Indexes**: Apply and verify database indexes for optimal read performance
+- **Rollback Data**: Safely rollback your database to a previous epoch when needed
+- **Database Maintenance**: Perform various database maintenance operations
+
+## Key Features
+
+### 1. Index Management
+- Apply default indexes required for read operations
+- Apply optional extra indexes for enhanced performance
+- Verify existing indexes and identify missing ones
+
+### 2. Rollback Operations
+- Rollback all data to a specific epoch
+- Rollback ledger state data independently
+- Configurable rollback behavior through YAML files
+- Safety validations and pruning warnings
+
+## When to Use Admin CLI
+
+### Index Management Scenarios
+- After initial database sync to optimize read performance
+- When adding new stores or modules that require additional indexes
+- During performance tuning and optimization
+
+### Rollback Scenarios
+- **Chain Reorganization**: When the Cardano blockchain experiences a reorganization
+- **Data Correction**: When you need to resync from a specific point due to data inconsistencies
+- **Testing & Development**: Rolling back to test different scenarios
+- **Recovery**: Recovering from sync errors or corrupted data
+
+<Callout type="warning">
+Always backup your database before performing rollback operations. Rollback is a destructive operation and cannot be undone without a backup.
+</Callout>
+
+## Prerequisites
+
+Before using Admin CLI, ensure you have:
+
+1. **Java 21 or higher** installed
+2. **Yaci Store database** properly configured and synced
+3. **Database access credentials** configured in `application.yml` or `application.properties`
+4. **Understanding of Cardano concepts**: epochs, slots, and blocks
+
+## Available Commands
+
+The Admin CLI provides the following command groups:
+
+### Database Commands (`db` group)
+
+| Command | Description |
+|---------|-------------|
+| `apply-indexes` | Apply default indexes for read operations |
+| `apply-extra-indexes` | Apply additional optional indexes |
+| `verify-indexes` | List missing indexes |
+| `rollback-data` | Rollback data to a previous epoch |
+| `rollback-ledger-state-data` | Rollback ledger state data to a previous epoch |
+
+## Getting Started
+
+To use the Admin CLI, you'll need to:
+
+1. Build or download the Admin CLI application
+2. Configure your database connection
+3. Run the application in interactive mode or with specific commands
+
+For detailed information on each command, see:
+- [Rollback Operations](/admin-cli/rollback) - Comprehensive guide on rollback commands
+- [Index Management](/admin-cli/commands) - Guide on managing database indexes
+
+## Next Steps
+
+- Learn about [Rollback Operations](/admin-cli/rollback)
+- Understand [Database Index Management](/admin-cli/commands)
+- Review [Configuration Options](/stores/configuration)

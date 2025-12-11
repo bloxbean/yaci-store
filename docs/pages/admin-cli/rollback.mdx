@@ -1,0 +1,600 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# Rollback Operations
+
+This guide provides comprehensive information about rollback operations in Yaci Store Admin CLI. Rollback allows you to revert your database to a previous state when needed.
+
+## Overview
+
+Yaci Store Admin CLI provides two rollback commands:
+
+1. **`rollback-data`**: Rolls back all store data to a specific epoch
+2. **`rollback-ledger-state-data`**: Rolls back only ledger state data (rewards, epoch stakes, etc.)
+
+Both commands allow you to safely revert your database to a previous epoch, useful for handling chain reorganizations, data corrections, or testing scenarios.
+
+<Callout type="warning">
+**Important**: Always backup your database before performing any rollback operation. Rollback is a destructive operation that permanently deletes data and cannot be undone without a backup.
+</Callout>
+
+## Prerequisites
+
+Before performing a rollback:
+
+1. **Backup Your Database**: Create a complete backup of your database
+2. **Stop Sync Process**: Ensure the sync process is stopped
+3. **Understand Impact**: Know which data will be affected
+4. **Check Pruning Status**: Verify if pruning is enabled (see [Pruning Warnings](#pruning-warnings))
+
+## Commands Reference
+
+### rollback-data
+
+Rolls back all store data to a specified epoch.
+
+#### Syntax
+
+```bash
+rollback-data --epoch <epoch_number> [options]
+```
+
+#### Required Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `--epoch` | Target epoch to rollback to (must be valid and ≤ current max epoch) | `--epoch 500` |
+
+#### Optional Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--event-publisher-id` | `1` | Event Publisher ID for tracking rollback events |
+| `--rollback-files` | `rollback.yml` | Comma-separated list of rollback YAML configuration files |
+
+#### Manual Rollback Point Parameters
+
+<Callout type="info">
+These parameters should **only** be used when the `block` table is not available in your database. If you provide these when the block table exists, the command will fail with a validation error.
+</Callout>
+
+| Parameter | Description | Required When |
+|-----------|-------------|---------------|
+| `--block` | Block number for rollback point | Block table not available |
+| `--block-hash` | Block hash for rollback point | Block table not available |
+| `--slot` | Slot number for rollback point | Block table not available |
+| `--era` | Era for rollback point | Block table not available |
+
+#### Examples
+
+**Basic rollback to epoch 500:**
+```bash
+rollback-data --epoch 500
+```
+
+**Rollback with custom event publisher ID:**
+```bash
+rollback-data --epoch 500 --event-publisher-id 100
+```
+
+**Rollback with custom configuration files:**
+```bash
+rollback-data --epoch 500 --rollback-files "custom-rollback.yml,extra-rollback.yml"
+```
+
+**Manual rollback point (when block table is not available):**
+```bash
+rollback-data --epoch 500 \
+  --block 10537200 \
+  --block-hash "a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c" \
+  --slot 76667163 \
+  --era 3
+```
+
+#### What Gets Rolled Back
+
+When you run `rollback-data`, the following data is deleted for all slots/epochs greater than the target:
+
+**Core Store Data:**
+- Blocks and block CBOR
+- Transactions, transaction CBOR, and transaction witnesses
+- Transaction inputs, outputs, and UTXOs
+- Assets (minting/burning events)
+- Transaction metadata
+- Scripts and script transactions
+
+**Staking Data:**
+- Stake registrations and delegations
+- Pool registrations and retirements
+- Pool information
+- Withdrawals
+
+**Governance Data:**
+- Governance action proposals
+- Voting procedures
+- DRep registrations
+- Committee registrations and deregistrations
+- Committee members and state
+- Constitution updates
+- Delegation votes
+
+**Epoch Data:**
+- Protocol parameter proposals
+- Epoch parameters
+- Cost models
+
+**Aggregate Data (if enabled):**
+- Address balances
+- Stake address balances
+- Address transaction amounts
+- Epoch stakes
+- Rewards and reward rest
+- DRep distribution
+
+### rollback-ledger-state-data
+
+Rolls back only ledger state aggregation data, specifically designed for the ledger-state application profile.
+
+#### Syntax
+
+```bash
+rollback-ledger-state-data --epoch <epoch_number>
+```
+
+#### Parameters
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `--epoch` | Target epoch to rollback to | Yes |
+
+#### Example
+
+```bash
+rollback-ledger-state-data --epoch 500
+```
+
+#### What Gets Rolled Back
+
+This command performs a **safe ledger-state rollback** on the following tables:
+
+**Ledger State Data:**
+- `adapot`: Staking pool aggregate data
+- `adapot_jobs`: Job status records (updates to 'STARTED' state)
+- `epoch_stake`: Epoch stake snapshots
+- `reward`: Reward records
+- `reward_rest`: Remaining reward records
+- `unclaimed_reward_rest`: Unclaimed rewards
+- `drep_dist`: DRep stake distribution
+- `gov_action_proposal_status`: Governance proposal statuses
+- `epoch_param`: Epoch parameters
+- `gov_epoch_activity`: Governance epoch activities
+- `committee_state`: Committee state records
+
+<Callout type="info">
+The `rollback-ledger-state-data` command is specifically designed to safely rollback ledger state data without affecting core blockchain data. It also updates `adapot_jobs` status to allow re-processing.
+</Callout>
+
+## Configuration
+
+### Rollback YAML Files
+
+Rollback behavior is defined in YAML configuration files that specify which tables to rollback and how.
+
+#### Default Configuration Files
+
+1. **`rollback.yml`**: Defines rollback for all store tables
+2. **`rollback-ledger-state.yml`**: Defines rollback for ledger state tables only
+
+These files are located in the `dbutils` component resources.
+
+#### YAML Structure
+
+```yaml
+rollback:
+  tables:
+    - name: "table_name"
+      operation: "DELETE"  # or "UPDATE"
+      condition:
+        type: "slot"       # or "epoch"
+        column: "slot"     # column name to check
+        operator: ">"      # comparison operator
+        offset: 0          # optional offset
+      update_set:          # only for UPDATE operations
+        - column: "status"
+          value: "'STARTED'"
+```
+
+#### Configuration Fields
+
+| Field | Description | Values |
+|-------|-------------|--------|
+| `name` | Table name to rollback | Any valid table name |
+| `operation` | Type of rollback operation | `DELETE`, `UPDATE` |
+| `condition.type` | Type of condition check | `slot`, `epoch` |
+| `condition.column` | Column to check in WHERE clause | Column name |
+| `condition.operator` | Comparison operator | `>`, `≥`, `<`, `≤`, `=` |
+| `condition.offset` | Offset to apply to rollback point | Integer (optional) |
+| `update_set` | Columns to update (for UPDATE) | Array of column-value pairs |
+
+#### Example: Custom Rollback Configuration
+
+```yaml
+rollback:
+  tables:
+    # Delete all blocks after rollback slot
+    - name: "block"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    # Delete epoch stakes for current and future epochs
+    - name: "epoch_stake"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+        offset: -1
+
+    # Update job status to allow reprocessing
+    - name: "adapot_jobs"
+      operation: "UPDATE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+      update_set:
+        - column: "status"
+          value: "'STARTED'"
+```
+
+### Application Properties
+
+You can configure rollback behavior in `application.yml` or `application.properties`:
+
+```properties
+# Rollback configuration
+store.admin-cli.db.rollback.rollback-files=rollback.yml
+
+# Manual rollback point configuration (use only when block table is not available)
+# store.admin-cli.db.rollback.point.block=10537200
+# store.admin-cli.db.rollback.point.block-hash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c
+# store.admin-cli.db.rollback.point.slot=76667163
+# store.admin-cli.db.rollback.point.era=3
+```
+
+<Callout type="warning">
+The manual rollback point configuration should be commented out by default and only used in special cases where the block table is not available.
+</Callout>
+
+## Pruning Warnings
+
+If any pruning feature is enabled, Admin CLI will display comprehensive warnings before performing rollback. Pruning can limit your ability to rollback safely.
+
+### Types of Pruning
+
+#### 1. UTXO Pruning
+
+**Configuration:**
+```properties
+store.utxo.pruning-enabled=true
+store.utxo.pruning-safe-blocks=2160
+```
+
+**Impact on Rollback:**
+- Historical UTXOs may have been permanently deleted
+- Can only rollback to points AFTER the last pruning operation
+- Rollback limited to: (last pruned slot + safe blocks + 1)
+
+#### 2. Transaction Pruning
+
+**Configuration:**
+```properties
+store.transaction.pruning-enabled=true
+```
+
+**Impact on Rollback:**
+- Transaction and witness records may have been deleted
+- Historical transaction data may be incomplete after rollback
+- Cannot fully restore transactions that were pruned
+
+#### 3. Reward Pruning
+
+**Configuration:**
+```properties
+store.adapot.reward-pruning-enabled=true
+store.adapot.reward-pruning-safe-slots=43200
+```
+
+**Impact on Rollback:**
+- Withdrawn reward records may have been pruned
+- Reward history may be incomplete after rollback
+- Only withdrawn rewards are pruned (unwithdrawn rewards remain)
+
+#### 4. Epoch Stake Pruning
+
+**Configuration:**
+```properties
+store.adapot.epoch-stake-pruning-enabled=true
+store.adapot.epoch-stake-safe-epochs=4
+```
+
+**Impact on Rollback:**
+- Old epoch stake records may have been deleted
+- Stake snapshots may be incomplete for old epochs
+- Can only rollback to recent epochs (within safe epoch range)
+
+#### 5. Account Balance Pruning
+
+**Configuration:**
+```properties
+store.account.pruning-enabled=true
+```
+
+**Impact on Rollback:**
+- Historical address and stake balance records may have been pruned
+- Balance history may be incomplete after rollback
+- Account aggregation may fail after rollback
+
+### Pruning Warning Example
+
+When pruning is enabled, you'll see warnings like this:
+
+```
+⚠️  WARNING: DATA PRUNING IS ENABLED ⚠️
+
+- UTXO Pruning (store.utxo.pruning-enabled=true)
+  → Historical UTXOs may have been pruned
+  → Rollback limited to last pruning point + 1
+
+- Transaction Pruning (store.transaction.pruning-enabled=true)
+  → Transaction and witness records may have been deleted
+  → Historical transaction data may be incomplete after rollback
+
+ROLLBACK RISKS:
+1. Historical data needed for rollback may have been permanently deleted
+2. Application may fail to start after rollback due to missing data
+3. You can only safely rollback to points AFTER the last pruning operation
+4. Consider disabling pruning before performing rollbacks
+```
+
+## Validation and Safety Checks
+
+Admin CLI performs several validation checks before executing rollback:
+
+### 1. Epoch Validation
+
+The rollback epoch must:
+- Be greater than 0
+- Be less than or equal to the current maximum epoch in the database
+
+**Error message if invalid:**
+```
+Epoch 999 is not a valid rollback epoch. The rollback epoch must be
+less than or equal to the current max epoch in the database and greater than 0.
+```
+
+### 2. Mutually Exclusive Options Validation
+
+Manual rollback point parameters (`--block`, `--block-hash`, `--slot`, `--era`) should NOT be used when the block table is available.
+
+**Error message if violated:**
+```
+Error: Manual rollback point information should not be provided when block table is available.
+You provided epoch=500 and manual rollback point information, but block table exists in the database.
+Please use epoch-based rollback instead:
+rollback-data --epoch 500
+
+Note: Manual rollback point is only needed when block table is not available in the database.
+```
+
+### 3. Rollback Action Verification
+
+Before executing rollback, Admin CLI verifies:
+- All configured tables exist in the database
+- Rollback SQL statements are valid
+- Configuration files are properly formatted
+
+## How Rollback Works
+
+### Process Flow
+
+1. **Validation Phase**
+   - Validate epoch parameter
+   - Check mutually exclusive options
+   - Verify pruning configuration
+   - Load and parse rollback YAML configuration
+
+2. **Verification Phase**
+   - Verify all tables exist
+   - Validate rollback actions
+   - Check SQL statement validity
+
+3. **Execution Phase**
+   - Determine rollback point (slot, block hash, era)
+   - Generate DELETE/UPDATE SQL statements based on configuration
+   - Execute rollback actions in order
+   - Track success/failure for each table
+
+4. **Completion**
+   - Report success or failed actions
+   - Update event publisher state if applicable
+
+### Rollback Point Determination
+
+**With Block Table (Normal Case):**
+- Query the block table to find the last block of the target epoch
+- Extract: slot, block number, block hash, and era
+- Use these values for all table rollback conditions
+
+**Without Block Table (Manual Case):**
+- Use provided `--block`, `--block-hash`, `--slot`, `--era` parameters
+- Or use configuration from `application.properties`
+- Must provide all required parameters for proper rollback
+
+### SQL Generation
+
+Based on the YAML configuration, Admin CLI generates SQL statements:
+
+**For DELETE operations:**
+```sql
+DELETE FROM table_name
+WHERE column_name > rollback_slot
+```
+
+**For UPDATE operations:**
+```sql
+UPDATE table_name
+SET status = 'STARTED'
+WHERE epoch >= rollback_epoch
+```
+
+**With offset:**
+```sql
+DELETE FROM epoch_stake
+WHERE epoch >= (rollback_epoch - 1)
+```
+
+## Common Use Cases
+
+### Use Case 1: Chain Reorganization
+
+When the Cardano network experiences a chain reorganization:
+
+```bash
+# Find the safe epoch before the fork
+# Rollback to that epoch
+rollback-data --epoch 450
+
+# Restart sync to follow the correct chain
+```
+
+### Use Case 2: Data Correction
+
+When you need to resync from a specific point due to sync errors:
+
+```bash
+# Rollback to the last known good epoch
+rollback-data --epoch 480
+
+# Fix configuration or code issues
+# Restart sync
+```
+
+### Use Case 3: Ledger State Re-computation
+
+When only ledger state data needs reprocessing:
+
+```bash
+# Rollback ledger state to re-calculate rewards and stakes
+rollback-ledger-state-data --epoch 500
+
+# The adapot_jobs will be reset to STARTED
+# Restart application to reprocess ledger state
+```
+
+### Use Case 4: Testing Different Scenarios
+
+In development or testing environments:
+
+```bash
+# Test scenario from epoch 400
+rollback-data --epoch 400
+
+# Run tests
+# Rollback again to test different code paths
+rollback-data --epoch 350
+```
+
+## Best Practices
+
+### 1. Always Backup Before Rollback
+
+```bash
+# PostgreSQL backup
+pg_dump -h localhost -U username -d yaci_store > backup_before_rollback_$(date +%Y%m%d_%H%M%S).sql
+
+# MySQL backup
+mysqldump -h localhost -u username -p yaci_store > backup_before_rollback_$(date +%Y%m%d_%H%M%S).sql
+```
+
+### 2. Disable Pruning Before Rollback
+
+If possible, disable all pruning before performing rollback:
+
+```properties
+# Disable all pruning
+store.utxo.pruning-enabled=false
+store.transaction.pruning-enabled=false
+store.adapot.reward-pruning-enabled=false
+store.adapot.epoch-stake-pruning-enabled=false
+store.account.pruning-enabled=false
+```
+
+### 3. Test Rollback in Non-Production First
+
+Always test rollback procedures in a development or staging environment before running in production.
+
+### 4. Verify Indexes After Rollback
+
+After rollback, verify that all required indexes are still present:
+
+```bash
+verify-indexes
+```
+
+If indexes are missing, reapply them:
+
+```bash
+apply-indexes
+```
+
+### 5. Document Your Rollback
+
+Keep a record of:
+- Why rollback was needed
+- Target epoch chosen
+- Timestamp of rollback
+- Any issues encountered
+- Time to resync after rollback
+
+### 6. Monitor Resync Progress
+
+After rollback, monitor the resync process to ensure it completes successfully:
+
+- Check application logs
+- Monitor database size
+- Verify data integrity
+- Compare with known checkpoints
+
+### 7. Understand Rollback Limits with Pruning
+
+If pruning is enabled, know your safe rollback window:
+
+```
+Safe Rollback Epoch = Current Epoch - (Pruning Interval in Epochs)
+```
+
+Only rollback within this safe window to avoid data loss.
+
+## Related Documentation
+
+- [Admin CLI Overview](/admin-cli/overview) - General Admin CLI information
+- [Index Management](/admin-cli/commands) - Database index commands
+- [Store Configuration](/stores/configuration) - Store configuration options
+- [Pruning Configuration](/other-configurations) - Detailed pruning settings
+
+## Summary
+
+Rollback operations in Yaci Store Admin CLI provide a powerful way to revert your database to a previous state. Key points to remember:
+
+- Always backup before rollback
+- Understand the impact of pruning on rollback capabilities
+- Use `rollback-data` for full data rollback
+- Use `rollback-ledger-state-data` for ledger state only
+- Validate your target epoch
+- Test in non-production environments first
+- Monitor the resync process after rollback
+
+With proper planning and precautions, rollback operations can safely recover your database from various issues and enable flexible testing scenarios.
