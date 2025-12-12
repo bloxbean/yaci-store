@@ -26,16 +26,16 @@ public class BlocksStoreProperties {
 
     /**
      * Enable/disable pruning of block CBOR data.
-     * When enabled, CBOR data older than cborRetentionSlots will be automatically deleted.
+     * When enabled, CBOR data older than cborPruningSafeSlots will be automatically deleted.
      */
     @Builder.Default
     private boolean cborPruningEnabled = false;
 
     /**
-     * Retention period for CBOR data in slots.
+     * Safe slot count to keep before pruning the block CBOR data.
      * Default: 43,200 slots (based on 2160 safe blocks).
      * CBOR data older than this will be pruned if cborPruningEnabled is true.
      */
     @Builder.Default
-    private int cborRetentionSlots = 43200; // 20 * 2160 slots
+    private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
 }

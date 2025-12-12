@@ -18,7 +18,7 @@ public class TransactionStoreProperties {
     private int pruningInterval = 86400;
 
     @Builder.Default
-    private int pruningSafeSlot = 43200; // 2160 blocks
+    private int pruningSafeSlots = 43200; // 2160 blocks
 
     /**
      * Enable/disable saving of transaction witnesses.
@@ -39,16 +39,16 @@ public class TransactionStoreProperties {
 
     /**
      * Enable/disable pruning of transaction CBOR data.
-     * When enabled, CBOR data older than cborRetentionSlots will be automatically deleted.
+     * When enabled, CBOR data older than cborPruningSafeSlots will be automatically deleted.
      */
     @Builder.Default
     private boolean cborPruningEnabled = false;
 
     /**
-     * Retention period for CBOR data in slots.
+     * Safe slot count to keep before pruning the transaction CBOR data.
      * Default: 43,200 slots (based on 2160 safe blocks).
      * CBOR data older than this will be pruned if cborPruningEnabled is true.
      */
     @Builder.Default
-    private int cborRetentionSlots = 43200; // 20 * 2160 slots
+    private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
 }
