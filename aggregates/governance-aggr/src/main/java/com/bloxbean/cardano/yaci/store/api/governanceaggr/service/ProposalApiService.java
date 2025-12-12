@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
@@ -95,6 +96,16 @@ public class ProposalApiService {
         ProposalDto dto = buildProposalDto(proposal, proposalStatus, votingStats);
 
         return Optional.of(dto);
+    }
+
+    /**
+     * Get proposal by CIP-129 bech32 governance action ID
+     * @param govActionIdBech32 The governance action ID in bech32 format (e.g., gov_action1...)
+     * @return Optional containing the proposal DTO if found
+     */
+    public Optional<ProposalDto> getProposalByGovActionId(String govActionIdBech32) {
+        var govActionId = GovUtil.toGovActionIdFromBech32(govActionIdBech32);
+        return getProposalById(govActionId.getTransactionId(), govActionId.getGovActionIndex());
     }
 
     private ProposalDto buildProposalDto(GovActionProposal proposal,

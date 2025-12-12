@@ -51,6 +51,17 @@ public class GovActionProposalController {
         return ResponseEntity.ok(govActionProposalService.getGovActionProposalByTx(txHash));
     }
 
+    @GetMapping("/gov-action-id/{govActionId}")
+    @Operation(description = "Get governance action proposal by CIP-129 bech32 governance action ID",
+               summary = "Get proposal by CIP-129 gov_action_id")
+    public ResponseEntity<GovActionProposal> getGovActionProposalByGovActionId(
+            @Parameter(description = "CIP-129 governance action ID in bech32 format", required = true, example = "gov_action1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+            @PathVariable String govActionId) {
+        var proposal = govActionProposalService.getGovActionProposalByGovActionId(govActionId);
+        return proposal.map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Governance Action Proposal not found"));
+    }
+
     @GetMapping("/gov-action-type/{govActionType}")
     @Operation(description = "Get governance action proposal list by governance action type")
     public ResponseEntity<List<GovActionProposal>> getGovActionProposalByGovActionType(
@@ -109,6 +120,22 @@ public class GovActionProposalController {
 
         return ResponseEntity.ok(votingProcedureService
                 .getVotingProcedureByGovActionProposalTxAndGovActionProposalIndex(txHash, indexInTx, p, count, order));
+    }
+
+    @GetMapping("/gov-action-id/{govActionId}/votes")
+    @Operation(description = "Get voting procedure list for a governance action by CIP-129 bech32 governance action ID",
+               summary = "Get votes by CIP-129 gov_action_id")
+    public ResponseEntity<List<VotingProcedure>> getVotingProceduresByGovActionId(
+            @Parameter(description = "CIP-129 governance action ID in bech32 format", required = true, example = "gov_action1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+            @PathVariable String govActionId,
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "count", defaultValue = "10") @Min(1) @Max(100) int count,
+            @RequestParam(name = "order", defaultValue = "desc") Order order) {
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return ResponseEntity.ok(votingProcedureService.getVotingProcedureByGovActionId(govActionId, p, count, order));
     }
 
     @GetMapping("/latest/gov-action-type/{govActionType}")

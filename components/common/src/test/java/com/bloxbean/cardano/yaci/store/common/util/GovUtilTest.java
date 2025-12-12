@@ -260,9 +260,54 @@ class GovUtilTest {
         assertThrows(IllegalArgumentException.class, () -> {
             GovUtil.toGovActionIdFromBech32("invalid_prefix1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf");
         });
-        
+
         assertThrows(IllegalArgumentException.class, () -> {
             GovUtil.toGovActionIdFromBech32("gov_action_wrong1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf");
+        });
+    }
+
+    @Test
+    @DisplayName("Should convert txHash and index to bech32 format")
+    void shouldConvertToGovActionIdBech32() {
+        String txHash = "0000000000000000000000000000000000000000000000000000000000000000";
+        int index = 17;
+        String expectedGovActionId = "gov_action1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzklpgpf";
+
+        String result = GovUtil.toGovActionIdBech32(txHash, index);
+
+        assertEquals(expectedGovActionId, result);
+    }
+
+    @Test
+    @DisplayName("Should perform round-trip conversion from bech32 back to txHash and index")
+    void shouldPerformRoundTripConversionFromBech32() {
+        String txHash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        int index = 42;
+
+        String bech32 = GovUtil.toGovActionIdBech32(txHash, index);
+        GovActionId result = GovUtil.toGovActionIdFromBech32(bech32);
+
+        assertEquals(txHash, result.getTransactionId());
+        assertEquals(index, result.getGovActionIndex());
+    }
+
+    @Test
+    @DisplayName("Should handle zero index in bech32 conversion")
+    void shouldHandleZeroIndexInBech32Conversion() {
+        String txHash = "1111111111111111111111111111111111111111111111111111111111111111";
+        int index = 0;
+        String expectedGovActionId = "gov_action1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygsq6dmejn";
+
+        String result = GovUtil.toGovActionIdBech32(txHash, index);
+
+        assertEquals(expectedGovActionId, result);
+    }
+
+    @Test
+    @DisplayName("Should handle null txHash in bech32 conversion")
+    void shouldHandleNullTxHashInBech32Conversion() {
+        assertThrows(Exception.class, () -> {
+            GovUtil.toGovActionIdBech32(null, 0);
         });
     }
 }
