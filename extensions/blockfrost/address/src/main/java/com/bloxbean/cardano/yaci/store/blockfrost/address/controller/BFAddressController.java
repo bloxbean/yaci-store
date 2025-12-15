@@ -32,4 +32,12 @@ public class BFAddressController {
     public BFAddressDTO getAddressInfo(@PathVariable String address) {
         return bfAddressService.getAddressInfo(address);
     }
+
+    //TODO: Need to create a new DTO to return extended information to the client.
+    @GetMapping("{address}/extended")
+    public BFAddressDTO getExtendedAddressInfo(@PathVariable String address) {
+        return bfAddressService.getAddressInfo(address);
+    }
+
+
 }
