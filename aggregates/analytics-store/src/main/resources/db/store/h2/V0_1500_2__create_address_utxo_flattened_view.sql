@@ -1,0 +1,1 @@
+-- Analytics is not supported for H2.
