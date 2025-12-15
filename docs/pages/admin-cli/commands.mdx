@@ -1,152 +1,83 @@
 import { Callout } from 'nextra/components'
 
-# Admin CLI Commands
+# Index Management Commands
 
-This guide covers all available commands in the Yaci Store Admin CLI, focusing on database index management operations.
+This guide covers database index management operations in the Yaci Store Admin CLI.
 
 ## Overview
 
 The Admin CLI provides commands for managing database indexes, which are essential for optimal read performance. All commands are organized under the `db` command group.
 
-## Index Management Commands
+## Commands
 
 ### apply-indexes
 
 Applies the default indexes required for read operations.
 
-#### Syntax
-
+**Syntax:**
 ```bash
 apply-indexes [--skip-extra-indexes]
 ```
 
-#### Parameters
+**Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `--skip-extra-indexes` | boolean | `false` | Skip applying additional optional indexes |
 
-#### Behavior
-
-This command applies indexes defined in two configuration files:
-
-1. **`index.yml`**: Default required indexes for read operations
-2. **`extra-index.yml`**: Additional optional indexes (unless `--skip-extra-indexes` is set)
-
-The command will:
-- Load index definitions from YAML files
-- Create indexes that don't already exist
-- Report success or failure for each index
-- Skip indexes that already exist
-
-#### Examples
-
-**Apply all indexes (default + extra):**
+**Examples:**
 ```bash
+# Apply all indexes (default + extra)
 apply-indexes
-```
 
-**Apply only default indexes:**
-```bash
+# Apply only default indexes
 apply-indexes --skip-extra-indexes
 ```
 
-#### Output
-
-Success message:
-```
-Start to apply index ...
-Start to apply extra index ...
-```
-
-Warning if no indexes found:
-```
-No optional index found to apply : index.yml
-```
-
-Failure message (if some indexes fail):
-```
->> Failed to apply these indexes : [table1.index1, table2.index2]
-```
+This command applies indexes from:
+- `index.yml`: Default required indexes for read operations
+- `extra-index.yml`: Additional optional indexes (unless `--skip-extra-indexes` is set)
 
 ### apply-extra-indexes
 
 Applies only the additional optional read indexes.
 
-#### Syntax
-
+**Syntax:**
 ```bash
 apply-extra-indexes
 ```
 
-#### Description
-
-This command applies only the indexes defined in `extra-index.yml`, without touching the default indexes. Useful when you've already applied default indexes and want to add optional ones later.
-
-#### Example
-
+**Example:**
 ```bash
 apply-extra-indexes
-```
-
-#### Output
-
-```
-Start to apply extra index ...
 ```
 
 ### verify-indexes
 
 Lists missing indexes by comparing database state with index definitions.
 
-#### Syntax
-
+**Syntax:**
 ```bash
 verify-indexes
 ```
 
-#### Description
-
-This command verifies both default and extra indexes by:
-- Loading index definitions from `index.yml` and `extra-index.yml`
-- Checking which indexes exist in the database
-- Reporting missing indexes
-
-Useful for:
-- Auditing your database index state
-- Identifying missing indexes after restore
-- Verifying index application
-
-#### Example
-
+**Example:**
 ```bash
 verify-indexes
 ```
 
-#### Output
-
-**When all indexes are present:**
-```
-All optional indexes are present from file : index.yml
-All optional indexes are present from file : extra-index.yml
-```
-
-**When indexes are missing:**
+**Output when indexes are missing:**
 ```
 The following indexes are not found from index.yml
     Table: transaction, Index: idx_transaction_slot
     Table: block, Index: idx_block_epoch
-    Table: utxo, Index: idx_utxo_stake_address
-
-The following indexes are not found from extra-index.yml
-    Table: assets, Index: idx_assets_policy_fingerprint
 ```
 
-## Index Configuration Files
+## Index Configuration
 
 Index behavior is defined in YAML configuration files located in the `dbutils` component.
 
-### Default Files
+### Configuration Files
 
 1. **`index.yml`**: Required indexes for basic read operations
 2. **`extra-index.yml`**: Optional indexes for enhanced performance
@@ -154,14 +85,15 @@ Index behavior is defined in YAML configuration files located in the `dbutils` c
 ### YAML Structure
 
 ```yaml
-indexes:
-  - table: "table_name"
-    indexes:
-      - name: "index_name"
-        columns:
-          - "column1"
-          - "column2"
-        unique: false
+- table: "table_name"
+  indexes:
+    - name: "index_name"
+      columns:
+        - "column1"
+        - "column2"
+      type: "btree"        # optional
+      excludes:            # optional
+        - "mysql"
 ```
 
 ### Configuration Fields
@@ -171,52 +103,48 @@ indexes:
 | `table` | Name of the database table | Yes |
 | `indexes.name` | Name of the index to create | Yes |
 | `indexes.columns` | List of columns in the index | Yes |
-| `indexes.unique` | Whether index should be unique | No (default: false) |
+| `indexes.type` | Index type (e.g., btree, gin, hash) | No |
+| `indexes.excludes` | List of database types to exclude this index from | No |
 
-### Example: Custom Index Configuration
+### Example Configuration
 
 ```yaml
-indexes:
-  # Single column index
-  - table: "transaction"
-    indexes:
-      - name: "idx_transaction_slot"
-        columns:
-          - "slot"
-        unique: false
+# Single column index
+- table: "transaction"
+  indexes:
+    - name: "idx_transaction_slot"
+      columns:
+        - "slot"
 
-  # Multi-column index
-  - table: "utxo"
-    indexes:
-      - name: "idx_utxo_address_slot"
-        columns:
-          - "address"
-          - "slot"
-        unique: false
+# Multi-column index
+- table: "utxo"
+  indexes:
+    - name: "idx_utxo_address_slot"
+      columns:
+        - "address"
+        - "slot"
 
-  # Unique index
-  - table: "block"
-    indexes:
-      - name: "idx_block_hash_unique"
-        columns:
-          - "hash"
-        unique: true
+# GIN index (PostgreSQL only, excluded from MySQL)
+- table: "address_utxo"
+  indexes:
+    - name: "idx_address_utxo_amounts"
+      columns:
+        - "amounts"
+      type: "gin"
+      excludes:
+        - "mysql"
 ```
 
-## When to Use Index Commands
+## When to Apply Indexes
 
 ### After Initial Sync
 
-After syncing your database for the first time:
-
 ```bash
-# Apply all indexes for optimal read performance
+# For fastest initial sync, apply indexes AFTER sync completes
 apply-indexes
 ```
 
 ### After Database Restore
-
-When restoring from a backup:
 
 ```bash
 # Verify existing indexes
@@ -228,278 +156,93 @@ apply-indexes
 
 ### Performance Optimization
 
-When experiencing slow queries:
-
 ```bash
-# Apply extra indexes for better performance
-apply-extra-indexes
-
-# Verify all indexes are present
-verify-indexes
-```
-
-### After Schema Changes
-
-When updating Yaci Store to a new version:
-
-```bash
-# Check for new indexes
-verify-indexes
-
-# Apply any missing indexes
-apply-indexes
-```
-
-### Selective Index Application
-
-When you only need specific indexes:
-
-```bash
-# Apply only default indexes (skip extra)
-apply-indexes --skip-extra-indexes
-
-# Later, add extra indexes if needed
+# Apply extra indexes for better read performance
 apply-extra-indexes
 ```
 
-## Performance Impact
+## Performance Considerations
 
-### Storage Space
-
-Indexes consume additional disk space:
-- Each index adds storage overhead
-- Multi-column indexes use more space
-- Consider disk space when applying extra indexes
+### Storage Impact
+- Indexes consume additional disk space
+- Multi-column indexes use more space than single-column
 
 ### Write Performance
-
-Indexes affect write performance:
-- More indexes = slower inserts/updates
-- During initial sync, consider applying indexes after sync completes
-- Balance read performance vs write performance
+- More indexes = slower inserts/updates during sync
+- Consider applying indexes after initial sync completes
 
 ### Read Performance
-
-Indexes significantly improve read performance:
-- Query response times can improve 10-100x
-- Essential for API endpoints
-- Critical for user-facing applications
+- Indexes significantly improve query response times (10-100x)
+- Essential for API endpoints and user-facing applications
 
 ## Best Practices
 
 ### 1. Apply Indexes After Initial Sync
 
 For fastest initial sync:
-
 ```bash
-# Start sync WITHOUT indexes
-# Wait for sync to complete
-# Then apply indexes
+# Start sync without indexes, wait for completion, then:
 apply-indexes
 ```
 
-This approach:
-- Speeds up initial sync significantly
-- Applies indexes once on stable data
-- Recommended for large syncs (mainnet)
+This approach speeds up initial sync significantly, especially for mainnet.
 
 ### 2. Verify Indexes Regularly
 
-Include index verification in maintenance routines:
-
 ```bash
-# Weekly or monthly verification
+# Include in maintenance routines
 verify-indexes
 ```
 
-### 3. Monitor Index Health
+### 3. Balance Index Usage
 
-Monitor your database for:
-- Unused indexes (consuming resources)
-- Missing indexes (slow queries)
-- Fragmented indexes (need rebuild)
-
-### 4. Custom Index Configuration
-
-For specialized use cases, create custom index YAML files:
-
-```bash
-# Create custom-indexes.yml with your specific indexes
-# Then apply them (requires code modification to use custom file)
-```
-
-### 5. Balance Default vs Extra Indexes
-
-Consider your use case:
-
-**API-heavy applications:**
+**For API-heavy applications:**
 ```bash
 # Apply all indexes for best read performance
 apply-indexes
 ```
 
-**Write-heavy applications:**
+**For write-heavy applications:**
 ```bash
 # Apply only default indexes
 apply-indexes --skip-extra-indexes
 ```
 
-**Balanced workloads:**
+## Common Workflows
+
+### Initial Setup
+
 ```bash
-# Start with default, add extra as needed
-apply-indexes --skip-extra-indexes
-# Monitor query performance
-# Add extra indexes if needed
-apply-extra-indexes
+# 1. Complete database sync
+# 2. Verify index state
+verify-indexes
+
+# 3. Apply all indexes
+apply-indexes
+
+# 4. Verify completion
+verify-indexes
 ```
 
-## Troubleshooting
+### Regular Maintenance
 
-### Issue: "No optional index found to apply"
-
-**Cause:** Index configuration files are missing or empty.
-
-**Solution:**
-- Verify `index.yml` and `extra-index.yml` exist in classpath
-- Check file format and syntax
-- Ensure files are in the correct location (dbutils resources)
-
-### Issue: Failed to Apply Indexes
-
-**Cause:**
-- Insufficient database permissions
-- Invalid index syntax
-- Duplicate index names
-- Table doesn't exist
-
-**Solution:**
 ```bash
-# Check database user permissions
-# Ensure user has CREATE INDEX privilege
-
-# Verify table exists
-# Check for duplicate index names
-
-# Review application logs for specific errors
+# Check and apply missing indexes
+verify-indexes
+apply-indexes
 ```
 
-### Issue: Indexes Not Improving Performance
-
-**Cause:**
-- Wrong columns indexed
-- Query not using indexes (missing WHERE clause)
-- Index selectivity too low
-- Statistics out of date
-
-**Solution:**
-- Analyze slow queries with EXPLAIN
-- Verify indexes match query patterns
-- Update database statistics
-- Consider compound indexes for multi-column queries
-
-## Database-Specific Considerations
-
-### PostgreSQL
-
-PostgreSQL-specific index features:
-- Partial indexes supported
-- Various index types (B-tree, Hash, GiST, GIN)
-- Concurrent index creation available
-
-### MySQL
-
-MySQL-specific considerations:
-- InnoDB uses clustered primary key
-- Index length limits on text columns
-- Different storage engines have different index behavior
-
-### H2
-
-H2 database notes:
-- Mainly used for testing/development
-- Simpler index implementation
-- May have different performance characteristics
-
-## Related Commands
-
-### Database Management
-
-For other database operations, see:
-- [Rollback Operations](/admin-cli/rollback) - Database rollback commands
-
-### Configuration
-
-For database configuration, see:
-- [Store Configuration](/stores/configuration) - Store configuration options
-- [Performance Configuration](/stores/configuration#performance-configuration) - Performance tuning
-
-## Command Reference Summary
+## Command Reference
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
 | `apply-indexes` | Apply default and extra indexes | After initial sync, after restore |
-| `apply-indexes --skip-extra-indexes` | Apply only default indexes | When storage is limited, write-heavy workloads |
-| `apply-extra-indexes` | Apply only extra indexes | Performance optimization, after default indexes applied |
-| `verify-indexes` | List missing indexes | Regular maintenance, after schema changes |
+| `apply-indexes --skip-extra-indexes` | Apply only default indexes | When storage is limited |
+| `apply-extra-indexes` | Apply only extra indexes | Performance optimization |
+| `verify-indexes` | List missing indexes | Regular maintenance |
 
-## Complete Workflow Example
+## Related Documentation
 
-### Initial Setup Workflow
-
-```bash
-# 1. Start with fresh database
-# 2. Configure Yaci Store
-# 3. Start sync WITHOUT indexes
-# 4. Wait for sync to complete
-
-# 5. Verify current index state
-verify-indexes
-
-# 6. Apply all indexes for production
-apply-indexes
-
-# 7. Verify all indexes applied successfully
-verify-indexes
-
-# 8. Restart application for optimal performance
-```
-
-### Maintenance Workflow
-
-```bash
-# Regular maintenance (monthly)
-
-# 1. Check index health
-verify-indexes
-
-# 2. Apply missing indexes if any
-apply-indexes
-
-# 3. Monitor query performance
-# 4. Adjust indexes as needed
-```
-
-### Troubleshooting Workflow
-
-```bash
-# When experiencing slow queries
-
-# 1. Verify all indexes exist
-verify-indexes
-
-# 2. Apply missing indexes
-apply-indexes
-
-# 3. Consider adding extra indexes
-apply-extra-indexes
-
-# 4. Analyze query patterns
-# 5. Create custom indexes if needed
-```
-
-## Next Steps
-
-- Learn about [Rollback Operations](/admin-cli/rollback)
-- Review [Store Configuration](/stores/configuration)
-- Explore [Performance Tuning](/stores/configuration#performance-configuration)
-- Read [Admin CLI Overview](/admin-cli/overview)
+- [Rollback Operations](/admin-cli/rollback) - Database rollback commands
+- [Store Configuration](/stores/configuration) - Store configuration options
+- [Admin CLI Overview](/admin-cli/overview) - General Admin CLI information
