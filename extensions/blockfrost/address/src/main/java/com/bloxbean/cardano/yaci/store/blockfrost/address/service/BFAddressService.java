@@ -7,6 +7,9 @@ import com.bloxbean.cardano.client.address.CredentialType;
 import com.bloxbean.cardano.yaci.store.api.utxo.service.AddressService;
 import com.bloxbean.cardano.yaci.store.api.utxo.service.UtxoUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressUtxoDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.mapper.BFAddressUtxoMapper;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -111,5 +114,13 @@ public class BFAddressService {
             return "byron";
         }
         return "shelley";
+    }
+
+    public List<BFAddressUtxoDTO> getAddressUtxos(@NonNull String address, int page, int count, Order order) {
+        List<AddressUtxo> addressUtxos = utxoStorageReader.findUtxoByAddress(address, page, count, order);
+        
+        return addressUtxos.stream()
+                .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)
+                .collect(Collectors.toList());
     }
 }
