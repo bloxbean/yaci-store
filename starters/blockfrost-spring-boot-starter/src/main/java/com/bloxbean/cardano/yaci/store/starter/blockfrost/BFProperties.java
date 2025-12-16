@@ -22,6 +22,7 @@ public class BFProperties {
 
             private Epoch epoch = new Epoch();
             private Address address = new Address();
+            private Asset asset = new Asset();
 
             @Getter
             @Setter
@@ -32,6 +33,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Address {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Asset {
                 private boolean enabled = true;
             }
 

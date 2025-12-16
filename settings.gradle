@@ -90,6 +90,9 @@ project(':extensions:blockfrost:blockfrost-epoch').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-address'
 project(':extensions:blockfrost:blockfrost-address').projectDir = new File('extensions/blockfrost/address')
 
+include ':extensions:blockfrost:blockfrost-asset'
+project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extensions/blockfrost/asset')
+
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 

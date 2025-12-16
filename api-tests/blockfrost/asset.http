@@ -1,0 +1,55 @@
+
+
+### @name getAssets
+### Get information about all assets
+GET https://cardano-preprod.blockfrost.io/api/v0/assets
+project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostAssetsResponse", response.body);
+
+    client.test("Get assets", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostAssetsResponse = client.global.get("blockfrostAssetsResponse");
+    const yaciAssetsResponse = response.body;
+
+    client.test("Compare assets between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostAssetsResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciAssetsResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostAssetsResponse.length === yaciAssetsResponse.length,
+            `Asset array length is different between blockfrost and yaci (Blockfrost: ${blockfrostAssetsResponse.length}, Yaci: ${yaciAssetsResponse.length})`);
+
+        if (blockfrostAssetsResponse.length > 0 && yaciAssetsResponse.length > 0) {
+            // Compare first asset
+            const blockfrostAsset = blockfrostAssetsResponse[0];
+            const yaciAsset = yaciAssetsResponse[0];
+
+            // Compare asset (unit)
+            client.assert(blockfrostAsset.asset === yaciAsset.asset,
+                `asset is different between blockfrost and yaci (Blockfrost: ${blockfrostAsset.asset}, Yaci: ${yaciAsset.asset})`);
+
+            // Compare quantity
+            client.assert(blockfrostAsset.quantity === yaciAsset.quantity,
+                `quantity is different between blockfrost and yaci (Blockfrost: ${blockfrostAsset.quantity}, Yaci: ${yaciAsset.quantity})`);
+        }
+    });
+%}
+
+
+
+

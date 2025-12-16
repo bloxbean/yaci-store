@@ -4,10 +4,13 @@ import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorageReader;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.mapper.AssetMapper;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntity;
+import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetInfo;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.repository.TxAssetRepository;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 
 import java.math.BigInteger;
@@ -63,5 +66,14 @@ public class AssetStorageReaderImpl implements AssetStorageReader {
     @Override
     public Optional<BigInteger> getSupplyByPolicy(String policyId) {
         return txAssetRepository.getSupplyByPolicy(policyId);
+    }
+
+    @Override
+    public Slice<TxAssetInfo> findAllGroupByUnit(int page, int count, Order order) {
+
+        Pageable pageable = PageRequest.of(page, count)
+                .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash");
+
+        return txAssetRepository.findAssetsGroupByUnit(pageable);
     }
 }
