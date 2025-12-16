@@ -59,4 +59,17 @@ public class BFAddressController {
         return bfAddressService.getAddressUtxos(address, p, count, order);
     }
 
+    @GetMapping("{address}/utxos/{asset}")
+    public List<BFAddressUtxoDTO> getAddressUtxosForAsset(@PathVariable String address, @PathVariable String asset,
+                                                  @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+                                                  @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                                  @RequestParam(required = false, defaultValue = "asc") Order order) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return bfAddressService.getAddressUtxosForAsset(address, asset, p, count, order);
+    }
+
 }

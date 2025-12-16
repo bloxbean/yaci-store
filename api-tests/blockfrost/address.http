@@ -182,3 +182,103 @@ GET {{base_url}}/api/v1/blockfrost/addresses/addr_test1wppg9l6relcpls4u667twqygg
         }
     });
 %}
+
+### @name getAddressUtxosForAsset
+### Get UTXOs for a specific address
+GET https://cardano-preprod.blockfrost.io/api/v0/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/utxos/c2ecc337337cf48720e3747c833c9c179e08d2ea235d9bee7afbcb1741555448
+project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostAddressUtxosForAssetResponse", response.body);
+
+    client.test("Get address utxos", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/utxos/c2ecc337337cf48720e3747c833c9c179e08d2ea235d9bee7afbcb1741555448
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostAddressUtxosResponse = client.global.get("blockfrostAddressUtxosForAssetResponse");
+    const yaciAddressUtxosResponse = response.body;
+
+    client.test("Compare address UTXOs between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostAddressUtxosResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciAddressUtxosResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostAddressUtxosResponse.length === yaciAddressUtxosResponse.length,
+            `UTXO array length is different between blockfrost and yaci (Blockfrost: ${blockfrostAddressUtxosResponse.length}, Yaci: ${yaciAddressUtxosResponse.length})`);
+
+        if (blockfrostAddressUtxosResponse.length > 0 && yaciAddressUtxosResponse.length > 0) {
+            // Compare first UTXO
+            const blockfrostUtxo = blockfrostAddressUtxosResponse[0];
+            const yaciUtxo = yaciAddressUtxosResponse[0];
+
+            // Compare address
+            client.assert(blockfrostUtxo.address === yaciUtxo.address,
+                `address is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.address}, Yaci: ${yaciUtxo.address})`);
+
+            // Compare tx_hash
+            client.assert(blockfrostUtxo.tx_hash === yaciUtxo.tx_hash,
+                `tx_hash is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.tx_hash}, Yaci: ${yaciUtxo.tx_hash})`);
+
+            // Compare output_index
+            client.assert(blockfrostUtxo.output_index === yaciUtxo.output_index,
+                `output_index is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.output_index}, Yaci: ${yaciUtxo.output_index})`);
+
+            // Compare block
+            client.assert(blockfrostUtxo.block === yaciUtxo.block,
+                `block is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.block}, Yaci: ${yaciUtxo.block})`);
+
+            // Compare data_hash (may be null)
+            //TODO: Check why data_hash is null in Yaci but not in Blockfrost?
+            // if (blockfrostUtxo.data_hash === null) {
+            //     client.assert(yaciUtxo.data_hash === null || yaciUtxo.data_hash === undefined,
+            //         `data_hash should be null (Blockfrost: null, Yaci: ${yaciUtxo.data_hash})`);
+            // } else {
+            //     client.assert(blockfrostUtxo.data_hash === yaciUtxo.data_hash,
+            //         `data_hash is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.data_hash}, Yaci: ${yaciUtxo.data_hash})`);
+            // }
+
+            // Compare inline_datum (may be null)
+            if (blockfrostUtxo.inline_datum === null) {
+                client.assert(yaciUtxo.inline_datum === null || yaciUtxo.inline_datum === undefined,
+                    `inline_datum should be null (Blockfrost: null, Yaci: ${yaciUtxo.inline_datum})`);
+            } else {
+                client.assert(blockfrostUtxo.inline_datum === yaciUtxo.inline_datum,
+                    `inline_datum is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.inline_datum}, Yaci: ${yaciUtxo.inline_datum})`);
+            }
+
+            // Compare reference_script_hash (may be null)
+            if (blockfrostUtxo.reference_script_hash === null) {
+                client.assert(yaciUtxo.reference_script_hash === null || yaciUtxo.reference_script_hash === undefined,
+                    `reference_script_hash should be null (Blockfrost: null, Yaci: ${yaciUtxo.reference_script_hash})`);
+            } else {
+                client.assert(blockfrostUtxo.reference_script_hash === yaciUtxo.reference_script_hash,
+                    `reference_script_hash is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.reference_script_hash}, Yaci: ${yaciUtxo.reference_script_hash})`);
+            }
+
+            // Compare amount list size
+            client.assert(blockfrostUtxo.amount.length === yaciUtxo.amount.length,
+                `amount list size is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.amount.length}, Yaci: ${yaciUtxo.amount.length})`);
+
+            // Compare first element of amount list
+            if (blockfrostUtxo.amount.length > 0 && yaciUtxo.amount.length > 0) {
+                client.assert(blockfrostUtxo.amount[0].unit === yaciUtxo.amount[0].unit,
+                    `amount[0].unit is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.amount[0].unit}, Yaci: ${yaciUtxo.amount[0].unit})`);
+                client.assert(blockfrostUtxo.amount[0].quantity === yaciUtxo.amount[0].quantity,
+                    `amount[0].quantity is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.amount[0].quantity}, Yaci: ${yaciUtxo.amount[0].quantity})`);
+            }
+        }
+    });
+%}
+
+

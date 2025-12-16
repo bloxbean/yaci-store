@@ -123,4 +123,12 @@ public class BFAddressService {
                 .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)
                 .collect(Collectors.toList());
     }
+
+    public List<BFAddressUtxoDTO> getAddressUtxosForAsset(@NonNull String address, @NonNull String asset, int page, int count, Order order) {
+        List<AddressUtxo> addressUtxos = utxoStorageReader.findUtxoByAddressAndAsset(address, asset, page, count, order);
+
+        return addressUtxos.stream()
+                .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)
+                .collect(Collectors.toList());
+    }
 }
