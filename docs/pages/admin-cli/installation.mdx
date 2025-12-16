@@ -2,284 +2,181 @@ import { Callout, Tabs, Steps } from 'nextra/components'
 
 # Installation and Setup
 
-This guide walks you through installing, configuring, and running the Yaci Store Admin CLI.
+This guide covers installing and configuring the Yaci Store Admin CLI.
 
 ## Prerequisites
 
-- **Java 21 or higher** installed
-- **Yaci Store database** setup (PostgreSQL, MySQL, or H2)
-- **Database credentials** with appropriate permissions
-- **Gradle** (for building from source) - optional
+- **Java 21 or higher**
+- **Yaci Store database** (PostgreSQL, MySQL, or H2)
+- **Database credentials** with CREATE INDEX and DELETE permissions
 
 ## Installation
 
-### Build from Source
-
 <Steps>
 
-### Clone the Repository
+### Clone and Build
 
 ```bash
 git clone https://github.com/bloxbean/yaci-store.git
 cd yaci-store
-```
-
-### Build the Project
-
-```bash
 ./gradlew clean build -x test
 ```
 
-### Navigate to Admin CLI
+### Locate the JAR
 
 ```bash
 cd applications/admin-cli/build/libs
 ```
 
-You should see a JAR file like `yaci-store-admin-cli-2.0.0-beta5.jar`
+The executable JAR is: `yaci-store-admin-cli-2.0.0-beta5.jar`
 
 </Steps>
 
 ## Configuration
 
-Admin CLI requires database configuration to connect to your Yaci Store database.
-
-### Database Configuration
-
-Create `application.yml` or `application.properties` in the same directory as the JAR file:
+Create `application.yml` in the same directory as the JAR file:
 
 <Tabs items={['PostgreSQL', 'MySQL', 'H2']}>
   <Tabs.Tab>
-**PostgreSQL (application.yml)**
-
 ```yaml
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/yaci_store
     username: your_username
     password: your_password
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
-    hibernate:
-      ddl-auto: none
 ```
   </Tabs.Tab>
 
   <Tabs.Tab>
-**MySQL (application.yml)**
-
 ```yaml
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/yaci_store
     username: your_username
     password: your_password
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
-    hibernate:
-      ddl-auto: none
 ```
   </Tabs.Tab>
 
   <Tabs.Tab>
-**H2 (application.yml)**
-
 ```yaml
 spring:
   datasource:
     url: jdbc:h2:file:./data/yaci_store;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password: password
-    driver-class-name: org.h2.Driver
-
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: none
 ```
   </Tabs.Tab>
 </Tabs>
 
-### Optional Rollback Configuration
+<Callout type="info">
+The `driver-class-name` is auto-detected by Spring Boot and not required.
+</Callout>
 
-Add to `application.yml` if you need to customize rollback behavior:
+### Optional: Rollback Configuration
+
+To customize rollback behavior, add to `application.yml`:
 
 ```yaml
-# Rollback Configuration (optional)
 store:
   admin-cli:
     db:
       rollback:
         rollback-files: rollback.yml
-        # Manual rollback point (use only when block table is not available)
-        # point:
-        #   block: 10537200
-        #   block-hash: "a5c72a0e74cf..."
-        #   slot: 76667163
-        #   era: 3
+```
+
+For manual rollback point (only when block table is unavailable):
+
+```yaml
+store:
+  admin-cli:
+    db:
+      rollback:
+        point:
+          block: 10537200
+          block-hash: "a5c72a0e74cf..."
+          slot: 76667163
+          era: 3
 ```
 
 <Callout type="warning">
-Manual rollback point should only be used when the block table is not available.
+Manual rollback point should only be used when the block table is not available in the database.
 </Callout>
 
-## Running Admin CLI
+## Running
 
-### Interactive Mode (Recommended)
-
-Run the CLI in interactive shell mode:
+### Interactive Mode
 
 ```bash
-java -jar yaci-store-admin-cli-2.0.0.jar
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar
 ```
 
-You'll see the Admin CLI prompt:
-
+You'll see the prompt:
 ```
 admin-cli:>
 ```
 
-Now you can run commands interactively:
-
+Run commands interactively:
 ```
 admin-cli:> verify-indexes
 admin-cli:> apply-indexes
 admin-cli:> rollback-data --epoch 500
 ```
 
+Use `help` for command list, `exit` or Ctrl+D to quit.
+
 ### Non-Interactive Mode
 
-Run specific commands directly:
-
 ```bash
-# Apply indexes
-java -jar yaci-store-admin-cli-2.0.0.jar apply-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar <command> [options]
+```
 
-# Verify indexes
-java -jar yaci-store-admin-cli-2.0.0.jar verify-indexes
-
-# Rollback data
-java -jar yaci-store-admin-cli-2.0.0.jar rollback-data --epoch 500
+Examples:
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar verify-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar apply-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar rollback-data --epoch 500
 ```
 
 ### With Custom Configuration
 
 ```bash
-java -jar yaci-store-admin-cli-2.0.0.jar \
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar \
   --spring.config.location=file:./custom-config.yml \
-  apply-indexes
+  verify-indexes
 ```
 
-## Shell Features
+## Quick Test
 
-### Command History
-
-- **Up/Down arrows** to navigate history
-- **Ctrl+R** to search history
-- History saved in `admin-cli.history`
-
-### Tab Completion
-
-Use **Tab** key for command and option completion
-
-### Help
+Verify database connection:
 
 ```bash
-# General help
-admin-cli:> help
-
-# Command-specific help
-admin-cli:> help apply-indexes
-admin-cli:> help rollback-data
-```
-
-### Exit
-
-```bash
-admin-cli:> exit
-# Or press Ctrl+D
-```
-
-## Verification
-
-Test that Admin CLI is working:
-
-<Steps>
-
-### Test Database Connection
-
-```bash
-java -jar yaci-store-admin-cli-2.0.0.jar verify-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar verify-indexes
 ```
 
 If successful, you'll see index verification output.
 
-### Check Available Commands
-
-```bash
-admin-cli:> help
-```
-
-You should see all available commands.
-
-</Steps>
-
 ## Environment Variables
 
-Use environment variables for credentials:
+For production, use environment variables instead of hardcoded credentials:
 
 ```yaml
 spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/yaci_store}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:changeme}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 ```
-
-Then set environment variables:
 
 ```bash
 export DB_URL="jdbc:postgresql://localhost:5432/yaci_store"
 export DB_USERNAME="admin"
 export DB_PASSWORD="secure_password"
 
-java -jar yaci-store-admin-cli-2.0.0.jar
-```
-
-## Common Issues
-
-### Cannot Connect to Database
-
-1. Verify database is running
-2. Check URL, username, and password
-3. Ensure database accepts connections
-
-```bash
-# Test PostgreSQL connection
-psql -h localhost -U your_username -d yaci_store
-```
-
-### Access Denied
-
-Check user permissions:
-
-```sql
--- PostgreSQL
-GRANT ALL PRIVILEGES ON DATABASE yaci_store TO your_username;
-
--- MySQL
-GRANT ALL PRIVILEGES ON yaci_store.* TO 'your_username'@'localhost';
-FLUSH PRIVILEGES;
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar
 ```
 
 ## Next Steps
 
-Now that Admin CLI is installed:
-
-- Learn about [Index Management Commands](/admin-cli/commands)
-- Understand [Rollback Operations](/admin-cli/rollback)
-- Review [Admin CLI Overview](/admin-cli/overview)
+- [Index Management Commands](/admin-cli/commands)
+- [Rollback Operations](/admin-cli/rollback)
+- [Admin CLI Overview](/admin-cli/overview)
