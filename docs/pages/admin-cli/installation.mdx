@@ -1,0 +1,182 @@
+import { Callout, Tabs, Steps } from 'nextra/components'
+
+# Installation and Setup
+
+This guide covers installing and configuring the Yaci Store Admin CLI.
+
+## Prerequisites
+
+- **Java 21 or higher**
+- **Yaci Store database** (PostgreSQL, MySQL, or H2)
+- **Database credentials** with CREATE INDEX and DELETE permissions
+
+## Installation
+
+<Steps>
+
+### Clone and Build
+
+```bash
+git clone https://github.com/bloxbean/yaci-store.git
+cd yaci-store
+./gradlew clean build -x test
+```
+
+### Locate the JAR
+
+```bash
+cd applications/admin-cli/build/libs
+```
+
+The executable JAR is: `yaci-store-admin-cli-2.0.0-beta5.jar`
+
+</Steps>
+
+## Configuration
+
+Create `application.yml` in the same directory as the JAR file:
+
+<Tabs items={['PostgreSQL', 'MySQL', 'H2']}>
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/yaci_store
+    username: your_username
+    password: your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/yaci_store
+    username: your_username
+    password: your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/yaci_store;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: password
+```
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+The `driver-class-name` is auto-detected by Spring Boot and not required.
+</Callout>
+
+### Optional: Rollback Configuration
+
+To customize rollback behavior, add to `application.yml`:
+
+```yaml
+store:
+  admin-cli:
+    db:
+      rollback:
+        rollback-files: rollback.yml
+```
+
+For manual rollback point (only when block table is unavailable):
+
+```yaml
+store:
+  admin-cli:
+    db:
+      rollback:
+        point:
+          block: 10537200
+          block-hash: "a5c72a0e74cf..."
+          slot: 76667163
+          era: 3
+```
+
+<Callout type="warning">
+Manual rollback point should only be used when the block table is not available in the database.
+</Callout>
+
+## Running
+
+### Interactive Mode
+
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar
+```
+
+You'll see the prompt:
+```
+admin-cli:>
+```
+
+Run commands interactively:
+```
+admin-cli:> verify-indexes
+admin-cli:> apply-indexes
+admin-cli:> rollback-data --epoch 500
+```
+
+Use `help` for command list, `exit` or Ctrl+D to quit.
+
+### Non-Interactive Mode
+
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar <command> [options]
+```
+
+Examples:
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar verify-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar apply-indexes
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar rollback-data --epoch 500
+```
+
+### With Custom Configuration
+
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar \
+  --spring.config.location=file:./custom-config.yml \
+  verify-indexes
+```
+
+## Quick Test
+
+Verify database connection:
+
+```bash
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar verify-indexes
+```
+
+If successful, you'll see index verification output.
+
+## Environment Variables
+
+For production, use environment variables instead of hardcoded credentials:
+
+```yaml
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/yaci_store}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+```
+
+```bash
+export DB_URL="jdbc:postgresql://localhost:5432/yaci_store"
+export DB_USERNAME="admin"
+export DB_PASSWORD="secure_password"
+
+java -jar yaci-store-admin-cli-2.0.0-beta5.jar
+```
+
+## Next Steps
+
+- [Index Management Commands](/admin-cli/commands)
+- [Rollback Operations](/admin-cli/rollback)
+- [Admin CLI Overview](/admin-cli/overview)
