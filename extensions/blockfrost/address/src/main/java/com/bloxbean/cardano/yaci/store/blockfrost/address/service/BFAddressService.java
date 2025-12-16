@@ -7,11 +7,14 @@ import com.bloxbean.cardano.client.address.CredentialType;
 import com.bloxbean.cardano.yaci.store.api.utxo.service.AddressService;
 import com.bloxbean.cardano.yaci.store.api.utxo.service.UtxoUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransactionDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressUtxoDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.mapper.BFAddressTransactionMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.mapper.BFAddressUtxoMapper;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
@@ -129,6 +132,14 @@ public class BFAddressService {
 
         return addressUtxos.stream()
                 .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)
+                .collect(Collectors.toList());
+    }
+
+    public List<BFAddressTransactionDTO> getAddressTransactions(@NonNull String address, int page, int count, Order order) {
+        List<AddressTransaction> addressUtxos = utxoStorageReader.findTransactionsByAddress(address, page, count, order);
+
+        return addressUtxos.stream()
+                .map(BFAddressTransactionMapper.INSTANCE::toBFAddressTransactionDTO)
                 .collect(Collectors.toList());
     }
 }

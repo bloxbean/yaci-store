@@ -192,7 +192,7 @@ project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
     // Save the response body to a global variable to use in the next request
     client.global.set("blockfrostAddressUtxosForAssetResponse", response.body);
 
-    client.test("Get address utxos", function() {
+    client.test("Get address utxos for asset", function() {
         client.assert(response.status === 200, "Response status is not 200");
     });
 %}
@@ -206,7 +206,7 @@ GET {{base_url}}/api/v1/blockfrost/addresses/addr_test1wppg9l6relcpls4u667twqygg
     const blockfrostAddressUtxosResponse = client.global.get("blockfrostAddressUtxosForAssetResponse");
     const yaciAddressUtxosResponse = response.body;
 
-    client.test("Compare address UTXOs between Blockfrost and Yaci", function() {
+    client.test("Compare address UTXOs for asset between Blockfrost and Yaci", function() {
         client.assert(response.status === 200, "Response status is not 200");
 
         // Both responses should be arrays
@@ -277,6 +277,66 @@ GET {{base_url}}/api/v1/blockfrost/addresses/addr_test1wppg9l6relcpls4u667twqygg
                 client.assert(blockfrostUtxo.amount[0].quantity === yaciUtxo.amount[0].quantity,
                     `amount[0].quantity is different between blockfrost and yaci (Blockfrost: ${blockfrostUtxo.amount[0].quantity}, Yaci: ${yaciUtxo.amount[0].quantity})`);
             }
+        }
+    });
+%}
+
+### @name getAddressTransactions
+### Get transactions for a specific address
+GET https://cardano-preprod.blockfrost.io/api/v0/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/transactions
+project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostAddressTransactionsResponse", response.body);
+
+    client.test("Get address transactions", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/addresses/addr_test1wppg9l6relcpls4u667twqyggkrpfrs5cdge9hhl9cv2upchtch0h/transactions
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostAddressTransactionsResponse = client.global.get("blockfrostAddressTransactionsResponse");
+    const yaciAddressTransactionsResponse = response.body;
+
+    client.test("Compare address Transactions between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostAddressTransactionsResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciAddressTransactionsResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostAddressTransactionsResponse.length === yaciAddressTransactionsResponse.length,
+            `Transaction array length is different between blockfrost and yaci (Blockfrost: ${blockfrostAddressTransactionsResponse.length}, Yaci: ${yaciAddressTransactionsResponse.length})`);
+
+        if (blockfrostAddressTransactionsResponse.length > 0 && yaciAddressTransactionsResponse.length > 0) {
+            // Compare first transaction
+            const blockfrostTransaction = blockfrostAddressTransactionsResponse[0];
+            const yaciTransaction = yaciAddressTransactionsResponse[0];
+
+            // Compare tx_hash
+            client.assert(blockfrostTransaction.tx_hash === yaciTransaction.tx_hash,
+                `tx_hash is different between blockfrost and yaci (Blockfrost: ${blockfrostTransaction.tx_hash}, Yaci: ${yaciTransaction.tx_hash})`);
+
+            // Compare tx_index
+            //TODO: Find out how to get the TX Index in a block.
+            // client.assert(blockfrostTransaction.tx_index === yaciTransaction.tx_index,
+            //     `tx_index is different between blockfrost and yaci (Blockfrost: ${blockfrostTransaction.tx_index}, Yaci: ${yaciTransaction.tx_index})`);
+
+            // Compare block_height
+            client.assert(blockfrostTransaction.block_height === yaciTransaction.block_height,
+                `block_height is different between blockfrost and yaci (Blockfrost: ${blockfrostTransaction.block_height}, Yaci: ${yaciTransaction.block_height})`);
+
+            // Compare block_time
+            client.assert(blockfrostTransaction.block_time === yaciTransaction.block_time,
+                `block_time is different between blockfrost and yaci (Blockfrost: ${blockfrostTransaction.block_time}, Yaci: ${yaciTransaction.block_time})`);
         }
     });
 %}

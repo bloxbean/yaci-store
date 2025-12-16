@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.address.controller;
 
 
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransactionDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressUtxoDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.service.BFAddressService;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
@@ -70,6 +71,19 @@ public class BFAddressController {
             p = p - 1;
 
         return bfAddressService.getAddressUtxosForAsset(address, asset, p, count, order);
+    }
+
+    @GetMapping("{address}/transactions")
+    public List<BFAddressTransactionDTO> getAddressTransactions(@PathVariable String address,
+                                                                @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+                                                                @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                                                @RequestParam(required = false, defaultValue = "asc") Order order) {
+        //TODO -- Fix pagination index
+        int p = page;
+        if (p > 0)
+            p = p - 1;
+
+        return bfAddressService.getAddressTransactions(address, p, count, order);
     }
 
 }
