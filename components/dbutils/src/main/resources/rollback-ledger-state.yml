@@ -1,12 +1,82 @@
-tables:
-  - adapot
-  - instant_reward
-  - reward
-  - reward_rest
-  - unclaimed_reward_rest
-  - adapot_jobs
-  - epoch_stake
-  - drep_dist
-  - gov_action_proposal_status
-  - drep_expiry
-  - epoch_param
+rollback:
+  tables:
+    - name: "adapot"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "adapot_jobs"
+      operation: "UPDATE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+      update_set:
+        - column: "status"
+          value: "'STARTED'"
+
+    - name: "epoch_stake"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+        offset: -1
+
+    - name: "reward"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "reward_rest"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "unclaimed_reward_rest"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "drep_dist"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+
+    - name: "gov_action_proposal_status"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+
+    - name: "epoch_param"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "gov_epoch_activity"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+
+    - name: "committee_state"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
