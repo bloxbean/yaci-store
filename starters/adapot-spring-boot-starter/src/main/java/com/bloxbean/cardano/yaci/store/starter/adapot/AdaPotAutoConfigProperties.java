@@ -20,7 +20,16 @@ public class AdaPotAutoConfigProperties {
         //Batch size for updating rewards in the db
         private int updateRewardDbBatchSize = 200;
         private boolean bulkUpdateReward = true;
-        private boolean bulkUpdateRewardWithCopy = true;
+        private boolean bulkUpdateRewardWithCopy = false;
+
+        // PostgreSQL Bulk Load Memory Configuration for Reward Operations
+        // Default is null to use PostgreSQL defaults
+        private String rewardBulkLoadWorkMem;
+        private String rewardBulkLoadMaintenanceWorkMem;
+
+        // PostgreSQL Memory Configuration for Stake Snapshot Operations
+        // Default is null to use PostgreSQL defaults
+        private String stakeSnapshotWorkMem;
 
         //Verify adapot calculation values with known values (db sync)
         private boolean verifyAdapotCalcValues = true;

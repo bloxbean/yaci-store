@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.staking;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -29,6 +30,6 @@ public class SpringBootTestApplication {
 
     @Bean
     public PluginRegistry pluginRegistry(StoreProperties storeProperties) {
-        return new PluginRegistry(storeProperties, List.of(), null);
+        return new PluginRegistry(storeProperties, List.of(), null, new PluginMetricsCollector(storeProperties, null));
     }
 }

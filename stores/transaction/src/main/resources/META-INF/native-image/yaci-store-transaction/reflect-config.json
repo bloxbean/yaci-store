@@ -30,6 +30,12 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.bloxbean.cardano.yaci.store.transaction.jooq.tables.pojos.TransactionCbor",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.bloxbean.cardano.yaci.store.transaction.jooq.tables.records.InvalidTransaction",
     "allPublicConstructors": true,
     "allPublicFields": true,
@@ -49,6 +55,12 @@
   },
   {
     "name": "com.bloxbean.cardano.yaci.store.transaction.jooq.tables.records.WithdrawalRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.transaction.jooq.tables.records.TransactionCborRecord",
     "allPublicConstructors": true,
     "allPublicFields": true,
     "allDeclaredMethods": true

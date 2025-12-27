@@ -5,6 +5,16 @@ import lombok.extern.slf4j.Slf4j;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * The DrepActiveUntilComparator class is responsible for comparing active_until value (drep)
@@ -15,14 +25,30 @@ public class DrepActiveUntilComparator {
     static int startEpoch = 740;
     static int endEpoch = 902;
 
+    private static final Path LOG_DIR = Paths.get("logs");
+    private static final DateTimeFormatter LOG_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final String RUN_TS = LocalDateTime.now().format(LOG_TS_FORMAT);
+    private static final Path LOG_FILE = LOG_DIR.resolve("drep_active_until_compare-" + RUN_TS + ".log");
+
+    static {
+        try {
+            if (!Files.exists(LOG_DIR)) Files.createDirectories(LOG_DIR);
+            if (!Files.exists(LOG_FILE)) Files.createFile(LOG_FILE);
+            logLine("===== Start DrepActiveUntil comparison run =====");
+            logLine("Log file: " + LOG_FILE.toAbsolutePath());
+        } catch (IOException e) {
+            System.err.println("Failed to initialize log file: " + e.getMessage());
+        }
+    }
+
     // Connection details for the two databases (update these with your real values)
     static String dbSyncUrl = "jdbc:postgresql://<db_sync_host>:<db_sync_port>/cexplorer?currentSchema=public";
-    static String dbSyncUser = "postgres";
+    static String dbSyncUser = "<dbsync_user>";
     static String dbSyncPassword = "<dbsync_password>";
 
-    static String storeUrl = "jdbc:postgresql://localhost:5433/yaci_indexer?currentSchema=preview";
-    static String storeDBUser = "user";
-    static String storeDBPassword = "";
+    static String storeUrl = "jdbc:postgresql://<store_host>:<store_port>/<db_name>?currentSchema=<schema_name>";
+    static String storeDBUser = "<store_user>";
+    static String storeDBPassword = "<store_password>";
 
     private static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
@@ -36,7 +62,7 @@ public class DrepActiveUntilComparator {
         return hash.toLowerCase();
     }
 
-    public static void compareActiveUntilForEpoch(int epoch) {
+    public static int compareActiveUntilForEpoch(int epoch) {
         String dbSyncQuery = "SELECT dh.raw, d.active_until FROM drep_distr d " +
                 "INNER JOIN drep_hash dh ON dh.id = d.hash_id WHERE d.epoch_no = ? and d.active_until is not null";
 
@@ -46,6 +72,7 @@ public class DrepActiveUntilComparator {
         Map<String, Integer> indexerMap = new HashMap<>();
 
         boolean mismatch = false;
+        int mismatchCount = 0;
 
         // Fetch from DB Sync
         try (Connection conn = DriverManager.getConnection(dbSyncUrl, dbSyncUser, dbSyncPassword);
@@ -64,6 +91,7 @@ public class DrepActiveUntilComparator {
             }
         } catch (SQLException e) {
             log.error("Error while fetching data from DB Sync for epoch {}" , epoch, e);
+            logErrorToFile("DB Sync query error for epoch " + epoch, e);
         }
 
         // Fetch from Yaci Store
@@ -82,6 +110,7 @@ public class DrepActiveUntilComparator {
             }
         } catch (SQLException e) {
             log.error("Error while fetching data from Yaci Store for epoch {}", epoch, e);
+            logErrorToFile("Yaci Store query error for epoch " + epoch, e);
         }
 
         // Compare results
@@ -93,28 +122,32 @@ public class DrepActiveUntilComparator {
                 Integer storeValue = indexerMap.get(hash);
                 if (!equalsNullableInt(dbValue, storeValue)) {
                     mismatch = true;
-                    System.out.println("Mismatch for hash: " + hash);
-                    System.out.println("  → DB Sync   : active_until = " + dbValue);
-                    System.out.println("  → Yaci Store: active_until = " + storeValue);
+                    mismatchCount++;
+                    logLine("Mismatch for hash: " + hash);
+                    logLine("  → DB Sync   : active_until = " + dbValue);
+                    logLine("  → Yaci Store: active_until = " + storeValue);
                 }
             } else {
                 mismatch = true;
-                System.out.println("Hash " + hash + " found in DB Sync but not in Yaci Store.");
+                mismatchCount++;
+                logLine("Hash " + hash + " found in DB Sync but not in Yaci Store.");
             }
         }
 
         for (String hash : indexerMap.keySet()) {
             if (!dbSyncMap.containsKey(hash)) {
                 mismatch = true;
-                System.out.println("Hash " + hash + " found in Yaci Store but not in DB Sync.");
+                mismatchCount++;
+                logLine("Hash " + hash + " found in Yaci Store but not in DB Sync.");
             }
         }
 
         if (mismatch) {
-            System.out.println("❌ Mismatch found in active_until for epoch " + epoch);
+            logLine("❌ Mismatches found: " + mismatchCount + " in active_until for epoch " + epoch);
         } else {
-            System.out.println("✅ All active_until values match for epoch " + epoch);
+            logLine("✅ All active_until values match for epoch " + epoch);
         }
+        return mismatchCount;
     }
 
     private static boolean equalsNullableInt(Integer a, Integer b) {
@@ -122,10 +155,44 @@ public class DrepActiveUntilComparator {
     }
 
     public static void main(String[] args) {
+        int totalMismatchCount = 0;
+        int epochsWithMismatch = 0;
+        int totalEpochs = Math.max(0, endEpoch - startEpoch + 1);
+
         for (int i = startEpoch; i <= endEpoch; i++) {
-            System.out.println("\n============ Comparing active_until for epoch: " + i + " ============");
-            compareActiveUntilForEpoch(i);
-            System.out.println("============ Finished epoch: " + i + " ============");
+            logLine("\n============ Comparing active_until for epoch: " + i + " ============");
+            int epochMismatch = compareActiveUntilForEpoch(i);
+            if (epochMismatch > 0) epochsWithMismatch++;
+            totalMismatchCount += epochMismatch;
+            logLine("============ Finished epoch: " + i + " ============");
+        }
+
+        logLine("\n===== Drep ActiveUntil Comparison Summary =====");
+        logLine("Epochs compared: " + totalEpochs);
+        logLine("Epochs with mismatches: " + epochsWithMismatch + "/" + totalEpochs);
+        logLine("Total mismatches across all epochs: " + totalMismatchCount);
+    }
+
+    private static synchronized void logLine(String message) {
+        System.out.println(message);
+        try {
+            Files.write(LOG_FILE, (message + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("Failed to write log line: " + e.getMessage());
+        }
+    }
+
+    private static synchronized void logErrorToFile(String message, Throwable t) {
+        System.err.println(message + ": " + t.getMessage());
+        try (StringWriter sw = new StringWriter(); PrintWriter pw = new PrintWriter(sw)) {
+            t.printStackTrace(pw);
+            String stack = sw.toString();
+            Files.write(LOG_FILE,
+                    (message + System.lineSeparator() + stack + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException ioe) {
+            System.err.println("Failed to write error log: " + ioe.getMessage());
         }
     }
 }

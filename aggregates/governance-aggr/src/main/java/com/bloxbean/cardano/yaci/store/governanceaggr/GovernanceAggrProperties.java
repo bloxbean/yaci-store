@@ -14,4 +14,8 @@ public class GovernanceAggrProperties {
 
     @Builder.Default
     private boolean isDevnetConwayBootstrapAvailable = false;
+
+    // PostgreSQL Memory Configuration for DRep Distribution Snapshot Operations
+    // Default is null to use PostgreSQL defaults
+    private String drepDistWorkMem;
 }

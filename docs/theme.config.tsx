@@ -2,7 +2,16 @@ import React from 'react'
 import { DocsThemeConfig } from 'nextra-theme-docs'
 
 const config: DocsThemeConfig = {
-  logo: <span><b>Yaci Store</b></span>,
+  logo: (
+    <>
+      <img
+        src="/images/YaciStore.svg"
+        alt="Yaci Store Logo"
+        style={{ height: '32px', marginRight: '8px' }}
+      />
+      <span><b>Yaci Store</b></span>
+    </>
+  ),
   project: {
     link: 'https://github.com/bloxbean/yaci-store',
   },
@@ -11,7 +20,7 @@ const config: DocsThemeConfig = {
   },
   docsRepositoryBase: 'https://github.com/bloxbean/yaci-store/tree/main/docs',
   footer: {
-    text: '© 2024 BloxBean project',
+    text: '© 2025 BloxBean project',
   },
    useNextSeoProps() {
         return {

@@ -1,3 +1,6 @@
+TRUNCATE TABLE block;
+TRUNCATE TABLE block_cbor;
+
 INSERT INTO block
 (hash, number, body_hash, body_size, epoch, total_output, total_fees, block_time, era, issuer_vkey, leader_vrf,
  nonce_vrf, prev_hash, protocol_version, slot, vrf_result, vrf_vkey, no_of_txs, slot_leader, create_datetime,

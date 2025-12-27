@@ -7,15 +7,19 @@ import com.bloxbean.cardano.yaci.store.events.internal.EpochTransitionCommitEven
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
+import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PluginEventHandlers extends PluginBaseEventHandler {
 
-    public PluginEventHandlers(PluginRegistry pluginRegistry, StoreProperties storeProperties) {
+    public PluginEventHandlers(PluginRegistry pluginRegistry,
+                              StoreProperties storeProperties,
+                              PluginMetricsCollector metricsCollector) {
         this.pluginRegistry = pluginRegistry;
         this.storeProperties = storeProperties;
+        this.metricsCollector = metricsCollector;
     }
 
     @EventListener

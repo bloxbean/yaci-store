@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.governance.service;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -33,5 +34,18 @@ public class GovActionProposalService {
 
     public Optional<GovActionProposal> getMostRecentGovActionProposalByGovActionType(GovActionType type) {
         return govActionProposalStorageReader.findMostRecentGovActionByType(type);
+    }
+
+    /**
+     * Get governance action proposal by CIP-129 bech32 governance action ID
+     * @param govActionIdBech32 The governance action ID in bech32 format (e.g., gov_action1...)
+     * @return Optional containing the governance action proposal if found
+     */
+    public Optional<GovActionProposal> getGovActionProposalByGovActionId(String govActionIdBech32) {
+        var govActionId = GovUtil.toGovActionIdFromBech32(govActionIdBech32);
+        return govActionProposalStorageReader.findByGovActionTxHashAndGovActionIndex(
+                govActionId.getTransactionId(),
+                govActionId.getGovActionIndex()
+        );
     }
 }

@@ -2,8 +2,12 @@ package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
+import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -26,10 +30,16 @@ import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.ST
 @EnableIf(STORE_BLOCKS_ENABLED)
 @Slf4j
 public class BlockProcessor {
-    private BlockStorage blockStorage;
+    private final BlockStorage blockStorage;
+    private final BlockCborStorage blockCborStorage;
+    private final BlocksStoreProperties blocksStoreProperties;
 
-    public BlockProcessor(BlockStorage blockStorage) {
+    public BlockProcessor(BlockStorage blockStorage,
+                          BlockCborStorage blockCborStorage,
+                          BlocksStoreProperties blocksStoreProperties) {
         this.blockStorage = blockStorage;
+        this.blockCborStorage = blockCborStorage;
+        this.blocksStoreProperties = blocksStoreProperties;
     }
 
     @EventListener
@@ -74,6 +84,36 @@ public class BlockProcessor {
         handleTransaction(block, blockEvent.getBlock().getTransactionBodies());
 
         blockStorage.save(block);
+
+        if (blocksStoreProperties.isSaveCbor()) {
+            saveBlockCbor(blockEvent, blockHeader.getHeaderBody().getBlockHash(), slot);
+        }
+    }
+
+    /**
+     * Save block CBOR data to separate table when CBOR storage is enabled.
+     * CBOR data is retrieved from the Block object in BlockEvent.
+     * The Block.cbor field contains hex-encoded CBOR string which is decoded to bytes.
+     */
+    private void saveBlockCbor(BlockEvent blockEvent, String blockHash, long slot) {
+        com.bloxbean.cardano.yaci.core.model.Block yaciBlock = blockEvent.getBlock();
+
+        String cborHex = yaciBlock.getCbor();
+        if (cborHex == null || cborHex.isEmpty()) {
+            log.debug("No CBOR data available for block {} (YaciConfig.INSTANCE.setReturnBlockCbor(true) may not be set)", blockHash);
+            return;
+        }
+
+        byte[] cborData = HexUtil.decodeHexString(cborHex);
+
+        BlockCbor blockCbor = BlockCbor.builder()
+                .blockHash(blockHash)
+                .cborData(cborData)
+                .cborSize(cborData.length)
+                .slot(slot)
+                .build();
+
+        blockCborStorage.save(blockCbor);
     }
 
     public void handleTransaction(Block block, List<TransactionBody> transactionBodies) {
@@ -100,10 +140,13 @@ public class BlockProcessor {
     @EventListener
     @Order(1)
     @Transactional
-    //TODO -- add test
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
         int count = blockStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
-
         log.info("Rollback -- {} block records", count);
+
+        if (blocksStoreProperties.isSaveCbor()) {
+            int cborDeleted = blockCborStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+            log.info("Rollback -- {} block_cbor records", cborDeleted);
+        }
     }
 }

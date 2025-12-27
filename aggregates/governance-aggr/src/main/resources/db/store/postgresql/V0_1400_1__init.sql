@@ -1,4 +1,4 @@
-drop table if exists drep_dist;
+drop table if exists drep_dist cascade;
 create table drep_dist
 (
     drep_hash       varchar(56),
@@ -10,7 +10,10 @@ create table drep_dist
     expiry          int,
     update_datetime timestamp,
     primary key (drep_hash, drep_type, epoch)
-);
+) partition by range (epoch);
+
+create table drep_dist_default
+    partition of drep_dist default;
 
 CREATE INDEX idx_drep_dist_drep_hash
     ON drep_dist (drep_hash);

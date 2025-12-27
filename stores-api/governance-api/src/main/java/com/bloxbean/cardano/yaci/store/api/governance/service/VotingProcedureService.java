@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.api.governance.service;
 
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -34,5 +35,24 @@ public class VotingProcedureService {
 
     public List<VotingProcedure> getVotingProcedureList(int page, int count, Order order) {
         return votingProcedureStorageReader.findAll(page, count, order);
+    }
+
+    /**
+     * Get voting procedures for a governance action by CIP-129 bech32 governance action ID
+     * @param govActionIdBech32 The governance action ID in bech32 format (e.g., gov_action1...)
+     * @param page Page number
+     * @param count Number of items per page
+     * @param order Sort order
+     * @return List of voting procedures for the governance action
+     */
+    public List<VotingProcedure> getVotingProcedureByGovActionId(String govActionIdBech32, int page, int count, Order order) {
+        var govActionId = GovUtil.toGovActionIdFromBech32(govActionIdBech32);
+        return votingProcedureStorageReader.findByGovActionTxHashAndGovActionIndex(
+                govActionId.getTransactionId(),
+                govActionId.getGovActionIndex(),
+                page,
+                count,
+                order
+        );
     }
 }

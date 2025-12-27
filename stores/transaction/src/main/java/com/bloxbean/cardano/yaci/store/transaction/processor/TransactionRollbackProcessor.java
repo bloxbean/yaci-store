@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionStorage;
+import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,18 @@ public class TransactionRollbackProcessor {
     private final TransactionStorage transactionStorage;
     private final TransactionWitnessStorage transactionWitnessStorage;
     private final InvalidTransactionStorage invalidTransactionStorage;
+    private final TransactionCborStorage transactionCborStorage;
 
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
         int count = transactionStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} transactions records", count);
+
+        int cborDeleted = transactionCborStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        if (cborDeleted > 0) {
+            log.info("Rollback -- {} transaction_cbor records", cborDeleted);
+        }
 
         count = transactionWitnessStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} transaction_witness records", count);

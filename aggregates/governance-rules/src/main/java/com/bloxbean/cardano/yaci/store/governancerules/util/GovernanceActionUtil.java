@@ -85,6 +85,12 @@ public class GovernanceActionUtil {
         return totalWithdrawal.compareTo(treasury) <= 0;
     }
 
+
+    /**
+     * Whether an accepted action delays acceptance of subsequent actions in the same epoch.
+     * Mirrors ledger behaviour: Cardano.Ledger.Conway.Rules.Ratify.delayingAction
+     * at cardano-ledger/eras/conway/impl/src/Cardano/Ledger/Conway/Rules/Ratify.hs:282.
+     */
     public static boolean isDelayingAction(GovActionType govActionType) {
         return govActionType == GovActionType.HARD_FORK_INITIATION_ACTION
                 || govActionType == GovActionType.NEW_CONSTITUTION
@@ -92,6 +98,11 @@ public class GovernanceActionUtil {
                 || govActionType == GovActionType.NO_CONFIDENCE;
     }
 
+    /**
+     * Priority used to sort actions for evaluation, aligned with
+     * Cardano.Ledger.Conway.Governance.Internal.actionPriority
+     * at cardano-ledger/eras/conway/impl/src/Cardano/Ledger/Conway/Governance/Internal.hs:542.
+     */
     public static int getActionPriority(GovActionType govActionType) {
         return switch (govActionType) {
             case NO_CONFIDENCE -> 0;
