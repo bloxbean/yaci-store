@@ -90,8 +90,8 @@ public record ProposalVotingStatsMcp(
             stats.getDrepNoVoteStake(),
             lovelaceToAda(stats.getDrepNoVoteStake()),
 
-            stats.getDrepNotVotedStake(),
-            lovelaceToAda(stats.getDrepNotVotedStake()),
+            stats.getDrepDoNotVoteStake(),
+            lovelaceToAda(stats.getDrepDoNotVoteStake()),
 
             stats.getDrepNoConfidenceStake(),
             lovelaceToAda(stats.getDrepNoConfidenceStake()),
