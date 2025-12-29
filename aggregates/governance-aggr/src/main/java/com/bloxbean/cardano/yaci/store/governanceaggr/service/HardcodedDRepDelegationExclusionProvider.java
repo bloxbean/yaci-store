@@ -233,6 +233,14 @@ public class HardcodedDRepDelegationExclusionProvider implements DRepDelegationE
                         .slot(143584927L)
                         .txIndex(7)
                         .certIndex(0)
+                        .build(),
+                DRepDelegationExclusion.builder()
+                        .address("stake1uxr98j3jg9dgxs3jtfnjg20x8nwaf2gsahxlj5vj7ycclzqy5hra2")
+                        .drepHash("2358e09cc591f954fdd2038c93c9b2704a1a892a35476f319e4a056d")
+                        .drepType(DrepType.ADDR_KEYHASH)
+                        .slot(144049770L)
+                        .txIndex(1)
+                        .certIndex(0)
                         .build()
         );
     }
