@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Types;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -567,35 +568,38 @@ public class DRepDistService {
         }
 
         StringBuilder condition = new StringBuilder();
-        condition.append("\n                    and not (");
+        condition.append("\n                    and not exists (\n");
+        condition.append("                        select 1\n");
+        condition.append("                        from (\n");
 
         for (int i = 0; i < exclusions.size(); i++) {
-            DRepDelegationExclusion exclusion = exclusions.get(i);
-
-            if (i > 0) {
-                condition.append(" or");
+            if (i == 0) {
+                condition.append("                            select\n");
+                condition.append("                                :excl_address_").append(i).append(" as address,\n");
+                condition.append("                                :excl_drep_hash_").append(i).append(" as drep_hash,\n");
+                condition.append("                                :excl_drep_type_").append(i).append(" as drep_type,\n");
+                condition.append("                                :excl_slot_").append(i).append(" as slot,\n");
+                condition.append("                                :excl_tx_index_").append(i).append(" as tx_index,\n");
+                condition.append("                                :excl_cert_index_").append(i).append(" as cert_index\n");
+            } else {
+                condition.append("                            union all select\n");
+                condition.append("                                :excl_address_").append(i).append(",\n");
+                condition.append("                                :excl_drep_hash_").append(i).append(",\n");
+                condition.append("                                :excl_drep_type_").append(i).append(",\n");
+                condition.append("                                :excl_slot_").append(i).append(",\n");
+                condition.append("                                :excl_tx_index_").append(i).append(",\n");
+                condition.append("                                :excl_cert_index_").append(i).append("\n");
             }
-
-            condition.append(" (rd.address = :excl_address_").append(i)
-                    .append(" and rd.drep_hash = :excl_drep_hash_").append(i)
-                    .append(" and rd.drep_type = :excl_drep_type_").append(i);
-
-            if (exclusion.getSlot() != null) {
-                condition.append(" and rd.slot= :excl_slot_").append(i);
-            }
-
-            if (exclusion.getTxIndex() != null) {
-                condition.append(" and rd.tx_index = :excl_tx_index_").append(i);
-            }
-
-            if (exclusion.getCertIndex() != null) {
-                condition.append(" and rd.cert_index = :excl_cert_index_").append(i);
-            }
-
-            condition.append(")");
         }
 
-        condition.append(")");
+        condition.append("                        ) excl\n");
+        condition.append("                        where excl.address = rd.address\n");
+        condition.append("                          and excl.drep_hash = rd.drep_hash\n");
+        condition.append("                          and excl.drep_type = rd.drep_type\n");
+        condition.append("                          and (excl.slot is null or excl.slot = rd.slot)\n");
+        condition.append("                          and (excl.tx_index is null or excl.tx_index = rd.tx_index)\n");
+        condition.append("                          and (excl.cert_index is null or excl.cert_index = rd.cert_index)\n");
+        condition.append("                    )\n");
         return condition.toString();
     }
 
@@ -606,25 +610,12 @@ public class DRepDistService {
 
         for (int i = 0; i < exclusions.size(); i++) {
             DRepDelegationExclusion exclusion = exclusions.get(i);
-
-            if (exclusion.getAddress() != null) {
-                params.addValue("excl_address_" + i, exclusion.getAddress());
-            }
-            if (exclusion.getDrepHash() != null) {
-                params.addValue("excl_drep_hash_" + i, exclusion.getDrepHash());
-            }
-            if (exclusion.getDrepType() != null) {
-                 params.addValue("excl_drep_type_" + i, exclusion.getDrepType().name());
-            }
-            if (exclusion.getSlot() != null) {
-                params.addValue("excl_slot_" + i, exclusion.getSlot());
-            }
-            if (exclusion.getTxIndex() != null) {
-                params.addValue("excl_tx_index_" + i, exclusion.getTxIndex());
-            }
-            if (exclusion.getCertIndex() != null) {
-                params.addValue("excl_cert_index_" + i, exclusion.getCertIndex());
-            }
+            params.addValue("excl_address_" + i, exclusion.getAddress(), Types.VARCHAR);
+            params.addValue("excl_drep_hash_" + i, exclusion.getDrepHash(), Types.VARCHAR);
+            params.addValue("excl_drep_type_" + i, exclusion.getDrepType() == null ? null : exclusion.getDrepType().name(), Types.VARCHAR);
+            params.addValue("excl_slot_" + i, exclusion.getSlot(), Types.BIGINT);
+            params.addValue("excl_tx_index_" + i, exclusion.getTxIndex(), Types.INTEGER);
+            params.addValue("excl_cert_index_" + i, exclusion.getCertIndex(), Types.INTEGER);
         }
     }
 
