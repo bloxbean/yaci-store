@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.signing.remote;
+package com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote;
 
 import lombok.Builder;
 import lombok.Value;

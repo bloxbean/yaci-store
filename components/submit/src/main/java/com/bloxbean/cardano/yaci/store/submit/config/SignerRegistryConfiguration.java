@@ -13,11 +13,11 @@ import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryPropert
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.Entry;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.RemoteSignerProperties;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.SignerType;
-import com.bloxbean.cardano.yaci.store.submit.signing.AccountSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.AddressOnlySignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.RemoteSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.ScopedSignerBinding;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.AccountSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.AddressOnlySignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.RemoteSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.ScopedSignerBinding;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.RemoteSignerClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,6 +27,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Optional;
@@ -131,7 +132,9 @@ public class SignerRegistryConfiguration {
 
         return scopes.stream()
                 .filter(StringUtils::hasText)
+                .flatMap(scope -> Arrays.stream(scope.split(",")))
                 .map(scope -> scope.trim().toLowerCase(Locale.ROOT))
+                .filter(StringUtils::hasText)
                 .collect(Collectors.toCollection(HashSet::new));
     }
 

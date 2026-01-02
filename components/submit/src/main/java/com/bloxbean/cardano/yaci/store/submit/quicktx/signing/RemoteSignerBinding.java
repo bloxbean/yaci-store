@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.signing;
+package com.bloxbean.cardano.yaci.store.submit.quicktx.signing;
 
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.function.TxSigner;
@@ -9,14 +9,13 @@ import com.bloxbean.cardano.client.transaction.spec.VkeyWitness;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.hdwallet.Wallet;
 import com.bloxbean.cardano.yaci.store.submit.config.SubmitSignerRegistryProperties.RemoteSignerProperties;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerRequest;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerResponse;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.RemoteSignerClient;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.RemoteSignerRequest;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.RemoteSignerResponse;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -41,12 +40,23 @@ public class RemoteSignerBinding implements SignerBinding {
 
     @Override
     public TxSigner signerFor(String scope) {
-        String normalized = normalize(scope);
-        if (!CollectionUtils.isEmpty(allowedScopes) && !allowedScopes.contains(normalized)) {
+        // Support comma-separated scopes like "payment,stake"
+        // Split and check if ANY of the scopes is allowed
+        String[] scopeParts = scope.split(",");
+        for (String part : scopeParts) {
+            String normalized = SignerScopeUtil.normalize(part);
+            if (!CollectionUtils.isEmpty(allowedScopes) && allowedScopes.contains(normalized)) {
+                // At least one scope matches - use the normalized scope for remote signing
+                return (ctx, tx) -> addRemoteWitness(scope, tx);
+            }
+        }
+
+        // None of the scopes matched
+        if (!CollectionUtils.isEmpty(allowedScopes)) {
             throw new IllegalArgumentException("Scope '%s' not allowed for ref '%s'".formatted(scope, ref));
         }
 
-        return (ctx, tx) -> addRemoteWitness(normalized, tx);
+        return (ctx, tx) -> addRemoteWitness(scope, tx);
     }
 
     @Override
@@ -124,13 +134,5 @@ public class RemoteSignerBinding implements SignerBinding {
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid hex for %s in ref='%s'".formatted(name, ref), e);
         }
-    }
-
-    private String normalize(String scope) {
-        if (scope == null) {
-            return "";
-        }
-
-        return scope.trim().toLowerCase(Locale.ROOT);
     }
 }

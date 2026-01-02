@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.submit.config;
 
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.HttpRemoteSignerClient;
-import com.bloxbean.cardano.yaci.store.submit.signing.remote.RemoteSignerClient;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.HttpRemoteSignerClient;
+import com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote.RemoteSignerClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;

@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.signing.remote;
+package com.bloxbean.cardano.yaci.store.submit.quicktx.signing.remote;
 
 public class RemoteSignerException extends RuntimeException {
     public RemoteSignerException(String message) {

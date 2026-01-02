@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.signing;
+package com.bloxbean.cardano.yaci.store.submit.quicktx.signing;
 
 import com.bloxbean.cardano.client.account.Account;
 import com.bloxbean.cardano.client.address.Address;
@@ -7,7 +7,6 @@ import com.bloxbean.cardano.client.function.helper.SignerProviders;
 import com.bloxbean.cardano.client.quicktx.signing.SignerBinding;
 import com.bloxbean.cardano.hdwallet.Wallet;
 
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -22,7 +21,7 @@ public class AccountSignerBinding implements SignerBinding {
 
     @Override
     public TxSigner signerFor(String scope) {
-        String normalized = normalize(scope);
+        String normalized = SignerScopeUtil.normalize(scope);
 
         return switch (normalized) {
             case "payment" -> SignerProviders.signerFrom(account);
@@ -44,13 +43,5 @@ public class AccountSignerBinding implements SignerBinding {
     public Optional<String> preferredAddress() {
         Address address = account.getBaseAddress();
         return address == null ? Optional.empty() : Optional.ofNullable(address.toBech32());
-    }
-
-    private String normalize(String scope) {
-        if (scope == null) {
-            return "";
-        }
-
-        return scope.trim().toLowerCase(Locale.ROOT);
     }
 }

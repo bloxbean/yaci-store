@@ -109,10 +109,10 @@ public class TxLifecycleController {
     }
 
     /**
-     * Build unsigned transaction from YAML.
+     * Build and sign transaction from YAML.
      */
     @PostMapping(value = "/build", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Build unsigned transaction from YAML")
+    @Operation(summary = "Build and sign transaction from YAML")
     public ResponseEntity<?> buildTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
         if (txPlanBuildService.isEmpty()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -121,6 +121,33 @@ public class TxLifecycleController {
 
         TxPlanBuildResult result = txPlanBuildService.get().buildFromYaml(txPlanYaml);
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Build, sign, and submit transaction from YAML in a single call.
+     */
+    @PostMapping(value = "/build-and-submit", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Build, sign, and submit transaction from YAML")
+    public ResponseEntity<SubmittedTransaction> buildAndSubmitTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
+        if (txPlanBuildService.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
+
+        // Build the transaction
+        TxPlanBuildResult buildResult = txPlanBuildService.get().buildFromYaml(txPlanYaml);
+
+        // Submit the transaction
+        byte[] txBytes = HexUtil.decodeHexString(buildResult.txBodyCbor());
+        SubmittedTransaction submittedTx = lifecycleService.submitTransaction(txBytes);
+
+        // Add txBodyCbor to the response
+        submittedTx.setTxBodyCbor(buildResult.txBodyCbor());
+
+        if (submittedTx.getStatus() == TxStatus.FAILED) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(submittedTx);
+        }
+
+        return ResponseEntity.accepted().body(submittedTx);
     }
 
     /**

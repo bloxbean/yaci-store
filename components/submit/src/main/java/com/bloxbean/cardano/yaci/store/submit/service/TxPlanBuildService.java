@@ -16,7 +16,7 @@ import org.springframework.util.StringUtils;
 import java.util.Optional;
 
 /**
- * Service to build unsigned transactions from YAML TxPlan definitions using QuickTx.
+ * Service to build and sign transactions from YAML TxPlan definitions using QuickTx.
  */
 @Service
 @ConditionalOnBean(QuickTxBuilder.class)
@@ -36,7 +36,7 @@ public class TxPlanBuildService {
         QuickTxBuilder.TxContext context = signerRegistry
                 .map(registry -> quickTxBuilder.compose(plan, registry))
                 .orElseGet(() -> quickTxBuilder.compose(plan));
-        var transaction = context.build();
+        var transaction = context.buildAndSign();  // Changed from build() to buildAndSign() to invoke signers
         String cborHex = HexUtil.encodeHexString(transaction.serialize());
         return new TxPlanBuildResult(cborHex);
     }
