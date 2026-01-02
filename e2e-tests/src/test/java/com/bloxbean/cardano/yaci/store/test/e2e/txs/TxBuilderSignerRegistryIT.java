@@ -39,8 +39,8 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
         System.out.println("PlutusV3 Script CborHex: " + scriptCborHex);
     }
 
+    /*=================== Group 1: Basic Payment =======================*/
     @Test
-    @Order(1)
     @DisplayName("Basic payment with remote signer (Build & Submit)")
     void buildTxPlan_withRemoteSignerRef_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
@@ -71,7 +71,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(2)
     @DisplayName("Multi-output payment with remote signer")
     void buildTxPlan_multiOutputPayment_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
@@ -107,7 +106,75 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(7)
+    @DisplayName("Metadata transaction with remote signer")
+    void buildTxPlan_metadataTransaction_shouldSucceed() {
+        topUpFund(account0.baseAddress(), 200);
+        waitForFunds(account0.baseAddress());
+
+        // Note: metadata in MetadataIntent expects a YAML string, not a nested object
+        String txYaml = """
+            version: 1.0
+            context:
+              signers:
+                - ref: remote://ops
+                  scope: payment
+            transaction:
+              - tx:
+                  from: %s
+                  intents:
+                    - type: payment
+                      address: %s
+                      amounts:
+                        - unit: lovelace
+                          quantity: 3000000
+                    - type: metadata
+                      metadata: |
+                        674:
+                          msg:
+                            - E2E Test Transaction
+                            - Testing TxPlan API with remote signer
+                            - Metadata stored on-chain
+            """.formatted(account0.baseAddress(), account1.baseAddress());
+
+        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
+        assertTxPlanSuccess(response);
+        assertThat(response.txHash).isNotNull();
+        System.out.println("  Metadata Transaction: Build and submit successful");
+        System.out.println("  Tx hash: " + response.txHash);
+    }
+
+    /*=================== Group 2: Stake Operations =======================*/
+
+    @Test
+    @Order(1)
+    @DisplayName("Stake registration with remote signer")
+    void buildTxPlan_stakeRegistration_shouldSucceed() {
+        // Use account1 (stake-ops account) for both payment and stake
+        topUpFund(account1.baseAddress(), 300);
+        waitForFunds(account1.baseAddress());
+
+        String txYaml = """
+            version: 1.0
+            context:
+              signers:
+                - ref: remote://stake-ops
+                  scope: payment,stake
+            transaction:
+              - tx:
+                  from: %s
+                  intents:
+                    - type: stake_registration
+                      stake_address: %s
+            """.formatted(account1.baseAddress(), account1.stakeAddress());
+
+        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
+        assertTxPlanSuccess(response);
+        assertThat(response.txHash).isNotNull();
+        System.out.println("✓ TC7 - Stake Registration: Build and submit successful");
+        System.out.println("  Tx hash: " + response.txHash);
+    }
+
+    @Test
     @Disabled("Test pool ID does not exist in devnet. Requires pool registration setup.")
     @DisplayName("Stake delegation with stake scope")
     void buildTxPlan_stakeDelegation_shouldSucceed() {
@@ -139,15 +206,12 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(8)
-    @Disabled("Test pool ID does not exist in devnet. Requires pool registration setup.")
-    @DisplayName("Payment + Stake multi-scope transaction")
-    void buildTxPlan_multiScope_shouldSucceed() {
-        // Use account1 (stake-ops account) for both payment and stake
-        topUpFund(account1.baseAddress(), 300);
+    @DisplayName("Stake deregistration with remote signer")
+    void buildTxPlan_stakeDeregistration_shouldSucceed() {
+        topUpFund(account1.baseAddress(), 200);
         waitForFunds(account1.baseAddress());
 
-        String txYaml = """
+        String deregisterYaml = """
             version: 1.0
             context:
               signers:
@@ -159,62 +223,22 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
               - tx:
                   from: %s
                   intents:
-                    - type: payment
-                      address: %s
-                      amounts:
-                        - unit: lovelace
-                          quantity: 5000000
-                    - type: stake_delegation
+                    - type: stake_deregistration
                       stake_address: %s
-                      pool_id: %s
-            """.formatted(account1.baseAddress(), account2.baseAddress(),
-                         account1.stakeAddress(), POOL_ID);
+            """.formatted(account1.baseAddress(), account1.stakeAddress());
 
-        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
+        TxPlanResponse response = buildAndSubmitTxFromYaml(deregisterYaml);
         assertTxPlanSuccess(response);
         assertThat(response.txHash).isNotNull();
-        System.out.println("✓ TC4 - Multi-scope (payment+stake): Build and submit successful");
+        System.out.println("  Stake Deregistration: Build and submit successful");
         System.out.println("  Tx hash: " + response.txHash);
     }
 
+    /*=================== Group 3: PlutusV3 Script =======================*/
     @Test
-    @Order(5)
-    @DisplayName("Policy scope with remote signer")
-    void buildTxPlan_policyScope_shouldSucceed() {
-        topUpFund(account0.baseAddress(), 200);
-        waitForFunds(account0.baseAddress());
-
-        String txYaml = """
-            version: 1.0
-            context:
-              signers:
-                - ref: remote://ops
-                  scope: payment
-                - ref: remote://policy-ops
-                  scope: policy
-            transaction:
-              - tx:
-                  from: %s
-                  intents:
-                    - type: payment
-                      address: %s
-                      amounts:
-                        - unit: lovelace
-                          quantity: 2000000
-            """.formatted(account0.baseAddress(), account1.baseAddress());
-
-        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
-        assertTxPlanSuccess(response);
-        assertThat(response.txHash).isNotNull();
-        System.out.println("✓ TC5 - Policy Scope with Remote Signer: Build and submit successful");
-        System.out.println("  Tx hash: " + response.txHash);
-    }
-
-    @Test
-    @Order(4)
+    @Order(2)
     @DisplayName("Lock funds to PlutusV3 script address with datum (YAML)")
     void buildTxPlan_scriptTx_lock_shouldSucceed() {
-        // First, fund account0 so we can send to script address
         topUpFund(account0.baseAddress(), 200);
         waitForFunds(account0.baseAddress());
 
@@ -249,21 +273,15 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
         TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
         assertTxPlanSuccess(response);
         assertThat(response.txHash).isNotNull();
-        System.out.println("  Lock to PlutusV3 Script (YAML): Funds locked successfully");
-        System.out.println("  Script address: " + scriptAddress);
-        System.out.println("  Datum (owner payment cred hash): " + paymentCredHash);
-        System.out.println("  Tx hash: " + response.txHash);
+        System.out.println("Lock to PlutusV3 Script (YAML): Funds locked successfully");
+        System.out.println("Script address: " + scriptAddress);
+        System.out.println("Datum (owner payment cred hash): " + paymentCredHash);
+        System.out.println("Tx hash: " + response.txHash);
     }
 
     @Test
-    @Order(6)
-//    @Disabled("Script integrity hash mismatch: YaciStoreProtocolParamsSupplier epoch params don't include cost models. " +
-//              "The /build-and-submit endpoint falls back to hardcoded cost models which differ from devnet. " +
-//              "Fix requires: store.epoch to properly store and provide cost models from protocol params.")
-    @DisplayName("TC6b: ScriptTx unlock with remote signer (PlutusV3)")
+    @DisplayName("ScriptTx unlock with remote signer (PlutusV3)")
     void buildTxPlan_scriptTx_unlock_shouldSucceed() {
-        // TC6a must run first to lock funds to script address
-        // Wait for the locked funds to be synced to yaci-store
         waitForFunds(scriptAddress);
 
         // Now unlock using YAML TxPlan with scriptTx
@@ -320,19 +338,20 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
                 helloWorldHex,             // redeemer bytes
                 account1.baseAddress(),    // receiver
                 scriptCborHex              // script cbor
-            );
+        );
 
         TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
         assertTxPlanSuccess(response);
         assertThat(response.txHash).isNotNull();
-        System.out.println("  ScriptTx Unlock with Remote Signer: Build and submit successful");
-        System.out.println("  Tx hash: " + response.txHash);
+        System.out.println("ScriptTx Unlock with Remote Signer: Build and submit successful");
+        System.out.println("Tx hash: " + response.txHash);
     }
 
+    // =================== Group 4: Multi Signer =======================
     @Test
-    @Order(3)
-    @DisplayName("Stake registration with remote signer")
-    void buildTxPlan_stakeRegistration_shouldSucceed() {
+    @Disabled("Test pool ID does not exist in devnet. Requires pool registration setup.")
+    @DisplayName("Payment + Stake multi-scope transaction")
+    void buildTxPlan_multiScope_shouldSucceed() {
         // Use account1 (stake-ops account) for both payment and stake
         topUpFund(account1.baseAddress(), 300);
         waitForFunds(account1.baseAddress());
@@ -342,24 +361,64 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
             context:
               signers:
                 - ref: remote://stake-ops
-                  scope: payment,stake
+                  scope: payment
+                - ref: remote://stake-ops
+                  scope: stake
             transaction:
               - tx:
                   from: %s
                   intents:
-                    - type: stake_registration
+                    - type: payment
+                      address: %s
+                      amounts:
+                        - unit: lovelace
+                          quantity: 5000000
+                    - type: stake_delegation
                       stake_address: %s
-            """.formatted(account1.baseAddress(), account1.stakeAddress());
+                      pool_id: %s
+            """.formatted(account1.baseAddress(), account2.baseAddress(),
+                         account1.stakeAddress(), POOL_ID);
 
         TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
         assertTxPlanSuccess(response);
         assertThat(response.txHash).isNotNull();
-        System.out.println("✓ TC7 - Stake Registration: Build and submit successful");
+        System.out.println("  Multi-scope (payment+stake): Build and submit successful");
         System.out.println("  Tx hash: " + response.txHash);
     }
 
     @Test
-    @Order(9)
+    @DisplayName("Policy scope with remote signer")
+    void buildTxPlan_policyScope_shouldSucceed() {
+        topUpFund(account0.baseAddress(), 200);
+        waitForFunds(account0.baseAddress());
+
+        String txYaml = """
+            version: 1.0
+            context:
+              signers:
+                - ref: remote://ops
+                  scope: payment
+                - ref: remote://policy-ops
+                  scope: policy
+            transaction:
+              - tx:
+                  from: %s
+                  intents:
+                    - type: payment
+                      address: %s
+                      amounts:
+                        - unit: lovelace
+                          quantity: 2000000
+            """.formatted(account0.baseAddress(), account1.baseAddress());
+
+        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
+        assertTxPlanSuccess(response);
+        assertThat(response.txHash).isNotNull();
+        System.out.println("  Policy Scope with Remote Signer: Build and submit successful");
+        System.out.println("  Tx hash: " + response.txHash);
+    }
+
+    @Test
     @DisplayName("Multiple remote signers in single transaction")
     void buildTxPlan_multipleRemoteSigners_shouldSucceed() {
         topUpFund(account0.baseAddress(), 300);
@@ -392,7 +451,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(10)
     @DisplayName("Mixed local and remote signers")
     void buildTxPlan_mixedSigners_shouldSucceed() {
         // Use account2 (local-alice's account) as the sender
@@ -426,7 +484,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(11)
     @DisplayName("Variable resolution with remote signer")
     void buildTxPlan_variablesWithRemoteSigner_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
@@ -462,7 +519,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(12)
     @DisplayName("Context properties with remote signer")
     void buildTxPlan_contextProperties_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
@@ -493,7 +549,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(13)
     @DisplayName("Multi-scope signer used for single scope")
     void buildTxPlan_multiScopeConfig_shouldSucceed() {
         // Use account1 (stake-ops account) as sender since that's the signer we're using
@@ -526,7 +581,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
     }
 
     @Test
-    @Order(14)
     @DisplayName("Different signer ref URI formats")
     void buildTxPlan_refUriFormats_shouldSucceed() {
         topUpFund(account0.baseAddress(), 200);
@@ -556,77 +610,6 @@ public class TxBuilderSignerRegistryIT extends BaseE2ETest {
         assertTxPlanSuccess(response);
         assertThat(response.txHash).isNotNull();
         System.out.println("  Different ref URI formats: Build and submit successful");
-        System.out.println("  Tx hash: " + response.txHash);
-    }
-
-    @Test
-    @Order(15)
-    @DisplayName("Metadata transaction with remote signer")
-    void buildTxPlan_metadataTransaction_shouldSucceed() {
-        topUpFund(account0.baseAddress(), 200);
-        waitForFunds(account0.baseAddress());
-
-        // Note: metadata in MetadataIntent expects a YAML string, not a nested object
-        String txYaml = """
-            version: 1.0
-            context:
-              signers:
-                - ref: remote://ops
-                  scope: payment
-            transaction:
-              - tx:
-                  from: %s
-                  intents:
-                    - type: payment
-                      address: %s
-                      amounts:
-                        - unit: lovelace
-                          quantity: 3000000
-                    - type: metadata
-                      metadata: |
-                        674:
-                          msg:
-                            - E2E Test Transaction
-                            - Testing TxPlan API with remote signer
-                            - Metadata stored on-chain
-            """.formatted(account0.baseAddress(), account1.baseAddress());
-
-        TxPlanResponse response = buildAndSubmitTxFromYaml(txYaml);
-        assertTxPlanSuccess(response);
-        assertThat(response.txHash).isNotNull();
-        System.out.println("  Metadata Transaction: Build and submit successful");
-        System.out.println("  Tx hash: " + response.txHash);
-    }
-
-    @Test
-    @Order(16)
-    @DisplayName("Stake deregistration with remote signer")
-    void buildTxPlan_stakeDeregistration_shouldSucceed() {
-        // Deregister account1's stake address (which was registered by TC7)
-        // Note: TC7 must run first (Order 4 < Order 16)
-        topUpFund(account1.baseAddress(), 200);
-        waitForFunds(account1.baseAddress());
-
-        String deregisterYaml = """
-            version: 1.0
-            context:
-              signers:
-                - ref: remote://stake-ops
-                  scope: payment
-                - ref: remote://stake-ops
-                  scope: stake
-            transaction:
-              - tx:
-                  from: %s
-                  intents:
-                    - type: stake_deregistration
-                      stake_address: %s
-            """.formatted(account1.baseAddress(), account1.stakeAddress());
-
-        TxPlanResponse response = buildAndSubmitTxFromYaml(deregisterYaml);
-        assertTxPlanSuccess(response);
-        assertThat(response.txHash).isNotNull();
-        System.out.println("  Stake Deregistration: Build and submit successful");
         System.out.println("  Tx hash: " + response.txHash);
     }
 }
