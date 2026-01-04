@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.submit.notification;
 
 import com.bloxbean.cardano.yaci.store.submit.SubmitLifecycleProperties;
-import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.event.TxStatusUpdateEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

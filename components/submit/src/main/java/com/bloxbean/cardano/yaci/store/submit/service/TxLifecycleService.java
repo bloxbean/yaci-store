@@ -4,7 +4,7 @@ import com.bloxbean.cardano.client.transaction.util.TransactionUtil;
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatusUpdateRequest;
-import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.event.TxStatusUpdateEvent;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.mapper.SubmittedTransactionMapper;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.model.SubmittedTransactionEntity;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.SubmittedTransactionRepository;
@@ -42,8 +42,8 @@ public class TxLifecycleService {
     }
 
     @Transactional(readOnly = true)
-    public Set<String> findTxConfirmedAfterSlot(Long slost) {
-        return repository.findByConfirmedSlotGreaterThan(slost).stream()
+    public Set<String> findTxConfirmedAfterSlot(Long slot) {
+        return repository.findByConfirmedSlotGreaterThan(slot).stream()
                 .map(SubmittedTransactionEntity::getTxHash)
                 .collect(Collectors.toSet());
     }

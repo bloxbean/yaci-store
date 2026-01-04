@@ -73,7 +73,6 @@ public class TxSubmitController {
         }
     }
 
-    @ExceptionHandler(Exception.class)
     public ResponseEntity<TxErrorResponse> handleException(Exception e) {
         if (log.isDebugEnabled())
             log.error("Unhandled exception", e);

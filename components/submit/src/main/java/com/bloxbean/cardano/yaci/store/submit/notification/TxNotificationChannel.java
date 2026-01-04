@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.submit.notification;
 
-import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.event.TxStatusUpdateEvent;
 
 /**
  * Interface for transaction status notification channels.

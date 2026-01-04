@@ -1,12 +1,14 @@
 package com.bloxbean.cardano.yaci.store.submit.controller;
 
+import com.bloxbean.cardano.client.exception.CborSerializationException;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;
 import com.bloxbean.cardano.yaci.store.submit.service.TxLifecycleService;
-import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.SubmittedTransactionRepository;
+import com.bloxbean.cardano.yaci.store.submit.service.TxPlanBuildService;
+import com.bloxbean.cardano.yaci.store.submit.service.TxPlanBuildService.TxPlanBuildResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
@@ -15,15 +17,11 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -45,6 +43,7 @@ public class TxLifecycleController {
     
     private final TxLifecycleService lifecycleService;
     private final CursorService cursorService;
+    private final Optional<TxPlanBuildService> txPlanBuildService;
     
     /**
      * Submit transaction with lifecycle tracking (CBOR format).
@@ -110,6 +109,48 @@ public class TxLifecycleController {
     }
 
     /**
+     * Build and sign transaction from YAML.
+     */
+    @PostMapping(value = "/build", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Build and sign transaction from YAML")
+    public ResponseEntity<?> buildTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
+        if (txPlanBuildService.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Tx builder not enabled. Ensure store.cardano.ogmios-url is set and store.utxo / store.epoch modules are enabled."));
+        }
+
+        TxPlanBuildResult result = txPlanBuildService.get().buildFromYaml(txPlanYaml);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Build, sign, and submit transaction from YAML in a single call.
+     */
+    @PostMapping(value = "/build-and-submit", consumes = MediaType.TEXT_PLAIN_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Build, sign, and submit transaction from YAML")
+    public ResponseEntity<SubmittedTransaction> buildAndSubmitTransaction(@RequestBody String txPlanYaml) throws CborSerializationException {
+        if (txPlanBuildService.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
+
+        // Build the transaction
+        TxPlanBuildResult buildResult = txPlanBuildService.get().buildFromYaml(txPlanYaml);
+
+        // Submit the transaction
+        byte[] txBytes = HexUtil.decodeHexString(buildResult.txBodyCbor());
+        SubmittedTransaction submittedTx = lifecycleService.submitTransaction(txBytes);
+
+        // Add txBodyCbor to the response
+        submittedTx.setTxBodyCbor(buildResult.txBodyCbor());
+
+        if (submittedTx.getStatus() == TxStatus.FAILED) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(submittedTx);
+        }
+
+        return ResponseEntity.accepted().body(submittedTx);
+    }
+
+    /**
      * Response DTO for transaction status.
      */
     @Data
@@ -128,4 +169,3 @@ public class TxLifecycleController {
         private String errorMessage;
     }
 }
-
