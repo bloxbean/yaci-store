@@ -1,0 +1,500 @@
+import { Callout } from 'nextra/components'
+
+# Submit Module
+
+Submit module lets you build and send Cardano transactions using simple YAML or raw CBOR.
+
+## Core Capabilities
+
+1. **Build Transactions** - Create transactions from YAML (TxPlan format)
+2. **Submit Transactions** - Send transactions to Cardano network
+3. **Track Status** - Monitor transaction confirmations and finalization
+
+## Quick Start
+
+### Step 1: Configure Ogmios
+
+```yaml
+# config/application.yml
+store:
+  cardano:
+    ogmios-url: http://localhost:1337
+  submit:
+    lifecycle:
+      enabled: true
+```
+
+### Step 2: Submit Your First Transaction
+
+Create `payment.yaml`:
+
+```yaml
+version: 1.0
+context:
+  signers:
+    - ref: remote://ops
+      scope: payment
+transaction:
+  - tx:
+      from: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
+      intents:
+        - type: payment
+          address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+          amounts:
+            - unit: lovelace
+              quantity: 1000000
+```
+
+Submit via API:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tx/lifecycle/build-and-submit \
+  -H "Content-Type: text/plain" \
+  --data-binary @payment.yaml
+```
+
+Response:
+
+```json
+{
+  "txHash": "abc123...",
+  "status": "SUBMITTED",
+  "txBodyCbor": "84a...",
+  "submittedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+## Configuration
+
+### Essential Properties
+
+| Property | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `store.cardano.ogmios-url` | Yes* | - | Ogmios service endpoint |
+| `store.cardano.n2c-node-socket-path` | Yes* | - | Local node socket path |
+| `store.submit.lifecycle.enabled` | No | false | Enable transaction status tracking |
+| `store.submit.lifecycle.success-block-depth` | No | 15 | Confirmations for SUCCESS state |
+| `store.utxo.enabled` | Yes | true | Required for UTXO queries |
+| `store.epoch.enabled` | Yes | true | Required for protocol parameters |
+
+<Callout type="info">
+*Choose ONE submission method: `ogmios-url` (recommended) OR `n2c-node-socket-path`
+</Callout>
+
+### Configuration Examples
+
+#### Using Ogmios (Recommended)
+
+```yaml
+store:
+  cardano:
+    host: preprod-node.play.dev.cardano.org
+    port: 3001
+    protocol-magic: 1
+    ogmios-url: http://localhost:1337
+
+  utxo:
+    enabled: true
+  epoch:
+    enabled: true
+
+  submit:
+    lifecycle:
+      enabled: true
+      success-block-depth: 15
+      finalized-block-depth: 2160
+```
+
+#### Using Local Node (N2C)
+
+```yaml
+store:
+  cardano:
+    n2c-node-socket-path: /path/to/node.socket
+    # OR for remote node via TCP:
+    # n2c-host: localhost
+    # n2c-port: 3001
+```
+
+## Building Transactions with TxPlan
+
+TxPlan is a YAML format for describing transactions. The module handles UTXO selection, fee calculation, and change creation automatically.
+
+### Basic Structure
+
+```yaml
+version: 1.0                    # TxPlan version (required)
+
+context:                        # Transaction context
+  signers:                      # Who signs this transaction
+    - ref: remote://ops         # Signer reference
+      scope: payment            # Signing scope
+
+transaction:                    # Transaction list
+  - tx:                         # Transaction definition
+      from: <sender_address>    # Source address
+      intents:                  # What to do
+        - type: payment         # Intent type
+          address: <receiver>   # Destination
+          amounts:              # Amounts to send
+            - unit: lovelace    # Currency unit
+              quantity: 1000000 # Amount
+```
+
+### Example 1: Basic Payment
+
+*Source: TxBuilderSignerRegistryIT.java:49-64*
+
+```yaml
+version: 1.0
+context:
+  signers:
+    - ref: remote://ops
+      scope: payment
+transaction:
+  - tx:
+      from: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
+      intents:
+        - type: payment
+          address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+          amounts:
+            - unit: lovelace
+              quantity: 1000000
+```
+
+### Example 2: Multi-Output Payment
+
+*Source: TxBuilderSignerRegistryIT.java:79-99*
+
+Send to multiple addresses in one transaction:
+
+```yaml
+version: 1.0
+context:
+  signers:
+    - ref: remote://ops
+      scope: payment
+transaction:
+  - tx:
+      from: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
+      intents:
+        - type: payment
+          address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+          amounts:
+            - unit: lovelace
+              quantity: 1000000
+        - type: payment
+          address: addr_test1qz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp
+          amounts:
+            - unit: lovelace
+              quantity: 2000000
+```
+
+### Example 3: Transaction with Metadata
+
+*Source: TxBuilderSignerRegistryIT.java:115-137*
+
+Attach metadata to your transaction:
+
+```yaml
+version: 1.0
+context:
+  signers:
+    - ref: remote://ops
+      scope: payment
+transaction:
+  - tx:
+      from: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
+      intents:
+        - type: payment
+          address: addr_test1wrrp97u5q77e204axhfzkztdefwqf7cn33ah72dzthgsmnsv68xff
+          amounts:
+            - unit: lovelace
+              quantity: 3000000
+        - type: metadata
+          metadata: |
+            674:
+              msg:
+                - E2E Test Transaction
+                - Testing TxPlan API with remote signer
+                - Metadata stored on-chain
+```
+
+### Example 4: Stake Delegation
+
+*Source: TxBuilderSignerRegistryIT.java:186-201*
+
+Delegate stake to a pool:
+
+```yaml
+version: 1.0
+context:
+  signers:
+    - ref: remote://stake-ops
+      scope: payment
+    - ref: remote://stake-ops
+      scope: stake
+transaction:
+  - tx:
+      from: addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex
+      intents:
+        - type: stake_delegation
+          stake_address: stake_test1uzpq2pktpnj54e64kfgjkm8nqcrv0kgw8t7gah0dtmj44cckjf6kx
+          pool_id: pool1wvqhvyrgwch4jq9aa84hc8q4kzvyq2z3xr6mpafkqmx9wce39zy
+```
+
+<Callout type="warning">
+Stake delegation requires TWO signers: one with `payment` scope and one with `stake` scope. They must be declared separately in the `signers` list.
+</Callout>
+
+### Common Intent Types
+
+| Intent Type | Purpose | Example Use |
+|-------------|---------|-------------|
+| `payment` | Transfer ADA or tokens | Send 5 ADA to address |
+| `metadata` | Attach transaction metadata | Add invoice details |
+| `stake_registration` | Register stake address | Enable staking |
+| `stake_delegation` | Delegate to pool | Earn rewards |
+| `stake_deregistration` | Unregister stake address | Stop staking |
+| `stake_withdrawal` | Claim rewards | Withdraw earned ADA |
+
+### API Endpoints
+
+**Build and Submit (All-in-One)**
+```bash
+POST /api/v1/tx/lifecycle/build-and-submit
+Content-Type: text/plain
+
+# Returns: { "txHash": "...", "status": "SUBMITTED", "txBodyCbor": "..." }
+```
+
+**Build Only (No Submit)**
+```bash
+POST /api/v1/tx/lifecycle/build
+Content-Type: text/plain
+
+# Returns: { "txBodyCbor": "84a..." }
+```
+
+**Submit Raw Transaction**
+```bash
+POST /api/v1/tx/submit
+Content-Type: text/plain
+
+<hex_encoded_cbor>
+
+# Returns: { "txHash": "..." } or HTTP 202
+```
+
+## Transaction Status
+
+Track your transaction from submission to finalization.
+
+### Enable Lifecycle Tracking
+
+```yaml
+store:
+  submit:
+    lifecycle:
+      enabled: true
+      success-block-depth: 15    # Confirmations for SUCCESS
+      finalized-block-depth: 2160 # Confirmations for FINALIZED
+```
+
+### Check Transaction Status
+
+```bash
+GET /api/v1/tx/lifecycle/{txHash}
+```
+
+Response:
+
+```json
+{
+  "txHash": "abc123...",
+  "status": "CONFIRMED",
+  "submittedAt": "2024-01-15T10:30:00Z",
+  "confirmedAt": "2024-01-15T10:30:20Z",
+  "confirmedSlot": 12345678,
+  "confirmedBlockNumber": 9876543,
+  "confirmations": 3
+}
+```
+
+### Transaction States
+
+```
+SUBMITTED → CONFIRMED → SUCCESS → FINALIZED
+     ↓            ↓         ↓
+   FAILED    ROLLED_BACK ←─┘
+                 ↓
+              (resubmit)
+```
+
+| State | Description |
+|-------|-------------|
+| **SUBMITTED** | Sent to network |
+| **CONFIRMED** | In a block |
+| **SUCCESS** | 15+ confirmations (configurable) | 
+| **FINALIZED** | 2160 confirmations (immutable) |
+| **FAILED** | Submission rejected | 
+| **ROLLED_BACK** | Chain reorganization |
+
+**State Transitions:**
+- SUBMITTED → CONFIRMED or FAILED
+- CONFIRMED → SUCCESS or ROLLED_BACK
+- SUCCESS → FINALIZED or ROLLED_BACK (rare)
+- ROLLED_BACK → can resubmit (returns to SUBMITTED)
+
+<Callout type="info">
+The `confirmations` field shows blocks added since confirmation. Once it reaches `success-block-depth`, status changes to SUCCESS.
+</Callout>
+
+<Callout type="warning">
+**ROLLED_BACK** occurs during chain reorganizations. Transactions in this state can be resubmitted to return to the normal flow.
+</Callout>
+
+## Event Notifications
+
+Track transaction status changes in real-time using WebSocket, webhook, or database event logs.
+
+### WebSocket Notifications
+
+Real-time broadcasts to connected clients for dashboards and live tracking.
+
+**Configuration:**
+
+```yaml
+store:
+  submit:
+    lifecycle:
+      websocket:
+        enabled: true
+        endpoint: /ws/tx-lifecycle
+```
+
+**Connect from JavaScript:**
+
+```javascript
+const ws = new WebSocket('ws://localhost:8080/ws/tx-lifecycle');
+
+ws.onmessage = (event) => {
+  const update = JSON.parse(event.data);
+  console.log(`TX ${update.txHash}: ${update.previousStatus} → ${update.newStatus}`);
+};
+```
+
+<Callout type="info">
+All connected clients receive ALL transaction status updates. Use this for real-time dashboards and monitoring interfaces.
+</Callout>
+
+### Webhook Notifications
+
+HTTP POST callbacks for server-to-server integration and microservices.
+
+**Configuration:**
+
+```yaml
+store:
+  submit:
+    lifecycle:
+      webhook:
+        enabled: true
+        url: https://myapp.com/webhook/tx-status
+        secret: your-bearer-token  # Optional authentication
+        timeoutMs: 5000
+```
+
+**Webhook Payload:**
+
+```json
+{
+  "event": "tx.status.update",
+  "timestamp": 1704672000000,
+  "data": {
+    "txHash": "abc123...",
+    "previousStatus": "SUBMITTED",
+    "newStatus": "CONFIRMED",
+    "message": "Transaction confirmed in block 12345678",
+    "submittedAt": 1704671980000,
+    "confirmedAt": 1704672000000,
+    "confirmedSlot": 12345678,
+    "confirmedBlockNumber": 9876543,
+    "successAt": null,
+    "finalizedAt": null,
+    "errorMessage": null
+  }
+}
+```
+
+<Callout type="info">
+Webhooks execute asynchronously and don't block transaction processing. Failed webhook calls are logged but don't affect transaction status.
+</Callout>
+
+### Event Log
+
+Persistent database audit trail for compliance, debugging, and analytics.
+
+**Configuration:**
+
+```yaml
+store:
+  submit:
+    lifecycle:
+      eventlog:
+        enabled: true  # Default: true, recommended
+        retentionDays: 90
+```
+
+**Database Table:** `tx_event_log`
+
+Stores all transaction status changes with timestamps, slot numbers, and block confirmations.
+
+<Callout type="tip">
+Event log is **enabled by default** and recommended for all production deployments. It provides a complete audit trail without requiring external services.
+</Callout>
+
+### Event Triggers
+
+Notifications are sent automatically when transactions change state:
+
+1. **SUBMITTED** - Transaction accepted by network
+2. **CONFIRMED** - Transaction appears in a block
+3. **SUCCESS** - 15 block confirmations reached (configurable)
+4. **FINALIZED** - 2160 block confirmations (mathematical finality)
+5. **ROLLED_BACK** - Chain reorganization detected
+6. **FAILED** - Transaction rejected by network
+
+### Configuration Reference
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `store.submit.lifecycle.websocket.enabled` | false | Enable WebSocket notifications |
+| `store.submit.lifecycle.websocket.endpoint` | /ws/tx-lifecycle | WebSocket endpoint path |
+| `store.submit.lifecycle.webhook.enabled` | false | Enable webhook notifications |
+| `store.submit.lifecycle.webhook.url` | - | Webhook URL (required if enabled) |
+| `store.submit.lifecycle.webhook.secret` | - | Bearer token for authentication |
+| `store.submit.lifecycle.webhook.timeoutMs` | 5000 | HTTP timeout in milliseconds |
+| `store.submit.lifecycle.eventlog.enabled` | **true** | Enable database event log |
+| `store.submit.lifecycle.eventlog.retentionDays` | 90 | Days to keep event logs |
+
+## Next Steps
+
+### Advanced Features
+- **Remote Signers** - Production signing services
+- **Plutus Scripts** - Smart contract transactions
+- **Batch Operations** - Multiple transactions
+
+### Related Documentation
+- [Store Configuration](/stores/configuration) - Complete configuration guide
+- [UTxO Store](/stores/overview) - Understanding UTxO management
+- [Epoch Store](/stores/overview) - Protocol parameters
+
+### API Reference
+- Full REST API documentation
+- WebSocket events (advanced)
+- Webhook integration (advanced)
+
+---
+
+**Questions or issues?** [Open an issue on GitHub](https://github.com/bloxbean/yaci-store/issues)
