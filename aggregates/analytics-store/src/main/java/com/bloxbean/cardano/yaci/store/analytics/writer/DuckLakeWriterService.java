@@ -147,15 +147,14 @@ public class DuckLakeWriterService implements StorageWriter {
      *
      * DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation.
      * Partition configuration is derived from:
-     * - Path format: "date=" → day() transform, "epoch=" → identity transform
+     * - Path format: "date=" → year/month/day transforms, "epoch=" → identity transform
      * - Partition column: Provided by the exporter (e.g., "block_time", "spent_block_time")
      *
-     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()),
-     * so the day() transform can be applied directly without nested function calls.
+     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()).
      *
      * DuckLake will create Hive-style partitions like:
-     * - main/transactions/block_time_day=2024-01-15/ducklake-{uuid}.parquet
-     * - main/spent_outputs/spent_block_time_day=2024-01-15/ducklake-{uuid}.parquet
+     * - main/transactions/year=2024/month=1/day=15/ducklake-{uuid}.parquet
+     * - main/spent_outputs/spentyear=2024/month=1/day=15/ducklake-{uuid}.parquet
      * - main/rewards/epoch=450/ducklake-{uuid}.parquet
      *
      * @param conn DuckDB connection
@@ -169,15 +168,12 @@ public class DuckLakeWriterService implements StorageWriter {
 
         // Extract partition type from path format
         if (outputPath.contains("date=")) {
-            // Date-based partitioning: Use day() transform on TIMESTAMP column
-            // Column is already TIMESTAMP type (cast in exporter's buildQuery())
-            // Result: {column}_day=2024-01-15 partitions
+            // Date-based partitioning: Partition by full date using supported transforms.
             alterSql = String.format(
-                    "ALTER TABLE %s SET PARTITIONED BY (day(%s));",
-                    tableName, partitionColumn
+                    "ALTER TABLE %s SET PARTITIONED BY (year(%s), month(%s), day(%s));",
+                    tableName, partitionColumn, partitionColumn, partitionColumn
             );
-            partitionDesc = String.format("day(%s)", partitionColumn);
-
+            partitionDesc = String.format("year/month/day(%s)", partitionColumn);
         } else if (outputPath.contains("epoch=")) {
             // Epoch-based partitioning: Use epoch column directly (identity transform)
             // Result: epoch=450 partitions
