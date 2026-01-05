@@ -125,11 +125,11 @@ public class HardcodedDRepDelegationExclusionProvider implements DRepDelegationE
                         .certIndex(0)
                         .build(),
                 DRepDelegationExclusion.builder()
-                        .address("stake1uy63zkhkpgmzt364wdtmv37tzs2me3q4amm090t5wudlz3ck5jkp2")
+                        .address("stake1u98fr67g4t8kycm92kaljk7asv6s3enjasxxfhv8fadfvacpkgzxx")
                         .drepHash("8b75035882d4165bea8000c4d3f2c123ae33c1d92a751a78135a2402")
                         .drepType(DrepType.ADDR_KEYHASH)
-                        .slot(145771679L)
-                        .txIndex(2)
+                        .slot(137175013L)
+                        .txIndex(11)
                         .certIndex(0)
                         .build(),
                 DRepDelegationExclusion.builder()
@@ -141,11 +141,11 @@ public class HardcodedDRepDelegationExclusionProvider implements DRepDelegationE
                         .certIndex(0)
                         .build(),
                 DRepDelegationExclusion.builder()
-                        .address("stake1u9wrhx23e0gr5cy8ay9znv24qm0sqjewdkdsz9wzva35yqc7d9lja")
+                        .address("stake1u8fazakv5h6nrtpyn4840kq4rvlldhjfhuaxyt2rqt4fqhscxdn52")
                         .drepHash("8b75035882d4165bea8000c4d3f2c123ae33c1d92a751a78135a2402")
                         .drepType(DrepType.ADDR_KEYHASH)
-                        .slot(136236835L)
-                        .txIndex(4)
+                        .slot(140755335L)
+                        .txIndex(32)
                         .certIndex(0)
                         .build(),
                 DRepDelegationExclusion.builder()
@@ -253,4 +253,3 @@ public class HardcodedDRepDelegationExclusionProvider implements DRepDelegationE
         return Collections.emptyList();
     }
 }
-
