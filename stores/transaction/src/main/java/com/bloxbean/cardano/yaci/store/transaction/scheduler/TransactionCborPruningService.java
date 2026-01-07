@@ -38,9 +38,9 @@ public class TransactionCborPruningService {
     @PostConstruct
     public void init() {
         log.info("<< Transaction CBOR Pruning Service Enabled >>");
-        log.info("   Retention: {} slots (~{} days)", 
-                transactionStoreProperties.getCborRetentionSlots(),
-                transactionStoreProperties.getCborRetentionSlots() / 86400);
+        log.info("   Retention: {} slots (~{} days)",
+                transactionStoreProperties.getCborPruningSafeSlots(),
+                transactionStoreProperties.getCborPruningSafeSlots() / 86400);
     }
 
     @Scheduled(fixedRateString = "${store.transaction.cbor-pruning-interval:86400}", timeUnit = TimeUnit.SECONDS)
@@ -78,7 +78,7 @@ public class TransactionCborPruningService {
             cursorService.getCursor().ifPresent(cursor -> {
                 log.info("Current cursor for CBOR pruning: block={}, slot={}", cursor.getBlock(), cursor.getSlot());
 
-                long retentionSlots = transactionStoreProperties.getCborRetentionSlots();
+                long retentionSlots = transactionStoreProperties.getCborPruningSafeSlots();
                 long pruneBeforeSlot = cursor.getSlot() - retentionSlots;
                 
                 if (pruneBeforeSlot > 0) {
