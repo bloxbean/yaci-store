@@ -33,7 +33,6 @@ Admin CLI is a Spring Shell-based application that allows you to:
 - During performance tuning and optimization
 
 ### Rollback Scenarios
-- **Chain Reorganization**: When the Cardano blockchain experiences a reorganization
 - **Data Correction**: When you need to resync from a specific point due to data inconsistencies
 - **Testing & Development**: Rolling back to test different scenarios
 - **Recovery**: Recovering from sync errors or corrupted data
@@ -46,9 +45,9 @@ Always backup your database before performing rollback operations. Rollback is a
 
 Before using Admin CLI, ensure you have:
 
-1. **Java 21 or higher** installed
-2. **Yaci Store database** properly configured and synced
-3. **Database access credentials** configured in `application.yml` or `application.properties`
+1. **Yaci Store database** properly configured and synced
+2. **Database access credentials** configured
+3. **Docker** (for Docker distribution) or **Java 21+** (for non-Docker distribution)
 4. **Understanding of Cardano concepts**: epochs, slots, and blocks
 
 ## Available Commands
@@ -69,9 +68,9 @@ The Admin CLI provides the following command groups:
 
 To use the Admin CLI, you'll need to:
 
-1. Build or download the Admin CLI application
+1. Download Yaci Store distribution (Docker or non-Docker ZIP)
 2. Configure your database connection
-3. Run the application in interactive mode or with specific commands
+3. Run Admin CLI using the provided wrapper script
 
 For detailed information on each command, see:
 - [Rollback Operations](/admin-cli/rollback) - Comprehensive guide on rollback commands

@@ -247,31 +247,6 @@ store.account.pruning-enabled=true
 4. Consider disabling pruning before rollback
 </Callout>
 
-## Validation and Safety
-
-Admin CLI performs validation before rollback:
-
-### 1. Epoch Validation
-
-- Must be greater than 0
-- Must be ≤ current maximum epoch in database
-
-### 2. Mutually Exclusive Options
-
-Manual rollback point parameters should NOT be used when block table exists.
-
-**Error if violated:**
-```
-Error: Manual rollback point should not be provided when block table is available.
-Use: rollback-data --epoch 500
-```
-
-### 3. Rollback Action Verification
-
-- Verifies all configured tables exist
-- Validates SQL statements
-- Checks configuration format
-
 ## How Rollback Works
 
 ### Process Flow
@@ -291,27 +266,7 @@ Use: rollback-data --epoch 500
 - Use provided parameters or configuration
 - Must provide all required values
 
-### SQL Generation
-
-**DELETE operations:**
-```sql
-DELETE FROM table_name WHERE column > rollback_slot
-```
-
-**UPDATE operations:**
-```sql
-UPDATE table_name SET status = 'STARTED' WHERE epoch >= rollback_epoch
-```
-
 ## Common Use Cases
-
-### Chain Reorganization
-
-```bash
-# Rollback to safe epoch before fork
-rollback-data --epoch 450
-# Restart sync to follow correct chain
-```
 
 ### Data Correction
 
@@ -327,47 +282,6 @@ rollback-data --epoch 480
 # Rollback only ledger state
 rollback-ledger-state-data --epoch 500
 # Restart application to reprocess
-```
-
-## Best Practices
-
-### 1. Always Backup
-
-```bash
-# PostgreSQL
-pg_dump -h localhost -U username -d yaci_store > backup_$(date +%Y%m%d).sql
-
-# MySQL
-mysqldump -h localhost -u username -p yaci_store > backup_$(date +%Y%m%d).sql
-```
-
-### 2. Disable Pruning Before Rollback
-
-```properties
-store.utxo.pruning-enabled=false
-store.transaction.pruning-enabled=false
-store.adapot.reward-pruning-enabled=false
-store.adapot.epoch-stake-pruning-enabled=false
-store.account.pruning-enabled=false
-```
-
-### 3. Verify Indexes After Rollback
-
-```bash
-verify-indexes
-# If needed:
-apply-indexes
-```
-
-### 4. Test in Non-Production First
-
-Always test rollback in development/staging before production.
-
-### 5. Know Your Safe Rollback Window
-
-With pruning enabled:
-```
-Safe Rollback Epoch = Current Epoch - Pruning Interval
 ```
 
 ## Summary

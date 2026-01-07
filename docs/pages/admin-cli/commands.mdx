@@ -175,39 +175,6 @@ apply-extra-indexes
 - Indexes significantly improve query response times (10-100x)
 - Essential for API endpoints and user-facing applications
 
-## Best Practices
-
-### 1. Apply Indexes After Initial Sync
-
-For fastest initial sync:
-```bash
-# Start sync without indexes, wait for completion, then:
-apply-indexes
-```
-
-This approach speeds up initial sync significantly, especially for mainnet.
-
-### 2. Verify Indexes Regularly
-
-```bash
-# Include in maintenance routines
-verify-indexes
-```
-
-### 3. Balance Index Usage
-
-**For API-heavy applications:**
-```bash
-# Apply all indexes for best read performance
-apply-indexes
-```
-
-**For write-heavy applications:**
-```bash
-# Apply only default indexes
-apply-indexes --skip-extra-indexes
-```
-
 ## Common Workflows
 
 ### Initial Setup
