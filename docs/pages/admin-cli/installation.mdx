@@ -75,19 +75,19 @@ SPRING_DATASOURCE_PASSWORD=password
 Use the provided wrapper script:
 
 ```bash
-./docker/admin-cli.sh <command> [options]
+./admin-cli.sh <command> [options]
 ```
 
 Examples:
 ```bash
-./docker/admin-cli.sh verify-indexes
-./docker/admin-cli.sh apply-indexes
-./docker/admin-cli.sh rollback-data --epoch 500
+./admin-cli.sh verify-indexes
+./admin-cli.sh apply-indexes
+./admin-cli.sh rollback-data --epoch 500
 ```
 
 For interactive mode, run without arguments:
 ```bash
-./docker/admin-cli.sh
+./admin-cli.sh
 ```
 
 </Steps>
@@ -267,7 +267,7 @@ Verify database connection works:
 
 **Docker Distribution:**
 ```bash
-./docker/admin-cli.sh verify-indexes
+./admin-cli.sh verify-indexes
 ```
 
 **Non-Docker Distribution:**
@@ -282,7 +282,7 @@ If successful, you'll see index verification output.
 **Docker Distribution** - Override with custom config file:
 ```bash
 # Mount custom config in docker-compose.yml or pass via environment
-SPRING_CONFIG_LOCATION=file:/path/to/custom-config.yml ./docker/admin-cli.sh verify-indexes
+SPRING_CONFIG_LOCATION=file:/path/to/custom-config.yml ./admin-cli.sh verify-indexes
 ```
 
 **Non-Docker Distribution** - Use Spring Boot's config location:
