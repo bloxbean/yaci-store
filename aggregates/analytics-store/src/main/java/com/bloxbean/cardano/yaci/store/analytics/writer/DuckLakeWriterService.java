@@ -70,8 +70,18 @@ public class DuckLakeWriterService implements StorageWriter {
             // Format: ./data/analytics/transactions/date=2024-01-15/data.parquet
             String tableName = extractTableNameFromPath(outputPath);
 
+            // Handle date partitioning query transformation
+            boolean isDatePartition = outputPath.contains("date=");
+            String finalQuery = query;
+            
+            if (isDatePartition) {
+                // To get "date=yyyy-mm-dd" folder structure, we need an explicit "date" column
+                finalQuery = String.format("SELECT *, CAST(%s AS DATE) AS date FROM (%s)", 
+                        partitionColumn, query);
+            }
+
             // Create table if it doesn't exist (using schema from query)
-            boolean isNewTable = createTableIfNotExists(conn, tableName, query);
+            boolean isNewTable = createTableIfNotExists(conn, tableName, finalQuery);
 
             // Configure partitioning for newly created tables
             // DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation
@@ -80,7 +90,7 @@ public class DuckLakeWriterService implements StorageWriter {
             }
 
             // Export data using DuckLake INSERT
-            long rowCount = exportWithDuckLake(conn, tableName, query);
+            long rowCount = exportWithDuckLake(conn, tableName, finalQuery);
 
             // Note: DuckLake manages its own files with UUID names in partition directories
             // The outputPath is used only for partition detection, not actual file placement
@@ -168,12 +178,13 @@ public class DuckLakeWriterService implements StorageWriter {
 
         // Extract partition type from path format
         if (outputPath.contains("date=")) {
-            // Date-based partitioning: Partition by full date using supported transforms.
+            // Single-level date partitioning: date=yyyy-mm-dd
+            // Uses the injected "date" column
             alterSql = String.format(
-                    "ALTER TABLE %s SET PARTITIONED BY (year(%s), month(%s), day(%s));",
-                    tableName, partitionColumn, partitionColumn, partitionColumn
+                    "ALTER TABLE %s SET PARTITIONED BY (date);",
+                    tableName
             );
-            partitionDesc = String.format("year/month/day(%s)", partitionColumn);
+            partitionDesc = "date";
         } else if (outputPath.contains("epoch=")) {
             // Epoch-based partitioning: Use epoch column directly (identity transform)
             // Result: epoch=450 partitions
