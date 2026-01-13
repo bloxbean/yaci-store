@@ -79,7 +79,8 @@ public class BlocksStoreAutoConfigProperties {
        }
 
        /**
-        * @deprecated Use {@link #setCborPruningSafeSlots(int)} instead
+        * @deprecated Use setCborPruningSafeSlots instead
+        * @param cborRetentionSlots the retention slots value
         */
        @Deprecated
        public void setCborRetentionSlots(int cborRetentionSlots) {

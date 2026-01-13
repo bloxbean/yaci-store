@@ -107,7 +107,8 @@ public class TransactionAutoConfigProperties {
       }
 
       /**
-       * @deprecated Use {@link #setPruningSafeSlots(int)} instead
+       * @deprecated Use setPruningSafeSlots instead
+       * @param pruningSafeSlot the safe slot value
        */
       @Deprecated
       public void setPruningSafeSlot(int pruningSafeSlot) {
@@ -124,7 +125,8 @@ public class TransactionAutoConfigProperties {
       }
 
       /**
-       * @deprecated Use {@link #setCborPruningSafeSlots(int)} instead
+       * @deprecated Use setCborPruningSafeSlots instead
+       * @param cborRetentionSlots the retention slots value
        */
       @Deprecated
       public void setCborRetentionSlots(int cborRetentionSlots) {
