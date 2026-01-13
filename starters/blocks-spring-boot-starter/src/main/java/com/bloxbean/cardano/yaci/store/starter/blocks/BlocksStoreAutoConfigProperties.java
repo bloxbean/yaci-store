@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.starter.blocks;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 @Getter
 @Setter
@@ -10,7 +11,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class BlocksStoreAutoConfigProperties {
     private Blocks blocks = new Blocks();
 
-    @Getter
     @Setter
     public static final class Blocks  {
        private boolean enabled = true;
@@ -40,6 +40,51 @@ public class BlocksStoreAutoConfigProperties {
         * CBOR data older than this will be pruned if cborPruningEnabled is true.
         */
        private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
+
+       public boolean isEnabled() {
+           return enabled;
+       }
+
+       public boolean isApiEnabled() {
+           return apiEnabled;
+       }
+
+       public Endpoints getEndpoints() {
+           return endpoints;
+       }
+
+       public Metrics getMetrics() {
+           return metrics;
+       }
+
+       public boolean isSaveCbor() {
+           return saveCbor;
+       }
+
+       public boolean isCborPruningEnabled() {
+           return cborPruningEnabled;
+       }
+
+       public int getCborPruningSafeSlots() {
+           return cborPruningSafeSlots;
+       }
+
+       /**
+        * @deprecated Use {@link #getCborPruningSafeSlots()} instead
+        */
+       @Deprecated
+       @DeprecatedConfigurationProperty(replacement = "store.blocks.cbor-pruning-safe-slots")
+       public int getCborRetentionSlots() {
+           return getCborPruningSafeSlots();
+       }
+
+       /**
+        * @deprecated Use {@link #setCborPruningSafeSlots(int)} instead
+        */
+       @Deprecated
+       public void setCborRetentionSlots(int cborRetentionSlots) {
+           setCborPruningSafeSlots(cborRetentionSlots);
+       }
     }
 
     @Getter

@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.starter.transaction;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 @Getter
 @Setter
@@ -10,7 +11,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class TransactionAutoConfigProperties {
     private Transaction transaction = new Transaction();
 
-    @Getter
     @Setter
     public static final class Transaction {
         private boolean enabled = true;
@@ -56,6 +56,80 @@ public class TransactionAutoConfigProperties {
        * CBOR data older than this will be pruned if cborPruningEnabled is true.
        */
       private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
+
+      public boolean isEnabled() {
+          return enabled;
+      }
+
+      public boolean isApiEnabled() {
+          return apiEnabled;
+      }
+
+      public Endpoints getEndpoints() {
+          return endpoints;
+      }
+
+      public boolean isPruningEnabled() {
+          return pruningEnabled;
+      }
+
+      public int getPruningInterval() {
+          return pruningInterval;
+      }
+
+      public int getPruningSafeSlots() {
+          return pruningSafeSlots;
+      }
+
+      public boolean isSaveWitness() {
+          return saveWitness;
+      }
+
+      public boolean isSaveCbor() {
+          return saveCbor;
+      }
+
+      public boolean isCborPruningEnabled() {
+          return cborPruningEnabled;
+      }
+
+      public int getCborPruningSafeSlots() {
+          return cborPruningSafeSlots;
+      }
+
+      /**
+       * @deprecated Use {@link #getPruningSafeSlots()} instead
+       */
+      @Deprecated
+      @DeprecatedConfigurationProperty(replacement = "store.transaction.pruning-safe-slots")
+      public int getPruningSafeSlot() {
+          return getPruningSafeSlots();
+      }
+
+      /**
+       * @deprecated Use {@link #setPruningSafeSlots(int)} instead
+       */
+      @Deprecated
+      public void setPruningSafeSlot(int pruningSafeSlot) {
+          setPruningSafeSlots(pruningSafeSlot);
+      }
+
+      /**
+       * @deprecated Use {@link #getCborPruningSafeSlots()} instead
+       */
+      @Deprecated
+      @DeprecatedConfigurationProperty(replacement = "store.transaction.cbor-pruning-safe-slots")
+      public int getCborRetentionSlots() {
+          return getCborPruningSafeSlots();
+      }
+
+      /**
+       * @deprecated Use {@link #setCborPruningSafeSlots(int)} instead
+       */
+      @Deprecated
+      public void setCborRetentionSlots(int cborRetentionSlots) {
+          setCborPruningSafeSlots(cborRetentionSlots);
+      }
     }
 
     @Getter
