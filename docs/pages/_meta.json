@@ -10,6 +10,9 @@
     "title": "Usage"
   },
   "stores": "Stores",
+  "admin-cli": {
+    "title": "Admin CLI"
+  },
   "plugins": {
     "title": "Plugin Framework"
   },

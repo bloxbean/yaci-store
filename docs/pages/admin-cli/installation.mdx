@@ -1,0 +1,297 @@
+import { Callout, Tabs, Steps } from 'nextra/components'
+
+# Installation and Setup
+
+This guide covers installing and configuring the Yaci Store Admin CLI using the pre-built distributions.
+
+## Prerequisites
+
+Choose based on your distribution:
+
+### Docker Distribution
+- **Docker** and **Docker Compose** installed
+- **Yaci Store database** (PostgreSQL, MySQL, or H2)
+- **Database credentials** with CREATE INDEX and DELETE permissions
+
+### Non-Docker Distribution
+- **Java 21 or higher** installed
+- **JAVA_HOME** environment variable set
+- **Yaci Store database** (PostgreSQL, MySQL, or H2)
+- **Database credentials** with CREATE INDEX and DELETE permissions
+
+## Download
+
+Download the appropriate distribution from [Yaci Store releases](https://github.com/bloxbean/yaci-store/releases):
+
+- **Docker Distribution**: `yaci-store-docker-<version>.zip`
+- **Non-Docker Distribution**: `yaci-store-<version>.zip`
+
+## Setup: Docker Distribution
+
+<Steps>
+
+### Extract the Archive
+
+```bash
+unzip yaci-store-docker-<version>.zip
+cd yaci-store-docker-<version>
+```
+
+### Configure Database Connection
+
+Create or edit the `.env` file in the distribution directory:
+
+<Tabs items={['PostgreSQL', 'MySQL', 'H2']}>
+  <Tabs.Tab>
+```properties
+# PostgreSQL Configuration
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/yaci_store
+SPRING_DATASOURCE_USERNAME=your_username
+SPRING_DATASOURCE_PASSWORD=your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```properties
+# MySQL Configuration
+SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/yaci_store
+SPRING_DATASOURCE_USERNAME=your_username
+SPRING_DATASOURCE_PASSWORD=your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```properties
+# H2 Configuration
+SPRING_DATASOURCE_URL=jdbc:h2:file:./data/yaci_store;DB_CLOSE_ON_EXIT=FALSE
+SPRING_DATASOURCE_USERNAME=sa
+SPRING_DATASOURCE_PASSWORD=password
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Run Admin CLI
+
+Use the provided wrapper script:
+
+```bash
+./admin-cli.sh <command> [options]
+```
+
+Examples:
+```bash
+./admin-cli.sh verify-indexes
+./admin-cli.sh apply-indexes
+./admin-cli.sh rollback-data --epoch 500
+```
+
+For interactive mode, run without arguments:
+```bash
+./admin-cli.sh
+```
+
+</Steps>
+
+<Callout type="info">
+The Docker distribution runs Admin CLI in a container, so you don't need Java installed on your host machine.
+</Callout>
+
+## Setup: Non-Docker Distribution
+
+<Steps>
+
+### Extract the Archive
+
+```bash
+unzip yaci-store-<version>.zip
+cd yaci-store-<version>
+```
+
+### Verify Java Installation
+
+Ensure Java 21+ is installed and JAVA_HOME is set:
+
+```bash
+java -version  # Should show Java 21 or higher
+echo $JAVA_HOME  # Should point to your Java installation
+```
+
+### Configure Database Connection
+
+Create `application.yml` in the distribution directory:
+
+<Tabs items={['PostgreSQL', 'MySQL', 'H2']}>
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/yaci_store
+    username: your_username
+    password: your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/yaci_store
+    username: your_username
+    password: your_password
+```
+  </Tabs.Tab>
+
+  <Tabs.Tab>
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/yaci_store;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: password
+```
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+The `driver-class-name` is auto-detected by Spring Boot and not required.
+</Callout>
+
+### Run Admin CLI
+
+Use the provided wrapper script:
+
+```bash
+./bin/admin-cli.sh <command> [options]
+```
+
+Examples:
+```bash
+./bin/admin-cli.sh verify-indexes
+./bin/admin-cli.sh apply-indexes
+./bin/admin-cli.sh rollback-data --epoch 500
+```
+
+For interactive mode, run without arguments:
+```bash
+./bin/admin-cli.sh
+```
+
+You'll see the prompt:
+```
+admin-cli:>
+```
+
+Run commands interactively:
+```
+admin-cli:> verify-indexes
+admin-cli:> apply-indexes
+admin-cli:> rollback-data --epoch 500
+```
+
+Use `help` for command list, `exit` or Ctrl+D to quit.
+
+</Steps>
+
+## Optional: Rollback Configuration
+
+To customize rollback behavior, add this configuration:
+
+**Docker Distribution** - Add to `.env`:
+```properties
+STORE_ADMIN_CLI_DB_ROLLBACK_ROLLBACK_FILES=rollback.yml
+```
+
+**Non-Docker Distribution** - Add to `application.yml`:
+```yaml
+store:
+  admin-cli:
+    db:
+      rollback:
+        rollback-files: rollback.yml
+```
+
+For manual rollback point (only when block table is unavailable):
+
+**Docker Distribution** - Add to `.env`:
+```properties
+STORE_ADMIN_CLI_DB_ROLLBACK_POINT_BLOCK=10537200
+STORE_ADMIN_CLI_DB_ROLLBACK_POINT_BLOCK_HASH=a5c72a0e74cf...
+STORE_ADMIN_CLI_DB_ROLLBACK_POINT_SLOT=76667163
+STORE_ADMIN_CLI_DB_ROLLBACK_POINT_ERA=3
+```
+
+**Non-Docker Distribution** - Add to `application.yml`:
+```yaml
+store:
+  admin-cli:
+    db:
+      rollback:
+        point:
+          block: 10537200
+          block-hash: "a5c72a0e74cf..."
+          slot: 76667163
+          era: 3
+```
+
+<Callout type="warning">
+Manual rollback point should only be used when the block table is not available in the database.
+</Callout>
+
+## Environment Variables (Production)
+
+For production deployments, use environment variables instead of hardcoded credentials.
+
+**Docker Distribution** - Already uses `.env` file by default.
+
+**Non-Docker Distribution** - Modify `application.yml`:
+```yaml
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/yaci_store}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+```
+
+Then set environment variables:
+```bash
+export DB_URL="jdbc:postgresql://localhost:5432/yaci_store"
+export DB_USERNAME="admin"
+export DB_PASSWORD="secure_password"
+
+./bin/admin-cli.sh verify-indexes
+```
+
+## Quick Test
+
+Verify database connection works:
+
+**Docker Distribution:**
+```bash
+./admin-cli.sh verify-indexes
+```
+
+**Non-Docker Distribution:**
+```bash
+./bin/admin-cli.sh verify-indexes
+```
+
+If successful, you'll see index verification output.
+
+## Custom Configuration
+
+**Docker Distribution** - Override with custom config file:
+```bash
+# Mount custom config in docker-compose.yml or pass via environment
+SPRING_CONFIG_LOCATION=file:/path/to/custom-config.yml ./admin-cli.sh verify-indexes
+```
+
+**Non-Docker Distribution** - Use Spring Boot's config location:
+```bash
+./bin/admin-cli.sh --spring.config.location=file:./custom-config.yml verify-indexes
+```
+
+## Next Steps
+
+- [Index Management Commands](/admin-cli/commands)
+- [Rollback Operations](/admin-cli/rollback)
+- [Admin CLI Overview](/admin-cli/overview)
