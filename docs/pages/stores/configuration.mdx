@@ -266,7 +266,7 @@ store.utxo.pruning-batch-size=3000
 # Enable transaction pruning
 store.transaction.pruning-enabled=true
 store.transaction.pruning.interval=86400
-store.transaction.pruning-safe-slot=43200
+store.transaction.pruning-safe-slots=43200
 ```
 
 ### Transaction Witness Saving
@@ -293,12 +293,12 @@ The following configs can be used to enable saving of block/transaction CBOR in 
 # Store and prune raw block CBOR
 store.blocks.save-cbor=false
 store.blocks.cbor-pruning-enabled=false
-store.blocks.cbor-retention-slots=43200
+store.blocks.cbor-pruning-safe-slots=43200
 
 # Store and prune raw transaction CBOR
 store.transaction.save-cbor=false
 store.transaction.cbor-pruning-enabled=false
-store.transaction.cbor-retention-slots=43200
+store.transaction.cbor-pruning-safe-slots=43200
 ```
 
 #### Epoch Stake Pruning
