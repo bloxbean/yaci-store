@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.DeprecatedConfigurationProper
 public class TransactionAutoConfigProperties {
     private Transaction transaction = new Transaction();
 
+    @Getter
     @Setter
     public static final class Transaction {
         private boolean enabled = true;
@@ -57,48 +58,8 @@ public class TransactionAutoConfigProperties {
        */
       private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
 
-      public boolean isEnabled() {
-          return enabled;
-      }
-
-      public boolean isApiEnabled() {
-          return apiEnabled;
-      }
-
-      public Endpoints getEndpoints() {
-          return endpoints;
-      }
-
-      public boolean isPruningEnabled() {
-          return pruningEnabled;
-      }
-
-      public int getPruningInterval() {
-          return pruningInterval;
-      }
-
-      public int getPruningSafeSlots() {
-          return pruningSafeSlots;
-      }
-
-      public boolean isSaveWitness() {
-          return saveWitness;
-      }
-
-      public boolean isSaveCbor() {
-          return saveCbor;
-      }
-
-      public boolean isCborPruningEnabled() {
-          return cborPruningEnabled;
-      }
-
-      public int getCborPruningSafeSlots() {
-          return cborPruningSafeSlots;
-      }
-
       /**
-       * @deprecated Use {@link #getPruningSafeSlots()} instead
+       * @deprecated Use getPruningSafeSlots() instead
        */
       @Deprecated
       @DeprecatedConfigurationProperty(replacement = "store.transaction.pruning-safe-slots")

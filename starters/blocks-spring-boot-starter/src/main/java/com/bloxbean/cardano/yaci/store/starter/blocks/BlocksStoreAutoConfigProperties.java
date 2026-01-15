@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.DeprecatedConfigurationProper
 public class BlocksStoreAutoConfigProperties {
     private Blocks blocks = new Blocks();
 
+    @Getter
     @Setter
     public static final class Blocks  {
        private boolean enabled = true;
@@ -41,36 +42,8 @@ public class BlocksStoreAutoConfigProperties {
         */
        private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
 
-       public boolean isEnabled() {
-           return enabled;
-       }
-
-       public boolean isApiEnabled() {
-           return apiEnabled;
-       }
-
-       public Endpoints getEndpoints() {
-           return endpoints;
-       }
-
-       public Metrics getMetrics() {
-           return metrics;
-       }
-
-       public boolean isSaveCbor() {
-           return saveCbor;
-       }
-
-       public boolean isCborPruningEnabled() {
-           return cborPruningEnabled;
-       }
-
-       public int getCborPruningSafeSlots() {
-           return cborPruningSafeSlots;
-       }
-
        /**
-        * @deprecated Use {@link #getCborPruningSafeSlots()} instead
+        * @deprecated Use getCborPruningSafeSlots() instead
         */
        @Deprecated
        @DeprecatedConfigurationProperty(replacement = "store.blocks.cbor-pruning-safe-slots")
