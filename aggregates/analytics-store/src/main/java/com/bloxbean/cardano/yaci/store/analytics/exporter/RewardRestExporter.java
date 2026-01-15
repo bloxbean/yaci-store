@@ -9,18 +9,27 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Exporter for Move Instantaneous Rewards (MIR).
+ * Exporter for reward rest (remaining rewards on deregistered stake addresses).
  *
- * Partitioning: EPOCH (epoch=N)
- * Source: mir table
- * Output: mir/epoch=N/data.parquet
+ * This exporter tracks rewards that remain in the reward pot for stake addresses
+ * that have been deregistered. These rewards can be reclaimed when the stake
+ * address is registered again.
+ *
+ * Partitioning: EPOCH (epoch=N based on earned_epoch)
+ * Source: reward_rest table
+ * Output: reward_rest/epoch=N/data.parquet
+ *
+ * Use cases:
+ * - Complete reward analysis including deregistered stakes
+ * - Tracking potential reclaim amounts
+ * - Stake lifecycle analysis
  */
 @Service
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
-public class MoveInstataneousRewardExporter extends AbstractTableExporter {
+public class RewardRestExporter extends AbstractTableExporter {
 
-    public MoveInstataneousRewardExporter(
+    public RewardRestExporter(
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
@@ -30,7 +39,7 @@ public class MoveInstataneousRewardExporter extends AbstractTableExporter {
 
     @Override
     public String getTableName() {
-        return "mir";
+        return "reward_rest";
     }
 
     @Override
@@ -38,6 +47,9 @@ public class MoveInstataneousRewardExporter extends AbstractTableExporter {
         return PartitionStrategy.EPOCH;
     }
 
+    /**
+     * Build SQL query for reward rest data by earned epoch.
+     */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
@@ -45,19 +57,16 @@ public class MoveInstataneousRewardExporter extends AbstractTableExporter {
 
         return String.format("""
             SELECT
-                m.tx_hash,
-                m.cert_index,
-                m.pot,
-                m.credential,
-                m.address,
-                m.amount,
-                m.epoch,
-                m.slot,
-                m.block_hash,
-                to_timestamp(m.block_time) as block_time
-            FROM source_db.%s.mir m
-            WHERE m.epoch = %d
-            ORDER BY m.slot, m.tx_hash, m.cert_index
+                rr.id,
+                rr.address,
+                rr.type,
+                rr.earned_epoch,
+                rr.amount,
+                rr.spendable_epoch,
+                rr.slot
+            FROM source_db.%s.reward_rest rr
+            WHERE rr.earned_epoch = %d
+            ORDER BY rr.earned_epoch, rr.address
             """,
             schema,
             epoch
