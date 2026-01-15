@@ -77,7 +77,7 @@ public class TransactionAutoConfigProperties {
       }
 
       /**
-       * @deprecated Use {@link #getCborPruningSafeSlots()} instead
+       * @deprecated Use getCborPruningSafeSlots() instead
        */
       @Deprecated
       @DeprecatedConfigurationProperty(replacement = "store.transaction.cbor-pruning-safe-slots")
