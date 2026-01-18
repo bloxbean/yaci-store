@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 
 import java.math.BigInteger;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 
@@ -119,6 +120,8 @@ public class DomainMapperDecorator implements DomainMapper {
                 protocolParamsDto.getCostModels().put(key, langCost);
             }
         }
+
+
 
         //UnitInterval and NonNegativeInterval
         protocolParamsDto.setA0(safeRatio(protocolParams.getPoolPledgeInfluence()));
