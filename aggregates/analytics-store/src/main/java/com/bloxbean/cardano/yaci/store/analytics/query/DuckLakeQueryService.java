@@ -45,7 +45,7 @@ public class DuckLakeQueryService {
      * @return Total number of transactions
      */
     public long getTotalTransactionCount() {
-        String query = "SELECT COUNT(*) as total FROM transactions";
+        String query = "SELECT COUNT(*) as total FROM transaction";
         return executeCountQuery(query);
     }
 
@@ -60,7 +60,7 @@ public class DuckLakeQueryService {
         // DuckLake stores transactions in date-partitioned format: date=2024-01-15
         // Query across multiple partitions using date filter
         String query = String.format(
-                "SELECT COUNT(*) as total FROM transactions WHERE date >= '%s' AND date <= '%s'",
+                "SELECT COUNT(*) as total FROM transaction WHERE date >= '%s' AND date <= '%s'",
                 startDate, endDate
         );
         return executeCountQuery(query);
@@ -74,7 +74,7 @@ public class DuckLakeQueryService {
      */
     public long getTransactionCountByDate(LocalDate date) {
         String query = String.format(
-                "SELECT COUNT(*) as total FROM transactions WHERE date = '%s'",
+                "SELECT COUNT(*) as total FROM transaction WHERE date = '%s'",
                 date
         );
         return executeCountQuery(query);

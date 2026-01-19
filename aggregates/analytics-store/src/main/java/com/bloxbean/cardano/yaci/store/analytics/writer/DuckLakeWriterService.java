@@ -70,8 +70,18 @@ public class DuckLakeWriterService implements StorageWriter {
             // Format: ./data/analytics/transactions/date=2024-01-15/data.parquet
             String tableName = extractTableNameFromPath(outputPath);
 
+            // Handle date partitioning query transformation
+            boolean isDatePartition = outputPath.contains("date=");
+            String finalQuery = query;
+            
+            if (isDatePartition) {
+                // To get "date=yyyy-mm-dd" folder structure, we need an explicit "date" column
+                finalQuery = String.format("SELECT *, CAST(%s AS DATE) AS date FROM (%s)", 
+                        partitionColumn, query);
+            }
+
             // Create table if it doesn't exist (using schema from query)
-            boolean isNewTable = createTableIfNotExists(conn, tableName, query);
+            boolean isNewTable = createTableIfNotExists(conn, tableName, finalQuery);
 
             // Configure partitioning for newly created tables
             // DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation
@@ -80,7 +90,7 @@ public class DuckLakeWriterService implements StorageWriter {
             }
 
             // Export data using DuckLake INSERT
-            long rowCount = exportWithDuckLake(conn, tableName, query);
+            long rowCount = exportWithDuckLake(conn, tableName, finalQuery);
 
             // Note: DuckLake manages its own files with UUID names in partition directories
             // The outputPath is used only for partition detection, not actual file placement
@@ -147,15 +157,14 @@ public class DuckLakeWriterService implements StorageWriter {
      *
      * DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation.
      * Partition configuration is derived from:
-     * - Path format: "date=" → day() transform, "epoch=" → identity transform
+     * - Path format: "date=" → year/month/day transforms, "epoch=" → identity transform
      * - Partition column: Provided by the exporter (e.g., "block_time", "spent_block_time")
      *
-     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()),
-     * so the day() transform can be applied directly without nested function calls.
+     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()).
      *
      * DuckLake will create Hive-style partitions like:
-     * - main/transactions/block_time_day=2024-01-15/ducklake-{uuid}.parquet
-     * - main/spent_outputs/spent_block_time_day=2024-01-15/ducklake-{uuid}.parquet
+     * - main/transactions/year=2024/month=1/day=15/ducklake-{uuid}.parquet
+     * - main/spent_outputs/spentyear=2024/month=1/day=15/ducklake-{uuid}.parquet
      * - main/rewards/epoch=450/ducklake-{uuid}.parquet
      *
      * @param conn DuckDB connection
@@ -169,15 +178,13 @@ public class DuckLakeWriterService implements StorageWriter {
 
         // Extract partition type from path format
         if (outputPath.contains("date=")) {
-            // Date-based partitioning: Use day() transform on TIMESTAMP column
-            // Column is already TIMESTAMP type (cast in exporter's buildQuery())
-            // Result: {column}_day=2024-01-15 partitions
+            // Single-level date partitioning: date=yyyy-mm-dd
+            // Uses the injected "date" column
             alterSql = String.format(
-                    "ALTER TABLE %s SET PARTITIONED BY (day(%s));",
-                    tableName, partitionColumn
+                    "ALTER TABLE %s SET PARTITIONED BY (date);",
+                    tableName
             );
-            partitionDesc = String.format("day(%s)", partitionColumn);
-
+            partitionDesc = "date";
         } else if (outputPath.contains("epoch=")) {
             // Epoch-based partitioning: Use epoch column directly (identity transform)
             // Result: epoch=450 partitions
