@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.submit.event;
+package com.bloxbean.cardano.yaci.store.submit.notification.event;
 
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
 import com.bloxbean.cardano.yaci.store.submit.domain.TxStatus;

@@ -22,10 +22,13 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class SubmittedTransaction {
-    
+
     private String txHash;
     private TxStatus status;
-    
+
+    // Transaction body CBOR (included in build-and-submit responses)
+    private String txBodyCbor;
+
     private Timestamp submittedAt;
     
     // Confirmation info

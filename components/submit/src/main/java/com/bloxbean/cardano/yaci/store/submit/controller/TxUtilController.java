@@ -100,18 +100,10 @@ public class TxUtilController {
         }
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<TxErrorResponse> handleException(Exception e) {
-        if (log.isDebugEnabled())
-            log.error("Unhandled exception", e);
-        TxErrorResponse errorResponse = new TxErrorResponse(500, "Internal Server Error", e.getMessage());
-        return ResponseEntity.status(500).body(errorResponse);
-    }
-
     @Data
     @NoArgsConstructor
     public static class EvaluateRequest {
         private String cbor;
-        private Set additionalUtxoSet;
+        private Set<Object> additionalUtxoSet;
     }
 }

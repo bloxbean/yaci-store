@@ -51,6 +51,12 @@ store:
       websocket:
         enabled: true
         endpoint: /ws/tx-lifecycle
+
+  # Required for TxPlan builder (QuickTx)
+  utxo:
+    enabled: true
+  epoch:
+    enabled: true
 ```
 
 ## REST API Endpoints
@@ -71,10 +77,10 @@ curl -X POST http://localhost:8080/api/v1/tx/lifecycle/submit \
 **Response:**
 ```json
 {
-  "txHash": "1234567890abcdef...",
+  "tx_hash": "1234567890abcdef...",
   "status": "SUBMITTED",
-  "cborHex": "84a400818258201234...5678",
-  "submittedAt": "2025-10-12T10:30:00Z"
+  "tx_body_cbor": "84a400818258201234...5678",
+  "submitted_at": "2025-10-12T10:30:00Z"
 }
 ```
 
@@ -87,14 +93,14 @@ Query the current status and details of a submitted transaction.
 **Response:**
 ```json
 {
-  "txHash": "1234567890abcdef...",
+  "tx_hash": "1234567890abcdef...",
   "status": "SUCCESS",
-  "submittedAt": "2025-10-12T10:30:00Z",
-  "confirmedAt": "2025-10-12T10:31:00Z",
-  "confirmedSlot": 123456789,
-  "confirmedBlockNumber": 9000000,
+  "submitted_at": "2025-10-12T10:30:00Z",
+  "confirmed_at": "2025-10-12T10:31:00Z",
+  "confirmed_slot": 123456789,
+  "confirmed_block_number": 9000000,
   "confirmations": 20,
-  "successAt": "2025-10-12T10:36:00Z"
+  "success_at": "2025-10-12T10:36:00Z"
 }
 ```
 
@@ -127,6 +133,171 @@ Get transaction lifecycle statistics.
 }
 ```
 
+## Build unsigned tx from TxPlan (QuickTx)
+
+**POST** `/api/v1/tx/lifecycle/build`
+
+Request (YAML):
+```yaml
+version: 1.0
+context:
+  fee_payer: addr_test1qp...
+transaction:
+  - tx:
+      from: addr_test1qp...
+      intents:
+        - type: payment
+          to: addr_test1zr...
+          amount:
+            unit: lovelace
+            quantity: 5000000
+```
+
+Response:
+```json
+{
+  "txBodyCbor": "84a40081825820..."
+}
+```
+
+Requires Ogmios (`store.cardano.ogmios-url`) plus local UTXO and Epoch modules (`store.utxo.enabled`, `store.epoch.enabled`).
+
+### Signer Registry
+
+Enable TxPlan `_ref` fields (`from_ref`, `fee_payer_ref`, `signers`) by binding them to accounts, address-only refs, or remote signers.
+
+#### Configuration
+
+```yaml
+store:
+  submit:
+    signer-registry:
+      enabled: true
+      entries:
+        - ref: account://alice
+          type: account
+          scopes: [payment, stake]    # Or comma-separated: "payment,stake"
+          account:
+            mnemonic: "${ALICE_MNEMONIC}"
+            account: 0
+            index: 0
+        - ref: address://treasury
+          type: address_only
+          scopes: [payment]
+          address:
+            address: addr_test1...
+        - ref: remote://ops
+          type: remote_signer
+          scopes: [payment, stake, policy]
+          remote:
+            endpoint: https://remote-signer.example.com/sign
+            auth-token: ${REMOTE_SIGNER_TOKEN}
+            key-id: ops-key-1
+            verification-key: ${REMOTE_SIGNER_VKEY}
+            address: ${REMOTE_SIGNER_ADDRESS}
+            timeout-ms: 5000
+```
+
+#### Signer Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `account` | Local signing with mnemonic, bech32 private key, or root key | Development, self-custody |
+| `address_only` | Build-only, provides address without signing capability | Multi-sig workflows, external signing |
+| `remote_signer` | Delegates signing to external HTTP service | Production, HSM, key management services |
+
+#### Account Signer Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `account.mnemonic` | One of three | 24-word mnemonic phrase |
+| `account.bech32-private-key` | One of three | Bech32-encoded private key |
+| `account.root-key-hex` | One of three | Hex-encoded root key |
+| `account.account` | No | HD derivation account index (default: 0) |
+| `account.index` | No | HD derivation address index (default: 0) |
+
+#### Remote Signer Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `remote.endpoint` | Yes | URL of the remote signing service |
+| `remote.key-id` | Yes | Key identifier sent to remote service |
+| `remote.auth-token` | No | Bearer token for authentication |
+| `remote.verification-key` | No | Fallback verification key (hex) if not returned by service |
+| `remote.address` | No | Preferred address for `from_ref` resolution |
+| `remote.timeout-ms` | No | HTTP request timeout in milliseconds |
+
+#### Remote Signer HTTP Protocol
+
+The default `HttpRemoteSignerClient` communicates via HTTP POST:
+
+**Request:**
+```http
+POST {endpoint}/sign
+Content-Type: application/json
+Authorization: Bearer {auth-token}
+
+{
+  "keyId": "ops-key-1",
+  "scope": "payment",
+  "txBody": "84a400818258...",
+  "address": "addr_test1...",
+  "verificationKey": "5820..."
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `keyId` | Yes | Key identifier from configuration |
+| `scope` | Yes | Signing scope: `payment`, `stake`, `policy`, `drep`, `committeecold`, `committeehot` |
+| `txBody` | Yes | Hex-encoded CBOR transaction body |
+| `address` | No | Address hint (if configured) |
+| `verificationKey` | No | Verification key hint (if configured) |
+
+**Response:**
+```json
+{
+  "signature": "845820...",
+  "verificationKey": "5820..."
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `signature` | Yes | Hex-encoded Ed25519 signature |
+| `verificationKey` | Conditional | Hex-encoded public key (required if not pre-configured) |
+
+**Notes:**
+- If endpoint doesn't end with `/sign`, it's automatically appended
+- Verification key fallback: response → configured `verification-key` → error
+- Scopes can be comma-separated in TxPlan (e.g., `scope: payment,stake`)
+
+#### Local Development Stub
+
+For local development and E2E testing, enable the built-in stub signer:
+
+```yaml
+store:
+  submit:
+    local-remote-signer:
+      enabled: true
+```
+
+This exposes `POST /local-remote-signer/sign` which produces **real Ed25519 signatures** using test accounts.
+
+**Key ID Mapping:**
+
+| Key ID | Account | Default Scope | Address |
+|--------|---------|---------------|---------|
+| `ops-key-1` | 0 | payment | `addr_test1qryvgass5dsrf2kxl3vgfz76uhp83kv5lagzcp29tcana68ca5aqa6swlq6llfamln09tal7n5kvt4275ckwedpt4v7q48uhex` |
+| `stake-key-1` | 1 | stake | (stake operations) |
+| `policy-key-1` | 2 | payment | (minting operations) |
+| `payment-key-1` | 3 | payment | (additional payments) |
+
+**Test Mnemonic:** `test test test test test test test test test test test test test test test test test test test test test test test sauce`
+
+⚠️ **Warning:** Never use this stub or test mnemonic in production.
+
 ## WebSocket Real-time Notifications
 
 When WebSocket is enabled, clients can subscribe to real-time status updates.
@@ -146,16 +317,9 @@ ws.onmessage = (event) => {
 };
 ```
 
-### Subscribe to Transaction
+### Receive Status Updates (Automatic)
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'subscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
-
-### Receive Status Updates
+After connecting, you'll automatically receive ALL transaction updates:
 
 ```json
 {
@@ -170,14 +334,12 @@ ws.send(JSON.stringify({
 }
 ```
 
-### Unsubscribe
+### Benefits of Broadcast Mode
 
-```javascript
-ws.send(JSON.stringify({
-  action: 'unsubscribe',
-  txHash: '1234567890abcdef...'
-}));
-```
+- ✅ **Simple**: Just connect - no subscription messages needed
+- ✅ **Comprehensive**: Receive updates for all transactions in the system
+- ✅ **Perfect for**: Monitoring dashboards, audit systems, real-time displays
+- ✅ **Flexible**: Filter on client-side if you only care about specific transactions
 
 ## Architecture
 
@@ -240,55 +402,12 @@ According to [Cardano Wallet Transaction Lifecycle](https://cardano-foundation.g
 2. The transaction **may reappear** in the winning fork if nodes re-include it
 3. If the transaction doesn't naturally reappear, it **must be re-submitted**
 
-### Re-submission Strategy
-
-- **Automatic**: System can automatically re-submit `ROLLED_BACK` transactions
-- **Manual**: Users can manually re-submit via the same submission endpoint
-- Both approaches will transition the transaction back to `SUBMITTED` → `CONFIRMED`
-
-## Example Usage
-
-### Java Client
-
-```java
-@Autowired
-private SmartTxSubmissionService smartSubmissionService;
-
-// Submit transaction
-SubmittedTransaction result = smartSubmissionService.submitTransaction(cborBytes);
-
-System.out.println("Status: " + result.getStatus());
-System.out.println("TxHash: " + result.getTxHash());
-```
-
-### Check Status
-
-```java
-@Autowired
-private TxLifecycleService lifecycleService;
-
-Optional<SubmittedTransaction> tx = lifecycleService.getTransaction(txHash);
-tx.ifPresent(t -> {
-    System.out.println("Status: " + t.getStatus());
-    System.out.println("Confirmations: " + t.getConfirmations(currentBlock));
-});
-```
-
-## Benefits
-
-- ✅ **No External Tools Required**: Built-in tracking without needing external monitoring services
-- ✅ **Automatic Rollback Handling**: Detects and handles chain reorganizations
-- ✅ **Flexible Finality**: Configurable SUCCESS state for different application needs
-- ✅ **Real-time Updates**: Optional WebSocket support for instant notifications
-- ✅ **Production-Ready**: Optimized scheduled jobs and indexed queries
-
 ## References
 
 - [ADR-001: Smart Transaction Submission](../../adr/ADR-001-smart-transaction-submission.md)
+- [ADR-002: Signer Reference Resolution](../../adr/ADR-002-signer-ref-resolution.md)
 - [Cardano Wallet - Transaction Lifecycle](https://cardano-foundation.github.io/cardano-wallet/design/concepts/transaction-lifecycle.html)
-- [Cardano Stack Exchange - Rollback Best Practices](https://cardano.stackexchange.com/questions/4614/best-practice-for-handling-rollbacks)
 
 ## License
 
 Same as Yaci Store main project.
-

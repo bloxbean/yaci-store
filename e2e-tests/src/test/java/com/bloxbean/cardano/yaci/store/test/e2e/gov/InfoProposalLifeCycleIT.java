@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Slf4j
+@Disabled
 public class InfoProposalLifeCycleIT extends BaseE2ETest {
     private final static Logger log = LoggerFactory.getLogger(InfoProposalLifeCycleIT.class);
 

@@ -3,11 +3,16 @@ dependencies {
     api project(":components:core")
     api project(":components:events")
     implementation libs.cardano.client.backend.ogmios
+    implementation project(":stores:utxo")
+    implementation project(":stores:epoch")
 
     implementation(libs.vavr)
     implementation libs.hibernate.types
     
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation(libs.assertj.core)
 }
 
 publishing {

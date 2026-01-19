@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.submit.notification;
 
-import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.event.TxStatusUpdateEvent;
 import com.bloxbean.cardano.yaci.store.submit.notification.websocket.TxLifecycleWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

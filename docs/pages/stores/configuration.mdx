@@ -199,6 +199,32 @@ store.sync-auto-start=false
 
 For public networks like mainnet, preprod, and preview, you still need to apply indexes manually or through admin-cli.
 
+## Submit signer registry & remote signer (QuickTx)
+
+Use the signer registry to resolve TxPlan `_ref` fields to local signers, address-only refs, or remote signers:
+
+```properties
+store.submit.signer-registry.enabled=true
+store.submit.signer-registry.entries[0].ref=account://alice
+store.submit.signer-registry.entries[0].type=account
+store.submit.signer-registry.entries[0].scopes=payment,stake
+store.submit.signer-registry.entries[0].account.mnemonic=${ALICE_MNEMONIC}
+store.submit.signer-registry.entries[1].ref=address://treasury
+store.submit.signer-registry.entries[1].type=address_only
+store.submit.signer-registry.entries[1].address.address=addr_test1...
+store.submit.signer-registry.entries[2].ref=remote://ops
+store.submit.signer-registry.entries[2].type=remote_signer
+store.submit.signer-registry.entries[2].scopes=payment,stake
+store.submit.signer-registry.entries[2].remote.endpoint=https://remote-signer.example.com
+store.submit.signer-registry.entries[2].remote.auth-token=${REMOTE_SIGNER_TOKEN}
+store.submit.signer-registry.entries[2].remote.key-id=ops-key-1
+store.submit.signer-registry.entries[2].remote.verification-key=${REMOTE_SIGNER_VKEY}
+store.submit.signer-registry.entries[2].remote.address=${REMOTE_SIGNER_ADDRESS}
+store.submit.signer-registry.entries[2].remote.timeout-ms=5000
+```
+
+Default remote signer transport: HTTP POST to `/sign` with JSON `{keyId, scope, txBody (hex), address?, verificationKey?}` and JSON response `{signature (hex), verificationKey?}`. A `RemoteSignerClient` bean can be overridden by adding a custom implementation on the classpath (e.g., drop a jar into the distribution `lib/` folder). ***
+
 ```properties
 # Auto-manage indexes during sync
 store.auto-index-management=true

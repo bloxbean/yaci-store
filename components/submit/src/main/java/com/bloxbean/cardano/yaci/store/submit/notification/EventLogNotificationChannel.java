@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.submit.notification;
 
 import com.bloxbean.cardano.yaci.store.submit.domain.SubmittedTransaction;
-import com.bloxbean.cardano.yaci.store.submit.event.TxStatusUpdateEvent;
+import com.bloxbean.cardano.yaci.store.submit.notification.event.TxStatusUpdateEvent;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.model.TxEventLogEntity;
 import com.bloxbean.cardano.yaci.store.submit.storage.impl.repository.TxEventLogRepository;
 import lombok.RequiredArgsConstructor;
