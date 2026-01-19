@@ -1,7 +1,7 @@
 # ADR-001: Smart Transaction Submission with Lifecycle Tracking
 
 ## Status
-**Proposed** - Under Discussion
+**Accepted** - Implemented
 
 ## Context
 

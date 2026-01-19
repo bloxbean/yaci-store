@@ -1,7 +1,7 @@
 # ADR-002: Signer reference resolution for TxPlan / QuickTx
 
 ## Status
-Proposed
+**Accepted** - Implemented
 
 ## Context
 - QuickTx YAML (`TxPlan`) supports `from_ref`, `fee_payer_ref`, `collateral_payer_ref`, and `signer` references. These are resolved through `SignerRegistry` when building or signing transactions.
@@ -25,41 +25,43 @@ Proposed
   - Provide a preferred address (for `from_ref`, `fee_payer_ref`, `collateral_payer_ref`).
   - Provide a signer for one or more scopes (`payment`, `stake`, `drep`, `committeeCold`, `committeeHot`, `policy`).
   - Optionally provide a wallet object when available to let QuickTx set sender/change addresses automatically.
-- Supported signer types (initial):
-  - `local-key`: payment/stake/policy keys stored locally (file/keystore/env); produces a `TxSigner`.
-  - `local-wallet`: HD wallet seed or xprv/xpub; can yield both address and signer.
-  - `remote-signer`: HTTP client that delegates signing to an external service (e.g., dripdropz/remote-signer). Needs endpoint, auth, and scope mapping. The signer implementation should call the remote service with the CBOR to sign and return witnesses.
-  - `address-only`: supplies an address for `from_ref`/payers without signing (useful for build-only flows).
-- Example configuration (shape to be refined in code):
+- Supported signer types:
+  - `account`: Local signing with mnemonic, bech32 private key, or root key. Supports HD derivation for payment/stake/policy keys.
+  - `remote_signer`: HTTP client that delegates signing to an external service. Sends `{keyId, scope, txBody}` and expects `{signature, verificationKey?}`.
+  - `address_only`: Supplies an address for `from_ref`/payers without signing capability (useful for build-only or multi-sig flows).
+- Example configuration:
 
 ```yaml
 store:
   submit:
     signer-registry:
+      enabled: true
       entries:
         - ref: account://alice
-          type: local-wallet
+          type: account
           scopes: [payment, stake]
-          wallet:
+          account:
             mnemonic: ${ALICE_MNEMONIC}
-            accountIndex: 0
-        - ref: policy://nft
-          type: local-key
-          scopes: [policy]
-          keys:
-            paymentSkey: file:/keys/policy.skey
+            account: 0
+            index: 0
         - ref: remote://ops
-          type: remote-signer
+          type: remote_signer
           scopes: [payment, stake, policy]
           remote:
-            baseUrl: https://remote-signer.example.com
-            authToken: ${REMOTE_SIGNER_TOKEN}
-            keyId: ops-key-1
-        - ref: wallet://treasury
-          type: address-only
+            endpoint: https://remote-signer.example.com/sign
+            auth-token: ${REMOTE_SIGNER_TOKEN}
+            key-id: ops-key-1
+            verification-key: ${REMOTE_SIGNER_VKEY}   # Optional fallback
+            address: ${REMOTE_SIGNER_ADDRESS}          # Optional
+            timeout-ms: 5000                           # Optional
+        - ref: address://treasury
+          type: address_only
           scopes: [payment]
-          address: addr1...
+          address:
+            address: addr_test1...
 ```
+
+See [components/submit/README.md](../components/submit/README.md) for complete configuration reference.
 
 - For remote signer support:
   - Define an interface (e.g., `RemoteSignerClient`) so implementations can target dripdropz/remote-signer or other services.

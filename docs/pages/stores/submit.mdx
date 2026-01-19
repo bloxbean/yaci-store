@@ -57,10 +57,10 @@ Response:
 
 ```json
 {
-  "txHash": "abc123...",
+  "tx_hash": "abc123...",
   "status": "SUBMITTED",
-  "txBodyCbor": "84a...",
-  "submittedAt": "2024-01-15T10:30:00Z"
+  "tx_body_cbor": "84a...",
+  "submitted_at": "2024-01-15T10:30:00Z"
 }
 ```
 
@@ -244,7 +244,9 @@ transaction:
 ```
 
 <Callout type="warning">
-Stake delegation requires TWO signers: one with `payment` scope and one with `stake` scope. They must be declared separately in the `signers` list.
+Stake delegation requires both `payment` and `stake` scopes. You can either:
+1. Declare two separate signers (as shown above), or
+2. Use a single signer with comma-separated scopes: `scope: payment,stake`
 </Callout>
 
 ### Common Intent Types
@@ -311,12 +313,12 @@ Response:
 
 ```json
 {
-  "txHash": "abc123...",
+  "tx_hash": "abc123...",
   "status": "CONFIRMED",
-  "submittedAt": "2024-01-15T10:30:00Z",
-  "confirmedAt": "2024-01-15T10:30:20Z",
-  "confirmedSlot": 12345678,
-  "confirmedBlockNumber": 9876543,
+  "submitted_at": "2024-01-15T10:30:00Z",
+  "confirmed_at": "2024-01-15T10:30:20Z",
+  "confirmed_slot": 12345678,
+  "confirmed_block_number": 9876543,
   "confirmations": 3
 }
 ```
@@ -477,6 +479,156 @@ Notifications are sent automatically when transactions change state:
 | `store.submit.lifecycle.webhook.timeoutMs` | 5000 | HTTP timeout in milliseconds |
 | `store.submit.lifecycle.eventlog.enabled` | **true** | Enable database event log |
 | `store.submit.lifecycle.eventlog.retentionDays` | 90 | Days to keep event logs |
+
+## Signer Registry
+
+The signer registry enables TxPlan references (`from_ref`, `fee_payer_ref`, `signers`) to resolve to actual signing keys.
+
+### Basic Configuration
+
+```yaml
+store:
+  submit:
+    signer-registry:
+      enabled: true
+      entries:
+        - ref: remote://ops
+          type: remote_signer
+          scopes: payment,stake
+          remote:
+            endpoint: https://signing-service.example.com/sign
+            auth-token: ${SIGNER_TOKEN}
+            key-id: ops-key-1
+```
+
+### Signer Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `account` | Local signing with mnemonic or private key | Development, self-custody |
+| `address_only` | Build-only, no signing | Multi-sig, external signing |
+| `remote_signer` | HTTP-based external signer | Production, HSM, KMS |
+
+### Remote Signer Configuration
+
+```yaml
+- ref: remote://ops
+  type: remote_signer
+  scopes: [payment, stake, policy]  # Or: "payment,stake,policy"
+  remote:
+    endpoint: https://signer.example.com/sign  # Required
+    key-id: ops-key-1                          # Required
+    auth-token: ${TOKEN}                       # Optional: Bearer auth
+    verification-key: ${VKEY_HEX}              # Optional: Fallback vkey
+    address: addr_test1...                     # Optional: Preferred address
+    timeout-ms: 5000                           # Optional: Request timeout
+```
+
+### Remote Signer HTTP Protocol
+
+Your signing service must implement this HTTP endpoint:
+
+**Request:**
+```http
+POST /sign
+Content-Type: application/json
+Authorization: Bearer {auth-token}
+
+{
+  "keyId": "ops-key-1",
+  "scope": "payment",
+  "txBody": "84a400818258...",
+  "address": "addr_test1...",
+  "verificationKey": "5820..."
+}
+```
+
+**Response:**
+```json
+{
+  "signature": "845820...",
+  "verificationKey": "5820..."
+}
+```
+
+<Callout type="info">
+**Verification Key Fallback:** If your service doesn't return `verificationKey`, configure it in `remote.verification-key`. The system tries: response → config → error.
+</Callout>
+
+### Available Scopes
+
+| Scope | Usage |
+|-------|-------|
+| `payment` | Regular payments, fee payment |
+| `stake` | Stake registration, delegation, withdrawal |
+| `policy` | Minting/burning tokens |
+| `drep` | DRep registration and voting |
+| `committeecold` | Committee cold key operations |
+| `committeehot` | Committee hot key operations |
+
+### Account Signer (Local)
+
+For development or self-custody:
+
+```yaml
+- ref: account://alice
+  type: account
+  scopes: [payment, stake]
+  account:
+    mnemonic: "${MNEMONIC}"  # Or: bech32-private-key, root-key-hex
+    account: 0               # HD derivation account
+    index: 0                 # HD derivation index
+```
+
+## Local Development
+
+### Local Remote Signer (Dev Stub)
+
+For local development and E2E testing, enable the built-in stub signer:
+
+```yaml
+store:
+  submit:
+    local-remote-signer:
+      enabled: true
+```
+
+This exposes `POST /local-remote-signer/sign` which produces **real Ed25519 signatures**.
+
+**Configure your registry to use it:**
+
+```yaml
+store:
+  submit:
+    signer-registry:
+      enabled: true
+      entries:
+        - ref: remote://ops
+          type: remote_signer
+          scopes: payment
+          remote:
+            endpoint: http://localhost:8080/local-remote-signer/sign
+            key-id: ops-key-1
+        - ref: remote://stake-ops
+          type: remote_signer
+          scopes: payment,stake
+          remote:
+            endpoint: http://localhost:8080/local-remote-signer/sign
+            key-id: stake-key-1
+```
+
+**Available Key IDs:**
+
+| Key ID | Account | Scope |
+|--------|---------|-------|
+| `ops-key-1` | 0 | payment |
+| `stake-key-1` | 1 | stake |
+| `policy-key-1` | 2 | policy |
+| `payment-key-1` | 3 | payment |
+
+<Callout type="warning">
+The local signer uses a standard test mnemonic. **Never use in production.**
+</Callout>
 
 ## Next Steps
 
