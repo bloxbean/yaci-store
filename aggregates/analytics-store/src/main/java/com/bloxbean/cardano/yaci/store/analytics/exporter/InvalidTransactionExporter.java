@@ -48,7 +48,7 @@ public class InvalidTransactionExporter extends AbstractTableExporter {
      * Build SQL query for invalid transactions in the slot range.
      *
      * Exports transaction hash, slot, block hash, and transaction JSON.
-     * The transaction JSON is cast to text for Parquet compatibility.
+     * JOINs with block table to get block_time for date partitioning.
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
@@ -59,13 +59,14 @@ public class InvalidTransactionExporter extends AbstractTableExporter {
                 it.slot,
                 it.block_hash,
                 it.transaction::text as transaction,
-                to_timestamp(it.block_time) as block_time
+                to_timestamp(b.block_time) as block_time
             FROM source_db.%s.invalid_transaction it
+            INNER JOIN source_db.%s.block b ON it.slot = b.slot
             WHERE it.slot >= %d
               AND it.slot < %d
             ORDER BY it.slot, it.tx_hash
             """,
-            schema,
+            schema, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

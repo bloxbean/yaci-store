@@ -54,6 +54,7 @@ public class RollbackExporter extends AbstractTableExporter {
      * Build SQL query for rollback events in the slot range.
      *
      * Uses current_slot for partitioning as it represents when the rollback occurred.
+     * JOINs with block table to get block_time for date partitioning.
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
@@ -66,13 +67,14 @@ public class RollbackExporter extends AbstractTableExporter {
                 r.current_block_hash,
                 r.current_slot,
                 r.current_block,
-                to_timestamp(r.block_time) as block_time
+                to_timestamp(b.block_time) as block_time
             FROM source_db.%s.rollback r
+            INNER JOIN source_db.%s.block b ON r.current_slot = b.slot
             WHERE r.current_slot >= %d
               AND r.current_slot < %d
             ORDER BY r.current_slot, r.id
             """,
-            schema,
+            schema, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );
