@@ -51,7 +51,7 @@ public class AddressExporter extends AbstractTableExporter {
      * Build SQL query for addresses discovered in the partition slot range.
      *
      * The query exports all addresses where the slot falls within the partition range.
-     * This ensures each address is exported based on when it was first seen.
+     * JOINs with block table to get block_time for date partitioning.
      */
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
@@ -63,13 +63,14 @@ public class AddressExporter extends AbstractTableExporter {
                 a.payment_credential,
                 a.stake_address,
                 a.slot,
-                a.update_datetime
+                to_timestamp(b.block_time) as block_time
             FROM source_db.%s.address a
+            INNER JOIN source_db.%s.block b ON a.slot = b.slot
             WHERE a.slot >= %d
               AND a.slot < %d
             ORDER BY a.slot, a.address
             """,
-            schema,
+            schema, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );
