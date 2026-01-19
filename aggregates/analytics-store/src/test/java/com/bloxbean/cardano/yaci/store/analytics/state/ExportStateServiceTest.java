@@ -49,7 +49,7 @@ public class ExportStateServiceTest {
         String partition = "2024-10-30";
         ExportState state = stateService.markInProgress(tableName, partition);
 
-        ParquetExportResult result = new ParquetExportResult(
+        ExportResult result = new ExportResult(
             "/path/to/file.parquet", 1000, 5000, 1500
         );
 
@@ -71,7 +71,7 @@ public class ExportStateServiceTest {
 
         // When - First export
         ExportState state1 = stateService.markInProgress(tableName, partition);
-        ParquetExportResult result = new ParquetExportResult("/path", 1000, 5000, 1500);
+        ExportResult result = new ExportResult("/path", 1000, 5000, 1500);
         stateService.markCompleted(state1, result, "abc123");
 
         // When - Second export attempt
@@ -108,7 +108,7 @@ public class ExportStateServiceTest {
         String tableName = "test_table";
         String partition = "2024-10-30";
         ExportState state1 = stateService.markInProgress(tableName, partition);
-        ParquetExportResult result = new ParquetExportResult("/path/file.parquet", 1000, 5000, 1500);
+        ExportResult result = new ExportResult("/path/file.parquet", 1000, 5000, 1500);
         stateService.markCompleted(state1, result, "abc123");
         entityManager.flush();
 
@@ -153,11 +153,11 @@ public class ExportStateServiceTest {
         // Given - Multiple partitions with different states
         stateService.markInProgress("test_table", "2024-10-30");
         ExportState state1 = stateService.getState("test_table", "2024-10-30");
-        stateService.markCompleted(state1, new ParquetExportResult("/path1", 100, 500, 100), "checksum1");
+        stateService.markCompleted(state1, new ExportResult("/path1", 100, 500, 100), "checksum1");
 
         stateService.markInProgress("test_table", "2024-10-31");
         ExportState state2 = stateService.getState("test_table", "2024-10-31");
-        stateService.markCompleted(state2, new ParquetExportResult("/path2", 200, 600, 150), "checksum2");
+        stateService.markCompleted(state2, new ExportResult("/path2", 200, 600, 150), "checksum2");
 
         stateService.markInProgress("test_table", "2024-11-01");
         ExportState state3 = stateService.getState("test_table", "2024-11-01");
@@ -217,7 +217,7 @@ public class ExportStateServiceTest {
 
         // Then - Error message should be truncated
         ExportState failed = stateService.getState(tableName, partition);
-        assertThat(failed.getErrorMessage()).hasSize(1017);  // 1000 + "... (truncated)"
+        assertThat(failed.getErrorMessage().length()).isEqualTo(1015);  // 1000 + "... (truncated)"
         assertThat(failed.getErrorMessage()).endsWith("... (truncated)");
     }
 
@@ -267,7 +267,7 @@ public class ExportStateServiceTest {
         }
 
         // When
-        ParquetExportResult result = new ParquetExportResult("/path", 1000, 5000, 1500);
+        ExportResult result = new ExportResult("/path", 1000, 5000, 1500);
         stateService.markCompleted(state, result, "checksum");
         entityManager.flush();
 
