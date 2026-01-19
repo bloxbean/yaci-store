@@ -1,0 +1,57 @@
+---
+navigation: false
+---
+
+# Yaci Store 2.0.0-beta5 Installation
+
+Yaci Store provides three types of distributions to suit different deployment needs:
+
+## Types of Distribution
+
+### 1. [Docker Distribution](/docs/v2/getting-started/installation/beta5/docker) **(Recommended)**
+
+Complete environment with PostgreSQL, admin tools, and monitoring stack (Prometheus + Grafana). Perfect for production deployments and quick setup.
+
+**Best for:**
+- Production deployments
+- Quick start and evaluation
+- Complete monitoring and management capabilities
+
+[View Docker Distribution Guide →](/docs/v2/getting-started/installation/beta5/docker)
+
+---
+
+### 2. [Zip Distribution (JARs)](/docs/v2/getting-started/installation/beta5/zip)
+
+Standalone JAR files with configuration files. Provides maximum flexibility for custom setups and enterprise deployments.
+
+**Best for:**
+- Custom database configurations
+- Enterprise deployment pipelines
+- Advanced users requiring full control
+
+[View Zip Distribution Guide →](/docs/v2/getting-started/installation/beta5/zip)
+
+---
+
+### 3. [Native (GraalVM) Distribution](/docs/v2/getting-started/installation/beta5/native) *(Preview)*
+
+Native binaries compiled with GraalVM for optimal performance and reduced resource usage.
+
+**Best for:**
+- Performance-critical deployments
+- Resource-constrained environments
+- Testing native compilation capabilities
+
+[View Native Distribution Guide →](/docs/v2/getting-started/installation/beta5/native)
+
+---
+
+## Known Issues or Limitations
+
+1. **Performance of Reward Calculation on Mainnet**
+   - Ledger-state calculations currently happen **during epoch transition**.
+     That means **rewards paid in epoch X are calculated during the transition from epoch X-1 to X**.
+   - On Mainnet, this takes around **15–30 minutes** per transition (depends on your PostgreSQL resources).
+   - In a future release, we plan to start **reward calculation in epoch X-1 after the stability window**, similar to how the Haskell node works.
+     This will reduce the computation load during epoch boundaries.

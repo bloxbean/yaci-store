@@ -1,0 +1,402 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# Configuration Access Guide
+
+**Access environment variables and application properties using `env`**
+
+## When to Use Configuration Access
+
+Use the `env` variable to:
+- Read environment variables for API keys and secrets
+- Access application configuration properties
+- Support different configurations per environment (dev/staging/prod)
+- Enable feature flags and conditional behavior
+- Configure plugin behavior without code changes
+
+<Callout type="info">
+The `env` variable provides read-only access to Spring's Environment, including system properties, environment variables, and application configuration files.
+</Callout>
+
+## Quick Start
+
+```javascript
+// MVEL - Get configuration with defaults
+apiUrl = env.getProperty("plugin.api.url", "http://localhost:8080");
+apiKey = env.getProperty("API_KEY"); // Environment variable
+timeout = env.getProperty("plugin.timeout", Integer.class, 30);
+
+if (env.containsProperty("plugin.feature.enabled")) {
+    featureEnabled = env.getProperty("plugin.feature.enabled", Boolean.class);
+}
+```
+
+## Core Concepts
+
+### Configuration Sources
+
+The `env` variable can access configuration from multiple sources (in priority order):
+
+1. **System Properties** - JVM system properties (`-Dproperty=value`)
+2. **Environment Variables** - OS environment variables (`export API_KEY=secret`)
+3. **Application Properties** - `application.properties` or `application.yml`
+4. **Profile-specific Properties** - `application-{profile}.properties`
+5. **Config Files** - Additional configuration files in the config directory
+
+### Property Naming Conventions
+
+| Source | Example | Access Method |
+|--------|---------|---------------|
+| **Environment Variable** | `API_KEY` | `env.getProperty("API_KEY")` |
+| **System Property** | `-Dapi.key=secret` | `env.getProperty("api.key")` |
+| **Application Property** | `plugin.webhook.url` | `env.getProperty("plugin.webhook.url")` |
+| **Spring Convention** | `PLUGIN_WEBHOOK_URL` | `env.getProperty("plugin.webhook.url")` |
+
+<Callout type="tip">
+Spring automatically maps environment variables: `PLUGIN_WEBHOOK_URL` → `plugin.webhook.url`
+</Callout>
+
+## API Reference
+
+### Core Methods
+
+<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs.Tab>
+```javascript
+// Get property as string
+value = env.getProperty("property.name");
+
+// Get with default value
+value = env.getProperty("property.name", "default");
+
+// Get as specific type
+port = env.getProperty("server.port", Integer.class);
+enabled = env.getProperty("feature.enabled", Boolean.class, false);
+
+// Check if property exists
+if (env.containsProperty("api.key")) {
+    // Property is defined
+}
+
+// Get required property (throws if missing)
+requiredKey = env.getRequiredProperty("api.key");
+
+// Get active profiles
+profiles = env.getActiveProfiles();
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Get property as string
+const value = env.getProperty("property.name");
+
+// Get with default value
+const value = env.getProperty("property.name", "default");
+
+// Get as specific type
+const port = env.getProperty("server.port", java.lang.Integer.class);
+const enabled = env.getProperty("feature.enabled", java.lang.Boolean.class, false);
+
+// Check if property exists
+if (env.containsProperty("api.key")) {
+    // Property is defined
+}
+
+// Get required property (throws if missing)
+const requiredKey = env.getRequiredProperty("api.key");
+
+// Get active profiles
+const profiles = env.getActiveProfiles();
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```python
+# Get property as string
+value = env.getProperty("property.name")
+
+# Get with default value
+value = env.getProperty("property.name", "default")
+
+# Get as specific type
+port = env.getProperty("server.port", java.lang.Integer)
+enabled = env.getProperty("feature.enabled", java.lang.Boolean, False)
+
+# Check if property exists
+if env.containsProperty("api.key"):
+    # Property is defined
+    pass
+
+# Get required property (throws if missing)
+required_key = env.getRequiredProperty("api.key")
+
+# Get active profiles
+profiles = env.getActiveProfiles()
+```
+</Tabs.Tab>
+</Tabs>
+
+### Type Conversion
+
+The `env` variable automatically converts property values to the requested type:
+
+```javascript
+// MVEL - Type conversion examples
+stringVal = env.getProperty("name");                          // String (default)
+intVal = env.getProperty("port", Integer.class);              // Integer
+longVal = env.getProperty("timeout", Long.class);             // Long
+boolVal = env.getProperty("enabled", Boolean.class);          // Boolean
+doubleVal = env.getProperty("rate", Double.class);            // Double
+
+// With defaults
+port = env.getProperty("server.port", Integer.class, 8080);
+timeout = env.getProperty("timeout.ms", Long.class, 30000L);
+```
+
+## Common Patterns
+
+### 1. API Configuration
+
+```javascript
+// JavaScript - Configure external API client
+function getApiClient() {
+    const config = {
+        baseUrl: env.getProperty("external.api.url", "https://api.example.com"),
+        apiKey: env.getProperty("EXTERNAL_API_KEY"),
+        timeout: env.getProperty("external.api.timeout", java.lang.Integer.class, 30),
+        retryCount: env.getProperty("external.api.retries", java.lang.Integer.class, 3)
+    };
+
+    if (!config.apiKey) {
+        console.error("EXTERNAL_API_KEY not configured");
+        return null;
+    }
+
+    return config;
+}
+
+// Use configuration
+const apiConfig = getApiClient();
+if (apiConfig) {
+    const response = http.retry(
+        () => http.getWithBearerToken(apiConfig.baseUrl + "/data", apiConfig.apiKey),
+        apiConfig.retryCount,
+        1
+    );
+}
+```
+
+### 2. Environment-specific Behavior
+
+```javascript
+// MVEL - Different behavior per environment
+profile = env.getActiveProfiles().length > 0 ? env.getActiveProfiles()[0] : "default";
+
+if (profile == "production") {
+    // Production settings
+    batchSize = env.getProperty("plugin.batch.size", Integer.class, 1000);
+    logLevel = "ERROR";
+} else if (profile == "development") {
+    // Development settings
+    batchSize = env.getProperty("plugin.batch.size", Integer.class, 10);
+    logLevel = "DEBUG";
+} else {
+    // Default settings
+    batchSize = 100;
+    logLevel = "INFO";
+}
+
+log.info("Running in " + profile + " mode with batch size: " + batchSize);
+```
+
+### 3. Feature Flags
+
+```python
+# Python - Feature flag management
+def is_feature_enabled(feature_name):
+    flag_key = f"plugin.feature.{feature_name}.enabled"
+
+    # Check if explicitly set
+    if env.containsProperty(flag_key):
+        return env.getProperty(flag_key, java.lang.Boolean)
+
+    # Check global feature flag
+    global_enabled = env.getProperty("plugin.features.enabled", java.lang.Boolean, True)
+
+    # Check if in beta features list
+    beta_features = env.getProperty("plugin.features.beta", "")
+    if feature_name in beta_features.split(","):
+        return env.getProperty("plugin.features.beta.enabled", java.lang.Boolean, False)
+
+    return global_enabled
+
+# Usage
+if is_feature_enabled("new_algorithm"):
+    use_new_algorithm()
+else:
+    use_legacy_algorithm()
+```
+
+### 4. Service Configuration
+
+```javascript
+// JavaScript - Dynamic service configuration
+function getServiceConfig() {
+    const config = {
+        url: env.getProperty("plugin.service.url", "http://localhost:8080"),
+        username: env.getProperty("plugin.service.username"),
+        password: env.getProperty("plugin.service.password"),
+        maxConnections: env.getProperty("plugin.service.max-connections", java.lang.Integer.class, 10)
+    };
+
+    // Validate configuration
+    if (!config.url) {
+        throw new Error("Service URL not configured");
+    }
+
+    return config;
+}
+```
+
+### 5. Webhook Configuration
+
+```javascript
+// MVEL - Configure webhooks from properties
+webhookConfig = [:];
+
+// Check if webhooks are enabled
+if (env.getProperty("plugin.webhooks.enabled", Boolean.class, false)) {
+    webhookConfig["enabled"] = true;
+    webhookConfig["urls"] = [];
+
+    // Support multiple webhook URLs
+    for (i = 1; i <= 10; i++) {
+        urlKey = "plugin.webhook.url." + i;
+        if (env.containsProperty(urlKey)) {
+            url = env.getProperty(urlKey);
+            authKey = "plugin.webhook.auth." + i;
+
+            webhook = ["url": url];
+            if (env.containsProperty(authKey)) {
+                webhook["auth"] = env.getProperty(authKey);
+            }
+
+            webhookConfig["urls"].add(webhook);
+        }
+    }
+
+    webhookConfig["retries"] = env.getProperty("plugin.webhook.retries", Integer.class, 3);
+    webhookConfig["timeout"] = env.getProperty("plugin.webhook.timeout", Integer.class, 10);
+}
+
+// Use configuration
+if (webhookConfig["enabled"]) {
+    for (webhook : webhookConfig["urls"]) {
+        sendWebhook(webhook["url"], data, webhook["auth"]);
+    }
+}
+```
+
+### 6. Secrets Management
+
+```javascript
+// JavaScript - Secure secret handling
+function getSecrets() {
+    const secrets = {};
+
+    // Try environment variables first (preferred for secrets)
+    secrets.apiKey = env.getProperty("API_KEY") ||
+                     env.getProperty("plugin.api.key");
+
+    secrets.password = env.getProperty("APP_PASSWORD") ||
+                       env.getProperty("plugin.password");
+
+    // Validate required secrets
+    const required = ["apiKey"];
+    for (const key of required) {
+        if (!secrets[key]) {
+            console.error(`Required secret '${key}' not configured`);
+            console.error("Set via environment variable or application properties");
+            return null;
+        }
+    }
+
+    // Never log secrets!
+    console.log("Secrets loaded successfully");
+    return secrets;
+}
+```
+
+## Configuration File Examples
+
+### application.properties
+```properties
+plugin.api.url=https://api.example.com
+plugin.api.timeout=30
+plugin.api.retries=3
+
+plugin.webhooks.enabled=true
+plugin.webhook.url.1=https://webhook1.example.com
+plugin.webhook.url.2=https://webhook2.example.com
+plugin.webhook.retries=3
+
+plugin.features.enabled=true
+plugin.features.beta=feature1,feature2
+plugin.features.beta.enabled=false
+
+plugin.batch.size=100
+plugin.db.max-connections=10
+```
+
+### Environment Variables
+```bash
+# Secrets (preferred method)
+export API_KEY="your-secret-api-key"
+export APP_PASSWORD="secure-password"
+export EXTERNAL_API_KEY="external-service-key"
+
+# Configuration overrides
+export PLUGIN_API_URL="https://api.production.com"
+export PLUGIN_BATCH_SIZE=1000
+export PLUGIN_FEATURES_ENABLED=true
+```
+
+## Security Considerations
+
+<Callout type="error">
+**Never log sensitive configuration values!** Always mask or omit secrets in logs.
+</Callout>
+
+```javascript
+// Safe logging of configuration
+console.log("Configuration loaded:");
+console.log(`  API URL: ${env.getProperty("plugin.api.url")}`);
+console.log(`  API Key: ${env.containsProperty("API_KEY") ? "***configured***" : "missing"}`);
+console.log(`  Timeout: ${env.getProperty("plugin.timeout", "30")}s`);
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Property not found**: Check spelling and naming conventions
+2. **Wrong type**: Ensure property value can be converted to requested type
+3. **Environment variable not visible**: Restart application after setting
+4. **Profile-specific properties not loading**: Verify active profile is set
+
+### Debugging Configuration
+
+```javascript
+// List active profiles
+console.log("Active profiles:", env.getActiveProfiles());
+
+// Check multiple property sources
+const propertyName = "plugin.api.url";
+console.log(`Checking property: ${propertyName}`);
+console.log(`  Exists: ${env.containsProperty(propertyName)}`);
+console.log(`  Value: ${env.getProperty(propertyName, "not set")}`);
+
+// Check both environment variable and property formats
+console.log(`  As env var: ${env.getProperty("PLUGIN_API_URL", "not set")}`);
+console.log(`  As property: ${env.getProperty("plugin.api.url", "not set")}`);
+```

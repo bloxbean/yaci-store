@@ -1,0 +1,3 @@
+export default {
+  "tracking-address-utxos": "Tracking UTXOs for a Specific Address"
+}

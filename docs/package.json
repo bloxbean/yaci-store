@@ -1,38 +1,35 @@
 {
   "name": "yaci-store-docs",
-  "description": "Documentation Yaci Store, a Bloxbean project ",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Yaci Store Docs site",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "export": "next build"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bloxbean/yaci-store"
+    "url": "git+https://github.com/bloxbean/yaci-store.git"
   },
+  "author": "Satya",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bloxbean/yaci-store/issues"
+  },
+  "homepage": "https://github.com/bloxbean/yaci-store#readme",
   "dependencies": {
-    "@heroicons/react": "^2.2.0",
-    "next": "^15.0.2",
-    "next-mdx-remote": "^5.0.0",
-    "nextra": "^4.2.17",
-    "nextra-theme-docs": "^4.2.17",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-icons": "^5.5.0"
-  },
-  "scripts": {
-    "dev": "next --turbopack",
-    "build": "next build",
-    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind",
-    "start": "next start",
-    "prettier": "npx prettier . --write",
-    "prepare": "husky"
+    "next": "^15.1.6",
+    "nextra": "^4.0.14",
+    "nextra-theme-docs": "^4.0.14",
+    "pnpm": "^9.0.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/node": "^v22.14.0",
-    "@types/react": "^19.1.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^15.4.3",
-    "pagefind": "^1.3.0",
-    "prettier": "3.5.2",
-    "typescript": "^5.7.3"
-  },
-  "lint-staged": {
-    "*.{js,css,md}": "prettier --write"
+    "@types/node": "^22.10.5",
+    "@types/react": "19.2.7",
+    "typescript": "^5.7.2"
   }
 }

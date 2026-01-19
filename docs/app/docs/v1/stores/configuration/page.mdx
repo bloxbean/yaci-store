@@ -1,4 +1,4 @@
-&nbsp;
+import { Callout, Tabs } from 'nextra/components'
 
 # Store Configuration Guide
 
@@ -8,7 +8,7 @@ This guide covers the essential configuration options for yaci-store, including 
 
 ### Core Stores
 
-All stores are enabled by default. To disable a store, set its flag to false:
+All stores are enabled by default. To disable a store, set its flag to `false`:
 
 ```properties
 # Core store flags
@@ -26,7 +26,9 @@ store.governance.enabled=true
 
 ### Aggregation Modules
 
-These modules are disabled by default and are enabled only for the ledger-state profile. While core store indexing is done in parallel, most of the processing in aggregation modules is sequential. Therefore, it is recommended to enable aggregation modules only when you need them.
+These modules are disabled by default and are enabled only for the `ledger-state` profile.
+While core store indexing is done in parallel, most of the processing in aggregation modules is sequential.
+Therefore, it is recommended to enable aggregation modules only when you need them.
 
 ```properties
 # Aggregation module flags (disabled by default)
@@ -56,7 +58,9 @@ store.mir.api-enabled=true
 store.governance.api-enabled=true
 ```
 
-> 💡 **Note**: Disabling unnecessary stores can significantly reduce database storage requirements and improve sync performance.
+<Callout type="tip">
+Disabling unnecessary stores can significantly reduce database storage requirements and improve sync performance.
+</Callout>
 
 ## Network Configuration
 
@@ -86,10 +90,13 @@ store.cardano.protocol-magic=<protocol_magic>
 
 ### Local Node Configuration (Optional)
 
-Yaci Store can connect to a local node to fetch current protocol parameters and current governance state data through n2c. It can also be used to submit transactions. You can use either a Unix socket or a TCP socket (through socat) to connect to your local node.
+Yaci Store can connect to a local node to fetch current protocol parameters and current governance state data through n2c. It can also be used to
+submit transactions. You can use either a Unix socket or a TCP socket (through socat) to connect to your local node.
 
-> ⚠️ **Important**: Even if the local node is configured for n2c, you still need to configure the `store.cardano.host`, `store.cardano.port`, and `store.cardano.protocol-magic` properties for indexing, as the indexing is done through the n2n protocol.
-
+<Callout type="important">
+Even if the local node is configured for n2c, you still need to configure the `store.cardano.host`, `store.cardano.port`,
+and `store.cardano.protocol-magic` properties for indexing, as the indexing is done through the n2n protocol.
+</Callout>
 ```properties
 # Unix socket (local node)
 store.cardano.n2c-node-socket-path=/path/to/node.socket
@@ -103,7 +110,7 @@ store.cardano.n2c-port=31001
 
 ### H2 (Default - In-Memory / File-Based)
 
-> ⚠️ **Warning**: Only for testing purposes, not recommended for production use.
+Only for testing purposes, not recommended for production use.
 
 ```properties
 spring.datasource.url=jdbc:h2:mem:mydb
@@ -239,7 +246,9 @@ store.transaction.enabled=true
 
 ### Pruning Configuration
 
+<Callout type="info">
 By default, pruning is disabled for all stores. Enable pruning to automatically remove historical data and reduce storage requirements.
+</Callout>
 
 #### UTxO Pruning
 
@@ -248,6 +257,7 @@ By default, pruning is disabled for all stores. Enable pruning to automatically 
 store.utxo.pruning-enabled=true
 store.utxo.pruning.interval=600
 store.utxo.pruning-safe-blocks=2160
+store.utxo.pruning-batch-size=3000
 ```
 
 #### Transaction Pruning
@@ -256,13 +266,39 @@ store.utxo.pruning-safe-blocks=2160
 # Enable transaction pruning
 store.transaction.pruning-enabled=true
 store.transaction.pruning.interval=86400
+store.transaction.pruning-safe-slot=43200
 ```
 
-#### Transaction Witness Saving
+### Transaction Witness Saving
 
 ```properties
 # Save transaction witness data (disabled by default to reduce storage)
 store.transaction.save-witness=false
+```
+
+### Block & Transaction CBOR
+
+#### Enable CBOR bytes in transaction/block payload of Yaci
+
+```properties
+store.cardano.return-tx-body-cbor=true
+store.cardano.return-block-cbor=true
+```
+
+The above properties must be set to true as prerequisites for the following configuration.
+
+The following configs can be used to enable saving of block/transaction CBOR in the database and enable pruning (optional):
+
+```properties
+# Store and prune raw block CBOR
+store.blocks.save-cbor=false
+store.blocks.cbor-pruning-enabled=false
+store.blocks.cbor-retention-slots=43200
+
+# Store and prune raw transaction CBOR
+store.transaction.save-cbor=false
+store.transaction.cbor-pruning-enabled=false
+store.transaction.cbor-retention-slots=43200
 ```
 
 #### Epoch Stake Pruning
@@ -271,12 +307,15 @@ store.transaction.save-witness=false
 # Enable epoch stake pruning (for adapot module)
 store.adapot.epoch-stake-pruning-enabled=true
 store.adapot.epoch-stake-pruning-interval=86400
-store.adapot.epoch-stake-safe-epochs=4
+store.adapot.epoch-stake-safe-epochs=8
+store.adapot.epoch-stake-pruning-batch-size=3000
 ```
 
 ### Address Storage
 
+<Callout type="info">
 By default, addresses are not saved in address table. Enable this feature if you need to have all used addresses in address table.
+</Callout>
 
 ```properties
 # Enable saving addresses to address table (default: false)
@@ -294,36 +333,37 @@ store.utxo.address-cache-size=100000
 store.cardano.keep-alive-interval=10000
 ```
 
-## Transaction Submission Configuration (Optional)
+### Transaction Submission Configuration (Optional)
 
+<Callout type="info">
 Transaction submission is optional and disabled by default. You can enable it through multiple methods based on your infrastructure.
+</Callout>
 
 Yaci Store supports three methods for transaction submission, with the following priority order:
 
-### 1. Submit API (Recommended)
-
+1. **Submit API** (Recommended)
 ```properties
 # Enable transaction submission via Submit API
 store.cardano.submit-api-url=http://localhost:8090/api/submit/tx
 ```
 
-### 2. Ogmios
-
+2. **Ogmios**
 ```properties
 # Enable transaction submission and script cost evaluation via Ogmios
 store.cardano.ogmios-url=http://ogmios-host:1337
 ```
 
-### 3. Local N2C Protocol
-
+3. **Local N2C Protocol**
 ```properties
 # Automatically enabled if n2c configuration is provided
 # See "Local Node Configuration" section above
 ```
 
-> 💡 **Tip**: You can combine Submit API for transaction submission with Ogmios for script cost evaluation by configuring both URLs. This provides the best of both services.
+<Callout type="tip">
+You can combine Submit API for transaction submission with Ogmios for script cost evaluation by configuring both URLs. This provides the best of both services.
+</Callout>
 
-### N2C Connection Pool Configuration
+#### N2C Connection Pool Configuration
 
 When using N2C protocol for transaction submission:
 
@@ -336,7 +376,7 @@ store.cardano.n2c-pool-max-idle=5
 store.cardano.n2c-pool-max-wait-in-millis=10000
 ```
 
-## Read-Only Mode
+### Read-Only Mode
 
 ```properties
 # Enable read-only mode (no writes to database)
@@ -351,7 +391,9 @@ For more advanced control over what specific data gets stored within each enable
 - Transform data before storage
 - Implement business-specific logic
 
-Learn more about fine-grained data control using plugins in the Plugin Getting Started Guide.
+<Callout type="info">
+Learn more about fine-grained data control using plugins in the [Plugin Getting Started Guide](/plugins/plugin-getting-started).
+</Callout>
 
 ## Best Practices
 
@@ -373,6 +415,13 @@ logging.file.name=./logs/yaci-store.log
 logging.level.com.bloxbean.cardano.yaci.store.core.service=INFO
 ```
 
+### Enable Metrics in Block store
+
+```properties
+store.blocks.metrics.enabled=true
+store.blocks.metrics.update-interval=60000
+```
+
 ## Next Steps
 
-Explore Plugin Development for fine-grained control
+- Explore [Plugin Development](/plugins/plugin-getting-started) for fine-grained control

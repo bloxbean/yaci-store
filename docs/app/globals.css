@@ -1,0 +1,222 @@
+/* Hide sidebar on landing page */
+[data-page-route="/"] aside.nextra-sidebar-container {
+  display: none !important;
+}
+
+[data-page-route="/"] .nx-max-w-\[90rem\] {
+  max-width: 100% !important;
+}
+
+[data-page-route="/"] main {
+  max-width: 100% !important;
+}
+
+/* Hide "Index" title in sidebar */
+aside nav > ul > li:first-child a[href*="/docs/v1"],
+aside nav > ul > li:first-child a[href*="/docs/v2"],
+aside nav > ul > li:first-child a[href="/docs/v1"],
+aside nav > ul > li:first-child a[href="/docs/v2"] {
+  display: none !important;
+}
+
+/* Hide any element containing only "Index" text */
+aside nav li a:only-child {
+  &:has-text("Index") {
+    display: none !important;
+  }
+}
+
+/* Target the sidebar container's first navigation item */
+.nextra-sidebar-container nav > ul > li:first-child {
+  &:has(a[href="/docs/v1"]),
+  &:has(a[href="/docs/v2"]) {
+    display: none !important;
+  }
+}
+
+/* More aggressive - hide any link that ends with just the version path */
+aside a[href$="/docs/v1"],
+aside a[href$="/docs/v2"] {
+  display: none !important;
+}
+
+aside li:has(> a[href$="/docs/v1"]),
+aside li:has(> a[href$="/docs/v2"]) {
+  display: none !important;
+}
+
+
+/* ==================== Consistent Spacing for All Pages ==================== */
+
+/* Main container padding */
+main {
+  padding-top: 1.5rem !important;
+}
+
+/* Remove nested padding */
+main article,
+main > div,
+.nextra-content,
+main > .nx-max-w-\[90rem\] {
+  padding-top: 0 !important;
+}
+
+/* First element has no top spacing */
+main > *:first-child,
+main article > *:first-child,
+main article > div:first-child > *:first-child,
+.nextra-content > *:first-child,
+main h1:first-child,
+main h2:first-child,
+main h3:first-child,
+article h1:first-child,
+article h2:first-child,
+article h3:first-child {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* ==================== Typography Standardization ==================== */
+
+/* Main Title (H1) - Uniform across all pages */
+h1,
+main h1,
+main article h1,
+.nextra-content h1,
+article h1 {
+  font-size: 2.25rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  margin-top: 0 !important;
+  margin-bottom: 1rem !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* All Subtitles (H2-H6) - Identical styling */
+h2, h3, h4, h5, h6,
+main h2, main h3, main h4, main h5, main h6,
+main article h2, main article h3, main article h4, main article h5, main article h6,
+.nextra-content h2, .nextra-content h3, .nextra-content h4, .nextra-content h5, .nextra-content h6,
+article h2, article h3, article h4, article h5, article h6 {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  margin-top: 2rem !important;
+  margin-bottom: 0.75rem !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* Body text - Consistent size and spacing across all pages */
+p,
+main p,
+main article p,
+.nextra-content p,
+article p {
+  font-size: 1rem !important;
+  line-height: 1.75 !important;
+  margin-bottom: 1rem !important;
+  margin-top: 0 !important;
+}
+
+/* Lists - Consistent across all pages (excluding sidebar) */
+main ul,
+main ol,
+main article ul,
+main article ol,
+.nextra-content ul,
+.nextra-content ol,
+article ul,
+article ol {
+  margin-bottom: 1rem !important;
+  margin-top: 0 !important;
+  padding-left: 1.5rem !important;
+}
+
+main li,
+main article li,
+.nextra-content li,
+article li {
+  font-size: 1rem !important;
+  line-height: 1.75 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Override for sidebar to remove the spacing */
+aside.nextra-sidebar-container ul,
+aside.nextra-sidebar-container ol {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+  padding-left: 0 !important;
+}
+
+aside.nextra-sidebar-container li {
+  margin-bottom: 0 !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+/* Links */
+main article a,
+.nextra-content a {
+  font-size: inherit !important;
+  text-decoration: underline !important;
+}
+
+/* Code blocks and inline code */
+main article code,
+.nextra-content code {
+  font-size: 0.875rem !important;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace !important;
+}
+
+main article pre,
+.nextra-content pre {
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  margin-bottom: 1rem !important;
+}
+
+/* Blockquotes */
+main article blockquote,
+.nextra-content blockquote {
+  font-size: 1rem !important;
+  line-height: 1.75 !important;
+  margin: 1rem 0 !important;
+  padding-left: 1rem !important;
+}
+
+/* Tables */
+main article table,
+.nextra-content table {
+  font-size: 1rem !important;
+}
+
+main article th,
+.nextra-content th {
+  font-weight: 600 !important;
+}
+
+main article td,
+.nextra-content td,
+main article th,
+.nextra-content th {
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+}
+
+/* Strong and emphasis */
+main article strong,
+.nextra-content strong,
+main article b,
+.nextra-content b {
+  font-weight: 600 !important;
+}
+
+main article em,
+.nextra-content em,
+main article i,
+.nextra-content i {
+  font-style: italic !important;
+}

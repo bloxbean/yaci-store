@@ -1,0 +1,467 @@
+# Plugin Getting Started Guide
+
+**Supported Version :** 2.0.0-beta3 and later
+
+
+**A beginner-friendly guide to writing your first yaci-store plugin**
+
+This guide will walk you through creating simple plugins using MVEL and SpEL expression languages. By the end of this tutorial, you'll understand how to filter and process blockchain data using the yaci-store plugin system.
+
+## Prerequisites
+
+- Yaci-store docker distribution installed
+- Basic understanding of blockchain concepts (transactions, UTXOs, metadata)
+- Familiarity with simple programming concepts
+
+## Setup
+
+### 1. Enable Plugin Support
+
+First, unzip your yaci-store docker distribution and navigate to the directory.
+
+Edit the `config/env` file to enable plugin support by uncommenting the following line:
+
+```bash
+JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+```
+
+### 2. Understanding the Plugin Directory Structure
+
+The plugin system uses the following directory structure:
+
+```
+plugins/
+├── scripts/     # Your plugin script files go here
+├── ext-jars/    # External JAR files (for advanced use cases)
+└── lib/         # Additional libraries
+```
+
+### 3. Plugin Configuration
+
+Inside the `config` folder, you'll find `application-plugins.yml`. This file configures all your plugins.
+
+To enable plugin support, set `store.plugins.enabled` to `true`:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+```
+
+## Understanding Plugin Types
+
+Yaci-store supports several types of plugins:
+
+- **Filter Plugins**: Control what data gets stored in the database
+- **Pre-Action Plugins**: Modify data before it's saved
+- **Post-Action Plugins**: Perform actions after data is saved
+- **Event Handler Plugins**: React to blockchain events
+- **Scheduler Plugins**: Execute at scheduled intervals or based on cron expressions
+
+## Plugin Languages
+
+For this guide, we'll focus on two simple expression languages:
+
+- **MVEL**: A powerful expression language with Java-like syntax
+- **SpEL**: Spring Expression Language, great for simple filtering
+
+>> The Yaci Store plugin system also supports writing plugins in **Python** and **JavaScript**.
+However, Python and JavaScript support is currently in **preview**.
+We will cover them in a separate document later.
+
+## Your First Plugin: Filtering NFT Metadata
+
+Let's create a plugin that only stores NFT metadata (label 721) in the database.
+
+### Method 1: Using Expressions (Simplest)
+
+The easiest way to create a filter is using simple expressions:
+
+#### MVEL Expression
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: mvel
+          expression: label == "721"
+```
+
+#### SpEL Expression
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: spel
+          expression: label == "721"
+```
+
+Both expressions do the same thing: they filter metadata to only include items with label "721" (NFT metadata standard).
+
+**Key Points:**
+- The `metadata.save` extension point is triggered when metadata is saved.
+- In an expression-based filter, direct access to the domain class's fields is available.
+- The expression should evaluate to `true` for the item to be stored.
+
+### Method 2: Using Inline Scripts
+
+For more complex logic, you can write inline scripts:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "Multiple Label Filter"
+          lang: mvel
+          inline-script: |
+            filteredItems = [];
+            for (item : items) {
+                if (item.label == "721" || item.label == "1967") {
+                    filteredItems.add(item);
+                }
+            }
+            return filteredItems;
+```
+
+**Key Points:**
+- In inline scripts, the input is always called `items`
+- You must return the filtered list
+- Don't include function signatures, just the body
+
+### Method 3: Using External Script Files
+
+For reusable or complex logic, create separate script files:
+
+1. Create `plugins/scripts/nft-filter.mvel`:
+
+```mvel
+def filterNFTMetadata(items) {
+    filteredItems = [];
+    for (item : items) {
+        if (item.label == "721") {
+            filteredItems.add(item);
+        }
+    }
+    return filteredItems;
+}
+```
+
+2. Reference it in your configuration:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: mvel
+          script:
+            file: /app/plugins/scripts/nft-filter.mvel
+            function: filterNFTMetadata
+```
+
+**Note**: For Docker deployments, use `/app/plugins/scripts/` as the path prefix.
+
+## Testing Your Plugin
+
+### Quick Start Configuration
+
+To test quickly without syncing from genesis, you can start from a recent block:
+
+```properties
+# Add to config/application.properties
+store.cardano.sync-start-slot=17558626
+store.cardano.sync-start-blockhash=3b907cde82b21fb0511845072139aade67222a47c3dcbf90d1e6931b1ad1e30e
+```
+
+### Start Yaci-Store
+
+```bash
+./yaci-store.sh start
+```
+
+Verify the logs to ensure that `yaci-store` is running correctly and that plugins are enabled:
+
+```bash
+tail -f logs/yaci-store.log
+```
+or,
+```
+./yaci_store.sh logs
+```
+
+### Verify Results
+
+Connect to the database and check the results:
+
+```bash
+./psql.sh
+```
+
+```sql
+-- Set the schema
+SET search_path TO yaci_store;
+
+-- Check that only NFT metadata (label 721) is stored
+SELECT tx_hash, label FROM transaction_metadata;
+```
+
+You should see only metadata with label "721".
+
+## Example 2: Filtering High-Value UTXOs
+
+Let's create a plugin that only stores UTXOs worth more than 1000 ADA:
+
+### SpEL Expression (Recommended for simple filters)
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "High Value UTXO Filter"
+          lang: spel
+          expression: lovelaceAmount > 1000000000
+```
+
+### MVEL Expression with Multiple Conditions
+
+High value UTXOs without any native assets:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "High Value and Asset UTXO Filter"
+          lang: mvel
+          expression: |
+            lovelaceAmount > 1000000000 &&
+            (amounts != null && amounts.size() == 1)
+```
+
+## Example 3: Filtering by Asset Policy
+
+To filter UTXOs that contain specific native assets:
+
+### SpEL with Collection Filtering
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Specific Asset Filter"
+          lang: spel
+          expression: amounts.?[policyId == 'your_policy_id_here'].size() > 0
+```
+
+### MVEL with Custom Logic
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Multiple Policy Filter"
+          lang: mvel
+          expression: |
+            if (amounts == null) return false;
+            foreach (amount : amounts) {
+                if (amount.policyId == 'policy1' ||
+                    amount.policyId == 'policy2') {
+                    return true;
+                }
+            }
+            return false;
+```
+
+## Pre-Action Plugins: Modifying Data
+
+Pre-action plugins run after filters but before data is saved. They can modify the data.
+
+### Example: Filter utxos with Specific PolicyId and Replace it with a custom label
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Specific Asset Filter"
+          lang: spel
+          expression: amounts.?[policyId == 'bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276'].size() > 0
+    pre-actions:
+      utxo.unspent.save:
+        - name: "Replace PolicyId in UTXOs"
+          lang: mvel
+          inline-script: |
+            modifiedUtxos = [];
+            for (utxo : items) {
+              for (amt: utxo.amounts) {
+                if (amt.getPolicyId() == "bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276") {
+                    amt.setPolicyId("MyPolicyId"); // Update policyId
+                    modifiedUtxos.add(amt);
+                }
+              }
+            }
+            return modifiedUtxos;
+```
+
+**Key Points:**
+- Pre-action plugins allow you to modify data before it is saved.
+- While most domain objects (items) are immutable, meaning you can update their fields, there are exceptions. For example,
+  [`TxMetadataLabel`](./plugin_api-guide#txmetadatalabel) cannot be modified as it does not have setter methods. In such cases, you may need to create a new
+  instance with updated values.
+  To check if an object is mutable or not with regard to the storage extension point, refer to the
+  [Plugin API Guide](./plugin_api-guide.mdx).
+- Similar to filter plugins, a pre-action plugin can be written in an external script file or as an inline script.
+
+## Post-Action Plugins: Notifications
+
+Post-action plugins run after data is successfully saved. Perfect for notifications.
+
+### Example: Log High-Fee Transactions
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    post-actions:
+      transaction.save:
+        - name: "High Fee Transaction Logger"
+          lang: mvel
+          inline-script: |
+            highFeeTxCount = 0;
+            totalOutput = 0;
+            for (txn : items) {
+                if (txn.fee > 1000000) { // > 1 ADA
+                    highFeeTxCount++;
+                }
+            }
+            if (highFeeTxCount > 0) {
+                System.out.println("Found " + highFeeTxCount + " high-fee transactions");
+            }
+```
+
+## Event Handler Plugins: Reacting to Events
+
+Event handlers listen to blockchain events and can perform custom actions.
+
+### Example: Block Processing Monitor
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    event-handlers:
+      BlockEvent:
+        - name: "Block Monitor"
+          lang: mvel
+          inline-script: |
+            block = event.block;
+            System.out.println("Processing block " + block.header.headerBody.blockNumber +
+                             " with " + block.transactionBodies.size() + " transactions");
+```
+
+## Common Extension Points
+
+Here are the most commonly used extension points:
+
+### Storage Extension Points
+- `metadata.save` - Transaction metadata
+- `utxo.unspent.save` - New unspent UTXOs
+- `transaction.save` - Transaction data
+- `asset.mint.save` - Asset minting operations
+
+### Event Types
+- `BlockEvent` - New blocks
+- `TransactionEvent` - Transaction processing
+- `AddressUtxoEvent` - Address UTXO changes
+- `MintBurnEvent` - Asset mint/burn operations
+
+## Tips for Success
+
+### 1. Start Simple
+Begin with expression-based filters before moving to scripts.
+
+### 2. Test Incrementally
+Test each plugin individually before combining multiple plugins.
+
+### 3. Use Appropriate Field Names
+Make sure field names in your expressions match the Java model exactly:
+- `lovelaceAmount` (not `lovelace_amount`)
+- `policyId` (not `policy_id`)
+
+### 4. Handle Null Values
+Always check for null values in your expressions:
+
+```mvel
+// Good
+amounts != null && amounts.size() > 0
+
+// Bad (can cause errors)
+amounts.size() > 0
+```
+
+### 5. Multiple Filters = AND Logic
+If you have multiple filters for the same extension point, they all must return true (AND logic).
+
+## Common Mistakes to Avoid
+
+1. **Forgetting semicolons in MVEL**: Always end statements with `;`
+2. **Wrong field names**: Use exact Java field names
+3. **Not handling null values**: Check for null before accessing properties
+4. **Wrong file paths**: Use `/app/plugins/scripts/` for Docker deployments
+
+## Non-Docker Distribution
+
+If you're using a non-Docker distribution:
+
+1. Uncomment this line in `bin/start.sh`:
+   ```bash
+   JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib,plugins/ext-jars"
+   ```
+
+2. Use relative paths in your configuration:
+   ```yaml
+   script:
+     file: ./plugins/scripts/your-script.mvel
+   ```
+
+## Troubleshooting
+
+### Plugin Not Working?
+1. Check that `store.plugins.enabled=true`
+2. Verify file paths are correct
+3. Check logs for syntax errors
+4. Ensure field names match Java models
+
+### Syntax Errors?
+1. Start with simple expressions
+2. Check for missing semicolons
+3. Verify parentheses matching
+
+With these basics, you're ready to start building powerful blockchain data processing plugins!
+
+## Next Steps
+
+Once you're comfortable with basic plugins, explore:
+
+- [Plugin Context Variables](./context-variables.mdx) - Context variables available in plugins
+- [Plugin Configuration Reference](./plugin-configuration-reference.mdx) - Complete configuration options
+- [Plugin API Guide](./plugin_api-guide.mdx) - Developer Reference for plugin APIs
