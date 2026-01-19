@@ -1,0 +1,69 @@
+plugins {
+    id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+node {
+    version = '20.11.0'
+    download = true
+    workDir = file("${project.projectDir}/.gradle/nodejs")
+    npmWorkDir = file("${project.projectDir}/.gradle/npm")
+    nodeProjectDir = file("${project.projectDir}/frontend")
+}
+
+task buildFrontend(type: NpmTask) {
+    dependsOn npmInstall
+    args = ['run', 'build']
+    inputs.dir('frontend/src')
+    inputs.files('frontend/package.json', 'frontend/svelte.config.js', 'frontend/vite.config.js')
+    outputs.dir('src/main/resources/static')
+}
+
+task cleanFrontend(type: Delete) {
+    delete 'src/main/resources/static'
+}
+
+processResources.dependsOn buildFrontend
+clean.dependsOn cleanFrontend
+
+// Ensure sourceJar also depends on buildFrontend since it includes resources
+tasks.matching { it.name == 'sourceJar' }.configureEach {
+    dependsOn buildFrontend
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    api project(":components:common")
+    api project(":components:core")
+
+    // Optional dependencies for richer status info
+    compileOnly project(":components:dbutils")
+    compileOnly project(":aggregates:adapot")
+    compileOnly project(":starters:utxo-spring-boot-starter")
+    compileOnly project(":starters:blocks-spring-boot-starter")
+    compileOnly project(":starters:transaction-spring-boot-starter")
+    compileOnly project(":starters:script-spring-boot-starter")
+    compileOnly project(":starters:metadata-spring-boot-starter")
+    compileOnly project(":starters:assets-spring-boot-starter")
+    compileOnly project(":starters:epoch-spring-boot-starter")
+    compileOnly project(":starters:staking-spring-boot-starter")
+    compileOnly project(":starters:mir-spring-boot-starter")
+    compileOnly project(":starters:live-spring-boot-starter")
+    compileOnly project(":starters:governance-spring-boot-starter")
+    compileOnly project(":starters:account-spring-boot-starter")
+    compileOnly project(":starters:epoch-aggr-spring-boot-starter")
+    compileOnly project(":starters:adapot-spring-boot-starter")
+    compileOnly project(":starters:governance-aggr-spring-boot-starter")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Admin UI'
+                description = 'Admin UI for Yaci Store with Svelte frontend'
+            }
+        }
+    }
+}

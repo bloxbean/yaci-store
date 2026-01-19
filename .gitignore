@@ -40,3 +40,6 @@ out/
 
 logs
 _rocksdb
+/components/admin-ui/frontend/.svelte-kit/
+/components/admin-ui/frontend/node_modules/
+/components/admin-ui/src/main/resources/static/
