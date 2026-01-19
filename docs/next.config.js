@@ -1,12 +1,15 @@
-const withNextra = require('nextra')({
-  theme: 'nextra-theme-docs',
-  themeConfig: './theme.config.tsx',
+import nextra from 'nextra'
+
+const withNextra = nextra({
+  latex: true,
+  search: {
+    codeblocks: false
+  }
 })
 
-module.exports = {
-    ...withNextra(),
+export default withNextra({
     images: {
         unoptimized: true,
     },
-    output: 'export'
-}
+    // output: 'export'  // Temporarily disabled for development
+})

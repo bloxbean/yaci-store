@@ -1,0 +1,407 @@
+&nbsp;
+
+# 💼 Use Case 1: Building a DeFi Portfolio Tracker
+
+Learn how to build a comprehensive DeFi portfolio tracking application using Yaci Store v0.1.x to index and analyze Cardano blockchain data.
+
+---
+
+## 🎯 Project Overview
+
+**Goal**: Create a portfolio tracker that monitors wallet addresses, tracks native asset holdings, and calculates portfolio values across multiple Cardano addresses.
+
+**What We'll Build**:
+- Real-time portfolio value tracking
+- Native asset balance monitoring
+- Transaction history analysis
+- Staking rewards calculation
+- Multi-wallet portfolio aggregation
+
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Cardano Node  │───▶│   Yaci Store    │───▶│  Portfolio App  │
+│                 │    │                 │    │                 │
+│ • Mainnet Data  │    │ • Indexed Data  │    │ • REST APIs     │
+│ • Real-time     │    │ • PostgreSQL    │    │ • Web Dashboard │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Components We'll Use:
+- **Yaci Store v0.1.x**: Blockchain data indexing
+- **PostgreSQL**: Indexed data storage
+- **Spring Boot**: Backend API service
+- **React**: Frontend dashboard (optional)
+
+---
+
+## 📋 Prerequisites
+
+### System Requirements
+- Java 24
+- PostgreSQL 14+
+- 8 GB RAM minimum
+- 500 GB storage for mainnet sync
+
+### Yaci Store Setup
+```bash
+# Download Yaci Store v0.1.4
+wget https://github.com/bloxbean/yaci-store/releases/download/v0.1.4/yaci-store-all-0.1.4.jar
+
+# Create database
+createdb portfolio_tracker
+```
+
+---
+
+## ⚙️ Configuration
+
+### 1. Yaci Store Configuration
+
+Create `application.properties`:
+
+```properties
+# Cardano Node Connection
+store.cardano.host=localhost
+store.cardano.port=3001
+store.cardano.protocol-magic=764824073
+
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/portfolio_tracker
+spring.datasource.username=portfolio_user
+spring.datasource.password=secure_password
+spring.jpa.hibernate.ddl-auto=update
+
+# Enable Required Stores
+store.blocks.enabled=true
+store.transactions.enabled=true
+store.utxos.enabled=true
+store.addresses.enabled=true
+store.assets.enabled=true
+store.staking.enabled=true
+
+# Optimization Settings
+store.cardano.sync-start-slot=4492800  # Start from Shelley era
+store.blocks.batch-size=1000
+store.transactions.batch-size=1000
+
+# Parallel Processing
+store.parallel-processing=true
+store.thread-pool-size=8
+```
+
+### 2. Portfolio Application Configuration
+
+```yaml
+# Portfolio App Settings
+portfolio:
+  tracked-addresses:
+    - addr1qxy2...  # Add wallet addresses to track
+    - addr1qzv8...
+    - addr1q9s2...
+  
+  price-feeds:
+    enabled: true
+    ada-price-api: "https://api.coingecko.com/api/v3/simple/price?ids=cardano&vs_currencies=usd"
+  
+  refresh-interval: 30  # seconds
+```
+
+---
+
+## 🚀 Implementation
+
+### 1. Start Yaci Store Indexing
+
+```bash
+# Start indexing (this will take 24+ hours for full sync)
+java -Xmx6g -jar yaci-store-all-0.1.4.jar
+
+# Monitor sync progress
+curl http://localhost:8080/actuator/health
+```
+
+### 2. Portfolio Service Implementation
+
+Create `PortfolioService.java`:
+
+```java
+@Service
+public class PortfolioService {
+    
+    @Autowired
+    private UtxoRepository utxoRepository;
+    
+    @Autowired
+    private AssetRepository assetRepository;
+    
+    @Autowired
+    private AddressRepository addressRepository;
+    
+    public PortfolioSummary getPortfolioSummary(List<String> addresses) {
+        PortfolioSummary summary = new PortfolioSummary();
+        
+        for (String address : addresses) {
+            // Get UTXOs for address
+            List<Utxo> utxos = utxoRepository.findByAddress(address);
+            
+            // Calculate ADA balance
+            BigDecimal adaBalance = utxos.stream()
+                .filter(utxo -> utxo.getAssets().isEmpty())
+                .map(Utxo::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            summary.addAdaBalance(adaBalance);
+            
+            // Calculate native asset balances
+            Map<String, BigDecimal> assetBalances = calculateAssetBalances(utxos);
+            summary.addAssetBalances(assetBalances);
+        }
+        
+        return summary;
+    }
+    
+    private Map<String, BigDecimal> calculateAssetBalances(List<Utxo> utxos) {
+        Map<String, BigDecimal> balances = new HashMap<>();
+        
+        utxos.forEach(utxo -> {
+            utxo.getAssets().forEach(asset -> {
+                String policyId = asset.getPolicyId();
+                String assetName = asset.getAssetName();
+                String fullAssetId = policyId + assetName;
+                
+                balances.merge(fullAssetId, asset.getQuantity(), BigDecimal::add);
+            });
+        });
+        
+        return balances;
+    }
+}
+```
+
+### 3. REST API Controller
+
+```java
+@RestController
+@RequestMapping("/api/portfolio")
+public class PortfolioController {
+    
+    @Autowired
+    private PortfolioService portfolioService;
+    
+    @GetMapping("/summary")
+    public ResponseEntity<PortfolioSummary> getPortfolioSummary(
+            @RequestParam List<String> addresses) {
+        
+        PortfolioSummary summary = portfolioService.getPortfolioSummary(addresses);
+        return ResponseEntity.ok(summary);
+    }
+    
+    @GetMapping("/transactions/{address}")
+    public ResponseEntity<List<TransactionSummary>> getTransactionHistory(
+            @PathVariable String address,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        Pageable pageable = PageRequest.of(page, size);
+        List<TransactionSummary> transactions = 
+            portfolioService.getTransactionHistory(address, pageable);
+            
+        return ResponseEntity.ok(transactions);
+    }
+    
+    @GetMapping("/staking/{stakeAddress}")
+    public ResponseEntity<StakingSummary> getStakingSummary(
+            @PathVariable String stakeAddress) {
+        
+        StakingSummary summary = portfolioService.getStakingSummary(stakeAddress);
+        return ResponseEntity.ok(summary);
+    }
+}
+```
+
+---
+
+## 📊 Key Features Implementation
+
+### 1. Real-time Balance Tracking
+
+```sql
+-- Query current UTXOs for an address
+SELECT 
+    u.tx_hash,
+    u.output_index,
+    u.address,
+    u.value as ada_amount,
+    a.policy_id,
+    a.asset_name,
+    a.quantity
+FROM utxo u
+LEFT JOIN utxo_asset a ON u.tx_hash = a.tx_hash 
+    AND u.output_index = a.output_index
+WHERE u.address = 'addr1qxy2...'
+    AND u.spent = false;
+```
+
+### 2. Transaction History Analysis
+
+```sql
+-- Get transaction history for an address
+SELECT DISTINCT
+    t.hash,
+    t.block_time,
+    t.fee,
+    CASE 
+        WHEN ti.address = 'addr1qxy2...' THEN 'incoming'
+        WHEN to.address = 'addr1qxy2...' THEN 'outgoing'
+    END as direction,
+    COALESCE(ti.amount, to.amount) as amount
+FROM transaction t
+LEFT JOIN transaction_input ti ON t.hash = ti.tx_hash
+LEFT JOIN transaction_output to ON t.hash = to.tx_hash
+WHERE ti.address = 'addr1qxy2...' 
+   OR to.address = 'addr1qxy2...'
+ORDER BY t.block_time DESC;
+```
+
+### 3. Staking Rewards Calculation
+
+```sql
+-- Calculate staking rewards for a stake address
+SELECT 
+    e.epoch_no,
+    sr.amount as reward_amount,
+    sr.pool_id,
+    sp.ticker as pool_ticker
+FROM stake_reward sr
+JOIN epoch e ON sr.epoch_no = e.epoch_no
+JOIN stake_pool sp ON sr.pool_id = sp.pool_id
+WHERE sr.addr_id = (
+    SELECT addr_id FROM stake_address 
+    WHERE stake_address = 'stake1u8a9...'
+)
+ORDER BY e.epoch_no DESC;
+```
+
+---
+
+## 📈 Advanced Analytics
+
+### 1. Portfolio Performance Tracking
+
+```java
+@Service
+public class AnalyticsService {
+    
+    public PortfolioPerformance calculatePerformance(
+            List<String> addresses, 
+            LocalDateTime startDate) {
+        
+        // Get historical transaction data
+        List<Transaction> transactions = transactionRepository
+            .findByAddressesAndDateRange(addresses, startDate, LocalDateTime.now());
+        
+        // Calculate metrics
+        BigDecimal totalInflow = calculateInflow(transactions);
+        BigDecimal totalOutflow = calculateOutflow(transactions);
+        BigDecimal currentValue = getCurrentPortfolioValue(addresses);
+        
+        return PortfolioPerformance.builder()
+            .totalInflow(totalInflow)
+            .totalOutflow(totalOutflow)
+            .currentValue(currentValue)
+            .netGainLoss(currentValue.subtract(totalInflow).add(totalOutflow))
+            .build();
+    }
+}
+```
+
+### 2. Asset Diversification Analysis
+
+```java
+public AssetDiversification getAssetDiversification(List<String> addresses) {
+    Map<String, BigDecimal> assetBalances = getAssetBalances(addresses);
+    BigDecimal totalValue = getTotalPortfolioValue(addresses);
+    
+    return assetBalances.entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue()
+                .divide(totalValue, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+        ));
+}
+```
+
+---
+
+## 🔧 Optimization Tips
+
+### 1. Database Indexing
+```sql
+-- Add indexes for better query performance
+CREATE INDEX idx_utxo_address ON utxo(address);
+CREATE INDEX idx_transaction_time ON transaction(block_time);
+CREATE INDEX idx_stake_reward_addr ON stake_reward(addr_id, epoch_no);
+```
+
+### 2. Caching Strategy
+```java
+@Service
+public class CachedPortfolioService {
+    
+    @Cacheable(value = "portfolio", key = "#addresses")
+    public PortfolioSummary getPortfolioSummary(List<String> addresses) {
+        // Expensive calculation cached for 5 minutes
+        return portfolioService.getPortfolioSummary(addresses);
+    }
+}
+```
+
+### 3. Background Updates
+```java
+@Scheduled(fixedRate = 30000) // Every 30 seconds
+public void updatePortfolioCache() {
+    List<String> trackedAddresses = configService.getTrackedAddresses();
+    portfolioService.refreshPortfolioData(trackedAddresses);
+}
+```
+
+---
+
+## 🎯 Expected Results
+
+After completing this use case, you'll have:
+
+### ✅ Core Functionality
+- **Real-time portfolio tracking** across multiple addresses
+- **Native asset balance monitoring** with detailed breakdowns
+- **Transaction history** with incoming/outgoing classification
+- **Staking rewards calculation** with epoch-by-epoch details
+
+### 📊 Analytics Features
+- **Portfolio performance metrics** (gains/losses, ROI)
+- **Asset diversification analysis** with percentage breakdowns
+- **Historical value tracking** over time
+- **Staking efficiency analysis** across different pools
+
+### 🔧 Technical Benefits
+- **Scalable architecture** using Yaci Store's modular design
+- **Real-time data access** with minimal lag behind chain tip
+- **Efficient querying** of blockchain data via PostgreSQL
+- **Easy integration** with existing Spring Boot applications
+
+---
+
+## 🚀 Next Steps
+
+1. **Extend to DeFi Protocols**: Add support for DEX trades and liquidity positions
+2. **Mobile App**: Create React Native app for portfolio tracking
+3. **Price Integration**: Add real-time ADA and native asset pricing
+4. **Alerts System**: Implement notifications for significant portfolio changes
+5. **Multi-Network Support**: Extend to testnet for development/testing
+
+This use case demonstrates Yaci Store v0.1.x's capabilities for building production-ready applications that require comprehensive Cardano blockchain data access.

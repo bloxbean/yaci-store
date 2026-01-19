@@ -1,0 +1,188 @@
+&nbsp;
+
+# 🚀 Yaci Store REST APIs
+
+Yaci Store exposes RESTful APIs for accessing blockchain data indexed by various modules.
+
+🔗 **Swagger UI**: [https://api.mainnet.yaci.xyz/swagger-ui/index.html](https://api.mainnet.yaci.xyz/swagger-ui/index.html)
+
+---
+
+## 🌿 EpochStake
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/epochs/{epoch}/total-stake` | Total stake in the epoch |
+| GET | `/api/v1/epochs/{epoch}/stake` | Stake distribution in epoch |
+| GET | `/api/v1/epochs/{epoch}/pools/{poolHash}/stake` | Pool-specific stake in epoch |
+| GET | `/api/v1/epochs/{epoch}/pools/{poolHash}/delegators` | Delegators of a pool in epoch |
+| GET | `/api/v1/epochs/{epoch}/accounts/{address}/stake` | Stake by account in epoch |
+
+## 🌐 Network
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/network` | Current network info |
+| GET | `/api/v1/network/epochs/{epoch}` | Network data for epoch |
+| GET | `/api/v1/network/param-proposals` | Parameter update proposals |
+
+## 🛠️ Proposal Debug
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/debug/governance-state/proposal-status/{epoch}` | Proposal status debug |
+
+## 🗳️ Proposal
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/governance-state/proposals` | List all proposals |
+| GET | `/api/v1/governance-state/proposals/{txHash}/{index}` | Proposal by transaction |
+
+## 🪙 DRep
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/governance-state/dreps` | List all DReps |
+| GET | `/api/v1/governance-state/dreps/{drepId}` | DRep details |
+| GET | `/api/v1/governance/dreps/updates` | DRep update history |
+| GET | `/api/v1/governance/dreps/registrations` | DRep registrations |
+| GET | `/api/v1/governance/dreps/deregistrations` | DRep deregistrations |
+
+## 🪶 Delegation Vote
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/governance/delegation-votes` | All delegation votes |
+| GET | `/api/v1/governance/delegation-votes/drep/{dRepId}` | Votes by DRep |
+| GET | `/api/v1/governance/delegation-votes/address/{address}` | Votes by address |
+
+## 🎁 Reward & AdaPot
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/pools/{poolHash}/epochs/{epoch}/rewards` | Pool rewards for epoch |
+| GET | `/api/v1/epochs/{epoch}/unclaimed_reward_rest` | Unclaimed epoch rewards |
+| GET | `/api/v1/epochs/{epoch}/rewards` | All epoch rewards |
+| GET | `/api/v1/epochs/{epoch}/reward_rest` | Epoch reward rest |
+| GET | `/api/v1/accounts/{address}/rewards` | Account pool rewards |
+| GET | `/api/v1/accounts/{address}/reward_rest` | Account reward rest |
+| GET | `/api/v1/accounts/{address}/epochs/{epoch}/rewards` | Epoch-specific account rewards |
+| GET | `/api/v1/accounts/{address}/epochs/{epoch}/reward_rest` | Epoch-specific account reward rest |
+| GET | `/api/v1/adapot` | AdaPot summary |
+| GET | `/api/v1/adapot/list` | AdaPot list |
+| GET | `/api/v1/adapot/epochs/{epoch}` | AdaPot for epoch |
+
+## 🔄 Transaction
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/utxos` | Get UTxO set (POST body) |
+| GET | `/api/v1/utxos/{txHash}/{index}` | Specific UTxO |
+| GET | `/api/v1/txs` | List transactions |
+| GET | `/api/v1/txs/{txHash}` | Transaction details |
+| GET | `/api/v1/txs/{txHash}/witnesses` | Witnesses for tx |
+| GET | `/api/v1/txs/{txHash}/withdrawals` | Withdrawals in tx |
+| GET | `/api/v1/txs/{txHash}/utxos` | UTxOs from tx |
+| GET | `/api/v1/txs/{txHash}/scripts` | Scripts used in tx |
+| GET | `/api/v1/txs/{txHash}/redeemers` | Redeemers of tx |
+| GET | `/api/v1/txs/{txHash}/metadata` | Metadata labels |
+| GET | `/api/v1/txs/{txHash}/metadata/cbor` | Metadata in CBOR |
+| GET | `/api/v1/txs/withdrawals` | List withdrawals |
+| GET | `/api/v1/txs/metadata/labels/{label}` | Transactions by metadata label |
+
+## 👤 Account
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/stake/registrations` | Stake registrations |
+| GET | `/api/v1/stake/deregistrations` | Stake deregistrations |
+| GET | `/api/v1/stake/delegations` | Stake delegations |
+| GET | `/api/v1/stake/addresses/{epoch}` | Stake addresses in epoch |
+| GET | `/api/v1/accounts/{stakeAddress}/withdrawals` | Withdrawals by stake address |
+
+## 📜 Script
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/scripts/{scriptHash}` | Script detail |
+| GET | `/api/v1/scripts/{scriptHash}/json` | Script in JSON |
+| GET | `/api/v1/scripts/{scriptHash}/details` | Script details |
+| GET | `/api/v1/scripts/{scriptHash}/cbor` | Script in CBOR |
+| GET | `/api/v1/scripts/datum/{datumHash}` | Datum retrieval |
+| GET | `/api/v1/scripts/datum/{datumHash}/cbor` | Datum in CBOR |
+
+## 🏊 Pool
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/pools/retiring/{epoch}` | Pools retiring in epoch |
+| GET | `/api/v1/pools/retirements` | Pool retirement history |
+| GET | `/api/v1/pools/registrations` | Pool registrations |
+| GET | `/api/v1/pools/pools/{poolId}/epochs/{epoch}` | Pool activity in epoch |
+
+## 🏦 MIR
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/mir` | MIR summary |
+| GET | `/api/v1/mir/mir/txs/{txHash}` | MIR transaction details |
+
+## 📄 GovActionProposal
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/governance/proposals` | List governance proposals |
+| GET | `/api/v1/governance/proposals/{txHash}` | Proposal by tx |
+| GET | `/api/v1/governance/proposals/{txHash}/{indexInTx}/votes` | Votes within a proposal tx |
+| GET | `/api/v1/governance/proposals/{txHash}/votes` | Votes for a proposal |
+| GET | `/api/v1/governance/proposals/return-address/{address}` | Proposals with return address |
+| GET | `/api/v1/governance/proposals/latest/gov-action-type/{govActionType}` | Latest by action type |
+| GET | `/api/v1/governance/proposals/gov-action-type/{govActionType}` | Proposals by action type |
+
+## 📜 Constitution & 🧑‍⚖️ Committee
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/governance/constitution` | Governance constitution |
+| GET | `/api/v1/governance/committees/registrations` | Committee registrations |
+| GET | `/api/v1/governance/committees/deregistrations` | Committee deregistrations |
+| GET | `/api/v1/governance/committees/current` | Current committee |
+
+## ⛓️ Epoch & Block
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/epochs/{number}/parameters` | Epoch protocol parameters |
+| GET | `/api/v1/epochs/latest` | Latest epoch |
+| GET | `/api/v1/epochs/latest/parameters` | Latest epoch params |
+| GET | `/api/v1/blocks` | List blocks |
+| GET | `/api/v1/blocks/{numberOrHash}` | Block detail |
+| GET | `/api/v1/blocks/{block}/txs` | Transactions in block |
+| GET | `/api/v1/blocks/pool/{poolId}` | Blocks by pool |
+| GET | `/api/v1/blocks/latest` | Latest block |
+| GET | `/api/v1/blocks/epoch/{epoch}` | Blocks in epoch |
+
+## 💎 Asset
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/assets/{unit}/utxos` | UTxOs for asset |
+| GET | `/api/v1/assets/{unit}/transactions` | Transactions using asset |
+| GET | `/api/v1/assets/{unit}/supply` | Asset supply (unit) |
+| GET | `/api/v1/assets/{unit}/history` | Asset transaction history |
+| GET | `/api/v1/assets/txs/{txHash}` | Asset tx history by tx |
+| GET | `/api/v1/assets/policy/{policy}/supply` | Supply for policy |
+| GET | `/api/v1/assets/policy/{policy}/history` | History for policy assets |
+| GET | `/api/v1/assets/fingerprint/{fingerprint}/supply` | Fingerprint supply |
+| GET | `/api/v1/assets/fingerprint/{fingerprint}/history` | Fingerprint history |
+
+## 🏷️ Address
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/addresses/{address}/utxos` | UTxOs at address |
+| GET | `/api/v1/addresses/{address}/utxos/{asset}` | UTxOs for specific asset |
+| GET | `/api/v1/addresses/{address}/transactions` | Address transactions |
+
+---

@@ -1,0 +1,40 @@
+# Yaci Store Native (GraalVM) Distribution *(Preview)*
+
+Native binaries are available under a separate release tag:
+`<version>-native` (e.g., `2.0.0-beta1-native`)
+
+## Download Format
+
+Look for platform-specific ZIP files in this format:
+
+```text
+yaci-store-<version>-<os>-<arch>-all.zip
+```
+
+Example:
+
+```text
+yaci-store-2.0.0-beta1-linux-x64-all.zip
+```
+
+> ⚠️ Only use the ZIP files ending with `-all`.
+> Ignore files ending with `n2c`.
+
+## Setup
+
+1. Extract the ZIP.
+2. Edit `config/application.properties` to configure:
+- Cardano network info (host/port/protocol magic)
+- PostgreSQL connection settings
+
+3. Run the app:
+
+```bash
+./yaci-store
+```
+
+4. Run with ledger-state profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=ledger-state ./yaci-store
+```

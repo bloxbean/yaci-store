@@ -1,0 +1,379 @@
+&nbsp;
+
+# 🧠 Yaci Store - Design
+
+## 🎯 Design Goals
+
+Yaci Store is designed with the following core objectives:
+
+- **Provide a Java library for creating scoped indexers** - Enable developers to build focused, purpose-driven blockchain data indexers
+- **Handle common data indexing logic** - Abstract away repetitive blockchain data processing patterns
+- **Allow selective data indexing** - Enable filtering and processing of only relevant blockchain data
+- **Enable data filtering capabilities** - Support conditional data processing based on custom criteria
+- **Permit behavior overrides** - Allow developers to customize and extend default behaviors
+- **Manage rollbacks efficiently** - Provide robust rollback mechanisms for blockchain reorganizations
+- **Offer out-of-the-box indexing applications** - Deliver ready-to-use indexing solutions for common use cases
+
+---
+
+## 🏗️ Core Architecture
+
+The Yaci Store architecture consists of several key components working together to provide a comprehensive blockchain data indexing solution:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          Yaci Store                             │
+│                                                                 │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐     │
+│  │  Core   │    │ Stores  │    │Aggregates│   │Persistence│    │
+│  │         │    │         │    │         │    │          │     │
+│  │ ┌─────┐ │    │ ┌─────┐ │    │ ┌─────┐ │    │ ┌──────┐ │     │
+│  │ │Event│ │    │ │Proc.│ │    │ │Aggr.│ │    │ │ DB   │ │     │
+│  │ │Pub. │ │◄───┤ │     │ │    │ │Logic│ │    │ │Store │ │     │
+│  │ └─────┘ │    │ └─────┘ │    │ └─────┘ │    │ └──────┘ │     │
+│  │         │    │         │    │         │    │          │     │
+│  │ ┌─────┐ │    │ ┌─────┐ │    │ ┌─────┐ │    │ ┌──────┐ │     │
+│  │ │Block│ │    │ │Store│ │    │ │Snap-│ │    │ │Schema│ │     │
+│  │ │Read │ │    │ │     │ │    │ │shot │ │    │ │Gen   │ │     │
+│  │ └─────┘ │    │ └─────┘ │    │ └─────┘ │    │ └──────┘ │     │
+│  └─────────┘    └─────────┘    └─────────┘    └─────────┘     │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                 Tx Submission                           │   │
+│  │  ┌─────────┐              ┌─────────┐                  │   │
+│  │  │   N2C   │              │Submit   │                  │   │
+│  │  │Protocol │              │API      │                  │   │
+│  │  └─────────┘              └─────────┘                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 🧱 Core
+
+The **Core** module serves as the backbone of Yaci Store, responsible for:
+
+- **Reading blockchain data** from Cardano nodes
+- **Broadcasting events** to interested components
+- **Tracking current processing point** in the database
+- **Publishing Spring events** for extensibility
+
+The core module monitors and records the current synchronization point, allowing the system to resume processing from the correct location after restarts. Events are published as Spring events, enabling developers to write custom Spring event listeners for specialized processing needs.
+
+---
+
+### 🏬 Stores
+
+**Stores** are specialized modules designed for specific data types or use cases. Each store operates independently and provides:
+
+**Core Capabilities:**
+- **Event listening** - Subscribe to events published by the core module
+- **Data processing** - Transform and validate blockchain data
+- **Persistent storage** - Store processed data in the database
+- **Derived event publishing** - Emit processed events for other components (optional)
+- **REST endpoints** - Provide data retrieval APIs (optional)
+
+**Extensibility:**
+All store functionalities can be overridden by developers through Spring Beans, allowing for complete customization of processing logic.
+
+> 💡 **Design Note**: To simplify rollback processing, stores intentionally avoid data aggregation. This architectural decision ensures clean and efficient rollback handling.
+
+---
+
+### 📊 Aggregates
+
+**Aggregates** handle cross-store data aggregation and provide:
+
+- **Multi-store data aggregation** - Combine data from multiple stores
+- **Persistent aggregation storage** - Store computed aggregations
+- **Event-driven updates** - React to store events for real-time aggregation
+
+**Current Implementation:**
+- **Account aggregate** - Provides account balance and related data
+- **UTXO store dependency** - Consumes events from the UTXO store
+- **Experimental status** - Currently in active development
+
+---
+
+### 💾 Persistence
+
+**Persistence Layer** provides flexible data storage with:
+
+**Default Implementation:**
+- **Relational database** storage (PostgreSQL, MySQL, H2)
+- **Automatic schema generation** via Flyway migrations
+- **JPA-based** data access layer
+
+**Customization Options:**
+- **Custom persistence stores** - Implement Storage API for alternative databases
+- **Pluggable storage backends** - Support for NoSQL, cloud storage, etc.
+
+---
+
+### 📤 Transaction Submission
+
+The **Submit module** enables direct transaction submission to Cardano nodes through:
+
+- **Node-to-Client (N2C) protocol** - Direct node communication
+- **Submit API** - HTTP-based transaction submission
+- **Flexible routing** - Support for multiple submission strategies
+
+---
+
+## 🧩 Store Architecture
+
+### 🧬 Store Components
+
+Each store consists of three primary components working together:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Store Architecture                       │
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
+│  │   Processor     │    │     Storage     │    │ Controller  │ │
+│  │                 │    │                 │    │             │ │
+│  │ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────┐ │ │
+│  │ │Event        │ │    │ │Storage      │ │    │ │REST     │ │ │
+│  │ │Listener     │ │    │ │Interface    │ │    │ │Endpoints│ │ │
+│  │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────┘ │ │
+│  │                 │    │                 │    │             │ │
+│  │ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────┐ │ │
+│  │ │Data         │ │    │ │JPA          │ │    │ │Query    │ │ │
+│  │ │Processing   │ │    │ │Implementation│    │ │Handling │ │ │
+│  │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────┘ │ │
+│  │                 │    │                 │    │             │ │
+│  │ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────┐ │ │
+│  │ │Event        │ │    │ │Custom       │ │    │ │Response │ │ │
+│  │ │Publishing   │ │    │ │Implementation│    │ │Formatting│ │ │
+│  │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────┘ │ │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### ⚙️ 1. Processor
+
+**Purpose**: Handles event processing and data transformation
+
+**Responsibilities:**
+- **Event subscription** - Listen to core module events
+- **Data processing** - Transform raw blockchain data
+- **Derived event publishing** - Emit processed events for downstream consumers
+- **Business logic execution** - Apply domain-specific processing rules
+
+**Example Implementation:**
+The `UtxoProcessor` in the UTXO store:
+- Listens to `TransactionEvent` events
+- Processes UTxOs within transactions
+- Publishes `AddressUtxo` derived events for each processed UTxO
+
+**Custom Implementation:**
+Developers can create custom processors by implementing Spring event listeners and subscribing to core module events.
+
+#### 💽 2. Storage
+
+**Purpose**: Defines data persistence interface and implementation
+
+**Interface Design:**
+- **Storage API** - Abstract interface for data operations
+- **Implementation flexibility** - Support for various storage backends
+- **Transaction support** - Ensure data consistency
+
+**Default Implementation:**
+- **JPA-based** storage using relational databases
+- **Automatic schema management** via Flyway
+- **Query optimization** for common access patterns
+
+**Custom Implementation:**
+Developers can implement custom storage backends by:
+- Implementing the Storage API interface
+- Providing custom data access logic
+- Supporting alternative persistence mechanisms
+
+#### 🌐 3. Controller
+
+**Purpose**: Provides REST API endpoints for data retrieval
+
+**Features:**
+- **Data retrieval endpoints** - Query stored data via HTTP APIs
+- **Storage API integration** - Leverage storage interface for data access
+- **Common endpoint patterns** - Out-of-the-box REST endpoints for all stores
+- **Custom endpoint support** - Extensible architecture for specialized APIs
+
+**Extensibility:**
+Developers can implement custom REST endpoints while leveraging the existing storage infrastructure.
+
+---
+
+## 🪃 Rollback Handling
+
+Yaci Store implements a **simple and efficient rollback strategy** designed to handle blockchain reorganizations:
+
+### 🔄 Store Rollback Strategy
+
+**Core Principle**: Slot-based record deletion
+
+**Implementation:**
+1. **Slot tracking** - Each table maintains a `slot` column
+2. **Rollback event processing** - Listen for `RollbackEvent` events
+3. **Record deletion** - Delete all records with `slot > rollback_slot`
+4. **Consistency maintenance** - Ensure data integrity across all stores
+
+**Benefits:**
+- **Simplicity** - Straightforward deletion-based approach
+- **Efficiency** - Fast rollback processing
+- **Consistency** - Uniform rollback handling across stores
+
+### 📊 Aggregate Rollback Strategy
+
+**Challenge**: Aggregates handle computed data across multiple stores
+
+**Solution**: Snapshot-based rollback handling
+
+**Implementation Example (Account Aggregate):**
+- **Snapshot storage** - Store balance snapshots per slot instead of single records
+- **Immutable records** - Never update existing aggregation records
+- **Rollback deletion** - Delete snapshots with `slot > rollback_slot`
+
+**Benefits:**
+- **Data integrity** - Maintains aggregation consistency
+- **Efficient rollback** - Simple deletion-based approach
+- **Audit trail** - Historical snapshot preservation
+
+### 🛠️ Custom Rollback Implementation
+
+**For Custom Applications:**
+- **Follow slot-based strategy** - Implement similar slot tracking
+- **Maintain consistency** - Ensure rollback handling across custom tables
+- **Event-driven approach** - Subscribe to rollback events for automated handling
+
+---
+
+## 🔁 Idempotency
+
+**Design Principle**: All processing operations must be idempotent
+
+### 🛡️ Built-in Idempotency
+
+**Core Module Guarantees:**
+- **Event deduplication** - Prevents duplicate event publishing
+- **Processing safety** - Handles edge cases and retries
+
+**Store Module Implementation:**
+- **Idempotent processors** - All out-of-the-box modules support reprocessing
+- **Duplicate handling** - Safe reprocessing of the same events
+- **State consistency** - Maintains data integrity during reprocessing
+
+### 🔧 Custom Idempotency
+
+**For Custom Stores:**
+- **Implement idempotent logic** - Ensure custom processors handle duplicate events
+- **Use unique constraints** - Leverage database constraints for deduplication
+- **State checking** - Verify existing state before processing
+
+**Best Practices:**
+- **Upsert operations** - Use insert-or-update patterns
+- **Conditional processing** - Check for existing records before processing
+- **Transaction boundaries** - Ensure atomic operations
+
+---
+
+## 🧵 Sequential Block Processing
+
+**Processing Model**: Blocks are processed one after another in chronological order
+
+### 📋 Sequential Processing Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Sequential Block Processing                    │
+│                                                                 │
+│  Block 1 → Process → Store → Block 2 → Process → Store → ...   │
+│                                                                 │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐     │
+│  │ Block   │    │ Event   │    │ Store   │    │ Next    │     │
+│  │ Fetch   │───▶│ Publish │───▶│ Process │───▶│ Block   │     │
+│  └─────────┘    └─────────┘    └─────────┘    └─────────┘     │
+│                                                                 │
+│  Benefits:                                                      │
+│  • Simple implementation                                        │
+│  • Guaranteed ordering                                          │
+│  • Easy rollback handling                                       │
+│  • Predictable resource usage                                   │
+│                                                                 │
+│  Trade-offs:                                                    │
+│  • Lower throughput                                             │
+│  • Single point of processing                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Characteristics:**
+- **Ordered processing** - Maintains strict chronological order
+- **Simplified rollback** - Easy to handle reorganizations
+- **Resource predictability** - Consistent resource utilization
+- **Implementation simplicity** - Straightforward processing logic
+
+**Use Cases:**
+- **High consistency requirements** - When strict ordering is critical
+- **Simple deployment scenarios** - Single-node processing
+- **Development and testing** - Easier debugging and validation
+
+---
+
+## 🧶 Parallel Block Processing
+
+**Processing Model**: Multiple blocks processed simultaneously with coordination
+
+### 🔄 Parallel Processing Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Parallel Block Processing                     │
+│                                                                 │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐     │
+│  │ Block 1 │    │ Block 2 │    │ Block 3 │    │ Block 4 │     │
+│  │         │    │         │    │         │    │         │     │
+│  └────┬────┘    └────┬────┘    └────┬────┘    └────┬────┘     │
+│       │              │              │              │          │
+│       ▼              ▼              ▼              ▼          │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐     │
+│  │Process 1│    │Process 2│    │Process 3│    │Process 4│     │
+│  └────┬────┘    └────┬────┘    └────┬────┘    └────┬────┘     │
+│       │              │              │              │          │
+│       └──────────────┼──────────────┼──────────────┘          │
+│                      ▼              ▼                         │
+│                 ┌─────────────────────────┐                   │
+│                 │   Coordination Layer    │                   │
+│                 │  • Ordering             │                   │
+│                 │  • Synchronization      │                   │
+│                 │  • State Management     │                   │
+│                 └─────────────────────────┘                   │
+│                                                                 │
+│  Benefits:                                                      │
+│  • Higher throughput                                            │
+│  • Better resource utilization                                 │
+│  • Scalable processing                                          │
+│                                                                 │
+│  Trade-offs:                                                    │
+│  • Complex coordination                                         │
+│  • Potential ordering issues                                    │
+│  • More complex rollback handling                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Characteristics:**
+- **Concurrent processing** - Multiple blocks processed simultaneously
+- **Coordination complexity** - Requires careful synchronization
+- **Higher throughput** - Improved processing performance
+- **Resource optimization** - Better CPU and I/O utilization
+
+**Use Cases:**
+- **High-performance requirements** - When processing speed is critical
+- **Scalable deployments** - Multi-node processing scenarios
+- **Resource-rich environments** - When sufficient resources are available
+
+**Implementation Considerations:**
+- **Ordering guarantees** - Ensure proper event ordering
+- **State synchronization** - Coordinate shared state access
+- **Rollback complexity** - Handle parallel rollback scenarios
