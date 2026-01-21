@@ -1,0 +1,92 @@
+# Admin UI
+
+The Admin UI is a web-based dashboard for monitoring Yaci Store sync status, health, and configuration. It provides a visual interface for tracking synchronization progress and managing store operations.
+
+## Enabling Admin UI
+
+To enable the Admin UI, add the following property to your `application.properties`:
+
+```properties
+store.admin.ui.enabled=true
+```
+
+Once enabled, access the Admin UI at: `http://localhost:8080/admin-ui`
+
+## Configuration Properties
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `store.admin.ui.enabled` | Enable/disable the Admin UI dashboard | `false` |
+| `store.admin.ui.sync-control-enabled` | Enable/disable sync control operations (start/stop/restart) | `false` |
+| `store.admin.ui.header-text` | Header text displayed in Admin UI (for white-labeling) | `Yaci Store Admin (Beta)` |
+
+### Example Configuration
+
+```properties
+# Enable Admin UI
+store.admin.ui.enabled=true
+
+# Enable sync control (start/stop/restart buttons)
+store.admin.ui.sync-control-enabled=true
+
+# Custom header text
+store.admin.ui.header-text=My Custom Indexer
+```
+
+## Features
+
+### Dashboard
+
+The main dashboard provides an overview of:
+- **Sync Progress**: Visual progress bar showing synchronization status
+- **Block/Slot/Epoch Stats**: Current block height, slot number, and epoch
+- **Health Status**: Connection health to the Cardano node
+
+### Sync Status
+
+Detailed synchronization information including:
+- Current sync state (syncing, synced, stopped)
+- Network tip vs local tip comparison
+- Sync percentage and estimated time remaining
+
+### Sync Controls
+
+When `store.admin.ui.sync-control-enabled=true`, you can:
+- **Start**: Begin synchronization
+- **Stop**: Pause synchronization
+- **Restart**: Stop and restart synchronization
+
+**Note**: Sync controls are automatically disabled when `store.read-only-mode=true`, regardless of the `sync-control-enabled` setting.
+
+### Store Status
+
+View the status of all enabled/disabled data stores:
+- Assets, Blocks, Epoch, Metadata
+- MIR, Script, Staking, Transaction
+- UTxO, Governance, and more
+
+### Index Status
+
+Monitor database index status:
+- View all indexes and their creation status
+
+### Ledger State
+
+Monitor ledger state processing:
+- Epoch processing status
+- Ledger state synchronization progress
+
+### Configuration Viewer
+
+View active configuration settings:
+- Network configuration
+- Database settings
+- Store configurations
+- All active properties
+
+## Security Considerations
+
+- The Admin UI is disabled by default for security
+- Sync controls are disabled by default to prevent accidental operations
+- Consider restricting access to `/admin-ui` endpoints in production environments
+- When running in read-only mode, sync controls are automatically disabled

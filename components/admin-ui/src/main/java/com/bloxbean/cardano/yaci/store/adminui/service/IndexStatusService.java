@@ -15,6 +15,9 @@ import java.util.*;
 /**
  * Service to retrieve index status using IndexService from dbutils.
  * This checks only app-specific indexes defined in index.yml and extra-index.yml.
+ *
+ * Results are cached for 5 minutes to reduce database introspection load.
+ * Use getIndexStatuses(true) to force a refresh.
  */
 @Service
 @Slf4j
@@ -22,11 +25,35 @@ public class IndexStatusService {
 
     private static final String INDEX_FILE = "index.yml";
     private static final String EXTRA_INDEX_FILE = "extra-index.yml";
+    private static final long CACHE_DURATION_MS = 300000; // 5 minutes
 
     @Autowired(required = false)
     private IndexService indexService;
 
+    // Caching fields
+    private volatile List<IndexStatusDto> cachedIndexes;
+    private volatile long lastFetchTime = 0;
+
+    /**
+     * Get index statuses with default caching behavior.
+     */
     public List<IndexStatusDto> getIndexStatuses() {
+        return getIndexStatuses(false);
+    }
+
+    /**
+     * Get index statuses with optional cache bypass.
+     *
+     * @param forceRefresh if true, bypasses cache and fetches fresh data
+     * @return list of index statuses
+     */
+    public List<IndexStatusDto> getIndexStatuses(boolean forceRefresh) {
+        // Return cached result if still valid and not forcing refresh
+        if (!forceRefresh && cachedIndexes != null &&
+                System.currentTimeMillis() - lastFetchTime < CACHE_DURATION_MS) {
+            return cachedIndexes;
+        }
+
         if (indexService == null) {
             log.debug("IndexService not available");
             return Collections.emptyList();
@@ -42,6 +69,10 @@ public class IndexStatusService {
             // Sort by table name, then index name
             results.sort(Comparator.comparing(IndexStatusDto::getTableName)
                     .thenComparing(IndexStatusDto::getName));
+
+            // Update cache
+            this.cachedIndexes = results;
+            this.lastFetchTime = System.currentTimeMillis();
 
             return results;
         } catch (Exception e) {

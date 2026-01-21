@@ -33,7 +33,7 @@
     <ErrorMessage message={error} />
 {:else}
     <div class="mb-6">
-        <p class="text-sm text-gray-600">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
             {enabledCount} of {stores.length} stores enabled
         </p>
     </div>
@@ -45,7 +45,7 @@
     </div>
 
     {#if stores.length === 0}
-        <div class="text-center py-12 text-gray-500">
+        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
             <p>No stores found. Make sure the store starters are included in your application.</p>
         </div>
     {/if}

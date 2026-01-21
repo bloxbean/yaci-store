@@ -43,3 +43,6 @@ _rocksdb
 /components/admin-ui/frontend/.svelte-kit/
 /components/admin-ui/frontend/node_modules/
 /components/admin-ui/src/main/resources/static/
+/docs/.next/
+/docs/node_modules/
+/docker/compose/.env

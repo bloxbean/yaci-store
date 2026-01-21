@@ -30,6 +30,7 @@ public class StoreStatusService {
             new StoreConfig("Staking", "store.staking.enabled", "store.staking.api-enabled", true),
             new StoreConfig("MIR", "store.mir.enabled", "store.mir.api-enabled", true),
             new StoreConfig("Governance", "store.governance.enabled", "store.governance.api-enabled", true),
+            new StoreConfig("Submit", "store.submit.enabled", null, false),  // Submit has no api-enabled property
             new StoreConfig("Account", "store.account.enabled", "store.account.api-enabled", false),
             new StoreConfig("Epoch Aggregation", "store.epoch-aggr.enabled", "store.epoch-aggr.api-enabled", false),
             new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false),

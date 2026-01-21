@@ -14,7 +14,7 @@ const config = {
             strict: true
         }),
         paths: {
-            base: '/admin'
+            base: '/admin-ui'
         }
     }
 };

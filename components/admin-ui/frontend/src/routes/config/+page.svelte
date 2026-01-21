@@ -53,14 +53,14 @@
 {:else}
     <div class="space-y-4">
         {#each sections as section}
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors">
                 <button
                     on:click={() => toggleSection(section.name)}
-                    class="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                    class="w-full px-6 py-4 flex items-center justify-between bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
                 >
-                    <h3 class="text-sm font-medium text-gray-900">{section.name}</h3>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">{section.name}</h3>
                     <svg
-                        class="w-5 h-5 text-gray-500 transition-transform {expandedSections.has(section.name) ? 'rotate-180' : ''}"
+                        class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform {expandedSections.has(section.name) ? 'rotate-180' : ''}"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -71,11 +71,11 @@
                 {#if expandedSections.has(section.name)}
                     <div class="px-6 py-4">
                         <table class="w-full">
-                            <tbody class="divide-y divide-gray-100">
+                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
                                 {#each Object.entries(section.properties) as [key, value]}
                                     <tr>
-                                        <td class="py-2 pr-4 text-sm text-gray-500 w-1/3">{key}</td>
-                                        <td class="py-2 text-sm font-mono {typeof value === 'boolean' ? (value ? 'text-green-600' : 'text-gray-500') : 'text-gray-900'}">
+                                        <td class="py-2 pr-4 text-sm text-gray-500 dark:text-gray-400 w-1/3">{key}</td>
+                                        <td class="py-2 text-sm font-mono {typeof value === 'boolean' ? (value ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400') : 'text-gray-900 dark:text-gray-200'}">
                                             {formatValue(value)}
                                         </td>
                                     </tr>
@@ -88,7 +88,7 @@
         {/each}
 
         {#if sections.length === 0}
-            <div class="text-center py-12 text-gray-500">
+            <div class="text-center py-12 text-gray-500 dark:text-gray-400">
                 <p>No configuration available.</p>
             </div>
         {/if}

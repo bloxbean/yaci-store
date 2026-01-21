@@ -31,7 +31,7 @@
 
     onMount(() => {
         fetchData();
-        interval = setInterval(fetchData, 60000);  // 60 seconds
+        interval = setInterval(fetchData, 20000);  // 20 seconds (Cardano block time)
     });
 
     onDestroy(() => {
@@ -46,8 +46,8 @@
         <Spinner size="lg" />
     </div>
 {:else if error}
-    <div class="rounded-md bg-red-50 p-4">
-        <p class="text-sm font-medium text-red-800">{error}</p>
+    <div class="rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+        <p class="text-sm font-medium text-red-800 dark:text-red-400">{error}</p>
     </div>
 {:else if syncStatus && health}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
@@ -83,5 +83,11 @@
             networkBlock={syncStatus.networkBlock}
         />
         <HealthBadge {health} />
+    </div>
+
+    <div class="mt-6 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <p class="text-xs text-blue-700 dark:text-blue-300">
+            <span class="font-medium">Note:</span> Network tip is refreshed every 3 minutes (when synced) or 15 minutes (when syncing) to minimize load on the Cardano node. The displayed network block/slot may be slightly behind the actual tip.
+        </p>
     </div>
 {/if}

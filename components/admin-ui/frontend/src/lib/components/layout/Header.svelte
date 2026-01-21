@@ -1,14 +1,28 @@
 <script lang="ts">
-    // No health fetch needed - connection status removed
+    import { onMount } from 'svelte';
+    import Logo from '$lib/components/common/Logo.svelte';
+    import ThemeToggle from '$lib/components/common/ThemeToggle.svelte';
+    import { api } from '$lib/api/client';
+
+    const DEFAULT_HEADER_TEXT = 'Yaci Store Admin (Beta)';
+    let headerText = DEFAULT_HEADER_TEXT;
+
+    onMount(async () => {
+        try {
+            const settings = await api.getUiSettings();
+            headerText = settings.headerText || DEFAULT_HEADER_TEXT;
+        } catch (error) {
+            console.error('Failed to fetch UI settings:', error);
+        }
+    });
 </script>
 
-<header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+<header class="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between transition-colors">
     <div class="flex items-center space-x-3">
-        <div class="w-8 h-8 bg-yaci-600 rounded-lg flex items-center justify-center">
-            <span class="text-white font-bold text-sm">Y</span>
-        </div>
-        <h1 class="text-xl font-semibold text-gray-900">Yaci Store Admin</h1>
+        <Logo size={28} />
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">{headerText}</h1>
     </div>
-    <!-- Empty right side - connection status removed -->
-    <div></div>
+    <div class="flex items-center">
+        <ThemeToggle />
+    </div>
 </header>

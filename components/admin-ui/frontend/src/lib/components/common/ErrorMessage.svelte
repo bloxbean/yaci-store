@@ -2,7 +2,7 @@
     export let message: string;
 </script>
 
-<div class="rounded-md bg-red-50 p-4">
+<div class="rounded-md bg-red-50 dark:bg-red-900/30 p-4">
     <div class="flex">
         <div class="flex-shrink-0">
             <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -10,7 +10,7 @@
             </svg>
         </div>
         <div class="ml-3">
-            <p class="text-sm font-medium text-red-800">{message}</p>
+            <p class="text-sm font-medium text-red-800 dark:text-red-400">{message}</p>
         </div>
     </div>
 </div>

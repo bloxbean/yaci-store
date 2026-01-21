@@ -41,12 +41,18 @@ export interface IndexStatus {
 }
 
 export interface LedgerStateStatus {
+    enabled: boolean;
     currentEpoch: number;
     lastProcessedEpoch: number;
     jobRunning: boolean;
     lastJobStatus: string;
     lastJobError: string | null;
+    lastErrorEpoch: number | null;
     lastJobTimestamp: number | null;
+}
+
+export interface UiSettings {
+    headerText: string;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -63,14 +69,25 @@ export const api = {
     getConfig: (): Promise<ConfigSection[]> =>
         fetch(`${API_BASE}/config`).then(r => handleResponse<ConfigSection[]>(r)),
 
+    getUiSettings: (): Promise<UiSettings> =>
+        fetch(`${API_BASE}/settings`).then(r => handleResponse<UiSettings>(r)),
+
     getSyncStatus: (): Promise<SyncStatus> =>
         fetch(`${API_BASE}/sync/status`).then(r => handleResponse<SyncStatus>(r)),
+
+    getSyncControlEnabled: (): Promise<boolean> =>
+        fetch(`${API_BASE}/sync/control-enabled`)
+            .then(r => handleResponse<{ enabled: boolean }>(r))
+            .then(data => data.enabled),
 
     getHealth: (): Promise<HealthStatus> =>
         fetch(`${API_BASE}/health`).then(r => handleResponse<HealthStatus>(r)),
 
     getIndexes: (): Promise<IndexStatus[]> =>
         fetch(`${API_BASE}/indexes`).then(r => handleResponse<IndexStatus[]>(r)),
+
+    refreshIndexes: (): Promise<IndexStatus[]> =>
+        fetch(`${API_BASE}/indexes/refresh`, { method: 'POST' }).then(r => handleResponse<IndexStatus[]>(r)),
 
     getLedgerState: (): Promise<LedgerStateStatus> =>
         fetch(`${API_BASE}/ledger-state`).then(r => handleResponse<LedgerStateStatus>(r)),

@@ -1,6 +1,9 @@
 <script lang="ts">
     import { page } from '$app/stores';
     import { base } from '$app/paths';
+    import Logo from '$lib/components/common/Logo.svelte';
+
+    $: currentPath = $page.url.pathname;
 
     interface NavItem {
         name: string;
@@ -17,8 +20,7 @@
         { name: 'Ledger State', href: `${base}/ledger-state`, icon: 'chart' }
     ];
 
-    function isActive(href: string): boolean {
-        const currentPath = $page.url.pathname;
+    function isActive(href: string, currentPath: string): boolean {
         if (href === base || href === `${base}/`) {
             return currentPath === base || currentPath === `${base}/`;
         }
@@ -43,7 +45,7 @@
         {#each navItems as item}
             <a
                 href={item.href}
-                class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {isActive(item.href)
+                class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {isActive(item.href, currentPath)
                     ? 'bg-slate-700 text-white'
                     : 'text-slate-300 hover:bg-slate-700 hover:text-white'}"
             >
@@ -55,6 +57,9 @@
         {/each}
     </nav>
     <div class="px-4 py-4 border-t border-slate-700">
-        <p class="text-xs text-slate-500">Yaci Store Admin UI</p>
+        <div class="flex items-center space-x-2">
+            <Logo size={16} />
+            <p class="text-xs text-slate-500">Yaci Store Admin UI</p>
+        </div>
     </div>
 </aside>

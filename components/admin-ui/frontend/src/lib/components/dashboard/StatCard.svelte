@@ -18,15 +18,15 @@
 <div class="stat-card">
     <div class="flex items-center justify-between">
         <div>
-            <p class="text-sm font-medium text-gray-500">{title}</p>
-            <p class="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+            <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{value}</p>
             {#if subtitle}
-                <p class="mt-1 text-xs text-gray-400">{subtitle}</p>
+                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{subtitle}</p>
             {/if}
         </div>
         {#if icon}
-            <div class="p-3 bg-yaci-50 rounded-lg">
-                <svg class="w-6 h-6 text-yaci-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="p-3 bg-yaci-50 dark:bg-yaci-900/30 rounded-lg">
+                <svg class="w-6 h-6 text-yaci-600 dark:text-yaci-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={getIconPath(icon)} />
                 </svg>
             </div>

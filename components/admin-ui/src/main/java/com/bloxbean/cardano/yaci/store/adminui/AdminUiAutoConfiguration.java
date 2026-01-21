@@ -30,7 +30,7 @@ public class AdminUiAutoConfiguration {
         return new WebMvcConfigurer() {
             @Override
             public void addResourceHandlers(ResourceHandlerRegistry registry) {
-                registry.addResourceHandler("/admin/**")
+                registry.addResourceHandler("/admin-ui/**")
                         .addResourceLocations("classpath:/static/");
             }
         };

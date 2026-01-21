@@ -10,10 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LedgerStateStatusDto {
+    private boolean enabled;
     private int currentEpoch;
     private int lastProcessedEpoch;
     private boolean jobRunning;
     private String lastJobStatus;
     private String lastJobError;
+    private Integer lastErrorEpoch;
     private Long lastJobTimestamp;
 }
