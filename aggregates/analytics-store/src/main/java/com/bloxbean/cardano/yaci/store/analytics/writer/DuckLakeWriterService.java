@@ -76,7 +76,7 @@ public class DuckLakeWriterService implements StorageWriter {
             
             if (isDatePartition) {
                 // To get "date=yyyy-mm-dd" folder structure, we need an explicit "date" column
-                finalQuery = String.format("SELECT *, CAST(%s AS DATE) AS date FROM (%s)", 
+                finalQuery = String.format("SELECT *, CAST(timezone('UTC', %s) AS DATE) AS date FROM (%s)", 
                         partitionColumn, query);
             }
 
