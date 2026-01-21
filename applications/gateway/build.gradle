@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'org.springframework.boot' version "${springBootAppVersion}"
     id "com.gorylenko.gradle-git-properties" version "${gradleGitPropertiesVersion}"
 }
 
