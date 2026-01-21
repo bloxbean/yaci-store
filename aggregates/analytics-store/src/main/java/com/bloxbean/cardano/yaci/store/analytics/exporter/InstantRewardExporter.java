@@ -51,12 +51,12 @@ public class InstantRewardExporter extends AbstractTableExporter {
                 ir.address,
                 ir.type,
                 ir.amount,
-                ir.earned_epoch,
-                ir.spendable_epoch AS epoch,
+                ir.earned_epoch AS epoch,
+                ir.spendable_epoch,
                 ir.slot
             FROM source_db.%s.instant_reward ir
-            WHERE ir.spendable_epoch = %d
-            ORDER BY ir.spendable_epoch, ir.address
+            WHERE ir.earned_epoch = %d
+            ORDER BY ir.earned_epoch, ir.address
             """,
             schema,
             epoch

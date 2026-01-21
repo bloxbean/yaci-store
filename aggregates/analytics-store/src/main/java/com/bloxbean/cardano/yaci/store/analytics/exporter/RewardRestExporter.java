@@ -60,7 +60,7 @@ public class RewardRestExporter extends AbstractTableExporter {
                 rr.id,
                 rr.address,
                 rr.type,
-                rr.earned_epoch,
+                rr.earned_epoch as epoch,
                 rr.amount,
                 rr.spendable_epoch,
                 rr.slot
