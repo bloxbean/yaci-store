@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --color-bg: #f8fafc;
+    --color-bg-secondary: #f1f5f9;
+    --color-sidebar: #1e293b;
+    --color-sidebar-hover: #334155;
+    --color-text: #0f172a;
+    --color-text-muted: #64748b;
+    --color-card-bg: #ffffff;
+    --color-card-border: #e2e8f0;
+    --color-table-header-bg: #f8fafc;
+    --color-table-row-hover: #f1f5f9;
+    --color-info-bg: #eff6ff;
+    --color-info-border: #bfdbfe;
+    --color-info-text: #1d4ed8;
+}
+
+.dark {
+    --color-bg: #0f172a;
+    --color-bg-secondary: #1e293b;
+    --color-sidebar: #0f172a;
+    --color-sidebar-hover: #1e293b;
+    --color-text: #f1f5f9;
+    --color-text-muted: #94a3b8;
+    --color-card-bg: #1e293b;
+    --color-card-border: #334155;
+    --color-table-header-bg: #1e293b;
+    --color-table-row-hover: #334155;
+    --color-info-bg: #1e3a5f;
+    --color-info-border: #1e40af;
+    --color-info-text: #93c5fd;
+}
+
+html {
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    margin: 0;
+    padding: 0;
+}
+
+.stat-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply dark:bg-slate-800 dark:border-slate-700;
+    transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.page-title {
+    @apply text-2xl font-semibold text-gray-900 mb-6;
+    @apply dark:text-white;
+}
+
+.btn-primary {
+    @apply bg-yaci-600 hover:bg-yaci-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
+}
+
+.btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors;
+    @apply dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-gray-200;
+}
+
+.btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
+}

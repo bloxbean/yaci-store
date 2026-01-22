@@ -13,6 +13,9 @@
   "admin-cli": {
     "title": "Admin CLI"
   },
+  "admin-ui": {
+    "title": "Admin UI"
+  },
   "plugins": {
     "title": "Plugin Framework"
   },
