@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adminui.service;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.store.adminui.dto.SyncStatusDto;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -23,6 +24,7 @@ public class SyncStatusService {
     private final ChainTipService chainTipService;
     private final StartService startService;
     private final EraService eraService;
+    private final StoreProperties storeProperties;
 
     private volatile Tuple<Tip, Integer> cachedTipAndEpoch;
     private volatile long lastTipFetchTime = 0;
@@ -87,6 +89,7 @@ public class SyncStatusService {
                 .networkBlock(networkBlock)
                 .networkSlot(networkSlot)
                 .synced(isSynced)
+                .protocolMagic(storeProperties.getProtocolMagic())
                 .build();
     }
 

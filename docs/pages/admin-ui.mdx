@@ -19,6 +19,7 @@ Once enabled, access the Admin UI at: `http://localhost:8080/admin-ui`
 | `store.admin.ui.enabled` | Enable/disable the Admin UI dashboard | `false` |
 | `store.admin.ui.sync-control-enabled` | Enable/disable sync control operations (start/stop/restart) | `false` |
 | `store.admin.ui.header-text` | Header text displayed in Admin UI (for white-labeling) | `Yaci Store Admin (Beta)` |
+| `store.admin.ui.koios-verification-enabled` | Enable/disable Koios ledger state verification | `true` |
 
 ### Example Configuration
 
@@ -31,6 +32,9 @@ store.admin.ui.sync-control-enabled=true
 
 # Custom header text
 store.admin.ui.header-text=My Custom Indexer
+
+# Disable Koios verification (if behind firewall)
+store.admin.ui.koios-verification-enabled=false
 ```
 
 ## Features
@@ -75,6 +79,26 @@ Monitor database index status:
 Monitor ledger state processing:
 - Epoch processing status
 - Ledger state synchronization progress
+- Treasury and Reserves balances
+- **Koios Verification**: Verify your local ledger state (treasury/reserves) against Koios API data
+
+#### Koios Verification
+
+The Ledger State page includes a "Verify with Koios" button that compares your locally calculated treasury and reserves values
+against data from the [Koios API](https://koios.rest/). This helps ensure your ledger state calculations are accurate.
+
+Koios verification is **enabled by default**. You may want to disable it in the following scenarios:
+
+- **Firewall restrictions**: Your deployment is behind a firewall that blocks outbound connections to Koios servers
+- **Air-gapped environments**: Running in an isolated network without internet access
+- **Private/devnet deployments**: Testing on private networks where Koios data is not available
+
+To disable Koios verification:
+```properties
+store.admin.ui.koios-verification-enabled=false
+```
+
+When disabled, the "Verify with Koios" button will not appear on the Ledger State page.
 
 ### Configuration Viewer
 

@@ -10,6 +10,13 @@ export interface SyncStatus {
     networkBlock: number;
     networkSlot: number;
     synced: boolean;
+    protocolMagic: number;
+}
+
+export interface KoiosTotals {
+    epochNo: number;
+    treasury: string;
+    reserves: string;
 }
 
 export interface HealthStatus {
@@ -49,6 +56,8 @@ export interface LedgerStateStatus {
     lastJobError: string | null;
     lastErrorEpoch: number | null;
     lastJobTimestamp: number | null;
+    treasury: string | null;
+    reserves: string | null;
 }
 
 export interface UiSettings {
@@ -105,5 +114,13 @@ export const api = {
     restartSync: (): Promise<void> =>
         fetch(`${API_BASE}/sync/restart`, { method: 'POST' }).then(r => {
             if (!r.ok) throw new Error('Failed to restart sync');
-        })
+        }),
+
+    isKoiosVerificationEnabled: (): Promise<boolean> =>
+        fetch(`${API_BASE}/koios/verification-enabled`)
+            .then(r => handleResponse<{ enabled: boolean }>(r))
+            .then(data => data.enabled),
+
+    getKoiosTotals: (epoch: number): Promise<KoiosTotals> =>
+        fetch(`${API_BASE}/koios/totals?epoch=${epoch}`).then(r => handleResponse<KoiosTotals>(r))
 };

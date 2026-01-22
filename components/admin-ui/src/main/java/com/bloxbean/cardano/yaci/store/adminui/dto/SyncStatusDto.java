@@ -19,4 +19,5 @@ public class SyncStatusDto {
     private long networkBlock;
     private long networkSlot;
     private boolean synced;
+    private long protocolMagic;
 }

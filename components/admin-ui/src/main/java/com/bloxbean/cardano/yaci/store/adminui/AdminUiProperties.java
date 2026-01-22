@@ -27,4 +27,12 @@ public class AdminUiProperties {
      * Default: "Yaci Store Admin (Beta)"
      */
     private String headerText = "Yaci Store Admin (Beta)";
+
+    /**
+     * Enable/disable Koios ledger state verification in the Admin UI.
+     * When disabled, the "Verify with Koios" button is hidden on the Ledger State page.
+     * Useful for deployments behind firewalls where the backend cannot reach Koios servers.
+     * Default: true (enabled)
+     */
+    private boolean koiosVerificationEnabled = true;
 }

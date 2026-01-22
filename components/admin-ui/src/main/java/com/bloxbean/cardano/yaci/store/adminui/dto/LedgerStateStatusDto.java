@@ -18,4 +18,6 @@ public class LedgerStateStatusDto {
     private String lastJobError;
     private Integer lastErrorEpoch;
     private Long lastJobTimestamp;
+    private String treasury;
+    private String reserves;
 }
