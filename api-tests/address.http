@@ -44,7 +44,7 @@ GET {{base_url}}/api/v1/addresses/addr_test1qqxnp3khzm7kcj9t23hskehat7428ghsenk0
 
 
 ### By ent address
-GET {{base_url}}/api/v1/addresses/addr_test1vqxnp3khzm7kcj9t23hskehat7428ghsenk0pfew4rqy5vq24rmml/utxos?page=0&count=100
+GET {{base_url}}/api/v1/addresses/addr_test1vp5z7zmlw848szvmpe693ukfu9yq4t3we4s6u483j9sq4zql2acs8/utxos?page=0&count=100
 
 > {%
     client.test("Get utxos by ent address", function() {
@@ -77,7 +77,7 @@ GET {{base_url}}/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2w
 
 ###
 ### By address verification key and asset
-GET {{base_url}}/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos/0401c735871cb02f76f7e8150f96527efb779c06effa45284dcf9885546573744e4654?page=0&count=10
+GET {{base_url}}/api/v1/addresses/addr_vkh1p5cvd4ckl4ky3265du9kdl2l42369uxvanc2wt4gcp9rqzc60ky/utxos/689903d80b71e0570fea2fdaaa4bf80989785ed2a2cd57da0d9a7d0a746f6b656e5f3132?page=0&count=10
 
 > {%
     client.test("Get utxos by verification key", function() {
