@@ -117,7 +117,11 @@ public class DuckLakeWriterService implements StorageWriter {
 
     @Override
     public String getSourceSchema() {
-        return connectionHelper.getSourceCredentials().getSchema();
+        String schema = connectionHelper.getSourceCredentials().getSchema();
+        if (schema == null || schema.isEmpty()) {
+            return schema;
+        }
+        return connectionHelper.quoteIdentifier(schema);
     }
 
     /**

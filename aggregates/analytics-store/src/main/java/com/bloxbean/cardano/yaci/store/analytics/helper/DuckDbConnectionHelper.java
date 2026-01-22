@@ -288,6 +288,26 @@ public class DuckDbConnectionHelper {
         return "public";
     }
 
+    /**
+     * Quote SQL identifier with double quotes.
+     * Always quotes for safety - handles special characters like hyphens, spaces, etc.
+     * Escapes internal double quotes by doubling them (SQL standard).
+     *
+     * Examples:
+     * - "mainnet" → "\"mainnet\""
+     * - "preprod-new" → "\"preprod-new\""
+     * - "test\"name" → "\"test\"\"name\""
+     *
+     * @param identifier SQL identifier (schema, table, column name)
+     * @return Quoted identifier safe for SQL
+     */
+    public String quoteIdentifier(String identifier) {
+        if (identifier == null) {
+            return null;
+        }
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
     // ========== Private Helper Methods ==========
 
     /**
