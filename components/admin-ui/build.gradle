@@ -55,6 +55,8 @@ dependencies {
     compileOnly project(":starters:epoch-aggr-spring-boot-starter")
     compileOnly project(":starters:adapot-spring-boot-starter")
     compileOnly project(":starters:governance-aggr-spring-boot-starter")
+    compileOnly project(":starters:submit-spring-boot-starter")
+    compileOnly project(":starters:admin-spring-boot-starter")
 }
 
 publishing {

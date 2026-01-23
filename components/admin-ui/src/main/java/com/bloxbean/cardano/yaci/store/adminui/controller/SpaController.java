@@ -29,9 +29,7 @@ public class SpaController {
             "/admin-ui/indexes",
             "/admin-ui/indexes/**",
             "/admin-ui/ledger-state",
-            "/admin-ui/ledger-state/**",
-            "/admin-ui/metrics",
-            "/admin-ui/metrics/**"
+            "/admin-ui/ledger-state/**"
     }, produces = MediaType.TEXT_HTML_VALUE)
     public Resource serveIndex() {
         return INDEX_HTML;

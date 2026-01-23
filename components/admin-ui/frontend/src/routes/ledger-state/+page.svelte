@@ -160,8 +160,13 @@
                 <div>
                     <h3 class="text-sm font-medium text-amber-800 dark:text-amber-200">Ledger State Calculation Disabled</h3>
                     <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                        AdaPot ledger state calculation is not enabled. To enable it, set <code class="bg-amber-100 dark:bg-amber-800 px-1 rounded">store.adapot.enabled=true</code> in your configuration.
+                        Ledger state calculation is not enabled. To enable, please check if the following properties are set:
                     </p>
+                    <div class="mt-2 text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                        <div><code class="bg-amber-100 dark:bg-amber-800 px-1 rounded">store.account.stake-address-balance-enabled=true</code></div>
+                        <div><code class="bg-amber-100 dark:bg-amber-800 px-1 rounded">store.adapot.enabled=true</code></div>
+                        <div><code class="bg-amber-100 dark:bg-amber-800 px-1 rounded">store.governance-aggr.enabled=true</code></div>
+                    </div>
                 </div>
             </div>
         </div>

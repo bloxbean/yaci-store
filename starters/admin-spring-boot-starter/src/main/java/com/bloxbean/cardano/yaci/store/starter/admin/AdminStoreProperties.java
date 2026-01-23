@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class AdminStoreProperties {
-    private Admin admin;
+    private Admin admin = new Admin();
 
     @Getter
     @Setter

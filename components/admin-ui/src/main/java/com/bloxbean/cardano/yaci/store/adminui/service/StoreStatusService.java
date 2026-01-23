@@ -30,12 +30,15 @@ public class StoreStatusService {
             new StoreConfig("Staking", "store.staking.enabled", "store.staking.api-enabled", true),
             new StoreConfig("MIR", "store.mir.enabled", "store.mir.api-enabled", true),
             new StoreConfig("Governance", "store.governance.enabled", "store.governance.api-enabled", true),
-            new StoreConfig("Submit", "store.submit.enabled", null, false),  // Submit has no api-enabled property
+            new StoreConfig("Submit", "store.submit.enabled", null, true),  // Submit has no api-enabled property, defaults to enabled
             new StoreConfig("Account", "store.account.enabled", "store.account.api-enabled", false),
             new StoreConfig("Epoch Aggregation", "store.epoch-aggr.enabled", "store.epoch-aggr.api-enabled", false),
             new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false),
             new StoreConfig("Governance Aggregation", "store.governance-aggr.enabled", "store.governance-aggr.api-enabled", false),
-            new StoreConfig("Live", "store.live.enabled", null, false)  // Live has no api-enabled property
+            new StoreConfig("Live", "store.live.enabled", null, false),  // Live has no api-enabled property
+            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false),
+            new StoreConfig("Remote", "store.remote.enabled", "store.remote.api-enabled", false),
+            new StoreConfig("MCP Server", "store.mcp-server.enabled", "store.mcp-server.api-enabled", false)
     );
 
     public StoreStatusService(Environment environment) {

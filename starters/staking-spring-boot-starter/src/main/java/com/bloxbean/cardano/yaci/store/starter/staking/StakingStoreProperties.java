@@ -8,11 +8,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class StakingStoreProperties {
-    private Staking staking;
+    private Staking staking = new Staking();
 
     @Getter
     @Setter
-    public static final class Staking  {
+    public static final class Staking {
        private boolean enabled = true;
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();

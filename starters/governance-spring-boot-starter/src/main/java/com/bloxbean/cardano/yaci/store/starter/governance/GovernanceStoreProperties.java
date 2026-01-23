@@ -8,11 +8,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class GovernanceStoreProperties {
-    private Governance governance;
+    private Governance governance = new Governance();
 
     @Getter
     @Setter
-    private static final class Governance {
+    public static final class Governance {
 
         private boolean enabled = true;
         private boolean apiEnabled = true;
@@ -50,7 +50,7 @@ public class GovernanceStoreProperties {
 
     @Getter
     @Setter
-    private static final class Live {
+    public static final class Live {
         private boolean enabled = true;
     }
 }
