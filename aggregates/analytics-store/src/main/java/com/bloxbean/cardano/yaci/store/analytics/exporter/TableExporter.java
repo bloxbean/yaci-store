@@ -92,4 +92,33 @@ public interface TableExporter {
      * @return true if export succeeded, false otherwise
      */
     boolean exportForPartition(PartitionValue partition);
+
+    /**
+     * Pre-export validation hook to check if prerequisites are met before export.
+     *
+     * This method is called before the actual export process begins. Exporters can
+     * override this method to implement custom validation logic, such as:
+     * - Checking if dependent jobs have completed (e.g., AdaPot job for reward tables)
+     * - Verifying data availability
+     * - Validating partition readiness
+     *
+     * Default implementation returns true (no validation required).
+     *
+     * Example usage:
+     * <pre>
+     * {@code
+     * @Override
+     * protected boolean preExportValidation(PartitionValue partition) {
+     *     int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+     *     return isRewardCalcAdaPotJobCompleted(epoch);
+     * }
+     * }
+     * </pre>
+     *
+     * @param partition The partition to be exported
+     * @return true if validation passes and export can proceed, false to skip export
+     */
+    default boolean preExportValidation(PartitionValue partition) {
+        return true;
+    }
 }

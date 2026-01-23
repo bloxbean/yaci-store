@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportState;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -64,6 +65,7 @@ public abstract class AbstractTableExporter implements TableExporter {
     protected final ExportStateService stateService;
     protected final EraService eraService;
     protected final AnalyticsStoreProperties properties;
+    protected final AdaPotJobStorage adaPotJobStorage;
 
     /**
      * Export data for a specific partition.
@@ -89,6 +91,13 @@ public abstract class AbstractTableExporter implements TableExporter {
         if (existingState != null && existingState.getStatus() == ExportStatus.COMPLETED) {
             log.info("Partition {} already exported for table {}, skipping", partitionKey, getTableName());
             return true;
+        }
+
+        // Pre-export validation (e.g., check if dependent jobs have completed)
+        if (!preExportValidation(partition)) {
+            log.warn("Pre-export validation failed for table {} partition {}, skipping export",
+                    getTableName(), partitionKey);
+            return false;
         }
 
         // Mark in progress
@@ -225,6 +234,44 @@ public abstract class AbstractTableExporter implements TableExporter {
         } catch (NoSuchAlgorithmException | IOException e) {
             log.warn("Failed to calculate checksum for {}: {}", filePath, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Check if Reward Calc AdaPot job has completed for the given epoch.
+     * Used by exporters that depend on Reward Calc AdaPot job completion.
+     *
+     * @param epoch The epoch to check
+     * @return true if AdaPot job is completed, false otherwise
+     */
+    protected boolean isRewardCalcAdaPotJobCompleted(int epoch) {
+        try {
+            Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
+            if (nonByronEpoch == null || epoch < nonByronEpoch) {
+                log.debug("Epoch {} is before first non-Byron epoch {}, skipping AdaPot job check",
+                        epoch, nonByronEpoch);
+                return true;
+            }
+
+            var job = adaPotJobStorage.getJobByTypeAndEpoch(
+                    com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType.REWARD_CALC,
+                    epoch);
+
+            if (job.isEmpty()) {
+                log.debug("No AdaPot job found for epoch {}", epoch);
+                return false;
+            }
+
+            boolean completed = job.get().getStatus() ==
+                    com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus.COMPLETED;
+            log.debug("AdaPot job for epoch {} status: {}", epoch, job.get().getStatus());
+            return completed;
+
+        } catch (Exception e) {
+            log.error("Error checking AdaPot job status for epoch {}: {}",
+                    epoch, e.getMessage(), e);
+            // if we can't check, allow export to prevent permanent blocking
+            return true;
         }
     }
 }
