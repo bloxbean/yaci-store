@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
@@ -24,8 +26,9 @@ public class EpochParamExporter extends AbstractTableExporter {
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
-            AnalyticsStoreProperties properties) {
-        super(storageWriter, stateService, eraService, properties);
+            AnalyticsStoreProperties properties,
+            AdaPotJobStorage adaPotJobStorage) {
+        super(storageWriter, stateService, eraService, properties, adaPotJobStorage);
     }
 
     @Override
@@ -36,6 +39,20 @@ public class EpochParamExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
+    }
+
+    @Override
+    public boolean preExportValidation(PartitionValue partition) {
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+
+        Era era = eraService.getEraForEpoch(epoch);
+        if (era.getValue() < Era.Conway.getValue()) {
+            //Epoch params are not available before Shelley era
+            log.info("Skipping export for epoch_param for epoch {} as it is before Conway era", epoch);
+            return true;
+        }
+
+        return isRewardCalcAdaPotJobCompleted(epoch);
     }
 
     @Override

@@ -3,6 +3,8 @@ dependencies {
     api project(":components:events")
     api project(":components:core")
     api project(":stores:blocks")
+    api project(":aggregates:adapot")  // For AdaPotJobStorage dependency check
+
 
     implementation(libs.duckdb.jdbc)  // Note: dash becomes dot in Gradle version catalog
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

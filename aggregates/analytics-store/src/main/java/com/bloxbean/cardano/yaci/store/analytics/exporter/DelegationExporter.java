@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
@@ -24,8 +25,9 @@ public class DelegationExporter extends AbstractTableExporter {
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
-            AnalyticsStoreProperties properties) {
-        super(storageWriter, stateService, eraService, properties);
+            AnalyticsStoreProperties properties,
+            AdaPotJobStorage adaPotJobStorage) {
+        super(storageWriter, stateService, eraService, properties, adaPotJobStorage);
     }
 
     @Override

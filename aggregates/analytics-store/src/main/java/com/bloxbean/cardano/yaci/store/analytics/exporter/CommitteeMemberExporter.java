@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
@@ -24,8 +25,9 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
-            AnalyticsStoreProperties properties) {
-        super(storageWriter, stateService, eraService, properties);
+            AnalyticsStoreProperties properties,
+            AdaPotJobStorage adaPotJobStorage) {
+        super(storageWriter, stateService, eraService, properties, adaPotJobStorage);
     }
 
     @Override
@@ -39,8 +41,16 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
     }
 
     @Override
+    public boolean preExportValidation(PartitionValue partition) {
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        return isRewardCalcAdaPotJobCompleted(epoch);
+    }
+
+    @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        
         return String.format("""
             SELECT
                 cm.hash,
@@ -51,13 +61,11 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
                 cm.slot,
                 cm.update_datetime
             FROM source_db.%s.committee_member cm
-            WHERE cm.slot >= %d
-              AND cm.slot < %d
-            ORDER BY cm.slot, cm.hash
+            WHERE cm.epoch = %d
+            ORDER BY cm.hash
             """,
             schema,
-            slotRange.startSlot(),
-            slotRange.endSlot()
+            epoch
         );
     }
 }

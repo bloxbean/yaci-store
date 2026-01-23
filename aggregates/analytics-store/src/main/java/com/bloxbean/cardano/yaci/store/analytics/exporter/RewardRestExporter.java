@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
@@ -33,8 +34,9 @@ public class RewardRestExporter extends AbstractTableExporter {
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
-            AnalyticsStoreProperties properties) {
-        super(storageWriter, stateService, eraService, properties);
+            AnalyticsStoreProperties properties,
+            AdaPotJobStorage adaPotJobStorage) {
+        super(storageWriter, stateService, eraService, properties, adaPotJobStorage);
     }
 
     @Override
@@ -45,6 +47,13 @@ public class RewardRestExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
+    }
+
+    @Override
+    public boolean preExportValidation(PartitionValue partition) {
+        // Reward rest table depends on AdaPot job completion
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        return isRewardCalcAdaPotJobCompleted(epoch);
     }
 
     /**
@@ -60,7 +69,7 @@ public class RewardRestExporter extends AbstractTableExporter {
                 rr.id,
                 rr.address,
                 rr.type,
-                rr.earned_epoch,
+                rr.earned_epoch as epoch,
                 rr.amount,
                 rr.spendable_epoch,
                 rr.slot
