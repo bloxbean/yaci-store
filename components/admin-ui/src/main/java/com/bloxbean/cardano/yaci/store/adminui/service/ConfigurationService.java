@@ -488,21 +488,6 @@ public class ConfigurationService {
                     .build());
         }
 
-        // Live Store
-        String livePrefix = "store.live";
-        Object liveDefaults = resolveStoreDefaultsRoot(configBeansByType, "com.bloxbean.cardano.yaci.store.starter.live.LiveStoreProperties", "live");
-        if (liveDefaults != null) {
-            Map<String, Object> liveProps = new LinkedHashMap<>();
-            Boolean liveEnabled = putEnabledProperty(liveProps, "store.live.enabled", livePrefix, liveDefaults);
-            if (!Boolean.FALSE.equals(liveEnabled)) {
-                putBooleanProperty(liveProps, "store.live.api-enabled", livePrefix, liveDefaults);
-            }
-            sections.add(ConfigSectionDto.builder()
-                    .name("Live Store")
-                    .properties(liveProps)
-                    .build());
-        }
-
         return sections;
     }
 
