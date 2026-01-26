@@ -581,7 +581,6 @@ public class ConfigurationService {
                 if (rootType != null) {
                     // Ensure nested root exists so defaults can be read even if nothing is bound.
                     root = BeanUtils.instantiateClass(rootType);
-                    wrapper.setPropertyValue(rootProperty, root);
                 }
             }
             return root;

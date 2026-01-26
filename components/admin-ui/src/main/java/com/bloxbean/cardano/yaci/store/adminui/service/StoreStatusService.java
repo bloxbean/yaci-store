@@ -35,7 +35,7 @@ public class StoreStatusService {
             new StoreConfig("Epoch Aggregation", "store.epoch-aggr.enabled", "store.epoch-aggr.api-enabled", false),
             new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false),
             new StoreConfig("Governance Aggregation", "store.governance-aggr.enabled", "store.governance-aggr.api-enabled", false),
-            new StoreConfig("Live", "store.live.enabled", null, false),  // Live has no api-enabled property
+            new StoreConfig("Live", "store.live.enabled", null, false) // Live has no api-enabled property
 
             //Will be enabled in future release
 //            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false),
