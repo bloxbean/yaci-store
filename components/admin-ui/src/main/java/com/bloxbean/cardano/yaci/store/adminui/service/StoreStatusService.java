@@ -36,9 +36,11 @@ public class StoreStatusService {
             new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false),
             new StoreConfig("Governance Aggregation", "store.governance-aggr.enabled", "store.governance-aggr.api-enabled", false),
             new StoreConfig("Live", "store.live.enabled", null, false),  // Live has no api-enabled property
-            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false),
-            new StoreConfig("Remote", "store.remote.enabled", "store.remote.api-enabled", false),
-            new StoreConfig("MCP Server", "store.mcp-server.enabled", "store.mcp-server.api-enabled", false)
+
+            //Will be enabled in future release
+//            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false),
+//            new StoreConfig("Remote", "store.remote.enabled", "store.remote.api-enabled", false),
+//            new StoreConfig("MCP Server", "store.mcp-server.enabled", "store.mcp-server.api-enabled", false)
     );
 
     public StoreStatusService(Environment environment) {
