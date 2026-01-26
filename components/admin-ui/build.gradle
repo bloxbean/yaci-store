@@ -40,23 +40,6 @@ dependencies {
     // Optional dependencies for richer status info
     compileOnly project(":components:dbutils")
     compileOnly project(":aggregates:adapot")
-    compileOnly project(":starters:utxo-spring-boot-starter")
-    compileOnly project(":starters:blocks-spring-boot-starter")
-    compileOnly project(":starters:transaction-spring-boot-starter")
-    compileOnly project(":starters:script-spring-boot-starter")
-    compileOnly project(":starters:metadata-spring-boot-starter")
-    compileOnly project(":starters:assets-spring-boot-starter")
-    compileOnly project(":starters:epoch-spring-boot-starter")
-    compileOnly project(":starters:staking-spring-boot-starter")
-    compileOnly project(":starters:mir-spring-boot-starter")
-    compileOnly project(":starters:live-spring-boot-starter")
-    compileOnly project(":starters:governance-spring-boot-starter")
-    compileOnly project(":starters:account-spring-boot-starter")
-    compileOnly project(":starters:epoch-aggr-spring-boot-starter")
-    compileOnly project(":starters:adapot-spring-boot-starter")
-    compileOnly project(":starters:governance-aggr-spring-boot-starter")
-    compileOnly project(":starters:submit-spring-boot-starter")
-    compileOnly project(":starters:admin-spring-boot-starter")
 }
 
 publishing {
