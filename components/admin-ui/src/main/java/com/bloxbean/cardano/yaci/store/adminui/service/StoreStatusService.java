@@ -21,26 +21,26 @@ public class StoreStatusService {
 
     // Static list of store configurations
     private static final List<StoreConfig> STORES = List.of(
-            new StoreConfig("Utxo", "store.utxo.enabled", "store.utxo.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.utxo.UtxoStoreAutoConfigProperties"),
-            new StoreConfig("Blocks", "store.blocks.enabled", "store.blocks.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.blocks.BlocksStoreAutoConfigProperties"),
-            new StoreConfig("Transaction", "store.transaction.enabled", "store.transaction.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.transaction.TransactionAutoConfigProperties"),
-            new StoreConfig("Script", "store.script.enabled", "store.script.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.script.ScriptStoreProperties"),
-            new StoreConfig("Metadata", "store.metadata.enabled", "store.metadata.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.metadata.MetadataStoreProperties"),
-            new StoreConfig("Assets", "store.assets.enabled", "store.assets.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.assets.AssetsStoreProperties"),
-            new StoreConfig("Epoch", "store.epoch.enabled", "store.epoch.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.epoch.EpochStoreProperties"),
-            new StoreConfig("Staking", "store.staking.enabled", "store.staking.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.staking.StakingStoreProperties"),
-            new StoreConfig("MIR", "store.mir.enabled", "store.mir.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.mir.MIRStoreProperties"),
-            new StoreConfig("Governance", "store.governance.enabled", "store.governance.api-enabled", true, "com.bloxbean.cardano.yaci.store.starter.governance.GovernanceStoreProperties"),
-            new StoreConfig("Submit", "store.submit.enabled", null, true, "com.bloxbean.cardano.yaci.store.starter.submit.SubmitStoreProperties"),
-            new StoreConfig("Account", "store.account.enabled", "store.account.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.account.AccountStoreAutoConfigProperties"),
-            new StoreConfig("Epoch Aggregation", "store.epoch-aggr.enabled", "store.epoch-aggr.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.epochaggr.EpochAggrStoreAutoConfigProperties"),
-            new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.adapot.AdaPotAutoConfigProperties"),
-            new StoreConfig("Governance Aggregation", "store.governance-aggr.enabled", "store.governance-aggr.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.governanceaggr.GovernanceAggrAutoConfigProperties")
+            new StoreConfig("Utxo", "store.utxo.enabled", "store.utxo.api-enabled", true, "com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties"),
+            new StoreConfig("Blocks", "store.blocks.enabled", "store.blocks.api-enabled", true, "com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties"),
+            new StoreConfig("Transaction", "store.transaction.enabled", "store.transaction.api-enabled", true, "com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties"),
+            new StoreConfig("Script", "store.script.enabled", "store.script.api-enabled", true, "com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration"),
+            new StoreConfig("Metadata", "store.metadata.enabled", "store.metadata.api-enabled", true, "com.bloxbean.cardano.yaci.store.metadata.MetadataStoreConfiguration"),
+            new StoreConfig("Assets", "store.assets.enabled", "store.assets.api-enabled", true, "com.bloxbean.cardano.yaci.store.assets.AssetsStoreConfiguration"),
+            new StoreConfig("Epoch", "store.epoch.enabled", "store.epoch.api-enabled", true, "com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration"),
+            new StoreConfig("Staking", "store.staking.enabled", "store.staking.api-enabled", true, "com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration"),
+            new StoreConfig("MIR", "store.mir.enabled", "store.mir.api-enabled", true, "com.bloxbean.cardano.yaci.store.mir.MIRStoreConfiguration"),
+            new StoreConfig("Governance", "store.governance.enabled", "store.governance.api-enabled", true, "com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfiguration"),
+            new StoreConfig("Submit", "store.submit.enabled", null, true, "com.bloxbean.cardano.yaci.store.submit.SubmitStoreConfiguration"),
+            new StoreConfig("Account", "store.account.enabled", "store.account.api-enabled", false, "com.bloxbean.cardano.yaci.store.account.AccountStoreProperties"),
+            new StoreConfig("Epoch Aggregation", "store.epoch-aggr.enabled", "store.epoch-aggr.api-enabled", false, "com.bloxbean.cardano.yaci.store.epochaggr.EpochAggrConfiguration"),
+            new StoreConfig("AdaPot", "store.adapot.enabled", "store.adapot.api-enabled", false, "com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties"),
+            new StoreConfig("Governance Aggregation", "store.governance-aggr.enabled", "store.governance-aggr.api-enabled", false, "com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties")
 
             //Will be enabled in future release
-//            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.analytics.AnalyticsStoreProperties"),
-//            new StoreConfig("Remote", "store.remote.enabled", "store.remote.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.remote.RemoteStoreAutoConfProperties"),
-//            new StoreConfig("MCP Server", "store.mcp-server.enabled", "store.mcp-server.api-enabled", false, "com.bloxbean.cardano.yaci.store.starter.mcp.McpServerStoreProperties")
+//            new StoreConfig("Analytics", "store.analytics.enabled", "store.analytics.api-enabled", false, "com.bloxbean.cardano.yaci.store.analytics.AnalyticsStoreProperties"),
+//            new StoreConfig("Remote", "store.remote.enabled", "store.remote.api-enabled", false, "com.bloxbean.cardano.yaci.store.remote.RemoteProperties"),
+//            new StoreConfig("MCP Server", "store.mcp-server.enabled", "store.mcp-server.api-enabled", false, "com.bloxbean.cardano.yaci.store.mcp.McpServerProperties")
     );
 
     public StoreStatusService(Environment environment) {
