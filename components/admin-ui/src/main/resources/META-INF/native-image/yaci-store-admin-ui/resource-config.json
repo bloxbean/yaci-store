@@ -1,0 +1,10 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "static/index\\.html$"},
+      {"pattern": "static/favicon\\.png$"},
+      {"pattern": "static/_app/.*"}
+    ]
+  },
+  "bundles": []
+}
