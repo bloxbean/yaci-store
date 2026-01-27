@@ -118,6 +118,18 @@ Is your project using Yaci Store? We'd love to feature it here! Please open a PR
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
+## Branching & releases
+
+- `main` → active development for the next minor release (2.1.x)
+- `release/2.0.x` → patch fixes for the 2.0.x line
+- `next` → development of the next major version (3.0)
+
+Please open pull requests against the `main` branch unless advised otherwise.
+
+### Documentation source
+
+The latest documentation source is maintained in the `main` branch.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -9,6 +9,7 @@ Thank you for your interest in contributing to Yaci Store! We welcome contributi
 - [How to Contribute](#how-to-contribute)
 - [Development Setup](#development-setup)
 - [Pull Request Process](#pull-request-process)
+- [Branching Strategy](#branching-strategy)
 - [Coding Standards](#coding-standards)
 - [Testing Guidelines](#testing-guidelines)
 - [Documentation](#documentation)
@@ -131,6 +132,18 @@ Brief description of the changes
 - [ ] Documentation updated
 - [ ] No new warnings
 ```
+
+## Branching Strategy
+
+We use the following branches:
+
+- `main` → active development for the next minor release (2.1.x)
+- `release/2.0.x` → patch fixes for the 2.0.x line
+- `next` → development of the next major version (3.0)
+
+**Please open pull requests against the `main` branch** unless advised otherwise by a maintainer.
+
+The documentation source is also maintained in the `main` branch.
 
 ## Coding Standards
 
