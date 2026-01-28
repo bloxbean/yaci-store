@@ -50,12 +50,9 @@ public class BFAddressController {
     @GetMapping("{address}/utxos")
     public List<BFAddressUtxoDTO> getAddressUtxos(@PathVariable String address,
                                                    @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                   @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                                   @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                                    @RequestParam(required = false, defaultValue = "asc") Order order) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
+        int p = page - 1;
 
         return bfAddressService.getAddressUtxos(address, p, count, order);
     }
@@ -63,12 +60,9 @@ public class BFAddressController {
     @GetMapping("{address}/utxos/{asset}")
     public List<BFAddressUtxoDTO> getAddressUtxosForAsset(@PathVariable String address, @PathVariable String asset,
                                                   @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                  @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                                  @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                                   @RequestParam(required = false, defaultValue = "asc") Order order) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
+        int p = page - 1;
 
         return bfAddressService.getAddressUtxosForAsset(address, asset, p, count, order);
     }
@@ -76,12 +70,9 @@ public class BFAddressController {
     @GetMapping("{address}/transactions")
     public List<BFAddressTransactionDTO> getAddressTransactions(@PathVariable String address,
                                                                 @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                                @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                                                @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                                                 @RequestParam(required = false, defaultValue = "asc") Order order) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
+        int p = page - 1;
 
         return bfAddressService.getAddressTransactions(address, p, count, order);
     }

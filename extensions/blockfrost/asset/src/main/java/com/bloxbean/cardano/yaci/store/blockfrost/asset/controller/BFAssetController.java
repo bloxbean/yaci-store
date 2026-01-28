@@ -35,15 +35,11 @@ public class BFAssetController {
 
     @GetMapping
     public List<BFAssetDTO> getAssets(@RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                      @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                      @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                       @RequestParam(required = false, defaultValue = "asc") Order order) {
-        //TODO -- Fix pagination index
-        int p = page;
-        if (p > 0)
-            p = p - 1;
+        int p = page - 1;
 
         return bfAssetService.getAssets(p, count, order);
     }
 
 }
-

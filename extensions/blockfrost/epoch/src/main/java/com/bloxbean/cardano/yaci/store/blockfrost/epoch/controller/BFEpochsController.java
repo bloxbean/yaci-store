@@ -77,11 +77,8 @@ public class BFEpochsController {
     @Operation(summary = "Listing of next epochs", description = "Return the list of epochs following a specific epoch.")
     public List<BFEpochDto> getNextEpochs(@PathVariable Integer number,
                                                  @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                 @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+                                                 @RequestParam(required = false, defaultValue = "1") @Min(1) int page) {
+        int p = page - 1;
 
         return bfEpochService.getNextEpochs(number, p, count);
     }
@@ -90,11 +87,8 @@ public class BFEpochsController {
     @Operation(summary = "Listing of previous epochs", description = "Return the list of epochs preceding a specific epoch.")
     public List<BFEpochDto> getPreviousEpochs(@PathVariable Integer number,
                                                      @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                     @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+                                                     @RequestParam(required = false, defaultValue = "1") @Min(1) int page) {
+        int p = page - 1;
 
         return bfEpochService.getPreviousEpochs(number, p, count);
     }
@@ -103,11 +97,8 @@ public class BFEpochsController {
     @Operation(summary = "Stake distribution", description = "Return the active stake distribution for the specified epoch.")
     public List<BFEpochStakeDto> getEpochStakes(@PathVariable Integer number,
                                                 @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+                                                @RequestParam(required = false, defaultValue = "1") @Min(1) int page) {
+        int p = page - 1;
 
         return bfEpochService.getEpochStakes(number, p, count);
     }
@@ -117,11 +108,8 @@ public class BFEpochsController {
     public List<BFEpochStakePoolDto> getEpochStakesByPool(@PathVariable Integer number,
                                                           @PathVariable("pool_id") String poolId,
                                                           @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                                          @RequestParam(required = false, defaultValue = "0") @Min(0) int page) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+                                                          @RequestParam(required = false, defaultValue = "1") @Min(1) int page) {
+        int p = page - 1;
 
         return bfEpochService.getEpochStakesByPool(number, poolId, p, count);
     }
@@ -130,12 +118,9 @@ public class BFEpochsController {
     @Operation(summary = "Block distribution", description = "Return the blocks minted for the epoch specified.")
     public List<String> getEpochBlocks(@PathVariable Integer number,
                                        @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                       @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                       @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                        @RequestParam(required = false, defaultValue = "asc") Order order) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+        int p = page - 1;
 
         return bfEpochService.getEpochBlocks(number, p, count, order);
     }
@@ -145,12 +130,9 @@ public class BFEpochsController {
     public List<String> getEpochBlocksByPool(@PathVariable Integer number,
                                              @PathVariable("pool_id") String poolId,
                                              @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-                                             @RequestParam(required = false, defaultValue = "0") @Min(0) int page,
+                                             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
                                              @RequestParam(required = false, defaultValue = "asc") Order order) {
-        int p = page;
-        if (p > 0) {
-            p = p - 1;
-        }
+        int p = page - 1;
 
         return bfEpochService.getEpochBlocksByPool(number, poolId, p, count, order);
     }
