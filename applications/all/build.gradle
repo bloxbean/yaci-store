@@ -24,6 +24,7 @@ dependencies {
     implementation project(':starters:epoch-aggr-spring-boot-starter')
     implementation project(':starters:adapot-spring-boot-starter')
     implementation project(':starters:governance-aggr-spring-boot-starter')
+    implementation project(':starters:blockfrost-spring-boot-starter')
 
     implementation project(':starters:admin-spring-boot-starter')
     implementation project(':components:dbutils')

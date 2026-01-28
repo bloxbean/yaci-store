@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.epoch.dto;
+package com.bloxbean.cardano.yaci.store.blockfrost.epoch.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -14,16 +14,14 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class ProtocolParamsDto {
+public class BFProtocolParamsDto {
+
     private Integer epoch;
     private Integer minFeeA;
     private Integer minFeeB;
@@ -49,6 +47,7 @@ public class ProtocolParamsDto {
 
     //Alonzo changes
     private Map<String, Map<String, Long>> costModels;
+    private Map<String, List<Long>> costModelsRaw;
     private BigDecimal priceMem;
     private BigDecimal priceStep;
     private String maxTxExMem;
@@ -62,7 +61,6 @@ public class ProtocolParamsDto {
     //Cost per UTxO word for Alonzo.
     //Cost per UTxO byte for Babbage and later.
     private String coinsPerUtxoSize;
-    @Deprecated
     private String coinsPerUtxoWord;
 
     //Conway era
@@ -88,12 +86,12 @@ public class ProtocolParamsDto {
     private BigDecimal dvtPPGovGroup;
     private BigDecimal dvtTreasuryWithdrawal;
 
-    private Integer committeeMinSize;
-    private Integer committeeMaxTermLength;
-    private Integer govActionLifetime;
+    private String committeeMinSize;
+    private String committeeMaxTermLength;
+    private String govActionLifetime;
     private BigInteger govActionDeposit;
     private BigInteger drepDeposit;
-    private Integer drepActivity;
+    private String drepActivity;
     private BigDecimal minFeeRefScriptCostPerByte;
 
     //To align with Blockfrost
@@ -101,9 +99,5 @@ public class ProtocolParamsDto {
     public BigDecimal getPvtppSecurityGroup() {
         return pvtPPSecurityGroup;
     }
-
-
-
-
 
 }
