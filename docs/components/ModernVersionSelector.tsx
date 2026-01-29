@@ -11,7 +11,7 @@ const versions = [
   },
   {
     value: "v1",
-    label: "v1.x.x",
+    label: "v0.1.x",
     isLatest: false,
   },
 ];

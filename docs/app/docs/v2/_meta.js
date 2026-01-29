@@ -6,6 +6,7 @@ export default {
   "api-reference": "API Reference",
   "plugins": "Plugin Framework",
   "advanced-configuration": "Advanced Configuration",
+  "admin-ui": "Admin UI",
   "tutorials": "Tutorials & Use Cases",
   "ledger-state-mismatches": "Known Issues",
   "showcase": "Showcase"
