@@ -56,7 +56,8 @@ export default function VersionFilteredLayout({ children, pageMap }: { children:
       docsRepositoryBase="https://github.com/bloxbean/yaci-store/tree/main/docs"
       footer={footer}
       sidebar={{
-        toggleButton: true
+        toggleButton: true,
+        defaultMenuCollapseLevel: 1
       }}
     >
       {children}

@@ -1,317 +1,207 @@
 # Yaci Store Documentation
 
-This is the official documentation site for Yaci Store, built with [Nextra 4](https://nextra.site/) and [Next.js 15](https://nextjs.org/).
+Documentation site for [Yaci Store](https://github.com/bloxbean/yaci-store), built with [Nextra 4](https://nextra.site/) and [Next.js](https://nextjs.org/).
 
-## Tech Stack
-
-- **Nextra 4.0.14** - Documentation framework
-- **Next.js 15.1.6** - React framework with App Router
-- **React 19** - UI library
-- **nextra-theme-docs** - Documentation theme
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
-- npm or pnpm
+- npm, yarn, or pnpm
 
-### Installation
+### Run the Doc Site Locally
 
 ```bash
+# Install dependencies
 npm install
-```
 
-### Development
-
-Start the development server:
-
-```bash
+# Start development server
 npm run dev
 ```
 
-The site will be available at `http://localhost:3000`
+The site will be available at **http://localhost:3000**
 
-### Build
-
-Build for production:
+### Build for Production
 
 ```bash
 npm run build
-```
-
-Start production server:
-
-```bash
 npm start
 ```
 
-## Project Structure
+---
+
+## Where Are the Documentation Pages?
+
+All documentation content lives in the `app/docs/` directory, organized by version:
 
 ```
-docs/
-├── app/                          # Next.js App Router directory
-│   ├── docs/                     # Documentation content
-│   │   ├── v1/                   # Version 1 documentation
-│   │   │   ├── _meta.js          # V1 navigation configuration
-│   │   │   ├── yaci-store/       # Yaci Store section
-│   │   │   ├── getting-started/  # Getting Started section
-│   │   │   ├── usage/            # Usage section
-│   │   │   ├── stores/           # Stores section
-│   │   │   ├── api-reference/    # API Reference section
-│   │   │   ├── advanced-configuration/
-│   │   │   ├── tutorials/        # Tutorials section
-│   │   │   ├── upgrade-guide/    # Upgrade Guide
-│   │   │   └── showcase/         # Showcase section
-│   │   │
-│   │   ├── v2/                   # Version 2 documentation
-│   │   │   ├── _meta.js          # V2 navigation configuration
-│   │   │   ├── yaci-store/       # Yaci Store section
-│   │   │   ├── getting-started/  # Getting Started section
-│   │   │   ├── usage/            # Usage section
-│   │   │   ├── stores/           # Stores section
-│   │   │   ├── api-reference/    # API Reference section
-│   │   │   ├── plugins/          # Plugin Framework (V2 only)
-│   │   │   ├── advanced-configuration/
-│   │   │   ├── tutorials/        # Tutorials section
-│   │   │   ├── ledger-state-mismatches/ # Known Issues
-│   │   │   └── showcase/         # Showcase section
-│   │   │
-│   │   ├── _meta.js              # Root docs navigation
-│   │   ├── layout.tsx            # Docs layout with version filtering
-│   │   └── not-found.tsx         # Custom 404 handler
-│   │
-│   ├── page.jsx                  # Landing page
-│   ├── layout.tsx                # Root layout
-│   └── globals.css               # Global styles
+app/docs/
+├── v1/                    # Version 1 documentation (legacy)
+│   ├── _meta.js           # Sidebar navigation config
+│   ├── yaci-store/        # Yaci Store overview
+│   ├── getting-started/   # Installation & setup guides
+│   ├── usage/             # Usage guides
+│   ├── stores/            # Store modules docs
+│   ├── api-reference/     # API documentation
+│   └── ...
 │
-├── components/                   # React components
-│   ├── VersionFilteredLayout.tsx # Version filtering logic
-│   └── ModernVersionSelector.tsx # Version dropdown selector
+├── v2/                    # Version 2 documentation (current)
+│   ├── _meta.js           # Sidebar navigation config
+│   ├── yaci-store/        # Yaci Store overview
+│   ├── getting-started/   # Installation & setup guides
+│   ├── usage/             # Usage guides
+│   ├── stores/            # Store modules docs
+│   ├── api-reference/     # API documentation
+│   ├── plugins/           # Plugin framework (v2 only)
+│   └── ...
 │
-├── public/                       # Static assets
-└── theme.config.tsx             # Nextra theme configuration
+└── layout.tsx             # Docs layout with version filtering
 ```
 
-## Documentation Versioning
+**Key Point:** Each documentation page is a `page.mdx` file inside a folder. For example:
+- `app/docs/v2/getting-started/installation/docker/page.mdx` -> `/docs/v2/getting-started/installation/docker`
 
-The documentation supports two versions: **v1** (legacy) and **v2** (current).
+---
 
-### Version Structure
+## Contributing
 
-- Each version has its own directory under `app/docs/`
-- Versions are filtered using the `VersionFilteredLayout` component
-- The version selector allows users to switch between versions
-- When switching versions, the system tries to preserve the current path
-- If a page doesn't exist in the target version, users are redirected to the overview page
+### How to Add or Edit Documentation
 
-### V2-Only Sections
-
-Some sections only exist in V2:
-- Plugin Framework (`/plugins`)
-- Known Issues (`/ledger-state-mismatches`)
-
-When switching to V1 from these sections, users are automatically redirected to the V1 overview page.
-
-## Adding/Editing Content
+1. **Fork and clone** the repository
+2. **Navigate to the docs folder:**
+   ```bash
+   cd yaci-store/docs
+   ```
+3. **Install dependencies and start the dev server:**
+   ```bash
+   npm install
+   npm run dev
+   ```
+4. **Make your changes** - Edit existing `.mdx` files or create new ones
+5. **Preview** your changes at http://localhost:3000
+6. **Create a Pull Request**
 
 ### Creating a New Page
 
-1. Navigate to the appropriate section directory (e.g., `app/docs/v2/tutorials/`)
-2. Create a new `.mdx` file (e.g., `my-tutorial.mdx`)
-3. Add content using MDX format:
+1. Create a folder under the appropriate section (e.g., `app/docs/v2/tutorials/my-tutorial/`)
+2. Add a `page.mdx` file inside the folder:
 
 ```mdx
-# My Tutorial
+# My Tutorial Title
 
-This is a tutorial about...
+Introduction paragraph here...
 
-## Step 1
+## Section 1
 
-First, do this...
+Content for section 1...
+
+## Section 2
+
+Content for section 2...
 ```
 
-### Using Components
-
-Nextra provides several built-in components:
-
-#### Callout Component
-
-```mdx
-import { Callout } from 'nextra/components'
-
-<Callout type="warning">
-⚠️ **Important Notice**
-
-This is an important warning message.
-</Callout>
-```
-
-Available types:
-- `warning` - Yellow warning box
-- `info` - Blue info box
-- `error` - Red error box
-- `default` - Gray default box
-
-#### Other Components
-
-```mdx
-import { Tabs, Tab } from 'nextra/components'
-import { Steps } from 'nextra/components'
-import { FileTree } from 'nextra/components'
-```
-
-See [Nextra Components Documentation](https://nextra.site/docs/guide/built-in-components) for more details.
-
-### Navigation Configuration
-
-Each directory can have a `_meta.js` file to configure navigation:
+3. Update the `_meta.js` file in the parent directory to add navigation:
 
 ```javascript
+// app/docs/v2/tutorials/_meta.js
 export default {
-  "overview": "Overview",
-  "installation": "Installation",
-  "configuration": "Configuration",
-  "tutorials": "Tutorials & Use Cases"
+  "existing-tutorial": "Existing Tutorial",
+  "my-tutorial": "My Tutorial Title"  // Add your new page
 }
 ```
 
-- Keys match the folder/file names (without extension)
-- Values are the display names in the sidebar
-- Order in the object determines the sidebar order
+### File Naming Conventions
 
-### Hiding Pages from Navigation
+- Use **kebab-case** for folder names: `my-page-name/`
+- Each page must have a `page.mdx` file inside its folder
+- Use descriptive names that indicate the content
 
-To hide a page from the sidebar but keep it accessible:
+### Using Components in MDX
 
-```mdx
----
-navigation: false
----
-
-# Hidden Page
-
-This page won't appear in the sidebar.
-```
-
-### Page Metadata
-
-Add frontmatter at the top of MDX files:
+Nextra provides built-in components you can use:
 
 ```mdx
----
-title: My Page Title
-description: Page description for SEO
----
+import { Callout, Tabs, Steps, FileTree } from 'nextra/components'
 
-# Content starts here
+<Callout type="warning">
+This is a warning message.
+</Callout>
+
+<Callout type="info">
+This is an info message.
+</Callout>
 ```
 
-## Version Selector
+### Sidebar Navigation (`_meta.js`)
 
-The version selector is implemented in `components/ModernVersionSelector.tsx`. It:
+Each directory can have a `_meta.js` file to control the sidebar order and display names:
 
-1. Detects the current version from the URL
-2. Allows switching between v1 and v2
-3. Preserves the current path when switching (if the page exists)
-4. Redirects to overview for V2-only sections when switching to V1
+```javascript
+export default {
+  "overview": "Overview",           // Key = folder name, Value = display name
+  "installation": "Installation",
+  "configuration": "Configuration"
+}
+```
 
-## Custom 404 Handling
+The order in this file determines the sidebar order.
 
-The `app/docs/not-found.tsx` file handles 404 errors:
+---
 
-- Detects which version the user is in
-- Redirects to the appropriate version's overview page
-- Shows a "Redirecting..." message during the redirect
+## Project Structure Overview
 
-## Styling
+```
+docs/
+├── app/
+│   ├── docs/              # Documentation pages (MDX files)
+│   │   ├── v1/            # Version 1 docs
+│   │   └── v2/            # Version 2 docs
+│   ├── page.jsx           # Landing page
+│   ├── layout.tsx         # Root layout
+│   └── globals.css        # Global styles
+│
+├── components/            # React components
+│   ├── VersionFilteredLayout.tsx
+│   └── ModernVersionSelector.tsx
+│
+├── public/                # Static assets (images, etc.)
+├── theme.config.tsx       # Nextra theme configuration
+└── package.json           # Project dependencies
+```
 
-- Global styles are in `app/globals.css`
-- The landing page has custom styles in `app/page.jsx`
-- Nextra theme configuration is in `theme.config.tsx`
-
-## Best Practices
-
-### Writing Documentation
-
-1. **Use clear, concise headings** - Use `##` for main sections, `###` for subsections
-2. **Add code examples** - Include working code snippets with syntax highlighting
-3. **Use callouts for important information** - Warnings, notes, tips
-4. **Include tables for structured data** - Use Markdown tables for comparisons
-5. **Link to related pages** - Help users navigate related content
-
-### Navigation Structure
-
-1. **Keep it simple** - Don't nest more than 3 levels deep
-2. **Use consistent naming** - Follow existing naming conventions
-3. **Order matters** - Put most important/common pages first
-4. **Group related content** - Keep related topics together
-
-### File Naming
-
-1. **Use kebab-case** - `my-page-name.mdx`
-2. **Be descriptive** - Name should indicate content
-3. **Avoid special characters** - Stick to letters, numbers, and hyphens
-4. **Use `page.mdx` for index pages** - Main page of a section
-
-### Version Management
-
-1. **Keep versions in sync** - Update both versions when content applies to both
-2. **Mark legacy content** - Use callouts to indicate deprecated features
-3. **Update upgrade guide** - Document breaking changes between versions
-4. **Test version switching** - Ensure links work across versions
+---
 
 ## Troubleshooting
 
 ### Page not appearing in sidebar
-
-- Check that the file name matches the key in `_meta.js`
-- Ensure `navigation: false` is not set in frontmatter
-- Verify the file is in the correct directory
-
-### Version switching not working
-
-- Check that the path exists in both versions
-- Verify `ModernVersionSelector.tsx` has correct version detection
-- Check for V2-only sections in the redirect logic
+- Ensure the folder name matches the key in `_meta.js`
+- Verify there's a `page.mdx` inside the folder
+- Check for typos in the `_meta.js` file
 
 ### Build errors
+- Clear the cache: `rm -rf .next` and rebuild
+- Check MDX syntax is valid
+- Ensure all imported components exist
 
-- Ensure all MDX files have valid syntax
-- Check that imported components exist
-- Verify all internal links point to existing pages
-
-### Styles not applying
-
+### Styles not working
+- Clear `.next` cache and restart dev server
 - Check `globals.css` for conflicts
-- Verify Tailwind classes are being used correctly
-- Clear `.next` cache and rebuild
 
-## Deployment
+---
 
-The site can be deployed to any Next.js hosting platform:
+## Useful Commands
 
-- Vercel (recommended)
-- Netlify
-- AWS Amplify
-- Self-hosted with Node.js
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm start` | Start production server |
 
-Build command: `npm run build`
-Start command: `npm start`
-
-## Contributing
-
-When contributing to the documentation:
-
-1. Create a new branch for your changes
-2. Test locally with `npm run dev`
-3. Build to check for errors: `npm run build`
-4. Create a pull request with a clear description
-5. Ensure all links work and navigation is correct
+---
 
 ## Resources
 
 - [Nextra Documentation](https://nextra.site/)
 - [Next.js Documentation](https://nextjs.org/docs)
 - [MDX Documentation](https://mdxjs.com/)
-- [React Documentation](https://react.dev/)
+- [Yaci Store Main Repository](https://github.com/bloxbean/yaci-store)
