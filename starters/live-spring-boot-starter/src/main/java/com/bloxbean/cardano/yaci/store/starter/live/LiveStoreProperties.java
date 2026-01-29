@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class LiveStoreProperties {
-    private Live live;
+    private Live live = new Live();
 
     @Getter
     @Setter

@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class SubmitStoreProperties {
-    private Submit submit;
+    private Submit submit = new Submit();
 
     @Getter
     @Setter
