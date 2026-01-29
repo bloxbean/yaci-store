@@ -1,6 +1,7 @@
 {
   "name": "yaci-store-docs",
   "version": "0.0.1",
+  "type": "module",
   "description": "Yaci Store Docs site",
   "scripts": {
     "dev": "next dev",
@@ -19,15 +20,17 @@
   },
   "homepage": "https://github.com/bloxbean/yaci-store#readme",
   "dependencies": {
-    "next": "^14.1.1",
-    "nextra": "2",
-    "nextra-theme-docs": "2",
+    "@heroicons/react": "^2.2.0",
+    "next": "^16.1.6",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
     "pnpm": "^9.0.6",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/node": "18.11.10",
-    "typescript": "^4.9.3"
+    "@types/node": "^22.10.5",
+    "@types/react": "19.2.7",
+    "typescript": "^5.7.2"
   }
 }

@@ -46,3 +46,4 @@ _rocksdb
 /docs/.next/
 /docs/node_modules/
 /docker/compose/.env
+/docs/node_modules/

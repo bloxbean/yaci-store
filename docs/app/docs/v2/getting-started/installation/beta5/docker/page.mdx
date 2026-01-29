@@ -1,0 +1,239 @@
+import { Callout } from 'nextra/components'
+
+# Yaci Store Docker Distribution
+
+This distribution provides scripts to help you easily run Yaci Store, perform administrative tasks, and monitor the system using Prometheus and Grafana.
+
+The Docker distribution includes:
+- PostgreSQL
+- Yaci Store app
+- Ledger State app
+- Admin CLI tools
+- Monitoring stack (Prometheus + Grafana)
+
+## Contents
+
+Key files and directories included:
+
+```
+.
+├── yaci-store.sh            # Start/stop Yaci Store application
+├── admin-cli.sh             # Admin operations (apply-indexes, rollback, etc.)
+├── monitoring.sh            # Start/stop Prometheus + Grafana monitoring stack
+├── compose/
+│   ├── .env                         # Environment file (contains Docker image tag)
+│   ├── yaci-store-monolith.yml      # Compose file for Yaci Store and PostgreSQL
+│   ├── admin-cli-compose.yml        # Compose file for admin CLI container
+│   ├── monitoring.yml               # Compose file for monitoring stack
+│   └── ...
+├── config/                          # Yaci Store configuration files mounted inside the container
+│   ├── env                          # Environment file (e.g., to enable ledger-state profile)
+│   ├── application.properties
+│   ├── application-ledger-state.properties
+│   ├── application-plugins.yml
+├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
+├── grafana/                 # Grafana configuration and dashboards
+├── prometheus/              # Prometheus configuration
+```
+
+## Edit Configuration
+
+Before starting Yaci Store, update the Cardano node connection details.
+
+Edit the following values in `config/application.properties`:
+
+```properties
+store.cardano.host=preprod-node.world.dev.cardano.org
+store.cardano.port=30000
+store.cardano.protocol-magic=1
+```
+
+## Running Yaci Store
+
+Use `yaci-store.sh` to start, stop, or view logs of the Yaci Store application.
+
+### Start
+
+```bash
+./yaci-store.sh start
+```
+
+This starts Yaci Store and PostgreSQL in the background.
+
+* Yaci Store API runs on **[http://localhost:8080](http://localhost:8080)**
+* API docs (Swagger UI): **[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)**
+
+### Stop both Yaci Store and PostgreSQL
+
+```bash
+./yaci-store.sh stop
+```
+
+### Stop only Yaci Store (PostgreSQL stays running)
+
+```bash
+./yaci-store.sh stop:yaci-store
+```
+
+### View logs
+
+```bash
+./yaci-store.sh logs                # Logs from all containers
+./yaci-store.sh logs:yaci-store     # Only Yaci Store logs
+./yaci-store.sh logs:db             # Only PostgreSQL logs
+```
+
+## Enable Ledger-State Profile
+
+To run Yaci Store with the `ledger-state` profile:
+
+1. Open the `env` file under the `config/` folder.
+2. Uncomment or add the following line:
+
+```env
+SPRING_PROFILES_ACTIVE=ledger-state
+```
+
+3. Start the application:
+
+```bash
+./yaci-store.sh start
+```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
+
+For optimal performance when running ledger-state calculation, especially on mainnet, you should tune your PostgreSQL configuration. While the default configuration will work, sync time will be significantly longer without these optimizations.
+
+### 1. Increase PostgreSQL Shared Memory
+
+Edit `compose/postgres-compose.yml` and change the `shm_size` setting:
+
+```yaml
+shm_size: 4g  # Change from 2g to 4g (will work with 2g but sync time will be longer)
+```
+
+### 2. Enable PostgreSQL Bulk Load Optimizations
+
+Uncomment the following properties in `config/application-ledger-state.properties`:
+
+```properties
+## Reward Bulk Load Operations
+store.adapot.reward-bulk-load-work-mem=1GB
+store.adapot.reward-bulk-load-maintenance-work-mem=2GB
+
+## Stake Snapshot Operations
+store.adapot.stake-snapshot-work-mem=512MB
+
+## DRep Distribution Snapshot Operations
+store.governance-aggr.drep-dist-work-mem=512MB
+```
+
+### 3. Restart the Application
+
+After making these changes, restart Yaci Store:
+
+```bash
+./yaci-store.sh stop
+./yaci-store.sh start
+```
+
+## Admin Operations
+
+Use `admin-cli.sh` to run administrative tasks like applying indexes or rolling back to a specific epoch.
+
+### Apply Indexes
+
+```bash
+./admin-cli.sh apply-indexes
+```
+
+> ⚠️ This applies database indexes required for optimal read performance from API endpoints.
+
+> **Important:** Only run this **after the full sync is complete**. Applying indexes early can significantly slow down the sync process.
+
+### Rollback
+
+```bash
+./admin-cli.sh rollback-data --epoch <epoch_no>
+```
+
+> ⚠️ **Important:** Before performing rollback, you must **stop Yaci Store** but keep **PostgreSQL running**. Use the following command to stop only Yaci Store:
+
+```bash
+./yaci-store.sh stop:yaci-store
+```
+
+> In interactive mode, you'll be prompted to confirm the rollback operation.
+
+## Monitoring (Prometheus + Grafana)
+
+Use `monitoring.sh` to start or stop the monitoring stack.
+
+### Start monitoring services
+
+```bash
+./monitoring.sh start
+```
+
+* **Prometheus**: [http://localhost:9090](http://localhost:9090)
+* **Grafana**: [http://localhost:3000](http://localhost:3000)
+  Default login: `admin / changeme`
+
+### Stop monitoring services
+
+```bash
+./monitoring.sh stop
+```
+
+### Troubleshooting
+
+<Callout type="warning">
+**Grafana Permission Error**
+
+If Grafana fails to start with the error:
+```
+grafana | mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied
+grafana | GF_PATHS_DATA='/var/lib/grafana' is not writable.
+```
+
+This is a permission issue with the Grafana data directory. Fix it by running:
+
+```bash
+sudo chown -R 472:472 ./grafana
+```
+
+The user ID `472` is the default Grafana user in the Docker container.
+</Callout>
+
+### Accessing PostgreSQL
+
+To connect to the PostgreSQL database running in Docker, you can use the included `psql.sh` script:
+
+```bash
+./psql.sh
+```
+
+This script opens an interactive `psql` session inside the running PostgreSQL container.
+
+> Make sure the Yaci Store stack is already running (`./yaci-store.sh start`) before using this script.
