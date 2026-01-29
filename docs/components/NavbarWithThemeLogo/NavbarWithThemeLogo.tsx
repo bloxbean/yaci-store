@@ -26,27 +26,22 @@ const NavbarWithThemeLogo = () => {
   return (
     <Navbar
       logo={
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Image
-            src={logo}
-            alt="Yaci Store Logo"
-            height={65}
-            style={{ 
-              objectFit: "contain",
-              filter: theme === "dark" ? "brightness(1.1) contrast(1.1)" : "none"
-            }}
-          />
-          <span style={{ 
-            fontSize: "18px", 
-            fontWeight: "600", 
-            color: "var(--nx-colors-gray-900)", 
-            marginLeft: "4px" 
-          }}>
-            Yaci Store
-          </span>
-          <div style={{ marginLeft: "8px" }}>
-            <VersionSelector />
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Image
+              src={logo}
+              alt="Yaci Store Logo"
+              height={72}
+              style={{
+                objectFit: "contain",
+                filter: theme === "dark" ? "brightness(1.1) contrast(1.1)" : "none"
+              }}
+            />
+            <span style={{ fontSize: "1.5rem" }}>
+              <b>Yaci Store</b>
+            </span>
           </div>
+          <VersionSelector />
         </div>
       }
       projectLink={YACI_STORE_GITHUB_REPO_URL}

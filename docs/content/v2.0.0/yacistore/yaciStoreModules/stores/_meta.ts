@@ -1,5 +1,5 @@
 const meta = {
-  "stories": "Stores Overview",
+  "stores": "Stores Overview",
   "stores-configuration": "Store Configuration"
 };
 

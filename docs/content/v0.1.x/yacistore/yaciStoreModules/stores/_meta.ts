@@ -1,6 +1,5 @@
 const meta = {
-  "stories": "Stores Overview",
-  "stores-configuration": "Store Configuration"
+  "stores": "Stores Overview"
 };
 
 export default meta;

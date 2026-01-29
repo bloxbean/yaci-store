@@ -19,13 +19,6 @@ aside nav > ul > li:first-child a[href="/docs/v2"] {
   display: none !important;
 }
 
-/* Hide any element containing only "Index" text */
-aside nav li a:only-child {
-  &:has-text("Index") {
-    display: none !important;
-  }
-}
-
 /* Target the sidebar container's first navigation item */
 .nextra-sidebar-container nav > ul > li:first-child {
   &:has(a[href="/docs/v1"]),
