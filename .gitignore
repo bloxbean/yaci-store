@@ -47,3 +47,6 @@ _rocksdb
 /docs/node_modules/
 /docker/compose/.env
 /docs/node_modules/
+/docs/.playwright-mcp/
+/docs/.playwright-mcp/
+/docs/.claude/
