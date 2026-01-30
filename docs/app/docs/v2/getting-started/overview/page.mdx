@@ -2,9 +2,9 @@ import { Callout } from 'nextra/components'
 
 # Getting Started with Yaci Store 2.x.x
 
-## Current Version: 2.0.0-beta5
+## Current Version: 2.0.0
 
-This is the **latest beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+This is the **latest release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
 
 Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
 
@@ -29,16 +29,6 @@ We will update this section with any discrepancies for future mismatches.
 ### Governance State Data
 
 Governance action proposal statuses are correctly calculated up to recent epochs and are matching. However, there are some known mismatches in dRep distribution and dRep `active_until` values. For a detailed breakdown and the latest mismatch reports, see [the 2.0.0-beta5 mismatch summary](../../ledger-state-mismatches/2-0-0-beta5/2-0-0-beta5). We will be working on fixing these in future releases.
-
----
-
-## Beta Release Status
-
-Except for governance state and reward data, all other stores are production-ready and can be used in production environments.
-
-While governance state data calculation has some mismatches, and even though reward/epoch stake data are all correct, we are keeping the beta label for now. There will be a few more beta releases while we fix all issues in the ledger state. Meanwhile, you can use other stores (UTXO, block, metadata, etc.) in production.
-
----
 
 ## Out-of-the-Box Applications
 

@@ -1,23 +1,13 @@
-# Use out-of-the-box applications
+# Use out-of-the-box indexer application
 
-Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is.
+Yaci Store comes with an out-of-the-box indexer application with all modules included in it. Apart from ledger state modules like adapot and governance-aggr, all other modules or stores are enabled by default.
+Based on your use case, you can enable or disable different stores by changing the configuration.
 
-- **yaci-store-all:** This application bundles all available modules/stores into a single application. If you want to index all available data, this is the application you want.
-- **yaci-store-utxo-indexer:** This application contains utxo store,  protocolparams store and submit module If you want a utxo indexer with transaction submission capability, this is the application you want.
-- **yaci-store-aggregation-app:** This application handles aggregation tasks like account balance calculation. This can be run as a separate application to calculate address balances.
-For steps to run this application, please refer to [Aggregation App Getting Started](aggregation-app-getting-started.md) section.
-
-The Jar files for these applications are available in the release section.
-
-
-##  Run Yaci Store All or Yaci Store Utxo Indexer
+For details on how to install yaci store out-of-the-box applications, please refer to the [Installation](/docs/v2/getting-started/installation/docker) section.
 
 ## Configuration
 
-Download the application.properties file from the release section and place it in a folder named "config" in the same directory as the jar file.
-The application will automatically pick up the configuration file.
-
-Update configuration file with your own values. Some of the key properties are mentioned below.
+You can find configuration file `application.properties` in the `config` directory.
 
 ### Mandatory Configuration
 
@@ -67,7 +57,7 @@ store.executor.use-virtual-thread-for-event-processing=true
 
 
 ### Optional Configuration
-The followings are optional configuration. You can leave them as-is and jump to the next section [Running the application](#running-the-application)
+The following are optional configurations.
 
 #### Genesis files Configuration for custom networks
 
@@ -75,7 +65,6 @@ This is only required if you are using any **custom** networks. For following pu
 - mainnet
 - preprod
 - preview
-- sanchonet
 
 
 Configure genesis files location for custom network
@@ -129,28 +118,11 @@ store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3
 #store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
 ```
 
-## Run As Jar
-
-For Yaci Store All, use the following command.
-
-```shell
-java -jar yaci-store-all-<version>.jar
-```
-
-For Yaci Store Utxo Indexer, use the following command.
-```shell
-java -jar yaci-store-utxo-indexer-<version>.jar
-```
-
 ## Swagger UI
 
 By default, swagger UI for the application is available at http://localhost:8080/swagger-ui/index.html
 
 ## DB Indexes (After Initial Sync)
 
-During the initial sync with the **yaci-store-all** or **yaci-store-utxo-indexer** apps, the app automatically removes all optional DB indexes
-to speed up the sync process. Once the sync is completed, you need to manually re-apply those missing indexes for faster queries.
-
-The SQL file of indexes that need to be re-applied can be found in the GitHub repository:
-- **Yaci Store All App :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/create-index.sql)
-- **Utxo Indexer App   :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/utxo-indexer/src/main/resources/sql/create-index.sql)
+After the initial sync is complete, you can create additional optional indexes to improve query performance of out-of-box REST APIs. To create optional indexes,
+check installation section for more details: [Installation](/docs/v2/getting-started/installation/docker#apply-indexes)
