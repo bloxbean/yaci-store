@@ -24,10 +24,7 @@
 
 ### Latest Releases
 
-- **Stable Release**: [v0.1.6](https://github.com/bloxbean/yaci-store/releases/tag/v0.1.6) - Production-ready release
-- **Beta Release**: [v2.0.0-beta5](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0-beta5) - Next generation release with enhanced features
-  - All core modules and stores are **production-ready**
-  - Note: Ledger State module is still in beta
+- **Stable Release**: [v2.0.0](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0) - Production-ready release
 
 ### Core Stores
 
