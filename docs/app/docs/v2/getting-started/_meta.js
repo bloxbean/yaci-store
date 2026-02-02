@@ -1,6 +1,12 @@
 export default {
   "overview": "Overview",
-  "requirements": "Requirements",
-  "compatibility-matrix": "Compatibility Matrix",
-  "installation": "Installation"
+    "requirements": {
+        title: "Requirements",
+        display: "hidden"
+    },
+    "compatibility-matrix": {
+        title: "Compatibility Matrix",
+        display: "hidden"
+    },
+    "installation": "Installation"
 }

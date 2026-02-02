@@ -133,6 +133,8 @@ Edit `compose/postgres-compose.yml` and change the `shm_size` setting:
 shm_size: 4g  # Change from 2g to 4g (will work with 2g but sync time will be longer)
 ```
 
+>> If you have sufficient system memory, we recommend allocating **6g** or more for better performance.
+
 ### 2. Enable PostgreSQL Bulk Load Optimizations
 
 Uncomment the following properties in `config/application-ledger-state.properties`:
