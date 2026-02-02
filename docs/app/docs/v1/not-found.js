@@ -7,7 +7,7 @@ export default function NotFound() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/docs/v1/yaci-store/overview');
+    router.replace('/docs/v1/introduction/overview');
   }, [router]);
 
   return null;

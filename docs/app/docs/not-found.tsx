@@ -14,12 +14,12 @@ export default function NotFound() {
 
     // Redirect to the appropriate version's overview
     if (isV1) {
-      router.replace('/docs/v1/yaci-store/overview')
+      router.replace('/docs/v1/introduction/overview')
     } else if (isV2) {
-      router.replace('/docs/v2/yaci-store/overview')
+      router.replace('/docs/v2/introduction/overview')
     } else {
       // Default to V2 overview
-      router.replace('/docs/v2/yaci-store/overview')
+      router.replace('/docs/v2/introduction/overview')
     }
   }, [router, pathname])
 

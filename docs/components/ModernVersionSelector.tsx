@@ -75,13 +75,13 @@ export function ModernVersionSelector() {
 
     // If switching to V1 and current path is in a V2-only section, redirect to overview
     if (version.value === 'v1' && v2OnlySections.some(section => pathWithoutVersion.startsWith(section))) {
-      router.push('/docs/v1/yaci-store/overview');
+      router.push('/docs/v1/introduction/overview');
       setIsOpen(false);
       return;
     }
 
     // Try to preserve the path in the new version
-    const newPath = pathWithoutVersion ? `/docs/${version.value}${pathWithoutVersion}` : `/docs/${version.value}/yaci-store/overview`;
+    const newPath = pathWithoutVersion ? `/docs/${version.value}${pathWithoutVersion}` : `/docs/${version.value}/introduction/overview`;
     router.push(newPath);
     setIsOpen(false);
   };

@@ -1,5 +1,5 @@
 export default {
-  "yaci-store": "Yaci Store",
+  "introduction": "Introduction",
   "getting-started": "Getting Started",
   "usage": "Usage",
   "stores": "Stores",
