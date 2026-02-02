@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.address.controller;
 
 
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTotalDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransactionDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressUtxoDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.service.BFAddressService;
@@ -47,6 +48,11 @@ public class BFAddressController {
         return bfAddressService.getAddressInfo(address);
     }
 
+    @GetMapping("{address}/total")
+    public BFAddressTotalDTO getAddressTotal(@PathVariable String address) {
+        return bfAddressService.getAddressTotal(address);
+    }
+
     @GetMapping("{address}/utxos")
     public List<BFAddressUtxoDTO> getAddressUtxos(@PathVariable String address,
                                                    @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
@@ -71,10 +77,23 @@ public class BFAddressController {
     public List<BFAddressTransactionDTO> getAddressTransactions(@PathVariable String address,
                                                                 @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
                                                                 @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
-                                                                @RequestParam(required = false, defaultValue = "asc") Order order) {
+                                                                @RequestParam(required = false, defaultValue = "asc") Order order,
+                                                                @RequestParam(required = false) String from,
+                                                                @RequestParam(required = false) String to) {
         int p = page - 1;
 
-        return bfAddressService.getAddressTransactions(address, p, count, order);
+        return bfAddressService.getAddressTransactions(address, p, count, order, from, to);
+    }
+
+    @Deprecated
+    @GetMapping("{address}/txs")
+    public List<String> getAddressTxs(@PathVariable String address,
+                                      @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+                                      @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
+                                      @RequestParam(required = false, defaultValue = "asc") Order order) {
+        int p = page - 1;
+
+        return bfAddressService.getAddressTxs(address, p, count, order);
     }
 
 }
