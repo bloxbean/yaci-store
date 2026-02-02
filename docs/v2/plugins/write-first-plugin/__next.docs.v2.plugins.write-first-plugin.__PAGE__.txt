@@ -1,0 +1,610 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+a:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+7c:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+7d:"$Sreact.suspense"
+8d:I[22016,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],""]
+5:T3132,# Plugin Getting Started Guide
+
+**Supported Version :** 2.0.0-beta3 and later
+
+
+**A beginner-friendly guide to writing your first yaci-store plugin**
+
+This guide will walk you through creating simple plugins using MVEL and SpEL expression languages. By the end of this tutorial, you'll understand how to filter and process blockchain data using the yaci-store plugin system.
+
+## Prerequisites
+
+- Yaci-store docker distribution installed
+- Basic understanding of blockchain concepts (transactions, UTXOs, metadata)
+- Familiarity with simple programming concepts
+
+## Setup
+
+### 1. Enable Plugin Support
+
+First, unzip your yaci-store docker distribution and navigate to the directory.
+
+Edit the `config/env` file to enable plugin support by uncommenting the following line:
+
+```bash
+JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+```
+
+### 2. Understanding the Plugin Directory Structure
+
+The plugin system uses the following directory structure:
+
+```
+plugins/
+├── scripts/     # Your plugin script files go here
+├── ext-jars/    # External JAR files (for advanced use cases)
+└── lib/         # Additional libraries
+```
+
+### 3. Plugin Configuration
+
+Inside the `config` folder, you'll find `application-plugins.yml`. This file configures all your plugins.
+
+To enable plugin support, set `store.plugins.enabled` to `true`:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+```
+
+## Understanding Plugin Types
+
+Yaci-store supports several types of plugins:
+
+- **Filter Plugins**: Control what data gets stored in the database
+- **Pre-Action Plugins**: Modify data before it's saved
+- **Post-Action Plugins**: Perform actions after data is saved
+- **Event Handler Plugins**: React to blockchain events
+- **Scheduler Plugins**: Execute at scheduled intervals or based on cron expressions
+
+## Plugin Languages
+
+For this guide, we'll focus on two simple expression languages:
+
+- **MVEL**: A powerful expression language with Java-like syntax
+- **SpEL**: Spring Expression Language, great for simple filtering
+
+>> The Yaci Store plugin system also supports writing plugins in **Python** and **JavaScript**.
+However, Python and JavaScript support is currently in **preview**.
+We will cover them in a separate document later.
+
+## Your First Plugin: Filtering NFT Metadata
+
+Let's create a plugin that only stores NFT metadata (label 721) in the database.
+
+### Method 1: Using Expressions (Simplest)
+
+The easiest way to create a filter is using simple expressions:
+
+#### MVEL Expression
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: mvel
+          expression: label == "721"
+```
+
+#### SpEL Expression
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: spel
+          expression: label == "721"
+```
+
+Both expressions do the same thing: they filter metadata to only include items with label "721" (NFT metadata standard).
+
+**Key Points:**
+- The `metadata.save` extension point is triggered when metadata is saved.
+- In an expression-based filter, direct access to the domain class's fields is available.
+- The expression should evaluate to `true` for the item to be stored.
+
+### Method 2: Using Inline Scripts
+
+For more complex logic, you can write inline scripts:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "Multiple Label Filter"
+          lang: mvel
+          inline-script: |
+            filteredItems = [];
+            for (item : items) {
+                if (item.label == "721" || item.label == "1967") {
+                    filteredItems.add(item);
+                }
+            }
+            return filteredItems;
+```
+
+**Key Points:**
+- In inline scripts, the input is always called `items`
+- You must return the filtered list
+- Don't include function signatures, just the body
+
+### Method 3: Using External Script Files
+
+For reusable or complex logic, create separate script files:
+
+1. Create `plugins/scripts/nft-filter.mvel`:
+
+```mvel
+def filterNFTMetadata(items) {
+    filteredItems = [];
+    for (item : items) {
+        if (item.label == "721") {
+            filteredItems.add(item);
+        }
+    }
+    return filteredItems;
+}
+```
+
+2. Reference it in your configuration:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      metadata.save:
+        - name: "NFT Metadata Filter"
+          lang: mvel
+          script:
+            file: /app/plugins/scripts/nft-filter.mvel
+            function: filterNFTMetadata
+```
+
+**Note**: For Docker deployments, use `/app/plugins/scripts/` as the path prefix.
+
+## Testing Your Plugin
+
+### Quick Start Configuration
+
+To test quickly without syncing from genesis, you can start from a recent block:
+
+```properties
+# Add to config/application.properties
+store.cardano.sync-start-slot=17558626
+store.cardano.sync-start-blockhash=3b907cde82b21fb0511845072139aade67222a47c3dcbf90d1e6931b1ad1e30e
+```
+
+### Start Yaci-Store
+
+```bash
+./yaci-store.sh start
+```
+
+Verify the logs to ensure that `yaci-store` is running correctly and that plugins are enabled:
+
+```bash
+tail -f logs/yaci-store.log
+```
+or,
+```
+./yaci_store.sh logs
+```
+
+### Verify Results
+
+Connect to the database and check the results:
+
+```bash
+./psql.sh
+```
+
+```sql
+-- Set the schema
+SET search_path TO yaci_store;
+
+-- Check that only NFT metadata (label 721) is stored
+SELECT tx_hash, label FROM transaction_metadata;
+```
+
+You should see only metadata with label "721".
+
+## Example 2: Filtering High-Value UTXOs
+
+Let's create a plugin that only stores UTXOs worth more than 1000 ADA:
+
+### SpEL Expression (Recommended for simple filters)
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "High Value UTXO Filter"
+          lang: spel
+          expression: lovelaceAmount > 1000000000
+```
+
+### MVEL Expression with Multiple Conditions
+
+High value UTXOs without any native assets:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "High Value and Asset UTXO Filter"
+          lang: mvel
+          expression: |
+            lovelaceAmount > 1000000000 &&
+            (amounts != null && amounts.size() == 1)
+```
+
+## Example 3: Filtering by Asset Policy
+
+To filter UTXOs that contain specific native assets:
+
+### SpEL with Collection Filtering
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Specific Asset Filter"
+          lang: spel
+          expression: amounts.?[policyId == 'your_policy_id_here'].size() > 0
+```
+
+### MVEL with Custom Logic
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Multiple Policy Filter"
+          lang: mvel
+          expression: |
+            if (amounts == null) return false;
+            foreach (amount : amounts) {
+                if (amount.policyId == 'policy1' ||
+                    amount.policyId == 'policy2') {
+                    return true;
+                }
+            }
+            return false;
+```
+
+## Pre-Action Plugins: Modifying Data
+
+Pre-action plugins run after filters but before data is saved. They can modify the data.
+
+### Example: Filter utxos with Specific PolicyId and Replace it with a custom label
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "Specific Asset Filter"
+          lang: spel
+          expression: amounts.?[policyId == 'bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276'].size() > 0
+    pre-actions:
+      utxo.unspent.save:
+        - name: "Replace PolicyId in UTXOs"
+          lang: mvel
+          inline-script: |
+            modifiedUtxos = [];
+            for (utxo : items) {
+              for (amt: utxo.amounts) {
+                if (amt.getPolicyId() == "bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276") {
+                    amt.setPolicyId("MyPolicyId"); // Update policyId
+                    modifiedUtxos.add(amt);
+                }
+              }
+            }
+            return modifiedUtxos;
+```
+
+**Key Points:**
+- Pre-action plugins allow you to modify data before it is saved.
+- While most domain objects (items) are immutable, meaning you can update their fields, there are exceptions. For example,
+  [`TxMetadataLabel`](./plugin_api-guide#txmetadatalabel) cannot be modified as it does not have setter methods. In such cases, you may need to create a new
+  instance with updated values.
+  To check if an object is mutable or not with regard to the storage extension point, refer to the
+  [Plugin API Guide](./plugin_api-guide.mdx).
+- Similar to filter plugins, a pre-action plugin can be written in an external script file or as an inline script.
+
+## Post-Action Plugins: Notifications
+
+Post-action plugins run after data is successfully saved. Perfect for notifications.
+
+### Example: Log High-Fee Transactions
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    post-actions:
+      transaction.save:
+        - name: "High Fee Transaction Logger"
+          lang: mvel
+          inline-script: |
+            highFeeTxCount = 0;
+            totalOutput = 0;
+            for (txn : items) {
+                if (txn.fee > 1000000) { // > 1 ADA
+                    highFeeTxCount++;
+                }
+            }
+            if (highFeeTxCount > 0) {
+                System.out.println("Found " + highFeeTxCount + " high-fee transactions");
+            }
+```
+
+## Event Handler Plugins: Reacting to Events
+
+Event handlers listen to blockchain events and can perform custom actions.
+
+### Example: Block Processing Monitor
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    event-handlers:
+      BlockEvent:
+        - name: "Block Monitor"
+          lang: mvel
+          inline-script: |
+            block = event.block;
+            System.out.println("Processing block " + block.header.headerBody.blockNumber +
+                             " with " + block.transactionBodies.size() + " transactions");
+```
+
+## Common Extension Points
+
+Here are the most commonly used extension points:
+
+### Storage Extension Points
+- `metadata.save` - Transaction metadata
+- `utxo.unspent.save` - New unspent UTXOs
+- `transaction.save` - Transaction data
+- `asset.mint.save` - Asset minting operations
+
+### Event Types
+- `BlockEvent` - New blocks
+- `TransactionEvent` - Transaction processing
+- `AddressUtxoEvent` - Address UTXO changes
+- `MintBurnEvent` - Asset mint/burn operations
+
+## Tips for Success
+
+### 1. Start Simple
+Begin with expression-based filters before moving to scripts.
+
+### 2. Test Incrementally
+Test each plugin individually before combining multiple plugins.
+
+### 3. Use Appropriate Field Names
+Make sure field names in your expressions match the Java model exactly:
+- `lovelaceAmount` (not `lovelace_amount`)
+- `policyId` (not `policy_id`)
+
+### 4. Handle Null Values
+Always check for null values in your expressions:
+
+```mvel
+// Good
+amounts != null && amounts.size() > 0
+
+// Bad (can cause errors)
+amounts.size() > 0
+```
+
+### 5. Multiple Filters = AND Logic
+If you have multiple filters for the same extension point, they all must return true (AND logic).
+
+## Common Mistakes to Avoid
+
+1. **Forgetting semicolons in MVEL**: Always end statements with `;`
+2. **Wrong field names**: Use exact Java field names
+3. **Not handling null values**: Check for null before accessing properties
+4. **Wrong file paths**: Use `/app/plugins/scripts/` for Docker deployments
+
+## Non-Docker Distribution
+
+If you're using a non-Docker distribution:
+
+1. Uncomment this line in `bin/start.sh`:
+   ```bash
+   JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib,plugins/ext-jars"
+   ```
+
+2. Use relative paths in your configuration:
+   ```yaml
+   script:
+     file: ./plugins/scripts/your-script.mvel
+   ```
+
+## Troubleshooting
+
+### Plugin Not Working?
+1. Check that `store.plugins.enabled=true`
+2. Verify file paths are correct
+3. Check logs for syntax errors
+4. Ensure field names match Java models
+
+### Syntax Errors?
+1. Start with simple expressions
+2. Check for missing semicolons
+3. Verify parentheses matching
+
+With these basics, you're ready to start building powerful blockchain data processing plugins!
+
+## Next Steps
+
+Once you're comfortable with basic plugins, explore:
+
+- [Plugin Context Variables](./context-variables.mdx) - Context variables available in plugins
+- [Plugin Configuration Reference](./plugin-configuration-reference.mdx) - Complete configuration options
+- [Plugin API Guide](./plugin_api-guide.mdx) - Developer Reference for plugin APIs0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Prerequisites","id":"prerequisites","depth":2},{"value":"Setup","id":"setup","depth":2},{"value":"1. Enable Plugin Support","id":"1-enable-plugin-support","depth":3},{"value":"2. Understanding the Plugin Directory Structure","id":"2-understanding-the-plugin-directory-structure","depth":3},{"value":"3. Plugin Configuration","id":"3-plugin-configuration","depth":3},{"value":"Understanding Plugin Types","id":"understanding-plugin-types","depth":2},{"value":"Plugin Languages","id":"plugin-languages","depth":2},{"value":"Your First Plugin: Filtering NFT Metadata","id":"your-first-plugin-filtering-nft-metadata","depth":2},{"value":"Method 1: Using Expressions (Simplest)","id":"method-1-using-expressions-simplest","depth":3},{"value":"MVEL Expression","id":"mvel-expression","depth":4},{"value":"SpEL Expression","id":"spel-expression","depth":4},{"value":"Method 2: Using Inline Scripts","id":"method-2-using-inline-scripts","depth":3},{"value":"Method 3: Using External Script Files","id":"method-3-using-external-script-files","depth":3},{"value":"Testing Your Plugin","id":"testing-your-plugin","depth":2},{"value":"Quick Start Configuration","id":"quick-start-configuration","depth":3},{"value":"Start Yaci-Store","id":"start-yaci-store","depth":3},{"value":"Verify Results","id":"verify-results","depth":3},{"value":"Example 2: Filtering High-Value UTXOs","id":"example-2-filtering-high-value-utxos","depth":2},{"value":"SpEL Expression (Recommended for simple filters)","id":"spel-expression-recommended-for-simple-filters","depth":3},{"value":"MVEL Expression with Multiple Conditions","id":"mvel-expression-with-multiple-conditions","depth":3},{"value":"Example 3: Filtering by Asset Policy","id":"example-3-filtering-by-asset-policy","depth":2},{"value":"SpEL with Collection Filtering","id":"spel-with-collection-filtering","depth":3},{"value":"MVEL with Custom Logic","id":"mvel-with-custom-logic","depth":3},{"value":"Pre-Action Plugins: Modifying Data","id":"pre-action-plugins-modifying-data","depth":2},{"value":"Example: Filter utxos with Specific PolicyId and Replace it with a custom label","id":"example-filter-utxos-with-specific-policyid-and-replace-it-with-a-custom-label","depth":3},{"value":"Post-Action Plugins: Notifications","id":"post-action-plugins-notifications","depth":2},{"value":"Example: Log High-Fee Transactions","id":"example-log-high-fee-transactions","depth":3},{"value":"Event Handler Plugins: Reacting to Events","id":"event-handler-plugins-reacting-to-events","depth":2},{"value":"Example: Block Processing Monitor","id":"example-block-processing-monitor","depth":3},{"value":"Common Extension Points","id":"common-extension-points","depth":2},{"value":"Storage Extension Points","id":"storage-extension-points","depth":3},{"value":"Event Types","id":"event-types","depth":3},{"value":"Tips for Success","id":"tips-for-success","depth":2},{"value":"1. Start Simple","id":"1-start-simple","depth":3},{"value":"2. Test Incrementally","id":"2-test-incrementally","depth":3},{"value":"3. Use Appropriate Field Names","id":"3-use-appropriate-field-names","depth":3},{"value":"4. Handle Null Values","id":"4-handle-null-values","depth":3},{"value":"5. Multiple Filters = AND Logic","id":"5-multiple-filters--and-logic","depth":3},{"value":"Common Mistakes to Avoid","id":"common-mistakes-to-avoid","depth":2},{"value":"Non-Docker Distribution","id":"non-docker-distribution","depth":2},{"value":"Troubleshooting","id":"troubleshooting","depth":2},{"value":"Plugin Not Working?","id":"plugin-not-working","depth":3},{"value":"Syntax Errors?","id":"syntax-errors","depth":3},{"value":"Next Steps","id":"next-steps","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Plugin Getting Started Guide","filePath":"app/docs/v2/plugins/write-first-plugin/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Plugin Getting Started Guide","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Supported Version :"}]," 2.0.0-beta3 and later"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"A beginner-friendly guide to writing your first yaci-store plugin"}]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This guide will walk you through creating simple plugins using MVEL and SpEL expression languages. By the end of this tutorial, you’ll understand how to filter and process blockchain data using the yaci-store plugin system."}],"\n",["$","h2",null,{"id":"prerequisites","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Prerequisites",["$","$L9",null,{"id":"prerequisites"}]]}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Yaci-store docker distribution installed"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Basic understanding of blockchain concepts (transactions, UTXOs, metadata)"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Familiarity with simple programming concepts"}],"\n"]}],"\n",["$","h2",null,{"id":"setup","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Setup",["$","$L9",null,{"id":"setup"}]]}],"\n",["$","h3",null,{"id":"1-enable-plugin-support","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["1. Enable Plugin Support",["$","$L9",null,{"id":"1-enable-plugin-support"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"First, unzip your yaci-store docker distribution and navigate to the directory."}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Edit the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"config/env"}]," file to enable plugin support by uncommenting the following line:"]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"JDK_JAVA_OPTIONS"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"="}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"$${JDK_JAVA_OPTIONS} "}],["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"-Dloader.path"}],"$Lb"]}]}]]}]]}],"\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n","$L24","\n","$L25","\n","$L26","\n","$L27","\n","$L28","\n","$L29","\n","$L2a","\n","$L2b","\n","$L2c","\n","$L2d","\n","$L2e","\n","$L2f","\n","$L30","\n","$L31","\n","$L32","\n","$L33","\n","$L34","\n","$L35","\n","$L36","\n","$L37","\n","$L38","\n","$L39","\n","$L3a","\n","$L3b","\n","$L3c","\n","$L3d","\n","$L3e","\n","$L3f","\n","$L40","\n","$L41","\n","$L42","\n","$L43","\n","$L44","\n","$L45","\n","$L46","\n","$L47","\n","$L48","\n","$L49","\n","$L4a","\n","$L4b","\n","$L4c","\n","$L4d","\n","$L4e","\n","$L4f","\n","$L50","\n","$L51","\n","$L52","\n","$L53","\n","$L54","\n","$L55","\n","$L56","\n","$L57","\n","$L58","\n","$L59","\n","$L5a","\n","$L5b","\n","$L5c","\n","$L5d","\n","$L5e","\n","$L5f","\n","$L60","\n","$L61","\n","$L62","\n","$L63","\n","$L64","\n","$L65","\n","$L66","\n","$L67","\n","$L68","\n","$L69","\n","$L6a","\n","$L6b","\n","$L6c","\n","$L6d","\n","$L6e","\n","$L6f","\n","$L70","\n","$L71","\n","$L72","\n","$L73","\n","$L74","\n","$L75","\n","$L76","\n","$L77","\n","$L78","\n","$L79","\n","$L7a","\n","$L7b"]}]
+8:["$","$L7c",null,{"children":["$","$7d",null,{"name":"Next.MetadataOutlet","children":"$@7e"}]}]
+b:["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"=plugins,plugins/lib,plugins/ext-jars"}]
+c:["$","h3",null,{"id":"2-understanding-the-plugin-directory-structure","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["2. Understanding the Plugin Directory Structure",["$","$L9",null,{"id":"2-understanding-the-plugin-directory-structure"}]]}]
+d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The plugin system uses the following directory structure:"}]
+e:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"plugins/"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── scripts/     # Your plugin script files go here"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── ext-jars/    # External JAR files (for advanced use cases)"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"└── lib/         # Additional libraries"}]}]]}]]}]]}]
+f:["$","h3",null,{"id":"3-plugin-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["3. Plugin Configuration",["$","$L9",null,{"id":"3-plugin-configuration"}]]}]
+10:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Inside the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"config"}]," folder, you’ll find ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"application-plugins.yml"}],". This file configures all your plugins."]}]
+11:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["To enable plugin support, set ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.plugins.enabled"}]," to ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"true"}],":"]}]
+12:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}]]}]]}]]}]
+13:["$","h2",null,{"id":"understanding-plugin-types","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Understanding Plugin Types",["$","$L9",null,{"id":"understanding-plugin-types"}]]}]
+14:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Yaci-store supports several types of plugins:"}]
+15:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Filter Plugins"}],": Control what data gets stored in the database"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Pre-Action Plugins"}],": Modify data before it’s saved"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Post-Action Plugins"}],": Perform actions after data is saved"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Event Handler Plugins"}],": React to blockchain events"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Scheduler Plugins"}],": Execute at scheduled intervals or based on cron expressions"]}],"\n"]}]
+16:["$","h2",null,{"id":"plugin-languages","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Plugin Languages",["$","$L9",null,{"id":"plugin-languages"}]]}]
+17:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For this guide, we’ll focus on two simple expression languages:"}]
+18:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"MVEL"}],": A powerful expression language with Java-like syntax"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"SpEL"}],": Spring Expression Language, great for simple filtering"]}],"\n"]}]
+19:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The Yaci Store plugin system also supports writing plugins in ",["$","strong",null,{"children":"Python"}]," and ",["$","strong",null,{"children":"JavaScript"}],".\nHowever, Python and JavaScript support is currently in ",["$","strong",null,{"children":"preview"}],".\nWe will cover them in a separate document later."]}],"\n"]}],"\n"]}]
+1a:["$","h2",null,{"id":"your-first-plugin-filtering-nft-metadata","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Your First Plugin: Filtering NFT Metadata",["$","$L9",null,{"id":"your-first-plugin-filtering-nft-metadata"}]]}]
+1b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Let’s create a plugin that only stores NFT metadata (label 721) in the database."}]
+1c:["$","h3",null,{"id":"method-1-using-expressions-simplest","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Method 1: Using Expressions (Simplest)",["$","$L9",null,{"id":"method-1-using-expressions-simplest"}]]}]
+1d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The easiest way to create a filter is using simple expressions:"}]
+1e:["$","h4",null,{"id":"mvel-expression","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["MVEL Expression",["$","$L9",null,{"id":"mvel-expression"}]]}]
+1f:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      metadata.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"NFT Metadata Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"label == \"721\""}]]}]]}]]}]]}]
+20:["$","h4",null,{"id":"spel-expression","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["SpEL Expression",["$","$L9",null,{"id":"spel-expression"}]]}]
+21:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      metadata.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"NFT Metadata Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"spel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"label == \"721\""}]]}]]}]]}]]}]
+22:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Both expressions do the same thing: they filter metadata to only include items with label “721” (NFT metadata standard)."}]
+23:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Key Points:"}]}]
+24:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["The ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"metadata.save"}]," extension point is triggered when metadata is saved."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"In an expression-based filter, direct access to the domain class’s fields is available."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["The expression should evaluate to ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"true"}]," for the item to be stored."]}],"\n"]}]
+25:["$","h3",null,{"id":"method-2-using-inline-scripts","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Method 2: Using Inline Scripts",["$","$L9",null,{"id":"method-2-using-inline-scripts"}]]}]
+26:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For more complex logic, you can write inline scripts:"}]
+27:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      metadata.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Multiple Label Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          inline-script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            filteredItems = [];"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            for (item : items) {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                if (item.label == \"721\" || item.label == \"1967\") {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    filteredItems.add(item);"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            return filteredItems;"}]}]]}]]}]]}]
+28:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Key Points:"}]}]
+29:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["In inline scripts, the input is always called ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"items"}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"You must return the filtered list"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Don’t include function signatures, just the body"}],"\n"]}]
+2a:["$","h3",null,{"id":"method-3-using-external-script-files","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Method 3: Using External Script Files",["$","$L9",null,{"id":"method-3-using-external-script-files"}]]}]
+2b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For reusable or complex logic, create separate script files:"}]
+2c:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Create ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"plugins/scripts/nft-filter.mvel"}],":"]}],"\n"]}]
+2d:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"def filterNFTMetadata(items) {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"    filteredItems = [];"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"    for (item : items) {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"        if (item.label == \"721\") {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"            filteredItems.add(item);"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"        }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"    }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"    return filteredItems;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"}"}]}]]}]]}]]}]
+2e:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","start":"2","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Reference it in your configuration:"}],"\n"]}]
+2f:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      metadata.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"NFT Metadata Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"            file"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"/app/plugins/scripts/nft-filter.mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"            function"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"filterNFTMetadata"}]]}]]}]]}]]}]
+30:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Note"}],": For Docker deployments, use ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"/app/plugins/scripts/"}]," as the path prefix."]}]
+31:["$","h2",null,{"id":"testing-your-plugin","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Testing Your Plugin",["$","$L9",null,{"id":"testing-your-plugin"}]]}]
+32:["$","h3",null,{"id":"quick-start-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Quick Start Configuration",["$","$L9",null,{"id":"quick-start-configuration"}]]}]
+33:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"To test quickly without syncing from genesis, you can start from a recent block:"}]
+34:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"# Add to config/application.properties"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.cardano.sync-start-slot"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=17558626"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.cardano.sync-start-blockhash"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=3b907cde82b21fb0511845072139aade67222a47c3dcbf90d1e6931b1ad1e30e"}]]}]]}]]}]]}]
+35:["$","h3",null,{"id":"start-yaci-store","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Start Yaci-Store",["$","$L9",null,{"id":"start-yaci-store"}]]}]
+36:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" start"}]]}]}]]}]]}]
+37:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Verify the logs to ensure that ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"yaci-store"}]," is running correctly and that plugins are enabled:"]}]
+38:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"tail"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" -f"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" logs/yaci-store.log"}]]}]}]]}]]}]
+39:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"or,"}]
+3a:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"children":"./yaci_store.sh logs"}]}]}]]}]]}]
+3b:["$","h3",null,{"id":"verify-results","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Verify Results",["$","$L9",null,{"id":"verify-results"}]]}]
+3c:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Connect to the database and check the results:"}]
+3d:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./psql.sh"}]}]}]]}]]}]
+3e:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"-- Set the schema"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"SET"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":" search_path "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"TO"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":" yaci_store;"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"-- Check that only NFT metadata (label 721) is stored"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"SELECT"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":" tx_hash, label "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"FROM"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":" transaction_metadata;"}]]}]]}]]}]]}]
+3f:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"You should see only metadata with label “721”."}]
+40:["$","h2",null,{"id":"example-2-filtering-high-value-utxos","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Example 2: Filtering High-Value UTXOs",["$","$L9",null,{"id":"example-2-filtering-high-value-utxos"}]]}]
+41:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Let’s create a plugin that only stores UTXOs worth more than 1000 ADA:"}]
+42:["$","h3",null,{"id":"spel-expression-recommended-for-simple-filters","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["SpEL Expression (Recommended for simple filters)",["$","$L9",null,{"id":"spel-expression-recommended-for-simple-filters"}]]}]
+43:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"High Value UTXO Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"spel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"lovelaceAmount > 1000000000"}]]}]]}]]}]]}]
+44:["$","h3",null,{"id":"mvel-expression-with-multiple-conditions","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["MVEL Expression with Multiple Conditions",["$","$L9",null,{"id":"mvel-expression-with-multiple-conditions"}]]}]
+45:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"High value UTXOs without any native assets:"}]
+46:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"High Value and Asset UTXO Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            lovelaceAmount > 1000000000 &&"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            (amounts != null && amounts.size() == 1)"}]}]]}]]}]]}]
+47:["$","h2",null,{"id":"example-3-filtering-by-asset-policy","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Example 3: Filtering by Asset Policy",["$","$L9",null,{"id":"example-3-filtering-by-asset-policy"}]]}]
+48:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"To filter UTXOs that contain specific native assets:"}]
+49:["$","h3",null,{"id":"spel-with-collection-filtering","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["SpEL with Collection Filtering",["$","$L9",null,{"id":"spel-with-collection-filtering"}]]}]
+4a:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Specific Asset Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"spel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"amounts.?[policyId == 'your_policy_id_here'].size() > 0"}]]}]]}]]}]]}]
+4b:["$","h3",null,{"id":"mvel-with-custom-logic","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["MVEL with Custom Logic",["$","$L9",null,{"id":"mvel-with-custom-logic"}]]}]
+4c:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Multiple Policy Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            if (amounts == null) return false;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            foreach (amount : amounts) {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                if (amount.policyId == 'policy1' ||"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    amount.policyId == 'policy2') {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    return true;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            }"}]}],"\n","$L7f"]}]]}]]}]
+4d:["$","h2",null,{"id":"pre-action-plugins-modifying-data","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Pre-Action Plugins: Modifying Data",["$","$L9",null,{"id":"pre-action-plugins-modifying-data"}]]}]
+4e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Pre-action plugins run after filters but before data is saved. They can modify the data."}]
+4f:["$","h3",null,{"id":"example-filter-utxos-with-specific-policyid-and-replace-it-with-a-custom-label","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Example: Filter utxos with Specific PolicyId and Replace it with a custom label",["$","$L9",null,{"id":"example-filter-utxos-with-specific-policyid-and-replace-it-with-a-custom-label"}]]}]
+50:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    filters"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Specific Asset Filter\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"spel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          expression"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"amounts.?[policyId == 'bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276'].size() > 0"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    pre-actions"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      utxo.unspent.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Replace PolicyId in UTXOs\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],"$L80","$L81"]}],"\n","$L82","\n","$L83","\n","$L84","\n","$L85","\n","$L86","\n","$L87","\n","$L88","\n","$L89","\n","$L8a","\n","$L8b","\n","$L8c"]}]]}]]}]
+51:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Key Points:"}]}]
+52:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Pre-action plugins allow you to modify data before it is saved."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["While most domain objects (items) are immutable, meaning you can update their fields, there are exceptions. For example,\n",["$","$L8d",null,{"href":"./plugin_api-guide#txmetadatalabel","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"TxMetadataLabel"}]}]," cannot be modified as it does not have setter methods. In such cases, you may need to create a new\ninstance with updated values.\nTo check if an object is mutable or not with regard to the storage extension point, refer to the\n",["$","$L8d",null,{"href":"./plugin_api-guide","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Plugin API Guide"}],"."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Similar to filter plugins, a pre-action plugin can be written in an external script file or as an inline script."}],"\n"]}]
+53:["$","h2",null,{"id":"post-action-plugins-notifications","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Post-Action Plugins: Notifications",["$","$L9",null,{"id":"post-action-plugins-notifications"}]]}]
+54:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Post-action plugins run after data is successfully saved. Perfect for notifications."}]
+55:["$","h3",null,{"id":"example-log-high-fee-transactions","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Example: Log High-Fee Transactions",["$","$L9",null,{"id":"example-log-high-fee-transactions"}]]}]
+56:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    post-actions"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      transaction.save"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"High Fee Transaction Logger\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          inline-script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            highFeeTxCount = 0;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            totalOutput = 0;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            for (txn : items) {"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                if (txn.fee > 1000000) { // > 1 ADA"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    highFeeTxCount++;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                }"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            }"}]}],"\n","$L8e","\n","$L8f","\n","$L90"]}]]}]]}]
+57:["$","h2",null,{"id":"event-handler-plugins-reacting-to-events","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Event Handler Plugins: Reacting to Events",["$","$L9",null,{"id":"event-handler-plugins-reacting-to-events"}]]}]
+58:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Event handlers listen to blockchain events and can perform custom actions."}]
+59:["$","h3",null,{"id":"example-block-processing-monitor","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Example: Block Processing Monitor",["$","$L9",null,{"id":"example-block-processing-monitor"}]]}]
+5a:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"store"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  plugins"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"    event-handlers"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"      BlockEvent"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"        - "}],["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"name"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\"Block Monitor\""}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          lang"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          inline-script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            block = event.block;"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            System.out.println(\"Processing block \" + block.header.headerBody.blockNumber +"}]}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                             \" with \" + block.transactionBodies.size() + \" transactions\");"}]}]]}]]}]]}]
+5b:["$","h2",null,{"id":"common-extension-points","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Common Extension Points",["$","$L9",null,{"id":"common-extension-points"}]]}]
+5c:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Here are the most commonly used extension points:"}]
+5d:["$","h3",null,{"id":"storage-extension-points","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Storage Extension Points",["$","$L9",null,{"id":"storage-extension-points"}]]}]
+5e:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"metadata.save"}]," - Transaction metadata"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"utxo.unspent.save"}]," - New unspent UTXOs"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"transaction.save"}]," - Transaction data"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"asset.mint.save"}]," - Asset minting operations"]}],"\n"]}]
+5f:["$","h3",null,{"id":"event-types","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Event Types",["$","$L9",null,{"id":"event-types"}]]}]
+60:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"BlockEvent"}]," - New blocks"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"TransactionEvent"}]," - Transaction processing"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"AddressUtxoEvent"}]," - Address UTXO changes"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"MintBurnEvent"}]," - Asset mint/burn operations"]}],"\n"]}]
+61:["$","h2",null,{"id":"tips-for-success","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Tips for Success",["$","$L9",null,{"id":"tips-for-success"}]]}]
+62:["$","h3",null,{"id":"1-start-simple","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["1. Start Simple",["$","$L9",null,{"id":"1-start-simple"}]]}]
+63:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Begin with expression-based filters before moving to scripts."}]
+64:["$","h3",null,{"id":"2-test-incrementally","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["2. Test Incrementally",["$","$L9",null,{"id":"2-test-incrementally"}]]}]
+65:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Test each plugin individually before combining multiple plugins."}]
+66:["$","h3",null,{"id":"3-use-appropriate-field-names","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["3. Use Appropriate Field Names",["$","$L9",null,{"id":"3-use-appropriate-field-names"}]]}]
+67:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Make sure field names in your expressions match the Java model exactly:"}]
+68:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"lovelaceAmount"}]," (not ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"lovelace_amount"}],")"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","code",null,{"className":"nextra-code","dir":"ltr","children":"policyId"}]," (not ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"policy_id"}],")"]}],"\n"]}]
+69:["$","h3",null,{"id":"4-handle-null-values","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["4. Handle Null Values",["$","$L9",null,{"id":"4-handle-null-values"}]]}]
+6a:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Always check for null values in your expressions:"}]
+6b:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"// Good"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"amounts != null && amounts.size() > 0"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"// Bad (can cause errors)"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"amounts.size() > 0"}]}]]}]]}]]}]
+6c:["$","h3",null,{"id":"5-multiple-filters--and-logic","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["5. Multiple Filters = AND Logic",["$","$L9",null,{"id":"5-multiple-filters--and-logic"}]]}]
+6d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"If you have multiple filters for the same extension point, they all must return true (AND logic)."}]
+6e:["$","h2",null,{"id":"common-mistakes-to-avoid","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Common Mistakes to Avoid",["$","$L9",null,{"id":"common-mistakes-to-avoid"}]]}]
+6f:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Forgetting semicolons in MVEL"}],": Always end statements with ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":";"}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Wrong field names"}],": Use exact Java field names"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Not handling null values"}],": Check for null before accessing properties"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Wrong file paths"}],": Use ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"/app/plugins/scripts/"}]," for Docker deployments"]}],"\n"]}]
+70:["$","h2",null,{"id":"non-docker-distribution","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Non-Docker Distribution",["$","$L9",null,{"id":"non-docker-distribution"}]]}]
+71:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"If you’re using a non-Docker distribution:"}]
+72:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Uncomment this line in ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"bin/start.sh"}],":"]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"JAVA_OPTS"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"="}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"\""}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"$$JAVA_OPTS"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" -Dloader.path=plugins,plugins/lib,plugins/ext-jars\""}]]}]}]]}]]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Use relative paths in your configuration:"}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":":"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"  file"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"./plugins/scripts/your-script.mvel"}]]}]]}]]}]]}],"\n"]}],"\n"]}]
+73:["$","h2",null,{"id":"troubleshooting","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Troubleshooting",["$","$L9",null,{"id":"troubleshooting"}]]}]
+74:["$","h3",null,{"id":"plugin-not-working","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Plugin Not Working?",["$","$L9",null,{"id":"plugin-not-working"}]]}]
+75:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Check that ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.plugins.enabled=true"}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Verify file paths are correct"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Check logs for syntax errors"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Ensure field names match Java models"}],"\n"]}]
+76:["$","h3",null,{"id":"syntax-errors","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Syntax Errors?",["$","$L9",null,{"id":"syntax-errors"}]]}]
+77:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Start with simple expressions"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Check for missing semicolons"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Verify parentheses matching"}],"\n"]}]
+78:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"With these basics, you’re ready to start building powerful blockchain data processing plugins!"}]
+79:["$","h2",null,{"id":"next-steps","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Next Steps",["$","$L9",null,{"id":"next-steps"}]]}]
+7a:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Once you’re comfortable with basic plugins, explore:"}]
+7b:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","$L8d",null,{"href":"./context-variables","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Plugin Context Variables"}]," - Context variables available in plugins"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","$L8d",null,{"href":"./plugin-configuration-reference","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Plugin Configuration Reference"}]," - Complete configuration options"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","$L8d",null,{"href":"./plugin_api-guide","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Plugin API Guide"}]," - Developer Reference for plugin APIs"]}],"\n"]}]
+7e:null
+7f:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            return false;"}]}]
+80:["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}]
+81:["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"mvel"}]
+82:["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"          inline-script"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"|"}]]}]
+83:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            modifiedUtxos = [];"}]}]
+84:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            for (utxo : items) {"}]}]
+85:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"              for (amt: utxo.amounts) {"}]}]
+86:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                if (amt.getPolicyId() == \"bfc7197e735d2748024be222ed510a23d8682e9f912769e6d922a276\") {"}]}]
+87:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    amt.setPolicyId(\"MyPolicyId\"); // Update policyId"}]}]
+88:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                    modifiedUtxos.add(amt);"}]}]
+89:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                }"}]}]
+8a:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"              }"}]}]
+8b:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            }"}]}]
+8c:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            return modifiedUtxos;"}]}]
+8e:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            if (highFeeTxCount > 0) {"}]}]
+8f:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"                System.out.println(\"Found \" + highFeeTxCount + \" high-fee transactions\");"}]}]
+90:["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"            }"}]}]

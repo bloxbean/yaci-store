@@ -1,0 +1,209 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[22016,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],""]
+a:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+33:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+34:"$Sreact.suspense"
+36:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+5:T1731,# Use out-of-the-box applications
+
+Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is.
+
+- **yaci-store-all:** This application bundles all available modules/stores into a single application. If you want to index all available data, this is the application you want.
+- **yaci-store-utxo-indexer:** This application contains utxo store,  protocolparams store and submit module If you want a utxo indexer with transaction submission capability, this is the application you want.
+- **yaci-store-aggregation-app:** This application handles aggregation tasks like account balance calculation. This can be run as a separate application to calculate address balances.
+For steps to run this application, please refer to [Aggregation App Getting Started](aggregation-app-getting-started.md) section.
+
+The Jar files for these applications are available in the release section.
+
+
+##  Run Yaci Store All or Yaci Store Utxo Indexer
+
+## Configuration
+
+Download the application.properties file from the release section and place it in a folder named "config" in the same directory as the jar file.
+The application will automatically pick up the configuration file.
+
+Update configuration file with your own values. Some of the key properties are mentioned below.
+
+### Mandatory Configuration
+
+#### Network Configuration
+
+```
+store.cardano.host=preprod-node.world.dev.cardano.org
+store.cardano.port=30000
+store.cardano.protocol-magic=1
+```
+
+#### Database Configuration
+
+Uncomment and edit the following properties to configure the database connection.
+
+```
+spring.datasource.url=
+spring.datasource.username=user
+spring.datasource.password=
+```
+
+Additional configurations for database connection pool and batch insert.
+
+```shell
+spring.datasource.hikari.maximum-pool-size=50
+spring.datasource.hikari.minimum-idle=5
+spring.jpa.properties.hibernate.jdbc.batch_size=100
+spring.jpa.properties.hibernate.order_inserts=true
+```
+
+#### Parallel Processing Configuration
+
+The following properties are used to configure parallel processing. You can leave them as-is or change them based on
+your machine configuration.
+
+**Note:** If you are using parallel processing, you also need to configure the database connection pool size accordingly.
+
+```
+store.executor.enable-parallel-processing=true
+
+store.executor.blocks-batch-size=200
+store.executor.blocks-partition-size=10
+
+store.executor.use-virtual-thread-for-batch-processing=true
+store.executor.use-virtual-thread-for-event-processing=true
+```
+
+
+### Optional Configuration
+The followings are optional configuration. You can leave them as-is and jump to the next section [Running the application](#running-the-application)
+
+#### Genesis files Configuration for custom networks
+
+This is only required if you are using any **custom** networks. For following public networks, the genesis files are already available in the application.
+- mainnet
+- preprod
+- preview
+- sanchonet
+
+
+Configure genesis files location for custom network
+
+```
+store.cardano.byron-genesis-file=/Users/xyz/cardano-node/files/byron-genesis.json
+store.cardano.shelley-genesis-file=/Users/xyz/cardano-node/files/shelley-genesis.json
+store.cardano.alonzo-genesis-file=/Users/xyz/work/cardano-node/preprod/files/alonzo-genesis.json
+store.cardano.conway-genesis-file=/Users/xyz/work/cardano-node/preprod/files/conway-genesis.json
+```
+
+#### N2C Configuration
+
+The following properties are required for node-to-client (n2c) communication. This is required for transaction submission,
+fetching protocol parameters etc. If you don't need these functionalities, you can leave them as-is.
+```
+#store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-8.1.2/db/node.socket
+
+# If you are accessing n2c through a relay like "socat", uncomment and edit the following properties.
+#store.cardano.n2c-host=<relay_host>
+#store.cardano.n2c-port=<relay_port>
+```
+
+#### Enable / Disable specific store
+
+Even if you are using ``yaci-store-all`` application, you can enable/disable specific stores. **For example**, if you want to disable utxo store, you can do so by setting the following property to false.
+
+```
+store.utxo.enabled=false
+```
+
+This property is available for all stores.
+
+```
+store.<store_name></store_name>.enabled=false
+```
+
+#### Starting from a specific point
+
+By default, sync starts from the genesis block. If you want to start from a specific point, you can do so by setting the following property.
+
+```
+store.cardano.sync-start-slot=2738868
+store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c
+
+# For Byron block as start  point
+#store.cardano.sync-start-byron-block-number=2737340
+
+# For stop point
+#store.cardano.sync-stop-slot=76667163
+#store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf
+```
+
+## Run As Jar
+
+For Yaci Store All, use the following command.
+
+```shell
+java -jar yaci-store-all-<version>.jar
+```
+
+For Yaci Store Utxo Indexer, use the following command.
+```shell
+java -jar yaci-store-utxo-indexer-<version>.jar
+```
+
+## Swagger UI
+
+By default, swagger UI for the application is available at http://localhost:8080/swagger-ui/index.html
+
+## DB Indexes (After Initial Sync)
+
+During the initial sync with the **yaci-store-all** or **yaci-store-utxo-indexer** apps, the app automatically removes all optional DB indexes
+to speed up the sync process. Once the sync is completed, you need to manually re-apply those missing indexes for faster queries.
+
+The SQL file of indexes that need to be re-applied can be found in the GitHub repository:
+- **Yaci Store All App :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/create-index.sql)
+- **Utxo Indexer App   :** [create-index.sql](https://github.com/bloxbean/yaci-store/blob/main/applications/utxo-indexer/src/main/resources/sql/create-index.sql)0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Run Yaci Store All or Yaci Store Utxo Indexer","id":"run-yaci-store-all-or-yaci-store-utxo-indexer","depth":2},{"value":"Configuration","id":"configuration","depth":2},{"value":"Mandatory Configuration","id":"mandatory-configuration","depth":3},{"value":"Network Configuration","id":"network-configuration","depth":4},{"value":"Database Configuration","id":"database-configuration","depth":4},{"value":"Parallel Processing Configuration","id":"parallel-processing-configuration","depth":4},{"value":"Optional Configuration","id":"optional-configuration","depth":3},{"value":"Genesis files Configuration for custom networks","id":"genesis-files-configuration-for-custom-networks","depth":4},{"value":"N2C Configuration","id":"n2c-configuration","depth":4},{"value":"Enable / Disable specific store","id":"enable--disable-specific-store","depth":4},{"value":"Starting from a specific point","id":"starting-from-a-specific-point","depth":4},{"value":"Run As Jar","id":"run-as-jar","depth":2},{"value":"Swagger UI","id":"swagger-ui","depth":2},{"value":"DB Indexes (After Initial Sync)","id":"db-indexes-after-initial-sync","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Use out-of-the-box applications","filePath":"app/docs/v1/usage/out-of-box/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Use out-of-the-box applications","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Yaci Store comes with few applications that you can use out-of-the-box. These applications are designed to be used as-is."}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"yaci-store-all:"}]," This application bundles all available modules/stores into a single application. If you want to index all available data, this is the application you want."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"yaci-store-utxo-indexer:"}]," This application contains utxo store,  protocolparams store and submit module If you want a utxo indexer with transaction submission capability, this is the application you want."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"yaci-store-aggregation-app:"}]," This application handles aggregation tasks like account balance calculation. This can be run as a separate application to calculate address balances.\nFor steps to run this application, please refer to ",["$","$L9",null,{"href":"aggregation-app-getting-started","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Aggregation App Getting Started"}]," section."]}],"\n"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The Jar files for these applications are available in the release section."}],"\n",["$","h2",null,{"id":"run-yaci-store-all-or-yaci-store-utxo-indexer","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Run Yaci Store All or Yaci Store Utxo Indexer",["$","$La",null,{"id":"run-yaci-store-all-or-yaci-store-utxo-indexer"}]]}],"\n",["$","h2",null,{"id":"configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Configuration",["$","$La",null,{"id":"configuration"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Download the application.properties file from the release section and place it in a folder named “config” in the same directory as the jar file.\nThe application will automatically pick up the configuration file."}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Update configuration file with your own values. Some of the key properties are mentioned below."}],"\n",["$","h3",null,{"id":"mandatory-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Mandatory Configuration",["$","$La",null,{"id":"mandatory-configuration"}]]}],"\n",["$","h4",null,{"id":"network-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Network Configuration",["$","$La",null,{"id":"network-configuration"}]]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":["$Lb","$Lc"]}]]}],"\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n","$L24","\n","$L25","\n","$L26","\n","$L27","\n","$L28","\n","$L29","\n","$L2a","\n","$L2b","\n","$L2c","\n","$L2d","\n","$L2e","\n","$L2f","\n","$L30","\n","$L31","\n","$L32"]}]
+8:["$","$L33",null,{"children":["$","$34",null,{"name":"Next.MetadataOutlet","children":"$@35"}]}]
+b:["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}]
+c:["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"store.cardano.host=preprod-node.world.dev.cardano.org"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.port=30000"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.protocol-magic=1"}]}]]}]
+d:["$","h4",null,{"id":"database-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Database Configuration",["$","$La",null,{"id":"database-configuration"}]]}]
+e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Uncomment and edit the following properties to configure the database connection."}]
+f:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"spring.datasource.url="}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"spring.datasource.username=user"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"spring.datasource.password="}]}]]}]]}]]}]
+10:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Additional configurations for database connection pool and batch insert."}]
+11:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"spring.datasource.hikari.maximum-pool-size"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"=50"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"spring.datasource.hikari.minimum-idle"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"=5"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"spring.jpa.properties.hibernate.jdbc.batch_size"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"=100"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"spring.jpa.properties.hibernate.order_inserts"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"="}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":"true"}]]}]]}]]}]]}]
+12:["$","h4",null,{"id":"parallel-processing-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Parallel Processing Configuration",["$","$La",null,{"id":"parallel-processing-configuration"}]]}]
+13:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The following properties are used to configure parallel processing. You can leave them as-is or change them based on\nyour machine configuration."}]
+14:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Note:"}]," If you are using parallel processing, you also need to configure the database connection pool size accordingly."]}]
+15:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"store.executor.enable-parallel-processing=true"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.executor.blocks-batch-size=200"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.executor.blocks-partition-size=10"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.executor.use-virtual-thread-for-batch-processing=true"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.executor.use-virtual-thread-for-event-processing=true"}]}]]}]]}]]}]
+16:["$","h3",null,{"id":"optional-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Optional Configuration",["$","$La",null,{"id":"optional-configuration"}]]}]
+17:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The followings are optional configuration. You can leave them as-is and jump to the next section ",["$","a",null,{"href":"#running-the-application","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Running the application"}]]}]
+18:["$","h4",null,{"id":"genesis-files-configuration-for-custom-networks","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Genesis files Configuration for custom networks",["$","$La",null,{"id":"genesis-files-configuration-for-custom-networks"}]]}]
+19:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["This is only required if you are using any ",["$","strong",null,{"children":"custom"}]," networks. For following public networks, the genesis files are already available in the application."]}]
+1a:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"mainnet"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"preprod"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"preview"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"sanchonet"}],"\n"]}]
+1b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Configure genesis files location for custom network"}]
+1c:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"store.cardano.byron-genesis-file=/Users/xyz/cardano-node/files/byron-genesis.json"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.shelley-genesis-file=/Users/xyz/cardano-node/files/shelley-genesis.json"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.alonzo-genesis-file=/Users/xyz/work/cardano-node/preprod/files/alonzo-genesis.json"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.conway-genesis-file=/Users/xyz/work/cardano-node/preprod/files/conway-genesis.json"}]}]]}]]}]]}]
+1d:["$","h4",null,{"id":"n2c-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["N2C Configuration",["$","$La",null,{"id":"n2c-configuration"}]]}]
+1e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The following properties are required for node-to-client (n2c) communication. This is required for transaction submission,\nfetching protocol parameters etc. If you don’t need these functionalities, you can leave them as-is."}]
+1f:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.n2c-node-socket-path=/Users/satya/work/cardano-node/preprod-8.1.2/db/node.socket"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"# If you are accessing n2c through a relay like \"socat\", uncomment and edit the following properties."}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.n2c-host=<relay_host>"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.n2c-port=<relay_port>"}]}]]}]]}]]}]
+20:["$","h4",null,{"id":"enable--disable-specific-store","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Enable / Disable specific store",["$","$La",null,{"id":"enable--disable-specific-store"}]]}]
+21:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Even if you are using ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"yaci-store-all"}]," application, you can enable/disable specific stores. ",["$","strong",null,{"children":"For example"}],", if you want to disable utxo store, you can do so by setting the following property to false."]}]
+22:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"children":"store.utxo.enabled=false"}]}]}]]}]]}]
+23:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This property is available for all stores."}]
+24:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"children":"store.<store_name></store_name>.enabled=false"}]}]}]]}]]}]
+25:["$","h4",null,{"id":"starting-from-a-specific-point","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Starting from a specific point",["$","$La",null,{"id":"starting-from-a-specific-point"}]]}]
+26:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"By default, sync starts from the genesis block. If you want to start from a specific point, you can do so by setting the following property."}]
+27:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"store.cardano.sync-start-slot=2738868"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"store.cardano.sync-start-blockhash=a5c72a0e74cf066873ae7741c488acaef32746e1c4ac3b0d49c4acf4add1a47c"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"# For Byron block as start  point"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.sync-start-byron-block-number=2737340"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"# For stop point"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.sync-stop-slot=76667163"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"#store.cardano.sync-stop-blockhash=3e9a93afb174503befd4e8dabd52f73e6c4e9c3c76886713475dd43b00e6acbf"}]}]]}]]}]]}]
+28:["$","h2",null,{"id":"run-as-jar","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Run As Jar",["$","$La",null,{"id":"run-as-jar"}]]}]
+29:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For Yaci Store All, use the following command."}]
+2a:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"java"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" -jar"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" yaci-store-all-"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"<"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"versio"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"n"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":">"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":".jar"}]]}]}]]}]]}]
+2b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For Yaci Store Utxo Indexer, use the following command."}]
+2c:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L36",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"java"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" -jar"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" yaci-store-utxo-indexer-"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"<"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"versio"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"n"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":">"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":".jar"}]]}]}]]}]]}]
+2d:["$","h2",null,{"id":"swagger-ui","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Swagger UI",["$","$La",null,{"id":"swagger-ui"}]]}]
+2e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["By default, swagger UI for the application is available at ",["$","a",null,{"href":"http://localhost:8080/swagger-ui/index.html","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["http://localhost:8080/swagger-ui/index.html",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]]}]
+2f:["$","h2",null,{"id":"db-indexes-after-initial-sync","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["DB Indexes (After Initial Sync)",["$","$La",null,{"id":"db-indexes-after-initial-sync"}]]}]
+30:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["During the initial sync with the ",["$","strong",null,{"children":"yaci-store-all"}]," or ",["$","strong",null,{"children":"yaci-store-utxo-indexer"}]," apps, the app automatically removes all optional DB indexes\nto speed up the sync process. Once the sync is completed, you need to manually re-apply those missing indexes for faster queries."]}]
+31:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The SQL file of indexes that need to be re-applied can be found in the GitHub repository:"}]
+32:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Yaci Store All App :"}]," ",["$","a",null,{"href":"https://github.com/bloxbean/yaci-store/blob/main/applications/all/src/main/resources/sql/create-index.sql","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["create-index.sql",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Utxo Indexer App   :"}]," ",["$","a",null,{"href":"https://github.com/bloxbean/yaci-store/blob/main/applications/utxo-indexer/src/main/resources/sql/create-index.sql","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["create-index.sql",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]]}],"\n"]}]
+35:null

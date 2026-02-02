@@ -1,0 +1,325 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+a:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+4f:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+50:"$Sreact.suspense"
+5:T1c0a,import { Callout } from 'nextra/components'
+
+# Yaci Store Docker Distribution
+
+This distribution provides scripts to help you easily run Yaci Store, perform administrative tasks, and monitor the system using Prometheus and Grafana.
+
+The Docker distribution includes:
+- PostgreSQL
+- Yaci Store app
+- Ledger State app
+- Admin CLI tools
+- Monitoring stack (Prometheus + Grafana)
+
+## Contents
+
+Key files and directories included:
+
+```
+.
+├── yaci-store.sh            # Start/stop Yaci Store application
+├── admin-cli.sh             # Admin operations (apply-indexes, rollback, etc.)
+├── monitoring.sh            # Start/stop Prometheus + Grafana monitoring stack
+├── compose/
+│   ├── .env                         # Environment file (contains Docker image tag)
+│   ├── yaci-store-monolith.yml      # Compose file for Yaci Store and PostgreSQL
+│   ├── admin-cli-compose.yml        # Compose file for admin CLI container
+│   ├── monitoring.yml               # Compose file for monitoring stack
+│   └── ...
+├── config/                          # Yaci Store configuration files mounted inside the container
+│   ├── env                          # Environment file (e.g., to enable ledger-state profile)
+│   ├── application.properties
+│   ├── application-ledger-state.properties
+│   ├── application-plugins.yml
+├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
+├── grafana/                 # Grafana configuration and dashboards
+├── prometheus/              # Prometheus configuration
+```
+
+## Edit Configuration
+
+Before starting Yaci Store, update the Cardano node connection details.
+
+Edit the following values in `config/application.properties`:
+
+```properties
+store.cardano.host=preprod-node.world.dev.cardano.org
+store.cardano.port=30000
+store.cardano.protocol-magic=1
+```
+
+## Running Yaci Store
+
+Use `yaci-store.sh` to start, stop, or view logs of the Yaci Store application.
+
+### Start
+
+```bash
+./yaci-store.sh start
+```
+
+This starts Yaci Store and PostgreSQL in the background.
+
+* Yaci Store API runs on **[http://localhost:8080](http://localhost:8080)**
+* API docs (Swagger UI): **[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)**
+
+### Stop both Yaci Store and PostgreSQL
+
+```bash
+./yaci-store.sh stop
+```
+
+### Stop only Yaci Store (PostgreSQL stays running)
+
+```bash
+./yaci-store.sh stop:yaci-store
+```
+
+### View logs
+
+```bash
+./yaci-store.sh logs                # Logs from all containers
+./yaci-store.sh logs:yaci-store     # Only Yaci Store logs
+./yaci-store.sh logs:db             # Only PostgreSQL logs
+```
+
+## Enable Ledger-State Profile
+
+To run Yaci Store with the `ledger-state` profile:
+
+1. Open the `env` file under the `config/` folder.
+2. Uncomment or add the following line:
+
+```env
+SPRING_PROFILES_ACTIVE=ledger-state
+```
+
+3. Start the application:
+
+```bash
+./yaci-store.sh start
+```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
+
+For optimal performance when running ledger-state calculation, especially on mainnet, you should tune your PostgreSQL configuration. While the default configuration will work, sync time will be significantly longer without these optimizations.
+
+### 1. Increase PostgreSQL Shared Memory
+
+Edit `compose/postgres-compose.yml` and change the `shm_size` setting:
+
+```yaml
+shm_size: 4g  # Change from 2g to 4g (will work with 2g but sync time will be longer)
+```
+
+>> If you have sufficient system memory, we recommend allocating **6g** or more for better performance.
+
+### 2. Enable PostgreSQL Bulk Load Optimizations
+
+Uncomment the following properties in `config/application-ledger-state.properties`:
+
+```properties
+## Reward Bulk Load Operations
+store.adapot.reward-bulk-load-work-mem=1GB
+store.adapot.reward-bulk-load-maintenance-work-mem=2GB
+
+## Stake Snapshot Operations
+store.adapot.stake-snapshot-work-mem=512MB
+
+## DRep Distribution Snapshot Operations
+store.governance-aggr.drep-dist-work-mem=512MB
+```
+
+### 3. Restart the Application
+
+After making these changes, restart Yaci Store:
+
+```bash
+./yaci-store.sh stop
+./yaci-store.sh start
+```
+
+## Admin Operations
+
+Use `admin-cli.sh` to run administrative tasks like applying indexes or rolling back to a specific epoch.
+
+### Apply Indexes
+
+```bash
+./admin-cli.sh apply-indexes
+```
+
+> ⚠️ This applies database indexes required for optimal read performance from API endpoints.
+
+> **Important:** Only run this **after the full sync is complete**. Applying indexes early can significantly slow down the sync process.
+
+### Rollback
+
+```bash
+./admin-cli.sh rollback-data --epoch <epoch_no>
+```
+
+> ⚠️ **Important:** Before performing rollback, you must **stop Yaci Store** but keep **PostgreSQL running**. Use the following command to stop only Yaci Store:
+
+```bash
+./yaci-store.sh stop:yaci-store
+```
+
+> In interactive mode, you'll be prompted to confirm the rollback operation.
+
+## Monitoring (Prometheus + Grafana)
+
+Use `monitoring.sh` to start or stop the monitoring stack.
+
+### Start monitoring services
+
+```bash
+./monitoring.sh start
+```
+
+* **Prometheus**: [http://localhost:9090](http://localhost:9090)
+* **Grafana**: [http://localhost:3000](http://localhost:3000)
+  Default login: `admin / changeme`
+
+### Stop monitoring services
+
+```bash
+./monitoring.sh stop
+```
+
+### Troubleshooting
+
+<Callout type="warning">
+**Grafana Permission Error**
+
+If Grafana fails to start with the error:
+```
+grafana | mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied
+grafana | GF_PATHS_DATA='/var/lib/grafana' is not writable.
+```
+
+This is a permission issue with the Grafana data directory. Fix it by running:
+
+```bash
+sudo chown -R 472:472 ./grafana
+```
+
+The user ID `472` is the default Grafana user in the Docker container.
+</Callout>
+
+### Accessing PostgreSQL
+
+To connect to the PostgreSQL database running in Docker, you can use the included `psql.sh` script:
+
+```bash
+./psql.sh
+```
+
+This script opens an interactive `psql` session inside the running PostgreSQL container.
+
+> Make sure the Yaci Store stack is already running (`./yaci-store.sh start`) before using this script.0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Contents","id":"contents","depth":2},{"value":"Edit Configuration","id":"edit-configuration","depth":2},{"value":"Running Yaci Store","id":"running-yaci-store","depth":2},{"value":"Start","id":"start","depth":3},{"value":"Stop both Yaci Store and PostgreSQL","id":"stop-both-yaci-store-and-postgresql","depth":3},{"value":"Stop only Yaci Store (PostgreSQL stays running)","id":"stop-only-yaci-store-postgresql-stays-running","depth":3},{"value":"View logs","id":"view-logs","depth":3},{"value":"Enable Ledger-State Profile","id":"enable-ledger-state-profile","depth":2},{"value":"PostgreSQL Configuration for Ledger-State (Optional but Recommended)","id":"postgresql-configuration-for-ledger-state-optional-but-recommended","depth":2},{"value":"1. Increase PostgreSQL Shared Memory","id":"1-increase-postgresql-shared-memory","depth":3},{"value":"2. Enable PostgreSQL Bulk Load Optimizations","id":"2-enable-postgresql-bulk-load-optimizations","depth":3},{"value":"3. Restart the Application","id":"3-restart-the-application","depth":3},{"value":"Admin Operations","id":"admin-operations","depth":2},{"value":"Apply Indexes","id":"apply-indexes","depth":3},{"value":"Rollback","id":"rollback","depth":3},{"value":"Monitoring (Prometheus + Grafana)","id":"monitoring-prometheus--grafana","depth":2},{"value":"Start monitoring services","id":"start-monitoring-services","depth":3},{"value":"Stop monitoring services","id":"stop-monitoring-services","depth":3},{"value":"Troubleshooting","id":"troubleshooting","depth":3},{"value":"Accessing PostgreSQL","id":"accessing-postgresql","depth":3}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Yaci Store Docker Distribution","filePath":"app/docs/v2/getting-started/installation/docker/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Yaci Store Docker Distribution","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This distribution provides scripts to help you easily run Yaci Store, perform administrative tasks, and monitor the system using Prometheus and Grafana."}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The Docker distribution includes:"}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"PostgreSQL"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Yaci Store app"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Ledger State app"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Admin CLI tools"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Monitoring stack (Prometheus + Grafana)"}],"\n"]}],"\n",["$","h2",null,{"id":"contents","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Contents",["$","$L9",null,{"id":"contents"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Key files and directories included:"}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"."}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── yaci-store.sh            # Start/stop Yaci Store application"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── admin-cli.sh             # Admin operations (apply-indexes, rollback, etc.)"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── monitoring.sh            # Start/stop Prometheus + Grafana monitoring stack"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── compose/"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   ├── .env                         # Environment file (contains Docker image tag)"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   ├── yaci-store-monolith.yml      # Compose file for Yaci Store and PostgreSQL"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   ├── admin-cli-compose.yml        # Compose file for admin CLI container"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   ├── monitoring.yml               # Compose file for monitoring stack"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   └── ..."}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"├── config/                          # Yaci Store configuration files mounted inside the container"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"│   ├── env                          # Environment file (e.g., to enable ledger-state profile)"}]}],"\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10"]}]]}]]}],"\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n","$L24","\n","$L25","\n","$L26","\n","$L27","\n","$L28","\n","$L29","\n","$L2a","\n","$L2b","\n","$L2c","\n","$L2d","\n","$L2e","\n","$L2f","\n","$L30","\n","$L31","\n","$L32","\n","$L33","\n","$L34","\n","$L35","\n","$L36","\n","$L37","\n","$L38","\n","$L39","\n","$L3a","\n","$L3b","\n","$L3c","\n","$L3d","\n","$L3e","\n","$L3f","\n","$L40","\n","$L41","\n","$L42","\n","$L43","\n","$L44","\n","$L45","\n","$L46","\n","$L47","\n","$L48","\n","$L49","\n","$L4a","\n","$L4b","\n","$L4c","\n","$L4d","\n","$L4e"]}]
+8:["$","$L4f",null,{"children":["$","$50",null,{"name":"Next.MetadataOutlet","children":"$@51"}]}]
+b:["$","span",null,{"children":["$","span",null,{"children":"│   ├── application.properties"}]}]
+c:["$","span",null,{"children":["$","span",null,{"children":"│   ├── application-ledger-state.properties"}]}]
+d:["$","span",null,{"children":["$","span",null,{"children":"│   ├── application-plugins.yml"}]}]
+e:["$","span",null,{"children":["$","span",null,{"children":"├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)"}]}]
+f:["$","span",null,{"children":["$","span",null,{"children":"├── grafana/                 # Grafana configuration and dashboards"}]}]
+10:["$","span",null,{"children":["$","span",null,{"children":"├── prometheus/              # Prometheus configuration"}]}]
+11:["$","h2",null,{"id":"edit-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Edit Configuration",["$","$L9",null,{"id":"edit-configuration"}]]}]
+12:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Before starting Yaci Store, update the Cardano node connection details."}]
+13:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Edit the following values in ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"config/application.properties"}],":"]}]
+14:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.cardano.host"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=preprod-node.world.dev.cardano.org"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.cardano.port"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=30000"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.cardano.protocol-magic"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=1"}]]}]]}]]}]]}]
+15:["$","h2",null,{"id":"running-yaci-store","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Running Yaci Store",["$","$L9",null,{"id":"running-yaci-store"}]]}]
+16:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Use ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"yaci-store.sh"}]," to start, stop, or view logs of the Yaci Store application."]}]
+17:["$","h3",null,{"id":"start","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Start",["$","$L9",null,{"id":"start"}]]}]
+18:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" start"}]]}]}]]}]]}]
+19:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This starts Yaci Store and PostgreSQL in the background."}]
+1a:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Yaci Store API runs on ",["$","strong",null,{"children":["$","a",null,{"href":"http://localhost:8080","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["http://localhost:8080",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["API docs (Swagger UI): ",["$","strong",null,{"children":["$","a",null,{"href":"http://localhost:8080/swagger-ui/index.html","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["http://localhost:8080/swagger-ui/index.html",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]}]]}],"\n"]}]
+1b:["$","h3",null,{"id":"stop-both-yaci-store-and-postgresql","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Stop both Yaci Store and PostgreSQL",["$","$L9",null,{"id":"stop-both-yaci-store-and-postgresql"}]]}]
+1c:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" stop"}]]}]}]]}]]}]
+1d:["$","h3",null,{"id":"stop-only-yaci-store-postgresql-stays-running","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Stop only Yaci Store (PostgreSQL stays running)",["$","$L9",null,{"id":"stop-only-yaci-store-postgresql-stays-running"}]]}]
+1e:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" stop:yaci-store"}]]}]}]]}]]}]
+1f:["$","h3",null,{"id":"view-logs","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["View logs",["$","$L9",null,{"id":"view-logs"}]]}]
+20:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" logs"}],["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"                # Logs from all containers"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" logs:yaci-store"}],["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"     # Only Yaci Store logs"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" logs:db"}],["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"             # Only PostgreSQL logs"}]]}]]}]]}]]}]
+21:["$","h2",null,{"id":"enable-ledger-state-profile","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Enable Ledger-State Profile",["$","$L9",null,{"id":"enable-ledger-state-profile"}]]}]
+22:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["To run Yaci Store with the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"ledger-state"}]," profile:"]}]
+23:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Open the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"env"}]," file under the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"config/"}]," folder."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Uncomment or add the following line:"}],"\n"]}]
+24:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"children":"SPRING_PROFILES_ACTIVE=ledger-state"}]}]}]]}]]}]
+25:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","start":"3","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Start the application:"}],"\n"]}]
+26:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" start"}]]}]}]]}]]}]
+27:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active"}]}]
+28:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating\nthat address balance calculation is active — which is required for ledger-state calculation."}]
+29:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":" # of blocks written: 100, Time taken: 25 ms"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"Block No: 4746  , Era: Shelley"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"### Starting account balance calculation upto block: 4846 ###"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" \tTotal Stake Address Balance records 0, Time taken to save: 0"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" \tTime taken to delete stake address balance history: 0"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"### Total balance processing and saving time 1 ###"}]}],"\n",["$","span",null,{"children":["$","span",null,{}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" # of blocks written: 100, Time taken: 28 ms"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" Block No: 4846  , Era: Shelley"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"### Starting account balance calculation upto block: 4946 ###"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" \tTotal Stake Address Balance records 0, Time taken to save: 0"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":" \tTime taken to delete stake address balance history: 0"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"### Total balance processing and saving time 1 ###"}]}]]}]]}]]}]
+2a:["$","h2",null,{"id":"postgresql-configuration-for-ledger-state-optional-but-recommended","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["PostgreSQL Configuration for Ledger-State (Optional but Recommended)",["$","$L9",null,{"id":"postgresql-configuration-for-ledger-state-optional-but-recommended"}]]}]
+2b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"For optimal performance when running ledger-state calculation, especially on mainnet, you should tune your PostgreSQL configuration. While the default configuration will work, sync time will be significantly longer without these optimizations."}]
+2c:["$","h3",null,{"id":"1-increase-postgresql-shared-memory","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["1. Increase PostgreSQL Shared Memory",["$","$L9",null,{"id":"1-increase-postgresql-shared-memory"}]]}]
+2d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Edit ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"compose/postgres-compose.yml"}]," and change the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"shm_size"}]," setting:"]}]
+2e:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#22863A","--shiki-dark":"#85E89D"},"children":"shm_size"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":": "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"4g"}],["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"  # Change from 2g to 4g (will work with 2g but sync time will be longer)"}]]}]}]]}]]}]
+2f:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["If you have sufficient system memory, we recommend allocating ",["$","strong",null,{"children":"6g"}]," or more for better performance."]}],"\n"]}],"\n"]}]
+30:["$","h3",null,{"id":"2-enable-postgresql-bulk-load-optimizations","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["2. Enable PostgreSQL Bulk Load Optimizations",["$","$L9",null,{"id":"2-enable-postgresql-bulk-load-optimizations"}]]}]
+31:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Uncomment the following properties in ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"config/application-ledger-state.properties"}],":"]}]
+32:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"## Reward Bulk Load Operations"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.adapot.reward-bulk-load-work-mem"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=1GB"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.adapot.reward-bulk-load-maintenance-work-mem"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=2GB"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"## Stake Snapshot Operations"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.adapot.stake-snapshot-work-mem"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=512MB"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"## DRep Distribution Snapshot Operations"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.governance-aggr.drep-dist-work-mem"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=512MB"}]]}]]}]]}]]}]
+33:["$","h3",null,{"id":"3-restart-the-application","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["3. Restart the Application",["$","$L9",null,{"id":"3-restart-the-application"}]]}]
+34:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"After making these changes, restart Yaci Store:"}]
+35:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" stop"}]]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" start"}]]}]]}]]}]]}]
+36:["$","h2",null,{"id":"admin-operations","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Admin Operations",["$","$L9",null,{"id":"admin-operations"}]]}]
+37:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Use ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"admin-cli.sh"}]," to run administrative tasks like applying indexes or rolling back to a specific epoch."]}]
+38:["$","h3",null,{"id":"apply-indexes","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Apply Indexes",["$","$L9",null,{"id":"apply-indexes"}]]}]
+39:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./admin-cli.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" apply-indexes"}]]}]}]]}]]}]
+3a:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"⚠️ This applies database indexes required for optimal read performance from API endpoints."}],"\n"]}]
+3b:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Important:"}]," Only run this ",["$","strong",null,{"children":"after the full sync is complete"}],". Applying indexes early can significantly slow down the sync process."]}],"\n"]}]
+3c:["$","h3",null,{"id":"rollback","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Rollback",["$","$L9",null,{"id":"rollback"}]]}]
+3d:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./admin-cli.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" rollback-data"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" --epoch"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":" <"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"epoch_n"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"o"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":">"}]]}]}]]}]]}]
+3e:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["⚠️ ",["$","strong",null,{"children":"Important:"}]," Before performing rollback, you must ",["$","strong",null,{"children":"stop Yaci Store"}]," but keep ",["$","strong",null,{"children":"PostgreSQL running"}],". Use the following command to stop only Yaci Store:"]}],"\n"]}]
+3f:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./yaci-store.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" stop:yaci-store"}]]}]}]]}]]}]
+40:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"In interactive mode, you’ll be prompted to confirm the rollback operation."}],"\n"]}]
+41:["$","h2",null,{"id":"monitoring-prometheus--grafana","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Monitoring (Prometheus + Grafana)",["$","$L9",null,{"id":"monitoring-prometheus--grafana"}]]}]
+42:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Use ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"monitoring.sh"}]," to start or stop the monitoring stack."]}]
+43:["$","h3",null,{"id":"start-monitoring-services","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Start monitoring services",["$","$L9",null,{"id":"start-monitoring-services"}]]}]
+44:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./monitoring.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" start"}]]}]}]]}]]}]
+45:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Prometheus"}],": ",["$","a",null,{"href":"http://localhost:9090","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["http://localhost:9090",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Grafana"}],": ",["$","a",null,{"href":"http://localhost:3000","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["http://localhost:3000",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}],"\nDefault login: ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"admin / changeme"}]]}],"\n"]}]
+46:["$","h3",null,{"id":"stop-monitoring-services","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Stop monitoring services",["$","$L9",null,{"id":"stop-monitoring-services"}]]}]
+47:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./monitoring.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" stop"}]]}]}]]}]]}]
+48:["$","h3",null,{"id":"troubleshooting","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Troubleshooting",["$","$L9",null,{"id":"troubleshooting"}]]}]
+49:["$","div",null,{"className":"nextra-callout x:overflow-x-auto x:not-first:mt-[1.25em] x:flex x:rounded-lg x:border x:py-[.5em] x:pe-[1em] x:contrast-more:border-current! x:bg-yellow-50 x:dark:bg-yellow-700/30 x:text-yellow-700 x:dark:text-yellow-500 x:border-yellow-700","children":[["$","div",null,{"className":"x:select-none x:text-[1.25em] x:ps-[.6em] x:pe-[.4em]","style":{"fontFamily":"\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\""},"data-pagefind-ignore":"all","children":["$","svg",null,{"viewBox":"0 0 16 16","fill":"currentColor","height":".8em","className":"x:mt-[.3em]","children":["$","path",null,{"d":"M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"}]}]}],["$","div",null,{"className":"x:w-full x:min-w-0","children":[["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Grafana Permission Error"}]}],["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"If Grafana fails to start with the error:"}],["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"grafana | mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"grafana | GF_PATHS_DATA='/var/lib/grafana' is not writable."}]}]]}]]}]]}],["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This is a permission issue with the Grafana data directory. Fix it by running:"}],["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"sudo"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" chown"}],"$L52","$L53","$L54"]}]}]]}]]}],"$L55"]}]]}]
+4a:["$","h3",null,{"id":"accessing-postgresql","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Accessing PostgreSQL",["$","$L9",null,{"id":"accessing-postgresql"}]]}]
+4b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["To connect to the PostgreSQL database running in Docker, you can use the included ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"psql.sh"}]," script:"]}]
+4c:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./psql.sh"}]}]}]]}]]}]
+4d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["This script opens an interactive ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"psql"}]," session inside the running PostgreSQL container."]}]
+4e:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Make sure the Yaci Store stack is already running (",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"./yaci-store.sh start"}],") before using this script."]}],"\n"]}]
+51:null
+52:["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" -R"}]
+53:["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" 472:472"}]
+54:["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" ./grafana"}]
+55:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The user ID ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"472"}]," is the default Grafana user in the Docker container."]}]

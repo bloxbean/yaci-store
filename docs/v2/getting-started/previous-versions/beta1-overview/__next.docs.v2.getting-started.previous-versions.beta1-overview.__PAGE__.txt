@@ -1,0 +1,109 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[22016,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],""]
+a:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+21:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+22:"$Sreact.suspense"
+5:Td66,# Getting Started with Yaci Store 2.0.0-beta1
+
+> **Note**: This documentation is for the **2.0.0-beta1** release. For the latest 2.x.x version, see the [main Getting Started guide](./getting-started-2.x.x.mdx).
+
+This was the **first beta release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+
+Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
+
+---
+
+## Status of Ledger State Data Accuracy (Beta1)
+
+Ledger State calculations include:
+- Epoch Stake and Rewards
+- ADAPot values
+- Governance State (dRep distribution, Proposal Status, dRep Status)
+
+### Reward Calculation and ADAPot Status
+
+- **Mainnet**:
+- ADAPots and rewards match up to epoch 545.
+- Mismatch in epoch 546:
+- Treasury: **-0.065 ADA** (-62,510 lovelace)
+- Reserves: **35.5 ADA** (35,580,032 lovelace)
+- _Note: This could be due to an incorrect status for the New Constitution governance action._
+
+- **Preprod**:
+- ADAPots and rewards match up to epoch 212 (current epoch at the time of writing).
+
+- **Preview**:
+- ADAPots and rewards match up to epoch 916 (current epoch at the time of writing).
+
+A few dRep distribution mismatches (for 5 dReps) were found on the Preview network during some earlier epochs.
+
+> 🔎 Mismatch details for all public networks can be found [here](../ledger-state-mismatches/2-0-0-beta1/2-0-0-beta1.mdx)..
+>
+> ⚠️ We also identified **some incorrect `DRep expiry` values** in Preprod and Preview. See [issue #536](https://github.com/bloxbean/yaci-store/issues/536).
+>
+> 🛠 We will address these issues in the next beta and continue to monitor results alongside DB Sync and the Cardano Node for upcoming epochs.
+
+---
+
+> **Note:**
+>
+> If you're testing ledger-state calculation, we recommend starting with **Preview** or **Preprod** networks for this release.
+>
+> For mainnet, you may also need to **tune your PostgreSQL configuration** though the default config will work but will take longer.
+In the next beta release we will provide the postgres configuration for mainnet sync.
+
+---
+
+## Known Issues or Limitations
+
+1. **Performance of Reward Calculation on Mainnet**
+- Ledger-state calculations currently happen **during epoch transition**.
+That means **rewards paid in epoch X are calculated during the transition from epoch X-1 to X**.
+- On Mainnet, this takes around **20–40 minutes** per transition (depends on your PostgreSQL resources).
+- In a future release, we plan to start **reward calculation in epoch X-1 after the stability window**, similar to how the Haskell node works.
+This will reduce the computation load during epoch boundaries.
+
+---
+
+## Out-of-the-Box Applications
+
+### 1. **Yaci Store App**
+- The **default indexer application**, includes all modules.
+- **Ledger-state calculation is disabled by default** but can be enabled via profile.
+
+### 2. **Ledger State App**
+- Contains only the modules needed for **ledger-state calculation**.
+- Excludes modules like metadata and script that are unnecessary for this purpose.
+
+### 3. **Yaci Store Admin CLI App**
+- CLI tool to **apply optional indexes after sync is complete**.
+- Optional indexes improve API query performance and are not applied during initial sync.0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Status of Ledger State Data Accuracy (Beta1)","id":"status-of-ledger-state-data-accuracy-beta1","depth":2},{"value":"Reward Calculation and ADAPot Status","id":"reward-calculation-and-adapot-status","depth":3},{"value":"Known Issues or Limitations","id":"known-issues-or-limitations","depth":2},{"value":"Out-of-the-Box Applications","id":"out-of-the-box-applications","depth":2},{"value":[["$","$1",".0",{"children":["1. ",["$","strong",".1",{"children":"Yaci Store App"}]]}]],"id":"1-yaci-store-app","depth":3},{"value":[["$","$1",".0",{"children":["2. ",["$","strong",".1",{"children":"Ledger State App"}]]}]],"id":"2-ledger-state-app","depth":3},{"value":[["$","$1",".0",{"children":["3. ",["$","strong",".1",{"children":"Yaci Store Admin CLI App"}]]}]],"id":"3-yaci-store-admin-cli-app","depth":3}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Getting Started with Yaci Store 2.0.0-beta1","filePath":"app/docs/v2/getting-started/previous-versions/beta1-overview/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Getting Started with Yaci Store 2.0.0-beta1","$undefined"]}],"\n",["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Note"}],": This documentation is for the ",["$","strong",null,{"children":"2.0.0-beta1"}]," release. For the latest 2.x.x version, see the ",["$","$L9",null,{"href":"./getting-started-2.x.x","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"main Getting Started guide"}],"."]}],"\n"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["This was the ",["$","strong",null,{"children":"first beta release of Yaci Store with ledger-state support"}],". Yaci Store can now ",["$","strong",null,{"children":"calculate and derive ledger state"}],"—such as ",["$","strong",null,{"children":"rewards"}],", ",["$","strong",null,{"children":"ADAPot"}],", and ",["$","strong",null,{"children":"governance state"}],"—from ",["$","strong",null,{"children":"on-chain data"}],"."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), ",["$","strong",null,{"children":"Yaci Store independently computes all required ledger state from the on-chain data itself."}]]}],"\n",["$","hr",null,{"className":"x:my-[2em] nextra-border"}],"\n",["$","h2",null,{"id":"status-of-ledger-state-data-accuracy-beta1","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Status of Ledger State Data Accuracy (Beta1)",["$","$La",null,{"id":"status-of-ledger-state-data-accuracy-beta1"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Ledger State calculations include:"}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Epoch Stake and Rewards"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"ADAPot values"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Governance State (dRep distribution, Proposal Status, dRep Status)"}],"\n"]}],"\n",["$","h3",null,{"id":"reward-calculation-and-adapot-status","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Reward Calculation and ADAPot Status",["$","$La",null,{"id":"reward-calculation-and-adapot-status"}]]}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Mainnet"}],":"]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"ADAPots and rewards match up to epoch 545."}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Mismatch in epoch 546:"}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Treasury: ",["$","strong",null,{"children":"-0.065 ADA"}]," (-62,510 lovelace)"]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Reserves: ","$Lb"," (35,580,032 lovelace)"]}],"\n"]}],"\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n"]}],"\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20"]}]
+8:["$","$L21",null,{"children":["$","$22",null,{"name":"Next.MetadataOutlet","children":"$@23"}]}]
+b:["$","strong",null,{"children":"35.5 ADA"}]
+c:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","em",null,{"children":"Note: This could be due to an incorrect status for the New Constitution governance action."}]}],"\n"]}]
+d:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Preprod"}],":"]}],"\n"]}]
+e:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"ADAPots and rewards match up to epoch 212 (current epoch at the time of writing)."}],"\n"]}]
+f:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Preview"}],":"]}],"\n"]}]
+10:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"ADAPots and rewards match up to epoch 916 (current epoch at the time of writing)."}],"\n"]}]
+11:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"A few dRep distribution mismatches (for 5 dReps) were found on the Preview network during some earlier epochs."}]
+12:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["🔎 Mismatch details for all public networks can be found ",["$","$L9",null,{"href":"../ledger-state-mismatches/2-0-0-beta1/2-0-0-beta1","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"here"}],".."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["⚠️ We also identified ",["$","strong",null,{"children":["some incorrect ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"DRep expiry"}]," values"]}]," in Preprod and Preview. See ",["$","a",null,{"href":"https://github.com/bloxbean/yaci-store/issues/536","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["issue #536",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}],"."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"🛠 We will address these issues in the next beta and continue to monitor results alongside DB Sync and the Cardano Node for upcoming epochs."}],"\n"]}]
+13:["$","hr",null,{"className":"x:my-[2em] nextra-border"}]
+14:["$","blockquote",null,{"className":"x:not-first:mt-[1.25em] x:border-gray-300 x:italic x:text-gray-700 x:dark:border-gray-700 x:dark:text-gray-400 x:border-s-2 x:ps-[1.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Note:"}]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["If you’re testing ledger-state calculation, we recommend starting with ",["$","strong",null,{"children":"Preview"}]," or ",["$","strong",null,{"children":"Preprod"}]," networks for this release."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["For mainnet, you may also need to ",["$","strong",null,{"children":"tune your PostgreSQL configuration"}]," though the default config will work but will take longer.\nIn the next beta release we will provide the postgres configuration for mainnet sync."]}],"\n"]}]
+15:["$","hr",null,{"className":"x:my-[2em] nextra-border"}]
+16:["$","h2",null,{"id":"known-issues-or-limitations","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Known Issues or Limitations",["$","$La",null,{"id":"known-issues-or-limitations"}]]}]
+17:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["$","strong",null,{"children":"Performance of Reward Calculation on Mainnet"}]}],"\n"]}]
+18:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Ledger-state calculations currently happen ",["$","strong",null,{"children":"during epoch transition"}],".\nThat means ",["$","strong",null,{"children":"rewards paid in epoch X are calculated during the transition from epoch X-1 to X"}],"."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["On Mainnet, this takes around ",["$","strong",null,{"children":"20–40 minutes"}]," per transition (depends on your PostgreSQL resources)."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["In a future release, we plan to start ",["$","strong",null,{"children":"reward calculation in epoch X-1 after the stability window"}],", similar to how the Haskell node works.\nThis will reduce the computation load during epoch boundaries."]}],"\n"]}]
+19:["$","hr",null,{"className":"x:my-[2em] nextra-border"}]
+1a:["$","h2",null,{"id":"out-of-the-box-applications","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Out-of-the-Box Applications",["$","$La",null,{"id":"out-of-the-box-applications"}]]}]
+1b:["$","h3",null,{"id":"1-yaci-store-app","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["1. ",["$","strong",null,{"children":"Yaci Store App"}]],["$","$La",null,{"id":"1-yaci-store-app"}]]}]
+1c:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["The ",["$","strong",null,{"children":"default indexer application"}],", includes all modules."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Ledger-state calculation is disabled by default"}]," but can be enabled via profile."]}],"\n"]}]
+1d:["$","h3",null,{"id":"2-ledger-state-app","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["2. ",["$","strong",null,{"children":"Ledger State App"}]],["$","$La",null,{"id":"2-ledger-state-app"}]]}]
+1e:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Contains only the modules needed for ",["$","strong",null,{"children":"ledger-state calculation"}],"."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Excludes modules like metadata and script that are unnecessary for this purpose."}],"\n"]}]
+1f:["$","h3",null,{"id":"3-yaci-store-admin-cli-app","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["3. ",["$","strong",null,{"children":"Yaci Store Admin CLI App"}]],["$","$La",null,{"id":"3-yaci-store-admin-cli-app"}]]}]
+20:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["CLI tool to ",["$","strong",null,{"children":"apply optional indexes after sync is complete"}],"."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Optional indexes improve API query performance and are not applied during initial sync."}],"\n"]}]
+23:null

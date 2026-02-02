@@ -1,0 +1,139 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+a:I[26579,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ImageZoom"]
+26:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+27:"$Sreact.suspense"
+5:T141f,# Design Goals
+
+Some of the high-level goals of Yaci Store are:
+
+- Providing a Java library for creating scoped indexers.
+- Handling the common logic required for data indexing.
+- Allowing applications to select the data they wish to index.
+- Enabling developers to filter data based on various conditions.
+- Permitting developers to override default behaviors.
+- Managing rollbacks.
+- Offering an out-of-the-box application for indexing common data.
+
+## Yaci Store - Design
+
+![High Level Design](/images/component-diagram.png)
+
+### Core
+
+The core module is the backbone of Yaci Store. It is responsible for reading data from Cardano blockchain and broadcasting events.
+It also monitors and records the current point in the database.
+Events are published as ``Spring events``, so developers can write their own Spring event listeners to listen these events and process them accordingly.
+
+### Stores
+
+Each store is a specialized module designed for a specific data type or use case.
+
+A store has the ability to:
+
+- Listen to events published by the core module.
+- Process data.
+- Store data in a persistent store.
+- Publish derived events. (Optional)
+- Provide REST endpoints to retrieve data (optional).
+
+Each of the above functionalities can be overridden by developers through the use of Spring Beans.
+
+**Note:** To simplify the rollback process, stores do not handle any data aggregation.
+
+### Aggregates
+
+Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store.
+Currently, the only available aggregate is "Account", which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.
+But status of this module is still **experimental**.
+
+### Persistence
+
+By default, Yaci Store uses a relational database to store data. The database schema is generated automatically by Flyway.
+Supported databases include: **PostgreSQL**, **MySQL**, **H2**
+
+**An application can also use a custom persistence store by implementing a store's Storage api.**
+
+### Tx Submission
+
+The "submit" module provides the ability to submit transactions to nodes directly, either through n2c or the submit API.
+
+## Stores - Components
+
+![Store Design](/images/store-design.png)
+
+A **store** is composed of the following components:
+
+**1. Processor:** A processor is responsible for processing data. It listens to events published by the core module and processes the data contained in the event. A processor can also publish derived events.
+For example: ``UtxoProcessor`` in the ``utxo`` store listens to TransactionEvent and processes the UTxOs contained in the transaction. It also publishes ``AddressUtxo`` derived event for each UTxO.
+
+Developer can write their own processor by listening to events published by the core module.
+
+**2. Storage:** A storage defines the interface for storing data. The implementation of a storage api is responsible for storing data in a persistent store.
+By default, Yaci Store uses a relational database to store data and each store provides a default implementation of corresponding storage api using JPA.
+
+This can be overridden by developers by implementing the storage api in consuming applications.
+
+
+**3. Controller:** A controller provides REST endpoints to retrieve store's data. It uses the storage api to retrieve data from the persistent store.
+Out of the box, Yaci Store provides some common REST endpoints for all stores. But, developers can implement their own REST endpoints.
+
+## Handling Rollbacks
+
+Yaci Store follows a simply strategy to handle rollbacks. As ``store`` modules don't handle any data aggregation, the rollback handling becomes simple.
+Each table in a store maintains a ``slot`` column. When a processor received a ``RollbackEvent`` event, it deletes all the records with a slot greater than
+the rollback slot mentioned in the event.
+
+But as aggregates handle data aggregation, the rollback handling becomes a bit complex. But with a simple strategy, we can handle rollbacks in aggregates as well.
+**For example,** the ``Account`` module aggregates account balance. But instead of storing the account balance for an address in one record, balance snapshot is stored for a slot.
+As we don't update existing records during aggregation, rollback can be handled by simply deleting all the records with a slot greater than the rollback slot mentioned in the event.
+
+If you are using Yaci Store as a library in your application with your own domain model and tables, you can follow the similar strategy to handle rollbacks.
+
+## Idempotency
+
+Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box
+modules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent.
+
+
+## Yaci Store - Sequential Block Processing
+
+![Sequential Processing](/images/store-sequential-diagram.png)
+
+## Yaci Store - Parallel Block Processing
+
+![Parallel Processing](/images/store-parallel-diagram.png)0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Yaci Store - Design","id":"yaci-store---design","depth":2},{"value":"Core","id":"core","depth":3},{"value":"Stores","id":"stores","depth":3},{"value":"Aggregates","id":"aggregates","depth":3},{"value":"Persistence","id":"persistence","depth":3},{"value":"Tx Submission","id":"tx-submission","depth":3},{"value":"Stores - Components","id":"stores---components","depth":2},{"value":"Handling Rollbacks","id":"handling-rollbacks","depth":2},{"value":"Idempotency","id":"idempotency","depth":2},{"value":"Yaci Store - Sequential Block Processing","id":"yaci-store---sequential-block-processing","depth":2},{"value":"Yaci Store - Parallel Block Processing","id":"yaci-store---parallel-block-processing","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Design Goals","filePath":"app/docs/v2/introduction/design/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Design Goals","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Some of the high-level goals of Yaci Store are:"}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Providing a Java library for creating scoped indexers."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Handling the common logic required for data indexing."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Allowing applications to select the data they wish to index."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Enabling developers to filter data based on various conditions."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Permitting developers to override default behaviors."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Managing rollbacks."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Offering an out-of-the-box application for indexing common data."}],"\n"]}],"\n",["$","h2",null,{"id":"yaci-store---design","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Yaci Store - Design",["$","$L9",null,{"id":"yaci-store---design"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","$La",null,{"alt":"High Level Design","placeholder":"blur","src":{"src":"/_next/static/media/component-diagram.f687a605.png","width":1499,"height":972,"blurWidth":8,"blurHeight":5,"blurDataURL":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAFCAYAAAB4ka1VAAAAjklEQVR42i2NTQuCMABA/f9/JererUtUUCAEBXaw0Jyomx85t7bFy6DDg3d6L7IuUKoJMVO2hqwaKKqW0XhC+BAJpVntMhbbnOVesI4bcmkYJs/bOaLbU5HWCSdRs0nvHApJIjWXfKR9WSJjHT44OjNwTM88Go2et9r+C879xM9Px/ZaE6cdUin6vsd7zxcKvZXcixebLAAAAABJRU5ErkJggg=="}}]}],"\n",["$","h3",null,{"id":"core","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Core",["$","$L9",null,{"id":"core"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The core module is the backbone of Yaci Store. It is responsible for reading data from Cardano blockchain and broadcasting events.\nIt also monitors and records the current point in the database.\nEvents are published as ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"Spring events"}],", so developers can write their own Spring event listeners to listen these events and process them accordingly."]}],"\n",["$","h3",null,{"id":"stores","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Stores",["$","$L9",null,{"id":"stores"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Each store is a specialized module designed for a specific data type or use case."}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"A store has the ability to:"}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Listen to events published by the core module."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Process data."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Store data in a persistent store."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Publish derived events. (Optional)"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Provide REST endpoints to retrieve data (optional)."}],"\n"]}],"\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n","$L24","\n","$L25"]}]
+8:["$","$L26",null,{"children":["$","$27",null,{"name":"Next.MetadataOutlet","children":"$@28"}]}]
+b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Each of the above functionalities can be overridden by developers through the use of Spring Beans."}]
+c:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Note:"}]," To simplify the rollback process, stores do not handle any data aggregation."]}]
+d:["$","h3",null,{"id":"aggregates","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Aggregates",["$","$L9",null,{"id":"aggregates"}]]}]
+e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store.\nCurrently, the only available aggregate is “Account”, which provides account balance related data. It depends on the “utxo” store and the event published by utxo store.\nBut status of this module is still ",["$","strong",null,{"children":"experimental"}],"."]}]
+f:["$","h3",null,{"id":"persistence","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Persistence",["$","$L9",null,{"id":"persistence"}]]}]
+10:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["By default, Yaci Store uses a relational database to store data. The database schema is generated automatically by Flyway.\nSupported databases include: ",["$","strong",null,{"children":"PostgreSQL"}],", ",["$","strong",null,{"children":"MySQL"}],", ",["$","strong",null,{"children":"H2"}]]}]
+11:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"An application can also use a custom persistence store by implementing a store’s Storage api."}]}]
+12:["$","h3",null,{"id":"tx-submission","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Tx Submission",["$","$L9",null,{"id":"tx-submission"}]]}]
+13:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The “submit” module provides the ability to submit transactions to nodes directly, either through n2c or the submit API."}]
+14:["$","h2",null,{"id":"stores---components","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Stores - Components",["$","$L9",null,{"id":"stores---components"}]]}]
+15:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","$La",null,{"alt":"Store Design","placeholder":"blur","src":{"src":"/_next/static/media/store-design.1ebde52d.png","width":2182,"height":1214,"blurWidth":8,"blurHeight":4,"blurDataURL":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAa0lEQVR42iWLMQ4CMRAD8/9nIPEPHnA1xUkgUUFBdBRhk+xubthwhWXLHqcindqU6aUqErmp/dVtkHLe+JZCawfoPlBzalf2HZLEMOlZWozztdw21mdhBJHcHRFBVbEoLq83p+ud8/pgyR9+F4N7CWIMJjgAAAAASUVORK5CYII="}}]}]
+16:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["A ",["$","strong",null,{"children":"store"}]," is composed of the following components:"]}]
+17:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"1. Processor:"}]," A processor is responsible for processing data. It listens to events published by the core module and processes the data contained in the event. A processor can also publish derived events.\nFor example: ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"UtxoProcessor"}]," in the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"utxo"}]," store listens to TransactionEvent and processes the UTxOs contained in the transaction. It also publishes ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"AddressUtxo"}]," derived event for each UTxO."]}]
+18:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Developer can write their own processor by listening to events published by the core module."}]
+19:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"2. Storage:"}]," A storage defines the interface for storing data. The implementation of a storage api is responsible for storing data in a persistent store.\nBy default, Yaci Store uses a relational database to store data and each store provides a default implementation of corresponding storage api using JPA."]}]
+1a:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This can be overridden by developers by implementing the storage api in consuming applications."}]
+1b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"3. Controller:"}]," A controller provides REST endpoints to retrieve store’s data. It uses the storage api to retrieve data from the persistent store.\nOut of the box, Yaci Store provides some common REST endpoints for all stores. But, developers can implement their own REST endpoints."]}]
+1c:["$","h2",null,{"id":"handling-rollbacks","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Handling Rollbacks",["$","$L9",null,{"id":"handling-rollbacks"}]]}]
+1d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Yaci Store follows a simply strategy to handle rollbacks. As ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store"}]," modules don’t handle any data aggregation, the rollback handling becomes simple.\nEach table in a store maintains a ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"slot"}]," column. When a processor received a ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"RollbackEvent"}]," event, it deletes all the records with a slot greater than\nthe rollback slot mentioned in the event."]}]
+1e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["But as aggregates handle data aggregation, the rollback handling becomes a bit complex. But with a simple strategy, we can handle rollbacks in aggregates as well.\n",["$","strong",null,{"children":"For example,"}]," the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"Account"}]," module aggregates account balance. But instead of storing the account balance for an address in one record, balance snapshot is stored for a slot.\nAs we don’t update existing records during aggregation, rollback can be handled by simply deleting all the records with a slot greater than the rollback slot mentioned in the event."]}]
+1f:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"If you are using Yaci Store as a library in your application with your own domain model and tables, you can follow the similar strategy to handle rollbacks."}]
+20:["$","h2",null,{"id":"idempotency","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Idempotency",["$","$L9",null,{"id":"idempotency"}]]}]
+21:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Though Yaci Store ensures that the same event is not published more than once, it is possible that the same event is published more than once in some scenarios. All out-of-box\nmodules are idepotent. But if you are writing your own stores, you should make sure that your modules are idempotent."}]
+22:["$","h2",null,{"id":"yaci-store---sequential-block-processing","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Yaci Store - Sequential Block Processing",["$","$L9",null,{"id":"yaci-store---sequential-block-processing"}]]}]
+23:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","$La",null,{"alt":"Sequential Processing","placeholder":"blur","src":{"src":"/_next/static/media/store-sequential-diagram.5da89157.png","width":1612,"height":925,"blurWidth":8,"blurHeight":5,"blurDataURL":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAFCAYAAAB4ka1VAAAAhklEQVR42kXOSwrCMACE4d7/MOIRXBbcKChCpQ8XjdIkTZqQVKHkN8GFi1nNBzNVSolt2wjxzSBmxGQQ0uc4XspRaa2RUvKcNMdm4dobzn3k8gg0Y6Sy1mKMQWrLqXPchgLCH5SJEp/hYbenbTrU8uGey1aEHygfovf0dY0aR9Z1RRuHmi1fV2SVx9R/WiQAAAAASUVORK5CYII="}}]}]
+24:["$","h2",null,{"id":"yaci-store---parallel-block-processing","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Yaci Store - Parallel Block Processing",["$","$L9",null,{"id":"yaci-store---parallel-block-processing"}]]}]
+25:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","$La",null,{"alt":"Parallel Processing","placeholder":"blur","src":{"src":"/_next/static/media/store-parallel-diagram.ecb3edfb.png","width":1532,"height":885,"blurWidth":8,"blurHeight":5,"blurDataURL":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAFCAYAAAB4ka1VAAAAh0lEQVR42iWNywrCMAAE8/9f1IPgWY8qeFCUvm3akLSQGJs2Y6wLe1lmGUFKjBEzTujRMhhHWJZtW9eI0FqjlCIvGx7lwPFcUA9vajVT9B+E9x5rLU0rqTvN5dbyfDnu7cy1mhE/RQghAR151bHbHzCTZbSBsvd/YElOKSUm9ZRleOeSf92OXwgpl4iYdAGfAAAAAElFTkSuQmCC"}}]}]
+28:null

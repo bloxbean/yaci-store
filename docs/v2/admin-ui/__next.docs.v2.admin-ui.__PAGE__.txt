@@ -1,0 +1,166 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+a:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+31:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+32:"$Sreact.suspense"
+5:Tf7c,# Admin UI
+
+The Admin UI is a web-based dashboard for monitoring Yaci Store sync status, health, and configuration. It provides a visual interface for tracking synchronization progress and managing store operations.
+
+## Enabling Admin UI
+
+To enable the Admin UI, add the following property to your `application.properties`:
+
+```properties
+store.admin.ui.enabled=true
+```
+
+Once enabled, access the Admin UI at: `http://localhost:8080/admin-ui`
+
+## Configuration Properties
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `store.admin.ui.enabled` | Enable/disable the Admin UI dashboard | `false` |
+| `store.admin.ui.sync-control-enabled` | Enable/disable sync control operations (start/stop/restart) | `false` |
+| `store.admin.ui.header-text` | Header text displayed in Admin UI (for white-labeling) | `Yaci Store Admin (Beta)` |
+| `store.admin.ui.koios-verification-enabled` | Enable/disable Koios ledger state verification | `true` |
+
+### Example Configuration
+
+```properties
+# Enable Admin UI
+store.admin.ui.enabled=true
+
+# Enable sync control (start/stop/restart buttons)
+store.admin.ui.sync-control-enabled=true
+
+# Custom header text
+store.admin.ui.header-text=My Custom Indexer
+
+# Disable Koios verification (if behind firewall)
+store.admin.ui.koios-verification-enabled=false
+```
+
+## Features
+
+### Dashboard
+
+The main dashboard provides an overview of:
+- **Sync Progress**: Visual progress bar showing synchronization status
+- **Block/Slot/Epoch Stats**: Current block height, slot number, and epoch
+- **Health Status**: Connection health to the Cardano node
+
+### Sync Status
+
+Detailed synchronization information including:
+- Current sync state (syncing, synced, stopped)
+- Network tip vs local tip comparison
+- Sync percentage and estimated time remaining
+
+### Sync Controls
+
+When `store.admin.ui.sync-control-enabled=true`, you can:
+- **Start**: Begin synchronization
+- **Stop**: Pause synchronization
+- **Restart**: Stop and restart synchronization
+
+**Note**: Sync controls are automatically disabled when `store.read-only-mode=true`, regardless of the `sync-control-enabled` setting.
+
+### Store Status
+
+View the status of all enabled/disabled data stores:
+- Assets, Blocks, Epoch, Metadata
+- MIR, Script, Staking, Transaction
+- UTxO, Governance, and more
+
+### Index Status
+
+Monitor database index status:
+- View all indexes and their creation status
+
+### Ledger State
+
+Monitor ledger state processing:
+- Epoch processing status
+- Ledger state synchronization progress
+- Treasury and Reserves balances
+- **Koios Verification**: Verify your local ledger state (treasury/reserves) against Koios API data
+
+#### Koios Verification
+
+The Ledger State page includes a "Verify with Koios" button that compares your locally calculated treasury and reserves values
+against data from the [Koios API](https://koios.rest/). This helps ensure your ledger state calculations are accurate.
+
+Koios verification is **enabled by default**. You may want to disable it in the following scenarios:
+
+- **Firewall restrictions**: Your deployment is behind a firewall that blocks outbound connections to Koios servers
+- **Air-gapped environments**: Running in an isolated network without internet access
+- **Private/devnet deployments**: Testing on private networks where Koios data is not available
+
+To disable Koios verification:
+```properties
+store.admin.ui.koios-verification-enabled=false
+```
+
+When disabled, the "Verify with Koios" button will not appear on the Ledger State page.
+
+### Configuration Viewer
+
+View active configuration settings:
+- Network configuration
+- Database settings
+- Store configurations
+- All active properties
+
+## Security Considerations
+
+- The Admin UI is disabled by default for security
+- Sync controls are disabled by default to prevent accidental operations
+- Consider restricting access to `/admin-ui` endpoints in production environments
+- When running in read-only mode, sync controls are automatically disabled0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Enabling Admin UI","id":"enabling-admin-ui","depth":2},{"value":"Configuration Properties","id":"configuration-properties","depth":2},{"value":"Example Configuration","id":"example-configuration","depth":3},{"value":"Features","id":"features","depth":2},{"value":"Dashboard","id":"dashboard","depth":3},{"value":"Sync Status","id":"sync-status","depth":3},{"value":"Sync Controls","id":"sync-controls","depth":3},{"value":"Store Status","id":"store-status","depth":3},{"value":"Index Status","id":"index-status","depth":3},{"value":"Ledger State","id":"ledger-state","depth":3},{"value":"Koios Verification","id":"koios-verification","depth":4},{"value":"Configuration Viewer","id":"configuration-viewer","depth":3},{"value":"Security Considerations","id":"security-considerations","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Admin UI","filePath":"app/docs/v2/admin-ui/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Admin UI","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The Admin UI is a web-based dashboard for monitoring Yaci Store sync status, health, and configuration. It provides a visual interface for tracking synchronization progress and managing store operations."}],"\n",["$","h2",null,{"id":"enabling-admin-ui","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Enabling Admin UI",["$","$L9",null,{"id":"enabling-admin-ui"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["To enable the Admin UI, add the following property to your ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"application.properties"}],":"]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=true"}]]}]}]]}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Once enabled, access the Admin UI at: ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"http://localhost:8080/admin-ui"}]]}],"\n",["$","h2",null,{"id":"configuration-properties","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Configuration Properties",["$","$L9",null,{"id":"configuration-properties"}]]}],"\n",["$","table",null,{"className":"x:block x:overflow-x-auto nextra-scrollbar x:not-first:mt-[1.25em] x:p-0","children":[["$","thead",null,{"children":["$","tr",null,{"children":[["$","th",null,{"children":"Property","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:font-semibold x:dark:border-gray-600"}],["$","th",null,{"children":"Description","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:font-semibold x:dark:border-gray-600"}],["$","th",null,{"children":"Default","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:font-semibold x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]}],["$","tbody",null,{"children":[["$","tr",null,{"children":[["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.admin.ui.enabled"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Enable/disable the Admin UI dashboard","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],"$Lb"],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],"$Lc","$Ld","$Le"]}]]}],"\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18","\n","$L19","\n","$L1a","\n","$L1b","\n","$L1c","\n","$L1d","\n","$L1e","\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n","$L24","\n","$L25","\n","$L26","\n","$L27","\n","$L28","\n","$L29","\n","$L2a","\n","$L2b","\n","$L2c","\n","$L2d","\n","$L2e","\n","$L2f","\n","$L30"]}]
+8:["$","$L31",null,{"children":["$","$32",null,{"name":"Next.MetadataOutlet","children":"$@33"}]}]
+b:["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"false"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]
+c:["$","tr",null,{"children":[["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.admin.ui.sync-control-enabled"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Enable/disable sync control operations (start/stop/restart)","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"false"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+d:["$","tr",null,{"children":[["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.admin.ui.header-text"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Header text displayed in Admin UI (for white-labeling)","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"Yaci Store Admin (Beta)"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+e:["$","tr",null,{"children":[["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.admin.ui.koios-verification-enabled"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Enable/disable Koios ledger state verification","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":["$","code",null,{"className":"nextra-code","dir":"ltr","children":"true"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+f:["$","h3",null,{"id":"example-configuration","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Example Configuration",["$","$L9",null,{"id":"example-configuration"}]]}]
+10:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"# Enable Admin UI"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=true"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"# Enable sync control (start/stop/restart buttons)"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.sync-control-enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=true"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"# Custom header text"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.header-text"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=My Custom Indexer"}]]}],"\n",["$","span",null,{"children":" "}],"\n",["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6A737D","--shiki-dark":"#6A737D"},"children":"# Disable Koios verification (if behind firewall)"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.koios-verification-enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=false"}]]}]]}]]}]]}]
+11:["$","h2",null,{"id":"features","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Features",["$","$L9",null,{"id":"features"}]]}]
+12:["$","h3",null,{"id":"dashboard","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Dashboard",["$","$L9",null,{"id":"dashboard"}]]}]
+13:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The main dashboard provides an overview of:"}]
+14:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Sync Progress"}],": Visual progress bar showing synchronization status"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Block/Slot/Epoch Stats"}],": Current block height, slot number, and epoch"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Health Status"}],": Connection health to the Cardano node"]}],"\n"]}]
+15:["$","h3",null,{"id":"sync-status","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Sync Status",["$","$L9",null,{"id":"sync-status"}]]}]
+16:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Detailed synchronization information including:"}]
+17:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Current sync state (syncing, synced, stopped)"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Network tip vs local tip comparison"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Sync percentage and estimated time remaining"}],"\n"]}]
+18:["$","h3",null,{"id":"sync-controls","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Sync Controls",["$","$L9",null,{"id":"sync-controls"}]]}]
+19:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["When ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.admin.ui.sync-control-enabled=true"}],", you can:"]}]
+1a:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Start"}],": Begin synchronization"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Stop"}],": Pause synchronization"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Restart"}],": Stop and restart synchronization"]}],"\n"]}]
+1b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Note"}],": Sync controls are automatically disabled when ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"store.read-only-mode=true"}],", regardless of the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"sync-control-enabled"}]," setting."]}]
+1c:["$","h3",null,{"id":"store-status","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Store Status",["$","$L9",null,{"id":"store-status"}]]}]
+1d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"View the status of all enabled/disabled data stores:"}]
+1e:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Assets, Blocks, Epoch, Metadata"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"MIR, Script, Staking, Transaction"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"UTxO, Governance, and more"}],"\n"]}]
+1f:["$","h3",null,{"id":"index-status","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Index Status",["$","$L9",null,{"id":"index-status"}]]}]
+20:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Monitor database index status:"}]
+21:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"View all indexes and their creation status"}],"\n"]}]
+22:["$","h3",null,{"id":"ledger-state","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Ledger State",["$","$L9",null,{"id":"ledger-state"}]]}]
+23:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Monitor ledger state processing:"}]
+24:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Epoch processing status"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Ledger state synchronization progress"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Treasury and Reserves balances"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Koios Verification"}],": Verify your local ledger state (treasury/reserves) against Koios API data"]}],"\n"]}]
+25:["$","h4",null,{"id":"koios-verification","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["Koios Verification",["$","$L9",null,{"id":"koios-verification"}]]}]
+26:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The Ledger State page includes a “Verify with Koios” button that compares your locally calculated treasury and reserves values\nagainst data from the ",["$","a",null,{"href":"https://koios.rest/","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["Koios API",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}],". This helps ensure your ledger state calculations are accurate."]}]
+27:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Koios verification is ",["$","strong",null,{"children":"enabled by default"}],". You may want to disable it in the following scenarios:"]}]
+28:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Firewall restrictions"}],": Your deployment is behind a firewall that blocks outbound connections to Koios servers"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Air-gapped environments"}],": Running in an isolated network without internet access"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Private/devnet deployments"}],": Testing on private networks where Koios data is not available"]}],"\n"]}]
+29:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"To disable Koios verification:"}]
+2a:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$La",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":"store.admin.ui.koios-verification-enabled"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"=false"}]]}]}]]}]]}]
+2b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"When disabled, the “Verify with Koios” button will not appear on the Ledger State page."}]
+2c:["$","h3",null,{"id":"configuration-viewer","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Configuration Viewer",["$","$L9",null,{"id":"configuration-viewer"}]]}]
+2d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"View active configuration settings:"}]
+2e:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Network configuration"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Database settings"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Store configurations"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"All active properties"}],"\n"]}]
+2f:["$","h2",null,{"id":"security-considerations","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Security Considerations",["$","$L9",null,{"id":"security-considerations"}]]}]
+30:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"The Admin UI is disabled by default for security"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Sync controls are disabled by default to prevent accidental operations"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["Consider restricting access to ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"/admin-ui"}]," endpoints in production environments"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"When running in read-only mode, sync controls are automatically disabled"}],"\n"]}]
+33:null

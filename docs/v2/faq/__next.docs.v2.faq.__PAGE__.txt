@@ -1,0 +1,151 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+19:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+1a:"$Sreact.suspense"
+1c:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+26:I[22016,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],""]
+5:Tec8,import { Callout } from 'nextra/components'
+
+# Frequently Asked Questions (FAQ)
+
+This page addresses common questions and provides solutions to help you get the most out of Yaci Store.
+
+---
+
+## General Questions
+
+### Why does the `utxo` column in the `adapot` table always show 0?
+
+<Callout type="info">
+The `utxo` column in the `adapot` table currently contains a default value of 0. This is a **planned feature** that will be implemented in a future release.
+</Callout>
+
+**Current workaround:**
+
+No action is required. The default value does not affect the accuracy of other ledger state calculations, including rewards, treasury, and reserves.
+
+---
+
+## Troubleshooting
+
+### What's the first thing I should do when encountering data discrepancy errors during synchronization?
+
+<Callout type="info">
+When you encounter data-related errors or discrepancies during synchronization, the **first recommended action** is to use the **Rollback CLI** to restore your database to a known good state.
+</Callout>
+
+**Why rollback first?**
+
+Data discrepancies can occur for various reasons - network issues, interrupted synchronization, or edge cases in data processing. Rather than waiting for a fix or troubleshooting extensively, rolling back to a stable epoch allows you to:
+
+- **Quickly restore operations** to a working state
+- **Isolate the problematic epoch** to better understand the issue
+- **Continue synchronization** from a clean checkpoint
+- **Provide better bug reports** with specific epoch information
+
+**How to perform a rollback:**
+
+The **Yaci Store Admin CLI** provides a straightforward rollback feature:
+
+1. **Stop the Yaci Store application** to prevent further synchronization
+
+2. **Identify the last known good epoch** (check your logs or database state before the error occurred)
+
+3. **Run the rollback command:**
+
+   The command differs depending on your distribution type:
+
+   #### For Docker Distribution
+
+   Use the `admin-cli.sh` script in **non-interactive mode** by passing commands and arguments directly:
+
+   ```bash
+   ./admin-cli.sh rollback --epoch <EPOCH_NUMBER>
+   ```
+
+   Replace `<EPOCH_NUMBER>` with the epoch you want to roll back to.
+
+   **Example:**
+   ```bash
+   ./admin-cli.sh rollback --epoch 450
+   ```
+
+   #### For ZIP (JAR) Distribution
+
+   The ZIP distribution requires using the Admin CLI in **interactive mode**:
+
+   1. Start the Admin CLI prompt:
+      ```bash
+      ./bin/admin-cli.sh
+      ```
+
+   2. Once in the Admin CLI prompt, run the rollback command:
+      ```
+      admin-cli> rollback --epoch <EPOCH_NUMBER>
+      ```
+
+   **Example:**
+   ```bash
+   ./bin/admin-cli.sh
+   admin-cli> rollback --epoch 450
+   ```
+
+4. **Verify the rollback** by checking your database state
+
+5. **Restart Yaci Store** and monitor the synchronization process
+
+**After rolling back:**
+
+- **Monitor the logs carefully** as synchronization resumes
+- If the error persists at the same epoch, check the [Known Issues](../ledger-state-mismatches) page
+- Report the issue with specific epoch and error details to help improve Yaci Store
+- Consider enabling debug logging for more detailed diagnostics
+
+**Best practices:**
+
+- Maintain regular database backups
+- Document the epoch where errors occur for future reference
+- Test rollback procedures in non-production environments first
+- Keep your Yaci Store version up to date to benefit from the latest fixes
+
+---
+
+## Need More Help?
+
+If your question isn't answered here, please:
+
+- Check the [Known Issues](../ledger-state-mismatches) section for documented problems
+- Review the [Tutorials & Use Cases](../tutorials) for practical examples
+- Visit the [GitHub repository](https://github.com/bloxbean/yaci-store) to report issues or request features
+- Join the community discussions for support and updates0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"General Questions","id":"general-questions","depth":2},{"value":[["$","$1",".0",{"children":["Why does the ",["$","code",".1",{"className":"nextra-code","dir":"ltr","children":"utxo"}]," column in the ",["$","code",".3",{"className":"nextra-code","dir":"ltr","children":"adapot"}]," table always show 0?"]}]],"id":"why-does-the-utxo-column-in-the-adapot-table-always-show-0","depth":3},{"value":"Troubleshooting","id":"troubleshooting","depth":2},{"value":"What’s the first thing I should do when encountering data discrepancy errors during synchronization?","id":"whats-the-first-thing-i-should-do-when-encountering-data-discrepancy-errors-during-synchronization","depth":3},{"value":"For Docker Distribution","id":"for-docker-distribution","depth":4},{"value":"For ZIP (JAR) Distribution","id":"for-zip-jar-distribution","depth":4},{"value":"Need More Help?","id":"need-more-help","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Frequently Asked Questions (FAQ)","filePath":"app/docs/v2/faq/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Frequently Asked Questions (FAQ)","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"This page addresses common questions and provides solutions to help you get the most out of Yaci Store."}],"\n",["$","hr",null,{"className":"x:my-[2em] nextra-border"}],"\n",["$","h2",null,{"id":"general-questions","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["General Questions",["$","$L9",null,{"id":"general-questions"}]]}],"\n",["$","h3",null,{"id":"why-does-the-utxo-column-in-the-adapot-table-always-show-0","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["Why does the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"utxo"}]," column in the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"adapot"}]," table always show 0?"],["$","$L9",null,{"id":"why-does-the-utxo-column-in-the-adapot-table-always-show-0"}]]}],"\n",["$","div",null,{"className":"nextra-callout x:overflow-x-auto x:not-first:mt-[1.25em] x:flex x:rounded-lg x:border x:py-[.5em] x:pe-[1em] x:contrast-more:border-current! x:bg-blue-100 x:dark:bg-blue-900/30 x:text-blue-700 x:dark:text-blue-400 x:border-blue-700 x:dark:border-blue-600","children":[["$","div",null,{"className":"x:select-none x:text-[1.25em] x:ps-[.6em] x:pe-[.4em]","style":{"fontFamily":"\"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\""},"data-pagefind-ignore":"all","children":["$","svg",null,{"viewBox":"0 0 16 16","fill":"currentColor","height":".8em","className":"x:mt-[.3em]","children":["$","path",null,{"d":"M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"}]}]}],["$","div",null,{"className":"x:w-full x:min-w-0","children":["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"utxo"}]," column in the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"adapot"}]," table currently contains a default value of 0. This is a ",["$","strong",null,{"children":"planned feature"}]," that will be implemented in a future release."]}]}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Current workaround:"}]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"No action is required. The default value does not affect the accuracy of other ledger state calculations, including rewards, treasury, and reserves."}],"\n",["$","hr",null,{"className":"x:my-[2em] nextra-border"}],"\n",["$","h2",null,{"id":"troubleshooting","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Troubleshooting",["$","$L9",null,{"id":"troubleshooting"}]]}],"\n",["$","h3",null,{"id":"whats-the-first-thing-i-should-do-when-encountering-data-discrepancy-errors-during-synchronization","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["What’s the first thing I should do when encountering data discrepancy errors during synchronization?",["$","$L9",null,{"id":"whats-the-first-thing-i-should-do-when-encountering-data-discrepancy-errors-during-synchronization"}]]}],"\n","$La","\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17","\n","$L18"]}]
+8:["$","$L19",null,{"children":["$","$1a",null,{"name":"Next.MetadataOutlet","children":"$@1b"}]}]
+a:["$","div",null,{"className":"nextra-callout x:overflow-x-auto x:not-first:mt-[1.25em] x:flex x:rounded-lg x:border x:py-[.5em] x:pe-[1em] x:contrast-more:border-current! x:bg-blue-100 x:dark:bg-blue-900/30 x:text-blue-700 x:dark:text-blue-400 x:border-blue-700 x:dark:border-blue-600","children":[["$","div",null,{"className":"x:select-none x:text-[1.25em] x:ps-[.6em] x:pe-[.4em]","style":"$7:props:children:10:props:children:0:props:style","data-pagefind-ignore":"all","children":"$7:props:children:10:props:children:0:props:children"}],["$","div",null,{"className":"x:w-full x:min-w-0","children":["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["When you encounter data-related errors or discrepancies during synchronization, the ",["$","strong",null,{"children":"first recommended action"}]," is to use the ",["$","strong",null,{"children":"Rollback CLI"}]," to restore your database to a known good state."]}]}]]}]
+b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Why rollback first?"}]}]
+c:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Data discrepancies can occur for various reasons - network issues, interrupted synchronization, or edge cases in data processing. Rather than waiting for a fix or troubleshooting extensively, rolling back to a stable epoch allows you to:"}]
+d:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Quickly restore operations"}]," to a working state"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Isolate the problematic epoch"}]," to better understand the issue"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Continue synchronization"}]," from a clean checkpoint"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Provide better bug reports"}]," with specific epoch information"]}],"\n"]}]
+e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"How to perform a rollback:"}]}]
+f:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The ",["$","strong",null,{"children":"Yaci Store Admin CLI"}]," provides a straightforward rollback feature:"]}]
+10:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Stop the Yaci Store application"}]," to prevent further synchronization"]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Identify the last known good epoch"}]," (check your logs or database state before the error occurred)"]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Run the rollback command:"}]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The command differs depending on your distribution type:"}],"\n",["$","h4",null,{"id":"for-docker-distribution","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["For Docker Distribution",["$","$L9",null,{"id":"for-docker-distribution"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Use the ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"admin-cli.sh"}]," script in ",["$","strong",null,{"children":"non-interactive mode"}]," by passing commands and arguments directly:"]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L1c",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./admin-cli.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" rollback"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" --epoch"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":" <"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"EPOCH_NUMBE"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"R"}],["$","span",null,{"style":{"--shiki-light":"#D73A49","--shiki-dark":"#F97583"},"children":">"}]]}]}]]}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Replace ",["$","code",null,{"className":"nextra-code","dir":"ltr","children":"<EPOCH_NUMBER>"}]," with the epoch you want to roll back to."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Example:"}]}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":["$L1d","$L1e"]}]]}],"\n","$L1f","\n","$L20","\n","$L21","\n","$L22","\n","$L23","\n"]}],"\n","$L24","\n","$L25","\n"]}]
+11:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"After rolling back:"}]}]
+12:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Monitor the logs carefully"}]," as synchronization resumes"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["If the error persists at the same epoch, check the ",["$","$L26",null,{"href":"../ledger-state-mismatches","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Known Issues"}]," page"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Report the issue with specific epoch and error details to help improve Yaci Store"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Consider enabling debug logging for more detailed diagnostics"}],"\n"]}]
+13:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Best practices:"}]}]
+14:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Maintain regular database backups"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Document the epoch where errors occur for future reference"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Test rollback procedures in non-production environments first"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Keep your Yaci Store version up to date to benefit from the latest fixes"}],"\n"]}]
+15:["$","hr",null,{"className":"x:my-[2em] nextra-border"}]
+16:["$","h2",null,{"id":"need-more-help","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Need More Help?",["$","$L9",null,{"id":"need-more-help"}]]}]
+17:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"If your question isn’t answered here, please:"}]
+18:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["Check the ",["$","$L26",null,{"href":"../ledger-state-mismatches","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Known Issues"}]," section for documented problems"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["Review the ",["$","$L26",null,{"href":"../tutorials","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":"Tutorials & Use Cases"}]," for practical examples"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["Visit the ",["$","a",null,{"href":"https://github.com/bloxbean/yaci-store","target":"_blank","rel":"noreferrer","className":"x:focus-visible:nextra-focus x:text-primary-600 x:underline x:hover:no-underline x:decoration-from-font x:[text-underline-position:from-font]","children":["GitHub repository",[" ",["$","svg",null,{"fill":"none","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round","strokeWidth":1.7,"viewBox":"0 0 24 24","height":"1em","className":"x:inline x:align-baseline x:shrink-0","children":[["$","path",null,{"d":"M7 17L17 7"}],["$","path",null,{"d":"M7 7h10v10"}]]}]]]}]," to report issues or request features"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Join the community discussions for support and updates"}],"\n"]}]
+1b:null
+1d:["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L1c",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}]
+1e:["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./admin-cli.sh"}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":" rollback"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" --epoch"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" 450"}]]}]}]
+1f:["$","h4",null,{"id":"for-zip-jar-distribution","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-xl","children":["For ZIP (JAR) Distribution",["$","$L9",null,{"id":"for-zip-jar-distribution"}]]}]
+20:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["The ZIP distribution requires using the Admin CLI in ",["$","strong",null,{"children":"interactive mode"}],":"]}]
+21:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Start the Admin CLI prompt:"}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L1c",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./bin/admin-cli.sh"}]}]}]]}]]}],"\n"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Once in the Admin CLI prompt, run the rollback command:"}],"\n",["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L1c",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":["$","span",null,{"children":["$","span",null,{"children":"admin-cli> rollback --epoch <EPOCH_NUMBER>"}]}]}]]}]]}],"\n"]}],"\n"]}]
+22:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Example:"}]}]
+23:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L1c",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"./bin/admin-cli.sh"}]}],"\n",["$","span",null,{"children":[["$","span",null,{"style":{"--shiki-light":"#6F42C1","--shiki-dark":"#B392F0"},"children":"admin-cli"}],["$","span",null,{"style":{"--shiki-light":"#24292E","--shiki-dark":"#E1E4E8"},"children":"> "}],["$","span",null,{"style":{"--shiki-light":"#032F62","--shiki-dark":"#9ECBFF"},"children":"rollback"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" --epoch"}],["$","span",null,{"style":{"--shiki-light":"#005CC5","--shiki-dark":"#79B8FF"},"children":" 450"}]]}]]}]]}]]}]
+24:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Verify the rollback"}]," by checking your database state"]}],"\n"]}]
+25:["$","li",null,{"className":"x:my-[.5em]","children":["\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":[["$","strong",null,{"children":"Restart Yaci Store"}]," and monitor the synchronization process"]}],"\n"]}]

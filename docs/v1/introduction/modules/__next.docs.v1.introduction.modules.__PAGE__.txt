@@ -1,0 +1,92 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+9:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+10:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+11:"$Sreact.suspense"
+5:Tb44,# Yaci Store Modules
+
+The modules in Yaci Store are divided into three main categories:
+
+- Core Modules
+- Stores
+- Aggregates
+
+## 1. Core Modules
+
+Core modules serve a critical purpose. They read data directly from Cardano blockchain and then publish various domain-specific events. Since these events are essentially Spring events, developers have the freedom to write their own Spring event listeners. This allows them to tap into these events and process them accordingly. In addition to this, the core module monitors and records the current point in the database.
+
+**Major core modules include:**
+
+- core
+- common
+- events
+
+**Events published by core modules:**
+
+- BlockEvent
+- BlockHeaderEvent
+- ByronEbBlockEvent
+- ByronMainBlockEvent
+- RollbackEvent
+- TransactionEvent
+- MintBurnEvent
+- ScriptEvent
+- CertificateEvent
+- GenesisBlockEvent
+- AuxDataEvent
+- GovernanceEvent
+
+**Derived Events: Events published by stores**
+
+- AddressUtxoEvent
+- TxAssetEvent
+- TxMetadataEvent
+- DatumEvent
+- TxScriptEvent
+
+## 2. Stores
+
+A "store" in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:
+
+- **Event Listening**: Listen to events published by the core module.
+- **Data Processing**: Processes event data.
+- **Data Persistence**: Saves processed data to a dedicated persistence store.
+- **REST Endpoints**: Optionally provides REST endpoints for data retrieval.
+
+**Available Store Implementations:**
+
+| Store | Description |
+|-------|-------------|
+| **utxo** | Focuses on UTxOs, extracting them from transaction data. |
+| **block** | Dedicated to handling and storing block data. |
+| **transaction** | Takes care of transaction data. |
+| **assets** | Manages data related to asset minting and burning. |
+| **metadata** | Retrieves and processes metadata events. |
+| **script** | Deals with the ScriptEvent, get datums and redeemers. |
+| **staking** | Handles from stake address registration to pool registration and more. |
+| **mir** | All about Mir data. |
+| **epoch** | Stores protocol params proposals and epoch protocol params. It also fetches protocol parameters from nodes via n2c. |
+| **governance** | Manages governance on-chain data. |
+| **submit** | Enables transaction submissions to nodes, either through n2c or the submit API. |
+
+Each of the mentioned stores is available as a Spring Boot starter. This means that integrating a specific store into your application is as straightforward as adding its Spring Boot starter as a dependency.
+
+## 3. Aggregates
+
+Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store. Currently, the only available aggregate is "Account", which provides account balance related data. It depends on the "utxo" store and the event published by utxo store.0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"1. Core Modules","id":"1-core-modules","depth":2},{"value":"2. Stores","id":"2-stores","depth":2},{"value":"3. Aggregates","id":"3-aggregates","depth":2}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Yaci Store Modules","filePath":"app/docs/v1/introduction/modules/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":["$L6","$L7"]}]]}]}],null,"$L8"]}],"loading":null,"isPartial":false}
+6:["$","div",null,{"id":"nextra-skip-nav"}]
+7:["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Yaci Store Modules","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"The modules in Yaci Store are divided into three main categories:"}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Core Modules"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Stores"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Aggregates"}],"\n"]}],"\n",["$","h2",null,{"id":"1-core-modules","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["1. Core Modules",["$","$L9",null,{"id":"1-core-modules"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Core modules serve a critical purpose. They read data directly from Cardano blockchain and then publish various domain-specific events. Since these events are essentially Spring events, developers have the freedom to write their own Spring event listeners. This allows them to tap into these events and process them accordingly. In addition to this, the core module monitors and records the current point in the database."}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Major core modules include:"}]}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"core"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"common"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"events"}],"\n"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Events published by core modules:"}]}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"BlockEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"BlockHeaderEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"ByronEbBlockEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"ByronMainBlockEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"RollbackEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"TransactionEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"MintBurnEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"ScriptEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"CertificateEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"GenesisBlockEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"AuxDataEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"GovernanceEvent"}],"\n"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Derived Events: Events published by stores"}]}],"\n",["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"AddressUtxoEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"TxAssetEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"TxMetadataEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"DatumEvent"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"TxScriptEvent"}],"\n"]}],"\n",["$","h2",null,{"id":"2-stores","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["2. Stores",["$","$L9",null,{"id":"2-stores"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"A “store” in Yaci Store is a specialized module designed for a specific data type or use case. Each store has a set of capabilities:"}],"\n","$La","\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf"]}]
+8:["$","$L10",null,{"children":["$","$11",null,{"name":"Next.MetadataOutlet","children":"$@12"}]}]
+a:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Event Listening"}],": Listen to events published by the core module."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Data Processing"}],": Processes event data."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Data Persistence"}],": Saves processed data to a dedicated persistence store."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"REST Endpoints"}],": Optionally provides REST endpoints for data retrieval."]}],"\n"]}]
+b:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["$","strong",null,{"children":"Available Store Implementations:"}]}]
+c:["$","table",null,{"className":"x:block x:overflow-x-auto nextra-scrollbar x:not-first:mt-[1.25em] x:p-0","children":[["$","thead",null,{"children":["$","tr",null,{"children":[["$","th",null,{"children":"Store","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:font-semibold x:dark:border-gray-600"}],["$","th",null,{"children":"Description","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:font-semibold x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]}],["$","tbody",null,{"children":[["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"utxo"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Focuses on UTxOs, extracting them from transaction data.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"block"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Dedicated to handling and storing block data.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"transaction"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Takes care of transaction data.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"assets"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Manages data related to asset minting and burning.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"metadata"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Retrieves and processes metadata events.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"script"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Deals with the ScriptEvent, get datums and redeemers.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"staking"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Handles from stake address registration to pool registration and more.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}],"$L13","$L14","$L15","$L16"]}]]}]
+d:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Each of the mentioned stores is available as a Spring Boot starter. This means that integrating a specific store into your application is as straightforward as adding its Spring Boot starter as a dependency."}]
+e:["$","h2",null,{"id":"3-aggregates","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["3. Aggregates",["$","$L9",null,{"id":"3-aggregates"}]]}]
+f:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Aggregates are modules that handle different kind of data aggregation. They are responsible for aggregating data from different stores and persisting them in a persistent store. Currently, the only available aggregate is “Account”, which provides account balance related data. It depends on the “utxo” store and the event published by utxo store."}]
+12:null
+13:["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"mir"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"All about Mir data.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+14:["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"epoch"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Stores protocol params proposals and epoch protocol params. It also fetches protocol parameters from nodes via n2c.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+15:["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"governance"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Manages governance on-chain data.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]
+16:["$","tr",null,{"children":[["$","td",null,{"children":["$","strong",null,{"children":"submit"}],"className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}],["$","td",null,{"children":"Enables transaction submissions to nodes, either through n2c or the submit API.","className":"x:m-0 x:border x:border-gray-300 x:px-4 x:py-2 x:dark:border-gray-600"}]],"className":"x:m-0 x:border-t x:border-gray-300 x:p-0 x:dark:border-gray-600 x:even:bg-gray-100 x:even:dark:bg-gray-600/20"}]

@@ -1,0 +1,72 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ClientWrapper"]
+6:I[63894,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"HeadingAnchor"]
+14:I[83987,["/_next/static/chunks/3436e3800b1509f7.js","/_next/static/chunks/27b56f1b54770ef2.js","/_next/static/chunks/85c513496f8b4010.js","/_next/static/chunks/d28914538669c399.js","/_next/static/chunks/711f2ae04e76ffd8.js"],"ToggleWordWrapButton"]
+15:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/53230e9f7fc59116.js"],"OutletBoundary"]
+16:"$Sreact.suspense"
+5:T8bb,import { Callout } from 'nextra/components'
+
+# Stores Overview
+
+## Introduction
+
+Yaci Store is built on a modular architecture where different types of blockchain data are organized into separate modules called "stores". This design provides flexibility, scalability, and allows users to enable only the functionality they need.
+
+## Architecture Overview
+
+### Core Principles
+
+1. **Modularity**: Each store is independent and can be enabled/disabled based on requirements
+2. **Event-Driven**: Stores react to blockchain events (blocks, transactions, etc.) published by the sync engine
+3. **Parallel Processing**: Core stores process data in parallel for optimal performance
+4. **Extensibility**: Plugin framework allows customization without modifying core code
+
+### Data Flow
+
+```
+Cardano Node → Sync → Event Publisher →  Processors →  Storage implementations → Database
+                                             ↓                         ↓
+                                      Plugin Framework         Plugin Framework
+```
+
+## Store Categories
+
+### Core Stores
+
+These stores handle fundamental blockchain data and are enabled by default:
+
+- **Assets Store**: Manages native tokens, NFTs, and fungible tokens
+- **Blocks Store**: Stores block-related information
+- **Epoch Store**: Tracks epoch parameters, and epoch-specific data
+- **Governance Store**: Handles governance actions, proposals, votes, and DRep data
+- **Metadata Store**: Stores transaction metadata
+- **MIR Store**: Processes Move Instantaneous Rewards certificates
+- **Script Store**: Manages Plutus scripts, native scripts, and script references
+- **Staking Store**: Tracks stake pools, delegations, registrations, and rewards
+- **Transaction Store**: Stores transaction data
+- **UTxO Store**: Manages unspent transaction outputs and spending relationships
+
+### Aggregation Modules
+
+These modules perform complex calculations and are disabled by default:
+
+- **Account**: Calculates and maintains address balances over time
+- **Adapot**: Tracks ADA distribution across different pots (treasury, reserves, etc.) and calculate rewards
+- **Governance Aggregation**: Calculate governance-related state
+- **Epoch Aggregation**: Aggregates epoch level data0:{"buildId":"YK8OYETV89Czkrntvw_Wc","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Introduction","id":"introduction","depth":2},{"value":"Architecture Overview","id":"architecture-overview","depth":2},{"value":"Core Principles","id":"core-principles","depth":3},{"value":"Data Flow","id":"data-flow","depth":3},{"value":"Store Categories","id":"store-categories","depth":2},{"value":"Core Stores","id":"core-stores","depth":3},{"value":"Aggregation Modules","id":"aggregation-modules","depth":3}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Stores Overview","filePath":"app/docs/v1/stores/overview/page.mdx","timestamp":1770034738000},"sourceCode":"$5","children":[["$","div",null,{"id":"nextra-skip-nav"}],["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Stores Overview","$undefined"]}],"\n",["$","h2",null,{"id":"introduction","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Introduction",["$","$L6",null,{"id":"introduction"}]]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Yaci Store is built on a modular architecture where different types of blockchain data are organized into separate modules called “stores”. This design provides flexibility, scalability, and allows users to enable only the functionality they need."}],"\n","$L7","\n","$L8","\n","$L9","\n","$La","\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12"]}]]}]]}]}],null,"$L13"]}],"loading":null,"isPartial":false}
+7:["$","h2",null,{"id":"architecture-overview","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Architecture Overview",["$","$L6",null,{"id":"architecture-overview"}]]}]
+8:["$","h3",null,{"id":"core-principles","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Core Principles",["$","$L6",null,{"id":"core-principles"}]]}]
+9:["$","ol",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-decimal x:ms-6","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Modularity"}],": Each store is independent and can be enabled/disabled based on requirements"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Event-Driven"}],": Stores react to blockchain events (blocks, transactions, etc.) published by the sync engine"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Parallel Processing"}],": Core stores process data in parallel for optimal performance"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Extensibility"}],": Plugin framework allows customization without modifying core code"]}],"\n"]}]
+a:["$","h3",null,{"id":"data-flow","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Data Flow",["$","$L6",null,{"id":"data-flow"}]]}]
+b:["$","div",null,{"data-pagefind-ignore":"all","className":"nextra-code x:relative x:not-first:mt-[1.25em]","children":["$undefined",["$","pre",null,{"className":"x:group x:focus-visible:nextra-focus x:overflow-x-auto x:subpixel-antialiased x:text-[.9em] x:bg-white x:dark:bg-black x:py-4 x:ring-1 x:ring-inset x:ring-gray-300 x:dark:ring-neutral-700 x:contrast-more:ring-gray-900 x:contrast-more:dark:ring-gray-50 x:contrast-more:contrast-150 x:rounded-md not-prose","tabIndex":"0","children":[["$","div",null,{"className":"x:group-hover:opacity-100 x:group-focus:opacity-100 x:opacity-0 x:transition x:focus-within:opacity-100 x:flex x:gap-1 x:absolute x:right-4 x:top-2","children":[["$","$L14",null,{"children":["$","svg",null,{"viewBox":"0 0 24 24","fill":"currentColor","height":"1em","children":["$","path",null,{"d":"M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"}]}]}],false]}],["$","code",null,{"className":"nextra-code","dir":"ltr","children":[["$","span",null,{"children":["$","span",null,{"children":"Cardano Node → Sync → Event Publisher →  Processors →  Storage implementations → Database"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"                                             ↓                         ↓"}]}],"\n",["$","span",null,{"children":["$","span",null,{"children":"                                      Plugin Framework         Plugin Framework"}]}]]}]]}]]}]
+c:["$","h2",null,{"id":"store-categories","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Store Categories",["$","$L6",null,{"id":"store-categories"}]]}]
+d:["$","h3",null,{"id":"core-stores","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Core Stores",["$","$L6",null,{"id":"core-stores"}]]}]
+e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"These stores handle fundamental blockchain data and are enabled by default:"}]
+f:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Assets Store"}],": Manages native tokens, NFTs, and fungible tokens"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Blocks Store"}],": Stores block-related information"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Epoch Store"}],": Tracks epoch parameters, and epoch-specific data"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Governance Store"}],": Handles governance actions, proposals, votes, and DRep data"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Metadata Store"}],": Stores transaction metadata"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"MIR Store"}],": Processes Move Instantaneous Rewards certificates"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Script Store"}],": Manages Plutus scripts, native scripts, and script references"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Staking Store"}],": Tracks stake pools, delegations, registrations, and rewards"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Transaction Store"}],": Stores transaction data"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"UTxO Store"}],": Manages unspent transaction outputs and spending relationships"]}],"\n"]}]
+10:["$","h3",null,{"id":"aggregation-modules","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Aggregation Modules",["$","$L6",null,{"id":"aggregation-modules"}]]}]
+11:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"These modules perform complex calculations and are disabled by default:"}]
+12:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Account"}],": Calculates and maintains address balances over time"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Adapot"}],": Tracks ADA distribution across different pots (treasury, reserves, etc.) and calculate rewards"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Governance Aggregation"}],": Calculate governance-related state"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Epoch Aggregation"}],": Aggregates epoch level data"]}],"\n"]}]
+13:["$","$L15",null,{"children":["$","$16",null,{"name":"Next.MetadataOutlet","children":"$@17"}]}]
+17:null
