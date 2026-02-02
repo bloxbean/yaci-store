@@ -5,9 +5,9 @@
   "description": "Yaci Store Docs site",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/generate-redirects.js",
     "start": "next start",
-    "export": "next build"
+    "export": "next build && node scripts/generate-redirects.js"
   },
   "repository": {
     "type": "git",
