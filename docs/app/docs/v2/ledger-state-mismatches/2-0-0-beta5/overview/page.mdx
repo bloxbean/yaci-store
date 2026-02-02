@@ -19,7 +19,7 @@ This document summarizes known mismatches identified in the Ledger state calcula
 | 743–762    | drep1a2r7cf9jfyrqcp2dahfw2aw5lwfd3tymvdc8y5v0ad2652mfcw7   | ea87ec24b249060c054dedd2e575d4fb92d8ac9b637072518feb55aa | Found in DB Sync but not in Yaci Store |
 | 709–830    | drep1ytkdk7j6g4jpnuamve0uy9kv2fyvlprdauv0ymtdpvkrt2gla0chu | ecdb7a5a456419f3bb665fc216cc5248cf846def18f26d6d0b2c35a9 | Amount mismatch (vs DB Sync) |
 
-### DRep active_until mismatches
+### DRep Expiry Epoch mismatches
 
 | Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note            |
 |:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:----------------|
@@ -34,9 +34,9 @@ This document summarizes known mismatches identified in the Ledger state calcula
 
 | Epoch(s)   | DRep ID                                                    | DRep Hash                                                | Note                                   |
 |:-----------|:-----------------------------------------------------------|:---------------------------------------------------------|:---------------------------------------|
-| 207        | drep1ytesfw7n2pq5ys2rk0m7fxxd2dyagf820wy24d82rdd9yxqfm4qjg | f304bbd35041424143b3f7e498cd5349d424ea7b88aab4ea1b5a5218 | active until is different from db sync |               |
-| 207        | drep1y2tc5kv5nspwutasa44c5qrlznt7h7vulxqhvr3005czsnsghulqt | 978a59949c02ee2fb0ed6b8a007f14d7ebf99cf981760e2f7d30284e | active until is different from db sync |
-| 207        | drep1y2urtnpqef68w3dm2xrggdsfpp98h00xmkf4qj78r70r3xq8lekef | b835cc20ca747745bb5186843609084a7bbde6dd93504bc71f9e3898 | active until is different from db sync |
+| 207        | drep1ytesfw7n2pq5ys2rk0m7fxxd2dyagf820wy24d82rdd9yxqfm4qjg | f304bbd35041424143b3f7e498cd5349d424ea7b88aab4ea1b5a5218 | expiry epoch is different from db sync |
+| 207        | drep1y2tc5kv5nspwutasa44c5qrlznt7h7vulxqhvr3005czsnsghulqt | 978a59949c02ee2fb0ed6b8a007f14d7ebf99cf981760e2f7d30284e | expiry epoch is different from db sync |
+| 207        | drep1y2urtnpqef68w3dm2xrggdsfpp98h00xmkf4qj78r70r3xq8lekef | b835cc20ca747745bb5186843609084a7bbde6dd93504bc71f9e3898 | expiry epoch is different from db sync |
 
 
 ## Mainnet
@@ -45,4 +45,4 @@ This document summarizes known mismatches identified in the Ledger state calcula
 Check the [DRep distribution mismatches](./mainnet/drep-distribution-detail) page.
 
 ### DRep active_until mismatches
-Check the [DRep active_until mismatches](./mainnet/drep-active-until-detail) page.
+Check the [DRep Expiry Epoch mismatches](./mainnet/drep-active-until-detail) page.
