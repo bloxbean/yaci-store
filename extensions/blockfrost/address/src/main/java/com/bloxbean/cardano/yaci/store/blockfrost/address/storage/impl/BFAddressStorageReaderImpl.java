@@ -10,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
-import org.jooq.Record4;
-import org.jooq.Select;
 import org.jooq.SortField;
 import org.jooq.Table;
 import org.jooq.TableField;
@@ -27,10 +25,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.ADDRESS_TX_AMOUNT;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.TRANSACTION;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.TX_INPUT;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE;
 
 @Component
 @RequiredArgsConstructor
@@ -40,14 +36,21 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     @Override
     public List<String> findTxHashesByAddress(String address, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        Table<?> combinedTx = buildAddressTxTable(address);
+        Condition condition = addressCondition(address, ADDRESS_TX_AMOUNT.ADDRESS, ADDRESS_TX_AMOUNT.ADDR_FULL);
+
+        Field<Long> latestSlot = DSL.max(ADDRESS_TX_AMOUNT.SLOT).as("slot");
+        Table<?> addressTxs = dsl.select(ADDRESS_TX_AMOUNT.TX_HASH.as("tx_hash"), latestSlot)
+                .from(ADDRESS_TX_AMOUNT)
+                .where(condition)
+                .groupBy(ADDRESS_TX_AMOUNT.TX_HASH)
+                .asTable("address_txs");
 
         SortField<?> orderBy = order == Order.desc
-                ? DSL.field("slot").desc()
-                : DSL.field("slot").asc();
+                ? addressTxs.field("slot", Long.class).desc()
+                : addressTxs.field("slot", Long.class).asc();
 
-        return dsl.selectDistinct(DSL.field("tx_hash", String.class))
-                .from(combinedTx)
+        return dsl.select(addressTxs.field("tx_hash", String.class))
+                .from(addressTxs)
                 .orderBy(orderBy)
                 .limit(count)
                 .offset(offset)
@@ -57,8 +60,14 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     @Override
     public List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to) {
         int offset = Math.max(page, 0) * count;
-        Table<?> combinedTx = buildAddressTxTable(address);
-        Field<String> txHashField = combinedTx.field("tx_hash", String.class);
+        Condition condition = addressCondition(address, ADDRESS_TX_AMOUNT.ADDRESS, ADDRESS_TX_AMOUNT.ADDR_FULL);
+        Field<Long> latestSlot = DSL.max(ADDRESS_TX_AMOUNT.SLOT).as("slot");
+        Table<?> addressTxs = dsl.select(ADDRESS_TX_AMOUNT.TX_HASH.as("tx_hash"), latestSlot)
+                .from(ADDRESS_TX_AMOUNT)
+                .where(condition)
+                .groupBy(ADDRESS_TX_AMOUNT.TX_HASH)
+                .asTable("address_txs");
+        Field<String> txHashField = addressTxs.field("tx_hash", String.class);
 
         BlockRef fromRef = parseBlockRef(from);
         BlockRef toRef = parseBlockRef(to);
@@ -69,12 +78,12 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         SortField<?> txIndexOrder = order == Order.desc ? txIndexField.desc() : txIndexField.asc();
 
         return dsl.selectDistinct(
-                        TRANSACTION.TX_HASH.as("txHash"),
-                        txIndexField.cast(Long.class).as("txIndex"),
-                        TRANSACTION.BLOCK.as("blockHeight"),
-                        TRANSACTION.BLOCK_TIME.as("blockTime")
+                TRANSACTION.TX_HASH.as("txHash"),
+                txIndexField.cast(Long.class).as("txIndex"),
+                TRANSACTION.BLOCK.as("blockHeight"),
+                TRANSACTION.BLOCK_TIME.as("blockTime")
                 )
-                .from(combinedTx)
+                .from(addressTxs)
                 .join(TRANSACTION)
                 .on(TRANSACTION.TX_HASH.eq(txHashField))
                 .where(rangeCondition)
@@ -82,7 +91,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .limit(count)
                 .offset(offset)
                 .fetchInto(BFAddressTransactionDTO.class);
-    }
+}
 
     @Override
     public Optional<BFAddressTotal> getAddressTotal(String address) {
@@ -149,31 +158,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .and(ADDRESS_BALANCE.SLOT.eq(slotField))
                 .where(condition)
                 .fetchMap(ADDRESS_BALANCE.UNIT, ADDRESS_BALANCE.QUANTITY);
-    }
-
-    private Table<?> buildAddressTxTable(String address) {
-        Condition addressCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
-
-        Select<Record4<String, Long, Long, Long>> addressUtxoTx = dsl
-                .select(ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                        ADDRESS_UTXO.BLOCK.as("block"),
-                        ADDRESS_UTXO.BLOCK_TIME.as("block_time"),
-                        ADDRESS_UTXO.SLOT.as("slot"))
-                .from(ADDRESS_UTXO)
-                .where(addressCondition);
-
-        Select<Record4<String, Long, Long, Long>> spentTx = dsl
-                .select(TX_INPUT.SPENT_TX_HASH.as("tx_hash"),
-                        TX_INPUT.SPENT_AT_BLOCK.as("block"),
-                        TX_INPUT.SPENT_BLOCK_TIME.as("block_time"),
-                        TX_INPUT.SPENT_AT_SLOT.as("slot"))
-                .from(TX_INPUT)
-                .join(ADDRESS_UTXO)
-                .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                .where(addressCondition);
-
-        return addressUtxoTx.union(spentTx).asTable("combined_tx");
     }
 
     private Condition addressCondition(String address, TableField<?, String> addressField, TableField<?, String> addressFullField) {
