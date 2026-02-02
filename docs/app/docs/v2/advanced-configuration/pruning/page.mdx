@@ -19,7 +19,7 @@ To enable utxo pruning, you can set the following configurations in the `applica
 
 ```properties
 store.utxo.pruning-enabled=true
-store.utxo.pruning.interval=600
+store.utxo.pruning-interval=600
 ```
 
 The above configuration will run utxo pruning every 600 seconds.
@@ -33,7 +33,7 @@ To enable transaction pruning, you can set the following configurations in the `
 
 ```properties
 store.transaction.pruning-enabled=true
-store.transaction.pruning.interval=86400
+store.transaction.pruning-interval=86400
 ```
 
 ## Epoch Stake Pruning
@@ -48,7 +48,7 @@ store.adapot.epoch-stake-pruning-interval=86400
 The above configuration will run transaction pruning every 86400 seconds or 1 day.
 
 There is also another configuration, `store.adapot.epoch-stake-safe-epochs`, which can be used to specify the number of safe epochs to keep in the store.
-By default, this is set to 4 epochs.
+By default, this is set to 8 epochs.
 
 ## Reward Pruning
 
