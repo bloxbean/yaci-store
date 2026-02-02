@@ -11,7 +11,7 @@ export default withNextra({
     images: {
         unoptimized: true,
     },
-    // output: 'export'  // Temporarily disabled for development
+    output: 'export',
     async redirects() {
         return [
             // ===== TUTORIALS =====
