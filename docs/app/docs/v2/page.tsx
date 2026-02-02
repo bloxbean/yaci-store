@@ -7,7 +7,7 @@ export default function V2Index() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/docs/v2/yaci-store/overview')
+    router.replace('/docs/v2/introduction/overview')
   }, [router])
 
   return null

@@ -903,7 +903,7 @@ export default function LandingPage() {
         }
 
         .banner-brand-text {
-          font-size: 0.95rem;
+          font-size: 1.5rem !important;
           font-weight: 600;
           color: #1f2937;
           margin: 0;
@@ -1381,26 +1381,25 @@ export default function LandingPage() {
                     <Image
                       src={YaciStore}
                       alt="Yaci Store Logo"
-                      height={28}
-                      width={28}
+                      width={40}
                     />
                   </div>
-                  <h1 className="banner-brand-text">Yaci Store</h1>
+                  <span className="banner-brand-text">Yaci Store</span>
                 </Link>
               </div>
 
               <div className="banner-right">
                 <nav className="banner-nav-links">
-                  <Link href="/docs/v2.0.0/gettingStarted/installation/run" className="banner-nav-link primary">
+                  <Link href="/docs/getting-started/overview" className="banner-nav-link primary">
                     Get Started
                   </Link>
-                  <Link href="/docs/v2.0.0" className="banner-nav-link">
+                  <Link href="/docs/introduction/overview" className="banner-nav-link">
                     Documentation
                   </Link>
                   <a href="https://github.com/bloxbean/yaci-store" target="_blank" className="banner-nav-link">
                     GitHub
                   </a>
-                  <a href="https://discord.gg/6AnKrFx4ne" target="_blank" className="banner-nav-link">
+                  <a href="https://discord.gg/JtQ54MSw6p" target="_blank" className="banner-nav-link">
                     Discord
                   </a>
                 </nav>
@@ -1438,11 +1437,11 @@ export default function LandingPage() {
 
 
                 <div className="hero-buttons">
-                  <Link href="/docs/v2.0.0/gettingStarted/installation/run" className="btn btn-primary">
+                  <Link href="/docs/getting-started/overview" className="btn btn-primary">
                     🚀 Get Started
                   </Link>
                   <Link
-                    href="/docs/v2.0.0"
+                    href="/docs"
                     className="btn btn-secondary"
                   >
                     📚 Documentation
@@ -1707,7 +1706,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="distribution-cta">
-                  <Link href="/docs/v2.0.0/gettingStarted/installation/docker" className="btn btn-primary">
+                  <Link href="/docs/getting-started/installation/docker" className="btn btn-primary">
                     Quick Start
                   </Link>
                 </div>
@@ -1740,10 +1739,10 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="distribution-cta">
-                  <Link href="/docs/v2/usage/asALibrary" className="btn btn-primary">
+                  <Link href="/docs/usage/as-library" className="btn btn-primary">
                     Get Started
                   </Link>
-                  <Link href="/docs/v2/yaci-store/spring-boot-starters" className="btn btn-secondary">
+                  <Link href="/docs/introduction/spring-boot-starters" className="btn btn-secondary">
                     Spring Boot Starters
                   </Link>
                 </div>
@@ -1779,7 +1778,7 @@ export default function LandingPage() {
                   <a href="https://github.com/bloxbean/yaci-store/releases/latest" target="_blank" className="btn btn-primary">
                     Download ZIP
                   </a>
-                  <Link href="/docs/v2/getting-started/installation/beta5/zip" className="btn btn-secondary">
+                  <Link href="/docs/getting-started/installation/zip" className="btn btn-secondary">
                     Setup Guide
                   </Link>
                 </div>
@@ -2013,7 +2012,7 @@ export default function LandingPage() {
                 </svg>
                 Discord
               </a>
-              <a href="/docs/v2.0.0" className="community-link">
+              <a href="/docs" className="community-link">
                 <svg className="community-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                   <path d="M19 2H6c-1.206 0-3 .799-3 3v14c0 2.201 1.794 3 3 3h15v-2H6.012C5.55 19.988 5 19.806 5 19s.55-.988 1.012-1H21V4c0-1.103-.897-2-2-2zm0 14H5V5c0-.806.55-.988 1-1h13v12z"/>
                   <path d="M9 6h2v2H9zm0 4h2v2H9zm0 4h2v2H9zm4-8h2v2h-2zm0 4h2v2h-2z"/>

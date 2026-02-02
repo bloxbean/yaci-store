@@ -154,6 +154,35 @@ export default withNextra({
                 destination: '/docs/v2/introduction/overview',
                 permanent: false,
             },
+
+            // ===== LATEST VERSION ALIASES =====
+            // These point to the current latest version (v2)
+            // Update these when releasing a new major version
+            {
+                source: '/docs/getting-started/:path*',
+                destination: '/docs/v2/getting-started/:path*',
+                permanent: false,
+            },
+            {
+                source: '/docs/introduction/:path*',
+                destination: '/docs/v2/introduction/:path*',
+                permanent: false,
+            },
+            {
+                source: '/docs/usage/:path*',
+                destination: '/docs/v2/usage/:path*',
+                permanent: false,
+            },
+            {
+                source: '/docs/plugins/:path*',
+                destination: '/docs/v2/plugins/:path*',
+                permanent: false,
+            },
+            {
+                source: '/docs/tutorials/:path*',
+                destination: '/docs/v2/tutorials/:path*',
+                permanent: false,
+            },
         ];
     },
 })
