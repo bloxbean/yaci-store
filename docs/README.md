@@ -25,7 +25,7 @@ The site will be available at **http://localhost:3000**
 
 ```bash
 npm run build
-npm start
+npx serve@latest out
 ```
 
 ---
