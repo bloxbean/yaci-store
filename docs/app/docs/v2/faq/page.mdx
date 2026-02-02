@@ -46,10 +46,43 @@ The **Yaci Store Admin CLI** provides a straightforward rollback feature:
 2. **Identify the last known good epoch** (check your logs or database state before the error occurred)
 
 3. **Run the rollback command:**
+
+   The command differs depending on your distribution type:
+
+   #### For Docker Distribution
+
+   Use the `admin-cli.sh` script in **non-interactive mode** by passing commands and arguments directly:
+
    ```bash
-   java -jar yaci-store-admin-cli.jar rollback --epoch <EPOCH_NUMBER>
+   ./admin-cli.sh rollback --epoch <EPOCH_NUMBER>
    ```
+
    Replace `<EPOCH_NUMBER>` with the epoch you want to roll back to.
+
+   **Example:**
+   ```bash
+   ./admin-cli.sh rollback --epoch 450
+   ```
+
+   #### For ZIP (JAR) Distribution
+
+   The ZIP distribution requires using the Admin CLI in **interactive mode**:
+
+   1. Start the Admin CLI prompt:
+      ```bash
+      ./bin/admin-cli.sh
+      ```
+
+   2. Once in the Admin CLI prompt, run the rollback command:
+      ```
+      admin-cli> rollback --epoch <EPOCH_NUMBER>
+      ```
+
+   **Example:**
+   ```bash
+   ./bin/admin-cli.sh
+   admin-cli> rollback --epoch 450
+   ```
 
 4. **Verify the rollback** by checking your database state
 
