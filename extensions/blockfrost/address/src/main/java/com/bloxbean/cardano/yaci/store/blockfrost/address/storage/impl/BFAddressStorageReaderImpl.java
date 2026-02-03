@@ -29,10 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.ADDRESS_UTXO;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.TRANSACTION;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.TX_INPUT;
-import static com.bloxbean.cardano.yaci.store.blockfrost_address.jooq.Tables.ADDRESS_BALANCE_CURRENT;
+import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
+import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE_CURRENT;
 
 @Component
 @RequiredArgsConstructor
