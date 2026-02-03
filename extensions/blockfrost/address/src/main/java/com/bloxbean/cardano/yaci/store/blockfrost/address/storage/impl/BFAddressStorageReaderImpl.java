@@ -41,6 +41,15 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANC
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     private final DSLContext dsl;
 
+    /**
+     * Find transaction hashes for an address with pagination and ordering.
+     *
+     * @param address Bech32 address.
+     * @param page zero-based page index.
+     * @param count page size.
+     * @param order sort order by slot.
+     * @return distinct transaction hashes for the address.
+     */
     @Override
     public List<String> findTxHashesByAddress(String address, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -58,6 +67,17 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .fetchInto(String.class);
     }
 
+    /**
+     * Find transactions for an address with pagination, ordering, and optional block range.
+     *
+     * @param address Bech32 address.
+     * @param page zero-based page index.
+     * @param count page size.
+     * @param order sort order by block height and tx index.
+     * @param from inclusive block reference ("block[:txIndex]") or null.
+     * @param to inclusive block reference ("block[:txIndex]") or null.
+     * @return list of transactions for the address.
+     */
     @Override
     public List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to) {
         int offset = Math.max(page, 0) * count;
@@ -90,6 +110,12 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         .fetchInto(BFAddressTransactionDTO.class);
 }
 
+    /**
+     * Get received/sent totals and transaction count for an address.
+     *
+     * @param address Bech32 address.
+     * @return totals and tx count, empty if the query fails.
+     */
     @Override
     public Optional<BFAddressTotal> getAddressTotal(String address) {
         try {
@@ -110,6 +136,12 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         }
     }
 
+    /**
+     * Return current balance by unit from the account aggregate table.
+     *
+     * @param address Bech32 address.
+     * @return map of unit to quantity.
+     */
     @Override
     public Map<String, BigInteger> findCurrentAddressBalanceByUnit(String address) {
         Condition condition = addressCondition(address, ADDRESS_BALANCE_CURRENT.ADDRESS, ADDRESS_BALANCE_CURRENT.ADDR_FULL);
@@ -120,12 +152,23 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .fetchMap(ADDRESS_BALANCE_CURRENT.UNIT, ADDRESS_BALANCE_CURRENT.QUANTITY);
     }
 
+    /**
+     * Return unspent balance by unit for an address.
+     *
+     * @param address Bech32 address.
+     * @return map of unit to quantity.
+     */
     @Override
     public Map<String, BigInteger> findUnspentAddressBalanceByUnit(String address) {
         Condition condition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
         return fetchUnspentAmountSums(condition);
     }
 
+    /**
+     * Aggregate amounts for an address. When {@code spent} is true, sum amounts of spent outputs;
+     * otherwise sum received amounts. Lovelace is sourced from {@code lovelace_amount} to avoid
+     * JSON expansion where possible, and JSON amounts are used for non-lovelace assets.
+     */
     private Map<String, BigInteger> fetchAmountSums(Condition addressCondition, boolean spent) {
         Select<?> base = spent
                 ? dsl.select(
@@ -183,8 +226,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .from(combined)
                 .groupBy(combinedUnit);
 
-        logSql(spent ? "fetchAmountSums:spent" : "fetchAmountSums:received", finalQuery);
-
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
                 .stream()
@@ -192,6 +233,11 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
+    /**
+     * Aggregate unspent amounts for an address using an anti-join to exclude spent outputs.
+     * Lovelace is sourced from {@code lovelace_amount}; JSON is used for non-lovelace assets,
+     * and for lovelace when the scalar amount is missing or zero.
+     */
     private Map<String, BigInteger> fetchUnspentAmountSums(Condition addressCondition) {
         var unspentCte = DSL.name("unspent").as(
                 dsl.select(
@@ -245,8 +291,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .from(combined)
                 .groupBy(combinedUnit);
 
-        logSql("fetchUnspentAmountSums", finalQuery);
-
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
                 .stream()
@@ -254,10 +298,9 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
-    private void logSql(String label, Query query) {
-        log.info("{} SQL: {}", label, dsl.renderInlined(query));
-    }
-
+    /**
+     * Build a combined transaction set for an address from both outputs and spent inputs.
+     */
     private Table<?> buildAddressTxTable(String address) {
         Condition addressCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
 
@@ -282,6 +325,9 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
 
         return addressUtxoTx.union(spentTx).asTable("combined_tx");
     }
+    /**
+     * Build address matching condition, including owner_addr_full for long Byron addresses.
+     */
     private Condition addressCondition(String address, TableField<?, String> addressField, TableField<?, String> addressFullField) {
         Tuple<String, String> addressTuple = AddressUtil.getAddress(address);
         if (addressTuple._2 != null) {
@@ -291,6 +337,9 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         return addressField.eq(addressTuple._1);
     }
 
+    /**
+     * Parse a block reference in the form "block[:txIndex]".
+     */
     private BlockRef parseBlockRef(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -324,6 +373,9 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         return new BlockRef(block, txIndex);
     }
 
+    /**
+     * Build an inclusive block range condition on TRANSACTION.BLOCK and TRANSACTION.TX_INDEX.
+     */
     private Condition buildRangeCondition(BlockRef from, BlockRef to) {
         Condition condition = DSL.trueCondition();
         if (from != null) {
