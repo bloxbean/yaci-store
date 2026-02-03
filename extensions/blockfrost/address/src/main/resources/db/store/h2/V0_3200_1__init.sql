@@ -133,3 +133,21 @@ CREATE INDEX idx_address_balance_slot
 CREATE INDEX idx_address_balance_block
     ON address_balance (block);
 
+-- address_balance_current table (from account)
+drop table if exists address_balance_current;
+create table address_balance_current
+(
+    address            varchar(500),
+    unit               varchar(255),
+    quantity           numeric(38)  null,
+    addr_full          clob null,
+    slot               bigint,
+    block              bigint,
+    block_time         bigint,
+    epoch              integer,
+    update_datetime    timestamp,
+    primary key (address, unit)
+);
+
+CREATE INDEX idx_address_balance_current_address
+    ON address_balance_current (address);
