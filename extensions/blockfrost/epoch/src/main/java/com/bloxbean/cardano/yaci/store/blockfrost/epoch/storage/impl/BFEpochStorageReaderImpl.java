@@ -14,9 +14,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static com.bloxbean.cardano.yaci.store.blockfrost_epoch.jooq.Tables.BLOCK;
-import static com.bloxbean.cardano.yaci.store.blockfrost_epoch.jooq.Tables.EPOCH;
-import static com.bloxbean.cardano.yaci.store.blockfrost_epoch.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
+import static com.bloxbean.cardano.yaci.store.epoch_aggr.jooq.Tables.EPOCH;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static org.jooq.impl.DSL.sum;
 
 @Component

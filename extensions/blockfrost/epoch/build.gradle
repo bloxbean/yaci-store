@@ -3,6 +3,7 @@ import org.gradle.api.publish.maven.MavenPublication
 dependencies {
 
     api project(":extensions:blockfrost:blockfrost-common")
+    api project(":stores:blocks")
 	api project(":stores:epoch")
 	api project(":stores-api:epoch-api")
     api project(":aggregates:epoch-aggr")
