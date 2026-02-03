@@ -46,7 +46,9 @@ public class BFAddressService {
     }
 
     public BFAddressDTO getAddressInfo(String address) {
-        Map<String, BigInteger> amountMap = bfAddressStorageReader.findLatestAddressBalanceByUnit(address);
+        Map<String, BigInteger> amountMap = isCurrentBalanceEnabled()
+                ? bfAddressStorageReader.findCurrentAddressBalanceByUnit(address)
+                : bfAddressStorageReader.findUnspentAddressBalanceByUnit(address);
         Map<String, BigInteger> normalized = normalizeUnits(amountMap);
         List<Utxo.Amount> aggregatedAmounts = toAmountList(normalized);
 
@@ -117,10 +119,6 @@ public class BFAddressService {
     }
 
     public BFAddressTotalDTO getAddressTotal(@NonNull String address) {
-        if (!isAddressTxAmountEnabled()) {
-            return emptyAddressTotal(address);
-        }
-
         return bfAddressStorageReader.getAddressTotal(address)
                 .map(total -> toAddressTotalDto(address, total))
                 .orElseGet(() -> emptyAddressTotal(address));
@@ -147,10 +145,10 @@ public class BFAddressService {
                 .build();
     }
 
-    private boolean isAddressTxAmountEnabled() {
+    private boolean isCurrentBalanceEnabled() {
         boolean enabled = Boolean.parseBoolean(environment.getProperty("store.account.enabled", "false"));
-        boolean saveTxAmount = Boolean.parseBoolean(environment.getProperty("store.account.saveAddressTxAmount", "false"));
-        return enabled && saveTxAmount;
+        boolean currentEnabled = Boolean.parseBoolean(environment.getProperty("store.account.currentBalanceEnabled", "false"));
+        return enabled && currentEnabled;
     }
 
     private Map<String, BigInteger> normalizeUnits(Map<String, BigInteger> amountMap) {

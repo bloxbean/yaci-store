@@ -4,10 +4,10 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransacti
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 
-import java.math.BigInteger;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Map;
+import java.math.BigInteger;
 
 public interface BFAddressStorageReader {
     List<String> findTxHashesByAddress(String address, int page, int count, Order order);
@@ -16,5 +16,7 @@ public interface BFAddressStorageReader {
 
     Optional<BFAddressTotal> getAddressTotal(String address);
 
-    Map<String, BigInteger> findLatestAddressBalanceByUnit(String address);
+    Map<String, BigInteger> findCurrentAddressBalanceByUnit(String address);
+
+    Map<String, BigInteger> findUnspentAddressBalanceByUnit(String address);
 }
