@@ -17,7 +17,7 @@ import java.util.List;
 public class BFAddressDTO {
     String address;
     List<Utxo.Amount> amount;
-    String stake_address;
+    String stakeAddress;
     String type;
     boolean script;
 }

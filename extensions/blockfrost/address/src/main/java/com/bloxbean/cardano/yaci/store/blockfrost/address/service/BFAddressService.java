@@ -77,7 +77,7 @@ public class BFAddressService {
         return BFAddressDTO.builder()
                 .address(address)
                 .amount(aggregatedAmounts)
-                .stake_address(stakeAddress)
+                .stakeAddress(stakeAddress)
                 .type(type)
                 .script(isScript)
                 .build();
