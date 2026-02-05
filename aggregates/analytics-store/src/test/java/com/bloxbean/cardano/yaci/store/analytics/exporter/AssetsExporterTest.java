@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
@@ -22,8 +23,9 @@ class AssetsExporterTest {
         ExportStateService stateService = mock(ExportStateService.class);
         EraService eraService = mock(EraService.class);
         AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        AdaPotJobStorage adaPotJobStorage = mock(AdaPotJobStorage.class);
 
-        AssetsExporter exporter = new AssetsExporter(storageWriter, stateService, eraService, properties);
+        AssetsExporter exporter = new AssetsExporter(storageWriter, stateService, eraService, properties, adaPotJobStorage);
 
         String sql = exporter.buildQuery(
                 PartitionValue.ofDate(LocalDate.of(2024, 1, 15)),
