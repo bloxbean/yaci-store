@@ -10,7 +10,7 @@ dependencies {
     implementation project(':starters:epoch-spring-boot-starter')
     implementation project(':starters:submit-spring-boot-starter')
 
-    implementation project(':extensions:utxo-rocksdb')
+    implementation project(':extensions:storage:utxo-rocksdb')
 
     implementation project(':components:dbutils')
     implementation project(':starters:admin-spring-boot-starter')

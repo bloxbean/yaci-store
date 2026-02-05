@@ -20,6 +20,11 @@ public interface UtxoRepository extends JpaRepository<AddressUtxoEntity, UtxoId>
     Optional<List<AddressUtxoEntity>> findUnspentByOwnerAddr(String ownerAddress, Pageable page);
 
     @Query("SELECT a FROM AddressUtxoEntity a LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
+            "WHERE a.ownerAddr = :ownerAddress AND s.txHash IS NULL")
+    Optional<List<AddressUtxoEntity>> findAllUnspentByOwnerAddr(String ownerAddress);
+
+
+    @Query("SELECT a FROM AddressUtxoEntity a LEFT JOIN TxInputEntity s ON a.txHash = s.txHash AND a.outputIndex = s.outputIndex " +
         "WHERE a.ownerStakeAddr = :ownerAddress AND s.txHash IS NULL")
     Optional<List<AddressUtxoEntity>> findUnspentByOwnerStakeAddr(String ownerAddress, Pageable page);
 

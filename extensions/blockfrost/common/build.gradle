@@ -1,0 +1,16 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			pom {
+				name = 'Yaci Store Blockfrost Common'
+				description = 'Yaci Store Blockfrost Common Functionality'
+			}
+		}
+	}
+}

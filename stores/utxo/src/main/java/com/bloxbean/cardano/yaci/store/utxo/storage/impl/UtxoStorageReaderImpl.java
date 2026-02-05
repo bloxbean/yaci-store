@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.AddressTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AssetTransaction;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
@@ -46,6 +47,17 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
         Pageable pageable = getPageable(page, count, order);
 
         return utxoRepository.findUnspentByOwnerAddr(address, pageable)
+                .stream()
+                .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
+                .toList();
+    }
+
+    @Override
+    public List<AddressUtxo> findAllUtxoByAddress(@NonNull String address) {
+
+        Optional<List<AddressUtxoEntity>> utxoEntities = utxoRepository.findAllUnspentByOwnerAddr(address);
+        System.out.println("UtxoEntity Size: " + utxoEntities.get().size());
+        return utxoEntities
                 .stream()
                 .flatMap(addressUtxoEntities -> addressUtxoEntities.stream().map(mapper::toAddressUtxo))
                 .toList();
