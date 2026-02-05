@@ -2,8 +2,10 @@ import org.gradle.api.publish.maven.MavenPublication
 
 dependencies {
 
+    api project(":aggregates:account")
 	api project(":stores:utxo")
 	api project(":stores-api:utxo-api")
+    api project(":stores:transaction")
 
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 }
