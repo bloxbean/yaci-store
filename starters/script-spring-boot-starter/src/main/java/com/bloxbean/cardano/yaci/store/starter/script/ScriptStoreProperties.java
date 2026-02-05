@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class ScriptStoreProperties {
-    private Script script;
+    private Script script = new Script();
 
     @Getter
     @Setter

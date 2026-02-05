@@ -1,0 +1,19 @@
+# Build from source and Run
+
+**Pre-requisites:** Java 21
+
+### Build
+
+```
+$> git clone https://github.com/bloxbean/yaci-store
+$> cd yaci-store
+$> ./gradlew clean build
+```
+
+### Run
+
+```
+$> cd yaci-store
+$> edit config/application.properties //datasource, network details
+$> java -jar applications/all/build/libs/yaci-store-all-<version>.jar
+```

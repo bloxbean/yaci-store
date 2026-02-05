@@ -24,10 +24,7 @@
 
 ### Latest Releases
 
-- **Stable Release**: [v0.1.6](https://github.com/bloxbean/yaci-store/releases/tag/v0.1.6) - Production-ready release
-- **Beta Release**: [v2.0.0-beta5](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0-beta5) - Next generation release with enhanced features
-  - All core modules and stores are **production-ready**
-  - Note: Ledger State module is still in beta
+- **Stable Release**: [v2.0.0](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0) - Production-ready release
 
 ### Core Stores
 
@@ -117,6 +114,18 @@ Is your project using Yaci Store? We'd love to feature it here! Please open a PR
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## Branching & releases
+
+- `main` → active development for the next minor release (2.1.x)
+- `release/2.0.x` → patch fixes for the 2.0.x line
+- `next` → development of the next major version (3.0)
+
+Please open pull requests against the `main` branch unless advised otherwise.
+
+### Documentation source
+
+The latest documentation source is maintained in the `main` branch.
 
 ## License
 

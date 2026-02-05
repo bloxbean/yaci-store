@@ -1,0 +1,54 @@
+plugins {
+    id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+node {
+    version = '20.11.0'
+    download = true
+    workDir = file("${project.projectDir}/.gradle/nodejs")
+    npmWorkDir = file("${project.projectDir}/.gradle/npm")
+    nodeProjectDir = file("${project.projectDir}/frontend")
+}
+
+task buildFrontend(type: NpmTask) {
+    dependsOn npmInstall
+    args = ['run', 'build']
+    inputs.dir('frontend/src')
+    inputs.files('frontend/package.json', 'frontend/svelte.config.js', 'frontend/vite.config.js')
+    outputs.dir('src/main/resources/static')
+}
+
+task cleanFrontend(type: Delete) {
+    delete 'src/main/resources/static'
+}
+
+processResources.dependsOn buildFrontend
+clean.dependsOn cleanFrontend
+
+// Ensure sourceJar also depends on buildFrontend since it includes resources
+tasks.matching { it.name == 'sourceJar' }.configureEach {
+    dependsOn buildFrontend
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    api project(":components:common")
+    api project(":components:core")
+
+    // Optional dependencies for richer status info
+    compileOnly project(":components:dbutils")
+    compileOnly project(":aggregates:adapot")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Admin UI'
+                description = 'Admin UI for Yaci Store with Svelte frontend'
+            }
+        }
+    }
+}

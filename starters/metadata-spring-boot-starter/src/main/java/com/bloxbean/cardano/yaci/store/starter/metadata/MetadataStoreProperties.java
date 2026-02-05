@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class MetadataStoreProperties {
-    private Metadata metadata;
+    private Metadata metadata = new Metadata();
 
     @Getter
     @Setter

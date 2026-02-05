@@ -26,6 +26,7 @@ include 'components:admin'
 include 'components:dbutils'
 include 'components:plugin-api'
 include 'components:plugin'
+include 'components:admin-ui'
 include 'components:plugin-polyglot'
 include 'components:plugin-model-types'
 

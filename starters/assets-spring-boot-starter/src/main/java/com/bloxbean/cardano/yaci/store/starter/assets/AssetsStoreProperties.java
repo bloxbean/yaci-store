@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store")
 public class AssetsStoreProperties {
-    private Assets assets;
+    private Assets assets = new Assets();
 
     @Getter
     @Setter

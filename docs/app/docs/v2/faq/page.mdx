@@ -1,0 +1,114 @@
+import { Callout } from 'nextra/components'
+
+# Frequently Asked Questions (FAQ)
+
+This page addresses common questions and provides solutions to help you get the most out of Yaci Store.
+
+---
+
+## General Questions
+
+### Why does the `utxo` column in the `adapot` table always show 0?
+
+<Callout type="info">
+The `utxo` column in the `adapot` table currently contains a default value of 0. This is a **planned feature** that will be implemented in a future release.
+</Callout>
+
+**Current workaround:**
+
+No action is required. The default value does not affect the accuracy of other ledger state calculations, including rewards, treasury, and reserves.
+
+---
+
+## Troubleshooting
+
+### What's the first thing I should do when encountering data discrepancy errors during synchronization?
+
+<Callout type="info">
+When you encounter data-related errors or discrepancies during synchronization, the **first recommended action** is to use the **Rollback CLI** to restore your database to a known good state.
+</Callout>
+
+**Why rollback first?**
+
+Data discrepancies can occur for various reasons - network issues, interrupted synchronization, or edge cases in data processing. Rather than waiting for a fix or troubleshooting extensively, rolling back to a stable epoch allows you to:
+
+- **Quickly restore operations** to a working state
+- **Isolate the problematic epoch** to better understand the issue
+- **Continue synchronization** from a clean checkpoint
+- **Provide better bug reports** with specific epoch information
+
+**How to perform a rollback:**
+
+The **Yaci Store Admin CLI** provides a straightforward rollback feature:
+
+1. **Stop the Yaci Store application** to prevent further synchronization
+
+2. **Identify the last known good epoch** (check your logs or database state before the error occurred)
+
+3. **Run the rollback command:**
+
+   The command differs depending on your distribution type:
+
+   #### For Docker Distribution
+
+   Use the `admin-cli.sh` script in **non-interactive mode** by passing commands and arguments directly:
+
+   ```bash
+   ./admin-cli.sh rollback --epoch <EPOCH_NUMBER>
+   ```
+
+   Replace `<EPOCH_NUMBER>` with the epoch you want to roll back to.
+
+   **Example:**
+   ```bash
+   ./admin-cli.sh rollback --epoch 450
+   ```
+
+   #### For ZIP (JAR) Distribution
+
+   The ZIP distribution requires using the Admin CLI in **interactive mode**:
+
+   1. Start the Admin CLI prompt:
+      ```bash
+      ./bin/admin-cli.sh
+      ```
+
+   2. Once in the Admin CLI prompt, run the rollback command:
+      ```
+      admin-cli> rollback --epoch <EPOCH_NUMBER>
+      ```
+
+   **Example:**
+   ```bash
+   ./bin/admin-cli.sh
+   admin-cli> rollback --epoch 450
+   ```
+
+4. **Verify the rollback** by checking your database state
+
+5. **Restart Yaci Store** and monitor the synchronization process
+
+**After rolling back:**
+
+- **Monitor the logs carefully** as synchronization resumes
+- If the error persists at the same epoch, check the [Known Issues](../ledger-state-mismatches) page
+- Report the issue with specific epoch and error details to help improve Yaci Store
+- Consider enabling debug logging for more detailed diagnostics
+
+**Best practices:**
+
+- Maintain regular database backups
+- Document the epoch where errors occur for future reference
+- Test rollback procedures in non-production environments first
+- Keep your Yaci Store version up to date to benefit from the latest fixes
+
+---
+
+## Need More Help?
+
+If your question isn't answered here, please:
+
+- Check the [Known Issues](../ledger-state-mismatches) section for documented problems
+- Review the [Tutorials & Use Cases](../tutorials) for practical examples
+- Visit the [GitHub repository](https://github.com/bloxbean/yaci-store) to report issues or request features
+- Join the community discussions for support and updates
