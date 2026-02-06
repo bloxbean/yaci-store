@@ -140,7 +140,7 @@ public class DRepExpiryService {
                     leftBoundaryEpoch
             );
 
-            /* Calculate active_until value, now keep it for testing, should drop active_until column later */
+            /* Calculate active_until value */
             boolean isLeftBoundaryEpochDormant = dormantEpochsToLeftBoundaryEpoch.contains(leftBoundaryEpoch);
             int dormantEpochCount = recentGovEpochActivityOpt.get().getDormantEpochCount();
             boolean leftBoundaryEpochHadNewProposal = false;
@@ -167,13 +167,13 @@ public class DRepExpiryService {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
                 // check left boundary epoch is in a dormant period and drep was registered in this dormant period
                 if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal) {
+                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
                 }
             } else {
                 // case: drep is updated in dormant period
                 if (isEpochRangeDormant(dRepLastInteraction.epoch(), leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal) {
+                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepLastInteraction.epoch() + dRepLastInteraction.dRepActivity();
                 }
             }
