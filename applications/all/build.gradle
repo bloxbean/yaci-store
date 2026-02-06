@@ -27,6 +27,7 @@ dependencies {
 
     implementation project(':starters:admin-spring-boot-starter')
     implementation project(':components:dbutils')
+    implementation project(':starters:analytics-spring-boot-starter')
     implementation project(':components:admin-ui')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
