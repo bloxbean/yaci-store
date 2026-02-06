@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.client.address.CredentialType;
+import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTotalDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransactionDTO;
@@ -17,10 +18,7 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -35,14 +33,14 @@ public class BFAddressService {
 
     private final UtxoStorageReader utxoStorageReader;
     private final BFAddressStorageReader bfAddressStorageReader;
-    private final Environment environment;
+    private final AccountStoreProperties accountStoreProperties;
 
     public BFAddressService(UtxoStorageReader utxoStorageReader,
                             BFAddressStorageReader bfAddressStorageReader,
-                            Environment environment) {
+                            AccountStoreProperties accountStoreProperties) {
         this.utxoStorageReader = utxoStorageReader;
         this.bfAddressStorageReader = bfAddressStorageReader;
-        this.environment = environment;
+        this.accountStoreProperties = accountStoreProperties;
     }
 
     public BFAddressDTO getAddressInfo(String address) {
@@ -146,9 +144,7 @@ public class BFAddressService {
     }
 
     private boolean isCurrentBalanceEnabled() {
-        boolean enabled = Boolean.parseBoolean(environment.getProperty("store.account.enabled", "false"));
-        boolean currentEnabled = Boolean.parseBoolean(environment.getProperty("store.account.currentBalanceEnabled", "false"));
-        return enabled && currentEnabled;
+        return accountStoreProperties.isCurrentBalanceEnabled();
     }
 
     private Map<String, BigInteger> normalizeUnits(Map<String, BigInteger> amountMap) {
