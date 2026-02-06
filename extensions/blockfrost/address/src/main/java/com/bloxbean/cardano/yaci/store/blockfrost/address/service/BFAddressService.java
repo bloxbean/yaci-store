@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
+
 @Service
 @Slf4j
 public class BFAddressService {
@@ -169,8 +171,8 @@ public class BFAddressService {
                 .sorted((e1, e2) -> {
                     String unit1 = e1.getKey();
                     String unit2 = e2.getKey();
-                    if ("lovelace".equals(unit1)) return -1;
-                    if ("lovelace".equals(unit2)) return 1;
+                    if (LOVELACE.equals(unit1)) return -1;
+                    if (LOVELACE.equals(unit2)) return 1;
                     return unit1.compareTo(unit2);
                 })
                 .map(entry -> Utxo.Amount.builder()
