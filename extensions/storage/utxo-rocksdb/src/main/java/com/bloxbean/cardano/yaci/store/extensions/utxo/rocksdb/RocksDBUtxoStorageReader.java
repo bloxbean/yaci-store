@@ -93,11 +93,6 @@ public class RocksDBUtxoStorageReader implements UtxoStorageReader {
     }
 
     @Override
-    public List<AddressUtxo> findAllUtxoByAddress(String address){
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
     public List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order) {
         throw new UnsupportedOperationException("Not implemented");
     }
