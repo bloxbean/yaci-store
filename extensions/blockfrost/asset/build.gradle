@@ -2,8 +2,11 @@ import org.gradle.api.publish.maven.MavenPublication
 
 dependencies {
 
+    api project(":extensions:blockfrost:blockfrost-common")
 	api project(":stores:assets")
 	api project(":stores-api:assets-api")
+    api project(":stores:utxo")
+    api project(":stores:transaction")
 
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 }
