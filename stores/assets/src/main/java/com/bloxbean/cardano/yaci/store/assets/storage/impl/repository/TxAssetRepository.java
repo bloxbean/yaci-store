@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.assets.storage.impl.repository;
 
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetEntity;
-import com.bloxbean.cardano.yaci.store.assets.storage.impl.model.TxAssetInfo;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,12 +32,4 @@ public interface TxAssetRepository extends JpaRepository<TxAssetEntity, Long> {
 
     @Query("select sum(ta.quantity) from TxAssetEntity ta where ta.policy = ?1")
     Optional<BigInteger> getSupplyByPolicy(String policy);
-
-    @Query("select ta.unit as unit, " +
-            "sum(ta.quantity) as quantity, " +
-            "min(ta.slot) as slot, " +
-            "min(ta.txHash) as txHash " +
-            "from TxAssetEntity ta " +
-            "group by ta.unit")
-    Slice<TxAssetInfo> findAssetsGroupByUnit(Pageable page);
 }
