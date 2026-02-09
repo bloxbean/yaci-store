@@ -22,7 +22,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,9 +42,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     @Override
     public List<BFPolicyAsset> findAssets(int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        List<FirstSeenUnit> pageRows = order == Order.asc
-                ? findFirstSeenUnitsPageAsc(offset, count)
-                : findFirstSeenUnitsPageDistinctOn(offset, count, order);
+        List<FirstSeenUnit> pageRows = findFirstSeenUnitsPage(offset, count, order);
         if (pageRows.isEmpty()) {
             return List.of();
         }
@@ -273,10 +270,14 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
 
         Field<String> addressField = DSL.coalesce(ownerAddrFullField, ownerAddrField).as("address");
         Table<?> amountTable = DSL.table(
-                "(select (elem->>'quantity')::numeric as quantity " +
-                        "from jsonb_array_elements({0}::jsonb) elem " +
-                        "where elem->>'unit' = {1} " +
-                        "limit 1) as amt",
+                """
+                (
+                    select (elem->>'quantity')::numeric as quantity
+                    from jsonb_array_elements({0}::jsonb) elem
+                    where elem->>'unit' = {1}
+                    limit 1
+                ) as amt
+                """,
                 amountsField,
                 DSL.val(unit)
         );
@@ -379,89 +380,93 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 .asTable("distinct_asset_tx");
     }
 
-    private List<FirstSeenUnit> findFirstSeenUnitsPageAsc(int offset, int count) {
-        int needed = offset + count;
-        int candidateLimit = Math.max(needed * 50, 5000);
-        int maxCandidateLimit = 200_000;
+    private List<FirstSeenUnit> findFirstSeenUnitsPage(int offset, int count, Order order) {
+        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
+        String txIndexOrder = order == Order.desc ? "desc" : "asc";
+        String unitOrder = order == Order.desc ? "desc" : "asc";
 
-        while (true) {
-            var candidatesQuery = dsl.select(ASSETS.UNIT, ASSETS.SLOT, ASSETS.TX_HASH)
-                    .from(ASSETS)
-                    .join(TRANSACTION)
-                    .on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
-                    .where(ASSETS.MINT_TYPE.eq("MINT"))
-                    .orderBy(
-                            ASSETS.SLOT.asc().nullsLast(),
-                            TRANSACTION.TX_INDEX.asc().nullsFirst(),
-                            ASSETS.UNIT.asc()
-                    )
-                    .limit(candidateLimit);
-            logQuery("findAssetsMintCandidates", candidatesQuery);
+        // Boundary comparisons for slot range selection
+        // For ASC: we want the page_window starting from offset, boundary is min/max of that window
+        // For DESC: reversed
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
 
-            var candidateRows = candidatesQuery.fetch();
-            LinkedHashMap<String, FirstSeenUnit> uniqueByUnit = new LinkedHashMap<>();
-            for (var row : candidateRows) {
-                String unit = row.get(ASSETS.UNIT);
-                uniqueByUnit.putIfAbsent(unit, new FirstSeenUnit(
-                        unit,
-                        row.get(ASSETS.SLOT),
-                        row.get(ASSETS.TX_HASH)
-                ));
-            }
+        // prefix counts rows strictly before the boundary slot
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        // candidates are rows within the boundary slot range (inclusive)
+        String candCmp1 = order == Order.desc ? "<=" : ">=";
+        String candCmp2 = order == Order.desc ? ">=" : "<=";
 
-            if (uniqueByUnit.size() >= needed || candidateRows.size() < candidateLimit) {
-                List<FirstSeenUnit> uniqueRows = new ArrayList<>(uniqueByUnit.values());
-                if (offset >= uniqueRows.size()) {
-                    return List.of();
-                }
-                return uniqueRows.subList(offset, Math.min(offset + count, uniqueRows.size()));
-            }
-
-            if (candidateLimit >= maxCandidateLimit) {
-                return findFirstSeenUnitsPageDistinctOn(offset, count, Order.asc);
-            }
-
-            candidateLimit = Math.min(candidateLimit * 2, maxCandidateLimit);
-        }
-    }
-
-    private List<FirstSeenUnit> findFirstSeenUnitsPageDistinctOn(int offset, int count, Order order) {
         Table<?> firstSeenUnits = DSL.table(
-                "(with first_slots as materialized (" +
-                        "select distinct on (unit) unit, slot " +
-                        "from assets " +
-                        "where mint_type = 'MINT' " +
-                        "order by unit, slot asc nulls last" +
-                        ") " +
-                        "select fs.unit, fs.slot, picked.tx_hash, picked.tx_index " +
-                        "from first_slots fs " +
-                        "join lateral (" +
-                        "select a.tx_hash, t.tx_index " +
-                        "from assets a " +
-                        "join transaction t on t.tx_hash = a.tx_hash " +
-                        "where a.mint_type = 'MINT' " +
-                        "and a.unit = fs.unit " +
-                        "and a.slot = fs.slot " +
-                        "order by t.tx_index asc nulls first, a.tx_hash asc " +
-                        "limit 1" +
-                        ") picked on true" +
-                        ") as first_seen_units"
+                """
+                (
+                    with first_mints as materialized (
+                        select distinct on (unit) unit as unit, slot::bigint as slot
+                        from assets
+                        where mint_type = 'MINT'
+                        order by unit, slot asc nulls last
+                    ),
+                    page_window as materialized (
+                        select unit, slot
+                        from first_mints
+                        order by slot %s, unit %s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %s(slot) as start_slot, %s(slot) as end_slot
+                        from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt
+                        from first_mints
+                        where slot %s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select fm.unit, fm.slot
+                        from first_mints fm, boundary b
+                        where fm.slot %s b.start_slot
+                          and fm.slot %s b.end_slot
+                    ),
+                    enriched as (
+                        select c.unit, c.slot, picked.tx_hash, picked.tx_index
+                        from candidates c
+                        join lateral (
+                            select a.tx_hash, t.tx_index
+                            from assets a
+                            join transaction t on t.tx_hash = a.tx_hash
+                            where a.mint_type = 'MINT'
+                              and a.unit = c.unit
+                              and a.slot = c.slot
+                            order by t.tx_index asc, a.tx_hash asc
+                            fetch next 1 rows only
+                        ) picked on true
+                    ),
+                    ranked as (
+                        select unit, slot, tx_hash,
+                               row_number() over (order by slot %s, tx_index %s, unit %s) as rn
+                        from enriched
+                    )
+                    select unit, slot, tx_hash
+                    from ranked
+                    where rn > ({0} - (select cnt from prefix))
+                      and rn <= ({0} - (select cnt from prefix) + {1})
+                ) as first_seen_units
+                """.formatted(
+                        slotOrder, unitOrder,
+                        boundaryStartAgg, boundaryEndAgg,
+                        prefixCmp,
+                        candCmp1, candCmp2,
+                        slotOrder, txIndexOrder, unitOrder
+                ),
+                DSL.inline(offset), DSL.inline(count)
         );
 
         Field<String> unitField = DSL.field(DSL.name("first_seen_units", "unit"), String.class);
         Field<Long> slotField = DSL.field(DSL.name("first_seen_units", "slot"), Long.class);
         Field<String> txHashField = DSL.field(DSL.name("first_seen_units", "tx_hash"), String.class);
-        Field<Integer> txIndexField = DSL.field(DSL.name("first_seen_units", "tx_index"), Integer.class);
-
-        SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
-        SortField<?> txIndexOrder = order == Order.desc ? txIndexField.desc().nullsLast() : txIndexField.asc().nullsFirst();
-        SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
 
         var query = dsl.select(unitField, slotField, txHashField)
-                .from(firstSeenUnits)
-                .orderBy(slotOrder, txIndexOrder, unitOrder)
-                .limit(count)
-                .offset(offset);
+                .from(firstSeenUnits);
         logQuery("findAssetsUnitsPage", query);
 
         return query.fetch(record -> new FirstSeenUnit(
