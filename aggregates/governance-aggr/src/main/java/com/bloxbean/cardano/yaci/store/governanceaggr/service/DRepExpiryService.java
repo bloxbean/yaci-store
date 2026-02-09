@@ -162,7 +162,7 @@ public class DRepExpiryService {
                 activeUntil = expiry - dormantEpochCount;
             }
 
-            // continue adjusting the active_until value, if the drep was registered or last interacted in a dormant period
+            // continue adjusting the active_until value, if the drep was registered or last interacted in a dormant period and in V9
             if (dRepLastInteraction == null) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
                 // check left boundary epoch is in a dormant period and drep was registered in this dormant period
