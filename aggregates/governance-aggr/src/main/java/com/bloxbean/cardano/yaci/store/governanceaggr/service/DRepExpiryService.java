@@ -156,7 +156,7 @@ public class DRepExpiryService {
             int activeUntil = expiry;
 
             /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), drep is not inactive,
-             we should set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+             we should set activeUntil to expiry - dormantEpochCount
              the active_until value is only updated after the dormant period ends. */
             if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry >= leftBoundaryEpoch) { // TODO: expiry >= leftBoundaryEpoch or expiry > leftBoundaryEpoch?
                 activeUntil = expiry - dormantEpochCount;
@@ -170,16 +170,9 @@ public class DRepExpiryService {
                         && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
                 }
-            } else {
-                // case: drep is updated in dormant period
-                if (isEpochRangeDormant(dRepLastInteraction.epoch(), leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
-                    activeUntil = dRepLastInteraction.epoch() + dRepLastInteraction.dRepActivity();
-                }
             }
 
             /* active_until calculation ends */
-
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
                     .addValue("drep_type", dRep._2.name())
