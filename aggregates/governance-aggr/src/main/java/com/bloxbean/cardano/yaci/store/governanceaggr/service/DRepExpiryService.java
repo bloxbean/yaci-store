@@ -173,7 +173,7 @@ public class DRepExpiryService {
             } else {
                 // case: drep is updated in dormant period
                 if (isEpochRangeDormant(dRepLastInteraction.epoch(), leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal && dRepLastInteraction.protocolMajorVersion() == 9) {
+                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepLastInteraction.epoch() + dRepLastInteraction.dRepActivity();
                 }
             }
@@ -314,15 +314,12 @@ public class DRepExpiryService {
         }
 
         Field<String> drepActivityField = null;
-        Field<String> protocolMajorVerField = null;
         SQLDialect dialect = dsl.dialect();
 
         if (dialect.family() == SQLDialect.POSTGRES) {
             drepActivityField = DSL.field("params->>'drep_activity'", String.class);
-            protocolMajorVerField = DSL.field("params->>'protocol_major_ver'", String.class);
         } else if (dialect.family() == SQLDialect.MYSQL) {
             drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
-            protocolMajorVerField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.protocol_major_ver"));
         }
 
         List<Condition> dRepRegConditions = drepHashAndTypes
@@ -376,8 +373,7 @@ public class DRepExpiryService {
                     li.field("drep_hash", String.class),
                     li.field("drep_type", String.class),
                     li.field("epoch", Integer.class),
-                    drepActivityField.cast(Integer.class).as("drep_activity"),
-                    protocolMajorVerField.cast(Integer.class).as("protocol_major_ver")
+                    drepActivityField.cast(Integer.class).as("drep_activity")
             )
             .from(li)
             .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(li.field("epoch", Integer.class)))
@@ -400,7 +396,6 @@ public class DRepExpiryService {
             int interactionEpoch = record.get("epoch", Integer.class);
             DrepType type = DrepType.valueOf(record.get("drep_type", String.class));
             int drepActivity = 0;
-            int protocolMajorVer = 0;
 
             if (dialect.family() == SQLDialect.H2) {
                 var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
@@ -408,16 +403,14 @@ public class DRepExpiryService {
                 try {
                     protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
                     drepActivity = protocolParam.getDrepActivity();
-                    protocolMajorVer = protocolParam.getProtocolMajorVer();
                 } catch (JsonProcessingException e) {
                     log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
                 }
             } else {
                 drepActivity = record.get("drep_activity", Integer.class);
-                protocolMajorVer = record.get("protocol_major_ver", Integer.class);
             }
 
-            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepInteractionInfo(interactionEpoch, drepActivity, protocolMajorVer));
+            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepInteractionInfo(interactionEpoch, drepActivity));
         }
 
         return map;

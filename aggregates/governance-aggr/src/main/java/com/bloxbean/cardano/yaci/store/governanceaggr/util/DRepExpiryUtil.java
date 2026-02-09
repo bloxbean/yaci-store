@@ -315,11 +315,10 @@ public class DRepExpiryUtil {
      * Represents the interaction performed by a DRep
      * (voting or update).
      *
-     * @param epoch                The epoch in which the interaction occurred.
-     * @param dRepActivity         The {@code dRepActivity} value from protocol parameters at the time of interaction.
-     * @param protocolMajorVersion The major protocol version at the time of interaction.
+     * @param epoch        The epoch in which the interaction occurred.
+     * @param dRepActivity The {@code dRepActivity} value from protocol parameters at the time of registration.
      */
-    public record DRepInteractionInfo(int epoch, int dRepActivity, int protocolMajorVersion) {
+    public record DRepInteractionInfo(int epoch, int dRepActivity) {
     }
 
     /**
