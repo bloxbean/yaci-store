@@ -39,6 +39,12 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private final DSLContext dsl;
 
+    /**
+     * Returns a paginated asset list with first-seen mint tx (per unit) and aggregated quantity for each unit.
+     * The method intentionally runs in two phases to avoid N+1:
+     * 1) resolve page units with deterministic first-seen ordering
+     * 2) aggregate quantities for only those page units.
+     */
     @Override
     public List<BFPolicyAsset> findAssets(int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -101,6 +107,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 .toList();
     }
 
+    /**
+     * Resolves full asset information for a specific unit.
+     * The earliest mint transaction hash is fetched separately from aggregates to keep both queries index-friendly.
+     */
     @Override
     public Optional<BFAssetInfo> findAssetInfo(String unit) {
         Condition assetCondition = buildAssetCondition(unit);
@@ -151,6 +161,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         ));
     }
 
+    /**
+     * Returns mint/burn history for an asset unit in deterministic order by slot and tx hash.
+     */
     @Override
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -175,6 +188,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 });
     }
 
+    /**
+     * Returns transaction hashes related to the provided unit.
+     * The tx hash set is pre-grouped from UTXO data and then ordered by block/tx_index/hash.
+     */
     @Override
     public List<String> findAssetTxHashes(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -203,6 +220,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return query.fetchInto(String.class);
     }
 
+    /**
+     * Returns transaction references for the provided unit with block height/time and tx index.
+     */
     @Override
     public List<BFAssetTransaction> findAssetTransactions(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -241,6 +261,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 ));
     }
 
+    /**
+     * Returns current holder addresses for a unit with quantity and first-seen slot.
+     * Only unspent UTXO rows are considered and quantity is extracted from the amounts JSON array.
+     */
     @Override
     public List<BFAssetAddress> findAssetAddresses(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -306,6 +330,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 ));
     }
 
+    /**
+     * Returns policy assets with first-seen tx per unit and aggregated quantity for that policy.
+     */
     @Override
     public List<BFPolicyAsset> findAssetsByPolicy(String policyId, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -372,6 +399,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 ));
     }
 
+    /**
+     * Builds a distinct tx hash table for a unit from UTXO amounts JSON.
+     */
     private Table<?> buildDistinctAssetTxTable(String unit) {
         return dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
                 .from(ADDRESS_UTXO)
@@ -380,6 +410,14 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 .asTable("distinct_asset_tx");
     }
 
+    /**
+     * Resolves the first mint row per unit for the requested page/order.
+     * Strategy:
+     * 1) build first mint slot per unit (distinct on unit),
+     * 2) compute page boundary slots from a small ordered window,
+     * 3) enrich only candidate rows inside boundary range,
+     * 4) rank in final order and slice requested page.
+     */
     private List<FirstSeenUnit> findFirstSeenUnitsPage(int offset, int count, Order order) {
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
         String txIndexOrder = order == Order.desc ? "desc" : "asc";
@@ -476,10 +514,17 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         ));
     }
 
+    /**
+     * Builds JSONB containment condition for unit matching inside address_utxo.amounts.
+     */
     private Condition buildUnitCondition(String unit) {
         return DSL.condition("amounts @> {0}::jsonb", DSL.val("[{\"unit\": \"" + unit + "\"}]"));
     }
 
+    /**
+     * Builds asset filter condition.
+     * For valid unit strings (policy + asset name), it also adds policy equality for better index usage.
+     */
     private Condition buildAssetCondition(String unit) {
         if (unit == null || unit.length() < 56) {
             return ASSETS.UNIT.eq(unit);
@@ -488,6 +533,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return ASSETS.UNIT.eq(unit).and(ASSETS.POLICY.eq(extractPolicy(unit)));
     }
 
+    /**
+     * Extracts policy id from a full unit (first 56 hex chars).
+     */
     private String extractPolicy(String unit) {
         if (unit == null || unit.length() < 56) {
             return null;
@@ -498,6 +546,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private record FirstSeenUnit(String unit, Long slot, String txHash) {
     }
 
+    /**
+     * Normalizes numeric results from jOOQ records into BigInteger.
+     */
     private BigInteger toBigInteger(Object value) {
         if (value == null) {
             return BigInteger.ZERO;
@@ -514,7 +565,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return new BigInteger(String.valueOf(value));
     }
 
+    /**
+     * Emits full SQL with inlined parameters for debugging and plan analysis.
+     */
     private void logQuery(String queryName, Query query) {
-        log.info("[BFAssetStorageReader] {} SQL: {}", queryName, query.getSQL(ParamType.INLINED));
+        log.debug("[BFAssetStorageReader] {} SQL: {}", queryName, query.getSQL(ParamType.INLINED));
     }
 }
