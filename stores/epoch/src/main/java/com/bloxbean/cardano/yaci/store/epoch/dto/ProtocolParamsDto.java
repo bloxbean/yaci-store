@@ -12,9 +12,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Data
 @Builder
@@ -101,9 +99,4 @@ public class ProtocolParamsDto {
     public BigDecimal getPvtppSecurityGroup() {
         return pvtPPSecurityGroup;
     }
-
-
-
-
-
 }

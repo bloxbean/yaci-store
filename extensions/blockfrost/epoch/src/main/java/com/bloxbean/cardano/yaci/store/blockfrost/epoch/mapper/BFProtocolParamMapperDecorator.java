@@ -39,14 +39,16 @@ public class BFProtocolParamMapperDecorator implements BFProtocolParamMapper {
             bfProtocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
         }
 
-        Map<String, List<Long>> costModelsRaw =  protocolParamsDto.getCostModels().entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> entry.getValue().entrySet().stream()
-                                .map(Map.Entry::getValue)
-                                .collect(Collectors.toList())
-                ));
-        bfProtocolParamsDto.setCostModelsRaw(costModelsRaw);
+        if(protocolParamsDto.getCostModels() != null) {
+            Map<String, List<Long>> costModelsRaw =  protocolParamsDto.getCostModels().entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().entrySet().stream()
+                                    .map(Map.Entry::getValue)
+                                    .collect(Collectors.toList())
+                    ));
+            bfProtocolParamsDto.setCostModelsRaw(costModelsRaw);
+        }
 
         bfProtocolParamsDto.setEMax(protocolParamsDto.getEMax());
         bfProtocolParamsDto.setNOpt(protocolParamsDto.getNOpt());
