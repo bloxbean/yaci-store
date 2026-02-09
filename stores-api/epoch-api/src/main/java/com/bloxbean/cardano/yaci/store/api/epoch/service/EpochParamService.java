@@ -26,7 +26,6 @@ public class EpochParamService {
                 .map(EpochParam::getParams)
                 .map(mapper::toProtocolParamsDto)
                 .map(protocolParamsDto -> {
-                    System.out.println("Setting epoch in param dto");
                     protocolParamsDto.setEpoch(epoch);
                     return protocolParamsDto;
                 });
@@ -37,7 +36,6 @@ public class EpochParamService {
                 .map(EpochParam::getParams)
                 .map(mapper::toProtocolParamsDto)
                 .map(protocolParamsDto -> {
-                    System.out.println("Setting epoch in param dto");
                     protocolParamsDto.setEpoch(epoch);
                     return protocolParamsDto;
                 });
