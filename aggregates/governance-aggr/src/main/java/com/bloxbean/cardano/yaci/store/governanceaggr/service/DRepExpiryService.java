@@ -162,10 +162,11 @@ public class DRepExpiryService {
                 activeUntil = expiry - dormantEpochCount;
             }
 
-            // continue adjusting the active_until value, if the drep was registered or last interacted in a dormant period and in V9
-            if (dRepLastInteraction == null) {
+            // continue adjusting the active_until value, if the drep was registered in a dormant period and in V9
+            if (dRepLastInteraction == null|| dRepLastInteraction.epoch() < dRepRegistration.epoch()) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
-                // check left boundary epoch is in a dormant period and drep was registered in this dormant period
+                // check left boundary epoch is in a dormant period , no proposal in left boundary epoch
+                // and drep was registered in this dormant period and drep registration is in V9
                 if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
                         && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
