@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.starter.blocks;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 @Getter
 @Setter
@@ -30,16 +31,34 @@ public class BlocksStoreAutoConfigProperties {
 
        /**
         * Enable/disable pruning of block CBOR data.
-        * When enabled, CBOR data older than cborRetentionSlots will be automatically deleted.
+        * When enabled, CBOR data older than cborPruningSafeSlots will be automatically deleted.
         */
        private boolean cborPruningEnabled = false;
 
        /**
-        * Retention period for CBOR data in slots.
+        * Safe slot count to keep before pruning the block CBOR data.
         * Default: 43,200 slots (based on 2160 safe blocks).
         * CBOR data older than this will be pruned if cborPruningEnabled is true.
         */
-       private int cborRetentionSlots = 43200; // 20 * 2160 slots
+       private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
+
+       /**
+        * @deprecated Use getCborPruningSafeSlots() instead
+        */
+       @Deprecated
+       @DeprecatedConfigurationProperty(replacement = "store.blocks.cbor-pruning-safe-slots")
+       public int getCborRetentionSlots() {
+           return getCborPruningSafeSlots();
+       }
+
+       /**
+        * @deprecated Use setCborPruningSafeSlots instead
+        * @param cborRetentionSlots the retention slots value
+        */
+       @Deprecated
+       public void setCborRetentionSlots(int cborRetentionSlots) {
+           setCborPruningSafeSlots(cborRetentionSlots);
+       }
     }
 
     @Getter

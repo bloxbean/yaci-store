@@ -1,0 +1,101 @@
+# Yaci Store Zip Distribution (JARs)
+
+Filename: `yaci-store-<version>.zip`
+
+Includes:
+- `yaci-store.jar`
+- `yaci-store-ledger-state.jar`
+- Config files (`application.properties`)
+
+## Pre-requisites
+
+- Java 21 or Java 24 (Recommended)
+
+You can use [sdkman](https://sdkman.io/) to install Java 21 or 24.
+
+```bash
+sdk install java 24.0.1-tem
+sdk use java 24.0.1-tem
+```
+
+Check if JAVA_HOME env variable is set correctly:
+
+```bash
+echo $JAVA_HOME
+```
+
+## Edit Config
+
+- Edit `application.properties` to set the Cardano network and Database connection settings
+- Check the following properties and update them accordingly
+```
+store.cardano.host=preview-node.world.dev.cardano.org
+store.cardano.port=30002
+store.cardano.protocol-magic=2
+```
+
+```
+spring.datasource.url=jdbc:postgresql://localhost:5432/yaci_indexer?currentSchema=preview
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+## Usage
+
+- **To run Yaci Store (without ledger-state):**
+  ```bash
+  ./bin/start.sh
+  ```
+
+- **To enable ledger-state calculation with all other on-chain data:**
+  ```bash
+  ./bin/start.sh ledger-state
+  ```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+## Apply Optional Indexes
+
+After the initial sync is complete:
+
+```bash
+./bin/yaci-cli.sh
+```
+
+This launches the Admin CLI (`yaci-store-admin-cli.jar`). At the CLI prompt:
+
+```bash
+yaci-store> apply-indexes
+```
+
+## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
+
+If you are running ledger-state calculation for mainnet, you should **tune your PostgreSQL configuration** for optimal performance. While the default config will work, sync time will be significantly longer without these optimizations.
+
+### For Standalone Distribution users (Zip or Native):
+
+1. Increase PostgreSQL shared memory to 4GB or more (minimum 2GB recommended)
+2. Configure the following PostgreSQL-related properties in your application configuration (application-ledger-state.properties):
+   - `store.adapot.reward-bulk-load-work-mem=1GB`
+   - `store.adapot.reward-bulk-load-maintenance-work-mem=2GB`
+   - `store.adapot.stake-snapshot-work-mem=512MB`
+   - `store.governance-aggr.drep-dist-work-mem=512MB`

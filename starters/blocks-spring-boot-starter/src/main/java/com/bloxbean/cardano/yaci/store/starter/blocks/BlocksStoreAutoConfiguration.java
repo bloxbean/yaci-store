@@ -28,7 +28,7 @@ public class BlocksStoreAutoConfiguration {
         blocksStoreProperties.setMetricsUpdateInterval(properties.getBlocks().getMetrics().getUpdateInterval());
         blocksStoreProperties.setSaveCbor(properties.getBlocks().isSaveCbor());
         blocksStoreProperties.setCborPruningEnabled(properties.getBlocks().isCborPruningEnabled());
-        blocksStoreProperties.setCborRetentionSlots(properties.getBlocks().getCborRetentionSlots());
+        blocksStoreProperties.setCborPruningSafeSlots(properties.getBlocks().getCborPruningSafeSlots());
 
         return blocksStoreProperties;
     }

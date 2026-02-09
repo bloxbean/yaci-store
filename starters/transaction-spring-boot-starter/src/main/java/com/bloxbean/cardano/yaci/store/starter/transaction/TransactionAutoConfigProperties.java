@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.starter.transaction;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 @Getter
 @Setter
@@ -27,7 +28,7 @@ public class TransactionAutoConfigProperties {
         /**
          * safe slot count to keep before pruning the Transaction
          */
-        private int pruningSafeSlot = 43200; // 2160 blocks
+        private int pruningSafeSlots = 43200; // 2160 blocks
         /**
          * Enable/disable saving of transaction witnesses.
          * When disabled, transaction witnesses will not be stored in the database.
@@ -46,16 +47,52 @@ public class TransactionAutoConfigProperties {
 
       /**
        * Enable/disable pruning of block CBOR data.
-       * When enabled, CBOR data older than cborRetentionSlots will be automatically deleted.
+       * When enabled, CBOR data older than cborPruningSafeSlots will be automatically deleted.
        */
       private boolean cborPruningEnabled = false;
 
       /**
-       * Retention period for CBOR data in slots.
+       * Safe slot count to keep before pruning the transaction CBOR data.
        * Default: 43,200 slots (based on 2160 safe blocks).
        * CBOR data older than this will be pruned if cborPruningEnabled is true.
        */
-      private int cborRetentionSlots = 43200; // 20 * 2160 slots
+      private int cborPruningSafeSlots = 43200; // 20 * 2160 slots
+
+      /**
+       * @deprecated Use getPruningSafeSlots() instead
+       */
+      @Deprecated
+      @DeprecatedConfigurationProperty(replacement = "store.transaction.pruning-safe-slots")
+      public int getPruningSafeSlot() {
+          return getPruningSafeSlots();
+      }
+
+      /**
+       * @deprecated Use setPruningSafeSlots instead
+       * @param pruningSafeSlot the safe slot value
+       */
+      @Deprecated
+      public void setPruningSafeSlot(int pruningSafeSlot) {
+          setPruningSafeSlots(pruningSafeSlot);
+      }
+
+      /**
+       * @deprecated Use getCborPruningSafeSlots() instead
+       */
+      @Deprecated
+      @DeprecatedConfigurationProperty(replacement = "store.transaction.cbor-pruning-safe-slots")
+      public int getCborRetentionSlots() {
+          return getCborPruningSafeSlots();
+      }
+
+      /**
+       * @deprecated Use setCborPruningSafeSlots instead
+       * @param cborRetentionSlots the retention slots value
+       */
+      @Deprecated
+      public void setCborRetentionSlots(int cborRetentionSlots) {
+          setCborPruningSafeSlots(cborRetentionSlots);
+      }
     }
 
     @Getter

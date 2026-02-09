@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.adapot.snapshot;
 
+import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
+import com.bloxbean.cardano.yaci.store.adapot.storage.PartitionManager;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,10 +20,15 @@ import java.util.Map;
 @Slf4j
 public class StakeSnapshotService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final AdaPotProperties adaPotProperties;
+    private final PartitionManager partitionManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int epoch) {
         log.info("Taking stake snapshot for epoch : " + epoch);
+
+        // Ensure partition exists for this epoch before taking snapshot
+        partitionManager.ensureEpochStakePartition(epoch);
 
         String tableType = "";
         //If postgres, set synchronous_commit to off for rest of the transaction
@@ -30,6 +37,19 @@ public class StakeSnapshotService {
             jdbcTemplate.update("SET LOCAL synchronous_commit = off", Map.of());
             tableType = "UNLOGGED";
             log.info("Postgres detected. Using UNLOGGED table for temp tables");
+
+            // Increase work_mem for complex snapshot queries with joins and window functions
+            // This setting only affects the current transaction and automatically resets after
+            // Only set if configured (null/empty means use PostgreSQL defaults)
+            try {
+                String workMem = adaPotProperties.getStakeSnapshotWorkMem();
+                if (workMem != null && !workMem.isBlank()) {
+                    jdbcTemplate.update("SET LOCAL work_mem = '" + workMem + "'", Map.of());
+                    log.info("Set work_mem to {} for stake snapshot operations", workMem);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to set work_mem: {}. Continuing with default settings.", e.getMessage());
+            }
         }
 
         jdbcTemplate.update("delete from epoch_stake where epoch = :epoch", new MapSqlParameterSource().addValue("epoch", epoch));

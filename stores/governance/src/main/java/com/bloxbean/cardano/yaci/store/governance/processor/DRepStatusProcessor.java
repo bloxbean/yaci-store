@@ -61,7 +61,9 @@ public class DRepStatusProcessor {
                             .deposit(drepRegistration.getDeposit())
                             .epoch(drepRegistration.getEpoch())
                             .slot(metadata.getSlot())
-                            .blockHash(metadata.getBlockHash());
+                            .blockHash(metadata.getBlockHash())
+                            .blockNumber(metadata.getBlock())
+                            .blockTime(metadata.getBlockTime());
 
                     if (drepRegistration.getType() == CertificateType.REG_DREP_CERT) {
                         dRepBuilder.registrationSlot(drepRegistrationEvent.getMetadata().getSlot());

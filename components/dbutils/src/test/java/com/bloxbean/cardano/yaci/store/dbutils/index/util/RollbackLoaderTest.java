@@ -52,7 +52,7 @@ class RollbackLoaderTest {
         assertEquals(">", txInputTable.getCondition().getOperator());
         assertNull(txInputTable.getCondition().getOffset());
 
-        RollbackConfig.TableRollbackDefinition assetTable = findTableByName(config.getTables(), "asset");
+        RollbackConfig.TableRollbackDefinition assetTable = findTableByName(config.getTables(), "assets");
         assertNotNull(assetTable);
         assertEquals("DELETE", assetTable.getOperation());
         assertEquals("slot", assetTable.getCondition().getType());
@@ -72,7 +72,7 @@ class RollbackLoaderTest {
         assertTrue(tableNames.contains("epoch_stake"));
         assertTrue(tableNames.contains("adapot_jobs"));
         assertTrue(tableNames.contains("tx_input"));
-        assertTrue(tableNames.contains("asset"));
+        assertTrue(tableNames.contains("assets"));
     }
 
     @Test

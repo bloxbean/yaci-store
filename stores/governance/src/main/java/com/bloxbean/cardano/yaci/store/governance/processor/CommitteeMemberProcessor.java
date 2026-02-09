@@ -159,7 +159,7 @@ public class CommitteeMemberProcessor {
                     updatedCommitteeMembers.add(CommitteeMember.builder()
                             .hash(credential.getHash())
                             .startEpoch(epoch)
-                            .expiredEpoch(epoch + term)
+                            .expiredEpoch(term)
                             .credType(credential.getType().equals(StakeCredType.ADDR_KEYHASH)
                                     ? CredentialType.ADDR_KEYHASH
                                     : CredentialType.SCRIPTHASH)

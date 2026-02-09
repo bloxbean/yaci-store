@@ -1,14 +1,14 @@
 <div align="center">
-<img src="static/YaciStore.png" width="200">
+<img src="static/YaciStore.svg" width="200">
 
-<h4>A Cardano blockchain indexer and datastore built with Yaci</h4>
+<h3>A Cardano blockchain indexer and datastore built with Yaci</h3>
 
 [![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
 </div>
 
 ## Overview
 
-Yaci Store is a modular, high-performance Cardano blockchain indexer and datastore that provides a flexible foundation for building blockchain applications. Built on top of the Yaci library, it offers both out-of-the-box functionality and extensive customization options through its plugin framework.
+**Yaci Store** is a modular, high-performance Cardano blockchain indexer and datastore that provides a flexible foundation for building blockchain applications. Built on top of the Yaci library, it offers both out-of-the-box functionality and extensive customization options through its plugin framework.
 
 ### Key Features
 
@@ -24,10 +24,7 @@ Yaci Store is a modular, high-performance Cardano blockchain indexer and datasto
 
 ### Latest Releases
 
-- **Stable Release**: [v0.1.6](https://github.com/bloxbean/yaci-store/releases/tag/v0.1.6) - Production-ready release
-- **Beta Release**: [v2.0.0-beta4](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0-beta4) - Next generation release with enhanced features
-  - All core modules and stores are production-ready
-  - Note: Ledger State module is still in beta
+- **Stable Release**: [v2.0.0](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0) - Production-ready release
 
 ### Core Stores
 
@@ -117,6 +114,18 @@ Is your project using Yaci Store? We'd love to feature it here! Please open a PR
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## Branching & releases
+
+- `main` → active development for the next minor release (2.1.x)
+- `release/2.0.x` → patch fixes for the 2.0.x line
+- `next` → development of the next major version (3.0)
+
+Please open pull requests against the `main` branch unless advised otherwise.
+
+### Documentation source
+
+The latest documentation source is maintained in the `main` branch.
 
 ## License
 

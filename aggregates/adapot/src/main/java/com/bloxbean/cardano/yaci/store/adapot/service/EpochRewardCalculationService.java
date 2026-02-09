@@ -454,7 +454,7 @@ public class EpochRewardCalculationService {
         } else if (bulkUpdateRewards && !batchedRewards.isEmpty()) {
             if (bulkUpdateRewardsWithCopy) {
                 log.info(">> Bulk saving rewards with copy for epoch " + epoch + " with rewards : " + batchedRewards.size());
-                rewardStorage.bulkSaveRewardsWithCopy(batchedRewards);
+                rewardStorage.bulkSaveRewardsWithCopy(batchedRewards, epoch);
                 log.info("Final batch of rewards saved with bulk copy: " + batchedRewards.size());
             } else {
                 log.info(">> Bulk saving rewards for epoch " + epoch + " with rewards : " + batchedRewards.size());

@@ -60,7 +60,7 @@ class CommitteeMemberProcessorTest {
         Credential newMember2 = new Credential(StakeCredType.SCRIPTHASH, "ffffff06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b");
 
         UpdateCommittee updateCommittee = new UpdateCommittee(null, Set.of(removedMember1, removedMember2),
-                Map.of(newMember1, 50, newMember2, 60),
+                Map.of(newMember1, 150, newMember2, 160),
                 UnitInterval.fromString("75/100"));
 
         GovActionProposal proposal = GovActionProposal
@@ -118,14 +118,14 @@ class CommitteeMemberProcessorTest {
 
         assertThat(savedMembers.stream().anyMatch(member -> member.getHash().equals("eeeeee06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
                 && member.getStartEpoch() == 101
-                && member.getExpiredEpoch() == 151
+                && member.getExpiredEpoch() == 150
                 && member.getCredType() == CredentialType.ADDR_KEYHASH
                 && member.getSlot() == 6000L))
                 .isTrue();
 
         assertThat(savedMembers.stream().anyMatch(member -> member.getHash().equals("ffffff06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
                 && member.getStartEpoch() == 101
-                && member.getExpiredEpoch() == 161
+                && member.getExpiredEpoch() == 160
                 && member.getCredType() == CredentialType.SCRIPTHASH
                 && member.getSlot() == 6000L))
                 .isTrue();

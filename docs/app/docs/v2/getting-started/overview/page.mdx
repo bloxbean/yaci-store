@@ -1,0 +1,48 @@
+import { Callout } from 'nextra/components'
+
+# Getting Started with Yaci Store 2.x.x
+
+## Current Version: 2.0.0
+
+This is the **latest release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+
+Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
+
+---
+
+## Status of Ledger State Data Accuracy
+
+Ledger State calculations include:
+- Epoch Stake and Rewards
+- ADAPot values
+- Governance State (dRep distribution, Proposal Status, dRep Status)
+
+### Reward Calculation and ADAPot Status
+
+ADAPot values match across all 3 public networks:
+- **Mainnet**: Verified through epoch 610
+- **Preprod**: Verified through epoch 268
+- **Preview**: Verified through epoch 1196
+
+We will update this section with any discrepancies for future mismatches.
+
+### Governance State Data
+
+Governance action proposal statuses match across all 3 public networks:
+- **Mainnet**: Verified through epoch 610
+- **Preprod**: Verified through epoch 268
+- **Preview**: Verified through epoch 1196
+
+However, there are some known mismatches in dRep distribution and **DRep Expiry Epoch**. For the latest mismatch reports, see [the 2.0.0 mismatch summary](../ledger-state-mismatches/2-0-0/overview). We will be working on fixing these in future releases.
+
+## Out-of-the-Box Applications
+
+### 1. **Yaci Store App**
+- The **default indexer application**, includes all modules.
+- **Ledger-state calculation is disabled by default** but can be enabled via profile.
+
+### 2. **Yaci Store Admin CLI App**
+- CLI tool to **apply optional indexes after sync is complete**.
+- Optional indexes improve API query performance and are not applied during initial sync.
+- Supports rollback to a previous epoch
+

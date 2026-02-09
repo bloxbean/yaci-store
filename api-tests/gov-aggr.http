@@ -1,0 +1,148 @@
+
+### Get governance proposals
+GET {{base_url}}/api/v1/governance-state/proposals?count=10&page=0&order=desc
+
+> {%
+    client.test("Get governance proposals", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        client.assert(response.body !== null, "Response body is null");
+        client.assert(Array.isArray(response.body), "Response body is not an array");
+        client.assert(response.body.length > 0, "Response array length is not greater than zero")
+    });
+%}
+
+### Get proposal details
+GET {{base_url}}/api/v1/governance-state/proposals/158ef6b249b7c3ec219c62d11f0b8e766a356472d023bd7b1e736efed977f3c6/0
+
+> {%
+    client.test("Get proposal details", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        client.assert(response.body !== null, "Response body is null");
+
+        client.assert(response.body.tx_hash !== undefined, "Tx hash is null");
+        client.assert(response.body.return_address !== undefined, "Return address is null");
+        client.log(response.body.return_address);
+    });
+%}
+
+### Get dreps
+GET {{base_url}}/api/v1/governance-state/dreps?count=10&page=0&order=desc
+
+> {%
+    client.test("Get dreps", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        client.assert(response.body !== null, "Response body is null");
+        client.assert(Array.isArray(response.body), "Response body is not an array");
+
+        // If there are dreps in the response, validate the structure
+        if (response.body.length > 0) {
+            const drep = response.body[0];
+
+            // Check required fields exist
+            client.assert(drep.drep_id !== undefined, "drep_id is undefined");
+            client.assert(drep.drep_hash !== undefined, "drep_hash is undefined");
+            client.assert(drep.deposit !== undefined, "deposit is undefined");
+            client.assert(drep.status !== undefined, "status is undefined");
+            client.assert(drep.voting_power !== undefined, "voting_power is undefined");
+            client.assert(drep.registration_slot !== undefined, "registration_slot is undefined");
+            client.assert(drep.drep_type !== undefined, "drep_type is undefined");
+
+            // Validate data types
+            client.assert(typeof drep.drep_id === "string", "drep_id should be a string");
+            client.assert(typeof drep.drep_hash === "string", "drep_hash should be a string");
+            client.assert(typeof drep.deposit === "number", "deposit should be a number");
+            client.assert(typeof drep.status === "string", "status should be a string");
+            client.assert(typeof drep.voting_power === "number", "voting_power should be a number");
+            client.assert(typeof drep.registration_slot === "number", "registration_slot should be a number");
+            client.assert(typeof drep.drep_type === "string", "drep_type should be a string");
+
+            // Validate drep_type is one of the expected values
+            const validDrepTypes = ["ADDR_KEYHASH", "SCRIPTHASH"];
+            client.assert(validDrepTypes.includes(drep.drep_type), "drep_type should be ADDR_KEYHASH or SCRIPTHASH");
+
+            client.log("Sample drep:", drep.drep_id);
+        }
+    });
+%}
+
+### Get drep details by ID
+
+GET {{base_url}}/api/v1/governance-state/dreps/drep1yfvngdk5pv943zx2z5kun2e5hqmjdx5ns60x3rauyxd300s93rjrx
+
+> {%
+    client.test("Get drep details by ID", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        client.assert(response.body !== null, "Response body is null");
+
+        // Check all required fields exist
+        client.assert(response.body.drep_id !== undefined, "drep_id is undefined");
+        client.assert(response.body.drep_hash !== undefined, "drep_hash is undefined");
+        client.assert(response.body.deposit !== undefined, "deposit is undefined");
+        client.assert(response.body.status !== undefined, "status is undefined");
+        client.assert(response.body.voting_power !== undefined, "voting_power is undefined");
+        client.assert(response.body.registration_slot !== undefined, "registration_slot is undefined");
+        client.assert(response.body.drep_type !== undefined, "drep_type is undefined");
+
+        // Validate data types
+        client.assert(typeof response.body.drep_id === "string", "drep_id should be a string");
+        client.assert(typeof response.body.drep_hash === "string", "drep_hash should be a string");
+        client.assert(typeof response.body.deposit === "number", "deposit should be a number");
+        client.assert(typeof response.body.status === "string", "status should be a string");
+        client.assert(typeof response.body.voting_power === "number", "voting_power should be a number");
+        client.assert(typeof response.body.registration_slot === "number", "registration_slot should be a number");
+        client.assert(typeof response.body.drep_type === "string", "drep_type should be a string");
+
+        // Validate the returned drep_id matches the requested one
+        client.assert(response.body.drep_id === "drep1yfvngdk5pv943zx2z5kun2e5hqmjdx5ns60x3rauyxd300s93rjrx",
+                     "drep_id does not match requested ID");
+
+        client.log("Drep details retrieved for:", response.body.drep_id);
+    });
+%}
+
+### Get special dreps (NO_CONFIDENCE and ABSTAIN)
+GET {{base_url}}/api/v1/governance-state/dreps/special
+
+> {%
+    client.test("Get special dreps", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        client.assert(response.body !== null, "Response body is null");
+        client.assert(Array.isArray(response.body), "Response body is not an array");
+
+        // Should always have exactly 2 special dreps
+        client.assert(response.body.length === 2, "Should have exactly 2 special dreps");
+
+        // Extract drep types from response
+        const drepTypes = response.body.map(drep => drep.drep_type);
+
+        // Validate both required types are present
+        client.assert(drepTypes.includes("NO_CONFIDENCE"), "NO_CONFIDENCE drep is missing");
+        client.assert(drepTypes.includes("ABSTAIN"), "ABSTAIN drep is missing");
+
+        // Validate structure of each drep
+        response.body.forEach((drep, index) => {
+            // Check all required fields exist
+            client.assert(drep.epoch !== undefined, `drep[${index}].epoch is undefined`);
+            client.assert(drep.voting_power !== undefined, `drep[${index}].voting_power is undefined`);
+            client.assert(drep.drep_type !== undefined, `drep[${index}].drep_type is undefined`);
+
+            // Validate data types
+            client.assert(typeof drep.epoch === "number", `drep[${index}].epoch should be a number`);
+            client.assert(typeof drep.voting_power === "number", `drep[${index}].voting_power should be a number`);
+            client.assert(typeof drep.drep_type === "string", `drep[${index}].drep_type should be a string`);
+
+            // Validate drep_type is one of the expected special types
+            const validSpecialTypes = ["NO_CONFIDENCE", "ABSTAIN"];
+            client.assert(validSpecialTypes.includes(drep.drep_type),
+                         `drep[${index}].drep_type should be NO_CONFIDENCE or ABSTAIN`);
+        });
+
+        client.log("Special dreps validated:", drepTypes.join(", "));
+    });
+%}
+

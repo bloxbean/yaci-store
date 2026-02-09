@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class EpochStoreProperties {
-    private Epoch epoch;
+    private Epoch epoch = new Epoch();
 
     @Getter
     @Setter

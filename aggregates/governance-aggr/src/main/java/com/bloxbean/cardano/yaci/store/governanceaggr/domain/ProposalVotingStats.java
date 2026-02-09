@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 
 @Data
@@ -25,6 +26,7 @@ public class ProposalVotingStats {
     private BigInteger spoNoVoteStake;
     private BigInteger spoAbstainVoteStake;
     private BigInteger spoDoNotVoteStake;
+    private BigDecimal spoApprovalRatio;
 
     // dReps stats
     private BigInteger drepTotalYesStake;
@@ -36,10 +38,12 @@ public class ProposalVotingStats {
     private BigInteger drepNoConfidenceStake;
     private BigInteger drepAutoAbstainStake;
     private BigInteger drepDoNotVoteStake;
+    private BigDecimal drepApprovalRatio;
 
     // committee stats
     private Integer ccYes;
     private Integer ccNo;
     private Integer ccDoNotVote;
     private Integer ccAbstain;
+    private BigDecimal ccApprovalRatio;
 }

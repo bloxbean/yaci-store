@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 @ConfigurationProperties(prefix = "store", ignoreUnknownFields = true)
 public class MIRStoreProperties {
-    private MIR mir;
+    private MIR mir = new MIR();
 
     @Getter
     @Setter

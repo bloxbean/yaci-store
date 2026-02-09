@@ -67,41 +67,59 @@ public class ProposalStateProcessor {
             // Take DRep distribution snapshot
             takeDRepDistrSnapshot(currentEpoch);
 
-            GovernanceEvaluationService governanceEvaluationService = new GovernanceEvaluationService();
-
-            // Collect aggregated governance data (proposals, votes, stake snapshots) for evaluation and voting stats computation
-            var aggregatorGovernanceData = proposalStateService.collectGovernanceData(currentEpoch);
-
-            if (aggregatorGovernanceData == null) {
+            Optional<List<GovActionProposalStatus>> statusListOpt = evaluateProposalStatuses(currentEpoch);
+            if (statusListOpt.isEmpty()) {
                 log.info("No proposals found for evaluation in epoch: {}", currentEpoch);
                 publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
                 return;
             }
 
-            // convert to governance evaluation input
-            GovernanceEvaluationInput input = governanceEvaluationInputMapper.toGovernanceEvaluationInput(aggregatorGovernanceData);
-
-            // evaluate proposal status
-            GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);
-
-            // compute voting stats
-            var statsMap = votingStatsService.computeVotingStats(aggregatorGovernanceData);
-
-            // map to GovActionProposalStatus and save
-            List<GovActionProposalStatus> statusList = proposalStatusMapper.mapToProposalStatus(result, currentEpoch, statsMap);
-            
+            List<GovActionProposalStatus> statusList = statusListOpt.get();
             if (!statusList.isEmpty()) {
                 govActionProposalStatusStorage.saveAll(statusList);
             }
-            
+
             log.info("Processed {} proposal statuses for epoch {}", statusList.size(), currentEpoch);
-            
+
             publisher.publishEvent(new ProposalStatusCapturedEvent(currentEpoch, stakeSnapshotTakenEvent.getSlot()));
             
         } catch (Exception e) {
             log.error("Error processing proposal status for epoch {}", currentEpoch, e);
             throw e;
         }
+    }
+
+    Optional<List<GovActionProposalStatus>> evaluateProposalStatuses(int epoch) {
+        // Collect aggregated governance data (proposals, votes, stake snapshots) for evaluation and voting stats computation
+        var aggregatedGovernanceData = proposalStateService.collectGovernanceData(epoch);
+
+        if (aggregatedGovernanceData == null) {
+            return Optional.empty();
+        }
+
+        GovernanceEvaluationService governanceEvaluationService = createGovernanceEvaluationService();
+
+        // convert to governance evaluation input
+        GovernanceEvaluationInput input = governanceEvaluationInputMapper.toGovernanceEvaluationInput(aggregatedGovernanceData);
+
+        // evaluate proposal status
+        GovernanceEvaluationResult result = governanceEvaluationService.evaluateGovernanceState(input);
+
+        // compute voting stats
+        var statsMap = votingStatsService.computeVotingStats(aggregatedGovernanceData);
+
+        // map to GovActionProposalStatus
+        List<GovActionProposalStatus> statusList = proposalStatusMapper.mapToProposalStatus(result, epoch, statsMap);
+
+        return Optional.of(statusList);
+    }
+
+    public List<GovActionProposalStatus> getProposalStatuses(int epoch) {
+        return evaluateProposalStatuses(epoch).orElseGet(List::of);
+    }
+
+    GovernanceEvaluationService createGovernanceEvaluationService() {
+        return new GovernanceEvaluationService();
     }
 
     private void takeDRepDistrSnapshot(int epoch) {

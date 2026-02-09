@@ -57,7 +57,7 @@ public class EpochStakeDataComparator {
 
         String storeQuery = "SELECT address, amount, pool_id " +
                 "FROM epoch_stake " +
-                "WHERE active_epoch = ? ORDER BY address, pool_id, amount";
+                "WHERE epoch = ? - 2 ORDER BY address, pool_id, amount";
 
         Map<String, EpochStakeData> dbSyncMap = new HashMap<>();
         Map<String, EpochStakeData> storeMap = new HashMap<>();

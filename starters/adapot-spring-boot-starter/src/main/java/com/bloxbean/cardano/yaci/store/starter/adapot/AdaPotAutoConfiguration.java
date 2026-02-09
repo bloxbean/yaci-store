@@ -26,6 +26,11 @@ public class AdaPotAutoConfiguration {
         adaPotProperties.setUpdateRewardDbBatchSize(properties.getAdaPot().getUpdateRewardDbBatchSize());
         adaPotProperties.setBulkUpdateReward(properties.getAdaPot().isBulkUpdateReward());
         adaPotProperties.setBulkUpdateRewardWithCopy(properties.getAdaPot().isBulkUpdateRewardWithCopy());
+
+        adaPotProperties.setRewardBulkLoadWorkMem(properties.getAdaPot().getRewardBulkLoadWorkMem());
+        adaPotProperties.setRewardBulkLoadMaintenanceWorkMem(properties.getAdaPot().getRewardBulkLoadMaintenanceWorkMem());
+        adaPotProperties.setStakeSnapshotWorkMem(properties.getAdaPot().getStakeSnapshotWorkMem());
+
         adaPotProperties.setVerifyAdapotCalcValues(properties.getAdaPot().isVerifyAdapotCalcValues());
 
         // Set epoch stake pruning properties
