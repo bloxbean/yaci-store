@@ -22,6 +22,7 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class ProtocolParamsDto {
+    private Integer epoch;
     private Integer minFeeA;
     private Integer minFeeB;
     private Integer maxBlockSize;
@@ -75,9 +76,13 @@ public class ProtocolParamsDto {
     private BigDecimal dvtCommitteeNoConfidence;
     private BigDecimal dvtUpdateToConstitution;
     private BigDecimal dvtHardForkInitiation;
+    @JsonProperty("dvt_p_p_network_group")
     private BigDecimal dvtPPNetworkGroup;
+    @JsonProperty("dvt_p_p_economic_group")
     private BigDecimal dvtPPEconomicGroup;
+    @JsonProperty("dvt_p_p_technical_group")
     private BigDecimal dvtPPTechnicalGroup;
+    @JsonProperty("dvt_p_p_gov_group")
     private BigDecimal dvtPPGovGroup;
     private BigDecimal dvtTreasuryWithdrawal;
 

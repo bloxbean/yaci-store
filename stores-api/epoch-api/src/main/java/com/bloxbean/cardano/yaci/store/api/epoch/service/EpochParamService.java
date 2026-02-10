@@ -24,13 +24,21 @@ public class EpochParamService {
         int epoch = epochParamStorage.getMaxEpoch();
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto);
+                .map(mapper::toProtocolParamsDto)
+                .map(protocolParamsDto -> {
+                    protocolParamsDto.setEpoch(epoch);
+                    return protocolParamsDto;
+                });
     }
 
     public Optional<ProtocolParamsDto> getProtocolParams(int epoch) {
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto);
+                .map(mapper::toProtocolParamsDto)
+                .map(protocolParamsDto -> {
+                    protocolParamsDto.setEpoch(epoch);
+                    return protocolParamsDto;
+                });
     }
 
     public int getLatestEpoch() {

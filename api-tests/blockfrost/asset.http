@@ -1,0 +1,352 @@
+
+
+### @name getAssets
+### Get information about all assets
+GET {{blockfrost_base_url}}/assets
+project_id: {{blockfrost_project_id}}
+
+> {%
+    // Save the response body to a global variable to use in the next request
+    client.global.set("blockfrostAssetsResponse", response.body);
+
+    client.test("Get assets", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets
+
+> {%
+    // Retrieve the response from the first request
+    const blockfrostAssetsResponse = client.global.get("blockfrostAssetsResponse");
+    const yaciAssetsResponse = response.body;
+
+    client.test("Compare assets between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostAssetsResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciAssetsResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostAssetsResponse.length === yaciAssetsResponse.length,
+            `Asset array length is different between blockfrost and yaci (Blockfrost: ${blockfrostAssetsResponse.length}, Yaci: ${yaciAssetsResponse.length})`);
+
+        if (blockfrostAssetsResponse.length > 0 && yaciAssetsResponse.length > 0) {
+            // Compare first asset
+            const blockfrostAsset = blockfrostAssetsResponse[0];
+            const yaciAsset = yaciAssetsResponse[0];
+
+            // Compare asset (unit)
+            client.assert(blockfrostAsset.asset === yaciAsset.asset,
+                `asset is different between blockfrost and yaci (Blockfrost: ${blockfrostAsset.asset}, Yaci: ${yaciAsset.asset})`);
+
+            // Compare quantity
+            client.assert(blockfrostAsset.quantity === yaciAsset.quantity,
+                `quantity is different between blockfrost and yaci (Blockfrost: ${blockfrostAsset.quantity}, Yaci: ${yaciAsset.quantity})`);
+        }
+    });
+%}
+
+
+### @name getAssetDetail
+### Get information about a specific asset
+GET {{blockfrost_base_url}}/assets/{{test_asset}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostAssetDetailResponse", response.body);
+
+    client.test("Get asset detail", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/{{test_asset}}
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostAssetDetailResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare asset detail between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Compare asset identifier
+        client.assert(blockfrostResponse.asset === yaciResponse.asset,
+            `asset is different (Blockfrost: ${blockfrostResponse.asset}, Yaci: ${yaciResponse.asset})`);
+
+        // Compare policy_id
+        client.assert(blockfrostResponse.policy_id === yaciResponse.policy_id,
+            `policy_id is different (Blockfrost: ${blockfrostResponse.policy_id}, Yaci: ${yaciResponse.policy_id})`);
+
+        // Compare asset_name
+        client.assert(blockfrostResponse.asset_name === yaciResponse.asset_name,
+            `asset_name is different (Blockfrost: ${blockfrostResponse.asset_name}, Yaci: ${yaciResponse.asset_name})`);
+
+        // Compare fingerprint
+        client.assert(blockfrostResponse.fingerprint === yaciResponse.fingerprint,
+            `fingerprint is different (Blockfrost: ${blockfrostResponse.fingerprint}, Yaci: ${yaciResponse.fingerprint})`);
+
+        // Compare quantity
+        client.assert(blockfrostResponse.quantity === yaciResponse.quantity,
+            `quantity is different (Blockfrost: ${blockfrostResponse.quantity}, Yaci: ${yaciResponse.quantity})`);
+
+        // Compare initial_mint_tx_hash
+        client.assert(blockfrostResponse.initial_mint_tx_hash === yaciResponse.initial_mint_tx_hash,
+            `initial_mint_tx_hash is different (Blockfrost: ${blockfrostResponse.initial_mint_tx_hash}, Yaci: ${yaciResponse.initial_mint_tx_hash})`);
+
+        // Compare mint_or_burn_count
+        client.assert(blockfrostResponse.mint_or_burn_count === yaciResponse.mint_or_burn_count,
+            `mint_or_burn_count is different (Blockfrost: ${blockfrostResponse.mint_or_burn_count}, Yaci: ${yaciResponse.mint_or_burn_count})`);
+    });
+%}
+
+
+### @name getAssetHistory
+### Get history of a specific asset
+GET {{blockfrost_base_url}}/assets/{{test_asset}}/history
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostAssetHistoryResponse", response.body);
+
+    client.test("Get asset history", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/{{test_asset}}/history
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostAssetHistoryResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare asset history between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `History array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare tx_hash
+            client.assert(bf.tx_hash === yaci.tx_hash,
+                `tx_hash is different (Blockfrost: ${bf.tx_hash}, Yaci: ${yaci.tx_hash})`);
+
+            // Compare action (mint or burn)
+            client.assert(bf.action === yaci.action,
+                `action is different (Blockfrost: ${bf.action}, Yaci: ${yaci.action})`);
+
+            // Compare amount
+            client.assert(bf.amount === yaci.amount,
+                `amount is different (Blockfrost: ${bf.amount}, Yaci: ${yaci.amount})`);
+        }
+    });
+%}
+
+
+### @name getAssetTxs
+### Get transaction hashes for a specific asset
+GET {{blockfrost_base_url}}/assets/{{test_asset}}/txs
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostAssetTxsResponse", response.body);
+
+    client.test("Get asset txs", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/{{test_asset}}/txs
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostAssetTxsResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare asset txs between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays of tx hashes
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Txs array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        // Compare first tx hash
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(blockfrostResponse[0] === yaciResponse[0],
+                `First tx hash is different (Blockfrost: ${blockfrostResponse[0]}, Yaci: ${yaciResponse[0]})`);
+        }
+    });
+%}
+
+
+### @name getAssetTransactions
+### Get transactions for a specific asset (detailed)
+GET {{blockfrost_base_url}}/assets/{{test_asset}}/transactions
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostAssetTransactionsResponse", response.body);
+
+    client.test("Get asset transactions", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/{{test_asset}}/transactions
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostAssetTransactionsResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare asset transactions between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Transactions array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare tx_hash
+            client.assert(bf.tx_hash === yaci.tx_hash,
+                `tx_hash is different (Blockfrost: ${bf.tx_hash}, Yaci: ${yaci.tx_hash})`);
+
+            // Compare tx_index
+            client.assert(bf.tx_index === yaci.tx_index,
+                `tx_index is different (Blockfrost: ${bf.tx_index}, Yaci: ${yaci.tx_index})`);
+
+            // Compare block_height
+            client.assert(bf.block_height === yaci.block_height,
+                `block_height is different (Blockfrost: ${bf.block_height}, Yaci: ${yaci.block_height})`);
+
+            // Compare block_time
+            client.assert(bf.block_time === yaci.block_time,
+                `block_time is different (Blockfrost: ${bf.block_time}, Yaci: ${yaci.block_time})`);
+        }
+    });
+%}
+
+
+### @name getAssetAddresses
+### Get addresses holding a specific asset
+GET {{blockfrost_base_url}}/assets/{{test_asset}}/addresses
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostAssetAddressesResponse", response.body);
+
+    client.test("Get asset addresses", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/{{test_asset}}/addresses
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostAssetAddressesResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare asset addresses between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Addresses array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare address
+            client.assert(bf.address === yaci.address,
+                `address is different (Blockfrost: ${bf.address}, Yaci: ${yaci.address})`);
+
+            // Compare quantity
+            client.assert(bf.quantity === yaci.quantity,
+                `quantity is different (Blockfrost: ${bf.quantity}, Yaci: ${yaci.quantity})`);
+        }
+    });
+%}
+
+
+### @name getAssetsByPolicy
+### Get assets minted under a specific policy
+# Extract policy_id from test_asset (first 56 chars)
+GET {{blockfrost_base_url}}/assets/policy/c2ecc337337cf48720e3747c833c9c179e08d2ea235d9bee7afbcb17
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostPolicyAssetsResponse", response.body);
+
+    client.test("Get assets by policy", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/assets/policy/c2ecc337337cf48720e3747c833c9c179e08d2ea235d9bee7afbcb17
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostPolicyAssetsResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare assets by policy between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Policy assets array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare asset
+            client.assert(bf.asset === yaci.asset,
+                `asset is different (Blockfrost: ${bf.asset}, Yaci: ${yaci.asset})`);
+
+            // Compare quantity
+            client.assert(bf.quantity === yaci.quantity,
+                `quantity is different (Blockfrost: ${bf.quantity}, Yaci: ${yaci.quantity})`);
+        }
+    });
+%}

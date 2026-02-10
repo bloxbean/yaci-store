@@ -1,0 +1,24 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+
+    api project(":extensions:blockfrost:blockfrost-common")
+    api project(":stores:blocks")
+	api project(":stores:epoch")
+	api project(":stores-api:epoch-api")
+    api project(":aggregates:epoch-aggr")
+    api project(":aggregates:adapot")
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			pom {
+				name = 'Yaci Store Blockfrost Epochs'
+				description = 'Yaci Store Blockfrost Epochs API'
+			}
+		}
+	}
+}

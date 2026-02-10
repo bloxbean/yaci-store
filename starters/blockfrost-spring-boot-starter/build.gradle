@@ -1,0 +1,23 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    api project(":extensions:blockfrost:blockfrost-epoch")
+    api project(":extensions:blockfrost:blockfrost-address")
+    api project(":extensions:blockfrost:blockfrost-asset")
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+}
+
+tasks.named('compileJava') {
+    inputs.files(tasks.named('processResources'))
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Blockfrost Spring Boot Starter'
+                description = 'Yaci Store Blockfrost Spring Boot Starter'
+            }
+        }
+    }
+}
