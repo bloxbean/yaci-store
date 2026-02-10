@@ -1,8 +1,116 @@
 
+### @name getLatestEpochBlockfrost
+### Get latest epoch info from Blockfrost
+GET {{blockfrost_base_url}}/epochs/latest
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostLatestEpochResponse", response.body);
+
+    client.test("Get latest epoch info", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getLatestEpochYaci
+### Get latest epoch info from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/latest
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostLatestEpochResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare latest epoch info between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Compare epoch number
+        client.assert(blockfrostResponse.epoch === yaciResponse.epoch, `epoch is different (Blockfrost: ${blockfrostResponse.epoch}, Yaci: ${yaciResponse.epoch})`);
+
+        // Compare start_time
+        client.assert(blockfrostResponse.start_time === yaciResponse.start_time, `start_time is different (Blockfrost: ${blockfrostResponse.start_time}, Yaci: ${yaciResponse.start_time})`);
+
+        // Compare end_time
+        client.assert(blockfrostResponse.end_time === yaciResponse.end_time, `end_time is different (Blockfrost: ${blockfrostResponse.end_time}, Yaci: ${yaciResponse.end_time})`);
+
+        // Compare first_block_time
+        client.assert(blockfrostResponse.first_block_time === yaciResponse.first_block_time, `first_block_time is different (Blockfrost: ${blockfrostResponse.first_block_time}, Yaci: ${yaciResponse.first_block_time})`);
+
+        // Compare last_block_time
+        client.assert(blockfrostResponse.last_block_time === yaciResponse.last_block_time, `last_block_time is different (Blockfrost: ${blockfrostResponse.last_block_time}, Yaci: ${yaciResponse.last_block_time})`);
+
+        // Compare block_count
+        client.assert(blockfrostResponse.block_count === yaciResponse.block_count, `block_count is different (Blockfrost: ${blockfrostResponse.block_count}, Yaci: ${yaciResponse.block_count})`);
+
+        // Compare tx_count
+        client.assert(blockfrostResponse.tx_count === yaciResponse.tx_count, `tx_count is different (Blockfrost: ${blockfrostResponse.tx_count}, Yaci: ${yaciResponse.tx_count})`);
+
+        // Compare output
+        client.assert(blockfrostResponse.output === yaciResponse.output, `output is different (Blockfrost: ${blockfrostResponse.output}, Yaci: ${yaciResponse.output})`);
+
+        // Compare fees
+        client.assert(blockfrostResponse.fees === yaciResponse.fees, `fees is different (Blockfrost: ${blockfrostResponse.fees}, Yaci: ${yaciResponse.fees})`);
+    });
+%}
+
+
+### @name getSpecificEpochBlockfrost
+### Get specific epoch info from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostSpecificEpochResponse", response.body);
+
+    client.test("Get specific epoch info", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getSpecificEpochYaci
+### Get specific epoch info from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostSpecificEpochResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare specific epoch info between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Compare epoch number
+        client.assert(blockfrostResponse.epoch === yaciResponse.epoch, `epoch is different (Blockfrost: ${blockfrostResponse.epoch}, Yaci: ${yaciResponse.epoch})`);
+
+        // Compare start_time
+        client.assert(blockfrostResponse.start_time === yaciResponse.start_time, `start_time is different (Blockfrost: ${blockfrostResponse.start_time}, Yaci: ${yaciResponse.start_time})`);
+
+        // Compare end_time
+        client.assert(blockfrostResponse.end_time === yaciResponse.end_time, `end_time is different (Blockfrost: ${blockfrostResponse.end_time}, Yaci: ${yaciResponse.end_time})`);
+
+        // Compare first_block_time
+        client.assert(blockfrostResponse.first_block_time === yaciResponse.first_block_time, `first_block_time is different (Blockfrost: ${blockfrostResponse.first_block_time}, Yaci: ${yaciResponse.first_block_time})`);
+
+        // Compare last_block_time
+        client.assert(blockfrostResponse.last_block_time === yaciResponse.last_block_time, `last_block_time is different (Blockfrost: ${blockfrostResponse.last_block_time}, Yaci: ${yaciResponse.last_block_time})`);
+
+        // Compare block_count
+        client.assert(blockfrostResponse.block_count === yaciResponse.block_count, `block_count is different (Blockfrost: ${blockfrostResponse.block_count}, Yaci: ${yaciResponse.block_count})`);
+
+        // Compare tx_count
+        client.assert(blockfrostResponse.tx_count === yaciResponse.tx_count, `tx_count is different (Blockfrost: ${blockfrostResponse.tx_count}, Yaci: ${yaciResponse.tx_count})`);
+
+        // Compare output
+        client.assert(blockfrostResponse.output === yaciResponse.output, `output is different (Blockfrost: ${blockfrostResponse.output}, Yaci: ${yaciResponse.output})`);
+
+        // Compare fees
+        client.assert(blockfrostResponse.fees === yaciResponse.fees, `fees is different (Blockfrost: ${blockfrostResponse.fees}, Yaci: ${yaciResponse.fees})`);
+    });
+%}
+
+
 ### @name getLatestEpochParamsBlockfrost
 ### Get latest epoch params from Blockfrost
-GET https://cardano-preprod.blockfrost.io/api/v0/epochs/latest/parameters
-project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+GET {{blockfrost_base_url}}/epochs/latest/parameters
+project_id: {{blockfrost_project_id}}
 
 > {%
     // Save the response body to a global variable to use in the next request
@@ -23,7 +131,7 @@ GET {{base_url}}/api/v1/blockfrost/epochs/latest/parameters
     const blockfrostLatestEpochResponse = client.global.get("blockfrostLatestEpochParamsResponse");
     const yaciLatestEpochParamsResponse = response.body;
 
-    client.test("Compare specific epoch with latest", function() {
+    client.test("Compare latest epoch params between Blockfrost and Yaci", function() {
         client.assert(response.status === 200, "Response status is not 200");
 
 
@@ -108,9 +216,9 @@ GET {{base_url}}/api/v1/blockfrost/epochs/latest/parameters
 
 
 ### @name getSpecificEpochParamsBlockfrost
-### Get latest epoch params from Blockfrost
-GET https://cardano-preprod.blockfrost.io/api/v0/epochs/200/parameters
-project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
+### Get specific epoch params from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/parameters
+project_id: {{blockfrost_project_id}}
 
 > {%
     // Save the response body to a global variable to use in the next request
@@ -124,7 +232,7 @@ project_id: preprodi9r9b9IQ5HIqRD5UuG0DDXIbWJqsJaWR
 
 ### @name getSpecificEpochParamsYaci
 ### Get specific epoch params from Yaci Store
-GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/parameters
 
 > {%
     // Retrieve the response from the first request
@@ -132,7 +240,7 @@ GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
     const yaciResponse = response.body;
 
 
-    client.test("Compare specific epoch with latest", function() {
+    client.test("Compare specific epoch params between Blockfrost and Yaci", function() {
         client.assert(response.status === 200, "Response status is not 200");
 
 
@@ -162,12 +270,12 @@ GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
         client.assert(blockfrostResponse.price_step === yaciResponse.price_step, `price_step is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.price_step}, Yaci: ${yaciResponse.price_step})`);
 
         //TODO: Needs to be fixed in core calculations
-        //client.assert(blockfrostLatestEpochResponse.max_tx_ex_mem === yaciLatestEpochParamsResponse.max_tx_ex_mem, `max_tx_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.max_tx_ex_mem}, Yaci: ${yaciLatestEpochParamsResponse.max_tx_ex_mem})`);
+        //client.assert(blockfrostResponse.max_tx_ex_mem === yaciResponse.max_tx_ex_mem, `max_tx_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_tx_ex_mem}, Yaci: ${yaciResponse.max_tx_ex_mem})`);
 
         client.assert(blockfrostResponse.max_tx_ex_steps === yaciResponse.max_tx_ex_steps, `max_tx_ex_steps is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_tx_ex_steps}, Yaci: ${yaciResponse.max_tx_ex_steps})`);
 
         //TODO: Needs to be fixed in core calculations
-        //client.assert(blockfrostLatestEpochResponse.max_block_ex_mem === yaciLatestEpochParamsResponse.max_block_ex_mem, `max_block_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.max_block_ex_mem}, Yaci: ${yaciLatestEpochParamsResponse.max_block_ex_mem})`);
+        //client.assert(blockfrostResponse.max_block_ex_mem === yaciResponse.max_block_ex_mem, `max_block_ex_mem is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_block_ex_mem}, Yaci: ${yaciResponse.max_block_ex_mem})`);
 
         client.assert(blockfrostResponse.max_block_ex_steps === yaciResponse.max_block_ex_steps, `max_block_ex_steps is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_block_ex_steps}, Yaci: ${yaciResponse.max_block_ex_steps})`);
         client.assert(blockfrostResponse.max_val_size === yaciResponse.max_val_size, `max_val_size is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.max_val_size}, Yaci: ${yaciResponse.max_val_size})`);
@@ -195,8 +303,8 @@ GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
         client.assert(blockfrostResponse.gov_action_lifetime === yaciResponse.gov_action_lifetime, `gov_action_lifetime is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.gov_action_lifetime}, Yaci: ${yaciResponse.gov_action_lifetime})`);
 
         //TODO: Needs to be fixed in core calculations
-        //client.assert(blockfrostLatestEpochResponse.gov_action_deposit === yaciLatestEpochParamsResponse.gov_action_deposit, `gov_action_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.gov_action_deposit}, Yaci: ${yaciLatestEpochParamsResponse.gov_action_deposit})`);
-        //client.assert(blockfrostLatestEpochResponse.drep_deposit === yaciLatestEpochParamsResponse.drep_deposit, `drep_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostLatestEpochResponse.drep_deposit}, Yaci: ${yaciLatestEpochParamsResponse.drep_deposit})`);
+        //client.assert(blockfrostResponse.gov_action_deposit === yaciResponse.gov_action_deposit, `gov_action_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.gov_action_deposit}, Yaci: ${yaciResponse.gov_action_deposit})`);
+        //client.assert(blockfrostResponse.drep_deposit === yaciResponse.drep_deposit, `drep_deposit is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.drep_deposit}, Yaci: ${yaciResponse.drep_deposit})`);
 
         client.assert(blockfrostResponse.drep_activity === yaciResponse.drep_activity, `drep_activity is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.drep_activity}, Yaci: ${yaciResponse.drep_activity})`);
 
@@ -212,5 +320,285 @@ GET {{base_url}}/api/v1/blockfrost/epochs/200/parameters
         client.assert(blockfrostResponse.pvtpp_security_group === yaciResponse.pvtpp_security_group, `pvtpp_security_group is different between blockfrost and yaci (Blockfrost: ${blockfrostResponse.pvtpp_security_group}, Yaci: ${yaciResponse.pvtpp_security_group})`);
 
 
+    });
+%}
+
+
+### @name getEpochNextBlockfrost
+### Get next epochs from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/next?count=3
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochNextResponse", response.body);
+
+    client.test("Get next epochs", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochNextYaci
+### Get next epochs from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/next?count=3
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochNextResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare next epochs between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Next epochs array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            client.assert(bf.epoch === yaci.epoch, `epoch is different (Blockfrost: ${bf.epoch}, Yaci: ${yaci.epoch})`);
+            client.assert(bf.start_time === yaci.start_time, `start_time is different (Blockfrost: ${bf.start_time}, Yaci: ${yaci.start_time})`);
+            client.assert(bf.end_time === yaci.end_time, `end_time is different (Blockfrost: ${bf.end_time}, Yaci: ${yaci.end_time})`);
+            client.assert(bf.block_count === yaci.block_count, `block_count is different (Blockfrost: ${bf.block_count}, Yaci: ${yaci.block_count})`);
+            client.assert(bf.tx_count === yaci.tx_count, `tx_count is different (Blockfrost: ${bf.tx_count}, Yaci: ${yaci.tx_count})`);
+            client.assert(bf.output === yaci.output, `output is different (Blockfrost: ${bf.output}, Yaci: ${yaci.output})`);
+            client.assert(bf.fees === yaci.fees, `fees is different (Blockfrost: ${bf.fees}, Yaci: ${yaci.fees})`);
+        }
+    });
+%}
+
+
+### @name getEpochPreviousBlockfrost
+### Get previous epochs from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/previous?count=3
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochPreviousResponse", response.body);
+
+    client.test("Get previous epochs", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochPreviousYaci
+### Get previous epochs from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/previous?count=3
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochPreviousResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare previous epochs between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Previous epochs array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            client.assert(bf.epoch === yaci.epoch, `epoch is different (Blockfrost: ${bf.epoch}, Yaci: ${yaci.epoch})`);
+            client.assert(bf.start_time === yaci.start_time, `start_time is different (Blockfrost: ${bf.start_time}, Yaci: ${yaci.start_time})`);
+            client.assert(bf.end_time === yaci.end_time, `end_time is different (Blockfrost: ${bf.end_time}, Yaci: ${yaci.end_time})`);
+            client.assert(bf.block_count === yaci.block_count, `block_count is different (Blockfrost: ${bf.block_count}, Yaci: ${yaci.block_count})`);
+            client.assert(bf.tx_count === yaci.tx_count, `tx_count is different (Blockfrost: ${bf.tx_count}, Yaci: ${yaci.tx_count})`);
+            client.assert(bf.output === yaci.output, `output is different (Blockfrost: ${bf.output}, Yaci: ${yaci.output})`);
+            client.assert(bf.fees === yaci.fees, `fees is different (Blockfrost: ${bf.fees}, Yaci: ${yaci.fees})`);
+        }
+    });
+%}
+
+
+### @name getEpochStakesBlockfrost
+### Get epoch stake distribution from Blockfrost
+# Note: Requires ledger-state/adapot profile enabled on yaci-store
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/stakes?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochStakesResponse", response.body);
+
+    client.test("Get epoch stakes", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochStakesYaci
+### Get epoch stake distribution from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/stakes?count=5
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochStakesResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare epoch stakes between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Stakes array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare stake_address
+            client.assert(bf.stake_address === yaci.stake_address,
+                `stake_address is different (Blockfrost: ${bf.stake_address}, Yaci: ${yaci.stake_address})`);
+
+            // Compare pool_id
+            client.assert(bf.pool_id === yaci.pool_id,
+                `pool_id is different (Blockfrost: ${bf.pool_id}, Yaci: ${yaci.pool_id})`);
+
+            // Compare amount
+            client.assert(bf.amount === yaci.amount,
+                `amount is different (Blockfrost: ${bf.amount}, Yaci: ${yaci.amount})`);
+        }
+    });
+%}
+
+
+### @name getEpochStakesByPoolBlockfrost
+### Get epoch stakes by pool from Blockfrost
+# Note: Requires ledger-state/adapot profile enabled on yaci-store
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/stakes/{{test_pool_id}}?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochStakesByPoolResponse", response.body);
+
+    client.test("Get epoch stakes by pool", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochStakesByPoolYaci
+### Get epoch stakes by pool from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/stakes/{{test_pool_id}}?count=5
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochStakesByPoolResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare epoch stakes by pool between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Stakes by pool array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            const bf = blockfrostResponse[0];
+            const yaci = yaciResponse[0];
+
+            // Compare stake_address
+            client.assert(bf.stake_address === yaci.stake_address,
+                `stake_address is different (Blockfrost: ${bf.stake_address}, Yaci: ${yaci.stake_address})`);
+
+            // Compare amount
+            client.assert(bf.amount === yaci.amount,
+                `amount is different (Blockfrost: ${bf.amount}, Yaci: ${yaci.amount})`);
+        }
+    });
+%}
+
+
+### @name getEpochBlocksBlockfrost
+### Get epoch blocks from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/blocks?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochBlocksResponse", response.body);
+
+    client.test("Get epoch blocks", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochBlocksYaci
+### Get epoch blocks from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/blocks?count=5
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochBlocksResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare epoch blocks between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays of block hashes (strings)
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Blocks array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        // Compare first block hash
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(blockfrostResponse[0] === yaciResponse[0],
+                `First block hash is different (Blockfrost: ${blockfrostResponse[0]}, Yaci: ${yaciResponse[0]})`);
+        }
+    });
+%}
+
+
+### @name getEpochBlocksByPoolBlockfrost
+### Get epoch blocks by pool from Blockfrost
+GET {{blockfrost_base_url}}/epochs/{{test_epoch}}/blocks/{{test_pool_id}}?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostEpochBlocksByPoolResponse", response.body);
+
+    client.test("Get epoch blocks by pool", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getEpochBlocksByPoolYaci
+### Get epoch blocks by pool from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/epochs/{{test_epoch}}/blocks/{{test_pool_id}}?count=5
+
+> {%
+    const blockfrostResponse = client.global.get("blockfrostEpochBlocksByPoolResponse");
+    const yaciResponse = response.body;
+
+    client.test("Compare epoch blocks by pool between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        // Both responses should be arrays of block hashes (strings)
+        client.assert(Array.isArray(blockfrostResponse), "Blockfrost response should be an array");
+        client.assert(Array.isArray(yaciResponse), "Yaci response should be an array");
+
+        // Compare array lengths
+        client.assert(blockfrostResponse.length === yaciResponse.length,
+            `Blocks by pool array length is different (Blockfrost: ${blockfrostResponse.length}, Yaci: ${yaciResponse.length})`);
+
+        // Compare first block hash
+        if (blockfrostResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(blockfrostResponse[0] === yaciResponse[0],
+                `First block hash is different (Blockfrost: ${blockfrostResponse[0]}, Yaci: ${yaciResponse[0]})`);
+        }
     });
 %}
