@@ -129,7 +129,10 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Script Event
         var txScriptEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxScripts> txScriptsList = getTxScripts(transactions);
+            List<Transaction> validTransactions = transactions.stream()
+                    .filter(transaction -> !transaction.isInvalid())
+                    .collect(Collectors.toList());
+            List<TxScripts> txScriptsList = getTxScripts(validTransactions);
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
             return true;
         }, eventExecutor);
@@ -234,7 +237,11 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Addtional events
         //TxScript Event
-        List<TxScripts> txScriptsList = getTxScripts(transactions);
+        List<Transaction> validTransactions = transactions.stream()
+                .filter(transaction -> !transaction.isInvalid())
+                .collect(Collectors.toList());
+        List<TxScripts> txScriptsList = getTxScripts(validTransactions);
+
         publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
 
         //AuxData event
