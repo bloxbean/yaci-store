@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTransactionDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -11,9 +13,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
-import org.jooq.Query;
 import org.jooq.Record2;
 import org.jooq.Record4;
+import org.jooq.Result;
 import org.jooq.Select;
 import org.jooq.SortField;
 import org.jooq.Table;
@@ -169,6 +171,13 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
      * JSON expansion where possible, and JSON amounts are used for non-lovelace assets.
      */
     private Map<String, BigInteger> fetchAmountSums(Condition addressCondition, boolean spent) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return fetchAmountSumsPostgres(addressCondition, spent);
+        }
+        return fetchAmountSumsH2(addressCondition, spent);
+    }
+
+    private Map<String, BigInteger> fetchAmountSumsPostgres(Condition addressCondition, boolean spent) {
         Select<?> base = spent
                 ? dsl.select(
                             ADDRESS_UTXO.TX_HASH.as("tx_hash"),
@@ -232,12 +241,37 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
+    private Map<String, BigInteger> fetchAmountSumsH2(Condition addressCondition, boolean spent) {
+        Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
+        Field<BigDecimal> lovelaceAmountField = ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount");
+
+        var query = spent
+                ? dsl.select(amountsField, lovelaceAmountField)
+                .from(ADDRESS_UTXO)
+                .join(TX_INPUT)
+                .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                .where(addressCondition)
+                : dsl.select(amountsField, lovelaceAmountField)
+                .from(ADDRESS_UTXO)
+                .where(addressCondition);
+
+        return aggregateAmountRows(query.fetch(), amountsField, lovelaceAmountField);
+    }
+
     /**
      * Aggregate unspent amounts for an address using an anti-join to exclude spent outputs.
      * Lovelace is sourced from {@code lovelace_amount}; JSON is used for non-lovelace assets,
      * and for lovelace when the scalar amount is missing or zero.
      */
     private Map<String, BigInteger> fetchUnspentAmountSums(Condition addressCondition) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return fetchUnspentAmountSumsPostgres(addressCondition);
+        }
+        return fetchUnspentAmountSumsH2(addressCondition);
+    }
+
+    private Map<String, BigInteger> fetchUnspentAmountSumsPostgres(Condition addressCondition) {
         var unspentCte = DSL.name("unspent").as(
                 dsl.select(
                                 ADDRESS_UTXO.TX_HASH.as("tx_hash"),
@@ -295,6 +329,48 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .stream()
                 .filter(entry -> entry.getValue() != null)
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
+    }
+
+    private Map<String, BigInteger> fetchUnspentAmountSumsH2(Condition addressCondition) {
+        Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
+        Field<BigDecimal> lovelaceAmountField = ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount");
+
+        var query = dsl.select(amountsField, lovelaceAmountField)
+                .from(ADDRESS_UTXO)
+                .where(addressCondition)
+                .and(DSL.notExists(
+                        dsl.selectOne()
+                                .from(TX_INPUT)
+                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                ));
+
+        return aggregateAmountRows(query.fetch(), amountsField, lovelaceAmountField);
+    }
+
+    private Map<String, BigInteger> aggregateAmountRows(Result<Record2<String, BigDecimal>> rows,
+                                                        Field<String> amountsField,
+                                                        Field<BigDecimal> lovelaceAmountField) {
+        Map<String, BigInteger> totals = new HashMap<>();
+
+        for (Record2<String, BigDecimal> row : rows) {
+            BigDecimal lovelaceAmount = row.get(lovelaceAmountField);
+            if (lovelaceAmount != null) {
+                totals.merge("lovelace", lovelaceAmount.toBigInteger(), BigInteger::add);
+            }
+
+            boolean includeJsonLovelace = lovelaceAmount == null || lovelaceAmount.compareTo(BigDecimal.ZERO) == 0;
+            Map<String, BigInteger> quantitiesByUnit = AmountsJsonUtil.toQuantityByUnit(row.get(amountsField));
+            for (Map.Entry<String, BigInteger> entry : quantitiesByUnit.entrySet()) {
+                String unit = entry.getKey();
+                if ("lovelace".equals(unit) && !includeJsonLovelace) {
+                    continue;
+                }
+                totals.merge(unit, entry.getValue(), BigInteger::add);
+            }
+        }
+
+        return totals;
     }
 
     /**

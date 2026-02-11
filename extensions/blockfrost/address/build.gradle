@@ -2,6 +2,7 @@ import org.gradle.api.publish.maven.MavenPublication
 
 dependencies {
 
+    api project(":extensions:blockfrost:blockfrost-common")
     api project(":aggregates:account")
 	api project(":stores:utxo")
 	api project(":stores-api:utxo-api")
