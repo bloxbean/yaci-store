@@ -140,7 +140,7 @@ public class DRepExpiryService {
                     leftBoundaryEpoch
             );
 
-            /* Calculate active_until value, now keep it for testing, should drop active_until column later */
+            /* Calculate active_until value */
             boolean isLeftBoundaryEpochDormant = dormantEpochsToLeftBoundaryEpoch.contains(leftBoundaryEpoch);
             int dormantEpochCount = recentGovEpochActivityOpt.get().getDormantEpochCount();
             boolean leftBoundaryEpochHadNewProposal = false;
@@ -156,30 +156,24 @@ public class DRepExpiryService {
             int activeUntil = expiry;
 
             /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), drep is not inactive,
-             we should set activeUntil to expiry - dormantEpochCount <=> do not change the expiry
+             we should set activeUntil to expiry - dormantEpochCount
              the active_until value is only updated after the dormant period ends. */
             if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry >= leftBoundaryEpoch) { // TODO: expiry >= leftBoundaryEpoch or expiry > leftBoundaryEpoch?
                 activeUntil = expiry - dormantEpochCount;
             }
 
-            // continue adjusting the active_until value, if the drep was registered or last interacted in a dormant period
-            if (dRepLastInteraction == null) {
+            // continue adjusting the active_until value, if the drep was registered in a dormant period and in V9
+            if (dRepLastInteraction == null|| dRepLastInteraction.epoch() < dRepRegistration.epoch()) {
                 int dRepRegistrationEpoch = dRepRegistration.epoch();
-                // check left boundary epoch is in a dormant period and drep was registered in this dormant period
+                // check left boundary epoch is in a dormant period , no proposal in left boundary epoch
+                // and drep was registered in this dormant period and drep registration is in V9
                 if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal) {
+                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
                     activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
-                }
-            } else {
-                // case: drep is updated in dormant period
-                if (isEpochRangeDormant(dRepLastInteraction.epoch(), leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal) {
-                    activeUntil = dRepLastInteraction.epoch() + dRepLastInteraction.dRepActivity();
                 }
             }
 
             /* active_until calculation ends */
-
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
                     .addValue("drep_type", dRep._2.name())

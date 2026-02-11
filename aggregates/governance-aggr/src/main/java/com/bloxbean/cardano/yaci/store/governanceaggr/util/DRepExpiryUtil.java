@@ -142,7 +142,7 @@ public class DRepExpiryUtil {
 
         int result = baseExpiry + v9Bonus;
 
-        if (result < evaluatedEpoch) { //TODO: "<" or "<="
+        if (result < evaluatedEpoch) {
             // The DRep is inactive, recalculate expiry
             result = calculateInactiveDRepExpiry(lastActivityEpoch, activityWindow, v9Bonus, evaluatedEpoch, dormantEpochs);
         }
