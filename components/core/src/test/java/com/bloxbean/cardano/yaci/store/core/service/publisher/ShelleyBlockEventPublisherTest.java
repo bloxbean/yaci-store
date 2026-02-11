@@ -185,7 +185,7 @@ class ShelleyBlockEventPublisherTest {
     }
 
     @Test
-    void shouldStillPublishScriptEventForAllTransactions() {
+    void shouldNotPublishScriptDataForInvalidTransaction() {
         List<Transaction> transactions = List.of(
                 Transaction.builder()
                         .txHash("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d")
@@ -205,7 +205,7 @@ class ShelleyBlockEventPublisherTest {
 
         var scriptEvent = capturePublishedEvent(ScriptEvent.class);
         assertThat(scriptEvent).isNotNull();
-        assertThat(scriptEvent.getTxScriptsList()).hasSize(2);
+        assertThat(scriptEvent.getTxScriptsList()).hasSize(1);
     }
 
     @Test
