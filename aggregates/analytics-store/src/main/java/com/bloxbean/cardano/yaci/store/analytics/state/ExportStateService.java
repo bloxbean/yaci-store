@@ -130,4 +130,63 @@ public class ExportStateService {
     public List<ExportState> getInProgressExports(String tableName) {
         return repository.findInProgressExports(tableName);
     }
+
+    /**
+     * Reset stale IN_PROGRESS exports to FAILED.
+     *
+     * Finds exports that have been IN_PROGRESS for longer than the specified timeout
+     * and marks them as FAILED. This handles cases where the application crashed or
+     * was forcibly stopped during an export, leaving the state stuck.
+     *
+     * @param staleTimeoutMinutes exports older than this many minutes are considered stale
+     * @return number of stale exports that were reset
+     */
+    @Transactional
+    public int resetStaleInProgressExports(int staleTimeoutMinutes) {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(staleTimeoutMinutes);
+        List<ExportState> staleExports = repository.findStaleInProgressExports(cutoff);
+
+        for (ExportState state : staleExports) {
+            state.setStatus(ExportStatus.FAILED);
+            state.setErrorMessage("Reset: stale IN_PROGRESS (exceeded " + staleTimeoutMinutes + " min timeout)");
+            state.setCompletedAt(LocalDateTime.now());
+            if (state.getStartedAt() != null) {
+                Duration duration = Duration.between(state.getStartedAt(), state.getCompletedAt());
+                state.setDurationSeconds((int) duration.getSeconds());
+            }
+            repository.save(state);
+            log.warn("Reset stale IN_PROGRESS export: {}/{} (started at: {})",
+                    state.getId().getTableName(), state.getId().getPartitionValue(), state.getStartedAt());
+        }
+
+        return staleExports.size();
+    }
+
+    /**
+     * Reset all IN_PROGRESS exports to FAILED.
+     *
+     * Used during application shutdown to ensure no exports are left in an
+     * inconsistent IN_PROGRESS state.
+     *
+     * @return number of exports that were reset
+     */
+    @Transactional
+    public int resetAllInProgressExports() {
+        List<ExportState> inProgressExports = repository.findAllInProgressExports();
+
+        for (ExportState state : inProgressExports) {
+            state.setStatus(ExportStatus.FAILED);
+            state.setErrorMessage("Reset: application shutdown while export was in progress");
+            state.setCompletedAt(LocalDateTime.now());
+            if (state.getStartedAt() != null) {
+                Duration duration = Duration.between(state.getStartedAt(), state.getCompletedAt());
+                state.setDurationSeconds((int) duration.getSeconds());
+            }
+            repository.save(state);
+            log.warn("Reset IN_PROGRESS export on shutdown: {}/{}",
+                    state.getId().getTableName(), state.getId().getPartitionValue());
+        }
+
+        return inProgressExports.size();
+    }
 }
