@@ -59,7 +59,7 @@ public class GapDetectionService {
         LocalDate current = startDate;
 
         while (!current.isAfter(endDate)) {
-            String partitionValue = current.toString(); // yyyy-MM-dd format
+            String partitionValue = "date=" + current; // Hive-style format matching PartitionValue.DatePartition.toPathSegment()
             if (!completedPartitions.contains(partitionValue)) {
                 missing.add(current);
             }
