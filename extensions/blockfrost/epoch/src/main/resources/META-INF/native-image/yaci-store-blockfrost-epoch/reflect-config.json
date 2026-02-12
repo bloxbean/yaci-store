@@ -1,0 +1,26 @@
+[
+  {
+    "name": "com.bloxbean.cardano.yaci.store.blockfrost.epoch.mapper.BFEpochMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.blockfrost.epoch.mapper.BFEpochStakeMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.blockfrost.epoch.mapper.BFProtocolParamMapperImpl",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.blockfrost.epoch.mapper.BFProtocolParamMapperImpl_",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]
