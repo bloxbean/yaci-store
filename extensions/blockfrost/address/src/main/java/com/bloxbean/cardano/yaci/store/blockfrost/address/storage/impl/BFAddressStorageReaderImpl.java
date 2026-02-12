@@ -169,12 +169,13 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
      * Aggregate amounts for an address. When {@code spent} is true, sum amounts of spent outputs;
      * otherwise sum received amounts. Lovelace is sourced from {@code lovelace_amount} to avoid
      * JSON expansion where possible, and JSON amounts are used for non-lovelace assets.
+     * Non-Postgres dialects (for example H2/MySQL) use the application-side JSON aggregation path.
      */
     private Map<String, BigInteger> fetchAmountSums(Condition addressCondition, boolean spent) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
             return fetchAmountSumsPostgres(addressCondition, spent);
         }
-        return fetchAmountSumsH2(addressCondition, spent);
+        return fetchAmountSumsNonPostgres(addressCondition, spent);
     }
 
     private Map<String, BigInteger> fetchAmountSumsPostgres(Condition addressCondition, boolean spent) {
@@ -241,7 +242,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
-    private Map<String, BigInteger> fetchAmountSumsH2(Condition addressCondition, boolean spent) {
+    private Map<String, BigInteger> fetchAmountSumsNonPostgres(Condition addressCondition, boolean spent) {
         Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
         Field<BigDecimal> lovelaceAmountField = ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount");
 
@@ -268,7 +269,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
             return fetchUnspentAmountSumsPostgres(addressCondition);
         }
-        return fetchUnspentAmountSumsH2(addressCondition);
+        return fetchUnspentAmountSumsNonPostgres(addressCondition);
     }
 
     private Map<String, BigInteger> fetchUnspentAmountSumsPostgres(Condition addressCondition) {
@@ -331,7 +332,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
-    private Map<String, BigInteger> fetchUnspentAmountSumsH2(Condition addressCondition) {
+    private Map<String, BigInteger> fetchUnspentAmountSumsNonPostgres(Condition addressCondition) {
         Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
         Field<BigDecimal> lovelaceAmountField = ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount");
 

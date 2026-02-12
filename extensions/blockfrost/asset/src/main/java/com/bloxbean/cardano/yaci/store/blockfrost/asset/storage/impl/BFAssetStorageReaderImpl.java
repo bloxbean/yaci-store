@@ -268,13 +268,14 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     /**
      * Returns current holder addresses for a unit with quantity and first-seen slot.
      * Only unspent UTXO rows are considered and quantity is extracted from the amounts JSON array.
+     * Non-Postgres dialects (for example H2/MySQL) use an application-side JSON parsing fallback.
      */
     @Override
     public List<BFAssetAddress> findAssetAddresses(String unit, int page, int count, Order order) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
             return findAssetAddressesPostgres(unit, page, count, order);
         }
-        return findAssetAddressesH2(unit, page, count, order);
+        return findAssetAddressesNonPostgres(unit, page, count, order);
     }
 
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
@@ -341,7 +342,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 ));
     }
 
-    private List<BFAssetAddress> findAssetAddressesH2(String unit, int page, int count, Order order) {
+    private List<BFAssetAddress> findAssetAddressesNonPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         Field<String> ownerAddrField = ADDRESS_UTXO.OWNER_ADDR.as("owner_addr");
         Field<String> ownerAddrFullField = ADDRESS_UTXO.OWNER_ADDR_FULL.as("owner_addr_full");
@@ -492,7 +493,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
             return findFirstSeenUnitsPagePostgres(offset, count, order);
         }
-        return findFirstSeenUnitsPageH2(offset, count, order);
+        return findFirstSeenUnitsPageNonPostgres(offset, count, order);
     }
 
     private List<FirstSeenUnit> findFirstSeenUnitsPagePostgres(int offset, int count, Order order) {
@@ -591,7 +592,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         ));
     }
 
-    private List<FirstSeenUnit> findFirstSeenUnitsPageH2(int offset, int count, Order order) {
+    private List<FirstSeenUnit> findFirstSeenUnitsPageNonPostgres(int offset, int count, Order order) {
         Field<String> unitField = ASSETS.UNIT.as("unit");
         Field<Long> slotField = DSL.min(ASSETS.SLOT).as("slot");
         Field<String> txHashField = DSL.min(ASSETS.TX_HASH).as("tx_hash");
@@ -607,7 +608,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                 .limit(count)
                 .offset(offset);
 
-        logQuery("findAssetsUnitsPageH2", query);
+        logQuery("findAssetsUnitsPageNonPostgres", query);
 
         return query.fetch(record -> new FirstSeenUnit(
                 record.get(unitField),
