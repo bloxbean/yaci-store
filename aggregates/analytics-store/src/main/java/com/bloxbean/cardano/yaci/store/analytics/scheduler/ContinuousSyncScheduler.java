@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Scheduler for continuous sync during blockchain synchronization.
@@ -83,79 +84,138 @@ public class ContinuousSyncScheduler {
     }
 
     /**
-     * Periodically check for gaps and export missing dates for all daily tables.
+     * Periodically check for gaps and export missing partitions for all enabled tables.
      *
-     * Finds the union of missing dates across all enabled daily tables and exports them
-     * sequentially from oldest to newest.
+     * Handles both DAILY and EPOCH partition strategies. Finds the union of missing
+     * partitions across all enabled tables and exports them sequentially.
      */
     public void syncGaps() {
-        log.debug("Running continuous sync gap detection for all daily tables");
+        log.debug("Running continuous sync gap detection for all tables");
 
         try {
-            // Get enabled daily tables from registry
-            List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
-
-            if (enabledDailyTables.isEmpty()) {
-                log.debug("No daily tables enabled, skipping continuous sync");
-                lastRunHadGaps = false;
-                return;
-            }
-
-            log.debug("Checking gaps for {} enabled daily tables: {}",
-                    enabledDailyTables.size(), enabledDailyTables);
-
-            // Find missing exports across all enabled daily tables (union)
-            Set<LocalDate> allMissingDates = new HashSet<>();
-            for (String tableName : enabledDailyTables) {
-                List<LocalDate> tableMissingDates = gapDetectionService.findMissingExports(tableName);
-                allMissingDates.addAll(tableMissingDates);
-                if (!tableMissingDates.isEmpty()) {
-                    log.debug("Table {} has {} missing exports", tableName, tableMissingDates.size());
-                }
-            }
-
-            lastRunHadGaps = !allMissingDates.isEmpty();
-
-            if (allMissingDates.isEmpty()) {
-                log.debug("No gaps detected across all daily tables, sync is up to date");
-                return;
-            }
-
-            // Sort dates for sequential export (oldest to newest)
-            List<LocalDate> sortedMissingDates = allMissingDates.stream()
-                    .sorted()
-                    .toList();
-
-            log.info("Found {} unique missing dates across all daily tables, starting sequential export",
-                    sortedMissingDates.size());
-
-            // Export all daily tables for each missing date
-            int successCount = 0;
-            int failureCount = 0;
-
-            for (LocalDate date : sortedMissingDates) {
-                try {
-                    log.info("Exporting all daily tables for missing date: {}", date);
-                    universalExportScheduler.exportAllDailyTables(date);
-                    successCount++;
-                } catch (Exception e) {
-                    log.error("Failed to export all daily tables for {}: {}", date, e.getMessage(), e);
-                    failureCount++;
-                }
-            }
-
-            log.info("Continuous sync batch complete: {} dates successful, {} failed",
-                successCount, failureCount);
-
+            boolean dailyHadGaps = syncDailyGaps();
+            boolean epochHadGaps = syncEpochGaps();
+            lastRunHadGaps = dailyHadGaps || epochHadGaps;
         } catch (Exception e) {
             log.error("Continuous sync scheduler encountered error: {}", e.getMessage(), e);
         }
     }
 
     /**
+     * Sync gaps for all enabled DAILY tables.
+     *
+     * @return true if gaps were found
+     */
+    private boolean syncDailyGaps() {
+        List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
+
+        if (enabledDailyTables.isEmpty()) {
+            log.debug("No daily tables enabled, skipping daily sync");
+            return false;
+        }
+
+        log.debug("Checking gaps for {} enabled daily tables: {}",
+                enabledDailyTables.size(), enabledDailyTables);
+
+        Set<LocalDate> allMissingDates = new HashSet<>();
+        for (String tableName : enabledDailyTables) {
+            List<LocalDate> tableMissingDates = gapDetectionService.findMissingExports(tableName);
+            allMissingDates.addAll(tableMissingDates);
+            if (!tableMissingDates.isEmpty()) {
+                log.debug("Table {} has {} missing exports", tableName, tableMissingDates.size());
+            }
+        }
+
+        if (allMissingDates.isEmpty()) {
+            log.debug("No gaps detected across all daily tables, sync is up to date");
+            return false;
+        }
+
+        List<LocalDate> sortedMissingDates = allMissingDates.stream()
+                .sorted()
+                .toList();
+
+        log.info("Found {} unique missing dates across all daily tables, starting sequential export",
+                sortedMissingDates.size());
+
+        int successCount = 0;
+        int failureCount = 0;
+
+        for (LocalDate date : sortedMissingDates) {
+            try {
+                log.info("Exporting all daily tables for missing date: {}", date);
+                universalExportScheduler.exportAllDailyTables(date);
+                successCount++;
+            } catch (Exception e) {
+                log.error("Failed to export all daily tables for {}: {}", date, e.getMessage(), e);
+                failureCount++;
+            }
+        }
+
+        log.info("Daily sync batch complete: {} dates successful, {} failed",
+            successCount, failureCount);
+
+        return true;
+    }
+
+    /**
+     * Sync gaps for all enabled EPOCH tables.
+     *
+     * @return true if gaps were found
+     */
+    private boolean syncEpochGaps() {
+        List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
+
+        if (enabledEpochTables.isEmpty()) {
+            log.debug("No epoch tables enabled, skipping epoch sync");
+            return false;
+        }
+
+        log.debug("Checking gaps for {} enabled epoch tables: {}",
+                enabledEpochTables.size(), enabledEpochTables);
+
+        Set<Integer> allMissingEpochs = new TreeSet<>();
+        for (String tableName : enabledEpochTables) {
+            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName);
+            allMissingEpochs.addAll(tableMissingEpochs);
+            if (!tableMissingEpochs.isEmpty()) {
+                log.debug("Table {} has {} missing epoch exports", tableName, tableMissingEpochs.size());
+            }
+        }
+
+        if (allMissingEpochs.isEmpty()) {
+            log.debug("No gaps detected across all epoch tables, sync is up to date");
+            return false;
+        }
+
+        // TreeSet is already sorted
+        log.info("Found {} unique missing epochs across all epoch tables, starting sequential export",
+                allMissingEpochs.size());
+
+        int successCount = 0;
+        int failureCount = 0;
+
+        for (int epoch : allMissingEpochs) {
+            try {
+                log.info("Exporting all epoch tables for missing epoch: {}", epoch);
+                universalExportScheduler.exportAllEpochTables(epoch);
+                successCount++;
+            } catch (Exception e) {
+                log.error("Failed to export all epoch tables for epoch {}: {}", epoch, e.getMessage(), e);
+                failureCount++;
+            }
+        }
+
+        log.info("Epoch sync batch complete: {} epochs successful, {} failed",
+            successCount, failureCount);
+
+        return true;
+    }
+
+    /**
      * Get current sync status for monitoring.
      *
-     * Aggregates status across all enabled daily tables.
+     * Aggregates status across all enabled daily and epoch tables.
      *
      * @return SyncStatus with current sync information
      */
@@ -174,14 +234,28 @@ public class ContinuousSyncScheduler {
             allMissingDates.addAll(tableMissingDates);
         }
 
+        // Get enabled epoch tables from registry
+        List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
+
+        // Find union of missing epochs across all enabled epoch tables
+        Set<Integer> allMissingEpochs = new HashSet<>();
+        for (String tableName : enabledEpochTables) {
+            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName);
+            allMissingEpochs.addAll(tableMissingEpochs);
+        }
+
+        boolean fullySynced = allMissingDates.isEmpty() && allMissingEpochs.isEmpty();
+
         return SyncStatus.builder()
             .genesisDate(genesis)
             .latestSyncedDate(latestSynced)
             .exportEndDate(exportEndDate)
             .bufferDays(properties.getContinuousSync().getBufferDays())
             .missingExportCount(allMissingDates.size())
-            .isFullySynced(allMissingDates.isEmpty())
+            .isFullySynced(fullySynced)
             .enabledTableCount(enabledDailyTables.size())
+            .missingEpochExportCount(allMissingEpochs.size())
+            .enabledEpochTableCount(enabledEpochTables.size())
             .build();
     }
 
@@ -198,5 +272,7 @@ public class ContinuousSyncScheduler {
         private int missingExportCount;
         private boolean isFullySynced;
         private int enabledTableCount;
+        private int missingEpochExportCount;
+        private int enabledEpochTableCount;
     }
 }
