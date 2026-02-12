@@ -4,19 +4,20 @@ import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.gap.GapDetectionService;
+import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Scheduler for continuous sync during blockchain synchronization.
@@ -26,9 +27,11 @@ import java.util.concurrent.TimeUnit;
  *
  * Uses TableExporterRegistry to automatically discover and export all daily tables
  * that are enabled in configuration.
+ *
+ * Uses adaptive scheduling: short interval (default 1 min) while catching up,
+ * standard interval (default 15 min) once fully synced.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
 public class ContinuousSyncScheduler {
@@ -37,16 +40,54 @@ public class ContinuousSyncScheduler {
     private final UniversalExportScheduler universalExportScheduler;
     private final TableExporterRegistry registry;
     private final AnalyticsStoreProperties properties;
+    private final TaskScheduler taskScheduler;
+
+    private volatile boolean lastRunHadGaps = true; // start optimistic
+
+    public ContinuousSyncScheduler(GapDetectionService gapDetectionService,
+                                   UniversalExportScheduler universalExportScheduler,
+                                   TableExporterRegistry registry,
+                                   AnalyticsStoreProperties properties,
+                                   TaskScheduler taskScheduler) {
+        this.gapDetectionService = gapDetectionService;
+        this.universalExportScheduler = universalExportScheduler;
+        this.registry = registry;
+        this.properties = properties;
+        this.taskScheduler = taskScheduler;
+    }
+
+    @PostConstruct
+    public void init() {
+        scheduleNext(Duration.ofSeconds(30));
+        log.info("Continuous sync scheduler initialized (catch-up: {}min, normal: {}min)",
+                properties.getContinuousSync().getCatchUpIntervalMinutes(),
+                properties.getContinuousSync().getSyncCheckIntervalMinutes());
+    }
+
+    private void scheduleNext(Duration delay) {
+        taskScheduler.schedule(this::runAndReschedule, Instant.now().plus(delay));
+    }
+
+    private void runAndReschedule() {
+        try {
+            syncGaps();
+        } finally {
+            boolean hasGaps = lastRunHadGaps;
+            int intervalMinutes = hasGaps
+                    ? properties.getContinuousSync().getCatchUpIntervalMinutes()
+                    : properties.getContinuousSync().getSyncCheckIntervalMinutes();
+            log.debug("Next sync in {} minutes ({})", intervalMinutes,
+                    hasGaps ? "catching up" : "fully synced");
+            scheduleNext(Duration.ofMinutes(intervalMinutes));
+        }
+    }
 
     /**
      * Periodically check for gaps and export missing dates for all daily tables.
      *
-     * Runs every N minutes (configurable via sync-check-interval-minutes).
      * Finds the union of missing dates across all enabled daily tables and exports them
      * sequentially from oldest to newest.
      */
-    @Scheduled(fixedDelayString = "${yaci.store.analytics.continuous-sync.sync-check-interval-minutes:15}",
-               timeUnit = TimeUnit.MINUTES)
     public void syncGaps() {
         log.debug("Running continuous sync gap detection for all daily tables");
 
@@ -56,6 +97,7 @@ public class ContinuousSyncScheduler {
 
             if (enabledDailyTables.isEmpty()) {
                 log.debug("No daily tables enabled, skipping continuous sync");
+                lastRunHadGaps = false;
                 return;
             }
 
@@ -71,6 +113,8 @@ public class ContinuousSyncScheduler {
                     log.debug("Table {} has {} missing exports", tableName, tableMissingDates.size());
                 }
             }
+
+            lastRunHadGaps = !allMissingDates.isEmpty();
 
             if (allMissingDates.isEmpty()) {
                 log.debug("No gaps detected across all daily tables, sync is up to date");

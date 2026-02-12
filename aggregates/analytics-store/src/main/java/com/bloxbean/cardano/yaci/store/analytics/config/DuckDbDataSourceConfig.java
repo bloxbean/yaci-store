@@ -17,8 +17,8 @@ import javax.sql.DataSource;
  * - Writer DataSource: For export operations
  * - Reader DataSource: Multiple connections for concurrent analytical queries
  *
- * For DuckDB catalog type: All connections point to the same catalog file
- * For PostgreSQL catalog type: In-memory connections with ATTACH to remote catalog
+ * All connections are in-memory and ATTACH the DuckLake catalog via the
+ * ducklake: protocol in prepareConnectionForDuckLake().
  */
 @Configuration
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
@@ -31,8 +31,6 @@ public class DuckDbDataSourceConfig {
      * Create DuckDB Writer DataSource with HikariCP connection pooling.
      *
      * Used for export operations that write to DuckLake catalog.
-     * For DuckDB catalog: connects to catalog file (shared across connections)
-     * For PostgreSQL catalog: in-memory with ATTACH
      */
     @Bean(name = "duckDbWriterDataSource")
     @ConfigurationProperties("yaci.store.analytics.duckdb.writer.datasource")
@@ -45,6 +43,11 @@ public class DuckDbDataSourceConfig {
                 .url(jdbcUrl)
                 .build();
 
+        // Exports are sequential (single-threaded scheduler), so one writer connection suffices.
+        // For DuckDB file catalogs this also prevents file lock conflicts on ATTACH.
+        dataSource.setMaximumPoolSize(1);
+        dataSource.setMinimumIdle(1);
+
         return dataSource;
     }
 
@@ -54,9 +57,6 @@ public class DuckDbDataSourceConfig {
      * Used for read-only analytical queries against DuckLake catalog.
      * Supports multiple concurrent readers for optimal query throughput.
      * Pool size defaults to available processor cores but can be configured.
-     *
-     * For DuckDB catalog: connects to catalog file (shared across connections)
-     * For PostgreSQL catalog: in-memory with ATTACH
      *
      * Note: Read-only mode is enforced at the DuckDB ATTACH level (READ_ONLY option),
      * not at the connection level. DuckDB doesn't support connection-level read-only mode.
@@ -81,22 +81,15 @@ public class DuckDbDataSourceConfig {
     }
 
     /**
-     * Build JDBC URL based on catalog type.
+     * Build JDBC URL — always uses in-memory connections.
      *
-     * For DuckDB catalog: jdbc:duckdb:/path/to/catalog.db (all connections share file)
-     *   - Catalog file is pre-initialized by DuckDbCatalogPreInitializer
-     *   - All pooled connections connect to the same file
-     *
-     * For PostgreSQL catalog: jdbc:duckdb: (in-memory, uses ATTACH for catalog)
+     * The DuckLake catalog (both DuckDB-file and PostgreSQL types) is
+     * attached via the ducklake: protocol in prepareConnectionForDuckLake().
+     * Connecting directly to the catalog file (jdbc:duckdb:{path}) opens it
+     * as the main database WITHOUT DuckLake extension support, which causes
+     * ATTACH conflicts and prevents the ducklake_catalog alias from being created.
      */
     private String buildJdbcUrl() {
-        if ("duckdb".equalsIgnoreCase(properties.getDucklake().getCatalogType())) {
-            // Connect to catalog file - all connections share same database
-            String catalogPath = properties.getDucklake().getCatalogPath();
-            return "jdbc:duckdb:" + catalogPath;
-        } else {
-            // PostgreSQL catalog - use in-memory + ATTACH
-            return "jdbc:duckdb:";
-        }
+        return "jdbc:duckdb:";
     }
 }
