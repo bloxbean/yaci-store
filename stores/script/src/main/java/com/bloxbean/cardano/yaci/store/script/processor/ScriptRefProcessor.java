@@ -39,6 +39,7 @@ public class ScriptRefProcessor {
         try {
             List<Script> scriptList = transactionEvent.getTransactions()
                     .stream()
+                    .filter(transaction -> !transaction.isInvalid())
                     .flatMap(transaction -> transaction.getBody().getOutputs().stream())
                     .map(transactionOutput -> transactionOutput.getScriptRef())
                     .filter(Objects::nonNull)
