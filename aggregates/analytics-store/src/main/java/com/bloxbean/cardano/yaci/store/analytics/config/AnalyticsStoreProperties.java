@@ -47,6 +47,7 @@ public class AnalyticsStoreProperties {
     private DuckDb duckdb = new DuckDb();
     private ParquetExport parquetExport = new ParquetExport();
     private DuckLake ducklake = new DuckLake();
+    private ExportMonitor exportMonitor = new ExportMonitor();
 
     @Data
     public static class StateManagement {
@@ -70,6 +71,12 @@ public class AnalyticsStoreProperties {
     @Data
     public static class Admin {
         private boolean enabled = false;
+    }
+
+    @Data
+    public static class ExportMonitor {
+        private boolean enabled = false;
+        private int checkIntervalSeconds = 300;
     }
 
     @Data
