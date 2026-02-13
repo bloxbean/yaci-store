@@ -1,0 +1,40 @@
+# Transaction Lifecycle Configuration
+store:
+  submit:
+    lifecycle:
+      # Enable transaction lifecycle tracking
+      enabled: false
+      
+      # Block depth for SUCCESS state (configurable per application)
+      success-block-depth: 15
+      
+      # Block depth for FINALIZED state (Cardano security parameter)
+      finalized-block-depth: 2160
+      
+      # SUCCESS status check interval (milliseconds)
+      success-check-interval-ms: 20000
+      
+      # FINALIZED status check interval (milliseconds)
+      finalized-check-interval-ms: 3600000
+      
+      # WebSocket notifications (OPTIONAL)
+      websocket:
+        enabled: false
+        endpoint: /ws/tx-lifecycle
+      
+      # Webhook notifications (OPTIONAL)
+      webhook:
+        enabled: false
+        # Webhook endpoint URL to receive transaction status updates
+        url: https://your-app.com/api/webhooks/tx-lifecycle
+        # Optional: Bearer token for webhook authentication
+        secret: your-webhook-secret
+        # HTTP request timeout in milliseconds
+        timeout-ms: 5000
+      
+      # Event Log (Audit Trail) - RECOMMENDED
+      eventlog:
+        enabled: true  # Default: true - important for audit trail
+        # Optional: Auto-cleanup old events (in days, 0 = disabled)
+        retention-days: 90
+

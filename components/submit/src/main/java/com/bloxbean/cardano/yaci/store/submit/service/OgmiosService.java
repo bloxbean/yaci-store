@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.vavr.control.Either;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -26,10 +27,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Ogmios service for transaction submission and evaluation.
+ * Implements TxSubmitter interface for lifecycle tracking integration.
+ */
 @Service
 @ConditionalOnProperty(name = "store.cardano.ogmios-url")
 @Slf4j
-public class OgmiosService {
+public class OgmiosService implements TxSubmitter {
     private String ogmiosUrl;
     private OgmiosBackendService ogmiosBackendService; //Used only for Tx submission
 
@@ -44,9 +49,15 @@ public class OgmiosService {
         log.info("<< Ogmios Service initialized >> " + ogmiosUrl);
     }
 
-    public Result<String> submitTx(byte[] cborTx) throws ApiException {
+    @Override
+    public String submitTx(byte[] cborTx) throws Exception {
         Result<String> result = ogmiosBackendService.getTransactionService().submitTransaction(cborTx);
-        return result;
+
+        if (result.isSuccessful()) {
+            return result.getValue();
+        } else {
+            throw new RuntimeException(result.getResponse());
+        }
     }
 
     public Either<JsonNode, JsonNode> evaluateTx(byte[] cborTx, Set<Utxo> additionalUtxos) throws ApiException {
