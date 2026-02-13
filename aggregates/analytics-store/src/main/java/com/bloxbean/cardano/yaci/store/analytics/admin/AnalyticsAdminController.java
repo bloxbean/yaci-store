@@ -4,10 +4,12 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.ContinuousSyncScheduler;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportMonitorStatus;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportMonitor;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.UniversalExportScheduler;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +31,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/analytics/admin")
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics.admin", name = "enabled", havingValue = "true")
 public class AnalyticsAdminController {
@@ -38,6 +39,20 @@ public class AnalyticsAdminController {
     private final ContinuousSyncScheduler continuousSyncScheduler;
     private final TableExporterRegistry registry;
     private final ExportStateAdminService adminService;
+    private final ExportMonitor exportMonitor;
+
+    public AnalyticsAdminController(
+            UniversalExportScheduler universalExportScheduler,
+            ContinuousSyncScheduler continuousSyncScheduler,
+            TableExporterRegistry registry,
+            ExportStateAdminService adminService,
+            @Autowired(required = false) ExportMonitor exportMonitor) {
+        this.universalExportScheduler = universalExportScheduler;
+        this.continuousSyncScheduler = continuousSyncScheduler;
+        this.registry = registry;
+        this.adminService = adminService;
+        this.exportMonitor = exportMonitor;
+    }
 
     /**
      * List all registered table exporters.
@@ -196,6 +211,22 @@ public class AnalyticsAdminController {
     @GetMapping("/status")
     public ResponseEntity<ContinuousSyncScheduler.SyncStatus> getStatus() {
         return ResponseEntity.ok(continuousSyncScheduler.getSyncStatus());
+    }
+
+    /**
+     * Get scheduler health status.
+     *
+     * Reports current state of all schedulers and any stale exports.
+     * Returns 404 if export monitor is disabled.
+     *
+     * @return ExportMonitorStatus with scheduler state and health information
+     */
+    @GetMapping("/health")
+    public ResponseEntity<ExportMonitorStatus> getHealth() {
+        if (exportMonitor == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(exportMonitor.getHealthStatus());
     }
 
     /**

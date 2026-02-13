@@ -6,17 +6,20 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.gap.GapDetectionService;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Scheduler for continuous sync during blockchain synchronization.
@@ -38,6 +41,13 @@ public class ContinuousSyncScheduler {
     private final TableExporterRegistry registry;
     private final AnalyticsStoreProperties properties;
 
+    @Getter
+    private final AtomicBoolean isSyncing = new AtomicBoolean(false);
+    @Getter
+    private volatile Instant lastSyncStart;
+    @Getter
+    private volatile Instant lastSyncEnd;
+
     /**
      * Periodically check for gaps and export missing dates for all daily tables.
      *
@@ -48,9 +58,15 @@ public class ContinuousSyncScheduler {
     @Scheduled(fixedDelayString = "${yaci.store.analytics.continuous-sync.sync-check-interval-minutes:15}",
                timeUnit = TimeUnit.MINUTES)
     public void syncGaps() {
-        log.debug("Running continuous sync gap detection for all daily tables");
+        if (!isSyncing.compareAndSet(false, true)) {
+            log.warn("Continuous sync is already in progress, skipping this run");
+            return;
+        }
 
+        lastSyncStart = Instant.now();
         try {
+            log.debug("Running continuous sync gap detection for all daily tables");
+
             // Get enabled daily tables from registry
             List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
 
@@ -105,6 +121,9 @@ public class ContinuousSyncScheduler {
 
         } catch (Exception e) {
             log.error("Continuous sync scheduler encountered error: {}", e.getMessage(), e);
+        } finally {
+            lastSyncEnd = Instant.now();
+            isSyncing.set(false);
         }
     }
 

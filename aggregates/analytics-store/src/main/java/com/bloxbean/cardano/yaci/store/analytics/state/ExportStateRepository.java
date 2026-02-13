@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -29,4 +30,9 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
            "AND e.status = 'IN_PROGRESS' " +
            "ORDER BY e.startedAt DESC")
     List<ExportState> findInProgressExports(@Param("tableName") String tableName);
+
+    @Query("SELECT e FROM ExportState e " +
+           "WHERE e.status = 'IN_PROGRESS' " +
+           "AND e.startedAt < :threshold")
+    List<ExportState> findStaleInProgressExports(@Param("threshold") LocalDateTime threshold);
 }
