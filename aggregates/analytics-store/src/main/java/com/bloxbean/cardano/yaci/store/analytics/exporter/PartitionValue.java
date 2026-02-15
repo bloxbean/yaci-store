@@ -63,6 +63,12 @@ public sealed interface PartitionValue permits
             long startSlot = eraService.slotFromTime(startEpochSeconds);
             long endSlot = eraService.slotFromTime(endEpochSeconds);
 
+            // On genesis day, start-of-day (midnight UTC) can be before the actual genesis time
+            // (e.g., mainnet genesis is 2017-09-23T21:44:51Z), producing a negative slot.
+            // No blockchain data exists before slot 0, so clamp to 0.
+            startSlot = Math.max(0, startSlot);
+            endSlot = Math.max(0, endSlot);
+
             return new SlotRange(startSlot, endSlot);
         }
     }
