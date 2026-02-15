@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,6 +35,7 @@ public class GapDetectionService {
     private final BlockStorageReader blockStorageReader;
     private final ExportStateService stateService;
     private final AnalyticsStoreProperties properties;
+    private final EraService eraService;
 
     /**
      * Find all missing export dates for a table.
@@ -59,7 +62,7 @@ public class GapDetectionService {
         LocalDate current = startDate;
 
         while (!current.isAfter(endDate)) {
-            String partitionValue = current.toString(); // yyyy-MM-dd format
+            String partitionValue = "date=" + current; // Hive-style format matching PartitionValue.DatePartition.toPathSegment()
             if (!completedPartitions.contains(partitionValue)) {
                 missing.add(current);
             }
@@ -134,5 +137,70 @@ public class GapDetectionService {
         }
 
         return calculatedEndDate;
+    }
+
+    /**
+     * Find all missing epoch exports for a table.
+     *
+     * Checks from the first non-Byron epoch (Shelley start) to the latest completed epoch.
+     * Epoch-based tables only contain Shelley+ data, so Byron epochs are skipped.
+     *
+     * @param tableName The table to check for missing epoch exports
+     * @return List of epoch numbers that are missing exports, sorted oldest to newest
+     */
+    public List<Integer> findMissingEpochExports(String tableName) {
+        Optional<Integer> startEpochOpt = eraService.getFirstNonByronEpoch();
+        if (startEpochOpt.isEmpty()) {
+            log.debug("No non-Byron era found yet, skipping epoch gap detection for {}", tableName);
+            return List.of();
+        }
+
+        int startEpoch = startEpochOpt.get();
+        Optional<Integer> endEpochOpt = getLatestCompletedEpoch();
+        if (endEpochOpt.isEmpty()) {
+            log.debug("No completed epoch available yet, skipping epoch gap detection for {}", tableName);
+            return List.of();
+        }
+
+        int endEpoch = endEpochOpt.get();
+        if (endEpoch < startEpoch) {
+            log.debug("End epoch {} is before start epoch {}, no exports needed for {}", endEpoch, startEpoch, tableName);
+            return List.of();
+        }
+
+        Set<String> completedPartitions = stateService.getCompletedPartitions(tableName);
+
+        List<Integer> missing = new ArrayList<>();
+        for (int epoch = startEpoch; epoch <= endEpoch; epoch++) {
+            String partitionValue = "epoch=" + epoch;
+            if (!completedPartitions.contains(partitionValue)) {
+                missing.add(epoch);
+            }
+        }
+
+        log.info("Epoch gap detection for {}: {} missing exports from epoch {} to {}",
+            tableName, missing.size(), startEpoch, endEpoch);
+
+        return missing;
+    }
+
+    /**
+     * Get the latest fully completed epoch number.
+     *
+     * Reads the current epoch from the latest block and returns currentEpoch - 1,
+     * since the current epoch is still in progress.
+     *
+     * @return Optional containing the latest completed epoch, or empty if no blocks exist
+     */
+    public Optional<Integer> getLatestCompletedEpoch() {
+        Block recentBlock = blockStorageReader.findRecentBlock().orElse(null);
+
+        if (recentBlock == null) {
+            log.warn("No blocks synced yet, cannot determine latest completed epoch");
+            return Optional.empty();
+        }
+
+        int currentEpoch = recentBlock.getEpochNumber();
+        return Optional.of(currentEpoch - 1);
     }
 }

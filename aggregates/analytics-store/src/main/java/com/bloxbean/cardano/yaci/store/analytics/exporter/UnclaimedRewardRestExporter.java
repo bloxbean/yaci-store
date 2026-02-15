@@ -68,7 +68,7 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
                 urr.id,
                 urr.address,
                 urr.type,
-                urr.earned_epoch,
+                urr.earned_epoch as epoch,
                 urr.amount,
                 urr.spendable_epoch,
                 urr.slot

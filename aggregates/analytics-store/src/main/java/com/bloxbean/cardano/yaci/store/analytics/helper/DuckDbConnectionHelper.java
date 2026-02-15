@@ -561,6 +561,12 @@ public class DuckDbConnectionHelper {
      * @param readOnly If true, attaches catalog in READ_ONLY mode
      */
     private void attachDuckDbCatalog(Connection conn, String dataPath, boolean readOnly) throws SQLException {
+        // Check if already attached on this connection (connection pooling scenario)
+        if (isDatabaseAttached(conn, "ducklake_catalog")) {
+            log.debug("DuckDB DuckLake catalog already attached as 'ducklake_catalog', skipping");
+            return;
+        }
+
         String catalogPath = properties.getDucklake().getCatalogPath();
 
         // Ensure catalog directory exists
@@ -594,40 +600,13 @@ public class DuckDbConnectionHelper {
             log.debug("Attached DuckDB DuckLake catalog: {} (DATA_PATH: {}, READ_ONLY: {})",
                     catalogPath, dataPath, readOnly);
         } catch (SQLException e) {
-            // Handle "already attached" error (connection pooling scenario)
-            // This is the primary mechanism for detecting if catalog is already attached
-            if (e.getMessage().contains("already attached") ||
-                e.getMessage().contains("Unique file handle conflict")) {
+            if (e.getMessage().contains("already attached")) {
                 log.debug("DuckDB catalog already attached (file: {}), skipping", catalogPath);
                 return;
             }
+            // "Unique file handle conflict" = another DuckDB instance holds the lock.
+            // This connection does NOT have the catalog — do not silently return.
             throw e;
-        }
-    }
-
-    /**
-     * Check if a DuckDB file-based database is already attached by checking the file path.
-     * This is necessary because DuckDB file catalogs may have internal names different from
-     * the alias we specify (e.g., "__ducklake_metadata_ducklake_catalog").
-     *
-     * @param conn DuckDB connection
-     * @param catalogPath Path to the DuckDB file
-     * @return true if a database using this file path is already attached
-     */
-    private boolean isDuckDbFileAttached(Connection conn, String catalogPath) {
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(
-                     "SELECT database_name, path FROM duckdb_databases() WHERE path LIKE '%" +
-                     catalogPath + "%';")) {
-            if (rs.next()) {
-                log.debug("DuckDB catalog file '{}' already attached as '{}'",
-                         catalogPath, rs.getString("database_name"));
-                return true;
-            }
-            return false;
-        } catch (SQLException e) {
-            log.debug("Error checking if DuckDB file is attached: {}", e.getMessage());
-            return false;
         }
     }
 }

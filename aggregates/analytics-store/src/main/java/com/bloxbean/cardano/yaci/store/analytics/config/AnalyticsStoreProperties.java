@@ -65,6 +65,7 @@ public class AnalyticsStoreProperties {
     public static class ContinuousSync {
         private int bufferDays = 3;
         private int syncCheckIntervalMinutes = 15;
+        private int catchUpIntervalMinutes = 1;
     }
 
     @Data
