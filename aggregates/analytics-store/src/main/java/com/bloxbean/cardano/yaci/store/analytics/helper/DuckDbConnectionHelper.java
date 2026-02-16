@@ -109,11 +109,6 @@ public class DuckDbConnectionHelper {
      * @param aliasName Database alias (e.g., "postgres_db" for Parquet, "source_db" for DuckLake)
      */
     public void attachSourceDatabase(Connection conn, String aliasName) throws SQLException {
-        if (isDatabaseAttached(conn, aliasName)) {
-            log.debug("Source database '{}' already attached, skipping", aliasName);
-            return;
-        }
-
         DatabaseCredentials creds = sourceCredentials;
 
         StringBuilder cmd = new StringBuilder();
@@ -129,8 +124,16 @@ public class DuckDbConnectionHelper {
 
         cmd.append("' AS ").append(aliasName).append(" (TYPE POSTGRES, READ_ONLY);");
 
-        executeSql(conn, cmd.toString());
-        log.debug("Attached source PostgreSQL database as '{}'", aliasName);
+        try {
+            executeSql(conn, cmd.toString());
+            log.debug("Attached source PostgreSQL database as '{}'", aliasName);
+        } catch (SQLException e) {
+            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
+                log.debug("Source database '{}' already attached, skipping", aliasName);
+                return;
+            }
+            throw e;
+        }
     }
 
     /**
@@ -191,8 +194,30 @@ public class DuckDbConnectionHelper {
             attachSourceDatabase(conn, "source_db");
         }
 
-        // Use catalog database
-        executeSql(conn, "USE ducklake_catalog;");
+        // Use catalog database — retry once if stale catalog state is detected
+        try {
+            executeSql(conn, "USE ducklake_catalog;");
+        } catch (SQLException e) {
+            log.warn("USE ducklake_catalog failed ({}), detaching and re-attaching catalogs", e.getMessage());
+
+            // Detach stale catalogs
+            try { executeSql(conn, "DETACH IF EXISTS ducklake_catalog;"); } catch (SQLException ignored) {}
+            if (needsSource) {
+                try { executeSql(conn, "DETACH IF EXISTS source_db;"); } catch (SQLException ignored) {}
+            }
+
+            // Re-install extensions and re-attach
+            installDuckLake(conn);
+            attachDuckLakeCatalog(conn, readOnly);
+            if (needsSource) {
+                installPostgresScanner(conn);
+                attachSourceDatabase(conn, "source_db");
+            }
+
+            // Retry — fail hard if this also fails
+            executeSql(conn, "USE ducklake_catalog;");
+            log.info("USE ducklake_catalog succeeded after re-attach");
+        }
         log.debug("Using ducklake_catalog (readOnly: {})", readOnly);
 
         // Set search_path to resolve both CREATE and SELECT operations correctly
@@ -362,12 +387,6 @@ public class DuckDbConnectionHelper {
      * @param readOnly If true, attaches catalog in READ_ONLY mode
      */
     private void attachPostgresCatalog(Connection conn, String dataPath, boolean readOnly) throws SQLException {
-        // Check if already attached by alias name (connection pooling scenario)
-        if (isDatabaseAttached(conn, "ducklake_catalog")) {
-            log.debug("PostgreSQL DuckLake catalog already attached as 'ducklake_catalog', skipping");
-            return;
-        }
-
         DatabaseCredentials creds = catalogCredentials;
 
         // Note: Schema creation is now handled by DuckLakeCatalogInitializer at startup
@@ -404,7 +423,7 @@ public class DuckDbConnectionHelper {
                     dataPath, readOnly);
         } catch (SQLException e) {
             // Handle "already attached" error (shouldn't happen after check, but safety net)
-            if (e.getMessage().contains("already attached")) {
+            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
                 log.debug("PostgreSQL catalog already attached, skipping");
                 return;
             }
@@ -561,12 +580,6 @@ public class DuckDbConnectionHelper {
      * @param readOnly If true, attaches catalog in READ_ONLY mode
      */
     private void attachDuckDbCatalog(Connection conn, String dataPath, boolean readOnly) throws SQLException {
-        // Check if already attached on this connection (connection pooling scenario)
-        if (isDatabaseAttached(conn, "ducklake_catalog")) {
-            log.debug("DuckDB DuckLake catalog already attached as 'ducklake_catalog', skipping");
-            return;
-        }
-
         String catalogPath = properties.getDucklake().getCatalogPath();
 
         // Ensure catalog directory exists
@@ -600,7 +613,7 @@ public class DuckDbConnectionHelper {
             log.debug("Attached DuckDB DuckLake catalog: {} (DATA_PATH: {}, READ_ONLY: {})",
                     catalogPath, dataPath, readOnly);
         } catch (SQLException e) {
-            if (e.getMessage().contains("already attached")) {
+            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
                 log.debug("DuckDB catalog already attached (file: {}), skipping", catalogPath);
                 return;
             }

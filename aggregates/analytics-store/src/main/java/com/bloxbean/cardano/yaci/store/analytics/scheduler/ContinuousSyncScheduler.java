@@ -38,7 +38,7 @@ import java.util.TreeSet;
 public class ContinuousSyncScheduler {
 
     private final GapDetectionService gapDetectionService;
-    private final UniversalExportScheduler universalExportScheduler;
+    private final UniversalExportService universalExportService;
     private final TableExporterRegistry registry;
     private final AnalyticsStoreProperties properties;
     private final TaskScheduler taskScheduler;
@@ -46,12 +46,12 @@ public class ContinuousSyncScheduler {
     private volatile boolean lastRunHadGaps = true; // start optimistic
 
     public ContinuousSyncScheduler(GapDetectionService gapDetectionService,
-                                   UniversalExportScheduler universalExportScheduler,
+                                   UniversalExportService universalExportService,
                                    TableExporterRegistry registry,
                                    AnalyticsStoreProperties properties,
                                    TaskScheduler taskScheduler) {
         this.gapDetectionService = gapDetectionService;
-        this.universalExportScheduler = universalExportScheduler;
+        this.universalExportService = universalExportService;
         this.registry = registry;
         this.properties = properties;
         this.taskScheduler = taskScheduler;
@@ -144,7 +144,7 @@ public class ContinuousSyncScheduler {
         for (LocalDate date : sortedMissingDates) {
             try {
                 log.info("Exporting all daily tables for missing date: {}", date);
-                universalExportScheduler.exportAllDailyTables(date);
+                universalExportService.exportAllDailyTables(date);
                 successCount++;
             } catch (Exception e) {
                 log.error("Failed to export all daily tables for {}: {}", date, e.getMessage(), e);
@@ -198,7 +198,7 @@ public class ContinuousSyncScheduler {
         for (int epoch : allMissingEpochs) {
             try {
                 log.info("Exporting all epoch tables for missing epoch: {}", epoch);
-                universalExportScheduler.exportAllEpochTables(epoch);
+                universalExportService.exportAllEpochTables(epoch);
                 successCount++;
             } catch (Exception e) {
                 log.error("Failed to export all epoch tables for epoch {}: {}", epoch, e.getMessage(), e);

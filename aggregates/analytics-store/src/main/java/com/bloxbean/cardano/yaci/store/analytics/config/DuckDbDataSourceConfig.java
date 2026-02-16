@@ -48,6 +48,12 @@ public class DuckDbDataSourceConfig {
         dataSource.setMaximumPoolSize(1);
         dataSource.setMinimumIdle(1);
 
+        // Disable connection eviction — with pool size 1, eviction provides zero benefit
+        // and destroys all ATTACH state on the in-memory DuckDB connection.
+        dataSource.setMaxLifetime(0);   // Disable connection retirement
+        dataSource.setIdleTimeout(0);   // Disable idle eviction
+        dataSource.setKeepaliveTime(0); // Disable keepalive probes
+
         return dataSource;
     }
 
