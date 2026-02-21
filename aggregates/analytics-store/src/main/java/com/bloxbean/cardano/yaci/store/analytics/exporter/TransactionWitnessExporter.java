@@ -56,7 +56,7 @@ public class TransactionWitnessExporter extends AbstractTableExporter {
                 t.block_hash,
                 t.block,
                 t.epoch,
-                to_timestamp(t.block_time) as block_time
+                to_timestamp(COALESCE(t.block_time, 0)) as block_time
             FROM source_db.%s.transaction_witness tw
             INNER JOIN source_db.%s.transaction t
                 ON t.tx_hash = tw.tx_hash

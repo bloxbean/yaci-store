@@ -56,7 +56,7 @@ public class StakeRegistrationExporter extends AbstractTableExporter {
                 sr.slot,
                 sr.block_hash,
                 sr.block,
-                to_timestamp(sr.block_time) as block_time
+                to_timestamp(COALESCE(sr.block_time, 0)) as block_time
             FROM source_db.%s.stake_registration sr
             WHERE sr.slot >= %d
               AND sr.slot < %d

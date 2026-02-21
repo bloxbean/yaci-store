@@ -65,7 +65,7 @@ public class AddressExporter extends AbstractTableExporter {
                 a.payment_credential,
                 a.stake_address,
                 a.slot,
-                to_timestamp(b.block_time) as block_time
+                to_timestamp(COALESCE(b.block_time, 0)) as block_time
             FROM source_db.%s.address a
             INNER JOIN source_db.%s.block b ON a.slot = b.slot
             WHERE a.slot >= %d

@@ -54,7 +54,7 @@ public class CommitteeRegistrationExporter extends AbstractTableExporter {
                 cr.cred_type,
                 cr.epoch,
                 cr.block,
-                to_timestamp(cr.block_time) as block_time
+                to_timestamp(COALESCE(cr.block_time, 0)) as block_time
             FROM source_db.%s.committee_registration cr
             WHERE cr.slot >= %d
               AND cr.slot < %d

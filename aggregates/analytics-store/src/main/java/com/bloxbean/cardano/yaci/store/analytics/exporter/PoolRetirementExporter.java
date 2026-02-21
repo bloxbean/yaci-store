@@ -53,7 +53,7 @@ public class PoolRetirementExporter extends AbstractTableExporter {
                 pr.retirement_epoch,
                 pr.epoch,
                 pr.block_hash,
-                to_timestamp(pr.block_time) as block_time
+                to_timestamp(COALESCE(pr.block_time, 0)) as block_time
             FROM source_db.%s.pool_retirement pr
             WHERE pr.slot >= %d
               AND pr.slot < %d

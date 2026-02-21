@@ -58,7 +58,7 @@ public class DRepRegistrationExporter extends AbstractTableExporter {
                 dr.cred_type,
                 dr.epoch,
                 dr.block,
-                to_timestamp(dr.block_time) as block_time
+                to_timestamp(COALESCE(dr.block_time, 0)) as block_time
             FROM source_db.%s.drep_registration dr
             WHERE dr.slot >= %d
               AND dr.slot < %d

@@ -50,7 +50,7 @@ public class ScriptExporter extends AbstractTableExporter {
                 s.content,
                 -- We align with transaction_scripts slot to drive the partition
                 ts.slot,
-                to_timestamp(ts.block_time) as block_time
+                to_timestamp(COALESCE(ts.block_time, 0)) as block_time
             FROM source_db.%s.transaction_scripts ts
             INNER JOIN source_db.%s.script s ON s.script_hash = ts.script_hash
             WHERE ts.slot >= %d

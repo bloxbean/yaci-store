@@ -61,7 +61,7 @@ public class InvalidTransactionExporter extends AbstractTableExporter {
                 it.slot,
                 it.block_hash,
                 it.transaction::text as transaction,
-                to_timestamp(b.block_time) as block_time
+                to_timestamp(COALESCE(b.block_time, 0)) as block_time
             FROM source_db.%s.invalid_transaction it
             INNER JOIN source_db.%s.block b ON it.slot = b.slot
             WHERE it.slot >= %d

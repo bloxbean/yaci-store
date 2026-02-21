@@ -57,7 +57,7 @@ public class GovActionProposalExporter extends AbstractTableExporter {
                 gap.anchor_hash,
                 gap.epoch,
                 gap.block,
-                to_timestamp(gap.block_time) as block_time
+                to_timestamp(COALESCE(gap.block_time, 0)) as block_time
             FROM source_db.%s.gov_action_proposal gap
             WHERE gap.slot >= %d
               AND gap.slot < %d

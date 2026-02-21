@@ -60,7 +60,7 @@ public class DRepExporter extends AbstractTableExporter {
                 d.slot,
                 d.block_hash,
                 d.block,
-                to_timestamp(d.block_time) as block_time
+                to_timestamp(COALESCE(d.block_time, 0)) as block_time
             FROM source_db.%s.drep d
             WHERE d.slot >= %d
               AND d.slot < %d

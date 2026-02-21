@@ -59,7 +59,7 @@ public class TransactionScriptsExporter extends AbstractTableExporter {
                 ts.redeemer_index,
                 ts.redeemer_datahash,
                 ts.block,
-                to_timestamp(ts.block_time) as block_time
+                to_timestamp(COALESCE(ts.block_time, 0)) as block_time
             FROM source_db.%s.transaction_scripts ts
             WHERE ts.slot >= %d
               AND ts.slot < %d

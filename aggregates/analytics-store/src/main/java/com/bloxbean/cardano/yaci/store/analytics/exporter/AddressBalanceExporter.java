@@ -60,7 +60,7 @@ public class AddressBalanceExporter extends AbstractTableExporter {
                 ab.address,
                 ab.quantity,
                 ab.unit,
-                to_timestamp(ab.block_time) as block_time,
+                to_timestamp(COALESCE(ab.block_time, 0)) as block_time,
                 ab.block,
                 ab.epoch,
                 ab.slot,
