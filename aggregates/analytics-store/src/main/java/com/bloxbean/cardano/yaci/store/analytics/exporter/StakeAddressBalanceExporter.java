@@ -50,7 +50,7 @@ public class StakeAddressBalanceExporter extends AbstractTableExporter {
             SELECT
                 sab.address,
                 sab.quantity,
-                to_timestamp(sab.block_time) as block_time,
+                to_timestamp(COALESCE(sab.block_time, 0)) as block_time,
                 sab.block,
                 sab.epoch,
                 sab.slot

@@ -12,8 +12,6 @@ public class AnalyticsStoreProperties {
 
     private boolean enabled = false;
     private String exportPath = "./data/analytics";
-    private String dailyExportCron = "0 0 0 * * *";
-    private String epochExportCron = "0 0 1 * * *";
 
     /**
      * Finalization lag in days (default: 2).
@@ -40,7 +38,6 @@ public class AnalyticsStoreProperties {
     private Set<String> enabledTables = new HashSet<>();
 
     private StateManagement stateManagement = new StateManagement();
-    private Verification verification = new Verification();
     private ContinuousSync continuousSync = new ContinuousSync();
     private Admin admin = new Admin();
     private Storage storage = new Storage();
@@ -50,21 +47,14 @@ public class AnalyticsStoreProperties {
 
     @Data
     public static class StateManagement {
-        private boolean enabled = true;
         private int staleTimeoutMinutes = 60;
-        private int maxRetries = 3;
-    }
-
-    @Data
-    public static class Verification {
-        private boolean enabled = true;
-        private String cron = "0 0 2 * * MON";
     }
 
     @Data
     public static class ContinuousSync {
-        private int bufferDays = 3;
+        private int bufferDays = 2;
         private int syncCheckIntervalMinutes = 15;
+        private int catchUpIntervalMinutes = 1;
     }
 
     @Data

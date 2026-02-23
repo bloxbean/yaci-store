@@ -102,9 +102,9 @@ public abstract class AbstractTableExporter implements TableExporter {
 
         // Mark in progress
         ExportState state = stateService.markInProgress(getTableName(), partitionKey);
-        SlotRange slotRange = partition.toSlotRange(eraService);
 
         try {
+            SlotRange slotRange = partition.toSlotRange(eraService);
             // Build query (template method - subclass implements)
             String query = buildQuery(partition, slotRange);
 
