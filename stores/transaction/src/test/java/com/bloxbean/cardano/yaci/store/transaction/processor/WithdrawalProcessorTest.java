@@ -84,6 +84,18 @@ public class WithdrawalProcessorTest {
 
     }
 
+    @Test
+    void givenInvalidTransactionEvent_shouldNotSaveWithdrawals() {
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .transactions(invalidTransactions())
+                .metadata(eventMetadata())
+                .build();
+
+        withdrawalProcessor.processWithdrawal(transactionEvent);
+
+        verify(withdrawalStorage, Mockito.never()).save(withdrawalListCaptor.capture());
+    }
+
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
                 .era(Era.Babbage)
@@ -142,6 +154,30 @@ public class WithdrawalProcessorTest {
                                         new TransactionInput("c3e9dcc6c638b78c2591f74cfca27fba728e56c18e0b5a61a2a0cc900592c59f", 0),
                                         new TransactionInput("5fb81bcabefefdb725a26fc9825d517ba79a05f86f845fda42b3f0f54b7ab90b", 1)
                                 ))
+                        .build()
+                )
+                .utxos(utxos(txHash, transactionOutputs()))
+                .invalid(false)
+                .build();
+
+        return List.of(transaction);
+    }
+
+    private List<Transaction> invalidTransactions() {
+        String txHash = "f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8";
+        Transaction transaction = Transaction.builder()
+                .txHash(txHash)
+                .slot(eventMetadata().getSlot())
+                .blockNumber(eventMetadata().getBlock())
+                .body(TransactionBody.builder()
+                        .inputs(Set.of(
+                                new TransactionInput("aaaae529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 1)
+                        ))
+                        .outputs(transactionOutputs())
+                        .fee(BigInteger.valueOf(300000))
+                        .withdrawals(Map.of(
+                                encodeHexString(new Address("stake1uysxxfteap80gkuqz6jepzr8le52dvskf59z63480l77scq90uxgd").getBytes()), BigInteger.valueOf(1000)
+                        ))
                         .build()
                 )
                 .utxos(utxos(txHash, transactionOutputs()))

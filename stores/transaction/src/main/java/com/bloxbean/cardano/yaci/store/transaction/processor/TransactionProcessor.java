@@ -209,6 +209,9 @@ public class TransactionProcessor {
 
         int index = 0;
         for(Transaction transaction: transactions) {
+            if (transaction.isInvalid())
+                continue;
+
             Witnesses witnesses = transaction.getWitnesses();
             if (witnesses == null)
                 return;

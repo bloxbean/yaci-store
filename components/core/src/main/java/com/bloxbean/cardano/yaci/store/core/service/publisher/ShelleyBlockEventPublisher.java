@@ -129,7 +129,10 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Script Event
         var txScriptEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxScripts> txScriptsList = getTxScripts(transactions);
+            List<Transaction> validTransactions = transactions.stream()
+                    .filter(transaction -> !transaction.isInvalid())
+                    .collect(Collectors.toList());
+            List<TxScripts> txScriptsList = getTxScripts(validTransactions);
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
             return true;
         }, eventExecutor);
@@ -137,6 +140,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         //AuxData event
         var txAuxDataEvent = CompletableFuture.supplyAsync(() -> {
             List<TxAuxData> txAuxDataList = transactions.stream()
+                    .filter(transaction -> !transaction.isInvalid())
                     .filter(transaction -> transaction.getAuxData() != null)
                     .map(transaction -> TxAuxData.builder()
                             .txHash(transaction.getTxHash())
@@ -153,20 +157,26 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                     IntStream.range(0, transactions.size())
                             .mapToObj(i -> {
                                         var transaction = transactions.get(i);
+                                        if (transaction.isInvalid())
+                                            return null;
                                         return TxCertificates.builder()
                                                 .txHash(transaction.getTxHash())
                                                 .txIndex(i)
                                                 .certificates(transaction.getBody().getCertificates())
                                                 .build();
                                     }
-                            ).collect(Collectors.toList());
+                            )
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
             publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
             return true;
         }, eventExecutor);
 
         //Mints
         var txMintBurnEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
+            List<TxMintBurn> txMintBurnEvents = transactions.stream()
+                    .filter(transaction -> !transaction.isInvalid())
+                    .filter(transaction ->
                             transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
                     .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
                     .collect(Collectors.toList());
@@ -176,7 +186,9 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Updates
         var txUpdateEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxUpdate> txUpdates = transactions.stream().filter(transaction -> transaction.getBody().getUpdate() != null)
+            List<TxUpdate> txUpdates = transactions.stream()
+                    .filter(transaction -> !transaction.isInvalid())
+                    .filter(transaction -> transaction.getBody().getUpdate() != null)
                     .map(transaction -> new TxUpdate(transaction.getTxHash(), transaction.getBody().getUpdate()))
                     .toList();
             if (txUpdates.size() > 0)
@@ -189,6 +201,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             List<TxGovernance> txGovernanceList = IntStream.range(0, transactions.size())
                     .mapToObj(i -> {
                         var transaction = transactions.get(i);
+                        if (transaction.isInvalid())
+                            return null;
                         if (transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null) {
                             return TxGovernance.builder()
                                     .txHash(transaction.getTxHash())
@@ -223,11 +237,16 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Addtional events
         //TxScript Event
-        List<TxScripts> txScriptsList = getTxScripts(transactions);
+        List<Transaction> validTransactions = transactions.stream()
+                .filter(transaction -> !transaction.isInvalid())
+                .collect(Collectors.toList());
+        List<TxScripts> txScriptsList = getTxScripts(validTransactions);
+
         publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
 
         //AuxData event
         List<TxAuxData> txAuxDataList = transactions.stream()
+                .filter(transaction -> !transaction.isInvalid())
                 .filter(transaction -> transaction.getAuxData() != null)
                 .map(transaction -> TxAuxData.builder()
                         .txHash(transaction.getTxHash())
@@ -240,24 +259,32 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         List<TxCertificates> txCertificatesList = IntStream.range(0, transactions.size())
                 .mapToObj(i -> {
                             var transaction = transactions.get(i);
+                            if (transaction.isInvalid())
+                                return null;
                             return TxCertificates.builder()
                                     .txHash(transaction.getTxHash())
                                     .txIndex(i)
                                     .certificates(transaction.getBody().getCertificates())
                                     .build();
                         }
-                ).collect(Collectors.toList());
+                )
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
         publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
 
         //Mints
-        List<TxMintBurn> txMintBurnEvents = transactions.stream().filter(transaction ->
+        List<TxMintBurn> txMintBurnEvents = transactions.stream()
+                .filter(transaction -> !transaction.isInvalid())
+                .filter(transaction ->
                         transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
                 .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
                 .collect(Collectors.toList());
         publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
 
         //Updates
-        List<TxUpdate> txUpdates = transactions.stream().filter(transaction -> transaction.getBody().getUpdate() != null)
+        List<TxUpdate> txUpdates = transactions.stream()
+                .filter(transaction -> !transaction.isInvalid())
+                .filter(transaction -> transaction.getBody().getUpdate() != null)
                 .map(transaction -> new TxUpdate(transaction.getTxHash(), transaction.getBody().getUpdate()))
                 .toList();
         if (txUpdates.size() > 0)
@@ -267,6 +294,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         List<TxGovernance> txGovernanceList = IntStream.range(0, transactions.size())
                 .mapToObj(i -> {
                     var transaction = transactions.get(i);
+                    if (transaction.isInvalid())
+                        return null;
                     if (transaction.getBody().getProposalProcedures() != null || transaction.getBody().getVotingProcedures() != null) {
                         return TxGovernance.builder()
                                 .txHash(transaction.getTxHash())

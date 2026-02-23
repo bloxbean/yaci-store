@@ -38,6 +38,9 @@ public class WithdrawalProcessor {
 
         List<Withdrawal> withdrawals = null;
         for (var transaction : transactions) {
+            if (transaction.isInvalid())
+                continue;
+
             Map<String, BigInteger> txWithdrawals = transaction.getBody().getWithdrawals();
             if (txWithdrawals == null || txWithdrawals.isEmpty())
                 continue;
