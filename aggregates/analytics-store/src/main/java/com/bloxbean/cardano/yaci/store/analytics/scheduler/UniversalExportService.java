@@ -18,7 +18,6 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Service for exporting all registered analytics tables.
@@ -51,19 +50,13 @@ public class UniversalExportService {
     private final AnalyticsStoreProperties properties;
     private final BlockStorageReader blockStorageReader;
 
-    @Getter
-    private final AtomicBoolean isDailyExporting = new AtomicBoolean(false);
-    @Getter
-    private final AtomicBoolean isEpochExporting = new AtomicBoolean(false);
+    @Getter private volatile boolean dailyExportRunning = false;
+    @Getter private volatile Instant lastDailyExportStart;
+    @Getter private volatile Instant lastDailyExportEnd;
 
-    @Getter
-    private volatile Instant lastDailyExportStart;
-    @Getter
-    private volatile Instant lastDailyExportEnd;
-    @Getter
-    private volatile Instant lastEpochExportStart;
-    @Getter
-    private volatile Instant lastEpochExportEnd;
+    @Getter private volatile boolean epochExportRunning = false;
+    @Getter private volatile Instant lastEpochExportStart;
+    @Getter private volatile Instant lastEpochExportEnd;
 
     /**
      * Export all daily tables for finalized date.
@@ -79,11 +72,7 @@ public class UniversalExportService {
      * - Exports data for 2024-01-15
      */
     public void exportDailyTables() {
-        if (!isDailyExporting.compareAndSet(false, true)) {
-            log.warn("Daily export is already in progress, skipping this run");
-            return;
-        }
-
+        dailyExportRunning = true;
         lastDailyExportStart = Instant.now();
         try {
             // Calculate finalized date (N days ago)
@@ -124,7 +113,7 @@ public class UniversalExportService {
             log.info("Daily export completed: {} successful, {} failed", successCount, failureCount);
         } finally {
             lastDailyExportEnd = Instant.now();
-            isDailyExporting.set(false);
+            dailyExportRunning = false;
         }
     }
 
@@ -142,11 +131,7 @@ public class UniversalExportService {
      * - Exports data for epoch 450
      */
     public void exportEpochTables() {
-        if (!isEpochExporting.compareAndSet(false, true)) {
-            log.warn("Epoch export is already in progress, skipping this run");
-            return;
-        }
-
+        epochExportRunning = true;
         lastEpochExportStart = Instant.now();
         try {
             // Get current epoch from latest block and export previous (completed) epoch
@@ -194,7 +179,7 @@ public class UniversalExportService {
             log.info("Epoch export completed: {} successful, {} failed", successCount, failureCount);
         } finally {
             lastEpochExportEnd = Instant.now();
-            isEpochExporting.set(false);
+            epochExportRunning = false;
         }
     }
 

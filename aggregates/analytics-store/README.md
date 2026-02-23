@@ -62,8 +62,9 @@ analytics/
 | Scheduler | Schedule | Purpose |
 |---|---|---|
 | `UniversalExportScheduler` | Daily + Epoch cron | Exports all enabled tables on schedule |
-| `ContinuousSyncScheduler` | Every 15 min | Detects and fills export gaps |
-| `ExportMonitor` | Every 5 min | Monitors health, recovers stuck exports |
+| `ContinuousSyncScheduler` | Adaptive: 1 min (catching up) / 15 min (synced) | Detects and fills daily + epoch export gaps |
+| `StaleExportRecoveryService` | On startup + shutdown | Recovers stuck IN_PROGRESS exports on application lifecycle events |
+| `ExportMonitor` | Every 5 min | Monitors scheduler liveness; reports health via `/health` endpoint |
 
 ## Storage Modes
 
@@ -216,8 +217,9 @@ duckdb -c "
 | `yaci.store.analytics.storage.type` | `parquet` | Storage format: `parquet` or `ducklake` |
 | `yaci.store.analytics.state-management.stale-timeout-minutes` | `60` | Timeout before stuck exports are recovered |
 | `yaci.store.analytics.state-management.max-retries` | `3` | Max retry attempts for failed exports |
-| `yaci.store.analytics.continuous-sync.buffer-days` | `3` | Buffer days for continuous sync |
-| `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval |
+| `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
+| `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
+| `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
 | `yaci.store.analytics.export-monitor.enabled` | `false` | Enable/disable the export monitor |
 | `yaci.store.analytics.export-monitor.check-interval-seconds` | `300` | Export monitor health check interval |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
@@ -306,4 +308,4 @@ PENDING --> IN_PROGRESS --> COMPLETED
                 +--> FAILED (retried up to max-retries times)
 ```
 
-The `ExportMonitor` automatically recovers stuck `IN_PROGRESS` exports that exceed the stale timeout (default: 60 minutes) by marking them as `FAILED`, allowing them to be retried on the next scheduler run.
+The `StaleExportRecoveryService` automatically recovers stuck `IN_PROGRESS` exports on application startup and marks active exports as `FAILED` on graceful shutdown, allowing them to be retried on the next run. The `ExportMonitor` (when enabled) monitors scheduler liveness and reports health status via the `/health` admin endpoint.

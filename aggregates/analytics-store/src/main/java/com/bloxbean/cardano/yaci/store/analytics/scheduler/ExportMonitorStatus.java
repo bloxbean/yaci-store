@@ -26,7 +26,6 @@ public class ExportMonitorStatus {
     private Instant lastSyncStart;
     private Instant lastSyncEnd;
 
-    private int staleInProgressCount;
     private boolean healthy;
     private String unhealthyReason;
 }
