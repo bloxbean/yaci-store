@@ -33,6 +33,11 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
 
     @Query("SELECT e FROM ExportState e " +
            "WHERE e.status = 'IN_PROGRESS' " +
-           "AND e.startedAt < :threshold")
-    List<ExportState> findStaleInProgressExports(@Param("threshold") LocalDateTime threshold);
+           "AND e.startedAt < :cutoff " +
+           "ORDER BY e.startedAt")
+    List<ExportState> findStaleInProgressExports(@Param("cutoff") LocalDateTime cutoff);
+
+    @Query("SELECT e FROM ExportState e " +
+           "WHERE e.status = 'IN_PROGRESS'")
+    List<ExportState> findAllInProgressExports();
 }

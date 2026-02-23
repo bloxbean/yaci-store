@@ -31,6 +31,7 @@ public class EraService {
     //Don't use these variable directly. Use firstShelleySlot(), shelleyEraStartTime() method
     private long _firstShelleySlot;
     private long _shelleyStartTime;
+    private boolean _shelleyEraResolved = false;
 
     public boolean checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
@@ -120,12 +121,15 @@ public class EraService {
 
     private long firstShelleySlot() {
         //calculate Byron Era last slot time
-        if (_firstShelleySlot == 0) {
-            _firstShelleySlot = eraStorage.findFirstNonByronEra().map(cardanoEra -> cardanoEra.getStartSlot())
-                    .orElse(0L);
-
-            if (_firstShelleySlot == -1) //Genesis block is already in shelley/post shelley era
-                _firstShelleySlot = 0;
+        if (!_shelleyEraResolved) {
+            var nonByronEra = eraStorage.findFirstNonByronEra();
+            if (nonByronEra.isPresent()) {
+                _firstShelleySlot = nonByronEra.get().getStartSlot();
+                if (_firstShelleySlot == -1) //Genesis block is already in shelley/post shelley era
+                    _firstShelleySlot = 0;
+                _shelleyEraResolved = true;
+                _shelleyStartTime = 0; // Reset so shelleyEraStartTime() recalculates
+            }
         }
 
         return _firstShelleySlot;
@@ -157,18 +161,18 @@ public class EraService {
      * @return Absolute slot number
      */
     public long slotFromTime(long epochSeconds) {
+        long firstShelley = firstShelleySlot();
         long shelleyStartTime = shelleyEraStartTime();
 
-        if (epochSeconds < shelleyStartTime) {
-            // Byron era
+        if (_shelleyEraResolved && epochSeconds >= shelleyStartTime) {
+            // Shelley/post-Shelley era
+            double slotDuration = genesisConfig.slotDuration(Era.Shelley);
+            return firstShelley + Math.round((epochSeconds - shelleyStartTime) / slotDuration);
+        } else {
+            // Byron era, or Shelley transition not yet recorded in DB
             long startTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
             double slotDuration = genesisConfig.slotDuration(Era.Byron);
             return Math.round((epochSeconds - startTime) / slotDuration);
-        } else {
-            // Shelley/post-Shelley era
-            long firstShelleySlot = firstShelleySlot();
-            double slotDuration = genesisConfig.slotDuration(Era.Shelley);
-            return firstShelleySlot + Math.round((epochSeconds - shelleyStartTime) / slotDuration);
         }
     }
 

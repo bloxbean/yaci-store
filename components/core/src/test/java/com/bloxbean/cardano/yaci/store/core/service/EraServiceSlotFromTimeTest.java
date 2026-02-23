@@ -140,4 +140,49 @@ class EraServiceSlotFromTimeTest {
         assertEquals(originalSlot, convertedSlot,
                 "Converting Shelley slot to time and back should yield the same slot");
     }
+
+    @Test
+    void testSlotFromTime_ShelleyNotYetKnown_UsesByronFormula() {
+        // Simulate mainnet during initial Byron-era sync: no Shelley era in DB yet
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.empty());
+        EraService byronOnlyService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties);
+
+        // Nov 13, 2017 00:00:00 UTC (Byron era date)
+        long epochSeconds = ZonedDateTime.of(2017, 11, 13, 0, 0, 0, 0,
+                ZoneId.of("UTC")).toEpochSecond();
+
+        long slot = byronOnlyService.slotFromTime(epochSeconds);
+
+        // Byron formula: round((epochSeconds - genesisTime) / 20)
+        long expected = Math.round((epochSeconds - MAINNET_GENESIS_TIME) / BYRON_SLOT_DURATION);
+        assertEquals(expected, slot,
+                "When Shelley is not yet known, Byron formula (20s slots) should be used");
+    }
+
+    @Test
+    void testSlotFromTime_ShelleyAtSlotZero_UsesShelleyFormula() {
+        // Simulate preprod/preview where chain starts in Shelley/post-Shelley at slot 0
+        long preprodGenesisTime = 1654041600L; // 2022-06-01T00:00:00Z
+        when(genesisConfig.getStartTime(1L)).thenReturn(preprodGenesisTime);
+        when(storeProperties.getProtocolMagic()).thenReturn(1L);
+
+        CardanoEra shelleyAtZero = CardanoEra.builder()
+                .era(Era.Babbage)
+                .startSlot(0L)
+                .build();
+        when(eraStorage.findFirstNonByronEra()).thenReturn(Optional.of(shelleyAtZero));
+
+        EraService preprodService = new EraService(eraStorage, cursorStorage, epochConfig, genesisConfig, storeProperties);
+
+        // Jan 15, 2024 00:00:00 UTC
+        long epochSeconds = ZonedDateTime.of(2024, 1, 15, 0, 0, 0, 0,
+                ZoneId.of("UTC")).toEpochSecond();
+
+        long slot = preprodService.slotFromTime(epochSeconds);
+
+        // Shelley formula: 0 + round((epochSeconds - genesisTime) / 1)
+        long expected = Math.round((epochSeconds - preprodGenesisTime) / SHELLEY_SLOT_DURATION);
+        assertEquals(expected, slot,
+                "When Shelley starts at slot 0 (preprod/preview), Shelley formula (1s slots) should be used");
+    }
 }

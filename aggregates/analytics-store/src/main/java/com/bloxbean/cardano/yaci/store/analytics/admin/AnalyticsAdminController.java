@@ -4,9 +4,9 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.ContinuousSyncScheduler;
-import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportMonitorStatus;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportMonitor;
-import com.bloxbean.cardano.yaci.store.analytics.scheduler.UniversalExportScheduler;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportMonitorStatus;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.UniversalExportService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,19 +35,19 @@ import java.util.List;
 @ConditionalOnProperty(prefix = "yaci.store.analytics.admin", name = "enabled", havingValue = "true")
 public class AnalyticsAdminController {
 
-    private final UniversalExportScheduler universalExportScheduler;
+    private final UniversalExportService universalExportService;
     private final ContinuousSyncScheduler continuousSyncScheduler;
     private final TableExporterRegistry registry;
     private final ExportStateAdminService adminService;
     private final ExportMonitor exportMonitor;
 
     public AnalyticsAdminController(
-            UniversalExportScheduler universalExportScheduler,
+            UniversalExportService universalExportService,
             ContinuousSyncScheduler continuousSyncScheduler,
             TableExporterRegistry registry,
             ExportStateAdminService adminService,
             @Autowired(required = false) ExportMonitor exportMonitor) {
-        this.universalExportScheduler = universalExportScheduler;
+        this.universalExportService = universalExportService;
         this.continuousSyncScheduler = continuousSyncScheduler;
         this.registry = registry;
         this.adminService = adminService;
@@ -87,7 +87,7 @@ public class AnalyticsAdminController {
         LocalDate exportDate = LocalDate.parse(date);
         log.info("Manual export triggered for all daily tables for date: {}", exportDate);
 
-        int successCount = universalExportScheduler.exportAllDailyTables(exportDate);
+        int successCount = universalExportService.exportAllDailyTables(exportDate);
         List<String> enabledTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
 
         return ResponseEntity.ok(new ExportResult(
@@ -112,7 +112,7 @@ public class AnalyticsAdminController {
         LocalDate exportDate = LocalDate.parse(date);
         log.info("Manual export triggered for table {} for date: {}", tableName, exportDate);
 
-        boolean success = universalExportScheduler.exportTable(tableName, PartitionValue.ofDate(exportDate));
+        boolean success = universalExportService.exportTable(tableName, PartitionValue.ofDate(exportDate));
 
         return ResponseEntity.ok(new ExportResult(
                 tableName,
@@ -135,7 +135,7 @@ public class AnalyticsAdminController {
 
         log.info("Manual export triggered for table {} for epoch: {}", tableName, epoch);
 
-        boolean success = universalExportScheduler.exportTable(tableName, PartitionValue.ofEpoch(epoch));
+        boolean success = universalExportService.exportTable(tableName, PartitionValue.ofEpoch(epoch));
 
         return ResponseEntity.ok(new ExportResult(
                 tableName,
@@ -162,7 +162,7 @@ public class AnalyticsAdminController {
         LocalDate end = LocalDate.parse(endDate);
 
         log.info("Manual range export triggered for table {}: {} to {}", tableName, start, end);
-        int successCount = universalExportScheduler.exportDateRange(tableName, start, end);
+        int successCount = universalExportService.exportDateRange(tableName, start, end);
 
         long totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
 
@@ -190,7 +190,7 @@ public class AnalyticsAdminController {
             @RequestParam int endEpoch) {
 
         log.info("Manual epoch range export triggered for table {}: {} to {}", tableName, startEpoch, endEpoch);
-        int successCount = universalExportScheduler.exportEpochRange(tableName, startEpoch, endEpoch);
+        int successCount = universalExportService.exportEpochRange(tableName, startEpoch, endEpoch);
 
         int totalEpochs = endEpoch - startEpoch + 1;
 

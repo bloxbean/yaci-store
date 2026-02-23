@@ -130,7 +130,7 @@ public class ParquetWriterService implements StorageWriter {
                 stmt.execute(exportCmd);
 
                 // Get row count and file size before rename
-                long rowCount = getRowCount(stmt, query);
+                long rowCount = getRowCountFromParquet(stmt, tempFile);
                 long fileSize = Files.size(tempFile);
 
                 // Atomically rename temporary file to final destination
@@ -172,10 +172,11 @@ public class ParquetWriterService implements StorageWriter {
     }
 
     /**
-     * Get row count from a query by wrapping it in COUNT(*)
+     * Get row count from an already-exported local Parquet file using DuckDB's read_parquet().
+     * This reads Parquet metadata locally and avoids re-executing the source query against PostgreSQL.
      */
-    private long getRowCount(Statement stmt, String query) throws SQLException {
-        String countQuery = String.format("SELECT COUNT(*) FROM (%s) AS count_query", query);
+    private long getRowCountFromParquet(Statement stmt, Path parquetPath) throws SQLException {
+        String countQuery = String.format("SELECT COUNT(*) FROM read_parquet('%s')", parquetPath);
         var rs = stmt.executeQuery(countQuery);
         if (rs.next()) {
             return rs.getLong(1);

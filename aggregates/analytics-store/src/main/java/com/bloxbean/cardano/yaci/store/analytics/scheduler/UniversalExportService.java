@@ -11,7 +11,6 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -22,19 +21,22 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Universal scheduler for exporting all registered tables.
+ * Service for exporting all registered analytics tables.
  *
- * This scheduler replaces table-specific schedulers with a unified approach:
+ * Provides a unified export API for all enabled tables:
  * - Automatically discovers and exports all enabled tables
  * - Supports multiple partition strategies (DAILY, EPOCH)
  * - Uses finalization buffer to ensure immutable data
- * - Provides admin methods for manual exports and backfills
  *
- * Scheduled Tasks:
- * 1. exportDailyTables() - Runs at midnight (default), exports all daily tables
- * 2. exportEpochTables() - Runs at 1 AM (default), exports all epoch tables
+ * Called by:
+ * - {@link ContinuousSyncScheduler} for automated gap-based exports
+ * - {@link com.bloxbean.cardano.yaci.store.analytics.admin.AnalyticsAdminController} for manual/admin exports
  *
- * Manual Operations:
+ * Export Methods:
+ * - exportDailyTables() - Export all daily tables for finalized date
+ * - exportEpochTables() - Export all epoch tables for previous epoch
+ * - exportAllDailyTables() - Export all daily tables for a specific date
+ * - exportAllEpochTables() - Export all epoch tables for a specific epoch
  * - exportTable() - Export specific table for specific partition
  * - exportDateRange() - Backfill date range for daily table
  * - exportEpochRange() - Backfill epoch range for epoch table
@@ -43,7 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
-public class UniversalExportScheduler {
+public class UniversalExportService {
 
     private final TableExporterRegistry registry;
     private final AnalyticsStoreProperties properties;
@@ -66,8 +68,7 @@ public class UniversalExportScheduler {
     /**
      * Export all daily tables for finalized date.
      *
-     * Runs at midnight (default) and exports data from N days ago,
-     * where N = finalizationLagDays (default: 2).
+     * Exports data from N days ago, where N = finalizationLagDays (default: 2).
      *
      * This ensures:
      * - Data is past Cardano's 2160 block security parameter (~12 hours)
@@ -77,7 +78,6 @@ public class UniversalExportScheduler {
      * Example: If today is 2024-01-17 and finalizationLagDays=2:
      * - Exports data for 2024-01-15
      */
-    @Scheduled(cron = "${yaci.store.analytics.daily-export-cron:0 0 0 * * *}")
     public void exportDailyTables() {
         if (!isDailyExporting.compareAndSet(false, true)) {
             log.warn("Daily export is already in progress, skipping this run");
@@ -131,8 +131,7 @@ public class UniversalExportScheduler {
     /**
      * Export all epoch tables for the previous completed epoch.
      *
-     * Runs at 1 AM (default) and exports data for the most recently
-     * completed epoch (currentEpoch - 1).
+     * Exports data for the most recently completed epoch (currentEpoch - 1).
      *
      * This ensures:
      * - Epoch is fully completed (all 432,000 slots)
@@ -142,7 +141,6 @@ public class UniversalExportScheduler {
      * Example: If current epoch is 451:
      * - Exports data for epoch 450
      */
-    @Scheduled(cron = "${yaci.store.analytics.epoch-export-cron:0 0 1 * * *}")
     public void exportEpochTables() {
         if (!isEpochExporting.compareAndSet(false, true)) {
             log.warn("Epoch export is already in progress, skipping this run");
