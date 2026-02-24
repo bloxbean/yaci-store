@@ -95,7 +95,7 @@ public abstract class AbstractTableExporter implements TableExporter {
 
         // Pre-export validation (e.g., check if dependent jobs have completed)
         if (!preExportValidation(partition)) {
-            log.warn("Pre-export validation failed for table {} partition {}, skipping export",
+            log.debug("Pre-export validation failed for table {} partition {}, skipping export",
                     getTableName(), partitionKey);
             return false;
         }

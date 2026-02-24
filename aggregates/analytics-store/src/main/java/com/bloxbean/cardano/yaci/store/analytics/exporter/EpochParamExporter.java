@@ -47,8 +47,7 @@ public class EpochParamExporter extends AbstractTableExporter {
 
         Era era = eraService.getEraForEpoch(epoch);
         if (era.getValue() < Era.Conway.getValue()) {
-            //Epoch params are not available before Shelley era
-            log.info("Skipping export for epoch_param for epoch {} as it is before Conway era", epoch);
+            log.info("Skipping pre export validation for epoch_param for epoch {} as it is before Conway era", epoch);
             return true;
         }
 

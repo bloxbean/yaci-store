@@ -1,7 +1,11 @@
 package com.bloxbean.cardano.yaci.store.analytics.config;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.NoOpAdaPotJobStorage;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -14,4 +18,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EntityScan(basePackages = "com.bloxbean.cardano.yaci.store.analytics.state")
 @EnableScheduling
 public class AnalyticsStoreConfig {
+
+    @Bean
+    @ConditionalOnMissingBean(AdaPotJobStorage.class)
+    public AdaPotJobStorage noOpAdaPotJobStorage() {
+        return new NoOpAdaPotJobStorage();
+    }
 }
