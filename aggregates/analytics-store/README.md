@@ -52,7 +52,7 @@ analytics/
   gap/             - Gap detection for continuous sync
   helper/          - DuckDB connection helper utilities
   query/           - DuckLake query controller and service
-  scheduler/       - Export schedulers and export monitor
+  scheduler/       - Export schedulers and recovery services
   state/           - Export state management (JPA entities)
   writer/          - Parquet and DuckLake writer services
 ```
@@ -61,10 +61,8 @@ analytics/
 
 | Scheduler | Schedule | Purpose |
 |---|---|---|
-| `UniversalExportScheduler` | Daily + Epoch cron | Exports all enabled tables on schedule |
-| `ContinuousSyncScheduler` | Adaptive: 1 min (catching up) / 15 min (synced) | Detects and fills daily + epoch export gaps |
+| `ContinuousSyncScheduler` | Adaptive: 1 min (catching up) / 15 min (synced) | Detects and fills daily + epoch export gaps via `UniversalExportService` |
 | `StaleExportRecoveryService` | On startup + shutdown | Recovers stuck IN_PROGRESS exports on application lifecycle events |
-| `ExportMonitor` | Every 5 min | Monitors scheduler liveness; reports health via `/health` endpoint |
 
 ## Storage Modes
 
@@ -220,8 +218,6 @@ duckdb -c "
 | `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
-| `yaci.store.analytics.export-monitor.enabled` | `false` | Enable/disable the export monitor |
-| `yaci.store.analytics.export-monitor.check-interval-seconds` | `300` | Export monitor health check interval |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.ducklake.catalog-type` | `postgresql` | DuckLake catalog: `postgresql` or `duckdb` |
@@ -254,7 +250,6 @@ The admin API provides manual control over exports when enabled (`yaci.store.ana
 |---|---|---|
 | GET | `/api/v1/analytics/admin/tables` | List all registered exporters |
 | GET | `/api/v1/analytics/admin/status` | Current sync status |
-| GET | `/api/v1/analytics/admin/health` | Scheduler health and stale export detection |
 | GET | `/api/v1/analytics/admin/statistics/{table}` | Export statistics for a table |
 | POST | `/api/v1/analytics/admin/export/date/{date}` | Export all daily tables for a date |
 | POST | `/api/v1/analytics/admin/export/table/{table}/date/{date}` | Export specific table for a date |
@@ -270,9 +265,6 @@ The admin API provides manual control over exports when enabled (`yaci.store.ana
 ```bash
 # Trigger export for a specific date
 curl -X POST http://localhost:8080/api/v1/analytics/admin/export/date/2024-01-15
-
-# Check health status
-curl http://localhost:8080/api/v1/analytics/admin/health
 
 # Query the exported data
 duckdb -c "SELECT COUNT(*) FROM read_parquet('./data/analytics/transaction/date=2024-01-15/data.parquet');"
@@ -305,7 +297,14 @@ Each export is tracked in the `analytics_export_state` table with status transit
 ```
 PENDING --> IN_PROGRESS --> COMPLETED
                 |
-                +--> FAILED (retried up to max-retries times)
+                +--> FAILED --> IN_PROGRESS (retried on next scheduler run)
 ```
 
-The `StaleExportRecoveryService` automatically recovers stuck `IN_PROGRESS` exports on application startup and marks active exports as `FAILED` on graceful shutdown, allowing them to be retried on the next run. The `ExportMonitor` (when enabled) monitors scheduler liveness and reports health status via the `/health` admin endpoint.
+- **PENDING**: initial state when a new export record is created
+- **IN_PROGRESS**: export is running; `retryCount` increments on each retry attempt
+- **COMPLETED**: export finished successfully
+- **FAILED**: export failed; gap detection automatically retries it on the next scheduler run. Use the admin API to manually reset if needed.
+
+`StaleExportRecoveryService` handles two lifecycle scenarios:
+- **On startup**: resets stale `IN_PROGRESS` exports (stuck due to a previous crash, exceeding `stale-timeout-minutes`) to `FAILED` so they are retried on the next scheduler run
+- **On shutdown**: resets all active `IN_PROGRESS` exports to `FAILED` to prevent inconsistent state after the application stops

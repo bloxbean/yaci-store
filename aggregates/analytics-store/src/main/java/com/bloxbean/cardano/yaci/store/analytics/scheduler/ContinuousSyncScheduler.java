@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.analytics.gap.GapDetectionService;
 import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
@@ -46,10 +45,6 @@ public class ContinuousSyncScheduler {
 
     private volatile boolean lastRunHadGaps = true; // start optimistic
 
-    @Getter private volatile boolean syncRunning = false;
-    @Getter private volatile Instant lastSyncStart;
-    @Getter private volatile Instant lastSyncEnd;
-
     public ContinuousSyncScheduler(GapDetectionService gapDetectionService,
                                    UniversalExportService universalExportService,
                                    TableExporterRegistry registry,
@@ -75,13 +70,9 @@ public class ContinuousSyncScheduler {
     }
 
     private void runAndReschedule() {
-        syncRunning = true;
-        lastSyncStart = Instant.now();
         try {
             syncGaps();
         } finally {
-            lastSyncEnd = Instant.now();
-            syncRunning = false;
             boolean hasGaps = lastRunHadGaps;
             int intervalMinutes = hasGaps
                     ? properties.getContinuousSync().getCatchUpIntervalMinutes()

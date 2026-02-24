@@ -7,13 +7,11 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -50,14 +48,6 @@ public class UniversalExportService {
     private final AnalyticsStoreProperties properties;
     private final BlockStorageReader blockStorageReader;
 
-    @Getter private volatile boolean dailyExportRunning = false;
-    @Getter private volatile Instant lastDailyExportStart;
-    @Getter private volatile Instant lastDailyExportEnd;
-
-    @Getter private volatile boolean epochExportRunning = false;
-    @Getter private volatile Instant lastEpochExportStart;
-    @Getter private volatile Instant lastEpochExportEnd;
-
     /**
      * Export all daily tables for finalized date.
      *
@@ -72,49 +62,42 @@ public class UniversalExportService {
      * - Exports data for 2024-01-15
      */
     public void exportDailyTables() {
-        dailyExportRunning = true;
-        lastDailyExportStart = Instant.now();
-        try {
-            // Calculate finalized date (N days ago)
-            LocalDate exportDate = LocalDate.now().minusDays(properties.getFinalizationLagDays());
+        // Calculate finalized date (N days ago)
+        LocalDate exportDate = LocalDate.now().minusDays(properties.getFinalizationLagDays());
 
-            log.info("Starting daily table exports for date: {} (finalization lag: {} days)",
-                    exportDate, properties.getFinalizationLagDays());
+        log.info("Starting daily table exports for date: {} (finalization lag: {} days)",
+                exportDate, properties.getFinalizationLagDays());
 
-            // Get enabled daily tables
-            List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
+        // Get enabled daily tables
+        List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
 
-            if (enabledDailyTables.isEmpty()) {
-                log.info("No daily tables enabled, skipping export");
-                return;
-            }
+        if (enabledDailyTables.isEmpty()) {
+            log.info("No daily tables enabled, skipping export");
+            return;
+        }
 
-            log.info("Exporting {} daily tables: {}", enabledDailyTables.size(), enabledDailyTables);
+        log.info("Exporting {} daily tables: {}", enabledDailyTables.size(), enabledDailyTables);
 
-            int successCount = 0;
-            int failureCount = 0;
+        int successCount = 0;
+        int failureCount = 0;
 
-            for (String tableName : enabledDailyTables) {
-                try {
-                    TableExporter exporter = registry.getExporter(tableName);
-                    boolean success = exporter.exportForPartition(PartitionValue.ofDate(exportDate));
+        for (String tableName : enabledDailyTables) {
+            try {
+                TableExporter exporter = registry.getExporter(tableName);
+                boolean success = exporter.exportForPartition(PartitionValue.ofDate(exportDate));
 
-                    if (success) {
-                        successCount++;
-                    } else {
-                        failureCount++;
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
+                if (success) {
+                    successCount++;
+                } else {
                     failureCount++;
                 }
+            } catch (Exception e) {
+                log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
+                failureCount++;
             }
-
-            log.info("Daily export completed: {} successful, {} failed", successCount, failureCount);
-        } finally {
-            lastDailyExportEnd = Instant.now();
-            dailyExportRunning = false;
         }
+
+        log.info("Daily export completed: {} successful, {} failed", successCount, failureCount);
     }
 
     /**
@@ -131,56 +114,49 @@ public class UniversalExportService {
      * - Exports data for epoch 450
      */
     public void exportEpochTables() {
-        epochExportRunning = true;
-        lastEpochExportStart = Instant.now();
-        try {
-            // Get current epoch from latest block and export previous (completed) epoch
-            Optional<Block> latestBlock = blockStorageReader.findRecentBlock();
-            if (latestBlock.isEmpty()) {
-                log.warn("No blocks found, cannot determine current epoch. Skipping epoch export.");
-                return;
-            }
+        // Get current epoch from latest block and export previous (completed) epoch
+        Optional<Block> latestBlock = blockStorageReader.findRecentBlock();
+        if (latestBlock.isEmpty()) {
+            log.warn("No blocks found, cannot determine current epoch. Skipping epoch export.");
+            return;
+        }
 
-            int currentEpoch = latestBlock.get().getEpochNumber();
-            int exportEpoch = currentEpoch - 1;
+        int currentEpoch = latestBlock.get().getEpochNumber();
+        int exportEpoch = currentEpoch - 1;
 
-            log.info("Starting epoch table exports for epoch: {} (current epoch: {})",
-                    exportEpoch, currentEpoch);
+        log.info("Starting epoch table exports for epoch: {} (current epoch: {})",
+                exportEpoch, currentEpoch);
 
-            // Get enabled epoch tables
-            List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
+        // Get enabled epoch tables
+        List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
 
-            if (enabledEpochTables.isEmpty()) {
-                log.info("No epoch tables enabled, skipping export");
-                return;
-            }
+        if (enabledEpochTables.isEmpty()) {
+            log.info("No epoch tables enabled, skipping export");
+            return;
+        }
 
-            log.info("Exporting {} epoch tables: {}", enabledEpochTables.size(), enabledEpochTables);
+        log.info("Exporting {} epoch tables: {}", enabledEpochTables.size(), enabledEpochTables);
 
-            int successCount = 0;
-            int failureCount = 0;
+        int successCount = 0;
+        int failureCount = 0;
 
-            for (String tableName : enabledEpochTables) {
-                try {
-                    TableExporter exporter = registry.getExporter(tableName);
-                    boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(exportEpoch));
+        for (String tableName : enabledEpochTables) {
+            try {
+                TableExporter exporter = registry.getExporter(tableName);
+                boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(exportEpoch));
 
-                    if (success) {
-                        successCount++;
-                    } else {
-                        failureCount++;
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
+                if (success) {
+                    successCount++;
+                } else {
                     failureCount++;
                 }
+            } catch (Exception e) {
+                log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
+                failureCount++;
             }
-
-            log.info("Epoch export completed: {} successful, {} failed", successCount, failureCount);
-        } finally {
-            lastEpochExportEnd = Instant.now();
-            epochExportRunning = false;
         }
+
+        log.info("Epoch export completed: {} successful, {} failed", successCount, failureCount);
     }
 
     /**
