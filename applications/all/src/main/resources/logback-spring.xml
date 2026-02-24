@@ -8,6 +8,7 @@
     <!-- Read properties from Spring environment -->
     <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="./logs/yaci-store.log"/>
     <springProperty scope="context" name="ANALYTICS_LOG_FILE" source="yaci.store.analytics.logging.file" defaultValue="./logs/analytics-store.log"/>
+    <springProperty scope="context" name="ANALYTICS_ENABLED" source="yaci.store.analytics.enabled" defaultValue="false"/>
 
     <!-- Main application log file -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -23,28 +24,31 @@
         </rollingPolicy>
     </appender>
 
-    <!-- Analytics-specific log file -->
-    <appender name="ANALYTICS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${ANALYTICS_LOG_FILE}</file>
-        <encoder>
-            <pattern>${FILE_LOG_PATTERN}</pattern>
-        </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${ANALYTICS_LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>2GB</totalSizeCap>
-        </rollingPolicy>
-    </appender>
-
     <!--
-        Analytics logger: writes to ANALYTICS_FILE appender only.
-        additivity="true" means log events also propagate to the root logger,
-        so analytics logs appear in both the main log file and the analytics-specific file.
+        Analytics-specific log file: only created when analytics store is enabled.
+        Analytics logs also propagate to the root logger (additivity="true"),
+        so they appear in both the main log file and the analytics-specific file.
     -->
-    <logger name="com.bloxbean.cardano.yaci.store.analytics" level="INFO" additivity="true">
-        <appender-ref ref="ANALYTICS_FILE"/>
-    </logger>
+    <if condition='property("ANALYTICS_ENABLED").equals("true")'>
+        <then>
+            <appender name="ANALYTICS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>${ANALYTICS_LOG_FILE}</file>
+                <encoder>
+                    <pattern>${FILE_LOG_PATTERN}</pattern>
+                </encoder>
+                <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                    <fileNamePattern>${ANALYTICS_LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+                    <maxFileSize>100MB</maxFileSize>
+                    <maxHistory>30</maxHistory>
+                    <totalSizeCap>2GB</totalSizeCap>
+                </rollingPolicy>
+            </appender>
+
+            <logger name="com.bloxbean.cardano.yaci.store.analytics" level="INFO" additivity="true">
+                <appender-ref ref="ANALYTICS_FILE"/>
+            </logger>
+        </then>
+    </if>
 
     <!-- Root logger: console + main file -->
     <root level="INFO">
