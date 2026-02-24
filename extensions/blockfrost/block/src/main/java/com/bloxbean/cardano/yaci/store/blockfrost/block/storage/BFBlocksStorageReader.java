@@ -17,7 +17,7 @@ public interface BFBlocksStorageReader {
 
     Optional<BFBlockRow> findBlockBySlot(long slot);
 
-    Optional<BFBlockRow> findBlockByEpochAndSlot(int epoch, long slot);
+    Optional<BFBlockRow> findBlockByEpochAndEpochSlot(int epoch, int epochSlot);
 
     List<BFBlockRow> findNextBlocks(long blockNumber, int page, int count);
 

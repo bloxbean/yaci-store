@@ -47,8 +47,8 @@ public class BFBlockService {
         return bfBlockMapper.toBFBlockDTO(blockRow);
     }
 
-    public BFBlockDTO getBlockByEpochAndSlot(int epochNumber, long slotNumber) {
-        BFBlockRow blockRow = bfBlocksStorageReader.findBlockByEpochAndSlot(epochNumber, slotNumber)
+    public BFBlockDTO getBlockByEpochAndSlot(int epochNumber, int epochSlot) {
+        BFBlockRow blockRow = bfBlocksStorageReader.findBlockByEpochAndEpochSlot(epochNumber, epochSlot)
                 .orElseThrow(this::notFound);
 
         return bfBlockMapper.toBFBlockDTO(blockRow);

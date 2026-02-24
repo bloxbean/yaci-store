@@ -73,7 +73,7 @@ public class BFBlockController {
     @GetMapping("epoch/{epoch_number}/slot/{slot_number}")
     @Operation(summary = "Block by epoch and slot", description = "Return block content for absolute slot constrained by epoch.")
     public BFBlockDTO getBlockByEpochAndSlot(@PathVariable("epoch_number") int epochNumber,
-                                             @PathVariable("slot_number") long slotNumber) {
+                                             @PathVariable("slot_number") int slotNumber) {
         return bfBlockService.getBlockByEpochAndSlot(epochNumber, slotNumber);
     }
 

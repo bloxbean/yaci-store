@@ -82,7 +82,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
     }
 
     @Override
-    public Optional<BFBlockRow> findBlockByEpochAndSlot(int epoch, long slot) {
+    public Optional<BFBlockRow> findBlockByEpochAndEpochSlot(int epoch, int epochSlot) {
         var block = BLOCK.as("b");
         var nextBlockField = nextBlockField(block);
         var confirmationsField = confirmationsField(block);
@@ -91,7 +91,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
                 block,
                 nextBlockField,
                 confirmationsField,
-                block.EPOCH.eq(epoch).and(block.EPOCH_SLOT.eq((int) slot))
+                block.EPOCH.eq(epoch).and(block.EPOCH_SLOT.eq(epochSlot))
         )
                 .orderBy(block.NUMBER.desc().nullsLast())
                 .limit(1)
