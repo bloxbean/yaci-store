@@ -245,6 +245,11 @@ public abstract class AbstractTableExporter implements TableExporter {
      * @return true if AdaPot job is completed, false otherwise
      */
     protected boolean isRewardCalcAdaPotJobCompleted(int epoch) {
+        if (adaPotJobStorage instanceof NoOpAdaPotJobStorage) {
+            log.debug("AdaPot module is disabled, skipping reward calc check for epoch {}", epoch);
+            return false;
+        }
+
         try {
             Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
             if (nonByronEpoch == null || epoch < nonByronEpoch) {
