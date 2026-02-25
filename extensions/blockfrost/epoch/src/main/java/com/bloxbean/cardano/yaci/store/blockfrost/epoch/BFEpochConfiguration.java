@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConditionalOnProperty(name = {"store.extensions.blockfrost.epoch.enabled"},
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @ComponentScan(basePackages = {
         "com.bloxbean.cardano.yaci.store.blockfrost.epoch",

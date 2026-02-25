@@ -27,19 +27,19 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Epoch {
-                private boolean enabled = true;
+                private boolean enabled = false;
             }
 
             @Getter
             @Setter
             public static final class Address {
-                private boolean enabled = true;
+                private boolean enabled = false;
             }
 
             @Getter
             @Setter
             public static final class Asset {
-                private boolean enabled = true;
+                private boolean enabled = false;
             }
 
         }

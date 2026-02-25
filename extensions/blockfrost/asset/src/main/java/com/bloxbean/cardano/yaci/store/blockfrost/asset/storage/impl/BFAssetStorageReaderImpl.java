@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFAss
 import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFAssetInfo;
 import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFAssetTransaction;
 import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFPolicyAsset;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -264,9 +268,17 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     /**
      * Returns current holder addresses for a unit with quantity and first-seen slot.
      * Only unspent UTXO rows are considered and quantity is extracted from the amounts JSON array.
+     * Non-Postgres dialects (for example H2/MySQL) use an application-side JSON parsing fallback.
      */
     @Override
     public List<BFAssetAddress> findAssetAddresses(String unit, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return findAssetAddressesPostgres(unit, page, count, order);
+        }
+        return findAssetAddressesNonPostgres(unit, page, count, order);
+    }
+
+    private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
 
         Table<?> candidateUtxo = dsl.select(
@@ -328,6 +340,65 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         toBigInteger(record.get(quantitySumField)),
                         record.get(firstSeenSlotField)
                 ));
+    }
+
+    private List<BFAssetAddress> findAssetAddressesNonPostgres(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        Field<String> ownerAddrField = ADDRESS_UTXO.OWNER_ADDR.as("owner_addr");
+        Field<String> ownerAddrFullField = ADDRESS_UTXO.OWNER_ADDR_FULL.as("owner_addr_full");
+        Field<Long> slotField = ADDRESS_UTXO.SLOT.as("slot");
+        Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
+
+        var rows = dsl.select(ownerAddrField, ownerAddrFullField, slotField, amountsField)
+                .from(ADDRESS_UTXO)
+                .where(buildUnitCondition(unit))
+                .andNotExists(
+                        dsl.selectOne()
+                                .from(TX_INPUT)
+                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                )
+                .fetch();
+
+        Map<String, HolderAggregate> byAddress = new HashMap<>();
+        for (var row : rows) {
+            String address = row.get(ownerAddrFullField);
+            if (address == null || address.isBlank()) {
+                address = row.get(ownerAddrField);
+            }
+            if (address == null || address.isBlank()) {
+                continue;
+            }
+
+            BigInteger quantity = AmountsJsonUtil.findQuantity(row.get(amountsField), unit);
+            if (quantity == null) {
+                continue;
+            }
+
+            Long slot = row.get(slotField);
+            byAddress.compute(address, (key, aggregate) -> {
+                if (aggregate == null) {
+                    return new HolderAggregate(quantity, slot);
+                }
+                return aggregate.merge(quantity, slot);
+            });
+        }
+
+        Comparator<BFAssetAddress> comparator = Comparator
+                .comparing(BFAssetAddress::firstSeenSlot, slotComparator(order))
+                .thenComparing(BFAssetAddress::address, order == Order.desc ? Comparator.reverseOrder() : Comparator.naturalOrder());
+
+        List<BFAssetAddress> sorted = byAddress.entrySet().stream()
+                .map(entry -> new BFAssetAddress(entry.getKey(), entry.getValue().quantity, entry.getValue().firstSeenSlot))
+                .sorted(comparator)
+                .toList();
+
+        if (offset >= sorted.size()) {
+            return List.of();
+        }
+
+        int toIndex = Math.min(offset + count, sorted.size());
+        return sorted.subList(offset, toIndex);
     }
 
     /**
@@ -419,6 +490,13 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
      * 4) rank in final order and slice requested page.
      */
     private List<FirstSeenUnit> findFirstSeenUnitsPage(int offset, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return findFirstSeenUnitsPagePostgres(offset, count, order);
+        }
+        return findFirstSeenUnitsPageNonPostgres(offset, count, order);
+    }
+
+    private List<FirstSeenUnit> findFirstSeenUnitsPagePostgres(int offset, int count, Order order) {
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
         String txIndexOrder = order == Order.desc ? "desc" : "asc";
         String unitOrder = order == Order.desc ? "desc" : "asc";
@@ -514,11 +592,41 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         ));
     }
 
+    private List<FirstSeenUnit> findFirstSeenUnitsPageNonPostgres(int offset, int count, Order order) {
+        Field<String> unitField = ASSETS.UNIT.as("unit");
+        Field<Long> slotField = DSL.min(ASSETS.SLOT).as("slot");
+        Field<String> txHashField = DSL.min(ASSETS.TX_HASH).as("tx_hash");
+        SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
+        SortField<?> txHashOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
+        SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
+
+        var query = dsl.select(unitField, slotField, txHashField)
+                .from(ASSETS)
+                .where(ASSETS.MINT_TYPE.eq("MINT"))
+                .groupBy(ASSETS.UNIT)
+                .orderBy(slotOrder, txHashOrder, unitOrder)
+                .limit(count)
+                .offset(offset);
+
+        logQuery("findAssetsUnitsPageNonPostgres", query);
+
+        return query.fetch(record -> new FirstSeenUnit(
+                record.get(unitField),
+                record.get(slotField),
+                record.get(txHashField)
+        ));
+    }
+
     /**
      * Builds JSONB containment condition for unit matching inside address_utxo.amounts.
      */
     private Condition buildUnitCondition(String unit) {
-        return DSL.condition("amounts @> {0}::jsonb", DSL.val("[{\"unit\": \"" + unit + "\"}]"));
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return DSL.condition("amounts @> {0}::jsonb", DSL.val("[{\"unit\": \"" + unit + "\"}]"));
+        }
+
+        return DSL.field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\": \"" + unit + "\"")
+                .or(DSL.field(ADDRESS_UTXO.AMOUNTS).cast(String.class).contains("\"unit\":\"" + unit + "\""));
     }
 
     /**
@@ -544,6 +652,36 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     private record FirstSeenUnit(String unit, Long slot, String txHash) {
+    }
+
+    private record HolderAggregate(BigInteger quantity, Long firstSeenSlot) {
+        private HolderAggregate merge(BigInteger additionalQuantity, Long slot) {
+            BigInteger mergedQuantity = quantity.add(additionalQuantity);
+            Long mergedFirstSeenSlot;
+            if (firstSeenSlot == null) {
+                mergedFirstSeenSlot = slot;
+            } else if (slot == null) {
+                mergedFirstSeenSlot = firstSeenSlot;
+            } else {
+                mergedFirstSeenSlot = Math.min(firstSeenSlot, slot);
+            }
+            return new HolderAggregate(mergedQuantity, mergedFirstSeenSlot);
+        }
+    }
+
+    private Comparator<Long> slotComparator(Order order) {
+        return (left, right) -> {
+            if (left == null && right == null) {
+                return 0;
+            }
+            if (left == null) {
+                return 1;
+            }
+            if (right == null) {
+                return -1;
+            }
+            return order == Order.desc ? right.compareTo(left) : left.compareTo(right);
+        };
     }
 
     /**
