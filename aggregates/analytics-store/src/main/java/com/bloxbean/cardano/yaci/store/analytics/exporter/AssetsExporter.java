@@ -55,7 +55,7 @@ public class AssetsExporter extends AbstractTableExporter {
                 a.quantity,
                 a.mint_type,
                 a.block,
-                to_timestamp(a.block_time) as block_time
+                to_timestamp(COALESCE(a.block_time, 0)) as block_time
             FROM source_db.%s.assets a
             WHERE a.slot >= %d
               AND a.slot < %d

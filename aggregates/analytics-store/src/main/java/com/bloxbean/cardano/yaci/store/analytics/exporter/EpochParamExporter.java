@@ -69,7 +69,7 @@ public class EpochParamExporter extends AbstractTableExporter {
                 ep.cost_model_hash,
                 ep.slot,
                 ep.block,
-                to_timestamp(ep.block_time) as block_time
+                to_timestamp(COALESCE(ep.block_time, 0)) as block_time
             FROM source_db.%s.epoch_param ep
             WHERE ep.epoch = %d
             ORDER BY ep.epoch

@@ -70,7 +70,7 @@ public class SpentOutputsExporter extends AbstractTableExporter {
                 ti.spent_at_slot,
                 ti.spent_at_block,
                 ti.spent_at_block_hash,
-                to_timestamp(ti.spent_block_time) as spent_block_time,
+                to_timestamp(COALESCE(ti.spent_block_time, 0)) as spent_block_time,
                 ti.spent_epoch
             FROM source_db.%s.tx_input ti
             WHERE ti.spent_at_slot >= %d

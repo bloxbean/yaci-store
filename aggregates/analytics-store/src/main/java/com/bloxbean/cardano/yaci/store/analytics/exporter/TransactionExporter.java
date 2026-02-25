@@ -62,7 +62,7 @@ public class TransactionExporter extends AbstractTableExporter {
                 t.block,
                 t.slot,
                 t.epoch,
-                to_timestamp(t.block_time) as block_time,
+                to_timestamp(COALESCE(t.block_time, 0)) as block_time,
                 t.tx_index,
                 t.fee,
                 t.invalid,

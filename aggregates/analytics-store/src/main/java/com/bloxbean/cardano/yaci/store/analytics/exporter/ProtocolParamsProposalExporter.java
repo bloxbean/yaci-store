@@ -53,7 +53,7 @@ public class ProtocolParamsProposalExporter extends AbstractTableExporter {
                 ppp.slot,
                 ppp.era,
                 ppp.block,
-                to_timestamp(ppp.block_time) as block_time
+                to_timestamp(COALESCE(ppp.block_time, 0)) as block_time
             FROM source_db.%s.protocol_params_proposal ppp
             WHERE ppp.slot >= %d
               AND ppp.slot < %d

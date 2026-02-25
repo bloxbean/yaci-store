@@ -52,7 +52,7 @@ public class BlockExporter extends AbstractTableExporter {
                 b.epoch,
                 CAST(b.total_output AS DECIMAL(38,0)) as total_output,
                 b.total_fees,
-                to_timestamp(b.block_time) as block_time,
+                to_timestamp(COALESCE(b.block_time, 0)) as block_time,
                 b.era,
                 b.issuer_vkey,
                 b.leader_vrf,

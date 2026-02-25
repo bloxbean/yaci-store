@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.analytics.config;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,12 +27,16 @@ public class DuckDbDataSourceConfig {
     private final AnalyticsStoreProperties properties;
 
     /**
-     * Create DuckDB Writer DataSource with HikariCP connection pooling.
+     * Create DuckDB Writer DataSource with HikariCP (pool size 1).
      *
-     * Used for export operations that write to DuckLake catalog.
+     * HikariCP with pool size 1 provides critical mutual exclusion: the single connection
+     * is exclusively held between getConnection() and close(), preventing concurrent access
+     * to the DuckDB connection (which is NOT thread-safe).
+     *
+     * Connection health is validated on checkout via connectionTestQuery.
+     * If the connection is stale/corrupted, HikariCP evicts it and creates a fresh one.
      */
     @Bean(name = "duckDbWriterDataSource")
-    @ConfigurationProperties("yaci.store.analytics.duckdb.writer.datasource")
     public DataSource duckDbWriterDataSource() {
         String jdbcUrl = buildJdbcUrl();
 
@@ -43,16 +46,12 @@ public class DuckDbDataSourceConfig {
                 .url(jdbcUrl)
                 .build();
 
-        // Exports are sequential (single-threaded scheduler), so one writer connection suffices.
-        // For DuckDB file catalogs this also prevents file lock conflicts on ATTACH.
         dataSource.setMaximumPoolSize(1);
         dataSource.setMinimumIdle(1);
-
-        // Disable connection eviction — with pool size 1, eviction provides zero benefit
-        // and destroys all ATTACH state on the in-memory DuckDB connection.
-        dataSource.setMaxLifetime(0);   // Disable connection retirement
-        dataSource.setIdleTimeout(0);   // Disable idle eviction
-        dataSource.setKeepaliveTime(0); // Disable keepalive probes
+        dataSource.setConnectionTestQuery("SELECT 42");
+        dataSource.setConnectionTimeout(60000);  // 60s - exports can take time
+        dataSource.setMaxLifetime(0);             // No max lifetime (connection reused indefinitely)
+        dataSource.setIdleTimeout(0);             // No idle timeout (keep connection alive)
 
         return dataSource;
     }

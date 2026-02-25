@@ -52,7 +52,7 @@ public class CostModelExporter extends AbstractTableExporter {
                 cm.costs,
                 cm.slot,
                 cm.block,
-                to_timestamp(cm.block_time) as block_time
+                to_timestamp(COALESCE(cm.block_time, 0)) as block_time
             FROM source_db.%s.cost_model cm
             WHERE cm.slot >= %d
               AND cm.slot < %d

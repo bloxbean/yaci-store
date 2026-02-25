@@ -58,7 +58,7 @@ public class VotingProcedureExporter extends AbstractTableExporter {
                 vp.anchor_hash,
                 vp.epoch,
                 vp.block,
-                to_timestamp(vp.block_time) as block_time
+                to_timestamp(COALESCE(vp.block_time, 0)) as block_time
             FROM source_db.%s.voting_procedure vp
             WHERE vp.slot >= %d
               AND vp.slot < %d

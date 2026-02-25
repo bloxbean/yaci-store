@@ -61,7 +61,7 @@ public class PoolExporter extends AbstractTableExporter {
                 p.slot,
                 p.block_hash,
                 p.block,
-                to_timestamp(p.block_time) as block_time
+                to_timestamp(COALESCE(p.block_time, 0)) as block_time
             FROM source_db.%s.pool p
             WHERE p.slot >= %d
               AND p.slot < %d

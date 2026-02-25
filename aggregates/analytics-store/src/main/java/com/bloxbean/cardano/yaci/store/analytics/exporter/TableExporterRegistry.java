@@ -81,6 +81,24 @@ public class TableExporterRegistry {
     }
 
     /**
+     * Register a single table exporter programmatically.
+     *
+     * Used by {@link com.bloxbean.cardano.yaci.store.analytics.config.CustomExporterRegistrar}
+     * to register custom exporters defined in YAML configuration after Spring auto-wiring.
+     *
+     * @param exporter The table exporter to register
+     * @throws IllegalStateException if an exporter with the same table name already exists
+     */
+    public void registerExporter(TableExporter exporter) {
+        String tableName = exporter.getTableName();
+        if (exporters.containsKey(tableName)) {
+            throw new IllegalStateException("Duplicate table exporter: " + tableName);
+        }
+        exporters.put(tableName, exporter);
+        log.info("Registered exporter: {} ({})", tableName, exporter.getPartitionStrategy());
+    }
+
+    /**
      * Get exporter for a specific table.
      *
      * @param tableName The table name

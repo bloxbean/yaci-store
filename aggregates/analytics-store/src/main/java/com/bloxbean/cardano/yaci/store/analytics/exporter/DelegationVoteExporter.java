@@ -57,7 +57,7 @@ public class DelegationVoteExporter extends AbstractTableExporter {
                 dv.cred_type,
                 dv.slot,
                 dv.block,
-                to_timestamp(dv.block_time) as block_time
+                to_timestamp(COALESCE(dv.block_time, 0)) as block_time
             FROM source_db.%s.delegation_vote dv
             WHERE dv.slot >= %d
               AND dv.slot < %d

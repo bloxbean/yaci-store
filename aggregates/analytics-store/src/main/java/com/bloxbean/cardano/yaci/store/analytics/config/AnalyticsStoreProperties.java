@@ -3,7 +3,9 @@ package com.bloxbean.cardano.yaci.store.analytics.config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @ConfigurationProperties(prefix = "yaci.store.analytics")
@@ -36,6 +38,8 @@ public class AnalyticsStoreProperties {
      * enabled-tables=transactions,transaction_outputs,spent_outputs,address_balance
      */
     private Set<String> enabledTables = new HashSet<>();
+
+    private List<CustomExporterConfig> customExporters = new ArrayList<>();
 
     private StateManagement stateManagement = new StateManagement();
     private ContinuousSync continuousSync = new ContinuousSync();
@@ -238,5 +242,14 @@ public class AnalyticsStoreProperties {
              */
             private int rowGroupSize = -1;
         }
+    }
+
+    @Data
+    public static class CustomExporterConfig {
+        private String name;
+        private String partitionStrategy = "DAILY";
+        private String partitionColumn = "block_time";
+        private boolean dependsOnAdapotJob = false;
+        private String query;
     }
 }

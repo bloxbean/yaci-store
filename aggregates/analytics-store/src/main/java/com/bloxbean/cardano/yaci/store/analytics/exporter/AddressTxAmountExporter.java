@@ -54,7 +54,7 @@ public class AddressTxAmountExporter extends AbstractTableExporter {
                 ata.stake_address,
                 ata.block,
                 ata.epoch,
-                to_timestamp(ata.block_time) as block_time
+                to_timestamp(COALESCE(ata.block_time, 0)) as block_time
             FROM source_db.%s.address_tx_amount ata
             WHERE ata.slot >= %d
               AND ata.slot < %d

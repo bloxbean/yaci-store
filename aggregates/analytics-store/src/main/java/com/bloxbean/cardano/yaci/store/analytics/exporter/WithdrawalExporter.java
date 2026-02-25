@@ -51,7 +51,7 @@ public class WithdrawalExporter extends AbstractTableExporter {
                 w.epoch,
                 w.slot,
                 w.block,
-                to_timestamp(w.block_time) as block_time
+                to_timestamp(COALESCE(w.block_time, 0)) as block_time
             FROM source_db.%s.withdrawal w
             WHERE w.slot >= %d
               AND w.slot < %d

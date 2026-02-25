@@ -82,7 +82,7 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
                 epoch,
                 slot,
                 block_hash,
-                to_timestamp(block_time) as block_time
+                to_timestamp(COALESCE(block_time, 0)) as block_time
             FROM source_db.%s.address_utxo_flattened
             WHERE slot >= %d
               AND slot < %d
