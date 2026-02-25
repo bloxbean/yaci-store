@@ -207,21 +207,21 @@ duckdb -c "
 |---|---|---|
 | `yaci.store.analytics.enabled` | `false` | Enable analytics store |
 | `yaci.store.analytics.export-path` | `./data/analytics` | Output directory for exported files |
-| `yaci.store.analytics.daily-export-cron` | `0 0 0 * * *` | Cron for daily table exports |
-| `yaci.store.analytics.epoch-export-cron` | `0 0 1 * * *` | Cron for epoch table exports |
 | `yaci.store.analytics.finalization-lag-days` | `2` | Days to lag behind tip (ensures immutability) |
 | `yaci.store.analytics.enabled-tables` | _(empty = all)_ | Comma-separated list of tables to export |
 | `yaci.store.analytics.admin.enabled` | `false` | Enable admin REST API |
 | `yaci.store.analytics.storage.type` | `parquet` | Storage format: `parquet` or `ducklake` |
 | `yaci.store.analytics.state-management.stale-timeout-minutes` | `60` | Timeout before stuck exports are recovered |
-| `yaci.store.analytics.state-management.max-retries` | `3` | Max retry attempts for failed exports |
 | `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
+| `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
 | `yaci.store.analytics.ducklake.catalog-type` | `postgresql` | DuckLake catalog: `postgresql` or `duckdb` |
-| `yaci.store.analytics.ducklake.catalog-url` | _(main datasource)_ | Custom PostgreSQL URL for catalog |
+| `yaci.store.analytics.ducklake.catalog-url` | _(main datasource)_ | PostgreSQL URL for catalog (used when `catalog-type=postgresql`) |
+| `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
+| `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
 | `yaci.store.analytics.logging.file` | `./logs/analytics-store.log` | Dedicated analytics log file path |
 
