@@ -95,7 +95,7 @@ public abstract class AbstractTableExporter implements TableExporter {
 
         // Pre-export validation (e.g., check if dependent jobs have completed)
         if (!preExportValidation(partition)) {
-            log.warn("Pre-export validation failed for table {} partition {}, skipping export",
+            log.debug("Pre-export validation failed for table {} partition {}, skipping export",
                     getTableName(), partitionKey);
             return false;
         }
@@ -245,6 +245,11 @@ public abstract class AbstractTableExporter implements TableExporter {
      * @return true if AdaPot job is completed, false otherwise
      */
     protected boolean isRewardCalcAdaPotJobCompleted(int epoch) {
+        if (adaPotJobStorage instanceof NoOpAdaPotJobStorage) {
+            log.debug("AdaPot module is disabled, skipping reward calc check for epoch {}", epoch);
+            return false;
+        }
+
         try {
             Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
             if (nonByronEpoch == null || epoch < nonByronEpoch) {
