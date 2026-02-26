@@ -128,10 +128,10 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                     return BFTransactionDto.builder()
                             .hash(record.get(TRANSACTION.TX_HASH))
                             .block(record.get(TRANSACTION.BLOCK_HASH))
-                            .blockHeight(record.get(TRANSACTION.BLOCK) != null ? record.get(TRANSACTION.BLOCK).intValue() : null)
+                            .blockHeight(record.get(TRANSACTION.BLOCK) != null ? Math.max(0, record.get(TRANSACTION.BLOCK).intValue()) : null)
                             .blockTime(record.get(TRANSACTION.BLOCK_TIME))
-                            .slot(record.get(TRANSACTION.SLOT))
-                            .index(record.get(TRANSACTION.TX_INDEX))
+                            .slot(record.get(TRANSACTION.SLOT) != null ? Math.max(0L, record.get(TRANSACTION.SLOT)) : null)
+                            .index(record.get(TRANSACTION.TX_INDEX) != null ? record.get(TRANSACTION.TX_INDEX) : 0)
                             .fees(record.get(TRANSACTION.FEE) != null ? record.get(TRANSACTION.FEE).toString() : "0")
                             .size(record.get(TRANSACTION_CBOR.CBOR_SIZE))
                             .invalidBefore(record.get(TRANSACTION.VALIDITY_INTERVAL_START) != null
