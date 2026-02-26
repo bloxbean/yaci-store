@@ -35,5 +35,7 @@ public interface BFTransactionStorageReader {
 
     int countStakeRegistrations(String txHash);
 
+    int countStakeDeregistrations(String txHash);
+
     int countPoolRegistrations(String txHash);
 }

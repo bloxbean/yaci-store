@@ -561,6 +561,15 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
     }
 
     @Override
+    public int countStakeDeregistrations(String txHash) {
+        return dsl.fetchCount(
+                dsl.selectFrom(STAKE_REGISTRATION)
+                        .where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
+                        .and(STAKE_REGISTRATION.TYPE.eq("STAKE_DEREGISTRATION"))
+        );
+    }
+
+    @Override
     public int countPoolRegistrations(String txHash) {
         return dsl.fetchCount(
                 dsl.selectFrom(POOL_REGISTRATION)

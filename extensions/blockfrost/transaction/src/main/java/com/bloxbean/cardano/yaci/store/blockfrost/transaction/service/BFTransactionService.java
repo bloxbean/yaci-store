@@ -181,11 +181,13 @@ public class BFTransactionService {
             BigInteger poolDeposit = epochParam.getParams().getPoolDeposit();
 
             int stakeRegCount = storageReader.countStakeRegistrations(txHash);
+            int stakeDeregCount = storageReader.countStakeDeregistrations(txHash);
+            int netStakeCount = stakeRegCount - stakeDeregCount;
             int poolRegCount = storageReader.countPoolRegistrations(txHash);
 
             BigInteger deposit = BigInteger.ZERO;
-            if (keyDeposit != null && stakeRegCount > 0) {
-                deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(stakeRegCount)));
+            if (keyDeposit != null && netStakeCount != 0) {
+                deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(netStakeCount)));
             }
             if (poolDeposit != null && poolRegCount > 0) {
                 deposit = deposit.add(poolDeposit.multiply(BigInteger.valueOf(poolRegCount)));
