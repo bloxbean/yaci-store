@@ -40,20 +40,8 @@ public class BFTransactionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "The requested component has not been found."));
 
-        // Resolve output_amount — lovelace first, then assets sorted by unit
-        Map<String, BigInteger> outputAmounts = storageReader.findTxOutputAmounts(txHash);
-        List<BFAmountDto> amountList = outputAmounts.entrySet().stream()
-                .sorted((a, b) -> {
-                    if ("lovelace".equals(a.getKey())) return -1;
-                    if ("lovelace".equals(b.getKey())) return 1;
-                    return a.getKey().compareTo(b.getKey());
-                })
-                .map(e -> BFAmountDto.builder()
-                        .unit(e.getKey())
-                        .quantity(e.getValue().toString())
-                        .build())
-                .collect(Collectors.toList());
-        dto.setOutputAmount(amountList);
+        // Resolve output_amount — lovelace aggregated, non-lovelace per-output (matching Blockfrost)
+        dto.setOutputAmount(storageReader.findTxOutputAmounts(txHash));
 
         // Resolve mir_cert_count from optional MIR store
         MIRStorageReader mirReader = mirStorageProvider.getIfAvailable();

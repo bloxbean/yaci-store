@@ -3,31 +3,28 @@ package com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl;
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
-import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.BFTransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.Field;
-import org.jooq.Record2;
-import org.jooq.Select;
-import org.jooq.Table;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
+import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.TRANSACTION_SCRIPTS;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.*;
@@ -41,6 +38,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
     private final DSLContext dsl;
     private final TransactionStorageReader transactionStorageReader;
     private final ObjectMapper objectMapper;
+    private final com.bloxbean.cardano.yaci.store.common.config.StoreProperties storeProperties;
 
     @Override
     public Optional<BFTransactionDto> findTransactionByHash(String txHash) {
@@ -84,11 +82,19 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .where(TX_INPUT.SPENT_TX_HASH.eq(txHash))
                 .asField("input_count");
 
+        // For valid txs: exclude collateral return from output_count (it is not a "real" output)
+        // For invalid txs: collateral return IS the real output — counted separately
         Field<Integer> outputCount = DSL.selectCount()
                 .from(ADDRESS_UTXO)
                 .where(ADDRESS_UTXO.TX_HASH.eq(txHash))
                 .and(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isFalse().or(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isNull()))
                 .asField("output_count");
+
+        Field<Integer> collateralReturnCount = DSL.selectCount()
+                .from(ADDRESS_UTXO)
+                .where(ADDRESS_UTXO.TX_HASH.eq(txHash))
+                .and(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isTrue())
+                .asField("collateral_return_count");
 
         return dsl.select(
                         TRANSACTION.TX_HASH,
@@ -110,7 +116,8 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         redeemerCount,
                         assetMintCount,
                         inputCount,
-                        outputCount
+                        outputCount,
+                        collateralReturnCount
                 )
                 .from(TRANSACTION)
                 .leftJoin(TRANSACTION_CBOR).on(TRANSACTION_CBOR.TX_HASH.eq(TRANSACTION.TX_HASH))
@@ -131,6 +138,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                                     && record.get(TRANSACTION.VALIDITY_INTERVAL_START) > 0
                                     ? record.get(TRANSACTION.VALIDITY_INTERVAL_START).toString() : null)
                             .invalidHereafter(record.get(TRANSACTION.TTL) != null
+                                    && record.get(TRANSACTION.TTL) > 0
                                     ? record.get(TRANSACTION.TTL).toString() : null)
                             .withdrawalCount(record.get("withdrawal_count", Integer.class))
                             .delegationCount(record.get("delegation_count", Integer.class))
@@ -140,7 +148,11 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                             .redeemerCount(record.get("redeemer_count", Integer.class))
                             .assetMintOrBurnCount(record.get("asset_mint_count", Integer.class))
                             .utxoCount(Optional.ofNullable(record.get("input_count", Integer.class)).orElse(0)
-                                    + Optional.ofNullable(record.get("output_count", Integer.class)).orElse(0))
+                                    + Optional.ofNullable(record.get("output_count", Integer.class)).orElse(0)
+                                    // For invalid txs the collateral return is a real output — include it
+                                    + (Boolean.TRUE.equals(invalid)
+                                            ? Optional.ofNullable(record.get("collateral_return_count", Integer.class)).orElse(0)
+                                            : 0))
                             .validContract(invalid == null || !invalid)
                             .build();
                 });
@@ -156,9 +168,15 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
 
         Set<String> collateralKeys = buildUtxoKeySet(txn.getCollateralInputs());
         Set<String> referenceKeys = buildUtxoKeySet(txn.getReferenceInputs());
+        // For invalid (failed-script) transactions Blockfrost treats the collateral
+        // inputs as the "real" inputs and the collateral return as the "real" output,
+        // both shown with collateral=false. The yaci-store TX_INPUT table records the
+        // consumed collateral inputs for invalid txs, so TX_INPUT already contains them.
+        boolean txInvalid = Boolean.TRUE.equals(txn.getInvalid());
 
-        // Inputs: UTXOs spent by this transaction
-        List<BFTxInputDto> inputs = dsl.select(
+        // Inputs: UTXOs spent by this transaction (regular inputs for valid txs;
+        // consumed collateral inputs for invalid txs — both stored in TX_INPUT).
+        List<BFTxInputDto> inputs = new ArrayList<>(dsl.select(
                         ADDRESS_UTXO.TX_HASH,
                         ADDRESS_UTXO.OUTPUT_INDEX,
                         ADDRESS_UTXO.OWNER_ADDR,
@@ -173,27 +191,32 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                 .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(TX_INPUT.SPENT_TX_HASH.eq(txHash))
-                .fetch(record -> {
-                    String utxoTxHash = record.get(ADDRESS_UTXO.TX_HASH);
-                    Integer outputIndex = record.get(ADDRESS_UTXO.OUTPUT_INDEX);
-                    String utxoKey = utxoTxHash + ":" + outputIndex;
+                .fetch(record -> BFTxInputDto.builder()
+                        .address(record.get(ADDRESS_UTXO.OWNER_ADDR))
+                        .amount(buildAmounts(record.get(ADDRESS_UTXO.LOVELACE_AMOUNT),
+                                record.get("amounts_str", String.class)))
+                        .txHash(record.get(ADDRESS_UTXO.TX_HASH))
+                        .outputIndex(record.get(ADDRESS_UTXO.OUTPUT_INDEX))
+                        .dataHash(record.get(ADDRESS_UTXO.DATA_HASH))
+                        .inlineDatum(record.get(ADDRESS_UTXO.INLINE_DATUM))
+                        .referenceScriptHash(record.get(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH))
+                        .collateral(false)
+                        .reference(false)
+                        .build()));
 
-                    return BFTxInputDto.builder()
-                            .address(record.get(ADDRESS_UTXO.OWNER_ADDR))
-                            .amount(buildAmounts(record.get(ADDRESS_UTXO.LOVELACE_AMOUNT),
-                                    record.get("amounts_str", String.class)))
-                            .txHash(utxoTxHash)
-                            .outputIndex(outputIndex)
-                            .dataHash(record.get(ADDRESS_UTXO.DATA_HASH))
-                            .inlineDatum(record.get(ADDRESS_UTXO.INLINE_DATUM))
-                            .referenceScriptHash(record.get(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH))
-                            .collateral(collateralKeys.contains(utxoKey))
-                            .reference(referenceKeys.contains(utxoKey))
-                            .build();
-                });
+        // For valid txs: collateral inputs are NOT in TX_INPUT (not consumed) — fetch
+        // them separately. A UTXO that serves both roles appears twice (BF behaviour).
+        // For invalid txs: collateral inputs are already in TX_INPUT — skip to avoid duplicates.
+        if (!txInvalid && !collateralKeys.isEmpty()) {
+            inputs.addAll(fetchUtxosByKeys(collateralKeys, true, false));
+        }
+        if (!referenceKeys.isEmpty()) {
+            inputs.addAll(fetchUtxosByKeys(referenceKeys, false, true));
+        }
 
-        // Outputs: UTXOs created by this transaction
-        List<BFTxOutputDto> outputs = dsl.select(
+        // Outputs: UTXOs created by this transaction.
+        // For invalid txs, BF shows the collateral return with collateral=false.
+        List<BFTxOutputDto> outputs = new ArrayList<>(dsl.select(
                         ADDRESS_UTXO.TX_HASH,
                         ADDRESS_UTXO.OUTPUT_INDEX,
                         ADDRESS_UTXO.OWNER_ADDR,
@@ -218,9 +241,50 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         .dataHash(record.get(ADDRESS_UTXO.DATA_HASH))
                         .inlineDatum(record.get(ADDRESS_UTXO.INLINE_DATUM))
                         .referenceScriptHash(record.get(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH))
-                        .collateral(Boolean.TRUE.equals(record.get(ADDRESS_UTXO.IS_COLLATERAL_RETURN)))
+                        // invalid txs: collateral return shown as collateral=false (BF behaviour)
+                        .collateral(!txInvalid && Boolean.TRUE.equals(record.get(ADDRESS_UTXO.IS_COLLATERAL_RETURN)))
                         .consumedByTx(record.get(TX_INPUT.SPENT_TX_HASH))
-                        .build());
+                        .build()));
+
+        // For valid transactions the collateral return output is not in address_utxo —
+        // it is stored in transaction.collateral_return_json. Add it if not already present.
+        // (For invalid txs the collateral return IS in address_utxo, so skip this block.)
+        boolean hasCollateralOutput = txInvalid || outputs.stream().anyMatch(o -> Boolean.TRUE.equals(o.getCollateral()));
+        if (!hasCollateralOutput) {
+            dsl.select(TRANSACTION.COLLATERAL_RETURN, TRANSACTION.COLLATERAL_RETURN_JSON)
+                    .from(TRANSACTION)
+                    .where(TRANSACTION.TX_HASH.eq(txHash))
+                    .fetchOptional()
+                    .ifPresent(record -> {
+                        org.jooq.JSON returnRef = record.get(TRANSACTION.COLLATERAL_RETURN);
+                        org.jooq.JSON returnJson = record.get(TRANSACTION.COLLATERAL_RETURN_JSON);
+                        if (returnRef != null && returnJson != null) {
+                            try {
+                                JsonNode refNode = objectMapper.readTree(returnRef.toString());
+                                JsonNode jsonNode = objectMapper.readTree(returnJson.toString());
+                                Integer outputIndex = refNode.has("output_index")
+                                        ? refNode.path("output_index").asInt() : null;
+                                String address = jsonNode.path("address").asText(null);
+                                List<BFAmountDto> amounts = parseCollateralReturnAmounts(jsonNode.path("amounts"));
+                                String dataHash = jsonNode.path("dataHash").isNull() ? null : jsonNode.path("dataHash").asText(null);
+                                String inlineDatum = jsonNode.path("inlineDatum").isNull() ? null : jsonNode.path("inlineDatum").asText(null);
+                                String refScriptHash = jsonNode.path("referenceScriptHash").isNull() ? null : jsonNode.path("referenceScriptHash").asText(null);
+                                outputs.add(BFTxOutputDto.builder()
+                                        .address(address)
+                                        .amount(amounts)
+                                        .outputIndex(outputIndex)
+                                        .dataHash(dataHash)
+                                        .inlineDatum(inlineDatum)
+                                        .referenceScriptHash(refScriptHash)
+                                        .collateral(true)
+                                        .consumedByTx(null)
+                                        .build());
+                            } catch (Exception e) {
+                                log.warn("Failed to parse collateral_return_json for tx {}: {}", txHash, e.getMessage());
+                            }
+                        }
+                    });
+        }
 
         return Optional.of(BFTxUtxosDto.builder()
                 .hash(txHash)
@@ -242,6 +306,41 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
 
     @Override
     public List<BFTxRedeemerDto> findTxRedeemers(String txHash) {
+        // Resolve execution unit prices from protocol params for this tx's epoch
+        BigDecimal priceMem = null;
+        BigDecimal priceStep = null;
+        try {
+            Integer epoch = dsl.select(TRANSACTION.EPOCH)
+                    .from(TRANSACTION)
+                    .where(TRANSACTION.TX_HASH.eq(txHash))
+                    .fetchOne(TRANSACTION.EPOCH);
+            if (epoch != null) {
+                String paramsJson = dsl.select(EPOCH_PARAM.PARAMS)
+                        .from(EPOCH_PARAM)
+                        .where(EPOCH_PARAM.EPOCH.eq(epoch))
+                        .fetchOne(r -> r.get(EPOCH_PARAM.PARAMS) != null
+                                ? r.get(EPOCH_PARAM.PARAMS).toString() : null);
+                if (paramsJson != null) {
+                    JsonNode params = objectMapper.readTree(paramsJson);
+                    JsonNode pMemNode = params.path("price_mem");
+                    JsonNode pStepNode = params.path("price_step");
+                    if (!pMemNode.isMissingNode() && pMemNode.has("numerator")) {
+                        priceMem = BigDecimal.valueOf(pMemNode.path("numerator").asLong())
+                                .divide(BigDecimal.valueOf(pMemNode.path("denominator").asLong()), 20, RoundingMode.HALF_UP);
+                    }
+                    if (!pStepNode.isMissingNode() && pStepNode.has("numerator")) {
+                        priceStep = BigDecimal.valueOf(pStepNode.path("numerator").asLong())
+                                .divide(BigDecimal.valueOf(pStepNode.path("denominator").asLong()), 20, RoundingMode.HALF_UP);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch protocol params for redeemer fee computation, tx {}: {}", txHash, e.getMessage());
+        }
+
+        final BigDecimal finalPriceMem = priceMem;
+        final BigDecimal finalPriceStep = priceStep;
+
         return dsl.select(
                         TRANSACTION_SCRIPTS.REDEEMER_INDEX,
                         TRANSACTION_SCRIPTS.PURPOSE,
@@ -253,19 +352,30 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .from(TRANSACTION_SCRIPTS)
                 .where(TRANSACTION_SCRIPTS.TX_HASH.eq(txHash))
                 .orderBy(TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc())
-                .fetch(record -> BFTxRedeemerDto.builder()
-                        .txIndex(record.get(TRANSACTION_SCRIPTS.REDEEMER_INDEX))
-                        .purpose(record.get(TRANSACTION_SCRIPTS.PURPOSE) != null
-                                ? record.get(TRANSACTION_SCRIPTS.PURPOSE).toLowerCase() : null)
-                        .scriptHash(record.get(TRANSACTION_SCRIPTS.SCRIPT_HASH))
-                        .redeemerDataHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
-                        .datumHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
-                        .unitMem(record.get(TRANSACTION_SCRIPTS.UNIT_MEM) != null
-                                ? record.get(TRANSACTION_SCRIPTS.UNIT_MEM).toString() : null)
-                        .unitSteps(record.get(TRANSACTION_SCRIPTS.UNIT_STEPS) != null
-                                ? record.get(TRANSACTION_SCRIPTS.UNIT_STEPS).toString() : null)
-                        .fee(null) // fee per redeemer not stored separately
-                        .build());
+                .fetch(record -> {
+                    Long unitMem = record.get(TRANSACTION_SCRIPTS.UNIT_MEM);
+                    Long unitSteps = record.get(TRANSACTION_SCRIPTS.UNIT_STEPS);
+                    String fee = null;
+                    if (finalPriceMem != null && finalPriceStep != null
+                            && unitMem != null && unitSteps != null) {
+                        fee = finalPriceMem.multiply(BigDecimal.valueOf(unitMem))
+                                .add(finalPriceStep.multiply(BigDecimal.valueOf(unitSteps)))
+                                .setScale(0, RoundingMode.CEILING)
+                                .toBigInteger()
+                                .toString();
+                    }
+                    return BFTxRedeemerDto.builder()
+                            .txIndex(record.get(TRANSACTION_SCRIPTS.REDEEMER_INDEX))
+                            .purpose(record.get(TRANSACTION_SCRIPTS.PURPOSE) != null
+                                    ? record.get(TRANSACTION_SCRIPTS.PURPOSE).toLowerCase() : null)
+                            .scriptHash(record.get(TRANSACTION_SCRIPTS.SCRIPT_HASH))
+                            .redeemerDataHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
+                            .datumHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
+                            .unitMem(unitMem != null ? unitMem.toString() : null)
+                            .unitSteps(unitSteps != null ? unitSteps.toString() : null)
+                            .fee(fee)
+                            .build();
+                });
     }
 
     @Override
@@ -343,17 +453,17 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .where(POOL_REGISTRATION.TX_HASH.eq(txHash))
                 .orderBy(POOL_REGISTRATION.CERT_INDEX.asc())
                 .fetch(record -> {
-                    String metadataUrl = record.get(POOL_REGISTRATION.METADATA_URL);
-                    String metadataHash = record.get(POOL_REGISTRATION.METADATA_HASH);
-                    BFTxPoolUpdateDto.PoolMetadata poolMetadata = null;
-                    if (metadataUrl != null || metadataHash != null) {
-                        poolMetadata = BFTxPoolUpdateDto.PoolMetadata.builder()
-                                .url(metadataUrl)
-                                .hash(metadataHash)
-                                .build();
-                    }
+                    // metadata is always returned as an object (fields null when not stored)
+                    BFTxPoolUpdateDto.PoolMetadata poolMetadata = BFTxPoolUpdateDto.PoolMetadata.builder()
+                            .url(record.get(POOL_REGISTRATION.METADATA_URL))
+                            .hash(record.get(POOL_REGISTRATION.METADATA_HASH))
+                            .ticker(null)
+                            .name(null)
+                            .description(null)
+                            .homepage(null)
+                            .build();
 
-                    List<String> owners = parseJsonStringArray(record.get(POOL_REGISTRATION.POOL_OWNERS) != null
+                    List<String> owners = parseOwners(record.get(POOL_REGISTRATION.POOL_OWNERS) != null
                             ? record.get(POOL_REGISTRATION.POOL_OWNERS).toString() : null);
 
                     List<BFTxPoolRelayDto> relays = parseRelays(record.get(POOL_REGISTRATION.RELAYS) != null
@@ -373,7 +483,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                             .owners(owners)
                             .relays(relays)
                             .metadata(poolMetadata)
-                            .activeEpoch(epoch != null ? epoch + 1 : null)
+                            .activeEpoch(epoch != null ? epoch + 2 : null)
                             .build();
                 });
     }
@@ -396,89 +506,49 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
     }
 
     @Override
-    public Map<String, BigInteger> findTxOutputAmounts(String txHash) {
-        if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return findTxOutputAmountsPostgres(txHash);
-        }
-        return findTxOutputAmountsNonPostgres(txHash);
-    }
+    public List<BFAmountDto> findTxOutputAmounts(String txHash) {
+        // Blockfrost behaviour: lovelace is aggregated (single entry); non-lovelace tokens
+        // are returned per-output — same token appearing in N outputs yields N entries.
+        // For invalid txs the collateral return IS the real output — include it.
+        boolean txInvalid = dsl.select(TRANSACTION.INVALID).from(TRANSACTION)
+                .where(TRANSACTION.TX_HASH.eq(txHash))
+                .fetchOne(r -> Boolean.TRUE.equals(r.get(TRANSACTION.INVALID)));
 
-    private Map<String, BigInteger> findTxOutputAmountsPostgres(String txHash) {
-        Table<?> baseTable = dsl.select(
-                        ADDRESS_UTXO.AMOUNTS.as("amounts"),
-                        ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount")
-                )
-                .from(ADDRESS_UTXO)
-                .where(ADDRESS_UTXO.TX_HASH.eq(txHash))
-                .and(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isFalse().or(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isNull()))
-                .asTable("base");
+        BigInteger lovelaceTotal = BigInteger.ZERO;
+        List<BFAmountDto> nonLovelace = new ArrayList<>();
 
-        Field<?> amountsField = DSL.field(DSL.name("base", "amounts"));
-        Field<BigDecimal> lovelaceAmountField = DSL.field(DSL.name("base", "lovelace_amount"), BigDecimal.class);
-
-        Select<Record2<String, BigDecimal>> lovelaceSelect = dsl.select(
-                        DSL.inline("lovelace").as("unit"),
-                        DSL.sum(lovelaceAmountField).cast(BigDecimal.class).as("quantity")
-                )
-                .from(baseTable)
-                .where(lovelaceAmountField.isNotNull());
-
-        Table<?> amountTable = DSL.table("jsonb_to_recordset({0}::jsonb) as amt(unit text, quantity numeric)", amountsField);
-        Field<String> unitField = DSL.field("amt.unit", String.class);
-        Field<BigDecimal> quantityField = DSL.field("amt.quantity", BigDecimal.class);
-
-        Select<Record2<String, BigDecimal>> assetsSelect = dsl.select(unitField.as("unit"),
-                        DSL.sum(quantityField).cast(BigDecimal.class).as("quantity"))
-                .from(baseTable)
-                .join(DSL.lateral(amountTable)).on(DSL.trueCondition())
-                .where(amountsField.isNotNull())
-                .and(unitField.ne("lovelace")
-                        .or(lovelaceAmountField.isNull()
-                                .or(lovelaceAmountField.eq(BigDecimal.ZERO))
-                                .and(unitField.eq("lovelace"))))
-                .groupBy(unitField);
-
-        Table<?> combined = lovelaceSelect.unionAll(assetsSelect).asTable("combined");
-        Field<String> combinedUnit = combined.field("unit", String.class);
-        Field<BigDecimal> combinedQuantity = combined.field("quantity", BigDecimal.class);
-
-        return dsl.select(combinedUnit, DSL.sum(combinedQuantity).as("quantity"))
-                .from(combined)
-                .groupBy(combinedUnit)
-                .fetchMap(combinedUnit, r -> r.get("quantity", BigDecimal.class))
-                .entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(HashMap::new,
-                        (map, e) -> map.put(e.getKey(), e.getValue().toBigInteger()),
-                        HashMap::putAll);
-    }
-
-    private Map<String, BigInteger> findTxOutputAmountsNonPostgres(String txHash) {
-        Map<String, BigInteger> totals = new HashMap<>();
-
-        dsl.select(
-                        ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount"),
+        List<org.jooq.Record2<Long, String>> rows = dsl.select(
+                        ADDRESS_UTXO.LOVELACE_AMOUNT,
                         ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts_str")
                 )
                 .from(ADDRESS_UTXO)
                 .where(ADDRESS_UTXO.TX_HASH.eq(txHash))
-                .and(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isFalse().or(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isNull()))
-                .fetch()
-                .forEach(record -> {
-                    BigDecimal lovelace = record.get("lovelace_amount", BigDecimal.class);
-                    if (lovelace != null) {
-                        totals.merge("lovelace", lovelace.toBigInteger(), BigInteger::add);
-                    }
-                    boolean includeJsonLovelace = lovelace == null || lovelace.compareTo(BigDecimal.ZERO) == 0;
-                    Map<String, BigInteger> assetAmounts = AmountsJsonUtil.toQuantityByUnit(
-                            record.get("amounts_str", String.class));
-                    assetAmounts.forEach((unit, qty) -> {
-                        if ("lovelace".equals(unit) && !includeJsonLovelace) return;
-                        totals.merge(unit, qty, BigInteger::add);
-                    });
-                });
+                // For valid txs: exclude collateral return; for invalid txs: include it (it's the real output)
+                .and(txInvalid
+                        ? DSL.trueCondition()
+                        : ADDRESS_UTXO.IS_COLLATERAL_RETURN.isFalse().or(ADDRESS_UTXO.IS_COLLATERAL_RETURN.isNull()))
+                .orderBy(ADDRESS_UTXO.OUTPUT_INDEX.asc())
+                .fetch();
 
-        return totals;
+        for (org.jooq.Record2<Long, String> row : rows) {
+            Long lovelace = row.value1();
+            if (lovelace != null && lovelace > 0) {
+                lovelaceTotal = lovelaceTotal.add(BigInteger.valueOf(lovelace));
+            }
+            String amountsJson = row.value2();
+            if (amountsJson != null) {
+                AmountsJsonUtil.toQuantityByUnit(amountsJson).entrySet().stream()
+                        .filter(e -> !"lovelace".equals(e.getKey()))
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(e -> nonLovelace.add(
+                                BFAmountDto.builder().unit(e.getKey()).quantity(e.getValue().toString()).build()));
+            }
+        }
+
+        List<BFAmountDto> result = new ArrayList<>();
+        result.add(BFAmountDto.builder().unit("lovelace").quantity(lovelaceTotal.toString()).build());
+        result.addAll(nonLovelace);
+        return result;
     }
 
     @Override
@@ -499,6 +569,57 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
     }
 
     // --- helpers ---
+
+    private List<BFAmountDto> parseCollateralReturnAmounts(JsonNode amountsNode) {
+        if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();
+        // Blockfrost only shows lovelace for the collateral return output
+        for (JsonNode a : amountsNode) {
+            String unit = a.path("unit").asText(null);
+            if ("lovelace".equals(unit)) {
+                return Collections.singletonList(
+                        BFAmountDto.builder().unit("lovelace").quantity(String.valueOf(a.path("quantity").asLong(0))).build());
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    private List<BFTxInputDto> fetchUtxosByKeys(Set<String> utxoKeys, boolean collateral, boolean reference) {
+        if (utxoKeys.isEmpty()) return Collections.emptyList();
+        org.jooq.Condition condition = utxoKeys.stream()
+                .map(key -> {
+                    String[] parts = key.split(":");
+                    return ADDRESS_UTXO.TX_HASH.eq(parts[0])
+                            .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(Integer.parseInt(parts[1])));
+                })
+                .reduce(DSL.noCondition(), org.jooq.Condition::or);
+        return dsl.select(
+                        ADDRESS_UTXO.TX_HASH,
+                        ADDRESS_UTXO.OUTPUT_INDEX,
+                        ADDRESS_UTXO.OWNER_ADDR,
+                        ADDRESS_UTXO.LOVELACE_AMOUNT,
+                        ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts_str"),
+                        ADDRESS_UTXO.DATA_HASH,
+                        ADDRESS_UTXO.INLINE_DATUM,
+                        ADDRESS_UTXO.REFERENCE_SCRIPT_HASH
+                )
+                .from(ADDRESS_UTXO)
+                .where(condition)
+                .fetch(record -> BFTxInputDto.builder()
+                        .address(record.get(ADDRESS_UTXO.OWNER_ADDR))
+                        // Blockfrost only shows lovelace for collateral inputs
+                        .amount(collateral
+                                ? lovelaceOnlyAmount(record.get(ADDRESS_UTXO.LOVELACE_AMOUNT))
+                                : buildAmounts(record.get(ADDRESS_UTXO.LOVELACE_AMOUNT),
+                                        record.get("amounts_str", String.class)))
+                        .txHash(record.get(ADDRESS_UTXO.TX_HASH))
+                        .outputIndex(record.get(ADDRESS_UTXO.OUTPUT_INDEX))
+                        .dataHash(record.get(ADDRESS_UTXO.DATA_HASH))
+                        .inlineDatum(record.get(ADDRESS_UTXO.INLINE_DATUM))
+                        .referenceScriptHash(record.get(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH))
+                        .collateral(collateral)
+                        .reference(reference)
+                        .build());
+    }
 
     private Set<String> buildUtxoKeySet(List<UtxoKey> keys) {
         if (keys == null) return Collections.emptySet();
@@ -525,12 +646,23 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
             totals.put("lovelace", BigInteger.ZERO);
         }
 
+        // lovelace first, then assets sorted alphabetically by unit
         return totals.entrySet().stream()
+                .sorted((a, b) -> {
+                    if ("lovelace".equals(a.getKey())) return -1;
+                    if ("lovelace".equals(b.getKey())) return 1;
+                    return a.getKey().compareTo(b.getKey());
+                })
                 .map(e -> BFAmountDto.builder()
                         .unit(e.getKey())
                         .quantity(e.getValue().toString())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    private List<BFAmountDto> lovelaceOnlyAmount(Long lovelaceAmount) {
+        long qty = lovelaceAmount != null ? lovelaceAmount : 0L;
+        return Collections.singletonList(BFAmountDto.builder().unit("lovelace").quantity(String.valueOf(qty)).build());
     }
 
     private String toBech32PoolId(String poolIdHex) {
@@ -558,6 +690,28 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
         }
     }
 
+    // Pool owners are stored as raw stake key hashes; convert to bech32 stake addresses
+    private List<String> parseOwners(String json) {
+        List<String> hashes = parseJsonStringArray(json);
+        boolean isMainnet = storeProperties.getProtocolMagic() == 764824073L;
+        String prefix = isMainnet ? "stake" : "stake_test";
+        byte headerByte = isMainnet ? (byte) 0xe1 : (byte) 0xe0;
+        return hashes.stream()
+                .map(hash -> {
+                    try {
+                        byte[] keyHash = HexUtil.decodeHexString(hash);
+                        byte[] stakeAddrBytes = new byte[keyHash.length + 1];
+                        stakeAddrBytes[0] = headerByte;
+                        System.arraycopy(keyHash, 0, stakeAddrBytes, 1, keyHash.length);
+                        return Bech32.encode(stakeAddrBytes, prefix);
+                    } catch (Exception e) {
+                        log.warn("Failed to encode pool owner to stake address: {}", hash, e);
+                        return hash;
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
     private List<BFTxPoolRelayDto> parseRelays(String relaysJson) {
         if (relaysJson == null || relaysJson.isBlank()) return Collections.emptyList();
         try {
@@ -565,13 +719,17 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
             if (!relaysNode.isArray()) return Collections.emptyList();
             List<BFTxPoolRelayDto> result = new ArrayList<>();
             for (JsonNode relay : relaysNode) {
+                // DB stores dnsName / dnsSrv; Blockfrost API uses dns / dns_srv
+                String dns = nullIfEmpty(relay.path("dnsName").isNull() ? null : relay.path("dnsName").asText(null));
+                String dnsSrv = nullIfEmpty(relay.path("dnsSrv").isNull() ? null : relay.path("dnsSrv").asText(null));
+                Integer port = relay.has("port") && !relay.path("port").isNull() && relay.path("port").asInt() > 0
+                        ? relay.path("port").asInt() : null;
                 result.add(BFTxPoolRelayDto.builder()
-                        .ipv4(relay.path("ipv4").isNull() ? null : relay.path("ipv4").asText(null))
-                        .ipv6(relay.path("ipv6").isNull() ? null : relay.path("ipv6").asText(null))
-                        .dns(relay.path("dns").isNull() ? null : relay.path("dns").asText(null))
-                        .dnsSrv(relay.path("dns_srv").isNull() ? null : relay.path("dns_srv").asText(null))
-                        .port(relay.has("port") && !relay.path("port").isNull()
-                                ? relay.path("port").asInt() : null)
+                        .ipv4(nullIfEmpty(relay.path("ipv4").isNull() ? null : relay.path("ipv4").asText(null)))
+                        .ipv6(nullIfEmpty(relay.path("ipv6").isNull() ? null : relay.path("ipv6").asText(null)))
+                        .dns(dns)
+                        .dnsSrv(dnsSrv)
+                        .port(port)
                         .build());
             }
             return result;
@@ -579,5 +737,9 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
             log.warn("Failed to parse relays JSON: {}", relaysJson, e);
             return Collections.emptyList();
         }
+    }
+
+    private String nullIfEmpty(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 }
