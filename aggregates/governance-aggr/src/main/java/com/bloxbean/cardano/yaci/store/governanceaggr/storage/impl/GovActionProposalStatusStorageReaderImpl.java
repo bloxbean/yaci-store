@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorageReader;
 import lombok.RequiredArgsConstructor;
+import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.Table;
@@ -55,6 +57,20 @@ public class GovActionProposalStatusStorageReaderImpl implements GovActionPropos
                                 DSL.field(indexField.getUnqualifiedName(), Integer.class))
                         .in(idSet)
                 )
+                .fetchInto(GovActionProposalStatus.class);
+    }
+
+    @Override
+    public List<GovActionProposalStatus> findByEpoch(int epoch, GovActionStatus status) {
+        var g = GOV_ACTION_PROPOSAL_STATUS;
+
+        Condition condition = g.EPOCH.eq(epoch);
+        if (status != null) {
+            condition = condition.and(g.STATUS.eq(status.name()));
+        }
+
+        return dsl.selectFrom(g)
+                .where(condition)
                 .fetchInto(GovActionProposalStatus.class);
     }
 }

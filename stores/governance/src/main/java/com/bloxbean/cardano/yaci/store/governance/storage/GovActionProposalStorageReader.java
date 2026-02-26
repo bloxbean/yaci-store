@@ -20,4 +20,6 @@ public interface GovActionProposalStorageReader {
     Optional<GovActionProposal> findMostRecentGovActionByType(GovActionType govActionType);
 
     Optional<GovActionProposal> findByGovActionTxHashAndGovActionIndex(String txHash, int index);
+
+    List<GovActionProposal> findByEpoch(int epoch);
 }
