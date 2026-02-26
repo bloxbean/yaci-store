@@ -16,9 +16,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalS
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -96,6 +94,52 @@ public class ProposalApiService {
         ProposalDto dto = buildProposalDto(proposal, proposalStatus, votingStats);
 
         return Optional.of(dto);
+    }
+
+    public List<ProposalDto> getProposalsByEpoch(int epoch, GovActionStatus statusFilter) {
+        List<AdaPotJob> lastJob = adaPotJobStorage.getRecentCompletedJobs(1);
+        Integer maxCompletedAdaPotJobEpoch = lastJob.isEmpty() ? null : lastJob.getFirst().getEpoch();
+
+        // Get proposal statuses at the given epoch
+        List<GovActionProposalStatus> statuses = statusReader.findByEpoch(epoch, statusFilter);
+
+        if (statuses.isEmpty())
+            return Collections.emptyList();
+
+        // Fetch full proposal details for each status entry
+        List<GovActionId> ids = statuses.stream()
+                .map(s -> new GovActionId(s.getGovActionTxHash(), s.getGovActionIndex()))
+                .toList();
+
+        Map<String, GovActionProposalStatus> statusMap = statuses.stream()
+                .collect(Collectors.toMap(
+                        s -> s.getGovActionTxHash() + "#" + s.getGovActionIndex(),
+                        s -> s
+                ));
+
+        // Look up full proposal data for each
+        return ids.stream()
+                .map(id -> proposalReader.findByGovActionTxHashAndGovActionIndex(
+                        id.getTransactionId(), id.getGov_action_index()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(proposal -> {
+                    String key = proposal.getTxHash() + "#" + proposal.getIndex();
+                    GovActionProposalStatus status = statusMap.get(key);
+                    ProposalStatus proposalStatus;
+                    ProposalVotingStats votingStats;
+
+                    if (status == null || maxCompletedAdaPotJobEpoch == null) {
+                        proposalStatus = ProposalStatus.LIVE;
+                        votingStats = new ProposalVotingStats();
+                    } else {
+                        proposalStatus = toProposalStatus(status, maxCompletedAdaPotJobEpoch);
+                        votingStats = status.getVotingStats();
+                    }
+
+                    return buildProposalDto(proposal, proposalStatus, votingStats);
+                })
+                .toList();
     }
 
     /**
