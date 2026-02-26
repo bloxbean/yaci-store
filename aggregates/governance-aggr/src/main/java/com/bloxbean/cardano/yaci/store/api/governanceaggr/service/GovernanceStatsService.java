@@ -181,6 +181,17 @@ public class GovernanceStatsService {
             }
         }
 
+        // Count proposals submitted at this epoch that don't have a status entry yet
+        var p = GOV_ACTION_PROPOSAL;
+        Integer newlySubmitted = dsl.selectCount()
+                .from(p)
+                .where(p.EPOCH.eq(epoch))
+                .fetchOneInto(Integer.class);
+
+        if (newlySubmitted != null) {
+            active += newlySubmitted;
+        }
+
         return GovernanceStatsDto.ProposalStatsDto.builder()
                 .activeProposals(active)
                 .ratifiedProposals(ratified)
