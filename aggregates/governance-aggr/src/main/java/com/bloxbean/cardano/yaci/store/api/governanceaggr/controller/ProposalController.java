@@ -45,16 +45,14 @@ public class ProposalController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/proposals/epoch/{epoch}")
-    @Operation(description = "Get proposals by epoch with their status and voting stats at that epoch",
-               summary = "Get proposals by epoch")
-    public ResponseEntity<List<ProposalDto>> getProposalsByEpoch(
-            @Parameter(description = "Epoch number", required = true)
-            @PathVariable int epoch,
+    @GetMapping("/proposals/current")
+    @Operation(description = "Get all proposals in the current epoch with their status and voting stats.",
+            summary = "Get current epoch proposals")
+    public ResponseEntity<List<ProposalDto>> getCurrentProposals(
             @Parameter(description = "Filter by proposal status: ACTIVE, RATIFIED, EXPIRED")
             @RequestParam(required = false) GovActionStatus status) {
 
-        List<ProposalDto> proposals = proposalApiService.getProposalsByEpoch(epoch, status);
+        List<ProposalDto> proposals = proposalApiService.getCurrentProposals(status);
         return ResponseEntity.ok(proposals);
     }
 

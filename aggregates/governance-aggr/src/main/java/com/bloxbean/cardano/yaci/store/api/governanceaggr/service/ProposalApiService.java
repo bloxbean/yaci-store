@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
@@ -25,6 +27,7 @@ public class ProposalApiService {
     private final GovActionProposalStorageReader proposalReader;
     private final GovActionProposalStatusStorageReader statusReader;
     private final AdaPotJobStorage adaPotJobStorage;
+    private final BlockStorage blockStorage;
 
     public List<ProposalDto> getProposals(int page, int count, Order order) {
         List<GovActionProposal> proposals = proposalReader.findAll(page, count, order);
@@ -96,20 +99,12 @@ public class ProposalApiService {
         return Optional.of(dto);
     }
 
-    public List<ProposalDto> getProposalsByEpoch(int epoch, GovActionStatus statusFilter) {
-        List<AdaPotJob> lastJob = adaPotJobStorage.getRecentCompletedJobs(1);
-        Integer maxCompletedAdaPotJobEpoch = lastJob.isEmpty() ? null : lastJob.getFirst().getEpoch();
-
-        // Get proposal statuses at the given epoch
-        List<GovActionProposalStatus> statuses = statusReader.findByEpoch(epoch, statusFilter);
-
-        if (statuses.isEmpty())
+    public List<ProposalDto> getCurrentProposals(GovActionStatus statusFilter) {
+        Integer targetEpoch = blockStorage.findRecentBlock().map(Block::getEpochNumber).orElse(null);
+        if (targetEpoch == null)
             return Collections.emptyList();
 
-        // Fetch full proposal details for each status entry
-        List<GovActionId> ids = statuses.stream()
-                .map(s -> new GovActionId(s.getGovActionTxHash(), s.getGovActionIndex()))
-                .toList();
+        List<GovActionProposalStatus> statuses = statusReader.findByEpoch(targetEpoch, statusFilter);
 
         Map<String, GovActionProposalStatus> statusMap = statuses.stream()
                 .collect(Collectors.toMap(
@@ -117,29 +112,39 @@ public class ProposalApiService {
                         s -> s
                 ));
 
-        // Look up full proposal data for each
-        return ids.stream()
-                .map(id -> proposalReader.findByGovActionTxHashAndGovActionIndex(
-                        id.getTransactionId(), id.getGov_action_index()))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(proposal -> {
-                    String key = proposal.getTxHash() + "#" + proposal.getIndex();
-                    GovActionProposalStatus status = statusMap.get(key);
-                    ProposalStatus proposalStatus;
-                    ProposalVotingStats votingStats;
+        // Build DTOs from proposals that have status entries
+        List<ProposalDto> result = new ArrayList<>();
 
-                    if (status == null || maxCompletedAdaPotJobEpoch == null) {
-                        proposalStatus = ProposalStatus.LIVE;
-                        votingStats = new ProposalVotingStats();
-                    } else {
-                        proposalStatus = toProposalStatus(status, maxCompletedAdaPotJobEpoch);
-                        votingStats = status.getVotingStats();
-                    }
+        for (var s : statuses) {
+            proposalReader.findByGovActionTxHashAndGovActionIndex(
+                    s.getGovActionTxHash(), s.getGovActionIndex()
+            ).ifPresent(proposal -> {
+                ProposalVotingStats votingStats = s.getVotingStats() != null
+                        ? s.getVotingStats() : new ProposalVotingStats();
+                result.add(buildProposalDto(proposal, toEpochProposalStatus(s.getStatus()), votingStats));
+            });
+        }
 
-                    return buildProposalDto(proposal, proposalStatus, votingStats);
-                })
-                .toList();
+        // Include proposals submitted at this epoch that don't have a status entry yet (newly created)
+        if (statusFilter == null || statusFilter == GovActionStatus.ACTIVE) {
+            List<GovActionProposal> submittedAtEpoch = proposalReader.findByEpoch(targetEpoch);
+            for (var proposal : submittedAtEpoch) {
+                String key = proposal.getTxHash() + "#" + proposal.getIndex();
+                if (!statusMap.containsKey(key)) {
+                    result.add(buildProposalDto(proposal, ProposalStatus.LIVE, new ProposalVotingStats()));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private ProposalStatus toEpochProposalStatus(GovActionStatus govActionStatus) {
+        return switch (govActionStatus) {
+            case ACTIVE -> ProposalStatus.LIVE;
+            case RATIFIED -> ProposalStatus.RATIFIED;
+            case EXPIRED -> ProposalStatus.EXPIRED;
+        };
     }
 
     /**
