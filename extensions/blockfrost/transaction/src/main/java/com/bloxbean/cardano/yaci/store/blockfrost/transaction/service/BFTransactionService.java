@@ -160,42 +160,47 @@ public class BFTransactionService {
     }
 
     private String calculateDeposit(String txHash, BFTransactionDto dto) {
-        EpochParamStorage epochParamStorage = epochParamStorageProvider.getIfAvailable();
-        if (epochParamStorage == null) {
-            return "0";
-        }
+        BigInteger deposit = BigInteger.ZERO;
 
+        // DRep deposit does not depend on epoch params — compute it independently.
         try {
-            // Get epoch from transaction (need to query it)
-            Txn txn = transactionStorageReader.getTransactionByTxHash(txHash).orElse(null);
-            if (txn == null || txn.getEpoch() == null) {
-                return "0";
+            BigInteger drepDeposit = storageReader.sumDrepDeposit(txHash);
+            if (drepDeposit != null && drepDeposit.compareTo(BigInteger.ZERO) != 0) {
+                deposit = deposit.add(drepDeposit);
             }
-
-            EpochParam epochParam = epochParamStorage.getProtocolParams(txn.getEpoch()).orElse(null);
-            if (epochParam == null || epochParam.getParams() == null) {
-                return "0";
-            }
-
-            BigInteger keyDeposit = epochParam.getParams().getKeyDeposit();
-            BigInteger poolDeposit = epochParam.getParams().getPoolDeposit();
-
-            int stakeRegCount = storageReader.countStakeRegistrations(txHash);
-            int stakeDeregCount = storageReader.countStakeDeregistrations(txHash);
-            int netStakeCount = stakeRegCount - stakeDeregCount;
-            int poolRegCount = storageReader.countPoolRegistrations(txHash);
-
-            BigInteger deposit = BigInteger.ZERO;
-            if (keyDeposit != null && netStakeCount != 0) {
-                deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(netStakeCount)));
-            }
-            if (poolDeposit != null && poolRegCount > 0) {
-                deposit = deposit.add(poolDeposit.multiply(BigInteger.valueOf(poolRegCount)));
-            }
-            return deposit.toString();
         } catch (Exception e) {
-            log.debug("Could not calculate deposit for tx {}: {}", txHash, e.getMessage());
-            return "0";
+            log.warn("Could not calculate drep deposit for tx {}: {}", txHash, e.getMessage());
         }
+
+        // Stake registration/deregistration and pool registration require epoch params.
+        EpochParamStorage epochParamStorage = epochParamStorageProvider.getIfAvailable();
+        if (epochParamStorage != null) {
+            try {
+                Txn txn = transactionStorageReader.getTransactionByTxHash(txHash).orElse(null);
+                if (txn != null && txn.getEpoch() != null) {
+                    EpochParam epochParam = epochParamStorage.getProtocolParams(txn.getEpoch()).orElse(null);
+                    if (epochParam != null && epochParam.getParams() != null) {
+                        BigInteger keyDeposit = epochParam.getParams().getKeyDeposit();
+                        BigInteger poolDeposit = epochParam.getParams().getPoolDeposit();
+
+                        int stakeRegCount = storageReader.countStakeRegistrations(txHash);
+                        int stakeDeregCount = storageReader.countStakeDeregistrations(txHash);
+                        int netStakeCount = stakeRegCount - stakeDeregCount;
+                        int poolRegCount = storageReader.countPoolRegistrations(txHash);
+
+                        if (keyDeposit != null && netStakeCount != 0) {
+                            deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(netStakeCount)));
+                        }
+                        if (poolDeposit != null && poolRegCount > 0) {
+                            deposit = deposit.add(poolDeposit.multiply(BigInteger.valueOf(poolRegCount)));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not calculate stake/pool deposit for tx {}: {}", txHash, e.getMessage());
+            }
+        }
+
+        return deposit.toString();
     }
 }

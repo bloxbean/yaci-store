@@ -10,6 +10,7 @@ dependencies {
     api project(":stores:epoch")
     api project(":stores:metadata")
     api project(":stores:mir")
+    api project(":stores:governance")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

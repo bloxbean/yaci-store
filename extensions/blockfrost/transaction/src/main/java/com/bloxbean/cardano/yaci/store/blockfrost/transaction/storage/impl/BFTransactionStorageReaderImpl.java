@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
+import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DREP_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.TRANSACTION_SCRIPTS;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.*;
@@ -366,8 +367,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                     }
                     return BFTxRedeemerDto.builder()
                             .txIndex(record.get(TRANSACTION_SCRIPTS.REDEEMER_INDEX))
-                            .purpose(record.get(TRANSACTION_SCRIPTS.PURPOSE) != null
-                                    ? record.get(TRANSACTION_SCRIPTS.PURPOSE).toLowerCase() : null)
+                            .purpose(mapRedeemerPurpose(record.get(TRANSACTION_SCRIPTS.PURPOSE)))
                             .scriptHash(record.get(TRANSACTION_SCRIPTS.SCRIPT_HASH))
                             .redeemerDataHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
                             .datumHash(record.get(TRANSACTION_SCRIPTS.REDEEMER_DATAHASH))
@@ -577,7 +577,34 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
         );
     }
 
+    @Override
+    public BigInteger sumDrepDeposit(String txHash) {
+        // deposit is positive for DRep registration, negative for DRep deregistration.
+        // Fetch individual Long values and sum in Java to avoid DSL.sum() BigDecimal coercion.
+        return dsl.select(DREP_REGISTRATION.DEPOSIT)
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.TX_HASH.eq(txHash))
+                .fetch(DREP_REGISTRATION.DEPOSIT)
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .map(BigInteger::valueOf)
+                .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
     // --- helpers ---
+
+    /**
+     * Maps internal redeemer purpose values to Blockfrost API purpose strings.
+     * DB stores: Spend, Mint, Cert, Reward, Voting, Proposing
+     * BF expects: spend, mint, cert, reward, vote, proposing
+     */
+    private String mapRedeemerPurpose(String purpose) {
+        if (purpose == null) return null;
+        return switch (purpose) {
+            case "Voting" -> "vote";
+            default -> purpose.toLowerCase();
+        };
+    }
 
     private List<BFAmountDto> parseCollateralReturnAmounts(JsonNode amountsNode) {
         if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();

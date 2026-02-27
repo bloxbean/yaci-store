@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,4 +39,6 @@ public interface BFTransactionStorageReader {
     int countStakeDeregistrations(String txHash);
 
     int countPoolRegistrations(String txHash);
+
+    BigInteger sumDrepDeposit(String txHash);
 }
