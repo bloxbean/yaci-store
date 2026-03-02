@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage;
 
-import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFAmountDto;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -8,26 +9,28 @@ import java.util.Optional;
 
 public interface BFTransactionStorageReader {
 
-    Optional<BFTransactionDto> findTransactionByHash(String txHash);
+    Optional<TxRaw> findTransactionByHash(String txHash);
 
-    Optional<BFTxUtxosDto> findTxUtxos(String txHash);
+    Optional<TxUtxosRaw> findTxUtxos(String txHash);
 
     Optional<String> findTxCborHex(String txHash);
 
-    List<BFTxRedeemerDto> findTxRedeemers(String txHash);
+    List<TxRedeemerRaw> findTxRedeemers(String txHash);
 
-    List<BFTxStakeDto> findTxStakes(String txHash);
+    Optional<TxRedeemerPricesRaw> findRedeemerPrices(String txHash);
 
-    List<BFTxDelegationDto> findTxDelegations(String txHash);
+    List<TxStakeRaw> findTxStakes(String txHash);
 
-    List<BFTxWithdrawalDto> findTxWithdrawals(String txHash);
+    List<TxDelegationRaw> findTxDelegations(String txHash);
 
-    List<BFTxPoolUpdateDto> findTxPoolUpdates(String txHash);
+    List<TxWithdrawalRaw> findTxWithdrawals(String txHash);
 
-    List<BFTxPoolRetireDto> findTxPoolRetires(String txHash);
+    List<TxPoolUpdateRaw> findTxPoolUpdates(String txHash);
+
+    List<TxPoolRetireRaw> findTxPoolRetires(String txHash);
 
     /**
-     * Returns output amounts for a transaction (excluding collateral returns).
+     * Returns output amounts for a transaction (excluding collateral returns for valid txs).
      * Lovelace is aggregated (single entry). Non-lovelace tokens are returned
      * per-output (not summed), matching Blockfrost API behaviour where the same
      * token appearing in multiple outputs yields multiple entries in the list.

@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.transaction.service;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.mapper.BFTransactionMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.BFTransactionStorageReader;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.TxRedeemerPricesRaw;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
@@ -18,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
@@ -30,42 +33,39 @@ import java.util.stream.Collectors;
 public class BFTransactionService {
 
     private final BFTransactionStorageReader storageReader;
+    private final BFTransactionMapper mapper;
     private final TransactionStorageReader transactionStorageReader;
     private final ObjectProvider<TxMetadataStorageReader> metadataStorageProvider;
     private final ObjectProvider<MIRStorageReader> mirStorageProvider;
     private final ObjectProvider<EpochParamStorage> epochParamStorageProvider;
 
     public BFTransactionDto getTransaction(String txHash) {
-        BFTransactionDto dto = storageReader.findTransactionByHash(txHash)
+        var raw = storageReader.findTransactionByHash(txHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "The requested component has not been found."));
 
-        // Resolve output_amount — lovelace aggregated, non-lovelace per-output (matching Blockfrost)
-        dto.setOutputAmount(storageReader.findTxOutputAmounts(txHash));
+        List<BFAmountDto> outputAmounts = storageReader.findTxOutputAmounts(txHash);
 
-        // Resolve mir_cert_count from optional MIR store
+        int mirCertCount = 0;
         MIRStorageReader mirReader = mirStorageProvider.getIfAvailable();
         if (mirReader != null) {
             try {
-                dto.setMirCertCount(mirReader.findMIRsByTxHash(txHash).size());
+                mirCertCount = mirReader.findMIRsByTxHash(txHash).size();
             } catch (Exception e) {
                 log.debug("Could not fetch MIR count for tx {}: {}", txHash, e.getMessage());
-                dto.setMirCertCount(0);
             }
-        } else {
-            dto.setMirCertCount(0);
         }
 
-        // Resolve deposit using protocol params
-        dto.setDeposit(calculateDeposit(txHash, dto));
+        String deposit = calculateDeposit(txHash);
 
-        return dto;
+        return mapper.toTransactionDto(raw, outputAmounts, deposit, mirCertCount);
     }
 
     public BFTxUtxosDto getTxUtxos(String txHash) {
-        return storageReader.findTxUtxos(txHash)
+        var raw = storageReader.findTxUtxos(txHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "The requested component has not been found."));
+        return mapper.toUtxosDto(txHash, raw);
     }
 
     public BFTxCborDto getTxCbor(String txHash) {
@@ -97,22 +97,26 @@ public class BFTransactionService {
 
     public List<BFTxRedeemerDto> getTxRedeemers(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxRedeemers(txHash);
+        var raws = storageReader.findTxRedeemers(txHash);
+        TxRedeemerPricesRaw prices = storageReader.findRedeemerPrices(txHash).orElse(null);
+        BigDecimal priceMem = prices != null ? prices.getPriceMem() : null;
+        BigDecimal priceStep = prices != null ? prices.getPriceStep() : null;
+        return mapper.toRedeemerDtos(raws, priceMem, priceStep);
     }
 
     public List<BFTxStakeDto> getTxStakes(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxStakes(txHash);
+        return mapper.toStakeDtos(storageReader.findTxStakes(txHash));
     }
 
     public List<BFTxDelegationDto> getTxDelegations(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxDelegations(txHash);
+        return mapper.toDelegationDtos(storageReader.findTxDelegations(txHash));
     }
 
     public List<BFTxWithdrawalDto> getTxWithdrawals(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxWithdrawals(txHash);
+        return mapper.toWithdrawalDtos(storageReader.findTxWithdrawals(txHash));
     }
 
     public List<BFTxMirDto> getTxMirs(String txHash) {
@@ -133,12 +137,12 @@ public class BFTransactionService {
 
     public List<BFTxPoolUpdateDto> getTxPoolUpdates(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxPoolUpdates(txHash);
+        return mapper.toPoolUpdateDtos(storageReader.findTxPoolUpdates(txHash));
     }
 
     public List<BFTxPoolRetireDto> getTxPoolRetires(String txHash) {
         ensureTxExists(txHash);
-        return storageReader.findTxPoolRetires(txHash);
+        return mapper.toPoolRetireDtos(storageReader.findTxPoolRetires(txHash));
     }
 
     public List<Map<String, String>> getTxRequiredSigners(String txHash) {
@@ -159,7 +163,7 @@ public class BFTransactionService {
                         "The requested component has not been found."));
     }
 
-    private String calculateDeposit(String txHash, BFTransactionDto dto) {
+    private String calculateDeposit(String txHash) {
         BigInteger deposit = BigInteger.ZERO;
 
         // DRep deposit does not depend on epoch params — compute it independently.
