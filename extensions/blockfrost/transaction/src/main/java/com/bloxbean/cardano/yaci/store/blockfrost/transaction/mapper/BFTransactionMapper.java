@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.transaction.mapper;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
@@ -240,21 +241,21 @@ public abstract class BFTransactionMapper {
     private List<BFAmountDto> buildAmounts(Long lovelaceAmount, String amountsJson) {
         Map<String, BigInteger> totals = new LinkedHashMap<>();
         if (lovelaceAmount != null && lovelaceAmount > 0) {
-            totals.put("lovelace", BigInteger.valueOf(lovelaceAmount));
+            totals.put(Constants.LOVELACE, BigInteger.valueOf(lovelaceAmount));
         }
         if (amountsJson != null) {
             AmountsJsonUtil.toQuantityByUnit(amountsJson).forEach((unit, qty) -> {
-                if ("lovelace".equals(unit) && lovelaceAmount != null && lovelaceAmount > 0) return;
+                if (Constants.LOVELACE.equals(unit) && lovelaceAmount != null && lovelaceAmount > 0) return;
                 totals.merge(unit, qty, BigInteger::add);
             });
         }
         if (totals.isEmpty() && (lovelaceAmount == null || lovelaceAmount == 0)) {
-            totals.put("lovelace", BigInteger.ZERO);
+            totals.put(Constants.LOVELACE, BigInteger.ZERO);
         }
         return totals.entrySet().stream()
                 .sorted((a, b) -> {
-                    if ("lovelace".equals(a.getKey())) return -1;
-                    if ("lovelace".equals(b.getKey())) return 1;
+                    if (Constants.LOVELACE.equals(a.getKey())) return -1;
+                    if (Constants.LOVELACE.equals(b.getKey())) return 1;
                     return a.getKey().compareTo(b.getKey());
                 })
                 .map(e -> BFAmountDto.builder().unit(e.getKey()).quantity(e.getValue().toString()).build())
@@ -264,7 +265,7 @@ public abstract class BFTransactionMapper {
     private List<BFAmountDto> lovelaceOnlyAmount(Long lovelaceAmount) {
         long qty = lovelaceAmount != null ? lovelaceAmount : 0L;
         return Collections.singletonList(
-                BFAmountDto.builder().unit("lovelace").quantity(String.valueOf(qty)).build());
+                BFAmountDto.builder().unit(Constants.LOVELACE).quantity(String.valueOf(qty)).build());
     }
 
     private Optional<BFTxOutputDto> parseCollateralReturnOutput(String refJson, String dataJson,
@@ -297,9 +298,9 @@ public abstract class BFTransactionMapper {
         if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();
         for (JsonNode a : amountsNode) {
             String unit = a.path("unit").asText(null);
-            if ("lovelace".equals(unit)) {
+            if (Constants.LOVELACE.equals(unit)) {
                 return Collections.singletonList(BFAmountDto.builder()
-                        .unit("lovelace")
+                        .unit(Constants.LOVELACE)
                         .quantity(String.valueOf(a.path("quantity").asLong(0)))
                         .build());
             }

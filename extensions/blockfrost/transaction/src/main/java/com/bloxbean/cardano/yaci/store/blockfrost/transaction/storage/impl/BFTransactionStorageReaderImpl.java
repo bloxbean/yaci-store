@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl;
 
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFAmountDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.BFTransactionStorageReader;
@@ -445,7 +446,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
             String amountsJson = row.value2();
             if (amountsJson != null) {
                 AmountsJsonUtil.toQuantityByUnit(amountsJson).entrySet().stream()
-                        .filter(e -> !"lovelace".equals(e.getKey()))
+                        .filter(e -> !Constants.LOVELACE.equals(e.getKey()))
                         .sorted(Map.Entry.comparingByKey())
                         .forEach(e -> nonLovelace.add(
                                 BFAmountDto.builder().unit(e.getKey())
@@ -454,7 +455,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
         }
 
         List<BFAmountDto> result = new ArrayList<>();
-        result.add(BFAmountDto.builder().unit("lovelace").quantity(lovelaceTotal.toString()).build());
+        result.add(BFAmountDto.builder().unit(Constants.LOVELACE).quantity(lovelaceTotal.toString()).build());
         result.addAll(nonLovelace);
         return result;
     }
