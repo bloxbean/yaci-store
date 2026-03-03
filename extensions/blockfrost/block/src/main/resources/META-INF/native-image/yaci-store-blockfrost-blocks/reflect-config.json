@@ -1,6 +1,6 @@
 [
   {
-    "name": "com.bloxbean.cardano.yaci.store.blockfrost.blocks.mapper.BFBlockMapperImpl",
+    "name": "com.bloxbean.cardano.yaci.store.blockfrost.block.mapper.BFBlockMapperImpl",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,
     "allDeclaredFields": true
