@@ -7,8 +7,8 @@ services:
     ports:
       - ${YACI_STORE_PORT:-8080}:8080
     volumes:
-      - $PWD/logs:/app/logs/
-      - $PWD/data:/app/data
+      - ../logs:/app/logs/
+      - ../data:/app/data
       - ../config:/app/config
       - ../plugins/scripts:/app/plugins/scripts/
       - ../plugins/ext-jars:/app/plugins/ext-jars/
