@@ -3,6 +3,7 @@ dependencies {
     api project(":extensions:blockfrost:blockfrost-epoch")
     api project(":extensions:blockfrost:blockfrost-address")
     api project(":extensions:blockfrost:blockfrost-asset")
+    api project(":extensions:blockfrost:blockfrost-account")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
