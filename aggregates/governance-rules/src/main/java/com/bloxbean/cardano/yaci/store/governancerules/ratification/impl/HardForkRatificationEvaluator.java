@@ -44,7 +44,7 @@ public class HardForkRatificationEvaluator implements RatificationEvaluator {
                         && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD)
                         && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
-        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isNotDelayed = context.isNotDelayed();
 
         final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(hardForkInitiationAction.getType(),
                 hardForkInitiationAction.getGovActionId(),
