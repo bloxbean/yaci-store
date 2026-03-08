@@ -152,8 +152,13 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
             log.warn("Could not fetch MIR data for {}: {}", stakeAddress, e.getMessage());
         }
 
+        // controlled_amount = spendable UTXOs + unclaimed rewards (rewards - withdrawals)
+        BigInteger withdrawable = rewardsSum.subtract(withdrawalsSum);
+        if (withdrawable.compareTo(BigInteger.ZERO) < 0) withdrawable = BigInteger.ZERO;
+        BigInteger totalControlled = controlledAmount.add(withdrawable);
+
         return Optional.of(new AccountInfo(stakeAddress, active, active, activeEpoch,
-                controlledAmount, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId));
+                totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId));
     }
 
     @Override
@@ -409,7 +414,8 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountUtxo> findUtxos(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        SortField<?> orderBy = order == Order.desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc();
+        SortField<?> slotOrder = order == Order.desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc();
+        SortField<?> idxOrder = order == Order.desc ? ADDRESS_UTXO.OUTPUT_INDEX.desc() : ADDRESS_UTXO.OUTPUT_INDEX.asc();
 
         Condition unspentCondition = DSL.notExists(
                 dsl.selectOne()
@@ -432,7 +438,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .from(ADDRESS_UTXO)
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                 .and(unspentCondition)
-                .orderBy(orderBy)
+                .orderBy(slotOrder, idxOrder)
                 .limit(count)
                 .offset(offset)
                 .fetch(rec -> {
@@ -476,25 +482,24 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
             }
         }
 
-        return dsl.select(
-                        DSL.min(ADDRESS_TX_AMOUNT.ADDRESS).as("address"),
+        return dsl.selectDistinct(
+                        ADDRESS_TX_AMOUNT.ADDRESS,
                         ADDRESS_TX_AMOUNT.TX_HASH,
                         ADDRESS_TX_AMOUNT.SLOT,
                         ADDRESS_TX_AMOUNT.BLOCK,
                         ADDRESS_TX_AMOUNT.BLOCK_TIME,
-                        DSL.min(TRANSACTION.TX_INDEX).as("tx_index")
+                        TRANSACTION.TX_INDEX
                 )
                 .from(ADDRESS_TX_AMOUNT)
                 .leftJoin(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_TX_AMOUNT.TX_HASH))
                 .where(condition)
-                .groupBy(ADDRESS_TX_AMOUNT.TX_HASH, ADDRESS_TX_AMOUNT.SLOT, ADDRESS_TX_AMOUNT.BLOCK, ADDRESS_TX_AMOUNT.BLOCK_TIME)
-                .orderBy(slotOrder)
+                .orderBy(slotOrder, TRANSACTION.TX_INDEX.asc(), ADDRESS_TX_AMOUNT.ADDRESS.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(rec -> new AccountTransaction(
-                        rec.get("address", String.class),
+                        rec.get(ADDRESS_TX_AMOUNT.ADDRESS),
                         rec.get(ADDRESS_TX_AMOUNT.TX_HASH),
-                        rec.get("tx_index", Integer.class) != null ? rec.get("tx_index", Integer.class).longValue() : 0L,
+                        rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
                         rec.get(ADDRESS_TX_AMOUNT.BLOCK) != null ? rec.get(ADDRESS_TX_AMOUNT.BLOCK) : 0L,
                         rec.get(ADDRESS_TX_AMOUNT.BLOCK_TIME) != null ? rec.get(ADDRESS_TX_AMOUNT.BLOCK_TIME) : 0L));
     }
