@@ -42,9 +42,10 @@ public class RewardExporter extends AbstractTableExporter {
 
     @Override
     public boolean preExportValidation(PartitionValue partition) {
-        // Reward table depends on AdaPot job completion
+        // reward[earned_epoch=N] is populated by AdaPot job N+2, which calls updateEpochRewards()
+        // with earnedEpoch = epoch - 2. Wait for job N+2 to complete before exporting epoch N.
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-        return isRewardCalcAdaPotJobCompleted(epoch);
+        return isRewardCalcAdaPotJobCompleted(epoch + 2);
     }
 
     @Override
