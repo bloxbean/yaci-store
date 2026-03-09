@@ -44,18 +44,17 @@ public class ScriptExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT DISTINCT
+            SELECT
                 s.script_hash,
                 s.script_type,
                 s.content,
-                -- We align with transaction_scripts slot to drive the partition
-                ts.slot,
-                to_timestamp(COALESCE(ts.block_time, 0)) as block_time
-            FROM source_db.%s.transaction_scripts ts
-            INNER JOIN source_db.%s.script s ON s.script_hash = ts.script_hash
-            WHERE ts.slot >= %d
-              AND ts.slot < %d
-            ORDER BY ts.slot, s.script_hash
+                s.slot,
+                to_timestamp(COALESCE(b.block_time, 0)) as block_time
+            FROM source_db.%s.script s
+            INNER JOIN source_db.%s.block b ON s.slot = b.slot
+            WHERE s.slot >= %d
+              AND s.slot < %d
+            ORDER BY s.slot, s.script_hash
             """,
             schema, schema,
             slotRange.startSlot(),

@@ -86,6 +86,7 @@ public class ScriptRefProcessor {
                                 .scriptHash(scriptHash)
                                 .scriptType(scriptType)
                                 .content(content)
+                                .slot(transactionEvent.getMetadata().getSlot())
                                 .build();
                     })
                     .filter(Objects::nonNull)

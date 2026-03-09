@@ -48,13 +48,13 @@ public class DatumExporter extends AbstractTableExporter {
                 d.hash,
                 d.datum,
                 d.created_at_tx,
-                t.slot,
-                to_timestamp(COALESCE(t.block_time, 0)) as block_time
+                d.slot,
+                to_timestamp(COALESCE(b.block_time, 0)) as block_time
             FROM source_db.%s.datum d
-            INNER JOIN source_db.%s.transaction t ON d.created_at_tx = t.tx_hash
-            WHERE t.slot >= %d
-              AND t.slot < %d
-            ORDER BY t.slot, d.hash
+            INNER JOIN source_db.%s.block b ON d.slot = b.slot
+            WHERE d.slot >= %d
+              AND d.slot < %d
+            ORDER BY d.slot, d.hash
             """,
             schema, schema,
             slotRange.startSlot(),
