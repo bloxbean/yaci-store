@@ -20,6 +20,7 @@ public class Script {
     private String scriptHash;
     private ScriptType scriptType;
     private String content;
+    private Long slot;
 
     @Override
     public boolean equals(Object o) {

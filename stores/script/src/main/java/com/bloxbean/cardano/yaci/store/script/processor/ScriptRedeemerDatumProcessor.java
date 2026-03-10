@@ -177,7 +177,12 @@ public class ScriptRedeemerDatumProcessor {
             List<Datum> redeemerDataList = scriptContexts.stream()
                     .map(scriptContext -> scriptContext.getRedeemer())
                     .filter(redeemer -> redeemer != null)
-                    .map(redeemer -> new Datum(redeemer.getData().getHash(), redeemer.getData().getCbor(), transaction.getTxHash()))
+                    .map(redeemer -> Datum.builder()
+                            .hash(redeemer.getData().getHash())
+                            .datum(redeemer.getData().getCbor())
+                            .createdAtTx(transaction.getTxHash())
+                            .slot(metadata.getSlot())
+                            .build())
                     .toList();
 
             if (redeemerDataList.size() > 0) {
@@ -199,6 +204,7 @@ public class ScriptRedeemerDatumProcessor {
                                     .scriptHash(scriptHash)
                                     .scriptType(ScriptUtil.toPlutusScriptType(plutusScript.getType()))
                                     .content(JsonUtil.getJson(plutusScript))
+                                    .slot(metadata.getSlot())
                                     .build();
                             }
                         )
@@ -222,6 +228,7 @@ public class ScriptRedeemerDatumProcessor {
                                 .scriptHash(scriptHash)
                                 .scriptType(ScriptType.NATIVE_SCRIPT)
                                 .content(JsonUtil.getJson(nativeScript))
+                                .slot(metadata.getSlot())
                                 .build();
                     })
                     .filter(Objects::nonNull)

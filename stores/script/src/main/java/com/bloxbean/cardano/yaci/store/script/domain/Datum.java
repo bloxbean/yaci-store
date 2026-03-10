@@ -15,6 +15,7 @@ public class Datum {
     private String hash;
     private String datum;
     private String createdAtTx;
+    private Long slot;
 
     @Override
     public boolean equals(Object o) {
