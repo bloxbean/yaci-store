@@ -35,8 +35,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -59,7 +59,7 @@ public class UtxoProcessor {
     private final MeterRegistry meterRegistry;
 
     //List of utxos with pointer address. We need to fetch stake address for these in CommitEvent
-    private List<Utxo> utxosWithPointerAddress = Collections.synchronizedList(new ArrayList<>());
+    private final List<Utxo> utxosWithPointerAddress = Collections.synchronizedList(new ArrayList<>());
 
     @EventListener
     @Order(2)
@@ -71,25 +71,23 @@ public class UtxoProcessor {
                 return;
 
             Stream<Transaction> transactionStream = transactions.stream(); //dependencyFound? transactions.stream(): transactions.parallelStream();
-            List<TxInputOutput> txInputOutputs = transactionStream.map(
-                    transaction -> {
-                        Optional<TxInputOutput> txInputOutputOptional;
+            List<TxInputOutput> txInputOutputs = transactionStream.flatMap(transaction -> {
                         if (transaction.isInvalid()) {
-                            txInputOutputOptional = handleInvalidTransaction(event.getMetadata(), transaction);
+                            return handleInvalidTransaction(event.getMetadata(), transaction).stream();
                         } else {
-                            txInputOutputOptional = handleValidTransaction(event.getMetadata(), transaction);
+                            return handleValidTransaction(event.getMetadata(), transaction).stream();
                         }
-
-                        return txInputOutputOptional;
-                    }).filter(Optional::isPresent)
-                    .map(Optional::get)
+                    })
                     .collect(Collectors.toList());
 
-            utxoStorage.saveSpent(txInputOutputs.stream()
-                    .flatMap(txInputOutput -> txInputOutput.getInputs().stream()).collect(Collectors.toList()));
-
+            // Saving unspent first as they could be inputs of other transactions
+            // It will also populate the utxoCache (which is a super bad thing, but maybe we should make it more implicit? Maybe an external component?)
             utxoStorage.saveUnspent(txInputOutputs.stream()
                     .flatMap(txInputOutput -> txInputOutput.getOutputs().stream()).collect(Collectors.toList()));
+
+            // Will allow extending code to check in memory which tx input to save (e.g. if uxto belongs to an address of interest)
+            utxoStorage.saveSpent(txInputOutputs.stream()
+                    .flatMap(txInputOutput -> txInputOutput.getInputs().stream()).collect(Collectors.toList()));
 
             publisher.publishEvent(new AddressUtxoEvent(event.getMetadata(), txInputOutputs));
         } catch (Exception e) {
@@ -105,11 +103,10 @@ public class UtxoProcessor {
 
         //set spent for input
         List<TxInput> spentOutupts = transaction.getBody().getInputs().stream()
-                .map(transactionInput -> new UtxoKey(transactionInput.getTransactionId(), transactionInput.getIndex()))
-                .map(utxoKey -> {
+                .map(transactionInput -> {
                     TxInput txInput = new TxInput();
-                    txInput.setTxHash(utxoKey.getTxHash());
-                    txInput.setOutputIndex(utxoKey.getOutputIndex());
+                    txInput.setTxHash(transactionInput.getTransactionId());
+                    txInput.setOutputIndex(transactionInput.getIndex());
                     txInput.setSpentAtSlot(metadata.getSlot());
                     txInput.setSpentAtBlock(metadata.getBlock());
                     txInput.setSpentAtBlockHash(metadata.getBlockHash());
@@ -128,7 +125,7 @@ public class UtxoProcessor {
                 .collect(Collectors.toList());
 
         //publish event
-        if (outputAddressUtxos.size() > 0 || spentOutupts.size() > 0)
+        if (!outputAddressUtxos.isEmpty() || !spentOutupts.isEmpty())
             return Optional.of(new TxInputOutput(transaction.getTxHash(), spentOutupts, outputAddressUtxos));
         else {
             log.warn("No input or output found for transaction: " + transaction.getTxHash());
@@ -173,7 +170,7 @@ public class UtxoProcessor {
 //                    .ifPresent(existingAddressUtxo -> collateralOutputUtxo.setSpent(existingAddressUtxo.getSpent()));
         }
 
-        List<AddressUtxo> outputs = collateralOutputUtxo != null? List.of(collateralOutputUtxo) : Collections.emptyList();
+        List<AddressUtxo> outputs = collateralOutputUtxo != null ? List.of(collateralOutputUtxo) : Collections.emptyList();
 
         return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, outputs));
     }
@@ -182,7 +179,7 @@ public class UtxoProcessor {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
-                                .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null) //remove . from unit as yaci provides policy.assetName as unit
+                                .unit(amount.getUnit() != null ? amount.getUnit().replace(".", "") : null) //remove . from unit as yaci provides policy.assetName as unit
                                 .policyId(amount.getPolicyId())
                                 .assetName(amount.getAssetName().replace('\u0000', ' '))
                                 .quantity(amount.getQuantity())
@@ -257,6 +254,7 @@ public class UtxoProcessor {
 
     /**
      * Resolve pointer address and update AddressUtxo with stake address and stake key hash
+     *
      * @param commitEvent
      */
     @EventListener
