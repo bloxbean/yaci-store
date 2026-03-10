@@ -42,9 +42,15 @@ public final class VoteTallyCalculator {
             DRep No Stake – The total stake of:
             1. Registered dReps that voted 'No', plus
             2. Registered dReps that did not vote for this action, plus
-            3. The AlwaysNoConfidence dRep.
+            3. The AlwaysNoConfidence dRep (only when NOT a NoConfidence action,
+               since for NoConfidence actions the AlwaysNoConfidence stake is already counted in YES).
         */
-        BigInteger noStake = no.add(notVoted).add(noConfidence);
+        BigInteger noStake;
+        if (type == GovActionType.NO_CONFIDENCE) {
+            noStake = no.add(notVoted);
+        } else {
+            noStake = no.add(notVoted).add(noConfidence);
+        }
 
         return VoteTallies.DRepTallies.builder()
                 .totalYesStake(yes)
