@@ -50,9 +50,11 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
 
     @Override
     public boolean preExportValidation(PartitionValue partition) {
-        // Unclaimed reward rest table depends on AdaPot job completion
+        // unclaimed_reward_rest[earned_epoch=N] is populated at the start of AdaPot job N+1 via
+        // PreAdaPotJobProcessingEvent(N+1), which triggers TreasuryWithdrawalProcessor and
+        // ProposalRefundProcessor with epoch = N. Wait for job N+1 to complete before exporting epoch N.
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-        return isRewardCalcAdaPotJobCompleted(epoch);
+        return isRewardCalcAdaPotJobCompleted(epoch + 1);
     }
 
     /**

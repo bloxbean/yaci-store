@@ -46,9 +46,10 @@ public class EpochStakeExporter extends AbstractTableExporter {
 
     @Override
     public boolean preExportValidation(PartitionValue partition) {
-        // Epoch stake table depends on AdaPot job completion
+        // epoch_stake[N] is populated by AdaPot job N+1, which calls takeStakeSnapshot(epoch-1)
+        // during calculateRewards(). Wait for job N+1 to complete before exporting epoch N.
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-        return isRewardCalcAdaPotJobCompleted(epoch);
+        return isRewardCalcAdaPotJobCompleted(epoch + 1);
     }
 
     @Override
