@@ -42,7 +42,7 @@ public class DatumExporter extends AbstractTableExporter {
 
     @Override
     public String getPartitionColumn() {
-        return "date";
+        return "block_date";
     }
 
     @Override
@@ -55,7 +55,7 @@ public class DatumExporter extends AbstractTableExporter {
                 d.datum,
                 d.created_at_tx,
                 d.slot,
-                CAST('%s' AS DATE) as date
+                CAST('%s' AS DATE) as block_date
             FROM source_db.%s.datum d
             WHERE d.slot >= %d
               AND d.slot < %d

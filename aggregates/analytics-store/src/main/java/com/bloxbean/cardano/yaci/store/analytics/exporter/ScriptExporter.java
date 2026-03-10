@@ -42,7 +42,7 @@ public class ScriptExporter extends AbstractTableExporter {
 
     @Override
     public String getPartitionColumn() {
-        return "date";
+        return "block_date";
     }
 
     @Override
@@ -55,7 +55,7 @@ public class ScriptExporter extends AbstractTableExporter {
                 s.script_type,
                 s.content,
                 s.slot,
-                CAST('%s' AS DATE) as date
+                CAST('%s' AS DATE) as block_date
             FROM source_db.%s.script s
             WHERE s.slot >= %d
               AND s.slot < %d
