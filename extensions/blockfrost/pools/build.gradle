@@ -1,0 +1,21 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+    api project(":extensions:blockfrost:blockfrost-common")
+    api project(":stores:staking")
+    api project(":stores:blocks")
+    api project(":stores:governance")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Blockfrost Pools'
+                description = 'Yaci Store Blockfrost Pools API'
+            }
+        }
+    }
+}
