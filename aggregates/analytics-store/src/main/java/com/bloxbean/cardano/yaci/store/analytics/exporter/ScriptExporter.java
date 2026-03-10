@@ -41,22 +41,27 @@ public class ScriptExporter extends AbstractTableExporter {
     }
 
     @Override
+    public String getPartitionColumn() {
+        return "date";
+    }
+
+    @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
+        String dateStr = ((PartitionValue.DatePartition) partition).date().toString();
         return String.format("""
             SELECT
                 s.script_hash,
                 s.script_type,
                 s.content,
                 s.slot,
-                to_timestamp(COALESCE(b.block_time, 0)) as block_time
+                CAST('%s' AS DATE) as date
             FROM source_db.%s.script s
-            INNER JOIN source_db.%s.block b ON s.slot = b.slot
             WHERE s.slot >= %d
               AND s.slot < %d
             ORDER BY s.slot, s.script_hash
             """,
-            schema, schema,
+            dateStr, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );
