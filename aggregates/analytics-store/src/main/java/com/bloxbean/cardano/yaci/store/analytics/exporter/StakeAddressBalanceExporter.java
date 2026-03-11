@@ -48,27 +48,29 @@ public class StakeAddressBalanceExporter extends AbstractTableExporter {
         String schema = getSourceSchema();
         return String.format("""
             SELECT
-                sab.address,
-                sab.quantity,
-                to_timestamp(COALESCE(sab.block_time, 0)) as block_time,
-                sab.block,
-                sab.epoch,
-                sab.slot
-            FROM source_db.%s.stake_address_balance sab
-            INNER JOIN (
+                address,
+                quantity,
+                to_timestamp(COALESCE(block_time, 0)) as block_time,
+                block,
+                epoch,
+                slot
+            FROM (
                 SELECT
                     address,
-                    MAX(slot) as max_slot
+                    quantity,
+                    block_time,
+                    block,
+                    epoch,
+                    slot,
+                    ROW_NUMBER() OVER (PARTITION BY address ORDER BY slot DESC) as rn
                 FROM source_db.%s.stake_address_balance
                 WHERE slot >= %d
                   AND slot < %d
-                GROUP BY address
-            ) latest
-            ON sab.address = latest.address
-               AND sab.slot = latest.max_slot
-            ORDER BY sab.address
+            ) ranked
+            WHERE rn = 1
+            ORDER BY address
             """,
-            schema, schema,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );
