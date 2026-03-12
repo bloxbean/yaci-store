@@ -1,0 +1,416 @@
+
+### @name getLatestBlockBlockfrost
+### Get latest block from Blockfrost
+GET {{blockfrost_base_url}}/blocks/latest
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfLatestBlock", response.body);
+    client.global.set("bfLatestBlockStatus", response.status);
+
+    if (response.status === 200 && response.body) {
+        client.global.set("bfLatestHash", response.body.hash);
+        client.global.set("bfLatestHeight", response.body.height);
+        client.global.set("bfLatestSlot", response.body.slot);
+        client.global.set("bfLatestEpoch", response.body.epoch);
+        client.global.set("bfLatestPrevHash", response.body.previous_block);
+
+        const nextAnchor = response.body.previous_block ? response.body.previous_block : response.body.hash;
+        client.global.set("bfNextAnchor", nextAnchor);
+    }
+
+    client.test("Blockfrost latest block request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getLatestBlockYaci
+### Get latest block from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/latest
+
+> {%
+    const bf = client.global.get("bfLatestBlock");
+    const yaci = response.body;
+
+    client.test("Compare latest block between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bf.hash === yaci.hash, `hash mismatch (Blockfrost: ${bf.hash}, Yaci: ${yaci.hash})`);
+        client.assert(bf.height === yaci.height, `height mismatch (Blockfrost: ${bf.height}, Yaci: ${yaci.height})`);
+        client.assert(bf.slot === yaci.slot, `slot mismatch (Blockfrost: ${bf.slot}, Yaci: ${yaci.slot})`);
+        client.assert(bf.epoch === yaci.epoch, `epoch mismatch (Blockfrost: ${bf.epoch}, Yaci: ${yaci.epoch})`);
+        client.assert(bf.tx_count === yaci.tx_count, `tx_count mismatch (Blockfrost: ${bf.tx_count}, Yaci: ${yaci.tx_count})`);
+        client.assert(bf.output === yaci.output, `output mismatch (Blockfrost: ${bf.output}, Yaci: ${yaci.output})`);
+        client.assert(bf.fees === yaci.fees, `fees mismatch (Blockfrost: ${bf.fees}, Yaci: ${yaci.fees})`);
+        client.assert(bf.previous_block === yaci.previous_block, `previous_block mismatch (Blockfrost: ${bf.previous_block}, Yaci: ${yaci.previous_block})`);
+    });
+%}
+
+### @name getBlockByHashBlockfrost
+### Get specific block by hash from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfLatestHash}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockByHash", response.body);
+    client.global.set("bfBlockByHashStatus", response.status);
+
+    client.test("Blockfrost block by hash request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getBlockByHashYaci
+### Get specific block by hash from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfLatestHash}}
+
+> {%
+    const bf = client.global.get("bfBlockByHash");
+    const yaci = response.body;
+
+    client.test("Compare block by hash between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bf.hash === yaci.hash, `hash mismatch (Blockfrost: ${bf.hash}, Yaci: ${yaci.hash})`);
+        client.assert(bf.height === yaci.height, `height mismatch (Blockfrost: ${bf.height}, Yaci: ${yaci.height})`);
+        client.assert(bf.slot === yaci.slot, `slot mismatch (Blockfrost: ${bf.slot}, Yaci: ${yaci.slot})`);
+        client.assert(bf.epoch === yaci.epoch, `epoch mismatch (Blockfrost: ${bf.epoch}, Yaci: ${yaci.epoch})`);
+        client.assert(bf.output === yaci.output, `output mismatch (Blockfrost: ${bf.output}, Yaci: ${yaci.output})`);
+        client.assert(bf.fees === yaci.fees, `fees mismatch (Blockfrost: ${bf.fees}, Yaci: ${yaci.fees})`);
+        client.assert(bf.confirmations === yaci.confirmations, `confirmations mismatch (Blockfrost: ${bf.confirmations}, Yaci: ${yaci.confirmations})`);
+    });
+%}
+
+### @name getNextBlocksBlockfrost
+### Get next blocks from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfNextAnchor}}/next?count=5&page=1
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfNextBlocks", response.body);
+    client.global.set("bfNextBlocksStatus", response.status);
+
+    client.test("Blockfrost next blocks request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getNextBlocksYaci
+### Get next blocks from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfNextAnchor}}/next?count=5&page=1
+
+> {%
+    const bf = client.global.get("bfNextBlocks");
+    const yaci = response.body;
+
+    client.test("Compare next blocks between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+        client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+
+        if (bf.length > 0 && yaci.length > 0) {
+            client.assert(bf[0].hash === yaci[0].hash, `first hash mismatch (Blockfrost: ${bf[0].hash}, Yaci: ${yaci[0].hash})`);
+            client.assert(bf[0].height === yaci[0].height, `first height mismatch (Blockfrost: ${bf[0].height}, Yaci: ${yaci[0].height})`);
+        }
+    });
+%}
+
+### @name getPreviousBlocksBlockfrost
+### Get previous blocks from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfLatestHash}}/previous?count=5&page=1
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfPreviousBlocks", response.body);
+    client.global.set("bfPreviousBlocksStatus", response.status);
+
+    client.test("Blockfrost previous blocks request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getPreviousBlocksYaci
+### Get previous blocks from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfLatestHash}}/previous?count=5&page=1
+
+> {%
+    const bf = client.global.get("bfPreviousBlocks");
+    const yaci = response.body;
+
+    client.test("Compare previous blocks between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+        client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+
+        if (bf.length > 0 && yaci.length > 0) {
+            client.assert(bf[0].hash === yaci[0].hash, `first hash mismatch (Blockfrost: ${bf[0].hash}, Yaci: ${yaci[0].hash})`);
+            client.assert(bf[0].height === yaci[0].height, `first height mismatch (Blockfrost: ${bf[0].height}, Yaci: ${yaci[0].height})`);
+        }
+    });
+%}
+
+### @name getBlockBySlotBlockfrost
+### Get block by absolute slot from Blockfrost
+GET {{blockfrost_base_url}}/blocks/slot/{{bfLatestSlot}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockBySlot", response.body);
+    client.global.set("bfBlockBySlotStatus", response.status);
+
+    client.test("Blockfrost block by slot request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getBlockBySlotYaci
+### Get block by absolute slot from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/slot/{{bfLatestSlot}}
+
+> {%
+    const bf = client.global.get("bfBlockBySlot");
+    const yaci = response.body;
+
+    client.test("Compare block by slot between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bf.hash === yaci.hash, `hash mismatch (Blockfrost: ${bf.hash}, Yaci: ${yaci.hash})`);
+        client.assert(bf.height === yaci.height, `height mismatch (Blockfrost: ${bf.height}, Yaci: ${yaci.height})`);
+        client.assert(bf.slot === yaci.slot, `slot mismatch (Blockfrost: ${bf.slot}, Yaci: ${yaci.slot})`);
+    });
+%}
+
+### @name getBlockByEpochSlotBlockfrost
+### Get block by epoch and absolute slot from Blockfrost
+GET {{blockfrost_base_url}}/blocks/epoch/{{bfLatestEpoch}}/slot/{{bfLatestSlot}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockByEpochSlot", response.body);
+    client.global.set("bfBlockByEpochSlotStatus", response.status);
+
+    client.test("Blockfrost block by epoch+slot request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getBlockByEpochSlotYaci
+### Get block by epoch and absolute slot from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/epoch/{{bfLatestEpoch}}/slot/{{bfLatestSlot}}
+
+> {%
+    const bf = client.global.get("bfBlockByEpochSlot");
+    const yaci = response.body;
+
+    client.test("Compare block by epoch+slot between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bf.hash === yaci.hash, `hash mismatch (Blockfrost: ${bf.hash}, Yaci: ${yaci.hash})`);
+        client.assert(bf.epoch === yaci.epoch, `epoch mismatch (Blockfrost: ${bf.epoch}, Yaci: ${yaci.epoch})`);
+        client.assert(bf.slot === yaci.slot, `slot mismatch (Blockfrost: ${bf.slot}, Yaci: ${yaci.slot})`);
+    });
+%}
+
+### @name getLatestBlockTxsBlockfrost
+### Get latest block tx hashes from Blockfrost
+GET {{blockfrost_base_url}}/blocks/latest/txs?count=20&page=1&order=asc
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfLatestTxs", response.body);
+    client.global.set("bfLatestTxsStatus", response.status);
+
+    client.test("Blockfrost latest txs request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getLatestBlockTxsYaci
+### Get latest block tx hashes from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/latest/txs?count=20&page=1&order=asc
+
+> {%
+    const bf = client.global.get("bfLatestTxs");
+    const yaci = response.body;
+
+    client.test("Compare latest block tx hashes between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+        client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+
+        if (bf.length > 0 && yaci.length > 0) {
+            client.assert(bf[0] === yaci[0], `first tx hash mismatch (Blockfrost: ${bf[0]}, Yaci: ${yaci[0]})`);
+        }
+    });
+%}
+
+### @name getLatestBlockTxsCborBlockfrost
+### Get latest block txs with cbor from Blockfrost
+GET {{blockfrost_base_url}}/blocks/latest/txs/cbor?count=20&page=1&order=asc
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfLatestTxsCbor", response.body);
+    client.global.set("bfLatestTxsCborStatus", response.status);
+
+    client.test("Blockfrost latest txs cbor request", function() {
+        client.assert(response.status === 200 || response.status === 404, "Unexpected status");
+    });
+%}
+
+### @name getLatestBlockTxsCborYaci
+### Get latest block txs with cbor from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/latest/txs/cbor?count=20&page=1&order=asc
+
+> {%
+    const bfStatus = client.global.get("bfLatestTxsCborStatus");
+    const bf = client.global.get("bfLatestTxsCbor");
+
+    client.test("Compare latest block tx cbor between Blockfrost and Yaci", function() {
+        if (response.status === 404) {
+            client.assert(response.body.message === "The requested component has not been found.", "Unexpected 404 message");
+            return;
+        }
+
+        client.assert(response.status === bfStatus, `status mismatch (Blockfrost: ${bfStatus}, Yaci: ${response.status})`);
+
+        const yaci = response.body;
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+
+        if (Array.isArray(bf)) {
+            client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+            if (bf.length > 0 && yaci.length > 0) {
+                client.assert(bf[0].tx_hash === yaci[0].tx_hash, `first tx hash mismatch (Blockfrost: ${bf[0].tx_hash}, Yaci: ${yaci[0].tx_hash})`);
+            }
+        }
+    });
+%}
+
+### @name getBlockTxsBlockfrost
+### Get tx hashes for specific block from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfLatestHash}}/txs?count=20&page=1&order=asc
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockTxs", response.body);
+    client.global.set("bfBlockTxsStatus", response.status);
+
+    client.test("Blockfrost block txs request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getBlockTxsYaci
+### Get tx hashes for specific block from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfLatestHash}}/txs?count=20&page=1&order=asc
+
+> {%
+    const bf = client.global.get("bfBlockTxs");
+    const yaci = response.body;
+
+    client.test("Compare block tx hashes between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+        client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+
+        if (bf.length > 0 && yaci.length > 0) {
+            client.assert(bf[0] === yaci[0], `first tx hash mismatch (Blockfrost: ${bf[0]}, Yaci: ${yaci[0]})`);
+        }
+    });
+%}
+
+### @name getBlockTxsCborBlockfrost
+### Get tx hashes with cbor for specific block from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfLatestHash}}/txs/cbor?count=20&page=1&order=asc
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockTxsCbor", response.body);
+    client.global.set("bfBlockTxsCborStatus", response.status);
+
+    client.test("Blockfrost block txs cbor request", function() {
+        client.assert(response.status === 200 || response.status === 404, "Unexpected status");
+    });
+%}
+
+### @name getBlockTxsCborYaci
+### Get tx hashes with cbor for specific block from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfLatestHash}}/txs/cbor?count=20&page=1&order=asc
+
+> {%
+    const bfStatus = client.global.get("bfBlockTxsCborStatus");
+    const bf = client.global.get("bfBlockTxsCbor");
+
+    client.test("Compare block tx cbor between Blockfrost and Yaci", function() {
+        if (response.status === 404) {
+            client.assert(response.body.message === "The requested component has not been found.", "Unexpected 404 message");
+            return;
+        }
+
+        client.assert(response.status === bfStatus, `status mismatch (Blockfrost: ${bfStatus}, Yaci: ${response.status})`);
+
+        const yaci = response.body;
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+
+        if (Array.isArray(bf)) {
+            client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+            if (bf.length > 0 && yaci.length > 0) {
+                client.assert(bf[0].tx_hash === yaci[0].tx_hash, `first tx hash mismatch (Blockfrost: ${bf[0].tx_hash}, Yaci: ${yaci[0].tx_hash})`);
+            }
+        }
+    });
+%}
+
+### @name getBlockAddressesBlockfrost
+### Get affected addresses for specific block from Blockfrost
+GET {{blockfrost_base_url}}/blocks/{{bfLatestHash}}/addresses?count=20&page=1
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfBlockAddresses", response.body);
+    client.global.set("bfBlockAddressesStatus", response.status);
+
+    client.test("Blockfrost block addresses request", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getBlockAddressesYaci
+### Get affected addresses for specific block from Yaci and compare
+# @timeout 6000
+GET {{base_url}}/api/v1/blockfrost/blocks/{{bfLatestHash}}/addresses?count=20&page=1
+
+> {%
+    const bf = client.global.get("bfBlockAddresses");
+    const yaci = response.body;
+
+    client.test("Compare block addresses between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaci), "Yaci response should be an array");
+        client.assert(bf.length === yaci.length, `array length mismatch (Blockfrost: ${bf.length}, Yaci: ${yaci.length})`);
+
+        if (bf.length > 0 && yaci.length > 0) {
+            client.assert(bf[0].address === yaci[0].address, `first address mismatch (Blockfrost: ${bf[0].address}, Yaci: ${yaci[0].address})`);
+
+            const bfTxs = Array.isArray(bf[0].transactions) ? bf[0].transactions : [];
+            const yaciTxs = Array.isArray(yaci[0].transactions) ? yaci[0].transactions : [];
+            client.assert(bfTxs.length === yaciTxs.length, `first address tx count mismatch (Blockfrost: ${bfTxs.length}, Yaci: ${yaciTxs.length})`);
+
+            if (bfTxs.length > 0 && yaciTxs.length > 0) {
+                client.assert(bfTxs[0].tx_hash === yaciTxs[0].tx_hash,
+                    `first tx hash mismatch (Blockfrost: ${bfTxs[0].tx_hash}, Yaci: ${yaciTxs[0].tx_hash})`);
+            }
+        }
+    });
+%}
