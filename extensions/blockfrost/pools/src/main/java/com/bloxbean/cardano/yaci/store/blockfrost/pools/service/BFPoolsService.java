@@ -2,14 +2,17 @@ package com.bloxbean.cardano.yaci.store.blockfrost.pools.service;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.mapper.BFPoolsMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.BFPoolsStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.impl.model.BFPoolMetadata;
+import com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.impl.model.BFPoolStakeInfo;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.util.BFPoolIdUtil;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,6 +28,7 @@ public class BFPoolsService {
 
     private final BFPoolsStorageReader storageReader;
     private final StoreProperties storeProperties;
+    private final ObjectProvider<EpochStakeStorageReader> epochStakeStorageProvider;
     private final BFPoolsMapper mapper = BFPoolsMapper.INSTANCE;
 
     // Header bytes for reward (stake) addresses: 0xe0 = testnet key hash, 0xe1 = mainnet key hash
@@ -58,6 +62,10 @@ public class BFPoolsService {
             dto.setOwners(dto.getOwners().stream()
                     .map(this::stakeKeyHashToBech32)
                     .toList());
+        }
+        // Enrich with live/active stake info from epoch_stake (if adapot is available)
+        if (isAdapotAvailable()) {
+            enrichPoolDtoWithStakeInfo(dto, poolIdHex);
         }
         return dto;
     }
@@ -110,8 +118,65 @@ public class BFPoolsService {
 
     public List<BFPoolListItemDto> getExtendedPools(int page, int count, String order) {
         int p = page - 1;
-        return storageReader.getExtendedPools(p, count, BFPoolIdUtil.normalizeOrder(order))
+        List<BFPoolListItemDto> dtos = storageReader.getExtendedPools(p, count, BFPoolIdUtil.normalizeOrder(order))
                 .stream().map(mapper::toBFPoolListItemDto).toList();
+        // Enrich with live/active stake info from epoch_stake (if adapot is available)
+        if (isAdapotAvailable() && !dtos.isEmpty()) {
+            List<String> poolHexes = dtos.stream().map(BFPoolListItemDto::getHex).toList();
+            var stakeInfoMap = storageReader.getPoolsStakeInfoBatch(poolHexes);
+            for (BFPoolListItemDto dto : dtos) {
+                BFPoolStakeInfo info = stakeInfoMap.get(dto.getHex());
+                if (info != null) {
+                    dto.setActiveStake(info.activeStake() != null ? info.activeStake().toString() : "0");
+                    dto.setLiveStake(info.liveStake() != null ? info.liveStake().toString() : "0");
+                    dto.setLiveSaturation(info.liveSaturation());
+                }
+            }
+        }
+        return dtos;
+    }
+
+    public List<BFPoolHistoryDto> getPoolHistory(String poolId, int page, int count, String order) {
+        String poolIdHex = normalizePoolHash(poolId);
+        // 404 if pool not registered
+        storageReader.getVrfKeyByPoolId(poolIdHex)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pool not found: " + poolId));
+        int p = page - 1;
+        if (isAdapotAvailable()) {
+            return storageReader.getPoolHistoryFull(poolIdHex, p, count, BFPoolIdUtil.normalizeOrder(order));
+        } else {
+            log.warn("Adapot aggregate is not enabled; history for pool {} will only include block/fee data.", poolId);
+            return storageReader.getPoolHistoryBase(poolIdHex, p, count, BFPoolIdUtil.normalizeOrder(order));
+        }
+    }
+
+    public List<BFPoolDelegatorDto> getPoolDelegators(String poolId, int page, int count, String order) {
+        String poolIdHex = normalizePoolHash(poolId);
+        // 404 if pool not registered
+        storageReader.getVrfKeyByPoolId(poolIdHex)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pool not found: " + poolId));
+        int p = page - 1;
+        if (isAdapotAvailable()) {
+            return storageReader.getPoolDelegatorsFull(poolIdHex, p, count, BFPoolIdUtil.normalizeOrder(order));
+        } else {
+            log.warn("Adapot aggregate is not enabled; live_stake for pool {} delegators will be null.", poolId);
+            return storageReader.getPoolDelegatorsBase(poolIdHex, p, count, BFPoolIdUtil.normalizeOrder(order));
+        }
+    }
+
+    /**
+     * Enrich a pool detail DTO with live/active stake info from epoch_stake.
+     * Sets live_stake, live_delegators, live_size, live_saturation, active_stake, active_size.
+     */
+    private void enrichPoolDtoWithStakeInfo(BFPoolDto dto, String poolIdHex) {
+        storageReader.getPoolStakeInfo(poolIdHex).ifPresent(info -> {
+            dto.setLiveStake(info.liveStake() != null ? info.liveStake().toString() : "0");
+            dto.setLiveDelegators(info.liveDelegators());
+            dto.setLiveSize(info.liveSize());
+            dto.setLiveSaturation(info.liveSaturation());
+            dto.setActiveStake(info.activeStake() != null ? info.activeStake().toString() : "0");
+            dto.setActiveSize(info.activeSize());
+        });
     }
 
     /**
@@ -143,5 +208,12 @@ public class BFPoolsService {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or malformed pool ID.");
         }
+    }
+
+    /**
+     * Returns true if the adapot aggregate is available (epoch_stake / reward data ready).
+     */
+    private boolean isAdapotAvailable() {
+        return epochStakeStorageProvider.getIfAvailable() != null;
     }
 }

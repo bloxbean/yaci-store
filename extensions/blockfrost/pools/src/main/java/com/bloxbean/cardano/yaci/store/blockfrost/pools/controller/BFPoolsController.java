@@ -12,12 +12,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @RestController
@@ -125,25 +123,29 @@ public class BFPoolsController {
     }
 
     @GetMapping("/{poolId}/history")
-    @Operation(summary = "Stake pool history (not supported)")
-    public ResponseEntity<Map<String, Object>> getPoolHistory(@PathVariable String poolId) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of(
-                        "status_code", 404,
-                        "error", "Not Found",
-                        "message", "Endpoint not supported — pool epoch history requires stake snapshots not available in yaci-store"
-                ));
+    @Operation(summary = "Stake pool history",
+            description = "History of stake pool parameters over epochs. " +
+                    "Fields active_stake, active_size, delegators_count and rewards are null when the adapot aggregate is not enabled.")
+    public List<BFPoolHistoryDto> getPoolHistory(
+            @PathVariable String poolId,
+            @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+            @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
+            @RequestParam(required = false, defaultValue = "asc") String order) {
+        validatePoolId(poolId);
+        return bfPoolsService.getPoolHistory(poolId, page, count, order);
     }
 
     @GetMapping("/{poolId}/delegators")
-    @Operation(summary = "Stake pool delegators (not supported)")
-    public ResponseEntity<Map<String, Object>> getPoolDelegators(@PathVariable String poolId) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of(
-                        "status_code", 404,
-                        "error", "Not Found",
-                        "message", "Endpoint not supported — delegator snapshots not available in yaci-store"
-                ));
+    @Operation(summary = "Stake pool delegators",
+            description = "List of current delegators to a stake pool. " +
+                    "Field live_stake is null when the adapot aggregate is not enabled.")
+    public List<BFPoolDelegatorDto> getPoolDelegators(
+            @PathVariable String poolId,
+            @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+            @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
+            @RequestParam(required = false, defaultValue = "asc") String order) {
+        validatePoolId(poolId);
+        return bfPoolsService.getPoolDelegators(poolId, page, count, order);
     }
 
     private void validatePoolId(String poolId) {

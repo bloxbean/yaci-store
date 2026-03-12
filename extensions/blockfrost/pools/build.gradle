@@ -5,6 +5,8 @@ dependencies {
     api project(":stores:staking")
     api project(":stores:blocks")
     api project(":stores:governance")
+    compileOnly project(":aggregates:adapot")
+    testImplementation project(":aggregates:adapot")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }
