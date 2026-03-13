@@ -50,16 +50,18 @@ public class DatumExporter extends AbstractTableExporter {
         String schema = getSourceSchema();
         String dateStr = ((PartitionValue.DatePartition) partition).date().toString();
         return String.format("""
-            SELECT
-                d.hash,
-                d.datum,
-                d.created_at_tx,
-                d.slot,
-                CAST('%s' AS DATE) as block_date
-            FROM source_db.%s.datum d
-            WHERE d.slot >= %d
-              AND d.slot < %d
-            ORDER BY d.slot, d.hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    d.hash,
+                    d.datum,
+                    d.created_at_tx,
+                    d.slot,
+                    CAST(''%s'' AS DATE) as block_date
+                FROM %s.datum d
+                WHERE d.slot >= %d
+                  AND d.slot < %d
+                ORDER BY d.slot, d.hash
+            ')
             """,
             dateStr, schema,
             slotRange.startSlot(),
