@@ -100,4 +100,7 @@ project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
+include ':extensions:blockfrost:blockfrost-scripts'
+project(':extensions:blockfrost:blockfrost-scripts').projectDir = new File('extensions/blockfrost/scripts')
+
 include 'e2e-tests'
