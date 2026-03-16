@@ -60,7 +60,6 @@ public class EpochExporter extends AbstractTableExporter {
                 e.max_slot
             FROM source_db.%s.epoch e
             WHERE e.number = %d
-            ORDER BY e.number
             """,
             schema,
             epoch

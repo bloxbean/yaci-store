@@ -62,7 +62,6 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
                 cm.update_datetime
             FROM source_db.%s.committee_member cm
             WHERE cm.epoch = %d
-            ORDER BY cm.hash
             """,
             schema,
             epoch

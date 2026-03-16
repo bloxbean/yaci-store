@@ -63,7 +63,7 @@ public class TransactionScriptsExporter extends AbstractTableExporter {
             FROM source_db.%s.transaction_scripts ts
             WHERE ts.slot >= %d
               AND ts.slot < %d
-            ORDER BY ts.slot, ts.tx_hash, ts.redeemer_index
+            ORDER BY ts.slot
             """,
             schema,
             slotRange.startSlot(),

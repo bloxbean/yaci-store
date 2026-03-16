@@ -58,7 +58,7 @@ public class CommitteeRegistrationExporter extends AbstractTableExporter {
             FROM source_db.%s.committee_registration cr
             WHERE cr.slot >= %d
               AND cr.slot < %d
-            ORDER BY cr.slot, cr.tx_hash, cr.cert_index
+            ORDER BY cr.slot
             """,
             schema,
             slotRange.startSlot(),

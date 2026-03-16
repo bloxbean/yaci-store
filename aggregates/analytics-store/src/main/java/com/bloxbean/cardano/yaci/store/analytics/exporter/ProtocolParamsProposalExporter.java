@@ -57,7 +57,7 @@ public class ProtocolParamsProposalExporter extends AbstractTableExporter {
             FROM source_db.%s.protocol_params_proposal ppp
             WHERE ppp.slot >= %d
               AND ppp.slot < %d
-            ORDER BY ppp.slot, ppp.tx_hash
+            ORDER BY ppp.slot
             """,
             schema,
             slotRange.startSlot(),

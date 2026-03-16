@@ -59,7 +59,7 @@ public class DatumExporter extends AbstractTableExporter {
             FROM source_db.%s.datum d
             WHERE d.slot >= %d
               AND d.slot < %d
-            ORDER BY d.slot, d.hash
+            ORDER BY d.slot
             """,
             dateStr, schema,
             slotRange.startSlot(),

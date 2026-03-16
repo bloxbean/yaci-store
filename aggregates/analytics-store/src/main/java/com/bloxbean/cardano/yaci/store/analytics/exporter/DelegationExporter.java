@@ -60,7 +60,7 @@ public class DelegationExporter extends AbstractTableExporter {
             FROM source_db.%s.delegation d
             WHERE d.slot >= %d
               AND d.slot < %d
-            ORDER BY d.slot, d.tx_index, d.cert_index
+            ORDER BY d.slot
             """,
             schema,
             slotRange.startSlot(),

@@ -59,7 +59,7 @@ public class ScriptExporter extends AbstractTableExporter {
             FROM source_db.%s.script s
             WHERE s.slot >= %d
               AND s.slot < %d
-            ORDER BY s.slot, s.script_hash
+            ORDER BY s.slot
             """,
             dateStr, schema,
             slotRange.startSlot(),

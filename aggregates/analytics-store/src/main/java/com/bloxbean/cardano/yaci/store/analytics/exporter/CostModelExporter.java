@@ -56,7 +56,7 @@ public class CostModelExporter extends AbstractTableExporter {
             FROM source_db.%s.cost_model cm
             WHERE cm.slot >= %d
               AND cm.slot < %d
-            ORDER BY cm.slot, cm.hash
+            ORDER BY cm.slot
             """,
             schema,
             slotRange.startSlot(),

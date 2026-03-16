@@ -72,7 +72,6 @@ public class EpochParamExporter extends AbstractTableExporter {
                 to_timestamp(COALESCE(ep.block_time, 0)) as block_time
             FROM source_db.%s.epoch_param ep
             WHERE ep.epoch = %d
-            ORDER BY ep.epoch
             """,
             schema,
             epoch

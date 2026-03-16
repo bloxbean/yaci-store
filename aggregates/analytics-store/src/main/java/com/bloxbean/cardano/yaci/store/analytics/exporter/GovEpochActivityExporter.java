@@ -62,7 +62,6 @@ public class GovEpochActivityExporter extends AbstractTableExporter {
                 gea.dormant_epoch_count
             FROM source_db.%s.gov_epoch_activity gea
             WHERE gea.epoch = %d
-            ORDER BY gea.epoch
             """,
             schema,
             epoch

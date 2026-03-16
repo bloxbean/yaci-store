@@ -78,7 +78,6 @@ public class AdaPotExporter extends AbstractTableExporter {
                 ap.pool_rewards_pot
             FROM source_db.%s.adapot ap
             WHERE ap.epoch = %d
-            ORDER BY ap.epoch
             """,
             schema,
             epoch

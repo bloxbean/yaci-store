@@ -72,7 +72,7 @@ public class BlockExporter extends AbstractTableExporter {
             FROM source_db.%s.block b
             WHERE b.slot >= %d
               AND b.slot < %d
-            ORDER BY b.slot, b.hash
+            ORDER BY b.slot
             """,
             schema,
             slotRange.startSlot(),

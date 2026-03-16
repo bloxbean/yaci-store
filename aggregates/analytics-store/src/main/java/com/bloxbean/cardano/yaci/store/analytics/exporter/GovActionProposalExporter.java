@@ -61,7 +61,7 @@ public class GovActionProposalExporter extends AbstractTableExporter {
             FROM source_db.%s.gov_action_proposal gap
             WHERE gap.slot >= %d
               AND gap.slot < %d
-            ORDER BY gap.slot, gap.tx_hash, gap.idx
+            ORDER BY gap.slot
             """,
             schema,
             slotRange.startSlot(),

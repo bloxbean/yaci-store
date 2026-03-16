@@ -66,7 +66,7 @@ public class InvalidTransactionExporter extends AbstractTableExporter {
             INNER JOIN source_db.%s.block b ON it.slot = b.slot
             WHERE it.slot >= %d
               AND it.slot < %d
-            ORDER BY it.slot, it.tx_hash
+            ORDER BY it.slot
             """,
             schema, schema,
             slotRange.startSlot(),

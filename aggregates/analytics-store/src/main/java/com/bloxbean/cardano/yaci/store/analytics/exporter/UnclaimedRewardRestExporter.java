@@ -76,7 +76,6 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
                 urr.slot
             FROM source_db.%s.unclaimed_reward_rest urr
             WHERE urr.earned_epoch = %d
-            ORDER BY urr.earned_epoch, urr.address
             """,
             schema,
             epoch

@@ -65,7 +65,6 @@ public class GovActionProposalStatusExporter extends AbstractTableExporter {
                 gaps.epoch
             FROM source_db.%s.gov_action_proposal_status gaps
             WHERE gaps.epoch = %d
-            ORDER BY gaps.epoch, gaps.gov_action_tx_hash, gaps.gov_action_index
             """,
             schema,
             epoch

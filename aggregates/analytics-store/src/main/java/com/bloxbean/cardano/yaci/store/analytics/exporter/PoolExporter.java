@@ -65,7 +65,7 @@ public class PoolExporter extends AbstractTableExporter {
             FROM source_db.%s.pool p
             WHERE p.slot >= %d
               AND p.slot < %d
-            ORDER BY p.slot, p.pool_id
+            ORDER BY p.slot
             """,
             schema,
             slotRange.startSlot(),
