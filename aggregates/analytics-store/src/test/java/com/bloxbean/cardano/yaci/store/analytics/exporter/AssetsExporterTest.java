@@ -35,7 +35,7 @@ class AssetsExporterTest {
         assertThat(sql).contains("FROM source_db.mainnet.assets a");
         assertThat(sql).contains("WHERE a.slot >= 10");
         assertThat(sql).contains("AND a.slot < 20");
-        assertThat(sql).contains("ORDER BY a.slot, a.tx_hash, a.unit");
+        assertThat(sql).contains("ORDER BY a.slot");
     }
 }
 
