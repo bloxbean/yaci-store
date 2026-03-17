@@ -1,12 +1,12 @@
 services:
   prometheus:
     image: prom/prometheus:v2.55.1
-    container_name: prometheus
+    container_name: prometheus-${INSTANCE_NAME:-default}
     restart: unless-stopped
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
-      - "9090:9090"
+      - "${MONITORING_PROMETHEUS_PORT:-9090}:9090"
     healthcheck:
       test: [ "CMD", "nc", "-z", "localhost", "9090" ]
     networks:
@@ -14,10 +14,10 @@ services:
 
   grafana:
     image: grafana/grafana:11.3.0
-    container_name: grafana
+    container_name: grafana-${INSTANCE_NAME:-default}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${MONITORING_GRAFANA_PORT:-3000}:3000"
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
@@ -41,4 +41,5 @@ services:
 
 networks:
   yaci-store-net:
+    name: yaci-store-net-${INSTANCE_NAME:-default}
     external: true
