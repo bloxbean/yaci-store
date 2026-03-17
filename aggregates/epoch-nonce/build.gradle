@@ -1,0 +1,29 @@
+dependencies {
+    api project(":components:common")
+    api project(':components:events')
+    api project(":components:core")
+    api project(":stores:blocks")
+
+    //Test dependencies
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testImplementation(libs.mapstruct)
+    testAnnotationProcessor(libs.mapstruct.processor)
+
+    testImplementation project(':starters:spring-boot-starter')
+    testImplementation project(':starters:blocks-spring-boot-starter')
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Epoch Nonce Module'
+                description = 'Yaci Store Epoch Nonce Module'
+            }
+        }
+    }
+}
