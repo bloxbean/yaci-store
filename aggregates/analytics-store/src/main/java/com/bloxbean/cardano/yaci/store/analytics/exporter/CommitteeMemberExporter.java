@@ -52,16 +52,18 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                cm.hash,
-                cm.cred_type,
-                cm.start_epoch,
-                cm.expired_epoch,
-                cm.epoch,
-                cm.slot,
-                cm.update_datetime
-            FROM source_db.%s.committee_member cm
-            WHERE cm.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    cm.hash,
+                    cm.cred_type,
+                    cm.start_epoch,
+                    cm.expired_epoch,
+                    cm.epoch,
+                    cm.slot,
+                    cm.update_datetime
+                FROM %s.committee_member cm
+                WHERE cm.epoch = %d
+            ')
             """,
             schema,
             epoch

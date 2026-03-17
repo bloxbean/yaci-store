@@ -49,15 +49,17 @@ public class InstantRewardExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                ir.address,
-                ir.type,
-                ir.amount,
-                ir.earned_epoch AS epoch,
-                ir.spendable_epoch,
-                ir.slot
-            FROM source_db.%s.instant_reward ir
-            WHERE ir.earned_epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ir.address,
+                    ir.type,
+                    ir.amount,
+                    ir.earned_epoch AS epoch,
+                    ir.spendable_epoch,
+                    ir.slot
+                FROM %s.instant_reward ir
+                WHERE ir.earned_epoch = %d
+            ')
             """,
             schema,
             epoch

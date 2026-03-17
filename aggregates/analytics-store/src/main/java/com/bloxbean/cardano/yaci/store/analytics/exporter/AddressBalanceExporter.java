@@ -56,32 +56,34 @@ public class AddressBalanceExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                address,
-                quantity,
-                unit,
-                to_timestamp(COALESCE(block_time, 0)) as block_time,
-                block,
-                epoch,
-                slot,
-                addr_full
-            FROM (
+            SELECT * FROM postgres_query('source_db', '
                 SELECT
                     address,
                     quantity,
                     unit,
-                    block_time,
+                    to_timestamp(COALESCE(block_time, 0)) as block_time,
                     block,
                     epoch,
                     slot,
-                    addr_full,
-                    ROW_NUMBER() OVER (PARTITION BY address, unit ORDER BY slot DESC) as rn
-                FROM source_db.%s.address_balance
-                WHERE slot >= %d
-                  AND slot < %d
-            ) ranked
-            WHERE rn = 1
-            ORDER BY slot
+                    addr_full
+                FROM (
+                    SELECT
+                        address,
+                        quantity,
+                        unit,
+                        block_time,
+                        block,
+                        epoch,
+                        slot,
+                        addr_full,
+                        ROW_NUMBER() OVER (PARTITION BY address, unit ORDER BY slot DESC) as rn
+                    FROM %s.address_balance
+                    WHERE slot >= %d
+                      AND slot < %d
+                ) ranked
+                WHERE rn = 1
+                ORDER BY slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

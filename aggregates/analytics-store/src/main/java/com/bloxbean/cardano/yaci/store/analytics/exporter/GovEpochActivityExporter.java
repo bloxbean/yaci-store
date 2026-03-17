@@ -56,12 +56,14 @@ public class GovEpochActivityExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                gea.epoch,
-                gea.dormant,
-                gea.dormant_epoch_count
-            FROM source_db.%s.gov_epoch_activity gea
-            WHERE gea.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    gea.epoch,
+                    gea.dormant,
+                    gea.dormant_epoch_count
+                FROM %s.gov_epoch_activity gea
+                WHERE gea.epoch = %d
+            ')
             """,
             schema,
             epoch

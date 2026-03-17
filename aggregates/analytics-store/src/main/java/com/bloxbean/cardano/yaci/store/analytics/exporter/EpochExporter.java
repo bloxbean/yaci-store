@@ -49,17 +49,19 @@ public class EpochExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                e.number AS epoch,
-                e.block_count,
-                e.transaction_count,
-                e.total_output,
-                e.total_fees,
-                e.start_time,
-                e.end_time,
-                e.max_slot
-            FROM source_db.%s.epoch e
-            WHERE e.number = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    e.number AS epoch,
+                    e.block_count,
+                    e.transaction_count,
+                    e.total_output,
+                    e.total_fees,
+                    e.start_time,
+                    e.end_time,
+                    e.max_slot
+                FROM %s.epoch e
+                WHERE e.number = %d
+            ')
             """,
             schema,
             epoch

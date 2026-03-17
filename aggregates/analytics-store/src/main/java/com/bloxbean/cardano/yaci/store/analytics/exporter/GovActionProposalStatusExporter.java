@@ -56,15 +56,17 @@ public class GovActionProposalStatusExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                gaps.gov_action_tx_hash,
-                gaps.gov_action_index,
-                gaps.type,
-                gaps.status,
-                gaps.voting_stats,
-                gaps.epoch
-            FROM source_db.%s.gov_action_proposal_status gaps
-            WHERE gaps.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    gaps.gov_action_tx_hash,
+                    gaps.gov_action_index,
+                    gaps.type,
+                    gaps.status,
+                    gaps.voting_stats,
+                    gaps.epoch
+                FROM %s.gov_action_proposal_status gaps
+                WHERE gaps.epoch = %d
+            ')
             """,
             schema,
             epoch

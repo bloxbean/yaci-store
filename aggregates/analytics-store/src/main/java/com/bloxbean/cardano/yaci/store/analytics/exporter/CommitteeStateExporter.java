@@ -55,11 +55,13 @@ public class CommitteeStateExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                cs.epoch,
-                cs.state
-            FROM source_db.%s.committee_state cs
-            WHERE cs.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    cs.epoch,
+                    cs.state
+                FROM %s.committee_state cs
+                WHERE cs.epoch = %d
+            ')
             """,
             schema,
             epoch

@@ -44,35 +44,37 @@ public class BlockExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                b.hash,
-                b.number,
-                b.body_hash,
-                b.body_size,
-                b.epoch,
-                CAST(b.total_output AS DECIMAL(38,0)) as total_output,
-                b.total_fees,
-                to_timestamp(COALESCE(b.block_time, 0)) as block_time,
-                b.era,
-                b.issuer_vkey,
-                b.leader_vrf,
-                b.nonce_vrf,
-                b.prev_hash,
-                b.protocol_version,
-                b.slot,
-                b.vrf_result,
-                b.vrf_vkey,
-                b.no_of_txs,
-                b.slot_leader,
-                b.epoch_slot,
-                b.op_cert_hot_vkey,
-                b.op_cert_seq_number,
-                b.op_cert_kes_period,
-                b.op_cert_sigma
-            FROM source_db.%s.block b
-            WHERE b.slot >= %d
-              AND b.slot < %d
-            ORDER BY b.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    b.hash,
+                    b.number,
+                    b.body_hash,
+                    b.body_size,
+                    b.epoch,
+                    CAST(b.total_output AS DECIMAL(38,0)) as total_output,
+                    b.total_fees,
+                    to_timestamp(COALESCE(b.block_time, 0)) as block_time,
+                    b.era,
+                    b.issuer_vkey,
+                    b.leader_vrf,
+                    b.nonce_vrf,
+                    b.prev_hash,
+                    b.protocol_version,
+                    b.slot,
+                    b.vrf_result,
+                    b.vrf_vkey,
+                    b.no_of_txs,
+                    b.slot_leader,
+                    b.epoch_slot,
+                    b.op_cert_hot_vkey,
+                    b.op_cert_seq_number,
+                    b.op_cert_kes_period,
+                    b.op_cert_sigma
+                FROM %s.block b
+                WHERE b.slot >= %d
+                  AND b.slot < %d
+                ORDER BY b.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

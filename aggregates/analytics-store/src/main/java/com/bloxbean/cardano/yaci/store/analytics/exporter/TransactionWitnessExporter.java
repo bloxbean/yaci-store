@@ -44,25 +44,27 @@ public class TransactionWitnessExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                tw.tx_hash,
-                tw.idx,
-                tw.pub_key,
-                tw.signature,
-                tw.pub_keyhash,
-                tw.type,
-                tw.additional_data,
-                tw.slot,
-                t.block_hash,
-                t.block,
-                t.epoch,
-                to_timestamp(COALESCE(t.block_time, 0)) as block_time
-            FROM source_db.%s.transaction_witness tw
-            INNER JOIN source_db.%s.transaction t
-                ON t.tx_hash = tw.tx_hash
-            WHERE tw.slot >= %d
-              AND tw.slot < %d
-            ORDER BY tw.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    tw.tx_hash,
+                    tw.idx,
+                    tw.pub_key,
+                    tw.signature,
+                    tw.pub_keyhash,
+                    tw.type,
+                    tw.additional_data,
+                    tw.slot,
+                    t.block_hash,
+                    t.block,
+                    t.epoch,
+                    to_timestamp(COALESCE(t.block_time, 0)) as block_time
+                FROM %s.transaction_witness tw
+                INNER JOIN %s.transaction t
+                    ON t.tx_hash = tw.tx_hash
+                WHERE tw.slot >= %d
+                  AND tw.slot < %d
+                ORDER BY tw.slot
+            ')
             """,
             schema, schema,
             slotRange.startSlot(),

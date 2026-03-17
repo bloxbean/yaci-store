@@ -44,18 +44,20 @@ public class WithdrawalExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                w.tx_hash,
-                w.address,
-                w.amount,
-                w.epoch,
-                w.slot,
-                w.block,
-                to_timestamp(COALESCE(w.block_time, 0)) as block_time
-            FROM source_db.%s.withdrawal w
-            WHERE w.slot >= %d
-              AND w.slot < %d
-            ORDER BY w.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    w.tx_hash,
+                    w.address,
+                    w.amount,
+                    w.epoch,
+                    w.slot,
+                    w.block,
+                    to_timestamp(COALESCE(w.block_time, 0)) as block_time
+                FROM %s.withdrawal w
+                WHERE w.slot >= %d
+                  AND w.slot < %d
+                ORDER BY w.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

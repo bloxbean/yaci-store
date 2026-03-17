@@ -44,24 +44,26 @@ public class GovActionProposalExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                gap.tx_hash,
-                gap.idx,
-                gap.tx_index,
-                gap.slot,
-                gap.deposit,
-                gap.return_address,
-                gap.type,
-                gap.details::text as details,
-                gap.anchor_url,
-                gap.anchor_hash,
-                gap.epoch,
-                gap.block,
-                to_timestamp(COALESCE(gap.block_time, 0)) as block_time
-            FROM source_db.%s.gov_action_proposal gap
-            WHERE gap.slot >= %d
-              AND gap.slot < %d
-            ORDER BY gap.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    gap.tx_hash,
+                    gap.idx,
+                    gap.tx_index,
+                    gap.slot,
+                    gap.deposit,
+                    gap.return_address,
+                    gap.type,
+                    gap.details::text as details,
+                    gap.anchor_url,
+                    gap.anchor_hash,
+                    gap.epoch,
+                    gap.block,
+                    to_timestamp(COALESCE(gap.block_time, 0)) as block_time
+                FROM %s.gov_action_proposal gap
+                WHERE gap.slot >= %d
+                  AND gap.slot < %d
+                ORDER BY gap.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),
