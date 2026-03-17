@@ -86,7 +86,7 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
             FROM source_db.%s.address_utxo_flattened
             WHERE slot >= %d
               AND slot < %d
-            ORDER BY slot, tx_hash, output_index
+            ORDER BY slot
             """,
             schema,
             slotRange.startSlot(),

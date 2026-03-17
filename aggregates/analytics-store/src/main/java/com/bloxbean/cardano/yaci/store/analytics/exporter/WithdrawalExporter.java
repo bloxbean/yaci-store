@@ -55,7 +55,7 @@ public class WithdrawalExporter extends AbstractTableExporter {
             FROM source_db.%s.withdrawal w
             WHERE w.slot >= %d
               AND w.slot < %d
-            ORDER BY w.slot, w.tx_hash, w.address
+            ORDER BY w.slot
             """,
             schema,
             slotRange.startSlot(),

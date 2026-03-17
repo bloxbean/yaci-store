@@ -74,7 +74,7 @@ public class RollbackExporter extends AbstractTableExporter {
             INNER JOIN source_db.%s.block b ON r.current_slot = b.slot
             WHERE r.current_slot >= %d
               AND r.current_slot < %d
-            ORDER BY r.current_slot, r.id
+            ORDER BY r.current_slot
             """,
             schema, schema,
             slotRange.startSlot(),

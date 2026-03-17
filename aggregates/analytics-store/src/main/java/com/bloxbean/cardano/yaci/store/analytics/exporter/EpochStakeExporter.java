@@ -68,7 +68,6 @@ public class EpochStakeExporter extends AbstractTableExporter {
                     es.active_epoch
                 FROM %s.epoch_stake es
                 WHERE es.epoch = %d
-                ORDER BY es.epoch, es.address
             ')
             """,
             schema,

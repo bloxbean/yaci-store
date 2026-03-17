@@ -60,7 +60,6 @@ public class CommitteeStateExporter extends AbstractTableExporter {
                 cs.state
             FROM source_db.%s.committee_state cs
             WHERE cs.epoch = %d
-            ORDER BY cs.epoch
             """,
             schema,
             epoch

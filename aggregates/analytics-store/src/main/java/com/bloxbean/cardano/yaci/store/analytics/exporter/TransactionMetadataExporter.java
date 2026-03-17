@@ -58,7 +58,7 @@ public class TransactionMetadataExporter extends AbstractTableExporter {
                 FROM %s.transaction_metadata tm
                 WHERE tm.slot >= %d
                   AND tm.slot < %d
-                ORDER BY tm.slot, tm.tx_hash
+                ORDER BY tm.slot
             ')
             """,
             schema,

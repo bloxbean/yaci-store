@@ -66,7 +66,6 @@ public class CommitteeExporter extends AbstractTableExporter {
                 c.slot
             FROM source_db.%s.committee c
             WHERE c.epoch = %d
-            ORDER BY c.epoch
             """,
             schema,
             epoch

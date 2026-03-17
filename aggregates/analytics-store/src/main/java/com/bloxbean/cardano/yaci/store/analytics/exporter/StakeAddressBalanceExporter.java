@@ -68,7 +68,7 @@ public class StakeAddressBalanceExporter extends AbstractTableExporter {
                   AND slot < %d
             ) ranked
             WHERE rn = 1
-            ORDER BY address
+            ORDER BY slot
             """,
             schema,
             slotRange.startSlot(),

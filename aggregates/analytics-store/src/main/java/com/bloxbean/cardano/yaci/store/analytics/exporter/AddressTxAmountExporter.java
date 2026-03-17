@@ -58,7 +58,7 @@ public class AddressTxAmountExporter extends AbstractTableExporter {
             FROM source_db.%s.address_tx_amount ata
             WHERE ata.slot >= %d
               AND ata.slot < %d
-            ORDER BY ata.slot, ata.address, ata.unit, ata.tx_hash
+            ORDER BY ata.slot
             """,
             schema,
             slotRange.startSlot(),

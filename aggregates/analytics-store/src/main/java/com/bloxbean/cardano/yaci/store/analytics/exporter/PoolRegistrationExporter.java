@@ -65,7 +65,7 @@ public class PoolRegistrationExporter extends AbstractTableExporter {
             FROM source_db.%s.pool_registration pr
             WHERE pr.slot >= %d
               AND pr.slot < %d
-            ORDER BY pr.slot, pr.tx_hash, pr.cert_index
+            ORDER BY pr.slot
             """,
             schema,
             slotRange.startSlot(),

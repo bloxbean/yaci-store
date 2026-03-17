@@ -62,7 +62,7 @@ public class VotingProcedureExporter extends AbstractTableExporter {
             FROM source_db.%s.voting_procedure vp
             WHERE vp.slot >= %d
               AND vp.slot < %d
-            ORDER BY vp.slot, vp.tx_hash, vp.idx
+            ORDER BY vp.slot
             """,
             schema,
             slotRange.startSlot(),

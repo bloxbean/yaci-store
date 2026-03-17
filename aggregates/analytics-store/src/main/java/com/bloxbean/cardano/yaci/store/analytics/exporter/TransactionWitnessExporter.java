@@ -62,7 +62,7 @@ public class TransactionWitnessExporter extends AbstractTableExporter {
                 ON t.tx_hash = tw.tx_hash
             WHERE tw.slot >= %d
               AND tw.slot < %d
-            ORDER BY tw.slot, tw.tx_hash, tw.idx
+            ORDER BY tw.slot
             """,
             schema, schema,
             slotRange.startSlot(),

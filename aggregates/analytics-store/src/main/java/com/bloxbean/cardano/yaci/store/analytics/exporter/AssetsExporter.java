@@ -59,7 +59,7 @@ public class AssetsExporter extends AbstractTableExporter {
             FROM source_db.%s.assets a
             WHERE a.slot >= %d
               AND a.slot < %d
-            ORDER BY a.slot, a.tx_hash, a.unit
+            ORDER BY a.slot
             """,
             schema,
             slotRange.startSlot(),

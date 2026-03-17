@@ -60,7 +60,7 @@ public class StakeRegistrationExporter extends AbstractTableExporter {
             FROM source_db.%s.stake_registration sr
             WHERE sr.slot >= %d
               AND sr.slot < %d
-            ORDER BY sr.slot, sr.tx_index, sr.cert_index
+            ORDER BY sr.slot
             """,
             schema,
             slotRange.startSlot(),

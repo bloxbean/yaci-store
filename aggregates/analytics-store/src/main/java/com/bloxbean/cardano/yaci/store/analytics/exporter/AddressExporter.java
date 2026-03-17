@@ -70,7 +70,7 @@ public class AddressExporter extends AbstractTableExporter {
             INNER JOIN source_db.%s.block b ON a.slot = b.slot
             WHERE a.slot >= %d
               AND a.slot < %d
-            ORDER BY a.slot, a.address
+            ORDER BY a.slot
             """,
             schema, schema,
             slotRange.startSlot(),

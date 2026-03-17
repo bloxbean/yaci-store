@@ -66,7 +66,6 @@ public class DRepDistExporter extends AbstractTableExporter {
                 dd.expiry
             FROM source_db.%s.drep_dist dd
             WHERE dd.epoch = %d
-            ORDER BY dd.epoch, dd.drep_hash
             """,
             schema,
             epoch

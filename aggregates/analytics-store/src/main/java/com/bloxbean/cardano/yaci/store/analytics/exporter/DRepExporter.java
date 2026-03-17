@@ -64,7 +64,7 @@ public class DRepExporter extends AbstractTableExporter {
             FROM source_db.%s.drep d
             WHERE d.slot >= %d
               AND d.slot < %d
-            ORDER BY d.slot, d.drep_hash
+            ORDER BY d.slot
             """,
             schema,
             slotRange.startSlot(),

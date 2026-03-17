@@ -59,7 +59,7 @@ public class CommitteeDeRegistrationExporter extends AbstractTableExporter {
             FROM source_db.%s.committee_deregistration cd
             WHERE cd.slot >= %d
               AND cd.slot < %d
-            ORDER BY cd.slot, cd.tx_hash, cd.cert_index
+            ORDER BY cd.slot
             """,
             schema,
             slotRange.startSlot(),
