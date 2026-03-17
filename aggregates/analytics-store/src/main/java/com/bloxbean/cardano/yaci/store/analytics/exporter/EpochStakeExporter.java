@@ -58,15 +58,17 @@ public class EpochStakeExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                es.epoch,
-                es.address,
-                es.amount,
-                es.pool_id,
-                es.delegation_epoch,
-                es.active_epoch
-            FROM source_db.%s.epoch_stake es
-            WHERE es.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    es.epoch,
+                    es.address,
+                    es.amount,
+                    es.pool_id,
+                    es.delegation_epoch,
+                    es.active_epoch
+                FROM %s.epoch_stake es
+                WHERE es.epoch = %d
+            ')
             """,
             schema,
             epoch

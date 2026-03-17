@@ -44,20 +44,22 @@ public class TransactionMetadataExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                tm.id,
-                tm.slot,
-                tm.tx_hash,
-                tm.label,
-                tm.body,
-                tm.cbor,
-                tm.block,
-                to_timestamp(COALESCE(tm.block_time, 0)) as block_time,
-                tm.update_datetime
-            FROM source_db.%s.transaction_metadata tm
-            WHERE tm.slot >= %d
-              AND tm.slot < %d
-            ORDER BY tm.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    tm.id,
+                    tm.slot,
+                    tm.tx_hash,
+                    tm.label,
+                    tm.body,
+                    tm.cbor,
+                    tm.block,
+                    to_timestamp(COALESCE(tm.block_time, 0)) as block_time,
+                    tm.update_datetime
+                FROM %s.transaction_metadata tm
+                WHERE tm.slot >= %d
+                  AND tm.slot < %d
+                ORDER BY tm.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),
