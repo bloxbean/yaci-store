@@ -74,26 +74,28 @@ Whitespace and formatting matter — the file must be byte-for-byte identical to
 
 ## Key Parameters
 
-| Parameter | Formula | Preprod | Mainnet |
-|-----------|---------|---------|---------|
-| stabilityWindow (for nonce) | floor(3 * k / f) | 129,600 | 129,600 |
+| Parameter | Formula | Pre-Conway | Conway+ |
+|-----------|---------|------------|---------|
+| stabilityWindow (for nonce) | see below | floor(3k/f) = 129,600 | ceiling(4k/f) = 172,800 |
 | epochLength | from genesis | 432,000 | 432,000 |
 | securityParam (k) | from genesis | 2,160 | 2,160 |
 | activeSlotsCoeff (f) | from genesis | 0.05 | 0.05 |
 
-**Important — naming confusion in the Cardano codebase:**
+### Era-dependent stability window
 
-The Haskell source defines two stability windows in `StabilityWindow.hs`:
+The stability window used for the candidate nonce freeze cutoff changed at the Conway hard fork:
 
-| Haskell function | Formula | Value (k=2160, f=0.05) |
-|---------|---------|------------------------|
-| `computeRandomnessStabilisationWindow` | `ceiling(4k/f)` | 172,800 (48h) |
-| `computeStabilityWindow` | `ceiling(3k/f)` | 129,600 (36h) |
+| Era | Haskell function | Formula | Value (k=2160, f=0.05) |
+|-----|---------|---------|------------------------|
+| Shelley through Babbage | `computeStabilityWindow` | `floor(3k/f)` | 129,600 (36h) |
+| Conway+ | `computeRandomnessStabilisationWindow` | `ceiling(4k/f)` | 172,800 (48h) |
 
-Despite the naming, the consensus layer's `PraosParams.praosRandomnessStabilisationWindow` field is
-actually populated with `computeStabilityWindow` (3k/f), not `computeRandomnessStabilisationWindow` (4k/f).
-This implementation uses `floor(3k/f)` for the candidate nonce freeze cutoff, which has been
-**empirically verified against dbsync for 30+ preprod epochs**.
+This change was introduced in **ouroboros-consensus v0.15.0.0** (backwards-incompatible), which set
+Conway's `praosRandomnessStabilisationWindow` to `computeRandomnessStabilisationWindow` (ceiling(4k/f))
+instead of the previous `computeStabilityWindow` (3k/f). See also **cardano-ledger erratum 17.3**.
+
+For pre-Conway eras, the consensus layer's `PraosParams.praosRandomnessStabilisationWindow` field was
+populated with `computeStabilityWindow` (3k/f) despite the naming suggesting otherwise.
 
 ## State Model
 
@@ -127,4 +129,5 @@ The implementation follows these Haskell modules in the Cardano codebase:
 
 ## Verified Against
 
-Epoch nonce values have been empirically verified against Cardano dbsync for preprod epochs 4-30+.
+Epoch nonce values have been empirically verified against Cardano dbsync for preprod epochs 4–163+
+(spanning pre-Conway and Conway eras).
