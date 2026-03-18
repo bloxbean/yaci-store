@@ -11,6 +11,8 @@ import com.bloxbean.cardano.yaci.store.epochnonce.domain.EpochNonce;
 import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorage;
 import com.bloxbean.cardano.yaci.store.epochnonce.util.EpochNonceConfig;
 import com.bloxbean.cardano.yaci.store.epochnonce.util.NonceUtil;
+import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.store.core.storage.impl.EraMapper;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +29,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class EpochNonceService {
-    // Babbage era value — Praos starts at era >= 6 (Babbage).
+    // Praos starts at era >= Babbage (6).
     // Shelley(2), Allegra(3), Mary(4), Alonzo(5) use TPraos.
-    private static final int BABBAGE_ERA = 6;
 
     private final BlockStorageReader blockStorageReader;
     private final EpochNonceStorage epochNonceStorage;
@@ -62,8 +63,20 @@ public class EpochNonceService {
             List<Block> blocks = blockStorageReader.findBlocksByEpoch(completedEpoch);
             blocks.sort(Comparator.comparingLong(Block::getSlot));
 
-            long stabilityWindow = epochNonceConfig.getStabilityWindow();
+            // Determine epoch era from first block to select the correct stability window
+            Era epochEra = (!blocks.isEmpty() && blocks.get(0).getEra() != null)
+                    ? EraMapper.intToEra(blocks.get(0).getEra())
+                    : null;
+
+            long stabilityWindow = epochNonceConfig.getStabilityWindow(epochEra);
             long epochLength = epochNonceConfig.getEpochLength();
+
+            // Compute first slot of next epoch once (same for all blocks in this epoch)
+            long firstSlotNextEpoch = !blocks.isEmpty()
+                    ? (blocks.get(0).getSlot() - blocks.get(0).getEpochSlot()) + epochLength
+                    : 0;
+
+            log.debug("Epoch {} era={}, stabilityWindow={}", completedEpoch, epochEra, stabilityWindow);
 
             // Process each block — evolving/candidate update continuously
             for (Block block : blocks) {
@@ -74,7 +87,7 @@ public class EpochNonceService {
 
                 // Era-aware VRF nonce derivation
                 byte[] eta;
-                if (block.getEra() != null && block.getEra() >= BABBAGE_ERA) {
+                if (block.getEra() != null && block.getEra() >= Era.Babbage.getValue()) {
                     eta = NonceUtil.vrfNonceValue(vrfOutput);        // Praos: Blake2b(Blake2b("N" || vrf))
                 } else {
                     eta = NonceUtil.vrfNonceValueTPraos(vrfOutput);   // TPraos: Blake2b(vrf)
@@ -82,8 +95,6 @@ public class EpochNonceService {
 
                 evolvingNonce = NonceUtil.combineNonces(evolvingNonce, eta);
 
-                // Calculate first slot of next epoch
-                long firstSlotNextEpoch = (block.getSlot() - block.getEpochSlot()) + epochLength;
                 if (block.getSlot() + stabilityWindow < firstSlotNextEpoch) {
                     candidateNonce = evolvingNonce;
                 }
