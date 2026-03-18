@@ -142,6 +142,7 @@ public class TableExporterRegistry {
      * Check if a table is enabled in configuration.
      *
      * Tables are enabled if:
+     * - yaci.store.analytics.exporter.<name>.enabled is not explicitly set to false, AND
      * - yaci.store.analytics.enabled-tables is empty (all enabled), OR
      * - yaci.store.analytics.enabled-tables contains the table name
      *
@@ -149,8 +150,15 @@ public class TableExporterRegistry {
      * @return true if table is enabled
      */
     public boolean isEnabled(String tableName) {
+        // Per-exporter flag: yaci.store.analytics.exporter.<name>.enabled=false disables the exporter
+        AnalyticsStoreProperties.ExporterConfig exporterConfig =
+                properties.getExporter().get(tableName);
+        if (exporterConfig != null && !exporterConfig.isEnabled()) {
+            return false;
+        }
+
+        // Existing whitelist: empty = all enabled
         Set<String> enabledTables = properties.getEnabledTables();
-        // Empty set means all tables are enabled
         return enabledTables.isEmpty() || enabledTables.contains(tableName);
     }
 
