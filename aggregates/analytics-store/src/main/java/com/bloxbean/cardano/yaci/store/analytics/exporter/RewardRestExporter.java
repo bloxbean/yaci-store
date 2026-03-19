@@ -67,16 +67,18 @@ public class RewardRestExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
 
         return String.format("""
-            SELECT
-                rr.id,
-                rr.address,
-                rr.type,
-                rr.earned_epoch as epoch,
-                rr.amount,
-                rr.spendable_epoch,
-                rr.slot
-            FROM source_db.%s.reward_rest rr
-            WHERE rr.earned_epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    rr.id,
+                    rr.address,
+                    rr.type,
+                    rr.earned_epoch as epoch,
+                    rr.amount,
+                    rr.spendable_epoch,
+                    rr.slot
+                FROM %s.reward_rest rr
+                WHERE rr.earned_epoch = %d
+            ')
             """,
             schema,
             epoch

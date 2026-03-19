@@ -44,25 +44,27 @@ public class VotingProcedureExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                vp.tx_hash,
-                vp.idx,
-                vp.tx_index,
-                vp.slot,
-                vp.voter_type,
-                vp.voter_hash,
-                vp.gov_action_tx_hash,
-                vp.gov_action_index,
-                vp.vote,
-                vp.anchor_url,
-                vp.anchor_hash,
-                vp.epoch,
-                vp.block,
-                to_timestamp(COALESCE(vp.block_time, 0)) as block_time
-            FROM source_db.%s.voting_procedure vp
-            WHERE vp.slot >= %d
-              AND vp.slot < %d
-            ORDER BY vp.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    vp.tx_hash,
+                    vp.idx,
+                    vp.tx_index,
+                    vp.slot,
+                    vp.voter_type,
+                    vp.voter_hash,
+                    vp.gov_action_tx_hash,
+                    vp.gov_action_index,
+                    vp.vote,
+                    vp.anchor_url,
+                    vp.anchor_hash,
+                    vp.epoch,
+                    vp.block,
+                    to_timestamp(COALESCE(vp.block_time, 0)) as block_time
+                FROM %s.voting_procedure vp
+                WHERE vp.slot >= %d
+                  AND vp.slot < %d
+                ORDER BY vp.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

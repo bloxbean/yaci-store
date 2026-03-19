@@ -56,17 +56,19 @@ public class InvalidTransactionExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                it.tx_hash,
-                it.slot,
-                it.block_hash,
-                it.transaction::text as transaction,
-                to_timestamp(COALESCE(b.block_time, 0)) as block_time
-            FROM source_db.%s.invalid_transaction it
-            INNER JOIN source_db.%s.block b ON it.slot = b.slot
-            WHERE it.slot >= %d
-              AND it.slot < %d
-            ORDER BY it.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    it.tx_hash,
+                    it.slot,
+                    it.block_hash,
+                    it.transaction::text as transaction,
+                    to_timestamp(COALESCE(b.block_time, 0)) as block_time
+                FROM %s.invalid_transaction it
+                INNER JOIN %s.block b ON it.slot = b.slot
+                WHERE it.slot >= %d
+                  AND it.slot < %d
+                ORDER BY it.slot
+            ')
             """,
             schema, schema,
             slotRange.startSlot(),

@@ -66,16 +66,18 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
 
         return String.format("""
-            SELECT
-                urr.id,
-                urr.address,
-                urr.type,
-                urr.earned_epoch as epoch,
-                urr.amount,
-                urr.spendable_epoch,
-                urr.slot
-            FROM source_db.%s.unclaimed_reward_rest urr
-            WHERE urr.earned_epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    urr.id,
+                    urr.address,
+                    urr.type,
+                    urr.earned_epoch as epoch,
+                    urr.amount,
+                    urr.spendable_epoch,
+                    urr.slot
+                FROM %s.unclaimed_reward_rest urr
+                WHERE urr.earned_epoch = %d
+            ')
             """,
             schema,
             epoch

@@ -63,21 +63,23 @@ public class AdaPotExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                ap.epoch,
-                ap.slot,
-                ap.deposits_stake,
-                ap.fees,
-                ap.utxo,
-                ap.treasury,
-                ap.reserves,
-                ap.circulation,
-                ap.distributed_rewards,
-                ap.undistributed_rewards,
-                ap.rewards_pot,
-                ap.pool_rewards_pot
-            FROM source_db.%s.adapot ap
-            WHERE ap.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ap.epoch,
+                    ap.slot,
+                    ap.deposits_stake,
+                    ap.fees,
+                    ap.utxo,
+                    ap.treasury,
+                    ap.reserves,
+                    ap.circulation,
+                    ap.distributed_rewards,
+                    ap.undistributed_rewards,
+                    ap.rewards_pot,
+                    ap.pool_rewards_pot
+                FROM %s.adapot ap
+                WHERE ap.epoch = %d
+            ')
             """,
             schema,
             epoch

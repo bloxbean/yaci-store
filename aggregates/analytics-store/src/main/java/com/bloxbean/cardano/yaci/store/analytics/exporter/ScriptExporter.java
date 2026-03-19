@@ -50,16 +50,18 @@ public class ScriptExporter extends AbstractTableExporter {
         String schema = getSourceSchema();
         String dateStr = ((PartitionValue.DatePartition) partition).date().toString();
         return String.format("""
-            SELECT
-                s.script_hash,
-                s.script_type,
-                s.content,
-                s.slot,
-                CAST('%s' AS DATE) as block_date
-            FROM source_db.%s.script s
-            WHERE s.slot >= %d
-              AND s.slot < %d
-            ORDER BY s.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    s.script_hash,
+                    s.script_type,
+                    s.content,
+                    s.slot,
+                    CAST(''%s'' AS DATE) as block_date
+                FROM %s.script s
+                WHERE s.slot >= %d
+                  AND s.slot < %d
+                ORDER BY s.slot
+            ')
             """,
             dateStr, schema,
             slotRange.startSlot(),

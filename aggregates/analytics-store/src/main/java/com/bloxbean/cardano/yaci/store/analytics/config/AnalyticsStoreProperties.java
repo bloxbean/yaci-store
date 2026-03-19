@@ -4,8 +4,10 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @ConfigurationProperties(prefix = "yaci.store.analytics")
@@ -40,6 +42,21 @@ public class AnalyticsStoreProperties {
     private Set<String> enabledTables = new HashSet<>();
 
     private List<CustomExporterConfig> customExporters = new ArrayList<>();
+
+    /**
+     * Per-exporter enable/disable flags (enabled by default).
+     *
+     * Key = table name (e.g., "reward", "epoch_stake").
+     * Example:
+     *   yaci.store.analytics.exporter.reward.enabled=false
+     *   yaci.store.analytics.exporter.epoch_stake.enabled=false
+     */
+    private Map<String, ExporterConfig> exporter = new HashMap<>();
+
+    @Data
+    public static class ExporterConfig {
+        private boolean enabled = true;
+    }
 
     private StateManagement stateManagement = new StateManagement();
     private ContinuousSync continuousSync = new ContinuousSync();

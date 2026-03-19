@@ -62,19 +62,21 @@ public class RollbackExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                r.id,
-                r.rollback_to_block_hash,
-                r.rollback_to_slot,
-                r.current_block_hash,
-                r.current_slot,
-                r.current_block,
-                to_timestamp(COALESCE(b.block_time, 0)) as block_time
-            FROM source_db.%s.rollback r
-            INNER JOIN source_db.%s.block b ON r.current_slot = b.slot
-            WHERE r.current_slot >= %d
-              AND r.current_slot < %d
-            ORDER BY r.current_slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    r.id,
+                    r.rollback_to_block_hash,
+                    r.rollback_to_slot,
+                    r.current_block_hash,
+                    r.current_slot,
+                    r.current_block,
+                    to_timestamp(COALESCE(b.block_time, 0)) as block_time
+                FROM %s.rollback r
+                INNER JOIN %s.block b ON r.current_slot = b.slot
+                WHERE r.current_slot >= %d
+                  AND r.current_slot < %d
+                ORDER BY r.current_slot
+            ')
             """,
             schema, schema,
             slotRange.startSlot(),

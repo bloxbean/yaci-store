@@ -63,15 +63,17 @@ public class EpochParamExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                ep.epoch,
-                ep.params,
-                ep.cost_model_hash,
-                ep.slot,
-                ep.block,
-                to_timestamp(COALESCE(ep.block_time, 0)) as block_time
-            FROM source_db.%s.epoch_param ep
-            WHERE ep.epoch = %d
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ep.epoch,
+                    ep.params,
+                    ep.cost_model_hash,
+                    ep.slot,
+                    ep.block,
+                    to_timestamp(COALESCE(ep.block_time, 0)) as block_time
+                FROM %s.epoch_param ep
+                WHERE ep.epoch = %d
+            ')
             """,
             schema,
             epoch

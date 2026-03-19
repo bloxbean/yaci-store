@@ -44,22 +44,24 @@ public class CommitteeDeRegistrationExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                cd.tx_hash,
-                cd.cert_index,
-                cd.tx_index,
-                cd.slot,
-                cd.anchor_url,
-                cd.anchor_hash,
-                cd.cold_key,
-                cd.cred_type,
-                cd.epoch,
-                cd.block,
-                to_timestamp(COALESCE(cd.block_time, 0)) as block_time
-            FROM source_db.%s.committee_deregistration cd
-            WHERE cd.slot >= %d
-              AND cd.slot < %d
-            ORDER BY cd.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    cd.tx_hash,
+                    cd.cert_index,
+                    cd.tx_index,
+                    cd.slot,
+                    cd.anchor_url,
+                    cd.anchor_hash,
+                    cd.cold_key,
+                    cd.cred_type,
+                    cd.epoch,
+                    cd.block,
+                    to_timestamp(COALESCE(cd.block_time, 0)) as block_time
+                FROM %s.committee_deregistration cd
+                WHERE cd.slot >= %d
+                  AND cd.slot < %d
+                ORDER BY cd.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

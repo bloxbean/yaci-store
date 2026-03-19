@@ -59,18 +59,20 @@ public class AddressExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                a.address,
-                a.addr_full,
-                a.payment_credential,
-                a.stake_address,
-                a.slot,
-                to_timestamp(COALESCE(b.block_time, 0)) as block_time
-            FROM source_db.%s.address a
-            INNER JOIN source_db.%s.block b ON a.slot = b.slot
-            WHERE a.slot >= %d
-              AND a.slot < %d
-            ORDER BY a.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    a.address,
+                    a.addr_full,
+                    a.payment_credential,
+                    a.stake_address,
+                    a.slot,
+                    to_timestamp(COALESCE(b.block_time, 0)) as block_time
+                FROM %s.address a
+                INNER JOIN %s.block b ON a.slot = b.slot
+                WHERE a.slot >= %d
+                  AND a.slot < %d
+                ORDER BY a.slot
+            ')
             """,
             schema, schema,
             slotRange.startSlot(),

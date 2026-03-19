@@ -17,11 +17,14 @@ import lombok.extern.slf4j.Slf4j;
  *
  * Query templates support the following placeholders:
  * <ul>
- *   <li>{@code {source}} — replaced with {@code source_db.{schema}}</li>
+ *   <li>{@code {source}} — replaced with the schema name (e.g., {@code mainnet})</li>
  *   <li>{@code {start_slot}} — slot range start (inclusive)</li>
  *   <li>{@code {end_slot}} — slot range end (exclusive)</li>
  *   <li>{@code {epoch}} — epoch number (EPOCH strategy only)</li>
  * </ul>
+ *
+ * The resolved query is automatically wrapped in {@code postgres_query('source_db', '...')}
+ * to ensure DuckDB pushes filtering down to PostgreSQL instead of performing full table scans.
  */
 @Slf4j
 public class CustomTableExporter extends AbstractTableExporter {
@@ -71,9 +74,9 @@ public class CustomTableExporter extends AbstractTableExporter {
 
     @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
-        String source = "source_db." + getSourceSchema();
+        String schema = getSourceSchema();
         String resolvedQuery = queryTemplate
-                .replace("{source}", source)
+                .replace("{source}", schema)
                 .replace("{start_slot}", String.valueOf(slotRange.startSlot()))
                 .replace("{end_slot}", String.valueOf(slotRange.endSlot()));
 
@@ -81,6 +84,8 @@ public class CustomTableExporter extends AbstractTableExporter {
             resolvedQuery = resolvedQuery.replace("{epoch}", String.valueOf(ep.epoch()));
         }
 
-        return resolvedQuery;
+        // Escape single quotes for postgres_query wrapper
+        resolvedQuery = resolvedQuery.replace("'", "''");
+        return String.format("SELECT * FROM postgres_query('source_db', '%s')", resolvedQuery);
     }
 }

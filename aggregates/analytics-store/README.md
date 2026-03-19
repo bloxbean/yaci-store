@@ -284,11 +284,24 @@ The module includes 50+ table exporters covering all indexed Cardano data. Each 
 
 ### Selecting specific tables
 
-Export only the tables you need:
+There are two ways to control which tables are exported:
+
+**Option 1 — Whitelist (enable only specific tables):**
 
 ```properties
-yaci.store.analytics.enabled-tables=transactions,transaction_outputs,blocks,address_balance
+# Only these tables will be exported; all others are skipped
+yaci.store.analytics.enabled-tables=transaction,transaction_outputs,block,address_balance
 ```
+
+**Option 2 — Per-exporter disable (disable individual tables):**
+
+```properties
+# Disable specific exporters while keeping all others enabled
+yaci.store.analytics.exporter.reward.enabled=false
+yaci.store.analytics.exporter.epoch_stake.enabled=false
+```
+
+Both options can be combined: per-exporter flags are evaluated first, then the whitelist filter is applied.
 
 ## Export State Management
 

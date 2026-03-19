@@ -44,20 +44,22 @@ public class ProtocolParamsProposalExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                ppp.tx_hash,
-                ppp.key_hash,
-                ppp.params,
-                ppp.target_epoch,
-                ppp.epoch,
-                ppp.slot,
-                ppp.era,
-                ppp.block,
-                to_timestamp(COALESCE(ppp.block_time, 0)) as block_time
-            FROM source_db.%s.protocol_params_proposal ppp
-            WHERE ppp.slot >= %d
-              AND ppp.slot < %d
-            ORDER BY ppp.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ppp.tx_hash,
+                    ppp.key_hash,
+                    ppp.params,
+                    ppp.target_epoch,
+                    ppp.epoch,
+                    ppp.slot,
+                    ppp.era,
+                    ppp.block,
+                    to_timestamp(COALESCE(ppp.block_time, 0)) as block_time
+                FROM %s.protocol_params_proposal ppp
+                WHERE ppp.slot >= %d
+                  AND ppp.slot < %d
+                ORDER BY ppp.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),
