@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,13 +25,26 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
 public class InstantRewardExporter extends AbstractTableExporter {
 
+    private final BlockStorageReader blockStorageReader;
+
     public InstantRewardExporter(
             StorageWriter storageWriter,
             ExportStateService stateService,
             EraService eraService,
             AnalyticsStoreProperties properties,
-            AdaPotJobStorage adaPotJobStorage) {
+            AdaPotJobStorage adaPotJobStorage,
+            BlockStorageReader blockStorageReader) {
         super(storageWriter, stateService, eraService, properties, adaPotJobStorage);
+        this.blockStorageReader = blockStorageReader;
+    }
+
+    @Override
+    public boolean preExportValidation(PartitionValue partition) {
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        int currentEpoch = blockStorageReader.findRecentBlock()
+                .map(com.bloxbean.cardano.yaci.store.blocks.domain.Block::getEpochNumber)
+                .orElse(Integer.MAX_VALUE);
+        return epoch < currentEpoch;
     }
 
     @Override
