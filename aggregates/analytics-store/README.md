@@ -19,10 +19,10 @@ yaci.store.analytics.storage.type=parquet
 
 ### 2. Start yaci-store
 
-Analytics exports begin automatically:
-- **Daily tables** export at midnight (configurable via `yaci.store.analytics.daily-export-cron`)
-- **Epoch tables** export at 1 AM (configurable via `yaci.store.analytics.epoch-export-cron`)
-- **Continuous sync** fills gaps every 15 minutes
+Analytics exports begin automatically via the `ContinuousSyncScheduler`:
+- Uses adaptive gap detection to find and export missing daily and epoch partitions
+- **Catching up**: checks every 1 minute by default (`yaci.store.analytics.continuous-sync.catch-up-interval-minutes`)
+- **Fully synced**: checks every 15 minutes by default (`yaci.store.analytics.continuous-sync.sync-check-interval-minutes`)
 
 Exported files are written to `./data/analytics/` by default.
 
@@ -48,7 +48,7 @@ analytics/
   admin/           - Admin REST controller and service
   config/          - Spring configuration and properties
   ducklake/        - DuckLake catalog initialization
-  exporter/        - 47 table exporter implementations
+  exporter/        - 47 built-in table exporters (31 daily + 16 epoch)
   gap/             - Gap detection for continuous sync
   helper/          - DuckDB connection helper utilities
   query/           - DuckLake query controller and service
@@ -106,39 +106,13 @@ yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
 
 ### Prerequisites: Installing DuckDB CLI
 
-To query exported analytics data from external tools, you need the DuckDB command-line interface:
+To query exported analytics data from external tools, you need the DuckDB command-line interface. Follow the official installation guide: https://duckdb.org/docs/installation/
 
-**Linux/macOS:**
-```bash
-# Download and install latest DuckDB CLI
-wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
-unzip duckdb_cli-linux-amd64.zip
-sudo mv duckdb /usr/local/bin/
-```
+If you're using DuckLake storage mode (`yaci.store.analytics.storage.type=ducklake`), also install the DuckLake extension:
 
-**macOS (Homebrew):**
-```bash
-brew install duckdb
-```
-
-**Windows:**
-```powershell
-# Download from: https://github.com/duckdb/duckdb/releases/latest
-# Extract duckdb.exe and add to PATH
-```
-
-**Verify installation:**
-```bash
-duckdb --version
-# Example output: v1.4.2 (or later)
-```
-
-**Install DuckLake extension (only needed for DuckLake mode):**
 ```bash
 duckdb -c "INSTALL ducklake;"
 ```
-
-> **Note**: The DuckLake extension is only required if you're using DuckLake storage mode (`yaci.store.analytics.storage.type=ducklake`). For direct Parquet file queries, the extension is not needed.
 
 ### Querying from DuckDB CLI
 
@@ -272,15 +246,15 @@ duckdb -c "SELECT COUNT(*) FROM read_parquet('./data/analytics/transaction/date=
 
 ## Table Exporters
 
-The module includes 50+ table exporters covering all indexed Cardano data. Each exporter uses a Template Method pattern (`AbstractTableExporter`) and is auto-discovered by the `TableExporterRegistry`.
+The module includes 47 built-in table exporters (31 daily + 16 epoch) covering all indexed Cardano data. Each exporter uses a Template Method pattern (`AbstractTableExporter`) and is auto-discovered by the `TableExporterRegistry`.
 
 ### Daily Tables (partitioned by date)
 
-`block`, `transaction`, `transaction_outputs`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `invalid_transaction`, `address`, `address_balance`, `address_tx_amount`, `assets`, `stake_address_balance`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `stake_registration`, `pool`, `pool_registration`, `pool_retirement`, `voting_procedure`, `gov_action_proposal`, `committee_registration`, `committee_deregistration`, `script`, `datum`, `cost_model`, `spent_outputs`, `rollback`, `protocol_params_proposal`, `move_instantaneous_reward`, `withdrawal`
+`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `rollback`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
 
 ### Epoch Tables (partitioned by epoch)
 
-`epoch`, `epoch_param`, `epoch_stake`, `reward`, `reward_rest`, `unclaimed_reward_rest`, `adapot`, `drep_dist`, `committee`, `committee_member`, `committee_state`, `constitution`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`
+`adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`, `mir`, `reward`, `reward_rest`, `unclaimed_reward_rest`
 
 ### Selecting specific tables
 

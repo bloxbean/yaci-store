@@ -30,6 +30,7 @@ Key files and directories included:
 │   ├── env                          # Environment file (e.g., to enable ledger-state profile)
 │   ├── application.properties
 │   ├── application-ledger-state.properties
+│   ├── application-analytics.properties
 │   ├── application-plugins.yml
 ├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
 ├── grafana/                 # Grafana configuration and dashboards
@@ -120,6 +121,39 @@ Block No: 4746  , Era: Shelley
  	Time taken to delete stake address balance history: 0
 ### Total balance processing and saving time 1 ###
 ```
+
+## Enable Analytics Store Profile
+
+To run Yaci Store with the analytics store profile for exporting blockchain data to Parquet/DuckLake:
+
+1. Open the `env` file under the `config/` folder.
+2. Uncomment or add the following line:
+
+```env
+SPRING_PROFILES_ACTIVE=analytics
+```
+
+To combine with ledger-state:
+
+```env
+SPRING_PROFILES_ACTIVE=ledger-state,analytics
+```
+
+3. Start the application:
+
+```bash
+./yaci-store.sh start
+```
+
+### Analytics Configuration
+
+Edit `config/application-analytics.properties` to tune analytics export behavior. Key settings include:
+
+- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (default, direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries)
+- **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
+- **Admin API**: `yaci.store.analytics.admin.enabled` — enable REST API for manual export control
+
+See the [Analytics Store README](https://github.com/bloxbean/yaci-store/tree/main/aggregates/analytics-store) for full configuration reference.
 
 ## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
 

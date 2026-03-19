@@ -73,6 +73,27 @@ Block No: 4746  , Era: Shelley
 ### Total balance processing and saving time 1 ###
 ```
 
+## Enable Analytics Store
+
+To export blockchain data to Parquet files or DuckLake catalogs for analytical workloads:
+
+```bash
+./bin/start.sh analytics
+```
+
+To combine with ledger-state:
+
+```bash
+./bin/start.sh ledger-state,analytics
+```
+
+Analytics export configuration is in `application-analytics.properties`. Key settings include:
+
+- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (default, direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries)
+- **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
+
+See the [Analytics Store README](https://github.com/bloxbean/yaci-store/tree/main/aggregates/analytics-store) for full configuration reference.
+
 ## Apply Optional Indexes
 
 After the initial sync is complete:
