@@ -230,6 +230,39 @@ public class DuckLakeWriterService implements StorageWriter {
         }
     }
 
+    @Override
+    public boolean verifyExport(String outputPath, long expectedRowCount) {
+        if (expectedRowCount == 0) {
+            return true;
+        }
+
+        try {
+            String tableName = extractTableNameFromPath(outputPath);
+            Path outputFilePath = Paths.get(outputPath);
+            String partitionSegment = outputFilePath.getParent().getFileName().toString();
+
+            // DuckLake stores files under: {DATA_PATH}/main/{tableName}/{partition}/
+            Path duckLakeDir = Paths.get(properties.getExportPath(), "main", tableName, partitionSegment);
+
+            if (!Files.exists(duckLakeDir)) {
+                log.warn("DuckLake partition directory does not exist after export: {}", duckLakeDir);
+                return false;
+            }
+
+            try (var files = Files.list(duckLakeDir)) {
+                boolean hasParquet = files.anyMatch(f ->
+                        f.getFileName().toString().endsWith(".parquet"));
+                if (!hasParquet) {
+                    log.warn("No parquet files found in DuckLake directory after export: {}", duckLakeDir);
+                }
+                return hasParquet;
+            }
+        } catch (Exception e) {
+            log.error("Failed to verify DuckLake export for {}: {}", outputPath, e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Extract table name from output path.
      * Format: ./data/analytics/transactions/date=2024-01-15/data.parquet → "transactions"
