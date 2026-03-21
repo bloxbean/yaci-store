@@ -3,10 +3,6 @@ package com.bloxbean.cardano.yaci.store.analytics.state;
 import com.bloxbean.cardano.yaci.store.analytics.writer.ExportResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.DSLContext;
-import org.jooq.Field;
-import org.jooq.Table;
-import org.jooq.impl.DSL;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,24 +17,7 @@ import java.util.Set;
 @Slf4j
 public class ExportStateService {
 
-    private static final Table<?> EXPORT_STATE = DSL.table("analytics_export_state");
-    private static final Field<String> TABLE_NAME = DSL.field("table_name", String.class);
-    private static final Field<String> PARTITION_VALUE = DSL.field("partition_value", String.class);
-    private static final Field<String> EXPORT_STATUS = DSL.field("export_status", String.class);
-    private static final Field<Integer> RETRY_COUNT = DSL.field("retry_count", Integer.class);
-    private static final Field<LocalDateTime> STARTED_AT = DSL.field("started_at", LocalDateTime.class);
-    private static final Field<LocalDateTime> COMPLETED_AT = DSL.field("completed_at", LocalDateTime.class);
-    private static final Field<LocalDateTime> CREATED_AT = DSL.field("created_at", LocalDateTime.class);
-    private static final Field<LocalDateTime> UPDATED_AT = DSL.field("updated_at", LocalDateTime.class);
-    private static final Field<Long> ROW_COUNT = DSL.field("row_count", Long.class);
-    private static final Field<Long> FILE_SIZE_BYTES = DSL.field("file_size_bytes", Long.class);
-    private static final Field<String> FILE_PATH = DSL.field("file_path", String.class);
-    private static final Field<String> CHECKSUM_SHA256 = DSL.field("checksum_sha256", String.class);
-    private static final Field<Integer> DURATION_SECONDS = DSL.field("duration_seconds", Integer.class);
-    private static final Field<String> ERROR_MESSAGE = DSL.field("error_message", String.class);
-
     private final ExportStateRepository repository;
-    private final DSLContext dsl;
 
     /**
      * Get current state for a partition
@@ -50,45 +29,12 @@ public class ExportStateService {
 
     /**
      * Mark export as in-progress (prevents concurrent exports).
-     * Uses jOOQ INSERT ... ON CONFLICT to atomically upsert, avoiding the
-     * JPA @EmbeddedId merge() confusion that caused duplicate key errors.
+     * Uses native PostgreSQL INSERT ... ON CONFLICT to atomically upsert,
+     * avoiding the JPA @EmbeddedId merge() confusion that caused duplicate key errors.
      */
     @Transactional
     public ExportState markInProgress(String tableName, String partitionValue) {
-        LocalDateTime now = LocalDateTime.now();
-
-        dsl.insertInto(EXPORT_STATE)
-            .set(TABLE_NAME, tableName)
-            .set(PARTITION_VALUE, partitionValue)
-            .set(EXPORT_STATUS, "IN_PROGRESS")
-            .set(RETRY_COUNT, 0)
-            .set(STARTED_AT, now)
-            .set(CREATED_AT, now)
-            .set(UPDATED_AT, now)
-            .set(ROW_COUNT, (Long) null)
-            .set(FILE_SIZE_BYTES, (Long) null)
-            .set(FILE_PATH, (String) null)
-            .set(CHECKSUM_SHA256, (String) null)
-            .set(COMPLETED_AT, (LocalDateTime) null)
-            .set(DURATION_SECONDS, (Integer) null)
-            .set(ERROR_MESSAGE, (String) null)
-            .onConflict(TABLE_NAME, PARTITION_VALUE)
-            .doUpdate()
-            .set(EXPORT_STATUS, DSL.val("IN_PROGRESS"))
-            .set(RETRY_COUNT,
-                DSL.when(EXPORT_STATUS.eq("FAILED"), RETRY_COUNT.plus(1))
-                    .otherwise(RETRY_COUNT))
-            .set(STARTED_AT, DSL.val(now))
-            .set(UPDATED_AT, DSL.val(now))
-            .setNull(ROW_COUNT)
-            .setNull(FILE_SIZE_BYTES)
-            .setNull(FILE_PATH)
-            .setNull(CHECKSUM_SHA256)
-            .setNull(COMPLETED_AT)
-            .setNull(DURATION_SECONDS)
-            .setNull(ERROR_MESSAGE)
-            .execute();
-
+        repository.upsertInProgress(tableName, partitionValue, LocalDateTime.now());
         return repository.findById(new ExportStateId(tableName, partitionValue))
             .orElseThrow(() -> new IllegalStateException(
                 "Export state not found after upsert for " + tableName + "/" + partitionValue));
