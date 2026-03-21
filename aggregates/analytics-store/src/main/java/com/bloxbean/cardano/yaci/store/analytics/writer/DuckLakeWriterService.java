@@ -89,6 +89,9 @@ public class DuckLakeWriterService implements StorageWriter {
                 configurePartitioning(conn, tableName, outputPath, partitionColumn);
             }
 
+            // Delete existing data for this partition to ensure idempotency (prevents duplicates on re-export)
+            deletePartitionData(conn, tableName, outputPath);
+
             // Export data using DuckLake INSERT
             long rowCount = exportWithDuckLake(conn, tableName, finalQuery);
 
@@ -206,6 +209,42 @@ public class DuckLakeWriterService implements StorageWriter {
         } else {
             log.warn("Could not determine partition type from path: {}", outputPath);
         }
+    }
+
+    /**
+     * Delete existing data for the target partition before re-inserting.
+     * This ensures idempotent exports — re-exporting the same partition replaces data instead of duplicating it.
+     */
+    private void deletePartitionData(Connection conn, String tableName, String outputPath) throws SQLException {
+        String deleteSql = null;
+
+        if (outputPath.contains("date=")) {
+            String dateValue = extractPartitionValue(outputPath, "date=");
+            deleteSql = String.format("DELETE FROM %s WHERE date = '%s'", tableName, dateValue);
+        } else if (outputPath.contains("epoch=")) {
+            String epochValue = extractPartitionValue(outputPath, "epoch=");
+            deleteSql = String.format("DELETE FROM %s WHERE epoch = %s", tableName, epochValue);
+        }
+
+        if (deleteSql != null) {
+            connectionHelper.executeSql(conn, deleteSql);
+            log.debug("Deleted existing partition data for table '{}' before re-export", tableName);
+        }
+    }
+
+    /**
+     * Extract a partition value from the output path.
+     * E.g., "date=2024-01-15" from ".../transactions/date=2024-01-15/data.parquet"
+     * E.g., "450" from ".../rewards/epoch=450/data.parquet"
+     */
+    private String extractPartitionValue(String outputPath, String prefix) {
+        Path path = Paths.get(outputPath);
+        // The partition segment is the parent directory of the file (e.g., "date=2024-01-15")
+        String partitionSegment = path.getParent().getFileName().toString();
+        if (partitionSegment.startsWith(prefix)) {
+            return partitionSegment.substring(prefix.length());
+        }
+        throw new IllegalArgumentException("Could not extract partition value with prefix '" + prefix + "' from path: " + outputPath);
     }
 
     /**
