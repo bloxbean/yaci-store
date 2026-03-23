@@ -76,6 +76,13 @@ public class AnalyticsStoreProperties {
         private int bufferDays = 2;
         private int syncCheckIntervalMinutes = 15;
         private int catchUpIntervalMinutes = 1;
+
+        /**
+         * When true (default), analytics exports are deferred until the sync reaches chain tip.
+         * During initial sync (block range sync mode), all exports are skipped.
+         * Set to false to allow exports during sync
+         */
+        private boolean exportAfterSync = true;
     }
 
     @Data
