@@ -42,6 +42,8 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
            "WHERE e.status = 'IN_PROGRESS'")
     List<ExportState> findAllInProgressExports();
 
+    // TODO: Replace native SQL to improve portability
+    //  and testability. Native INSERT...ON CONFLICT is PostgreSQL-specific and breaks H2-based tests.
     /**
      * Atomically insert or update export state to IN_PROGRESS.
      */

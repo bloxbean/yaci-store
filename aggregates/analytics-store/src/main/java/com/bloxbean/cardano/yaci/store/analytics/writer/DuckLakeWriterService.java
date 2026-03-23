@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -216,19 +217,36 @@ public class DuckLakeWriterService implements StorageWriter {
      * This ensures idempotent exports — re-exporting the same partition replaces data instead of duplicating it.
      */
     private void deletePartitionData(Connection conn, String tableName, String outputPath) throws SQLException {
-        String deleteSql = null;
-
         if (outputPath.contains("date=")) {
             String dateValue = extractPartitionValue(outputPath, "date=");
-            deleteSql = String.format("DELETE FROM %s WHERE date = '%s'", tableName, dateValue);
+            validateDateFormat(dateValue);
+            String deleteSql = String.format("DELETE FROM %s WHERE date = ?", tableName);
+            try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
+                ps.setString(1, dateValue);
+                ps.executeUpdate();
+            }
         } else if (outputPath.contains("epoch=")) {
             String epochValue = extractPartitionValue(outputPath, "epoch=");
-            deleteSql = String.format("DELETE FROM %s WHERE epoch = %s", tableName, epochValue);
+            validateEpochFormat(epochValue);
+            String deleteSql = String.format("DELETE FROM %s WHERE epoch = ?", tableName);
+            try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
+                ps.setInt(1, Integer.parseInt(epochValue));
+                ps.executeUpdate();
+            }
         }
 
-        if (deleteSql != null) {
-            connectionHelper.executeSql(conn, deleteSql);
-            log.debug("Deleted existing partition data for table '{}' before re-export", tableName);
+        log.debug("Deleted existing partition data for table '{}' before re-export", tableName);
+    }
+
+    private void validateDateFormat(String dateValue) {
+        if (!dateValue.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            throw new IllegalArgumentException("Invalid date partition value: " + dateValue);
+        }
+    }
+
+    private void validateEpochFormat(String epochValue) {
+        if (!epochValue.matches("\\d+")) {
+            throw new IllegalArgumentException("Invalid epoch partition value: " + epochValue);
         }
     }
 
