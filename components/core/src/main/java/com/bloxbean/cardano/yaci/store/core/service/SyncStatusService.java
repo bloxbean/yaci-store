@@ -48,10 +48,12 @@ public class SyncStatusService {
             blockHash = cursor.getBlockHash();
             era = cursor.getEra() != null ? cursor.getEra().name() : "Unknown";
 
+            // Calculate current epoch from sync slot
             if (cursor.getEra() != null && cursor.getEra() != Era.Byron) {
                 try {
                     currentEpoch = eraService.getEpochNo(cursor.getEra(), currentSlot);
                 } catch (Exception e) {
+                    // Fall back to 0 if epoch calculation fails
                     log.debug("Could not calculate epoch from slot: {}", e.getMessage());
                 }
             }
@@ -92,22 +94,26 @@ public class SyncStatusService {
     private Optional<Tuple<Tip, Integer>> getCachedTipAndEpoch(long currentBlock) {
         long now = System.currentTimeMillis();
 
+        // If cursor block is newer than cached tip, no need to fetch from node
         if (cachedTipAndEpoch != null && currentBlock >= cachedTipAndEpoch._1.getBlock()) {
             return Optional.of(cachedTipAndEpoch);
         }
 
-        long refreshInterval = INITIAL_SYNC_REFRESH_INTERVAL;
+        // Determine refresh interval based on sync state
+        long refreshInterval = INITIAL_SYNC_REFRESH_INTERVAL; // default: syncing
         if (cachedTipAndEpoch != null) {
             long blocksBehind = cachedTipAndEpoch._1.getBlock() - currentBlock;
             if (blocksBehind <= SYNC_THRESHOLD_BLOCKS) {
-                refreshInterval = SYNCED_REFRESH_INTERVAL;
+                refreshInterval = SYNCED_REFRESH_INTERVAL; // at tip: 3 min
             }
         }
 
+        // Return cached if not stale
         if (cachedTipAndEpoch != null && (now - lastTipFetchTime) < refreshInterval) {
             return Optional.of(cachedTipAndEpoch);
         }
 
+        // Fetch fresh tip from node
         try {
             Optional<Tuple<Tip, Integer>> tipAndEpoch = chainTipService.getTipAndCurrentEpoch();
             if (tipAndEpoch.isPresent()) {
@@ -117,7 +123,7 @@ public class SyncStatusService {
             return tipAndEpoch;
         } catch (Exception e) {
             log.debug("Could not get network tip: {}", e.getMessage());
-            return Optional.ofNullable(cachedTipAndEpoch);
+            return Optional.ofNullable(cachedTipAndEpoch); // Return stale cache if available
         }
     }
 }
