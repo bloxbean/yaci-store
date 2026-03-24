@@ -1,7 +1,8 @@
 package com.bloxbean.cardano.yaci.store.adminui.service;
 
 import com.bloxbean.cardano.yaci.store.adminui.dto.LedgerStateStatusDto;
-import com.bloxbean.cardano.yaci.store.adminui.dto.SyncStatusDto;
+import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
+import com.bloxbean.cardano.yaci.store.core.service.SyncStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,8 +44,8 @@ public class LedgerStateStatusService {
                 environment.getProperty("store.adapot.enabled", "false")
         );
 
-        SyncStatusDto syncStatus = syncStatusService.getSyncStatus();
-        int currentEpoch = syncStatus.getEpoch();
+        SyncStatus syncStatus = syncStatusService.getSyncStatus();
+        int currentEpoch = syncStatus.epoch();
 
         // Query database directly
         LedgerStateStatusDto dbResult = tryGetFromDatabase(currentEpoch);

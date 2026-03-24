@@ -2,8 +2,10 @@ package com.bloxbean.cardano.yaci.store.adminui.controller;
 
 import com.bloxbean.cardano.yaci.store.adminui.AdminUiProperties;
 import com.bloxbean.cardano.yaci.store.adminui.dto.SyncStatusDto;
-import com.bloxbean.cardano.yaci.store.adminui.service.SyncStatusService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
+import com.bloxbean.cardano.yaci.store.core.service.StartService;
+import com.bloxbean.cardano.yaci.store.core.service.SyncStatusService;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,12 +20,25 @@ import java.util.Map;
 @Hidden
 public class SyncStatusController {
     private final SyncStatusService syncStatusService;
+    private final StartService startService;
     private final AdminUiProperties adminUiProperties;
     private final StoreProperties storeProperties;
 
     @GetMapping("/status")
     public ResponseEntity<SyncStatusDto> getSyncStatus() {
-        return ResponseEntity.ok(syncStatusService.getSyncStatus());
+        SyncStatus status = syncStatusService.getSyncStatus();
+        return ResponseEntity.ok(SyncStatusDto.builder()
+                .block(status.block())
+                .slot(status.slot())
+                .epoch(status.epoch())
+                .era(status.era())
+                .blockHash(status.blockHash())
+                .syncPercentage(status.syncPercentage())
+                .networkBlock(status.networkBlock())
+                .networkSlot(status.networkSlot())
+                .synced(status.synced())
+                .protocolMagic(status.protocolMagic())
+                .build());
     }
 
     @GetMapping("/control-enabled")
@@ -37,7 +52,9 @@ public class SyncStatusController {
         if (!adminUiProperties.isSyncControlEnabled() || storeProperties.isReadOnlyMode()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        syncStatusService.startSync();
+        if (!startService.isStarted()) {
+            startService.start();
+        }
         return ResponseEntity.ok().build();
     }
 
@@ -46,7 +63,9 @@ public class SyncStatusController {
         if (!adminUiProperties.isSyncControlEnabled() || storeProperties.isReadOnlyMode()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        syncStatusService.stopSync();
+        if (startService.isStarted()) {
+            startService.stop();
+        }
         return ResponseEntity.ok().build();
     }
 
@@ -55,7 +74,10 @@ public class SyncStatusController {
         if (!adminUiProperties.isSyncControlEnabled() || storeProperties.isReadOnlyMode()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        syncStatusService.restartSync();
+        if (startService.isStarted()) {
+            startService.stop();
+        }
+        startService.start();
         return ResponseEntity.ok().build();
     }
 }
