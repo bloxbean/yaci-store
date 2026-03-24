@@ -277,6 +277,68 @@ yaci.store.analytics.exporter.epoch_stake.enabled=false
 
 Both options can be combined: per-exporter flags are evaluated first, then the whitelist filter is applied.
 
+### Custom Exporters
+
+You can define custom SQL-based exporters to export any data from PostgreSQL to Parquet/DuckLake without writing Java code. Custom exporters are configured in a YAML file and activated via Spring profile.
+
+**Sample Configuration file:** `config/application-custom-exporters.yml`
+
+> **Note:** The file `config/application-custom-exporters.yml` shipped in this repository is just a **sample configuration** with examples. You can define your own exporters.
+
+Each custom exporter requires:
+
+| Property | Required | Description                                                                                                                                 |
+|---|---|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `name` | Yes | Target table name in the analytics catalog                                                                                                  |
+| `query` | Yes | SQL template with placeholders (see below)                                                                                                  |
+| `partition-strategy` | No | `DAILY` (default) or `EPOCH`                                                                                                                |
+| `depends-on-adapot-job` | No | If `true`, need to wait for AdaPot reward calculation to complete before exporting. Only meaningful with `EPOCH` strategy. Default: `false` |
+
+**Query placeholders:**
+
+| Placeholder | Description |
+|---|---|
+| `{source}` | Resolves to the schema name (e.g. `mainnet`) |
+| `{start_slot}` | Slot range start (inclusive) |
+| `{end_slot}` | Slot range end (exclusive) |
+| `{epoch}` | Epoch number (only available with `EPOCH` strategy) |
+
+**Example — Daily exporter:**
+
+```yaml
+yaci:
+  store:
+    analytics:
+      custom-exporters:
+        - name: daily_tx_count
+          query: >-
+            SELECT b.number,
+                   to_timestamp(COALESCE(b.block_time, 0)) as block_time,
+                   b.slot, b.epoch, b.no_of_txs
+            FROM {source}.block b
+            WHERE b.slot >= {start_slot}
+              AND b.slot <  {end_slot}
+            ORDER BY b.slot
+```
+
+**Example — Epoch exporter:**
+
+```yaml
+        - name: epoch_pool_rewards
+          partition-strategy: EPOCH
+          depends-on-adapot-job: true
+          query: >-
+            SELECT r.address,
+                   r.earned_epoch AS epoch,
+                   r.spendable_epoch, r.type, r.pool_id,
+                   r.amount, r.slot
+            FROM {source}.reward r
+            WHERE r.earned_epoch = {epoch}
+            ORDER BY r.earned_epoch, r.address
+```
+
+> **Note:** When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g. `r.earned_epoch AS epoch`). Without this, the DuckLake table will not be partitioned and all Parquet files will be written flat without `epoch=N/` subdirectories.
+
 ## Export State Management
 
 Each export is tracked in the `analytics_export_state` table with status transitions:
