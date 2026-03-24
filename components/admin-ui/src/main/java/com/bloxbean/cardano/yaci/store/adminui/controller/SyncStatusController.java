@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adminui.controller;
 
 import com.bloxbean.cardano.yaci.store.adminui.AdminUiProperties;
-import com.bloxbean.cardano.yaci.store.adminui.dto.SyncStatusDto;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
@@ -25,20 +24,8 @@ public class SyncStatusController {
     private final StoreProperties storeProperties;
 
     @GetMapping("/status")
-    public ResponseEntity<SyncStatusDto> getSyncStatus() {
-        SyncStatus status = syncStatusService.getSyncStatus();
-        return ResponseEntity.ok(SyncStatusDto.builder()
-                .block(status.block())
-                .slot(status.slot())
-                .epoch(status.epoch())
-                .era(status.era())
-                .blockHash(status.blockHash())
-                .syncPercentage(status.syncPercentage())
-                .networkBlock(status.networkBlock())
-                .networkSlot(status.networkSlot())
-                .synced(status.synced())
-                .protocolMagic(status.protocolMagic())
-                .build());
+    public ResponseEntity<SyncStatus> getSyncStatus() {
+        return ResponseEntity.ok(syncStatusService.getSyncStatus());
     }
 
     @GetMapping("/control-enabled")
