@@ -1,0 +1,378 @@
+
+GET {{blockfrost_base_url}}/network
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostNetworkResponse", response.body);
+
+    client.test("Blockfrost /network: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    client.test("Blockfrost /network: supply object exists", function() {
+        client.assert(response.body.supply !== undefined, "supply is missing");
+    });
+
+    client.test("Blockfrost /network: stake object exists", function() {
+        client.assert(response.body.stake !== undefined, "stake is missing");
+    });
+%}
+
+###
+
+### @name getNetworkYaci
+### Fetch network info from Yaci Store and validate Blockfrost compatibility
+GET {{base_url}}/api/v1/blockfrost/network
+
+> {%
+    const bf   = client.global.get("blockfrostNetworkResponse");
+    const yaci = response.body;
+
+    // ── HTTP status ─────────────────────────────────────────────────────────
+    client.test("Yaci /network: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    // ── Structure: top-level keys ────────────────────────────────────────────
+    client.test("Yaci /network: supply object present", function() {
+        client.assert(yaci.supply !== undefined, "supply object is missing");
+    });
+
+    client.test("Yaci /network: stake object present", function() {
+        client.assert(yaci.stake !== undefined, "stake object is missing");
+    });
+
+    // ── CRITICAL: ALL numeric fields must be STRING (not number) ─────────────
+    client.test("CRITICAL supply.max is a String", function() {
+        client.assert(typeof yaci.supply.max === "string",
+            "supply.max must be STRING, got " + typeof yaci.supply.max + " (" + yaci.supply.max + ")");
+    });
+
+    client.test("CRITICAL supply.circulating is a String", function() {
+        client.assert(typeof yaci.supply.circulating === "string",
+            "supply.circulating must be STRING, got " + typeof yaci.supply.circulating);
+    });
+
+    client.test("CRITICAL supply.treasury is a String", function() {
+        client.assert(typeof yaci.supply.treasury === "string",
+            "supply.treasury must be STRING, got " + typeof yaci.supply.treasury);
+    });
+
+    client.test("CRITICAL supply.reserves is a String", function() {
+        client.assert(typeof yaci.supply.reserves === "string",
+            "supply.reserves must be STRING, got " + typeof yaci.supply.reserves);
+    });
+
+    client.test("CRITICAL stake.active is a String", function() {
+        client.assert(typeof yaci.stake.active === "string",
+            "stake.active must be STRING, got " + typeof yaci.stake.active);
+    });
+
+    // ── CRITICAL: Derived fields that Blockfrost requires ────────────────────
+    client.test("CRITICAL supply.total is present", function() {
+        client.assert(yaci.supply.total !== undefined && yaci.supply.total !== null,
+            "supply.total is missing — required by Blockfrost");
+    });
+
+    client.test("CRITICAL supply.total is a String", function() {
+        client.assert(typeof yaci.supply.total === "string",
+            "supply.total must be STRING, got " + typeof yaci.supply.total);
+    });
+
+    client.test("CRITICAL supply.locked is present", function() {
+        client.assert(yaci.supply.locked !== undefined && yaci.supply.locked !== null,
+            "supply.locked is missing — required by Blockfrost");
+    });
+
+    client.test("CRITICAL supply.locked is a String", function() {
+        client.assert(typeof yaci.supply.locked === "string",
+            "supply.locked must be STRING, got " + typeof yaci.supply.locked);
+    });
+
+    client.test("CRITICAL stake.live is present", function() {
+        client.assert(yaci.stake.live !== undefined && yaci.stake.live !== null,
+            "stake.live is missing — required by Blockfrost");
+    });
+
+    client.test("CRITICAL stake.live is a String", function() {
+        client.assert(typeof yaci.stake.live === "string",
+            "stake.live must be STRING, got " + typeof yaci.stake.live);
+    });
+
+    // ── Values exceed JavaScript MAX_SAFE_INTEGER (9007199254740991) ─────────
+    client.test("supply.max value is plausible ADA max supply", function() {
+        const max = BigInt(yaci.supply.max);
+        client.assert(max > 0n, "supply.max must be > 0");
+        client.assert(max <= 45000000000000000n, "supply.max must be <= 45B ADA in lovelace");
+    });
+
+    // ── supply.total = supply.max - supply.reserves ──────────────────────────
+    client.test("supply.total = supply.max - supply.reserves", function() {
+        const max      = BigInt(yaci.supply.max);
+        const reserves = BigInt(yaci.supply.reserves);
+        const total    = BigInt(yaci.supply.total);
+        client.assert(total === max - reserves,
+            "supply.total (" + yaci.supply.total + ") != max (" + yaci.supply.max + ") - reserves (" + yaci.supply.reserves + ")");
+    });
+
+    // ── Compare with Blockfrost (only if Blockfrost call succeeded) ───────────
+    if (bf && bf.supply) {
+        client.test("supply.max matches Blockfrost", function() {
+            client.assert(yaci.supply.max === bf.supply.max,
+                "supply.max mismatch — BF: " + bf.supply.max + ", Yaci: " + yaci.supply.max);
+        });
+    }
+%}
+
+###
+
+### ===========================================================================
+### [2] GET /genesis  — Blockchain genesis parameters
+### ===========================================================================
+
+### @name getGenesisBlockfrost
+### Fetch genesis from real Blockfrost (reference response)
+GET {{blockfrost_base_url}}/genesis
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostGenesisResponse", response.body);
+
+    client.test("Blockfrost /genesis: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+###
+
+### @name getGenesisYaci
+### Fetch genesis from Yaci Store and validate structure
+GET {{base_url}}/api/v1/blockfrost/genesis
+
+> {%
+    const bf   = client.global.get("blockfrostGenesisResponse");
+    const yaci = response.body;
+
+    client.test("Yaci /genesis: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    // ── Required fields ──────────────────────────────────────────────────────
+    const requiredFields = [
+        "active_slots_coefficient",
+        "update_quorum",
+        "max_lovelace_supply",
+        "network_magic",
+        "epoch_length",
+        "system_start",
+        "slots_per_kes_period",
+        "slot_length",
+        "max_kes_evolutions",
+        "security_param"
+    ];
+
+    requiredFields.forEach(function(field) {
+        client.test("genesis field '" + field + "' is present", function() {
+            client.assert(yaci[field] !== undefined && yaci[field] !== null,
+                "Required field '" + field + "' is missing or null");
+        });
+    });
+
+    // ── CRITICAL: max_lovelace_supply must be a String ───────────────────────
+    client.test("CRITICAL genesis.max_lovelace_supply is a String", function() {
+        client.assert(typeof yaci.max_lovelace_supply === "string",
+            "max_lovelace_supply must be STRING, got " + typeof yaci.max_lovelace_supply);
+    });
+
+    // ── Value sanity checks ──────────────────────────────────────────────────
+    client.test("genesis.active_slots_coefficient is a valid fraction (0 < f <= 1)", function() {
+        const f = yaci.active_slots_coefficient;
+        client.assert(typeof f === "number", "active_slots_coefficient must be a number");
+        client.assert(f > 0 && f <= 1, "active_slots_coefficient out of range: " + f);
+    });
+
+    client.test("genesis.epoch_length > 0", function() {
+        client.assert(yaci.epoch_length > 0, "epoch_length must be > 0");
+    });
+
+    client.test("genesis.system_start is a valid Unix timestamp (> 2017)", function() {
+        // Cardano mainnet launched Sept 2017 = 1504224000
+        client.assert(yaci.system_start > 1504224000, "system_start looks wrong: " + yaci.system_start);
+    });
+
+    client.test("genesis.security_param > 0", function() {
+        client.assert(yaci.security_param > 0, "security_param must be > 0");
+    });
+
+    client.test("genesis.slot_length = 1 (Shelley slot = 1 second)", function() {
+        client.assert(yaci.slot_length === 1, "slot_length should be 1, got " + yaci.slot_length);
+    });
+
+    // ── Compare with Blockfrost ──────────────────────────────────────────────
+    if (bf) {
+        client.test("genesis.max_lovelace_supply matches Blockfrost", function() {
+            client.assert(yaci.max_lovelace_supply === bf.max_lovelace_supply,
+                "max_lovelace_supply mismatch — BF: " + bf.max_lovelace_supply + ", Yaci: " + yaci.max_lovelace_supply);
+        });
+
+        client.test("genesis.epoch_length matches Blockfrost", function() {
+            client.assert(yaci.epoch_length === bf.epoch_length,
+                "epoch_length mismatch — BF: " + bf.epoch_length + ", Yaci: " + yaci.epoch_length);
+        });
+
+        client.test("genesis.security_param matches Blockfrost", function() {
+            client.assert(yaci.security_param === bf.security_param,
+                "security_param mismatch — BF: " + bf.security_param + ", Yaci: " + yaci.security_param);
+        });
+
+        client.test("genesis.active_slots_coefficient matches Blockfrost", function() {
+            client.assert(yaci.active_slots_coefficient === bf.active_slots_coefficient,
+                "active_slots_coefficient mismatch — BF: " + bf.active_slots_coefficient + ", Yaci: " + yaci.active_slots_coefficient);
+        });
+    }
+%}
+
+###
+
+### ===========================================================================
+### [3] GET /network/eras  — Blockchain era summaries
+### ===========================================================================
+
+### @name getErasBlockfrost
+### Fetch era summaries from real Blockfrost
+GET {{blockfrost_base_url}}/network/eras
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("blockfrostErasResponse", response.body);
+
+    client.test("Blockfrost /network/eras: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    client.test("Blockfrost /network/eras: is an array", function() {
+        client.assert(Array.isArray(response.body), "Expected array response");
+    });
+%}
+
+###
+
+### @name getErasYaci
+### Fetch era summaries from Yaci Store and validate structure
+GET {{base_url}}/api/v1/blockfrost/network/eras
+
+> {%
+    const bf   = client.global.get("blockfrostErasResponse");
+    const yaci = response.body;
+
+    client.test("Yaci /network/eras: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    client.test("Yaci /network/eras: response is an array", function() {
+        client.assert(Array.isArray(yaci), "Response must be an array, got " + typeof yaci);
+    });
+
+    client.test("Yaci /network/eras: at least one era returned", function() {
+        client.assert(yaci.length > 0, "Era list is empty — Byron era should always be present");
+    });
+
+    // ── Validate structure of each era ───────────────────────────────────────
+    yaci.forEach(function(era, index) {
+        const prefix = "era[" + index + "]";
+
+        client.test(prefix + ".start is present", function() {
+            client.assert(era.start !== undefined, prefix + ".start is missing");
+        });
+
+        client.test(prefix + ".start.slot is a number", function() {
+            client.assert(typeof era.start.slot === "number",
+                prefix + ".start.slot must be number, got " + typeof era.start.slot);
+        });
+
+        client.test(prefix + ".start.time is a number", function() {
+            client.assert(typeof era.start.time === "number",
+                prefix + ".start.time must be number, got " + typeof era.start.time);
+        });
+
+        client.test(prefix + ".start.epoch is a number", function() {
+            client.assert(typeof era.start.epoch === "number",
+                prefix + ".start.epoch must be number, got " + typeof era.start.epoch);
+        });
+
+        client.test(prefix + ".parameters is present", function() {
+            client.assert(era.parameters !== undefined, prefix + ".parameters is missing");
+        });
+
+        client.test(prefix + ".parameters.epoch_length > 0", function() {
+            client.assert(era.parameters.epoch_length > 0,
+                prefix + ".parameters.epoch_length must be > 0");
+        });
+
+        client.test(prefix + ".parameters.slot_length > 0", function() {
+            client.assert(era.parameters.slot_length > 0,
+                prefix + ".parameters.slot_length must be > 0");
+        });
+
+        client.test(prefix + ".parameters.safe_zone >= 0", function() {
+            client.assert(era.parameters.safe_zone >= 0,
+                prefix + ".parameters.safe_zone must be >= 0");
+        });
+    });
+
+    // ── First era should be Byron (slot 0, epoch 0) ──────────────────────────
+    client.test("First era starts at slot 0 (Byron)", function() {
+        client.assert(yaci[0].start.slot === 0,
+            "First era start.slot should be 0 (Byron), got " + yaci[0].start.slot);
+    });
+
+    client.test("First era starts at epoch 0", function() {
+        client.assert(yaci[0].start.epoch === 0,
+            "First era start.epoch should be 0, got " + yaci[0].start.epoch);
+    });
+
+    // ── Compare with Blockfrost era count ────────────────────────────────────
+    if (bf && Array.isArray(bf)) {
+        client.test("Era count matches Blockfrost", function() {
+            client.assert(yaci.length === bf.length,
+                "Era count mismatch — BF: " + bf.length + ", Yaci: " + yaci.length);
+        });
+    }
+%}
+
+###
+
+### ===========================================================================
+### [4] GET /  — Root endpoint
+### ===========================================================================
+
+### @name getRootYaci
+GET {{base_url}}/api/v1/blockfrost/
+
+> {%
+    const yaci = response.body;
+
+    client.test("Yaci /: HTTP 200", function() {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+
+    client.test("Yaci /: url field is present", function() {
+        client.assert(yaci.url !== undefined, "'url' field missing");
+    });
+
+    client.test("Yaci /: version field is present", function() {
+        client.assert(yaci.version !== undefined, "'version' field missing");
+    });
+
+    client.test("Yaci /: url is a non-empty string", function() {
+        client.assert(typeof yaci.url === "string" && yaci.url.length > 0,
+            "'url' must be a non-empty string");
+    });
+
+    client.test("Yaci /: version is a non-empty string", function() {
+        client.assert(typeof yaci.version === "string" && yaci.version.length > 0,
+            "'version' must be a non-empty string");
+    });
+%}
+
+###

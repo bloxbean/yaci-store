@@ -50,3 +50,5 @@ _rocksdb
 /docs/.playwright-mcp/
 /docs/.playwright-mcp/
 /docs/.claude/
+
+CLAUDE.md

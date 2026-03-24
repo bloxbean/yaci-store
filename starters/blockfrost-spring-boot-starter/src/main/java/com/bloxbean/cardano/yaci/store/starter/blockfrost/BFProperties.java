@@ -24,6 +24,7 @@ public class BFProperties {
             private Address address = new Address();
             private Asset asset = new Asset();
             private Scripts scripts = new Scripts();
+            private Network network = new Network();
 
             @Getter
             @Setter
@@ -46,6 +47,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Scripts {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Network {
                 private boolean enabled = false;
             }
 
