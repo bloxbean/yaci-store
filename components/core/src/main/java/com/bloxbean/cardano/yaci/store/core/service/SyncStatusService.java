@@ -27,8 +27,8 @@ public class SyncStatusService {
     private volatile Tuple<Tip, Integer> cachedTipAndEpoch;
     private volatile long lastTipFetchTime = 0;
 
-    private static final long INITIAL_SYNC_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
-    private static final long SYNCED_REFRESH_INTERVAL = 3 * 60 * 1000;        // 3 minutes
+    private static final long INITIAL_SYNC_REFRESH_INTERVAL = 15L * 60 * 1000; // 15 minutes
+    private static final long SYNCED_REFRESH_INTERVAL = 3L * 60 * 1000;       // 3 minutes
     private static final long SYNC_THRESHOLD_BLOCKS = 1000;                   // Consider syncing if > 1000 blocks behind
     private static final long SYNCED_BLOCK_TOLERANCE = 10;                    // Consider synced if within 10 blocks
 
