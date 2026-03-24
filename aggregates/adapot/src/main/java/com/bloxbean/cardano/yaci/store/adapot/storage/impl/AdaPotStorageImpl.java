@@ -29,4 +29,9 @@ public class AdaPotStorageImpl implements AdaPotStorage {
     public int deleteBySlotGreaterThan(long slot) {
         return adaPotRepository.deleteBySlotGreaterThan(slot);
     }
+
+    @Override
+    public int deleteByEpoch(int epoch) {
+        return adaPotRepository.deleteByEpoch(epoch);
+    }
 }
