@@ -297,14 +297,14 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
 
             JsonNode pMemNode = params.path("price_mem");
             if (!pMemNode.isMissingNode() && pMemNode.has("numerator")) {
-                priceMem = BigDecimal.valueOf(pMemNode.path("numerator").asLong())
-                        .divide(BigDecimal.valueOf(pMemNode.path("denominator").asLong()),
+                priceMem = new BigDecimal(new BigInteger(pMemNode.path("numerator").asText()))
+                        .divide(new BigDecimal(new BigInteger(pMemNode.path("denominator").asText())),
                                 20, RoundingMode.HALF_UP);
             }
             JsonNode pStepNode = params.path("price_step");
             if (!pStepNode.isMissingNode() && pStepNode.has("numerator")) {
-                priceStep = BigDecimal.valueOf(pStepNode.path("numerator").asLong())
-                        .divide(BigDecimal.valueOf(pStepNode.path("denominator").asLong()),
+                priceStep = new BigDecimal(new BigInteger(pStepNode.path("numerator").asText()))
+                        .divide(new BigDecimal(new BigInteger(pStepNode.path("denominator").asText())),
                                 20, RoundingMode.HALF_UP);
             }
             return Optional.of(TxRedeemerPricesRaw.builder()
@@ -418,9 +418,10 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
 
     @Override
     public List<BFAmountDto> findTxOutputAmounts(String txHash) {
-        boolean txInvalid = dsl.select(TRANSACTION.INVALID).from(TRANSACTION)
+        Boolean txInvalidRaw = dsl.select(TRANSACTION.INVALID).from(TRANSACTION)
                 .where(TRANSACTION.TX_HASH.eq(txHash))
-                .fetchOne(r -> Boolean.TRUE.equals(r.get(TRANSACTION.INVALID)));
+                .fetchOne(r -> r.get(TRANSACTION.INVALID));
+        boolean txInvalid = Boolean.TRUE.equals(txInvalidRaw);
 
         BigInteger lovelaceTotal = BigInteger.ZERO;
         List<BFAmountDto> nonLovelace = new ArrayList<>();
