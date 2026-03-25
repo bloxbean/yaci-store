@@ -28,6 +28,11 @@ public class AdaPotService {
      */
     @Transactional
     public AdaPot createAdaPot(Integer epoch, Long slot) {
+        adaPotStorage.findByEpoch(epoch).ifPresent(existing -> {
+            log.warn("AdaPot already exists for epoch {}, deleting before re-create", epoch);
+            adaPotStorage.deleteByEpoch(epoch);
+        });
+
         var adaPot = AdaPot.builder()
                 .epoch(epoch)
                 .slot(slot)
