@@ -89,7 +89,7 @@ To combine with ledger-state:
 
 Analytics export configuration is in `application-analytics.properties`. Key settings include:
 
-- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (default, direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries)
+- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries). The code default is `parquet`, but the out-of-box `application-analytics.properties` ships with `ducklake`.
 - **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
 
 ### Custom Exporters

@@ -150,7 +150,7 @@ SPRING_PROFILES_ACTIVE=ledger-state,analytics
 
 Edit `config/application-analytics.properties` to tune analytics export behavior. Key settings include:
 
-- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (default, direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries)
+- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries). The code default is `parquet`, but the out-of-box `application-analytics.properties` ships with `ducklake`.
 - **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
 - **Admin API**: `yaci.store.analytics.admin.enabled` — enable REST API for manual export control
 
