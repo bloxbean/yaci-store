@@ -223,6 +223,7 @@ duckdb -c "
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
 | `yaci.store.analytics.logging.file` | `./logs/analytics-store.log` | Dedicated analytics log file path |
 
 ## Known Caveats
@@ -237,6 +238,21 @@ When querying with DuckDB CLI or Python, you **must start from the same working 
 ```properties
 yaci.store.analytics.export-path=/var/lib/yaci-store/analytics
 ```
+
+### DuckDB memory usage in JVM
+
+DuckDB defaults to using 80% of system physical RAM for its buffer manager. Since DuckDB runs inside the JVM process, this can cause memory contention — JVM heap + DuckDB buffer may together exceed available system RAM, leading to OOM kills (especially in containers/Kubernetes).
+
+To limit DuckDB memory usage:
+
+```properties
+# Limit DuckDB buffer manager to 1GB per connection
+yaci.store.analytics.duckdb.memory-limit=1GB
+```
+
+If not set, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments.
+
+Note: With writer pool (1 connection) + reader pool (N connections), total potential DuckDB memory is `memory_limit * (1 + N)`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
 
 ### DuckLake requires `public` schema in PostgreSQL
 
