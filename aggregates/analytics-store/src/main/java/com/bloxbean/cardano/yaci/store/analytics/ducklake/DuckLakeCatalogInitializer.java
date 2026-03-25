@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -64,6 +65,9 @@ public class DuckLakeCatalogInitializer {
             // Configure catalog compression settings
             connectionHelper.configureDuckLakeCatalogSettings(conn);
 
+            // Log effective DuckDB memory settings
+            logDuckDbSettings(conn);
+
             log.info("✅ DuckLake catalog initialized successfully");
             log.debug("DuckDB connection will close now, releasing any attached PostgreSQL connections");
 
@@ -83,6 +87,20 @@ public class DuckLakeCatalogInitializer {
             // Try to query catalog metadata using duckdb_tables()
             stmt.executeQuery("SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = 'ducklake_catalog';");
             log.debug("Catalog verification successful");
+        }
+    }
+
+    /**
+     * Log effective DuckDB memory settings for operational visibility.
+     */
+    private void logDuckDbSettings(Connection conn) {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT current_setting('memory_limit')")) {
+            if (rs.next()) {
+                log.info("DuckDB memory_limit={}", rs.getString(1));
+            }
+        } catch (SQLException e) {
+            log.debug("Could not query DuckDB memory_limit: {}", e.getMessage());
         }
     }
 }
