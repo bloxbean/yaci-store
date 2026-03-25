@@ -1,3 +1,7 @@
+@import "tailwindcss";
+@source "../app/**/*.{js,jsx,ts,tsx}";
+@source "../components/**/*.{js,jsx,ts,tsx}";
+
 /* Hide sidebar on landing page */
 [data-page-route="/"] aside.nextra-sidebar-container {
   display: none !important;

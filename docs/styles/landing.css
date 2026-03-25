@@ -1,0 +1,136 @@
+/* ── Cloud animations (driven by CSS custom properties set in JSX) ── */
+.cloud-pass {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation: cloudPass var(--cloud-duration) linear infinite;
+  animation-delay: var(--cloud-delay);
+}
+
+.cloud-parallax {
+  will-change: transform;
+}
+
+.cloud-float {
+  display: inline-block;
+  will-change: transform;
+  animation: cloudFloat var(--float-duration) ease-in-out infinite;
+}
+
+.cloud-scale {
+  display: inline-block;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+  animation:
+    cloudScale var(--scale-duration) ease-in-out infinite alternate,
+    cloudOpacity calc(var(--scale-duration) * 0.9) ease-in-out infinite alternate;
+}
+
+@keyframes cloudPass {
+  from { transform: translate3d(110vw, 0, 0); }
+  to   { transform: translate3d(calc(-1 * var(--cloud-width) - 160px), 0, 0); }
+}
+
+@keyframes cloudFloat {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  35%       { transform: translate3d(var(--float-x1), var(--float-y1), 0); }
+  70%       { transform: translate3d(var(--float-x2), var(--float-y2), 0); }
+}
+
+@keyframes cloudScale {
+  0%   { transform: scale(var(--scale-from)); }
+  100% { transform: scale(var(--scale-to)); }
+}
+
+@keyframes cloudOpacity {
+  0%   { opacity: var(--opacity-from); }
+  100% { opacity: var(--opacity-to); }
+}
+
+/* ── Fish swim animations ── */
+.fish-swim {
+  position: absolute;
+  animation: swim linear infinite;
+}
+
+@keyframes swim {
+  from { transform: translateX(110vw); }
+  to   { transform: translateX(-200px); }
+}
+
+.fish-swim-r {
+  position: absolute;
+  animation: swimr linear infinite;
+}
+
+@keyframes swimr {
+  from { transform: translateX(-200px); }
+  to   { transform: translateX(110vw); }
+}
+
+/* ── Bubble rise animation ── */
+@keyframes rise {
+  0%   { transform: translateY(0);       opacity: 0.7; }
+  100% { transform: translateY(-120vh);  opacity: 0; }
+}
+
+/* ── Scroll hint bounce ── */
+.scroll-hint {
+  animation: bob 2s ease-in-out infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%       { transform: translateX(-50%) translateY(7px); }
+}
+
+/* ── Ice block float ── */
+.ice-block {
+  animation: floatice ease-in-out infinite;
+}
+
+@keyframes floatice {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+/* ── Card reveal animations ── */
+.feat-card {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease, transform 0.7s ease, box-shadow 0.3s;
+}
+
+.feat-card.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.proj-card {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease, border-color 0.28s, background 0.28s;
+}
+
+.proj-card.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Back-to-top visibility ── */
+.back-top {
+  opacity: 0;
+  transform: translateY(14px) scale(0.92);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s;
+}
+
+.back-top.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.back-top:hover {
+  transform: translateY(-3px) scale(1.06);
+}
