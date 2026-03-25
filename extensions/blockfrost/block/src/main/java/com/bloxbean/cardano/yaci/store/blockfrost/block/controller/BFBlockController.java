@@ -130,7 +130,13 @@ public class BFBlockController {
     }
 
     @GetMapping("{hash_or_number}/addresses")
-    @Operation(summary = "Affected addresses", description = "Return affected addresses for the specified block.")
+    @Operation(
+            summary = "Affected addresses",
+            description = "Return affected addresses in the specified block. " +
+                    "**Note:** If UTXO pruning is enabled (`store.utxo.pruning.enabled=true`), " +
+                    "addresses that only appear as inputs (spent UTXOs) may be missing from the results, " +
+                    "as spent input address resolution requires those records to still be present in `address_utxo`."
+    )
     public List<BFBlockAddressDTO> getBlockAddresses(
             @PathVariable("hash_or_number") String hashOrNumber,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
