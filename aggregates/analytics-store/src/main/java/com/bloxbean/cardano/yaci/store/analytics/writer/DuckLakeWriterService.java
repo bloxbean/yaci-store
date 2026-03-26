@@ -8,12 +8,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -89,9 +87,6 @@ public class DuckLakeWriterService implements StorageWriter {
             if (isNewTable) {
                 configurePartitioning(conn, tableName, outputPath, partitionColumn);
             }
-
-            // Delete existing data for this partition to ensure idempotency (prevents duplicates on re-export)
-            deletePartitionData(conn, tableName, outputPath);
 
             // Export data using DuckLake INSERT
             long rowCount = exportWithDuckLake(conn, tableName, finalQuery);
@@ -210,59 +205,6 @@ public class DuckLakeWriterService implements StorageWriter {
         } else {
             log.warn("Could not determine partition type from path: {}", outputPath);
         }
-    }
-
-    /**
-     * Delete existing data for the target partition before re-inserting.
-     * This ensures idempotent exports — re-exporting the same partition replaces data instead of duplicating it.
-     */
-    private void deletePartitionData(Connection conn, String tableName, String outputPath) throws SQLException {
-        if (outputPath.contains("date=")) {
-            String dateValue = extractPartitionValue(outputPath, "date=");
-            validateDateFormat(dateValue);
-            String deleteSql = String.format("DELETE FROM %s WHERE date = ?", tableName);
-            try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
-                ps.setString(1, dateValue);
-                ps.executeUpdate();
-            }
-        } else if (outputPath.contains("epoch=")) {
-            String epochValue = extractPartitionValue(outputPath, "epoch=");
-            validateEpochFormat(epochValue);
-            String deleteSql = String.format("DELETE FROM %s WHERE epoch = ?", tableName);
-            try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
-                ps.setInt(1, Integer.parseInt(epochValue));
-                ps.executeUpdate();
-            }
-        }
-
-        log.debug("Deleted existing partition data for table '{}' before re-export", tableName);
-    }
-
-    private void validateDateFormat(String dateValue) {
-        if (!dateValue.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            throw new IllegalArgumentException("Invalid date partition value: " + dateValue);
-        }
-    }
-
-    private void validateEpochFormat(String epochValue) {
-        if (!epochValue.matches("\\d+")) {
-            throw new IllegalArgumentException("Invalid epoch partition value: " + epochValue);
-        }
-    }
-
-    /**
-     * Extract a partition value from the output path.
-     * E.g., "date=2024-01-15" from ".../transactions/date=2024-01-15/data.parquet"
-     * E.g., "450" from ".../rewards/epoch=450/data.parquet"
-     */
-    private String extractPartitionValue(String outputPath, String prefix) {
-        Path path = Paths.get(outputPath);
-        // The partition segment is the parent directory of the file (e.g., "date=2024-01-15")
-        String partitionSegment = path.getParent().getFileName().toString();
-        if (partitionSegment.startsWith(prefix)) {
-            return partitionSegment.substring(prefix.length());
-        }
-        throw new IllegalArgumentException("Could not extract partition value with prefix '" + prefix + "' from path: " + outputPath);
     }
 
     /**
