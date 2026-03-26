@@ -28,16 +28,31 @@ public class ExportStateService {
     }
 
     /**
-     * Mark export as in-progress (prevents concurrent exports).
-     * Uses native PostgreSQL INSERT ... ON CONFLICT to atomically upsert,
-     * avoiding the JPA @EmbeddedId merge() confusion that caused duplicate key errors.
+     * Mark export as in-progress (prevents concurrent exports)
      */
     @Transactional
     public ExportState markInProgress(String tableName, String partitionValue) {
-        repository.upsertInProgress(tableName, partitionValue, LocalDateTime.now());
-        return repository.findById(new ExportStateId(tableName, partitionValue))
-            .orElseThrow(() -> new IllegalStateException(
-                "Export state not found after upsert for " + tableName + "/" + partitionValue));
+        ExportState state = repository.findById(new ExportStateId(tableName, partitionValue))
+            .orElse(new ExportState(tableName, partitionValue));
+
+        // Only increment retry count if previous attempt failed
+        if (state.getStatus() == ExportStatus.FAILED) {
+            state.setRetryCount(state.getRetryCount() + 1);
+        }
+
+        state.setStatus(ExportStatus.IN_PROGRESS);
+        state.setStartedAt(LocalDateTime.now());
+
+        // Clear stale fields from previous attempts to prevent misleading metrics
+        state.setRowCount(null);
+        state.setFileSizeBytes(null);
+        state.setFilePath(null);
+        state.setChecksumSha256(null);
+        state.setCompletedAt(null);
+        state.setDurationSeconds(null);
+        state.setErrorMessage(null);
+
+        return repository.save(state);
     }
 
     /**
