@@ -50,9 +50,7 @@ class BFNetworkMapperDecoratorTest {
 
     };
 
-    // =========================================================================
-    // Helper — build NetworkInfoDto with BigInteger values
-    // =========================================================================
+   
 
     private static NetworkInfoDto dto(BigInteger max, BigInteger circulating,
                                       BigInteger treasury, BigInteger reserves,
@@ -63,9 +61,7 @@ class BFNetworkMapperDecoratorTest {
         );
     }
 
-    // =========================================================================
-    // Test the derived-field computation logic independently of Spring wiring
-    // =========================================================================
+
 
     @Nested
     @DisplayName("supply.total computation (max - reserves)")

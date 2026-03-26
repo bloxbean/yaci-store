@@ -316,9 +316,6 @@ class BFNetworkControllerTest {
         }
     }
 
-    // =========================================================================
-    // /genesis — Blockchain genesis parameters
-    // =========================================================================
 
     @Nested
     @DisplayName("GET /api/v1/blockfrost/genesis")
@@ -402,9 +399,6 @@ class BFNetworkControllerTest {
         }
     }
 
-    // =========================================================================
-    // /network/eras — Era summaries
-    // =========================================================================
 
     @Nested
     @DisplayName("GET /api/v1/blockfrost/network/eras")
@@ -515,9 +509,6 @@ class BFNetworkControllerTest {
         }
     }
 
-    // =====================================================================
-    // / — Root endpoint
-    // =====================================================================
 
     @Nested
     @DisplayName("GET /api/v1/blockfrost  (root)")
