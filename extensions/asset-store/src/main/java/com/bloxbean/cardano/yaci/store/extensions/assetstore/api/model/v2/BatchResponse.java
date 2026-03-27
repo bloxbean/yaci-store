@@ -1,7 +1,14 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 
-public record BatchResponse(List<Subject> subjects,
-                            List<String> queryPriority) {
-}
+@Schema(description = "Batch subject query response.")
+public record BatchResponse(
+        @Schema(description = "List of subjects with valid metadata (subjects without name+description are excluded).")
+        List<Subject> subjects,
+
+        @Schema(description = "The CIP priority order that was used for this query.")
+        List<String> queryPriority
+) {}

@@ -57,6 +57,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v2")
 @ConditionalOnExpression("${store.extensions.asset-store.enabled:false}")
 @RequiredArgsConstructor
+@io.swagger.v3.oas.annotations.tags.Tag(name = "V2 Subjects (CF Registry Compatible)",
+        description = "Multi-standard merged metadata API — drop-in replacement for cf-token-metadata-registry V2 API")
 @Slf4j
 public class CFMetadataRegistrySubjectController {
 
@@ -79,7 +81,12 @@ public class CFMetadataRegistrySubjectController {
      * @param showCipsDetails whether to include raw per-standard metadata in the response
      * @return the merged subject with metadata and extensions, or 404 if not found
      */
-    @Operation(operationId = "getSubject", summary = "Query either all or a subset of properties of a given subject")
+    @Operation(operationId = "getSubject", summary = "Query either all or a subset of properties of a given subject",
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Merged metadata found"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Required properties (name, description) missing from filter"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subject not found or has no valid metadata")
+            })
     @GetMapping(path = "/subjects/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<Response> getSubject(
             @Parameter(description = "the concatenation of policy id and asset name (if any) to query")
@@ -123,7 +130,10 @@ public class CFMetadataRegistrySubjectController {
      * @param showCipsDetails whether to include raw per-standard metadata
      * @return list of merged subjects with valid metadata
      */
-    @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects")
+    @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects",
+            responses = {
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Batch results (subjects without valid metadata are excluded)")
+            })
     @PostMapping(value = "/subjects/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
     public ResponseEntity<BatchResponse> getSubjects(
             @Parameter(name = "body", required = true, schema = @Schema)
