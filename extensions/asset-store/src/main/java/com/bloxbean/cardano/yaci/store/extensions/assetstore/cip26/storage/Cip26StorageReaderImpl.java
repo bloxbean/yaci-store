@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +50,11 @@ public class Cip26StorageReaderImpl implements Cip26StorageReader {
     public List<TokenMetadata> findByTicker(String ticker, int page, int count) {
         Pageable pageable = PageRequest.of(page, Math.min(count, 100));
         return tokenMetadataRepository.findByTickerIgnoreCase(ticker, pageable).getContent();
+    }
+
+    @Override
+    public List<TokenMetadata> findByPolicies(Collection<String> policyIds) {
+        return tokenMetadataRepository.findByPolicyIn(policyIds);
     }
 
     @Override

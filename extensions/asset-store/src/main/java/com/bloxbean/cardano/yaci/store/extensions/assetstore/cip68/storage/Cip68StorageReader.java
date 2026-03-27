@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,6 +64,15 @@ public interface Cip68StorageReader {
      * @return history of datum updates, newest first
      */
     List<MetadataReferenceNft> findHistory(String policyId, String assetName, int page, int count);
+
+    /**
+     * Find the latest reference NFT per (policyId, assetName) for multiple policies (batch).
+     * Returns one entry per distinct token, using the highest slot.
+     *
+     * @param policyIds the policy IDs to look up
+     * @return latest reference NFT entities for each token under the given policies
+     */
+    List<MetadataReferenceNft> findLatestByPolicyIds(Collection<String> policyIds);
 
     /**
      * Get the total number of indexed CIP-68 reference NFTs.

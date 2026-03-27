@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +48,14 @@ public class Cip68StorageReaderImpl implements Cip68StorageReader {
                 policyId, assetName,
                 PageRequest.of(page, Math.min(count, 100), Sort.by("slot").descending())
         ).getContent();
+    }
+
+    @Override
+    public List<MetadataReferenceNft> findLatestByPolicyIds(Collection<String> policyIds) {
+        if (policyIds == null || policyIds.isEmpty()) {
+            return List.of();
+        }
+        return metadataReferenceNftRepository.findLatestByPolicyIds(policyIds);
     }
 
     @Override

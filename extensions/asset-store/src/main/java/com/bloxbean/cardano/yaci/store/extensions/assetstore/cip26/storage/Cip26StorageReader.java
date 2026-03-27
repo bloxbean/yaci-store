@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -64,6 +65,14 @@ public interface Cip26StorageReader {
      * @return matching metadata entries
      */
     List<TokenMetadata> findByTicker(String ticker, int page, int count);
+
+    /**
+     * Find all tokens registered under multiple policy IDs (batch).
+     *
+     * @param policyIds the policy IDs to look up
+     * @return all metadata entries matching any of the given policies
+     */
+    List<TokenMetadata> findByPolicies(Collection<String> policyIds);
 
     /**
      * Get the total number of registered CIP-26 tokens.

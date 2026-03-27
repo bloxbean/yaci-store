@@ -6,12 +6,15 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface TokenMetadataRepository extends JpaRepository<TokenMetadata, String> {
 
     List<TokenMetadata> findByPolicy(String policy);
+
+    List<TokenMetadata> findByPolicyIn(Collection<String> policies);
 
     Slice<TokenMetadata> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
