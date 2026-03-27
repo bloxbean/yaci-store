@@ -35,6 +35,8 @@ public class OnchainReadinessHealthIndicator implements HealthIndicator {
     private final HealthService healthService;
     private final SyncStatusService syncStatusService;
 
+    private static final String DETAIL_SYNC_STATUS = "syncStatus";
+
     @Override
     public Health health() {
         HealthStatus status;
@@ -42,7 +44,7 @@ public class OnchainReadinessHealthIndicator implements HealthIndicator {
             status = healthService.getHealthStatus();
         } catch (NullPointerException e) {
             return Health.unknown()
-                    .withDetail("syncStatus", "Block fetcher not initialized")
+                    .withDetail(DETAIL_SYNC_STATUS, "Block fetcher not initialized")
                     .build();
         }
 
@@ -54,19 +56,19 @@ public class OnchainReadinessHealthIndicator implements HealthIndicator {
 
         if (status.isScheduleToStop()) {
             return builder.outOfService()
-                    .withDetail("syncStatus", "Scheduled to stop")
+                    .withDetail(DETAIL_SYNC_STATUS, "Scheduled to stop")
                     .build();
         }
 
         if (status.isError() || !status.isConnectionAlive()) {
             return builder.down()
-                    .withDetail("syncStatus", "Connection lost or sync error")
+                    .withDetail(DETAIL_SYNC_STATUS, "Connection lost or sync error")
                     .build();
         }
 
         if (!status.isReceivingBlocks()) {
             return builder.outOfService()
-                    .withDetail("syncStatus", "Not receiving blocks")
+                    .withDetail(DETAIL_SYNC_STATUS, "Not receiving blocks")
                     .build();
         }
 
@@ -75,12 +77,12 @@ public class OnchainReadinessHealthIndicator implements HealthIndicator {
 
         if (!syncStatus.synced()) {
             return builder.outOfService()
-                    .withDetail("syncStatus", "Syncing")
+                    .withDetail(DETAIL_SYNC_STATUS, "Syncing")
                     .build();
         }
 
         return builder.up()
-                .withDetail("syncStatus", "Synced")
+                .withDetail(DETAIL_SYNC_STATUS, "Synced")
                 .build();
     }
 }

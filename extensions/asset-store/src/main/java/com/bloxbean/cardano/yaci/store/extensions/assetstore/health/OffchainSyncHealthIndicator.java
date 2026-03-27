@@ -26,6 +26,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OffchainSyncHealthIndicator implements HealthIndicator {
 
+    private static final String DETAIL_SYNC_STATUS = "syncStatus";
+
     private final TokenMetadataSyncService tokenMetadataSyncService;
 
     @Override
@@ -33,7 +35,7 @@ public class OffchainSyncHealthIndicator implements HealthIndicator {
         SyncStatus syncStatus = tokenMetadataSyncService.getSyncStatus();
         if (syncStatus == null) {
             return Health.unknown()
-                    .withDetail("syncStatus", "Not initialized")
+                    .withDetail(DETAIL_SYNC_STATUS, "Not initialized")
                     .build();
         }
 
@@ -41,13 +43,13 @@ public class OffchainSyncHealthIndicator implements HealthIndicator {
 
         return switch (syncStatus.getStatus()) {
             case SYNC_DONE, SYNC_IN_EXTRA_JOB -> Health.up()
-                    .withDetail("syncStatus", statusText)
+                    .withDetail(DETAIL_SYNC_STATUS, statusText)
                     .build();
             case SYNC_IN_PROGRESS, SYNC_NOT_STARTED -> Health.outOfService()
-                    .withDetail("syncStatus", statusText)
+                    .withDetail(DETAIL_SYNC_STATUS, statusText)
                     .build();
             case SYNC_ERROR -> Health.down()
-                    .withDetail("syncStatus", statusText)
+                    .withDetail(DETAIL_SYNC_STATUS, statusText)
                     .build();
         };
     }
