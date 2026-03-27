@@ -2,80 +2,43 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
 import lombok.extern.slf4j.Slf4j;
+import org.cardanofoundation.metadatatools.core.cip26.MetadataCreator;
+import org.cardanofoundation.metadatatools.core.cip26.ValidationError;
+import org.cardanofoundation.metadatatools.core.cip26.ValidationField;
+import org.cardanofoundation.metadatatools.core.cip26.ValidationResult;
+import org.cardanofoundation.metadatatools.core.cip26.model.Metadata;
+import org.cardanofoundation.metadatatools.core.cip26.model.MetadataProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
- * Simplified validator to ensure token metadata fields meet CIP-26 specification constraints.
- * This is a simplified version that checks that required fields (name and description) are present,
- * without depending on the cf-metadata-core library.
+ * Validates token metadata fields against the CIP-26 specification using the
+ * <a href="https://github.com/cardano-foundation/cf-token-metadata-registry">cf-tokens-cip26</a> library.
  */
 @Component
 @Slf4j
 public class TokenMetadataValidator {
 
-    /** CIP-26 maximum logo size in characters (base64-encoded PNG, max 87,400 chars). */
-    private static final int MAX_LOGO_LENGTH = 87_400;
-
-    /** CIP-26 maximum name length. */
-    private static final int MAX_NAME_LENGTH = 50;
-
-    /** CIP-26 maximum description length. */
-    private static final int MAX_DESCRIPTION_LENGTH = 500;
-
-    /** CIP-26 maximum ticker length. */
-    private static final int MAX_TICKER_LENGTH = 9;
-
-    /** CIP-26 maximum URL length. */
-    private static final int MAX_URL_LENGTH = 250;
-
     /**
      * Validates that all fields in the TokenMetadata entity comply with CIP-26 specification.
-     * Checks that required fields (name and description) are present and that optional fields
-     * do not exceed their maximum lengths.
      *
      * @param tokenMetadata the token metadata to validate
      * @return true if valid according to CIP-26, false otherwise
      */
     public boolean validate(TokenMetadata tokenMetadata) {
         try {
-            if (tokenMetadata.getSubject() == null || tokenMetadata.getSubject().isBlank()) {
-                log.warn("CIP-26 validation failed: subject is missing");
-                return false;
-            }
+            Metadata cip26Metadata = convertToMetadata(tokenMetadata);
+            ValidationResult validationResult = MetadataCreator.validateMetadata(cip26Metadata);
 
-            if (tokenMetadata.getName() == null || tokenMetadata.getName().isBlank()) {
-                log.warn("CIP-26 validation failed for subject '{}': name is missing",
-                        tokenMetadata.getSubject());
-                return false;
-            }
-
-            if (tokenMetadata.getDescription() == null || tokenMetadata.getDescription().isBlank()) {
-                log.warn("CIP-26 validation failed for subject '{}': description is missing",
-                        tokenMetadata.getSubject());
-                return false;
-            }
-
-            if (tokenMetadata.getName().length() > MAX_NAME_LENGTH) {
-                log.warn("CIP-26 validation failed for subject '{}': name exceeds {} characters",
-                        tokenMetadata.getSubject(), MAX_NAME_LENGTH);
-                return false;
-            }
-
-            if (tokenMetadata.getDescription().length() > MAX_DESCRIPTION_LENGTH) {
-                log.warn("CIP-26 validation failed for subject '{}': description exceeds {} characters",
-                        tokenMetadata.getSubject(), MAX_DESCRIPTION_LENGTH);
-                return false;
-            }
-
-            if (tokenMetadata.getTicker() != null && tokenMetadata.getTicker().length() > MAX_TICKER_LENGTH) {
-                log.warn("CIP-26 validation failed for subject '{}': ticker exceeds {} characters",
-                        tokenMetadata.getSubject(), MAX_TICKER_LENGTH);
-                return false;
-            }
-
-            if (tokenMetadata.getUrl() != null && tokenMetadata.getUrl().length() > MAX_URL_LENGTH) {
-                log.warn("CIP-26 validation failed for subject '{}': url exceeds {} characters",
-                        tokenMetadata.getSubject(), MAX_URL_LENGTH);
+            if (!validationResult.isValid()) {
+                String errorMessages = validationResult.getValidationErrors().stream()
+                        .map(error -> error.getField() + ": " + error.getMessage())
+                        .collect(Collectors.joining(", "));
+                log.warn("CIP-26 validation failed for subject '{}': {}",
+                        tokenMetadata.getSubject(), errorMessages);
                 return false;
             }
 
@@ -90,23 +53,41 @@ public class TokenMetadataValidator {
 
     /**
      * Validates a logo string according to CIP-26 specification.
-     * Logo is optional but if present must comply with CIP-26 constraints (max 87,400 characters).
      *
      * @param subject the token subject (for logging)
-     * @param logo the logo string to validate (can be null)
+     * @param logo    the logo string to validate (can be null)
      * @return true if valid according to CIP-26, false otherwise
      */
     public boolean validateLogo(String subject, String logo) {
-        // Logo is optional, so null is valid
         if (logo == null || logo.isEmpty()) {
             return true;
         }
 
         try {
-            if (logo.length() > MAX_LOGO_LENGTH) {
-                log.warn("CIP-26 logo validation failed for subject '{}': logo exceeds {} characters",
-                        subject, MAX_LOGO_LENGTH);
-                return false;
+            Metadata metadata = new Metadata();
+            metadata.setSubject(subject);
+            metadata.addProperty(ValidationField.NAME, new MetadataProperty<>("dummy"));
+            metadata.addProperty(ValidationField.DESCRIPTION, new MetadataProperty<>("dummy"));
+            metadata.addProperty(ValidationField.LOGO, new MetadataProperty<>(logo));
+
+            ValidationResult validationResult = MetadataCreator.validateMetadata(metadata);
+
+            if (!validationResult.isValid()) {
+                List<ValidationError> logoErrors = validationResult.getValidationErrorsForField(ValidationField.LOGO);
+                List<ValidationError> subjectErrors = validationResult.getValidationErrorsForField(ValidationField.SUBJECT);
+
+                if (!logoErrors.isEmpty() || !subjectErrors.isEmpty()) {
+                    List<ValidationError> relevantErrors = new ArrayList<>(logoErrors);
+                    relevantErrors.addAll(subjectErrors);
+
+                    String errorMessages = relevantErrors.stream()
+                            .map(error -> error.getField() + ": " + error.getMessage())
+                            .collect(Collectors.joining(", "));
+
+                    log.warn("CIP-26 logo validation failed for subject '{}': {}",
+                            subject, errorMessages);
+                    return false;
+                }
             }
 
             return true;
@@ -116,5 +97,30 @@ public class TokenMetadataValidator {
                     subject, e.getMessage(), e);
             return false;
         }
+    }
+
+    private Metadata convertToMetadata(TokenMetadata tokenMetadata) {
+        Metadata metadata = new Metadata();
+
+        if (tokenMetadata.getSubject() != null) {
+            metadata.setSubject(tokenMetadata.getSubject());
+        }
+        if (tokenMetadata.getName() != null) {
+            metadata.addProperty(ValidationField.NAME, new MetadataProperty<>(tokenMetadata.getName()));
+        }
+        if (tokenMetadata.getDescription() != null) {
+            metadata.addProperty(ValidationField.DESCRIPTION, new MetadataProperty<>(tokenMetadata.getDescription()));
+        }
+        if (tokenMetadata.getTicker() != null) {
+            metadata.addProperty(ValidationField.TICKER, new MetadataProperty<>(tokenMetadata.getTicker()));
+        }
+        if (tokenMetadata.getDecimals() != null) {
+            metadata.addProperty(ValidationField.DECIMALS, new MetadataProperty<>(tokenMetadata.getDecimals().intValue()));
+        }
+        if (tokenMetadata.getUrl() != null) {
+            metadata.addProperty(ValidationField.URL, new MetadataProperty<>(tokenMetadata.getUrl()));
+        }
+
+        return metadata;
     }
 }
