@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  *   <li><b>CIP-113</b> — programmable token extensions (transfer logic scripts)</li>
  * </ul>
  *
- * <h3>Query Priority</h3>
+ * <p><b>Query Priority:</b>
  * When the same property (e.g. {@code name}) exists in both CIP-26 and CIP-68, the standard
  * with higher priority wins. The default order is {@code CIP_68, CIP_26} (on-chain preferred),
  * configurable per-request via the {@code query_priority} parameter or globally via
