@@ -100,4 +100,9 @@ project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
+include ':extensions:asset-store'
+project(':extensions:asset-store').projectDir = new File('extensions/asset-store')
+
+include ':starters:asset-store-ext-spring-boot-starter'
+
 include 'e2e-tests'

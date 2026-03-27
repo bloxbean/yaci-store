@@ -1,0 +1,23 @@
+apply from : "../../publish-common.gradle"
+
+dependencies {
+    api project(":components:common")
+    api project(":components:events")
+    api project(":stores:utxo")
+    api project(":components:plugin")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:7.1.0.202411261347-r'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Asset Store Extension'
+                description = 'Yaci Store Asset Store Extension - CIP-26, CIP-68, CIP-113 Token Metadata'
+            }
+        }
+    }
+}
