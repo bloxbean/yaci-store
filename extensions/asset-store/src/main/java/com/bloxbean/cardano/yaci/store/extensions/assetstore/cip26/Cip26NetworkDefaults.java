@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  * sanchonet, devkit) the sync is automatically disabled unless the user explicitly configures
  * a custom registry.
  *
- * <table summary="CIP-26 registry defaults per network">
+ * <table>
  *   <caption>CIP-26 registry defaults per network</caption>
  *   <tr><th>Network</th><th>Organization</th><th>Repository</th><th>Mappings Folder</th></tr>
  *   <tr><td>Mainnet</td><td>cardano-foundation</td><td>cardano-token-registry</td><td>mappings</td></tr>

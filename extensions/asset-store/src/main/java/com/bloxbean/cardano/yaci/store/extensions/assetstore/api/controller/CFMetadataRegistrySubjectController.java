@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  * configurable per-request via the {@code query_priority} parameter or globally via
  * {@code store.extensions.asset-store.default-query-priority}.
  *
- * <h3>CIP-113 Extensions</h3>
+ * <p><b>CIP-113 Extensions:</b>
  * If the token's policy ID is registered as a CIP-113 programmable token, the response includes
  * an {@code extensions.cip113} block with transfer logic script hashes.
  *
