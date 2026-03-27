@@ -144,3 +144,19 @@ Flyway migrations are included for PostgreSQL, H2, and MySQL. Tables are created
 - `off_chain_sync_state` — CIP-26 sync tracking
 - `metadata_reference_nft` — CIP-68 reference NFTs
 - `cip113_registry_node` — CIP-113 registry nodes
+
+### Indexes
+
+Only essential indexes are created automatically (slot-based indexes for rollback, and primary keys). This follows the yaci-store convention where query-performance indexes are optional.
+
+If you use the `Cip26StorageReader` search/filter methods (`findByPolicy`, `searchByName`, `findByTicker`) at scale, apply the optional indexes from `db/store/optional-indexes.sql`:
+
+```sql
+-- CIP-26: lookup by policy ID
+CREATE INDEX IF NOT EXISTS idx_token_metadata_policy ON token_metadata(policy);
+
+-- CIP-26: lookup by ticker
+CREATE INDEX IF NOT EXISTS idx_token_metadata_ticker ON token_metadata(ticker);
+```
+
+For the full list of optional indexes, see [`optional-indexes.sql`](src/main/resources/db/store/optional-indexes.sql).

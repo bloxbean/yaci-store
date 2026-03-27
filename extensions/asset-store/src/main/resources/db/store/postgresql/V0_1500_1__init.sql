@@ -12,8 +12,6 @@ CREATE TABLE token_metadata (
     properties  JSONB
 );
 
-CREATE INDEX idx_token_metadata_fields ON token_metadata(subject, policy, name, ticker, url, description, decimals, updated DESC, updated_by);
-CREATE INDEX idx_token_metadata_properties ON token_metadata USING GIN(properties);
 
 -- CIP-26 logos
 CREATE TABLE token_logo (
