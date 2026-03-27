@@ -47,13 +47,23 @@ class Cip113EventListenerTest {
 
     @BeforeEach
     void setUp() {
-        config = new Cip113Configuration();
-        config.setRegistryNftPolicyIds(List.of(REGISTRY_NFT_POLICY_ID));
-        config.init();
+        config = buildConfig(REGISTRY_NFT_POLICY_ID);
 
         Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
         Cip113RegistryService registryService = new Cip113RegistryService(repository, config);
         listener = new Cip113EventListener(config, parser, repository, registryService);
+    }
+
+    private static Cip113Configuration buildConfig(String... policyIds) {
+        Cip113Configuration cfg = org.mockito.Mockito.mock(Cip113Configuration.class,
+                org.mockito.Mockito.withSettings().lenient());
+        java.util.Set<String> policyIdSet = java.util.Set.of(policyIds);
+        org.mockito.Mockito.when(cfg.isEnabled()).thenReturn(!policyIdSet.isEmpty());
+        org.mockito.Mockito.when(cfg.getRegistryNftPolicyIdSet()).thenReturn(policyIdSet);
+        for (String id : policyIds) {
+            org.mockito.Mockito.when(cfg.isMonitoredPolicyId(id)).thenReturn(true);
+        }
+        return cfg;
     }
 
     @Nested
@@ -86,8 +96,10 @@ class Cip113EventListenerTest {
 
         @Test
         void skipsWhenNoPolicyIdsConfigured() {
-            config.setRegistryNftPolicyIds(List.of());
-            config.init();
+            config = buildConfig();
+            Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
+            Cip113RegistryService registryService = new Cip113RegistryService(repository, config);
+            listener = new Cip113EventListener(config, parser, repository, registryService);
             listener.processTransaction(buildEvent(100L, REGISTRY_NFT_POLICY_ID, REGISTERED_POLICY_ID, "d8799f40ff", TX_HASH));
             verifyNoInteractions(repository);
         }

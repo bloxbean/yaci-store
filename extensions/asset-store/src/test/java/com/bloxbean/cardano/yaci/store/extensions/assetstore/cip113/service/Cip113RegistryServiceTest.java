@@ -37,10 +37,20 @@ class Cip113RegistryServiceTest {
 
     @BeforeEach
     void setUp() {
-        config = new Cip113Configuration();
-        config.setRegistryNftPolicyIds(List.of(MONITORED_POLICY));
-        config.init();
+        config = buildConfig(MONITORED_POLICY);
         service = new Cip113RegistryService(repository, config);
+    }
+
+    private static Cip113Configuration buildConfig(String... policyIds) {
+        Cip113Configuration config = org.mockito.Mockito.mock(Cip113Configuration.class,
+                org.mockito.Mockito.withSettings().lenient());
+        java.util.Set<String> policyIdSet = java.util.Set.of(policyIds);
+        when(config.isEnabled()).thenReturn(!policyIdSet.isEmpty());
+        when(config.getRegistryNftPolicyIdSet()).thenReturn(policyIdSet);
+        for (String id : policyIds) {
+            when(config.isMonitoredPolicyId(id)).thenReturn(true);
+        }
+        return config;
     }
 
     @Nested
@@ -77,8 +87,8 @@ class Cip113RegistryServiceTest {
 
         @Test
         void returnsEmptyWhenDisabled() {
-            config.setRegistryNftPolicyIds(List.of());
-            config.init();
+            config = buildConfig();
+            service = new Cip113RegistryService(repository, config);
             assertThat(service.findByPolicyId("deadbeef")).isEmpty();
         }
     }
@@ -108,8 +118,8 @@ class Cip113RegistryServiceTest {
 
         @Test
         void returnsEmptyMapWhenDisabled() {
-            config.setRegistryNftPolicyIds(List.of());
-            config.init();
+            config = buildConfig();
+            service = new Cip113RegistryService(repository, config);
             assertThat(service.findByPolicyIds(List.of("policy1"))).isEmpty();
         }
 
@@ -143,8 +153,8 @@ class Cip113RegistryServiceTest {
 
         @Test
         void returnsFalseWhenDisabled() {
-            config.setRegistryNftPolicyIds(List.of());
-            config.init();
+            config = buildConfig();
+            service = new Cip113RegistryService(repository, config);
             AddressUtxo utxo = utxoWithAmount(MONITORED_POLICY, "deadbeef", BigInteger.ONE);
             assertThat(service.containsRegistryNode(utxo)).isFalse();
         }
