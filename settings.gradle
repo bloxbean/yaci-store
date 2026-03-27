@@ -97,6 +97,9 @@ project(':extensions:blockfrost:blockfrost-address').projectDir = new File('exte
 include ':extensions:blockfrost:blockfrost-asset'
 project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extensions/blockfrost/asset')
 
+include ':extensions:blockfrost:blockfrost-block'
+project(':extensions:blockfrost:blockfrost-block').projectDir = new File('extensions/blockfrost/block')
+
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
