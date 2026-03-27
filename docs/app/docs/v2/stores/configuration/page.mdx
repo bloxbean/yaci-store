@@ -166,6 +166,21 @@ store.executor.use-virtual-thread-for-batch-processing=true
 store.executor.use-virtual-thread-for-event-processing=true
 ```
 
+### DuckDB Memory Limit (Analytics Store)
+
+When the analytics store is enabled, DuckDB runs in-process via JDBC for Parquet exports. By default, DuckDB allocates up to **80% of system physical RAM** for its buffer manager. Since DuckDB shares the process with the JVM, this can cause out-of-memory issues — especially in containers or when the JVM heap is also large.
+
+To limit DuckDB memory usage, set the `memory-limit` property:
+
+```properties
+# Limit DuckDB buffer manager memory (e.g., 1GB, 512MB, 2GB)
+yaci.store.analytics.duckdb.memory-limit=1GB
+```
+
+<Callout type="warning">
+If not configured, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments to prevent OOM kills.
+</Callout>
+
 ### Database Insert Performance
 
 ```properties

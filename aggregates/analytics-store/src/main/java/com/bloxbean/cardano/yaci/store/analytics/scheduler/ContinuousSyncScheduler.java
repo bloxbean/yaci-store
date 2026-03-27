@@ -1,9 +1,15 @@
 package com.bloxbean.cardano.yaci.store.analytics.scheduler;
 
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJob;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
+import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.NoOpAdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.gap.GapDetectionService;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.Data;
@@ -42,6 +48,8 @@ public class ContinuousSyncScheduler {
     private final TableExporterRegistry registry;
     private final AnalyticsStoreProperties properties;
     private final TaskScheduler taskScheduler;
+    private final CursorService cursorService;
+    private final AdaPotJobStorage adaPotJobStorage;
 
     private volatile boolean lastRunHadGaps = true; // start optimistic
 
@@ -49,12 +57,16 @@ public class ContinuousSyncScheduler {
                                    UniversalExportService universalExportService,
                                    TableExporterRegistry registry,
                                    AnalyticsStoreProperties properties,
-                                   TaskScheduler taskScheduler) {
+                                   TaskScheduler taskScheduler,
+                                   CursorService cursorService,
+                                   AdaPotJobStorage adaPotJobStorage) {
         this.gapDetectionService = gapDetectionService;
         this.universalExportService = universalExportService;
         this.registry = registry;
         this.properties = properties;
         this.taskScheduler = taskScheduler;
+        this.cursorService = cursorService;
+        this.adaPotJobStorage = adaPotJobStorage;
     }
 
     @PostConstruct
@@ -90,6 +102,27 @@ public class ContinuousSyncScheduler {
      * partitions across all enabled tables and exports them sequentially.
      */
     public void syncGaps() {
+        // Skip exports if sync is still catching up (block range sync)
+        if (properties.getContinuousSync().isExportAfterSync() && !cursorService.isSyncMode()) {
+            log.info("Skipping analytics export — yaci store is still syncing. "
+                    + "Exports will begin once sync reaches chain tip.");
+            lastRunHadGaps = true; // keep catch-up interval for quick start after tip
+            return;
+        }
+
+        // Skip exports if any adapot job is running
+        if (!(adaPotJobStorage instanceof NoOpAdaPotJobStorage)) {
+            List<AdaPotJob> runningJobs = adaPotJobStorage.getJobsByTypeAndStatus(
+                    AdaPotJobType.REWARD_CALC, AdaPotJobStatus.STARTED);
+            if (!runningJobs.isEmpty()) {
+                log.info("Skipping analytics export — AdaPot job in progress (epoch {}). "
+                        + "Will retry next iteration.",
+                        runningJobs.get(0).getEpoch());
+                lastRunHadGaps = true; // keep catch-up interval
+                return;
+            }
+        }
+
         log.debug("Running continuous sync gap detection for all tables");
 
         try {
@@ -245,6 +278,8 @@ public class ContinuousSyncScheduler {
         }
 
         boolean fullySynced = allMissingDates.isEmpty() && allMissingEpochs.isEmpty();
+        boolean exportDeferred = properties.getContinuousSync().isExportAfterSync()
+                && !cursorService.isSyncMode();
 
         return SyncStatus.builder()
             .genesisDate(genesis)
@@ -256,6 +291,7 @@ public class ContinuousSyncScheduler {
             .enabledTableCount(enabledDailyTables.size())
             .missingEpochExportCount(allMissingEpochs.size())
             .enabledEpochTableCount(enabledEpochTables.size())
+            .exportDeferred(exportDeferred)
             .build();
     }
 
@@ -274,5 +310,6 @@ public class ContinuousSyncScheduler {
         private int enabledTableCount;
         private int missingEpochExportCount;
         private int enabledEpochTableCount;
+        private boolean exportDeferred;
     }
 }
