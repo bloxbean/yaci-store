@@ -35,6 +35,15 @@ public interface Cip68StorageReader {
     Optional<FungibleTokenMetadata> findBySubject(String subject);
 
     /**
+     * Find the latest CIP-68 metadata for a subject with property filtering.
+     *
+     * @param subject    the subject (policyId + hex assetName)
+     * @param properties list of property names to include (empty = all)
+     * @return the parsed metadata if found, with only requested properties populated
+     */
+    Optional<FungibleTokenMetadata> findBySubject(String subject, List<String> properties);
+
+    /**
      * Find all reference NFTs registered under a policy ID.
      * Returns the raw entity (not parsed metadata) including slot and datum.
      *

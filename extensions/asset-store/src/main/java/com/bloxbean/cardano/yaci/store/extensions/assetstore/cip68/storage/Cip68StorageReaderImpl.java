@@ -26,9 +26,14 @@ public class Cip68StorageReaderImpl implements Cip68StorageReader {
 
     @Override
     public Optional<FungibleTokenMetadata> findBySubject(String subject) {
+        return findBySubject(subject, List.of());
+    }
+
+    @Override
+    public Optional<FungibleTokenMetadata> findBySubject(String subject, List<String> properties) {
         return cip68FungibleTokenService.getReferenceNftSubject(subject)
                 .flatMap(assetType -> cip68FungibleTokenService.findSubject(
-                        assetType.policyId(), assetType.assetName(), List.of()));
+                        assetType.policyId(), assetType.assetName(), properties));
     }
 
     @Override

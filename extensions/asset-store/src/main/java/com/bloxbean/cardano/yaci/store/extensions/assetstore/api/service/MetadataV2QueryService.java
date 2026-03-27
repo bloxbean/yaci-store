@@ -3,11 +3,10 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.service.Cip113RegistryService;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.repository.TokenLogoRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.repository.TokenMetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68FungibleTokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,10 +32,9 @@ public class MetadataV2QueryService {
 
     private static final MetadataStandardsPair IDENTITY = new MetadataStandardsPair(Metadata.empty(), Standards.empty());
 
-    private final TokenMetadataRepository tokenMetadataRepository;
-    private final TokenLogoRepository tokenLogoRepository;
-    private final Cip68FungibleTokenService cip68FungibleTokenService;
-    private final Cip113RegistryService cip113RegistryService;
+    private final Cip26StorageReader cip26StorageReader;
+    private final Cip68StorageReader cip68StorageReader;
+    private final Cip113StorageReader cip113StorageReader;
 
     /**
      * Query and merge metadata for a single subject.
@@ -105,7 +103,7 @@ public class MetadataV2QueryService {
                 .map(s -> AssetType.fromUnit(s).policyId())
                 .distinct()
                 .toList();
-        return cip113RegistryService.findByPolicyIds(policyIds);
+        return cip113StorageReader.findByPolicyIds(policyIds);
     }
 
     private Optional<MetadataStandardsPair> findMetadata(String subject, List<String> properties, QueryPriority priority) {
@@ -116,11 +114,9 @@ public class MetadataV2QueryService {
     }
 
     private Optional<MetadataStandardsPair> findCip26Metadata(String subject, List<String> properties) {
-        return tokenMetadataRepository.findById(subject)
+        return cip26StorageReader.findBySubject(subject)
                 .map(entity -> {
-                    String logo = tokenLogoRepository.findById(subject)
-                            .map(tokenLogo -> tokenLogo.getLogo())
-                            .orElse(null);
+                    String logo = cip26StorageReader.findLogoBySubject(subject).orElse(null);
                     return new MetadataStandardsPair(
                             Metadata.from(entity, logo, properties),
                             new Standards(entity, null));
@@ -128,8 +124,7 @@ public class MetadataV2QueryService {
     }
 
     private Optional<MetadataStandardsPair> findCip68Metadata(String subject, List<String> properties) {
-        return cip68FungibleTokenService.getReferenceNftSubject(subject)
-                .flatMap(assetType -> cip68FungibleTokenService.findSubject(assetType.policyId(), assetType.assetName(), properties))
+        return cip68StorageReader.findBySubject(subject, properties)
                 .map(fungibleTokenMetadata -> new MetadataStandardsPair(
                         Metadata.from(fungibleTokenMetadata),
                         new Standards(null, fungibleTokenMetadata)));
@@ -153,7 +148,7 @@ public class MetadataV2QueryService {
 
     private Map<String, Extension> buildExtensions(String subject) {
         Map<String, Extension> extensions = new LinkedHashMap<>();
-        cip113RegistryService.findByPolicyId(AssetType.fromUnit(subject).policyId())
+        cip113StorageReader.findByPolicyId(AssetType.fromUnit(subject).policyId())
                 .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
         return extensions;
     }
@@ -163,5 +158,4 @@ public class MetadataV2QueryService {
      */
     private record MetadataStandardsPair(Metadata metadata, Standards standards) {
     }
-
 }
