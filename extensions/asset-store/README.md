@@ -105,6 +105,36 @@ Configurable prefix (default `/api/v1`):
 | GET | `/api/v1/cip113/registry/{policyId}` | CIP-113 latest registry state |
 | POST | `/api/v1/cip113/registry/query` | CIP-113 batch lookup |
 
+## Health indicators
+
+The extension contributes three [Spring Boot Actuator](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.health) `HealthIndicator` beans. They appear automatically under `/actuator/health` when actuator is enabled.
+
+| Bean name | What it checks | Status values |
+|-----------|---------------|---------------|
+| `assetStoreOffchainSync` | CIP-26 GitHub sync job status | `UP` (sync done), `OUT_OF_SERVICE` (syncing/not started), `DOWN` (error) |
+| `assetStoreOnchainConnection` | Cardano node connection alive and receiving blocks | `UP` (connected), `OUT_OF_SERVICE` (not receiving), `DOWN` (connection lost) |
+| `assetStoreOnchainReadiness` | On-chain sync progress (CIP-68/CIP-113 indexing) | `UP` (synced to tip), `OUT_OF_SERVICE` (catching up), `DOWN` (connection lost) |
+
+### Assigning to Kubernetes probe groups
+
+The extension contributes the indicators but does **not** decide which probe group they belong to — that is your application's concern. Configure probe groups in your `application.properties`:
+
+```properties
+# Startup probe — check DB and node connection before accepting traffic
+management.endpoint.health.group.startup.include=db,assetStoreOnchainConnection
+
+# Liveness probe — is the process healthy?
+management.endpoint.health.group.liveness.include=assetStoreOnchainConnection
+
+# Readiness probe — is the service ready to serve accurate data?
+management.endpoint.health.group.readiness.include=db,assetStoreOffchainSync,assetStoreOnchainReadiness
+```
+
+This gives you:
+- `GET /actuator/health/startup` — fails if DB or node connection is down (pod restarts)
+- `GET /actuator/health/liveness` — fails if node connection drops (pod restarts)
+- `GET /actuator/health/readiness` — fails if still syncing or CIP-26 sync error (pod stops receiving traffic until caught up)
+
 ## Database
 
 Flyway migrations are included for PostgreSQL, H2, and MySQL. Tables are created automatically when the extension is enabled:
