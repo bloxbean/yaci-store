@@ -7,7 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip1
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -73,7 +73,7 @@ class MetadataV2QueryServiceTest {
 
         // CIP-68 for known subject (name and url overridden)
         when(cip68StorageReader.findBySubject(eq(KNOWN_SUBJECT), any()))
-                .thenReturn(Optional.of(new FungibleTokenMetadata(null, null, null, "NUTCOIN", null, "https://cip68-url.com/nutcoin", null)));
+                .thenReturn(Optional.of(new Cip68TokenMetadata(null, null, null, "NUTCOIN", null, "https://cip68-url.com/nutcoin", null)));
 
         // FLDT: CIP-26 data
         TokenMetadata fldtCip26 = new TokenMetadata();
@@ -86,7 +86,7 @@ class MetadataV2QueryServiceTest {
 
         // FLDT: CIP-68 data
         when(cip68StorageReader.findBySubject(eq(FLDT_SUBJECT), any()))
-                .thenReturn(Optional.of(new FungibleTokenMetadata(null,
+                .thenReturn(Optional.of(new Cip68TokenMetadata(null,
                         "The official token of FluidTokens, a leading DeFi ecosystem fueled by innovation and community backing.",
                         null, "FLDT", "FLDT", null, null)));
 

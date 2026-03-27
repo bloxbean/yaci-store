@@ -125,9 +125,9 @@ public class MetadataV2QueryService {
 
     private Optional<MetadataStandardsPair> findCip68Metadata(String subject, List<String> properties) {
         return cip68StorageReader.findBySubject(subject, properties)
-                .map(fungibleTokenMetadata -> new MetadataStandardsPair(
-                        Metadata.from(fungibleTokenMetadata),
-                        new Standards(null, fungibleTokenMetadata)));
+                .map(cip68TokenMetadata -> new MetadataStandardsPair(
+                        Metadata.from(cip68TokenMetadata),
+                        new Standards(null, cip68TokenMetadata)));
     }
 
     private static BinaryOperator<MetadataStandardsPair> aggregateResults() {

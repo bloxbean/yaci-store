@@ -1,9 +1,9 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.repository.MetadataReferenceNftRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68FungibleTokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -17,23 +17,23 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class Cip68StorageReaderImpl implements Cip68StorageReader {
 
-    private final Cip68FungibleTokenService cip68FungibleTokenService;
+    private final Cip68TokenService cip68TokenService;
     private final MetadataReferenceNftRepository metadataReferenceNftRepository;
 
     @Override
-    public Optional<FungibleTokenMetadata> findByPolicyIdAndAssetName(String policyId, String assetName) {
-        return cip68FungibleTokenService.findSubject(policyId, assetName, List.of());
+    public Optional<Cip68TokenMetadata> findByPolicyIdAndAssetName(String policyId, String assetName) {
+        return cip68TokenService.findSubject(policyId, assetName, List.of());
     }
 
     @Override
-    public Optional<FungibleTokenMetadata> findBySubject(String subject) {
+    public Optional<Cip68TokenMetadata> findBySubject(String subject) {
         return findBySubject(subject, List.of());
     }
 
     @Override
-    public Optional<FungibleTokenMetadata> findBySubject(String subject, List<String> properties) {
-        return cip68FungibleTokenService.getReferenceNftSubject(subject)
-                .flatMap(assetType -> cip68FungibleTokenService.findSubject(
+    public Optional<Cip68TokenMetadata> findBySubject(String subject, List<String> properties) {
+        return cip68TokenService.getReferenceNftSubject(subject)
+                .flatMap(assetType -> cip68TokenService.findSubject(
                         assetType.policyId(), assetType.assetName(), properties));
     }
 

@@ -4,10 +4,10 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68FTDatumParser;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.repository.MetadataReferenceNftRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68FungibleTokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import org.junit.jupiter.api.DisplayName;
@@ -35,10 +35,10 @@ class Cip68EventListenerTest {
     private static final String TX_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 
     @Mock
-    private Cip68FungibleTokenService cip68FungibleTokenService;
+    private Cip68TokenService cip68TokenService;
 
     @Mock
-    private Cip68FTDatumParser cip68DatumParser;
+    private Cip68DatumParser cip68DatumParser;
 
     @Mock
     private MetadataReferenceNftRepository metadataReferenceNftRepository;
@@ -53,7 +53,7 @@ class Cip68EventListenerTest {
         @Test
         void savesEntityWithCorrectFields() {
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
+            Cip68TokenMetadata metadata = new Cip68TokenMetadata(
                     6L, "A test token", "logo", "TestToken", "TST", "https://test.com", 1L);
 
             Amt refNftAmt = Amt.builder()
@@ -67,9 +67,9 @@ class Cip68EventListenerTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68FungibleTokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
             when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
-            when(cip68FungibleTokenService.isValidFTMetadata(metadata)).thenReturn(true);
+            when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
 
             listener.processTransaction(buildEvent(100L, utxo));
 
@@ -102,7 +102,7 @@ class Cip68EventListenerTest {
                             .build()))
                     .build();
 
-            when(cip68FungibleTokenService.extractReferenceNft(utxo)).thenReturn(Optional.empty());
+            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.empty());
 
             listener.processTransaction(buildEvent(100L, utxo));
 
@@ -123,7 +123,7 @@ class Cip68EventListenerTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68FungibleTokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
             when(cip68DatumParser.parse(datum)).thenReturn(Optional.empty());
 
             listener.processTransaction(buildEvent(100L, utxo));
@@ -134,7 +134,7 @@ class Cip68EventListenerTest {
         @Test
         void skipsWhenMetadataInvalid() {
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
+            Cip68TokenMetadata metadata = new Cip68TokenMetadata(
                     null, null, null, null, null, null, null);
 
             Amt refNftAmt = Amt.builder()
@@ -148,9 +148,9 @@ class Cip68EventListenerTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68FungibleTokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
             when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
-            when(cip68FungibleTokenService.isValidFTMetadata(metadata)).thenReturn(false);
+            when(cip68TokenService.isValidMetadata(metadata)).thenReturn(false);
 
             listener.processTransaction(buildEvent(100L, utxo));
 

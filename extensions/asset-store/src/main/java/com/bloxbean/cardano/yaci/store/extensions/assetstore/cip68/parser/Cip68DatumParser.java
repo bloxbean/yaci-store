@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,7 +13,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class Cip68FTDatumParser {
+public class Cip68DatumParser {
 
     public static final String DECIMALS = "decimals";
     public static final String DESCRIPTION = "description";
@@ -23,12 +23,12 @@ public class Cip68FTDatumParser {
     public static final String URL = "url";
 
     /**
-     * Manually parses Cip68 Fungible Token Datum
+     * Parses a CIP-68 reference NFT inline datum.
      *
      * @param inlineDatum the hex encoded datum
-     * @return the Cip68 Fungible Token Metadata
+     * @return the CIP-68 token metadata
      */
-    public Optional<FungibleTokenMetadata> parse(String inlineDatum) {
+    public Optional<Cip68TokenMetadata> parse(String inlineDatum) {
 
         if (inlineDatum == null || inlineDatum.trim().isEmpty()) {
             return Optional.empty();
@@ -59,7 +59,7 @@ public class Cip68FTDatumParser {
                     return Optional.empty();
                 }
 
-                return Optional.of(new FungibleTokenMetadata(decimals.orElse(null),
+                return Optional.of(new Cip68TokenMetadata(decimals.orElse(null),
                         description.orElse(null),
                         logo.orElse(null),
                         name.orElse(null),

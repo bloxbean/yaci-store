@@ -7,7 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Progra
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -113,7 +113,7 @@ public class TokenMetadataQueryService {
      * Look up CIP-68 on-chain reference NFT metadata for a subject.
      * Handles the fungible token prefix to reference NFT prefix conversion.
      */
-    public Optional<FungibleTokenMetadata> getCip68Metadata(String subject) {
+    public Optional<Cip68TokenMetadata> getCip68Metadata(String subject) {
         return cip68StorageReader.findBySubject(subject);
     }
 

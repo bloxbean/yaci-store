@@ -5,7 +5,7 @@ import jakarta.annotation.Nullable;
 
 @Schema(description = "CIP-68 token metadata parsed from a reference NFT inline datum. "
         + "Applies to both fungible and non-fungible tokens that follow the CIP-68 standard.")
-public record FungibleTokenMetadata(
+public record Cip68TokenMetadata(
         @Nullable @Schema(description = "Number of decimal places.") Long decimals,
         @Nullable @Schema(description = "Token description.") String description,
         @Nullable @Schema(description = "Base64-encoded PNG logo.") String logo,

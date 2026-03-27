@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,7 +22,7 @@ public interface Cip68StorageReader {
      * @param assetName the reference NFT asset name (with {@code 000643b0} prefix)
      * @return the parsed metadata if found
      */
-    Optional<FungibleTokenMetadata> findByPolicyIdAndAssetName(String policyId, String assetName);
+    Optional<Cip68TokenMetadata> findByPolicyIdAndAssetName(String policyId, String assetName);
 
     /**
      * Find the latest CIP-68 metadata for a subject.
@@ -33,7 +33,7 @@ public interface Cip68StorageReader {
      * @param subject the subject (policyId + hex assetName)
      * @return the parsed metadata if found
      */
-    Optional<FungibleTokenMetadata> findBySubject(String subject);
+    Optional<Cip68TokenMetadata> findBySubject(String subject);
 
     /**
      * Find the latest CIP-68 metadata for a subject with property filtering.
@@ -42,7 +42,7 @@ public interface Cip68StorageReader {
      * @param properties list of property names to include (empty = all)
      * @return the parsed metadata if found, with only requested properties populated
      */
-    Optional<FungibleTokenMetadata> findBySubject(String subject, List<String> properties);
+    Optional<Cip68TokenMetadata> findBySubject(String subject, List<String> properties);
 
     /**
      * Find all reference NFTs registered under a policy ID.

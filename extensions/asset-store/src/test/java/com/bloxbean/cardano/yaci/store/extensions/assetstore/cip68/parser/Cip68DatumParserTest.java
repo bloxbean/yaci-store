@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,13 +13,13 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class Cip68FTDatumParserTest {
+class Cip68DatumParserTest {
 
-    private Cip68FTDatumParser parser;
+    private Cip68DatumParser parser;
 
     @BeforeEach
     void setUp() {
-        parser = new Cip68FTDatumParser();
+        parser = new Cip68DatumParser();
     }
 
     @Nested
@@ -41,10 +41,10 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isPresent();
-            FungibleTokenMetadata metadata = result.get();
+            Cip68TokenMetadata metadata = result.get();
             assertThat(metadata.name()).isEqualTo("TestToken");
             assertThat(metadata.description()).isEqualTo("A test token");
             assertThat(metadata.ticker()).isEqualTo("TT");
@@ -66,10 +66,10 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isPresent();
-            FungibleTokenMetadata metadata = result.get();
+            Cip68TokenMetadata metadata = result.get();
             assertThat(metadata.name()).isEqualTo("MinToken");
             assertThat(metadata.description()).isEqualTo("Minimal");
             assertThat(metadata.ticker()).isNull();
@@ -91,7 +91,7 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isPresent();
             assertThat(result.get().name()).isEqualTo("TestToken");
@@ -104,28 +104,28 @@ class Cip68FTDatumParserTest {
 
         @Test
         void shouldReturnEmptyForNullInput() {
-            Optional<FungibleTokenMetadata> result = parser.parse(null);
+            Optional<Cip68TokenMetadata> result = parser.parse(null);
 
             assertThat(result).isEmpty();
         }
 
         @Test
         void shouldReturnEmptyForEmptyString() {
-            Optional<FungibleTokenMetadata> result = parser.parse("");
+            Optional<Cip68TokenMetadata> result = parser.parse("");
 
             assertThat(result).isEmpty();
         }
 
         @Test
         void shouldReturnEmptyForBlankString() {
-            Optional<FungibleTokenMetadata> result = parser.parse("   ");
+            Optional<Cip68TokenMetadata> result = parser.parse("   ");
 
             assertThat(result).isEmpty();
         }
 
         @Test
         void shouldReturnEmptyForInvalidHex() {
-            Optional<FungibleTokenMetadata> result = parser.parse("not-valid-hex");
+            Optional<Cip68TokenMetadata> result = parser.parse("not-valid-hex");
 
             assertThat(result).isEmpty();
         }
@@ -137,7 +137,7 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(mapData.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isEmpty();
         }
@@ -151,7 +151,7 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isEmpty();
         }
@@ -164,7 +164,7 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isEmpty();
         }
@@ -181,7 +181,7 @@ class Cip68FTDatumParserTest {
 
             String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
 
-            Optional<FungibleTokenMetadata> result = parser.parse(hexDatum);
+            Optional<Cip68TokenMetadata> result = parser.parse(hexDatum);
 
             assertThat(result).isEmpty();
         }

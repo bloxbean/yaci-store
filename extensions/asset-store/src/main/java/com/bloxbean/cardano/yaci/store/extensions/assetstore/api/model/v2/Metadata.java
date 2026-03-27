@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import jakarta.annotation.Nullable;
 import lombok.Builder;
 
@@ -52,14 +52,14 @@ public record Metadata(StringProperty name, StringProperty description, StringPr
         return new Metadata(nameProp, descProp, tickerProp, decimalsProp, logoProp, urlProp, null);
     }
 
-    public static Metadata from(FungibleTokenMetadata fungibleTokenMetadata) {
-        StringProperty nameProp = fungibleTokenMetadata.name() != null ? new StringProperty(fungibleTokenMetadata.name(), QueryPriority.CIP_68.name()) : null;
-        StringProperty descProp = fungibleTokenMetadata.description() != null ? new StringProperty(fungibleTokenMetadata.description(), QueryPriority.CIP_68.name()) : null;
-        StringProperty tickerProp = fungibleTokenMetadata.ticker() != null ? new StringProperty(fungibleTokenMetadata.ticker(), QueryPriority.CIP_68.name()) : null;
-        LongProperty decimalsProp = fungibleTokenMetadata.decimals() != null ? new LongProperty(fungibleTokenMetadata.decimals(), QueryPriority.CIP_68.name()) : null;
-        StringProperty logoProp = fungibleTokenMetadata.logo() != null ? new StringProperty(fungibleTokenMetadata.logo(), QueryPriority.CIP_68.name()) : null;
-        StringProperty urlProp = fungibleTokenMetadata.url() != null ? new StringProperty(fungibleTokenMetadata.url(), QueryPriority.CIP_68.name()) : null;
-        LongProperty versionProp = fungibleTokenMetadata.version() != null ? new LongProperty(fungibleTokenMetadata.version(), QueryPriority.CIP_68.name()) : null;
+    public static Metadata from(Cip68TokenMetadata cip68TokenMetadata) {
+        StringProperty nameProp = cip68TokenMetadata.name() != null ? new StringProperty(cip68TokenMetadata.name(), QueryPriority.CIP_68.name()) : null;
+        StringProperty descProp = cip68TokenMetadata.description() != null ? new StringProperty(cip68TokenMetadata.description(), QueryPriority.CIP_68.name()) : null;
+        StringProperty tickerProp = cip68TokenMetadata.ticker() != null ? new StringProperty(cip68TokenMetadata.ticker(), QueryPriority.CIP_68.name()) : null;
+        LongProperty decimalsProp = cip68TokenMetadata.decimals() != null ? new LongProperty(cip68TokenMetadata.decimals(), QueryPriority.CIP_68.name()) : null;
+        StringProperty logoProp = cip68TokenMetadata.logo() != null ? new StringProperty(cip68TokenMetadata.logo(), QueryPriority.CIP_68.name()) : null;
+        StringProperty urlProp = cip68TokenMetadata.url() != null ? new StringProperty(cip68TokenMetadata.url(), QueryPriority.CIP_68.name()) : null;
+        LongProperty versionProp = cip68TokenMetadata.version() != null ? new LongProperty(cip68TokenMetadata.version(), QueryPriority.CIP_68.name()) : null;
 
         return new Metadata(nameProp, descProp, tickerProp, decimalsProp, logoProp, urlProp, versionProp);
     }

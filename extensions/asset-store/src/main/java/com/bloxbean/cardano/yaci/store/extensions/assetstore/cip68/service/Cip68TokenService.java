@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68FTDatumParser;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.repository.MetadataReferenceNftRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,7 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class Cip68FungibleTokenService {
+public class Cip68TokenService {
 
     // This represents the hex encoding of `(100)` the prefix in the name of the Reference Token
     private static final String REFERENCE_NFT_PREFIX = "000643b0";
@@ -34,8 +34,8 @@ public class Cip68FungibleTokenService {
      *
      * @return true if the metadata are compliant to the FT Cip68 standard
      */
-    public boolean isValidFTMetadata(FungibleTokenMetadata fungibleTokenMetadata) {
-        return fungibleTokenMetadata.name() != null && fungibleTokenMetadata.description() != null;
+    public boolean isValidMetadata(Cip68TokenMetadata cip68TokenMetadata) {
+        return cip68TokenMetadata.name() != null && cip68TokenMetadata.description() != null;
     }
 
     /**
@@ -69,14 +69,14 @@ public class Cip68FungibleTokenService {
                 && AssetType.fromUnit(amount.getUnit()).assetName().startsWith(REFERENCE_NFT_PREFIX);
     }
 
-    public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
+    public Optional<Cip68TokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
         return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(policyId, assetName)
-                .map(referenceNft -> new FungibleTokenMetadata(getPropertyIfRequired(Cip68FTDatumParser.DECIMALS, referenceNft.getDecimals(), properties),
-                        getPropertyIfRequired(Cip68FTDatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
-                        getPropertyIfRequired(Cip68FTDatumParser.LOGO, referenceNft.getLogo(), properties),
-                        getPropertyIfRequired(Cip68FTDatumParser.NAME, referenceNft.getName(), properties),
-                        getPropertyIfRequired(Cip68FTDatumParser.TICKER, referenceNft.getTicker(), properties),
-                        getPropertyIfRequired(Cip68FTDatumParser.URL, referenceNft.getUrl(), properties),
+                .map(referenceNft -> new Cip68TokenMetadata(getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
+                        getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
+                        getPropertyIfRequired(Cip68DatumParser.LOGO, referenceNft.getLogo(), properties),
+                        getPropertyIfRequired(Cip68DatumParser.NAME, referenceNft.getName(), properties),
+                        getPropertyIfRequired(Cip68DatumParser.TICKER, referenceNft.getTicker(), properties),
+                        getPropertyIfRequired(Cip68DatumParser.URL, referenceNft.getUrl(), properties),
                         getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties)));
     }
 

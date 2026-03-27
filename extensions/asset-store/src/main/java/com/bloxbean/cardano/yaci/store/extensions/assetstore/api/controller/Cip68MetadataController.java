@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,13 +23,13 @@ public class Cip68MetadataController {
     private final Cip68StorageReader cip68StorageReader;
 
     @Operation(operationId = "getCip68Metadata",
-            summary = "Get CIP-68 on-chain fungible token metadata",
+            summary = "Get CIP-68 on-chain token metadata by policy ID and asset name",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Reference NFT metadata found"),
                     @ApiResponse(responseCode = "404", description = "No CIP-68 reference NFT found for this policy/asset")
             })
     @GetMapping(path = "/cip68/{policyId}/{assetName}", produces = {"application/json;charset=utf-8"})
-    public ResponseEntity<FungibleTokenMetadata> getCip68Metadata(
+    public ResponseEntity<Cip68TokenMetadata> getCip68Metadata(
             @Parameter(description = "The policy ID (56 hex characters)")
             @PathVariable("policyId") String policyId,
             @Parameter(description = "The reference NFT asset name (hex, with 000643b0 prefix)")
