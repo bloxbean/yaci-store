@@ -27,9 +27,10 @@ import java.util.stream.Collectors;
  * This controller is a <b>compatibility adapter</b> ported from the
  * <a href="https://github.com/cardano-foundation/cf-token-metadata-registry">
  * Cardano Foundation Token Metadata Registry</a> (cf-token-metadata-registry).
- * It provides the same V2 API contract ({@code /subjects/{subject}} and {@code /subjects/query})
- * so that existing clients of cf-token-metadata-registry can switch to a yaci-store deployment
- * without changes.
+ * It provides the same V2 API contract ({@code /api/v2/subjects/{subject}} and
+ * {@code /api/v2/subjects/query}) so that existing clients of cf-token-metadata-registry can
+ * switch to a yaci-store deployment by only changing the base URL — all paths, parameters,
+ * and response shapes are identical.
  * <p>
  * The V2 API merges metadata from multiple CIP standards into a single response:
  * <ul>
@@ -53,11 +54,11 @@ import java.util.stream.Collectors;
  *     Original V2ApiController in cf-token-metadata-registry</a>
  */
 @RestController
-@RequestMapping("${store.extensions.asset-store.api-prefix:/api/v1}")
+@RequestMapping("/api/v2")
 @ConditionalOnExpression("${store.extensions.asset-store.enabled:false}")
 @RequiredArgsConstructor
 @Slf4j
-public class V2SubjectController {
+public class CFMetadataRegistrySubjectController {
 
     private static final List<String> ALL_PROPERTIES = List.of();
 
