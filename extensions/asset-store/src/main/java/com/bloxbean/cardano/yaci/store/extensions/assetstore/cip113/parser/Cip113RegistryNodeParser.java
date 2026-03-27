@@ -56,7 +56,7 @@ public class Cip113RegistryNodeParser {
             String next = extractBytes(fields.get(1));
             String transferLogicScript = extractCredentialBytes(fields.get(2));
             String thirdPartyTransferLogicScript = extractCredentialBytes(fields.get(3));
-            String globalStatePolicyId = fields.size() > 4 ? extractBytes(fields.get(4)) : null;
+            String globalStatePolicyId = fields.size() > 4 ? extractBytesOrNull(fields.get(4)) : null;
 
             if (transferLogicScript == null || thirdPartyTransferLogicScript == null) {
                 log.warn("CIP-113 registry node missing required scripts: transferLogic={}, thirdPartyLogic={}",
@@ -89,6 +89,16 @@ public class Cip113RegistryNodeParser {
             return HexUtil.encodeHexString(bytes.getValue());
         }
         return null;
+    }
+
+    /**
+     * Extracts bytes, returning null for empty values.
+     * Used for optional fields like globalStatePolicyId where empty bytes means absent.
+     */
+    @Nullable
+    private String extractBytesOrNull(PlutusData data) {
+        String hex = extractBytes(data);
+        return (hex == null || hex.isEmpty()) ? null : hex;
     }
 
     /**
