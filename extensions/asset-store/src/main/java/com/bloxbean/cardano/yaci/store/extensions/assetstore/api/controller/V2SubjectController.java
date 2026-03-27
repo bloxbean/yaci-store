@@ -21,6 +21,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * V2 Subjects API — multi-standard token metadata with priority-based merging.
+ * <p>
+ * This controller is a <b>compatibility adapter</b> ported from the
+ * <a href="https://github.com/cardano-foundation/cf-token-metadata-registry">
+ * Cardano Foundation Token Metadata Registry</a> (cf-token-metadata-registry).
+ * It provides the same V2 API contract ({@code /subjects/{subject}} and {@code /subjects/query})
+ * so that existing clients of cf-token-metadata-registry can switch to a yaci-store deployment
+ * without changes.
+ * <p>
+ * The V2 API merges metadata from multiple CIP standards into a single response:
+ * <ul>
+ *   <li><b>CIP-26</b> — offchain metadata synced from the GitHub cardano-token-registry</li>
+ *   <li><b>CIP-68</b> — on-chain reference NFT metadata parsed from inline datums</li>
+ *   <li><b>CIP-113</b> — programmable token extensions (transfer logic scripts)</li>
+ * </ul>
+ *
+ * <h3>Query Priority</h3>
+ * When the same property (e.g. {@code name}) exists in both CIP-26 and CIP-68, the standard
+ * with higher priority wins. The default order is {@code CIP_68, CIP_26} (on-chain preferred),
+ * configurable per-request via the {@code query_priority} parameter or globally via
+ * {@code store.extensions.asset-store.default-query-priority}.
+ *
+ * <h3>CIP-113 Extensions</h3>
+ * If the token's policy ID is registered as a CIP-113 programmable token, the response includes
+ * an {@code extensions.cip113} block with transfer logic script hashes.
+ *
+ * @see MetadataV2QueryService
+ * @see <a href="https://github.com/cardano-foundation/cf-token-metadata-registry/blob/main/api/src/main/java/org/cardanofoundation/tokenmetadata/registry/api/controller/V2ApiController.java">
+ *     Original V2ApiController in cf-token-metadata-registry</a>
+ */
 @RestController
 @RequestMapping("${store.extensions.asset-store.api-prefix:/api/v1}")
 @ConditionalOnExpression("${store.extensions.asset-store.enabled:false}")
@@ -37,6 +68,16 @@ public class V2SubjectController {
     @Value("${store.extensions.asset-store.default-query-priority:CIP_68,CIP_26}")
     private List<QueryPriority> defaultQueryPriority;
 
+    /**
+     * Query metadata for a single subject, merging across CIP standards by priority.
+     *
+     * @param subject        the subject identifier (policyId + hex assetName)
+     * @param properties     optional list of properties to include (if omitted, all are returned;
+     *                       when filtering, {@code name} and {@code description} are always required)
+     * @param priorities     optional CIP priority override (default: {@code CIP_68, CIP_26})
+     * @param showCipsDetails whether to include raw per-standard metadata in the response
+     * @return the merged subject with metadata and extensions, or 404 if not found
+     */
     @Operation(operationId = "getSubject", summary = "Query either all or a subset of properties of a given subject")
     @GetMapping(path = "/subjects/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<Response> getSubject(
@@ -70,6 +111,17 @@ public class V2SubjectController {
         return ResponseEntity.ok(new Response(result, stringPriorities));
     }
 
+    /**
+     * Batch query metadata for multiple subjects.
+     * <p>
+     * CIP-113 data is pre-fetched in a single query to avoid N+1 lookups.
+     * Subjects without valid metadata (missing {@code name} or {@code description}) are excluded.
+     *
+     * @param body            request body with list of subjects and optional property filter
+     * @param priorities      optional CIP priority override
+     * @param showCipsDetails whether to include raw per-standard metadata
+     * @return list of merged subjects with valid metadata
+     */
     @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects")
     @PostMapping(value = "/subjects/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
     public ResponseEntity<BatchResponse> getSubjects(
