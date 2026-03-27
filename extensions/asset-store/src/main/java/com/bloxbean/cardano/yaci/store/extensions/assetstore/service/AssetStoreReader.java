@@ -34,7 +34,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TokenMetadataQueryService {
+public class AssetStoreReader {
 
     private final MetadataV2QueryService metadataV2QueryService;
     private final Cip26StorageReader cip26StorageReader;
