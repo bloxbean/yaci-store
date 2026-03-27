@@ -20,13 +20,15 @@ public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113Regist
     Optional<Cip113RegistryNode> findFirstByPolicyIdOrderBySlotDesc(String policyId);
 
     /**
-     * Returns the latest registry node state per policy ID using PostgreSQL DISTINCT ON.
-     * Only returns one row per policy ID (the one with the highest slot).
+     * Returns the latest registry node state per policy ID.
+     * Uses a correlated subquery to find the max slot per policy, portable across databases.
      */
-    @Query(value = "SELECT DISTINCT ON (policy_id) * FROM cip113_registry_node " +
-            "WHERE policy_id IN :policyIds ORDER BY policy_id, slot DESC",
-            nativeQuery = true)
+    @Query("SELECT e FROM Cip113RegistryNode e WHERE e.policyId IN :policyIds AND e.slot = " +
+            "(SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.policyId = e.policyId)")
     List<Cip113RegistryNode> findLatestByPolicyIds(@Param("policyIds") Collection<String> policyIds);
+
+    @Query("SELECT DISTINCT e.policyId FROM Cip113RegistryNode e")
+    List<String> findDistinctPolicyIds();
 
     int deleteBySlotGreaterThan(Long slot);
 

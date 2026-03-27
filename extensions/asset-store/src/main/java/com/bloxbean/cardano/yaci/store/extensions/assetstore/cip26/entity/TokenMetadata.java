@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
-@Table(name = "metadata")
+@Table(name = "token_metadata")
 @Getter
 @Setter
 public class TokenMetadata {

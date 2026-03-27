@@ -41,9 +41,6 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
 
     @Override
     public List<String> findAllProgrammableTokenPolicyIds() {
-        return cip113RegistryNodeRepository.findAll().stream()
-                .map(Cip113RegistryNode::getPolicyId)
-                .distinct()
-                .toList();
+        return cip113RegistryNodeRepository.findDistinctPolicyIds();
     }
 }

@@ -7,7 +7,7 @@ import lombok.Setter;
 import java.util.Objects;
 
 @Entity
-@Table(name = "logo")
+@Table(name = "token_logo")
 @Getter
 @Setter
 public class TokenLogo {

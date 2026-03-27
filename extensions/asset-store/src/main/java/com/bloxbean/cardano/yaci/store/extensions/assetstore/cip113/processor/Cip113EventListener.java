@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +24,7 @@ public class Cip113EventListener {
     private final Cip113RegistryService cip113RegistryService;
 
     @EventListener
+    @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         if (!cip113Configuration.isEnabled()) {
             return;

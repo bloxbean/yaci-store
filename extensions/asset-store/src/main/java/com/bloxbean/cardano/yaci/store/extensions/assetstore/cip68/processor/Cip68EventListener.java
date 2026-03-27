@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.stream.Stream;
 
@@ -32,6 +33,7 @@ public class Cip68EventListener {
     private final MetadataReferenceNftRepository metadataReferenceNftRepository;
 
     @EventListener
+    @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         Long slot = addressUtxoEvent.getMetadata().getSlot();
         addressUtxoEvent.getTxInputOutputs()
