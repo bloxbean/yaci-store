@@ -58,7 +58,7 @@ public class Cip68Processor {
                 .policyId(assetType.policyId())
                 .assetName(assetType.assetName())
                 .slot(slot)
-                .label(Cip68Constants.LABEL_FT)
+                .label(Cip68Constants.labelFromReferenceNft(assetType.assetName()))
                 .name(metadata.name())
                 .description(metadata.description())
                 .ticker(metadata.ticker())

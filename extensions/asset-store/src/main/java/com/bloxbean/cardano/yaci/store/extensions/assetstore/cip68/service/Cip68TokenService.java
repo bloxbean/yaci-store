@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
@@ -14,16 +15,12 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
-import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.FUNGIBLE_TOKEN_PREFIX;
-import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.REFERENCE_TOKEN_PREFIX;
+import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.*;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class Cip68TokenService {
-
-    // This represents the hex encoding of `(100)` the prefix in the name of the Reference Token
-    private static final String REFERENCE_NFT_PREFIX = "000643b0";
 
     private static final String VERSION = "version";
 
@@ -66,11 +63,16 @@ public class Cip68TokenService {
      */
     public boolean isReferenceNft(Amt amount) {
         return amount.getQuantity().equals(BigInteger.ONE)
-                && AssetType.fromUnit(amount.getUnit()).assetName().startsWith(REFERENCE_NFT_PREFIX);
+                && AssetType.fromUnit(amount.getUnit()).assetName().startsWith(REFERENCE_TOKEN_PREFIX);
     }
 
+    /**
+     * Find fungible token metadata by policy ID and asset name.
+     * Uses label-aware query to only return FT (label 333) entries.
+     */
     public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
-        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(policyId, assetName)
+        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
+                        policyId, assetName, LABEL_FT)
                 .map(referenceNft -> new FungibleTokenMetadata(getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
                         getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
                         getPropertyIfRequired(Cip68DatumParser.LOGO, referenceNft.getLogo(), properties),
@@ -88,6 +90,10 @@ public class Cip68TokenService {
         }
     }
 
+    /**
+     * Converts a fungible token subject (prefix 0014df10) to its corresponding reference NFT subject (prefix 000643b0).
+     * Returns empty if the subject does not have a fungible token prefix.
+     */
     public Optional<AssetType> getReferenceNftSubject(String subject) {
         AssetType assetType = AssetType.fromUnit(subject);
         String assetName = assetType.assetName();
@@ -98,6 +104,24 @@ public class Cip68TokenService {
         } else {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Derives the CIP-68 label from a reference NFT asset name prefix.
+     * The reference NFT always has prefix 000643b0 (label 100), but the corresponding
+     * user token label determines the token type:
+     * <ul>
+     *   <li>If the reference NFT was minted alongside a token with prefix 0014df10 → label 333 (FT)</li>
+     *   <li>If alongside prefix 000de140 → label 222 (NFT)</li>
+     *   <li>If alongside prefix 001bc280 → label 444 (RFT)</li>
+     * </ul>
+     * Since we currently only index FTs, this always returns LABEL_FT.
+     * When NFT support is added, this should inspect the minting transaction
+     * to determine which user token prefix was minted alongside the reference NFT.
+     */
+    public static int deriveLabelForReferenceNft() {
+        // TODO: When NFT support is added, derive label from co-minted user token prefix
+        return LABEL_FT;
     }
 
 }
