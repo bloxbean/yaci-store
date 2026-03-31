@@ -168,6 +168,10 @@ store.executor.use-virtual-thread-for-event-processing=true
 
 ### DuckDB Memory Limit (Analytics Store)
 
+<Callout type="info">
+Analytics Store is available since **2.1.0-pre1**.
+</Callout>
+
 When the analytics store is enabled, DuckDB runs in-process via JDBC for Parquet exports. By default, DuckDB allocates up to **80% of system physical RAM** for its buffer manager. Since DuckDB shares the process with the JVM, this can cause out-of-memory issues — especially in containers or when the JVM heap is also large.
 
 To limit DuckDB memory usage, set the `memory-limit` property:

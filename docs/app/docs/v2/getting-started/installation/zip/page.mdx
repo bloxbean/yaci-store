@@ -87,6 +87,8 @@ To combine with ledger-state:
 ./bin/start.sh ledger-state,analytics
 ```
 
+> **Note:** Analytics Store is available since **2.1.0-pre1**.
+
 Analytics export configuration is in `application-analytics.properties`. Key settings include:
 
 - **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries). The code default is `parquet`, but the out-of-box `application-analytics.properties` ships with `ducklake`.
