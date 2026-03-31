@@ -61,7 +61,7 @@ public class TokenMetadataSubjectController {
                     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Required properties (name, description) missing from filter"),
                     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subject not found or has no valid metadata")
             })
-    @GetMapping(path = "/subjects/{subject}", produces = {"application/json;charset=utf-8"})
+    @GetMapping(path = "/subject/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<SubjectResponse> getSubject(
             @Parameter(description = "the concatenation of policy id and asset name (if any) to query")
             @PathVariable("subject") String subject,
@@ -97,7 +97,7 @@ public class TokenMetadataSubjectController {
             responses = {
                     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Batch results (subjects without valid metadata are excluded)")
             })
-    @PostMapping(value = "/subjects/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
+    @PostMapping(value = "/subject/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
     public ResponseEntity<SubjectBatchResponse> getSubjects(
             @Parameter(name = "body", required = true, schema = @Schema)
             @Valid @RequestBody BatchRequest body,

@@ -28,7 +28,7 @@ public class PolicyApiController {
 
     @Operation(operationId = "getPolicy",
             summary = "Look up a policy: returns all tokens and programmable token status for the given minting policy")
-    @GetMapping(path = "/policies/{policyId}", produces = "application/json;charset=utf-8")
+    @GetMapping(path = "/policy/{policyId}", produces = "application/json;charset=utf-8")
     public ResponseEntity<PolicyResponse> getPolicy(
             @Parameter(description = "the minting policy ID (56 hex characters)")
             @PathVariable("policyId") String policyId) {
@@ -42,7 +42,7 @@ public class PolicyApiController {
 
     @Operation(operationId = "queryPolicies",
             summary = "Batch lookup of policies: returns tokens and programmable token status for each policy")
-    @PostMapping(path = "/policies/query",
+    @PostMapping(path = "/policy/query",
             produces = "application/json;charset=utf-8",
             consumes = "application/json;charset=utf-8")
     public ResponseEntity<List<PolicyResponse>> queryPolicies(
