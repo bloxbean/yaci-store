@@ -47,10 +47,6 @@ CREATE TABLE metadata_reference_nft (
 );
 
 CREATE INDEX idx_metadata_reference_nft_slot ON metadata_reference_nft(slot);
-CREATE INDEX idx_metadata_reference_nft_policy_label ON metadata_reference_nft(policy_id, label, slot DESC);
-
-CREATE INDEX idx_ft_offchain_metadata_policy ON ft_offchain_metadata(policy);
-CREATE INDEX idx_ft_offchain_metadata_ticker ON ft_offchain_metadata(ticker);
 
 -- CIP-113 programmable token registry nodes
 CREATE TABLE cip113_registry_node (

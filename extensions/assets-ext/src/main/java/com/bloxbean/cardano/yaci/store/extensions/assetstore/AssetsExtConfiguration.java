@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -53,8 +52,7 @@ public class AssetsExtConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService,
-                                                  MetadataReferenceNftRepository metadataReferenceNftRepository) {
-        return new Cip68StorageReaderImpl(cip68TokenService, metadataReferenceNftRepository);
+    public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService) {
+        return new Cip68StorageReaderImpl(cip68TokenService);
     }
 }
