@@ -37,7 +37,7 @@ CREATE TABLE metadata_reference_nft (
     description    TEXT         NOT NULL,
     ticker         TEXT,
     url            TEXT,
-    decimals       BIGINT,
+    decimals       INTEGER,
     logo           LONGTEXT,
     version        BIGINT       NOT NULL,
     datum          LONGTEXT     NOT NULL,
