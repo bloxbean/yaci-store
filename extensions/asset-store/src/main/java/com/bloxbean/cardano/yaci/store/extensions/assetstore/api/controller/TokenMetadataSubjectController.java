@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.MetadataV2QueryService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * configurable per-request via the {@code query_priority} parameter or globally via
  * {@code store.extensions.asset-store.default-query-priority}.
  *
- * @see MetadataV2QueryService
+ * @see TokenQueryService
  */
 @RestController
 @RequestMapping("${apiPrefix:/api/v1}")
@@ -50,7 +50,7 @@ public class TokenMetadataSubjectController {
 
     private static final List<String> REQUIRED_PROPERTIES = List.of("name", "description");
 
-    private final MetadataV2QueryService metadataV2QueryService;
+    private final TokenQueryService tokenQueryService;
 
     @Value("${store.extensions.asset-store.default-query-priority:CIP_68,CIP_26}")
     private List<QueryPriority> defaultQueryPriority;
@@ -62,7 +62,7 @@ public class TokenMetadataSubjectController {
                     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subject not found or has no valid metadata")
             })
     @GetMapping(path = "/subjects/{subject}", produces = {"application/json;charset=utf-8"})
-    public ResponseEntity<Response> getSubject(
+    public ResponseEntity<SubjectResponse> getSubject(
             @Parameter(description = "the concatenation of policy id and asset name (if any) to query")
             @PathVariable("subject") String subject,
             @Parameter(description = "the list of properties to be returned in the response, if none specified, all properties will be returned")
@@ -83,14 +83,14 @@ public class TokenMetadataSubjectController {
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
-        Subject result = metadataV2QueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails);
+        Subject result = tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails);
 
         if (result == null) {
             return ResponseEntity.notFound().build();
         }
 
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
-        return ResponseEntity.ok(new Response(result, stringPriorities));
+        return ResponseEntity.ok(new SubjectResponse(result, stringPriorities));
     }
 
     @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects",
@@ -98,7 +98,7 @@ public class TokenMetadataSubjectController {
                     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Batch results (subjects without valid metadata are excluded)")
             })
     @PostMapping(value = "/subjects/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
-    public ResponseEntity<BatchResponse> getSubjects(
+    public ResponseEntity<SubjectBatchResponse> getSubjects(
             @Parameter(name = "body", required = true, schema = @Schema)
             @Valid @RequestBody BatchRequest body,
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")
@@ -111,17 +111,17 @@ public class TokenMetadataSubjectController {
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
-        Map<String, ProgrammableTokenCip113> cip113Map = metadataV2QueryService.prefetchCip113(body.getSubjects());
+        Map<String, ProgrammableTokenCip113> cip113Map = tokenQueryService.prefetchCip113(body.getSubjects());
 
         List<Subject> subjects = body.getSubjects()
                 .stream()
-                .map(subject -> metadataV2QueryService.querySubjectBatch(
+                .map(subject -> tokenQueryService.querySubjectBatch(
                         subject, queryPriority, queryProperties, cip113Map, includeCipsDetails))
                 .filter(s -> !s.metadata().isEmpty() && s.metadata().isValid())
                 .toList();
 
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
-        return ResponseEntity.ok(new BatchResponse(subjects, stringPriorities));
+        return ResponseEntity.ok(new SubjectBatchResponse(subjects, stringPriorities));
     }
 
     private void validateProperties(List<String> queryProperties) {

@@ -8,14 +8,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("${apiPrefix:/api/v1}")
 @RequiredArgsConstructor
-@Tag(name = "CIP-68 Metadata", description = "On-chain token metadata parsed from CIP-68 reference NFT inline datums")
+@Tag(name = "CIP-68 Metadata", description = "On-chain fungible token metadata parsed from CIP-68 reference NFT inline datums")
 @Slf4j
 public class Cip68MetadataController {
 
@@ -37,20 +36,5 @@ public class Cip68MetadataController {
         return cip68StorageReader.findByPolicyIdAndAssetName(policyId, assetName)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @Operation(operationId = "getCip68NftMetadata",
-            summary = "Get CIP-68 NFT metadata by policy ID and asset name (not yet implemented)",
-            responses = {
-                    @ApiResponse(responseCode = "501", description = "NFT metadata support is not yet implemented")
-            })
-    @GetMapping(path = "/cip68/nft/{policyId}/{assetName}", produces = {"application/json;charset=utf-8"})
-    public ResponseEntity<Void> getNftMetadata(
-            @Parameter(description = "The policy ID (56 hex characters)")
-            @PathVariable("policyId") String policyId,
-            @Parameter(description = "The NFT asset name (hex)")
-            @PathVariable("assetName") String assetName) {
-
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 }

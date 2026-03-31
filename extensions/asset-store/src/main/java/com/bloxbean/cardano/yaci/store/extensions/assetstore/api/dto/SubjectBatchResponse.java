@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 @Schema(description = "Batch subject query response.")
-public record BatchResponse(
+public record SubjectBatchResponse(
         @Schema(description = "List of subjects with valid metadata (subjects without name+description are excluded).")
         List<Subject> subjects,
 

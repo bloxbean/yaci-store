@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 @Schema(description = "Single subject query response with the resolved query priority.")
-public record Response(
+public record SubjectResponse(
         @Schema(description = "The merged subject with metadata and extensions.")
         Subject subject,
 

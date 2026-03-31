@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Progra
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Marker interface for V2 API extensions.
+ * Marker interface for API extensions.
  * Each CIP standard that enriches the Subject response implements this interface.
  * Extensions are serialized into the {@code extensions} map keyed by their CIP identifier.
  */

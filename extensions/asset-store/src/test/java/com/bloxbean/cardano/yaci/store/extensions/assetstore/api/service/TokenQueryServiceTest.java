@@ -32,8 +32,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("MetadataV2QueryService")
-class MetadataV2QueryServiceTest {
+@DisplayName("TokenQueryService")
+class TokenQueryServiceTest {
 
     private static final String KNOWN_SUBJECT = "025146866af908340247fe4e9672d5ac7059f1e8534696b5f920c9e66362544848";
     private static final String UNKNOWN_SUBJECT = "025146866af908340247fe4e9672d5ac7059f1e8534696b5f920c9e66362544843";
@@ -51,11 +51,11 @@ class MetadataV2QueryServiceTest {
     @Mock
     private Cip113StorageReader cip113StorageReader;
 
-    private MetadataV2QueryService service;
+    private TokenQueryService service;
 
     @BeforeEach
     void setUp() {
-        service = new MetadataV2QueryService(cip26StorageReader, cip68StorageReader, cip113StorageReader);
+        service = new TokenQueryService(cip26StorageReader, cip68StorageReader, cip113StorageReader);
 
         // Unknown subject: no CIP-26, no CIP-68
         AssetType unknownAssetType = AssetType.fromUnit(UNKNOWN_SUBJECT);

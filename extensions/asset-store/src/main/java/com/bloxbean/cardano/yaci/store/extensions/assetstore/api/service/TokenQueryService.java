@@ -17,14 +17,14 @@ import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 
 /**
- * Core query and merge logic for the V2 metadata API.
+ * Core query and merge logic for multi-standard token metadata.
  * <p>
  * Merges CIP-26 and CIP-68 metadata based on a configurable priority order,
  * and appends CIP-113 extensions when applicable.
  */
 @Service
 @Slf4j
-public class MetadataV2QueryService {
+public class TokenQueryService {
 
     private static final MetadataStandardsPair IDENTITY = new MetadataStandardsPair(Metadata.empty(), Standards.empty());
 
@@ -33,7 +33,7 @@ public class MetadataV2QueryService {
     private final Optional<Cip113StorageReader> cip113StorageReader;
 
     @Autowired
-    public MetadataV2QueryService(Cip26StorageReader cip26StorageReader,
+    public TokenQueryService(Cip26StorageReader cip26StorageReader,
                                    Cip68StorageReader cip68StorageReader,
                                    @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
         this.cip26StorageReader = cip26StorageReader;

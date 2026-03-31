@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.MetadataV2QueryService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
@@ -35,23 +35,23 @@ import java.util.Optional;
 @Slf4j
 public class AssetStoreReader {
 
-    private final MetadataV2QueryService metadataV2QueryService;
+    private final TokenQueryService tokenQueryService;
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
     private final Optional<Cip113StorageReader> cip113StorageReader;
 
     @Autowired
-    public AssetStoreReader(MetadataV2QueryService metadataV2QueryService,
+    public AssetStoreReader(TokenQueryService tokenQueryService,
                             Cip26StorageReader cip26StorageReader,
                             Cip68StorageReader cip68StorageReader,
                             @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
-        this.metadataV2QueryService = metadataV2QueryService;
+        this.tokenQueryService = tokenQueryService;
         this.cip26StorageReader = cip26StorageReader;
         this.cip68StorageReader = cip68StorageReader;
         this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
     }
 
-    // ========== Merged (V2) queries ==========
+    // ========== Merged queries ==========
 
     /**
      * Query merged metadata for a subject using default priority (CIP_68, CIP_26).
@@ -83,7 +83,7 @@ public class AssetStoreReader {
      * @return the merged subject with metadata and extensions, or empty if not found
      */
     public Optional<Subject> getSubject(String subject, List<QueryPriority> queryPriority, List<String> properties) {
-        Subject result = metadataV2QueryService.querySubject(subject, queryPriority, properties, false);
+        Subject result = tokenQueryService.querySubject(subject, queryPriority, properties, false);
         return Optional.ofNullable(result);
     }
 
@@ -95,9 +95,9 @@ public class AssetStoreReader {
      * @return list of subjects with valid metadata (invalid/not-found subjects are excluded)
      */
     public List<Subject> getSubjects(List<String> subjects, List<QueryPriority> queryPriority) {
-        Map<String, ProgrammableTokenCip113> cip113Map = metadataV2QueryService.prefetchCip113(subjects);
+        Map<String, ProgrammableTokenCip113> cip113Map = tokenQueryService.prefetchCip113(subjects);
         return subjects.stream()
-                .map(subject -> metadataV2QueryService.querySubjectBatch(
+                .map(subject -> tokenQueryService.querySubjectBatch(
                         subject, queryPriority, List.of(), cip113Map, false))
                 .filter(subject -> subject.metadata() != null && subject.metadata().isValid())
                 .toList();

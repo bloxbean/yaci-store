@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("${apiPrefix:/api/v1}")
 @RequiredArgsConstructor
-@Tag(name = "CIP-26 Metadata", description = "Off-chain token metadata (fungible and non-fungible) from the GitHub cardano-token-registry")
+@Tag(name = "CIP-26 Metadata", description = "Off-chain fungible token metadata from the GitHub cardano-token-registry")
 @Slf4j
 public class Cip26MetadataController {
 
@@ -26,7 +26,7 @@ public class Cip26MetadataController {
                     @ApiResponse(responseCode = "200", description = "Metadata found"),
                     @ApiResponse(responseCode = "404", description = "Subject not found in CIP-26 registry")
             })
-    @GetMapping(path = "/metadata/{subject}", produces = {"application/json;charset=utf-8"})
+    @GetMapping(path = "/cip26/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<TokenMetadata> getMetadata(
             @Parameter(description = "The subject identifier (policy ID + asset name hex)")
             @PathVariable("subject") String subject) {
