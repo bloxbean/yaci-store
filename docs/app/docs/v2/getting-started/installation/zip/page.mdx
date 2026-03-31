@@ -91,6 +91,7 @@ Analytics export configuration is in `application-analytics.properties`. Key set
 
 - **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries). The code default is `parquet`, but the out-of-box `application-analytics.properties` ships with `ducklake`.
 - **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
+- **Export after sync**: `yaci.store.analytics.continuous-sync.export-after-sync` — when `true` (default), exports are deferred until the sync reaches chain tip. **Recommended to keep `true` on mainnet** to optimize resource usage during the sync.
 
 ### Custom Exporters
 
