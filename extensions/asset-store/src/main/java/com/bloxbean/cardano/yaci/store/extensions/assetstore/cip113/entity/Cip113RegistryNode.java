@@ -1,12 +1,10 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.IdClass;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 import jakarta.annotation.Nullable;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "cip113_registry_node")
@@ -47,5 +45,8 @@ public class Cip113RegistryNode {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String datum;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private LocalDateTime lastSyncedAt;
 
 }

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
@@ -16,6 +17,9 @@ public class TokenLogo {
     private String subject;
 
     private String logo;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private LocalDateTime lastSyncedAt;
 
     @Override
     public boolean equals(Object o) {

@@ -40,6 +40,9 @@ public class TokenMetadata {
     @JdbcTypeCode(SqlTypes.JSON)
     private Mapping properties;
 
+    @Temporal(TemporalType.TIMESTAMP)
+    private LocalDateTime lastSyncedAt;
+
 
     @Override
     public boolean equals(Object o) {

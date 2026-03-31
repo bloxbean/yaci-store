@@ -39,6 +39,7 @@ public class TokenMetadataService {
         }
 
         try {
+            tokenMetadata.setLastSyncedAt(java.time.LocalDateTime.now());
             tokenMetadataRepository.save(tokenMetadata);
             return true;
         } catch (Exception e) {
@@ -62,6 +63,7 @@ public class TokenMetadataService {
         }
 
         try {
+            tokenLogo.setLastSyncedAt(java.time.LocalDateTime.now());
             tokenLogoRepository.save(tokenLogo);
             return true;
         } catch (Exception e) {

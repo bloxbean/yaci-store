@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "metadata_reference_nft")
 @IdClass(MetadataReferenceNftId.class)
@@ -48,5 +50,8 @@ public class MetadataReferenceNft {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String datum;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private LocalDateTime lastSyncedAt;
 
 }

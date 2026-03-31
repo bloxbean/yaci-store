@@ -52,6 +52,7 @@ public class Cip113Processor {
                                     .globalStatePolicyId(parsed.globalStatePolicyId())
                                     .nextKey(parsed.next())
                                     .datum(utxo.getInlineDatum())
+                                    .lastSyncedAt(java.time.LocalDateTime.now())
                                     .build();
 
                             cip113RegistryNodeRepository.save(entity);
