@@ -1,7 +1,7 @@
--- CIP-26 offchain token metadata
-CREATE TABLE token_metadata (
+-- CIP-26 offchain fungible token metadata
+CREATE TABLE ft_offchain_metadata (
     subject     VARCHAR(255) PRIMARY KEY,
-    policy      TEXT,
+    policy      VARCHAR(56),
     name        VARCHAR(255),
     ticker      VARCHAR(32),
     url         VARCHAR(255),
@@ -12,11 +12,10 @@ CREATE TABLE token_metadata (
     properties  JSON
 );
 
--- CIP-26 logos
-CREATE TABLE token_logo (
+-- CIP-26 fungible token logos
+CREATE TABLE ft_offchain_logo (
     subject VARCHAR(255) PRIMARY KEY,
-    logo    LONGTEXT,
-    CONSTRAINT fk_token_logo_metadata_subject FOREIGN KEY(subject) REFERENCES token_metadata(subject)
+    logo    LONGTEXT
 );
 
 -- CIP-26 GitHub sync state tracking
@@ -27,17 +26,18 @@ CREATE TABLE off_chain_sync_state (
 
 -- CIP-68 on-chain reference NFT metadata
 CREATE TABLE metadata_reference_nft (
-    policy_id   VARCHAR(56),
-    asset_name  VARCHAR(255),
-    slot        BIGINT,
-    name        TEXT NOT NULL,
-    description TEXT NOT NULL,
+    policy_id   VARCHAR(56)  NOT NULL,
+    asset_name  VARCHAR(255) NOT NULL,
+    slot        BIGINT       NOT NULL,
+    label       INTEGER      NOT NULL DEFAULT 333,
+    name        TEXT         NOT NULL,
+    description TEXT         NOT NULL,
     ticker      TEXT,
     url         TEXT,
     decimals    BIGINT,
     logo        LONGTEXT,
-    version     BIGINT NOT NULL,
-    datum       LONGTEXT NOT NULL,
+    version     BIGINT       NOT NULL,
+    datum       LONGTEXT     NOT NULL,
     PRIMARY KEY (policy_id, asset_name, slot)
 );
 
@@ -57,4 +57,3 @@ CREATE TABLE cip113_registry_node (
 );
 
 CREATE INDEX idx_cip113_slot ON cip113_registry_node(slot);
-CREATE INDEX idx_cip113_policy_slot ON cip113_registry_node(policy_id, slot DESC);

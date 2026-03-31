@@ -1,21 +1,18 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.QueryPriority;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.*;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import jakarta.annotation.Nullable;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 
@@ -26,7 +23,6 @@ import java.util.function.BinaryOperator;
  * and appends CIP-113 extensions when applicable.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MetadataV2QueryService {
 
@@ -34,7 +30,16 @@ public class MetadataV2QueryService {
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Cip113StorageReader cip113StorageReader;
+    private final Optional<Cip113StorageReader> cip113StorageReader;
+
+    @Autowired
+    public MetadataV2QueryService(Cip26StorageReader cip26StorageReader,
+                                   Cip68StorageReader cip68StorageReader,
+                                   @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
+        this.cip26StorageReader = cip26StorageReader;
+        this.cip68StorageReader = cip68StorageReader;
+        this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
+    }
 
     /**
      * Query and merge metadata for a single subject.
@@ -97,13 +102,16 @@ public class MetadataV2QueryService {
 
     /**
      * Pre-fetch CIP-113 data for a list of subjects to avoid N+1 queries.
+     * Returns an empty map if CIP-113 is not enabled.
      */
     public Map<String, ProgrammableTokenCip113> prefetchCip113(List<String> subjects) {
-        List<String> policyIds = subjects.stream()
-                .map(s -> AssetType.fromUnit(s).policyId())
-                .distinct()
-                .toList();
-        return cip113StorageReader.findByPolicyIds(policyIds);
+        return cip113StorageReader.map(reader -> {
+            List<String> policyIds = subjects.stream()
+                    .map(s -> AssetType.fromUnit(s).policyId())
+                    .distinct()
+                    .toList();
+            return reader.findByPolicyIds(policyIds);
+        }).orElse(Map.of());
     }
 
     private Optional<MetadataStandardsPair> findMetadata(String subject, List<String> properties, QueryPriority priority) {
@@ -148,7 +156,7 @@ public class MetadataV2QueryService {
 
     private Map<String, Extension> buildExtensions(String subject) {
         Map<String, Extension> extensions = new LinkedHashMap<>();
-        cip113StorageReader.findByPolicyId(AssetType.fromUnit(subject).policyId())
+        cip113StorageReader.flatMap(reader -> reader.findByPolicyId(AssetType.fromUnit(subject).policyId()))
                 .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
         return extensions;
     }

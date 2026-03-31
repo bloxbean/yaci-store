@@ -1,18 +1,16 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.repository.TokenLogoRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.repository.TokenMetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenLogoRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenMetadataRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-@Component
 @RequiredArgsConstructor
 public class Cip26StorageReaderImpl implements Cip26StorageReader {
 

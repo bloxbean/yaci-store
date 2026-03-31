@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenLogo;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenLogo;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 

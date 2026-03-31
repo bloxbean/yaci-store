@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.metadatatools.core.cip26.MetadataCreator;
 import org.cardanofoundation.metadatatools.core.cip26.ValidationError;

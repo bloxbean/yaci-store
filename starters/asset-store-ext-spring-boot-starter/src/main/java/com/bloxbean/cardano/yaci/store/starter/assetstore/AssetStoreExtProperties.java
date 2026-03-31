@@ -38,12 +38,14 @@ public class AssetStoreExtProperties {
     @Setter
     public static final class Cip68 {
         private boolean enabled = true;
+        private boolean fungibleEnabled = true;
+        private boolean nftEnabled = false;
     }
 
     @Getter
     @Setter
     public static final class Cip113 {
-        private boolean enabled = true;
+        private boolean enabled = false;
         private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 

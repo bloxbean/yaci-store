@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.Extension;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Extension;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.annotation.Nullable;

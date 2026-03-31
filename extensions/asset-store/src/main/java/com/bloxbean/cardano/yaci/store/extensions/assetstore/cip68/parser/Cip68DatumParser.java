@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,7 @@ public class Cip68DatumParser {
      * @param inlineDatum the hex encoded datum
      * @return the CIP-68 token metadata
      */
-    public Optional<Cip68TokenMetadata> parse(String inlineDatum) {
+    public Optional<FungibleTokenMetadata> parse(String inlineDatum) {
 
         if (inlineDatum == null || inlineDatum.trim().isEmpty()) {
             return Optional.empty();
@@ -59,7 +59,7 @@ public class Cip68DatumParser {
                     return Optional.empty();
                 }
 
-                return Optional.of(new Cip68TokenMetadata(decimals.orElse(null),
+                return Optional.of(new FungibleTokenMetadata(decimals.orElse(null),
                         description.orElse(null),
                         logo.orElse(null),
                         name.orElse(null),

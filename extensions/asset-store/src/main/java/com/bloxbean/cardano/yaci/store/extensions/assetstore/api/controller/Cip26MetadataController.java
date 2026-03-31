@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -8,13 +8,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("${store.extensions.asset-store.api-prefix:/api/v1}")
-@ConditionalOnExpression("${store.extensions.asset-store.enabled:false}")
+@RequestMapping("${apiPrefix:/api/v1}")
 @RequiredArgsConstructor
 @Tag(name = "CIP-26 Metadata", description = "Off-chain token metadata (fungible and non-fungible) from the GitHub cardano-token-registry")
 @Slf4j

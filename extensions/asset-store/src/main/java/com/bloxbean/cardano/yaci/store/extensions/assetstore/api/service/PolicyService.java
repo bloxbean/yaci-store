@@ -1,16 +1,16 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.Extension;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.PolicyResponse;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.PolicyTokenSummary;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Extension;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.PolicyResponse;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.PolicyTokenSummary;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,16 +18,23 @@ import java.util.stream.Collectors;
 
 /**
  * Service for policy-level queries — aggregates all tokens and extensions for a minting policy.
- * Ported from cf-token-metadata-registry's PolicyService.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PolicyService {
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Cip113StorageReader cip113StorageReader;
+    private final Optional<Cip113StorageReader> cip113StorageReader;
+
+    @Autowired
+    public PolicyService(Cip26StorageReader cip26StorageReader,
+                         Cip68StorageReader cip68StorageReader,
+                         @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
+        this.cip26StorageReader = cip26StorageReader;
+        this.cip68StorageReader = cip68StorageReader;
+        this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
+    }
 
     /**
      * Look up a single policy: aggregates all CIP-26 and CIP-68 tokens plus extensions.
@@ -60,7 +67,9 @@ public class PolicyService {
                 .stream()
                 .collect(Collectors.groupingBy(MetadataReferenceNft::getPolicyId));
 
-        Map<String, ProgrammableTokenCip113> cip113ByPolicy = cip113StorageReader.findByPolicyIds(policyIdList);
+        Map<String, ProgrammableTokenCip113> cip113ByPolicy = cip113StorageReader
+                .map(reader -> reader.findByPolicyIds(policyIdList))
+                .orElse(Map.of());
 
         List<PolicyResponse> results = new ArrayList<>();
         for (String policyId : policyIdList) {
@@ -79,7 +88,7 @@ public class PolicyService {
 
     private Map<String, Extension> buildExtensions(String policyId) {
         Map<String, Extension> extensions = new LinkedHashMap<>();
-        cip113StorageReader.findByPolicyId(policyId)
+        cip113StorageReader.flatMap(reader -> reader.findByPolicyId(policyId))
                 .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
         return extensions;
     }

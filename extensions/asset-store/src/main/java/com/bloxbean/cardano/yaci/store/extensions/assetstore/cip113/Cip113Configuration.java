@@ -7,7 +7,11 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,6 +20,9 @@ import java.util.stream.Collectors;
 
 /**
  * CIP-113 programmable token configuration.
+ * <p>
+ * This entire module is disabled by default. Enable it with
+ * {@code store.extensions.asset-store.cip113.enabled=true}.
  * <p>
  * Registry NFT policy IDs are maintained per-network in property files:
  * <ul>
@@ -27,7 +34,16 @@ import java.util.stream.Collectors;
  * Users can override via {@code store.extensions.asset-store.cip113.registry-nft-policy-ids}
  * if needed.
  */
-@Component
+@Configuration
+@ConditionalOnProperty(
+        prefix = "store.extensions.asset-store",
+        name = "cip113.enabled",
+        havingValue = "true",
+        matchIfMissing = false
+)
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113"})
+@EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113"})
+@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113"})
 @RequiredArgsConstructor
 @Slf4j
 public class Cip113Configuration {

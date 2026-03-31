@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.PolicyBatchRequest;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.PolicyResponse;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.PolicyBatchRequest;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.PolicyResponse;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.PolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,13 +16,9 @@ import java.util.List;
 
 /**
  * Policy API — look up all tokens and extensions for a minting policy.
- * <p>
- * Ported from cf-token-metadata-registry's {@code PolicyApiController}.
- * Hardcoded at {@code /api/v2} for compatibility.
  */
 @RestController
-@RequestMapping("/api/v2")
-@ConditionalOnExpression("${store.extensions.asset-store.enabled:false}")
+@RequestMapping("${apiPrefix:/api/v1}")
 @RequiredArgsConstructor
 @Tag(name = "Policy Service", description = "Policy-level token metadata lookups")
 @Slf4j

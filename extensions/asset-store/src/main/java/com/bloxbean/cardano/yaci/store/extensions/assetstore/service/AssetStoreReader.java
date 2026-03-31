@@ -1,16 +1,16 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.QueryPriority;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.Subject;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.MetadataV2QueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -28,18 +28,28 @@ import java.util.Optional;
  *   <li>{@link #getSubject} — merged metadata with configurable CIP priority</li>
  *   <li>{@link #getCip26Metadata} — CIP-26 offchain metadata only</li>
  *   <li>{@link #getCip68Metadata} — CIP-68 on-chain reference NFT metadata only</li>
- *   <li>{@link #getCip113RegistryNode} — CIP-113 programmable token info only</li>
+ *   <li>{@link #getCip113RegistryNode} — CIP-113 programmable token info only (when enabled)</li>
  * </ul>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AssetStoreReader {
 
     private final MetadataV2QueryService metadataV2QueryService;
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Cip113StorageReader cip113StorageReader;
+    private final Optional<Cip113StorageReader> cip113StorageReader;
+
+    @Autowired
+    public AssetStoreReader(MetadataV2QueryService metadataV2QueryService,
+                            Cip26StorageReader cip26StorageReader,
+                            Cip68StorageReader cip68StorageReader,
+                            @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
+        this.metadataV2QueryService = metadataV2QueryService;
+        this.cip26StorageReader = cip26StorageReader;
+        this.cip68StorageReader = cip68StorageReader;
+        this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
+    }
 
     // ========== Merged (V2) queries ==========
 
@@ -113,28 +123,33 @@ public class AssetStoreReader {
      * Look up CIP-68 on-chain reference NFT metadata for a subject.
      * Handles the fungible token prefix to reference NFT prefix conversion.
      */
-    public Optional<Cip68TokenMetadata> getCip68Metadata(String subject) {
+    public Optional<FungibleTokenMetadata> getCip68Metadata(String subject) {
         return cip68StorageReader.findBySubject(subject);
     }
 
     /**
      * Look up CIP-113 programmable token registry node for a policy ID.
+     * Returns empty if CIP-113 module is not enabled.
      */
     public Optional<ProgrammableTokenCip113> getCip113RegistryNode(String policyId) {
-        return cip113StorageReader.findByPolicyId(policyId);
+        return cip113StorageReader.flatMap(reader -> reader.findByPolicyId(policyId));
     }
 
     /**
      * Batch look up CIP-113 registry nodes for multiple policy IDs.
+     * Returns empty map if CIP-113 module is not enabled.
      */
     public Map<String, ProgrammableTokenCip113> getCip113RegistryNodes(Collection<String> policyIds) {
-        return cip113StorageReader.findByPolicyIds(policyIds);
+        return cip113StorageReader.map(reader -> reader.findByPolicyIds(policyIds))
+                .orElse(Map.of());
     }
 
     /**
      * Check whether a policy ID is registered as a CIP-113 programmable token.
+     * Returns false if CIP-113 module is not enabled.
      */
     public boolean isProgrammableToken(String policyId) {
-        return cip113StorageReader.isProgrammableToken(policyId);
+        return cip113StorageReader.map(reader -> reader.isProgrammableToken(policyId))
+                .orElse(false);
     }
 }

@@ -1,12 +1,12 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.OffChainSyncState;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.OffChainSyncState;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.repository.SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.SyncStateRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

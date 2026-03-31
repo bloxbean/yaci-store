@@ -1,18 +1,17 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.model.v2.PolicyResponse;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.PolicyResponse;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.entity.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.entity.MetadataReferenceNft;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -44,11 +43,12 @@ class PolicyServiceTest {
     @Mock
     private Cip113StorageReader cip113StorageReader;
 
-    @InjectMocks
     private PolicyService policyService;
 
     @BeforeEach
     void setUp() {
+        policyService = new PolicyService(cip26StorageReader, cip68StorageReader, cip113StorageReader);
+
         // CIP-26 tokens for POLICY_ID
         TokenMetadata cip26Token = new TokenMetadata();
         cip26Token.setSubject(POLICY_ID + "4e5554");
