@@ -12,6 +12,10 @@ public record Subject(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String subject,
 
+        @Schema(description = "Token type: NATIVE for standard tokens, PROGRAMMABLE for tokens with on-chain transfer logic (e.g. CIP-113)",
+                requiredMode = Schema.RequiredMode.REQUIRED)
+        TokenType type,
+
         @Schema(description = "Merged display metadata from CIP-26/CIP-68 based on query priority",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         Metadata metadata,

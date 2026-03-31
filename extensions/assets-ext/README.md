@@ -72,19 +72,6 @@ For advanced users who want to query a specific standard directly.
 | `GET` | `/cip26/{subject}` | CIP-26 off-chain metadata only |
 | `GET` | `/cip68/ft/{policyId}/{assetName}` | CIP-68 fungible token metadata only |
 
-### Policy Aggregation
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/policy/{policyId}` | All tokens and extensions for a minting policy |
-| `POST` | `/policy/query` | Batch policy lookup (max 100) |
-
-### CIP-113 Registry (when enabled)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/cip113/registry/{policyId}` | Programmable token registry entry |
-| `POST` | `/cip113/registry/query` | Batch registry lookup |
 
 ## Configuration
 

@@ -149,6 +149,7 @@ class TokenQueryServiceTest {
         void nonProgrammableTokenShouldNotHaveExtensions() {
             Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
             assertThat(result).isNotNull();
+            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
             assertThat(result.extensions()).isNull();
         }
     }
@@ -202,6 +203,7 @@ class TokenQueryServiceTest {
             Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
 
             assertThat(result).isNotNull();
+            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.PROGRAMMABLE);
             assertThat(result.extensions()).isNotNull();
             assertThat(result.extensions()).containsKey("cip113");
 
@@ -214,6 +216,7 @@ class TokenQueryServiceTest {
         void nonProgrammableTokenShouldNotHaveExtensions() {
             Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
             assertThat(result).isNotNull();
+            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
             assertThat(result.extensions()).isNull();
         }
     }

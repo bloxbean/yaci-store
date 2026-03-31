@@ -64,7 +64,8 @@ public class TokenQueryService {
         }
 
         Map<String, Extension> extensions = buildExtensions(subject);
-        return new Subject(subject, pair.metadata(),
+        TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
+        return new Subject(subject, type, pair.metadata(),
                 showCipsDetails ? pair.standards() : null,
                 extensions.isEmpty() ? null : extensions);
     }
@@ -95,7 +96,8 @@ public class TokenQueryService {
             extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113);
         }
 
-        return new Subject(subject, pair.metadata(),
+        TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
+        return new Subject(subject, type, pair.metadata(),
                 showCipsDetails ? pair.standards() : null,
                 extensions.isEmpty() ? null : extensions);
     }

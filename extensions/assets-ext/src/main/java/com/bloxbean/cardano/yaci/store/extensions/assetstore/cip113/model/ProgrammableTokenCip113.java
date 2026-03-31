@@ -15,8 +15,11 @@ public record ProgrammableTokenCip113(
         String transferLogicScript,
 
         @JsonProperty("third_party_transfer_logic_script")
-        @Schema(description = "Blake2b-224 hash of the Plutus script for issuer operations (freeze, seize, burn).",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Nullable
+        @Schema(description = "Blake2b-224 hash of the Plutus script for issuer operations (freeze, seize, burn). "
+                + "Not all programmable token substandards require this.",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         String thirdPartyTransferLogicScript,
 
         @JsonProperty("global_state_policy_id")

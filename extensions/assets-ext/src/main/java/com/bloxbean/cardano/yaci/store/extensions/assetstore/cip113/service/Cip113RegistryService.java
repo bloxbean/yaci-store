@@ -66,10 +66,11 @@ public class Cip113RegistryService {
     }
 
     private static ProgrammableTokenCip113 toDto(Cip113RegistryNode entity) {
+        String thirdParty = entity.getThirdPartyTransferLogicScript();
         String globalState = entity.getGlobalStatePolicyId();
         return new ProgrammableTokenCip113(
                 entity.getTransferLogicScript(),
-                entity.getThirdPartyTransferLogicScript(),
+                (thirdParty == null || thirdParty.isEmpty()) ? null : thirdParty,
                 (globalState == null || globalState.isEmpty()) ? null : globalState
         );
     }

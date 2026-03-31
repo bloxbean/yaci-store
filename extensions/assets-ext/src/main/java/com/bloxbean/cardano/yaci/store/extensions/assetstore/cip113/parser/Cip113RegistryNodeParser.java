@@ -17,11 +17,11 @@ import java.util.Optional;
  * <p>
  * A registry node datum is a ConstrPlutusData (or list) with 5 fields:
  * <ol>
- *   <li>key — ByteString (policy ID of registered token)</li>
- *   <li>next — ByteString (next pointer in sorted linked list)</li>
- *   <li>transferLogicScript — ConstrPlutusData wrapping a ByteString credential</li>
- *   <li>thirdPartyTransferLogicScript — ConstrPlutusData wrapping a ByteString credential</li>
- *   <li>globalStatePolicyId — ByteString (optional, may be absent)</li>
+ *   <li>key — ByteString (policy ID of registered token, required)</li>
+ *   <li>next — ByteString (next pointer in sorted linked list, required)</li>
+ *   <li>transferLogicScript — ConstrPlutusData wrapping a ByteString credential (required)</li>
+ *   <li>thirdPartyTransferLogicScript — ConstrPlutusData wrapping a ByteString credential (optional)</li>
+ *   <li>globalStatePolicyId — ByteString (optional, may be absent or empty)</li>
  * </ol>
  */
 @Component
@@ -29,11 +29,13 @@ import java.util.Optional;
 public class Cip113RegistryNodeParser {
 
     /**
-     * Parsed registry node data.
+     * Parsed registry node data. {@code key}, {@code next}, and {@code transferLogicScript}
+     * are required by the CIP-113 linked list structure. Invalid entries (missing any of these)
+     * are rejected during parsing.
      */
-    public record ParsedRegistryNode(@Nullable String key,
-                                     @Nullable String next,
-                                     @Nullable String transferLogicScript,
+    public record ParsedRegistryNode(String key,
+                                     String next,
+                                     String transferLogicScript,
                                      @Nullable String thirdPartyTransferLogicScript,
                                      @Nullable String globalStatePolicyId) {
     }
@@ -55,13 +57,13 @@ public class Cip113RegistryNodeParser {
             String key = extractBytes(fields.get(0));
             String next = extractBytes(fields.get(1));
             String transferLogicScript = extractCredentialBytes(fields.get(2));
-            String thirdPartyTransferLogicScript = extractCredentialBytes(fields.get(3));
+            String thirdPartyTransferLogicScript = extractCredentialBytesOrNull(fields.get(3));
             String globalStatePolicyId = fields.size() > 4 ? extractBytesOrNull(fields.get(4)) : null;
 
-            if (transferLogicScript == null || thirdPartyTransferLogicScript == null) {
-                log.warn("CIP-113 registry node missing required scripts: transferLogic={}, thirdPartyLogic={}",
-                        transferLogicScript != null ? "present" : "null",
-                        thirdPartyTransferLogicScript != null ? "present" : "null");
+            if (key == null || next == null || transferLogicScript == null) {
+                log.warn("Skipping invalid CIP-113 registry node: key={}, next={}, transferLogicScript={} — "
+                                + "all three fields are required by the on-chain linked list structure",
+                        key, next, transferLogicScript);
                 return Optional.empty();
             }
 
@@ -91,10 +93,6 @@ public class Cip113RegistryNodeParser {
         return null;
     }
 
-    /**
-     * Extracts bytes, returning null for empty values.
-     * Used for optional fields like globalStatePolicyId where empty bytes means absent.
-     */
     @Nullable
     private String extractBytesOrNull(PlutusData data) {
         String hex = extractBytes(data);
@@ -102,7 +100,8 @@ public class Cip113RegistryNodeParser {
     }
 
     /**
-     * Credentials are wrapped in a ConstrPlutusData: Constr(0, [ByteString])
+     * Credentials are wrapped in a ConstrPlutusData: Constr(0, [ByteString]).
+     * Returns the inner byte string or null if the structure is invalid.
      */
     @Nullable
     private String extractCredentialBytes(PlutusData data) {
@@ -113,6 +112,18 @@ public class Cip113RegistryNodeParser {
             }
         }
         return null;
+    }
+
+    /**
+     * Like {@link #extractCredentialBytes} but returns null for empty credentials.
+     * Used for optional fields like thirdPartyTransferLogicScript.
+     */
+    @Nullable
+    private String extractCredentialBytesOrNull(PlutusData data) {
+        if (data instanceof BytesPlutusData bytes && bytes.getValue().length == 0) {
+            return null;
+        }
+        return extractCredentialBytes(data);
     }
 
 }

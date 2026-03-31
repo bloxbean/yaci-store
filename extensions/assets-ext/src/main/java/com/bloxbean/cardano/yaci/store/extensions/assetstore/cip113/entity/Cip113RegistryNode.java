@@ -27,8 +27,7 @@ public class Cip113RegistryNode {
     @Column(nullable = false)
     private Long slot;
 
-    @Nullable
-    @Column(name = "transfer_logic_script", length = 56)
+    @Column(name = "transfer_logic_script", length = 56, nullable = false)
     private String transferLogicScript;
 
     @Nullable
@@ -39,8 +38,7 @@ public class Cip113RegistryNode {
     @Column(name = "global_state_policy_id", length = 56)
     private String globalStatePolicyId;
 
-    @Nullable
-    @Column(name = "next_key", length = 56)
+    @Column(name = "next_key", length = 56, nullable = false)
     private String nextKey;
 
     @Column(nullable = false, columnDefinition = "TEXT")

@@ -52,10 +52,10 @@ CREATE TABLE cip113_registry_node (
     policy_id                         VARCHAR(56) NOT NULL,
     slot                              BIGINT      NOT NULL,
     tx_hash                           VARCHAR(64) NOT NULL,
-    transfer_logic_script             VARCHAR(56),
+    transfer_logic_script             VARCHAR(56) NOT NULL,
     third_party_transfer_logic_script VARCHAR(56),
     global_state_policy_id            VARCHAR(56),
-    next_key                          VARCHAR(56),
+    next_key                          VARCHAR(56) NOT NULL,
     datum                             LONGTEXT    NOT NULL,
     last_synced_at                    TIMESTAMP NULL,
     PRIMARY KEY (policy_id, tx_hash)
