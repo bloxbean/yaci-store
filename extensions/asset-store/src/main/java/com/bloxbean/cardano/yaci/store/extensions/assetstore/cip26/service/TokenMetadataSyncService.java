@@ -83,6 +83,7 @@ public class TokenMetadataSyncService {
             } else if (newHashOpt.isPresent()) {
                 OffChainSyncState offChainSyncStateToSave = lastSyncState.orElse(new OffChainSyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
+                offChainSyncStateToSave.setLastSyncedAt(java.time.LocalDateTime.now());
                 syncStateRepository.save(offChainSyncStateToSave);
             }
 

@@ -22,7 +22,8 @@ CREATE TABLE ft_offchain_logo (
 -- CIP-26 GitHub sync state tracking
 CREATE TABLE off_chain_sync_state (
     id               BIGSERIAL PRIMARY KEY,
-    last_commit_hash VARCHAR(40) NOT NULL
+    last_commit_hash VARCHAR(40) NOT NULL,
+    last_synced_at   TIMESTAMP
 );
 
 -- CIP-68 on-chain reference NFT metadata
