@@ -18,6 +18,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 @Component
@@ -39,18 +40,21 @@ public class Cip68Processor {
     @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         Long slot = addressUtxoEvent.getMetadata().getSlot();
-        addressUtxoEvent.getTxInputOutputs()
+        List<MetadataReferenceNft> entities = addressUtxoEvent.getTxInputOutputs()
                 .stream()
                 .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
                 .flatMap(this::findReferenceNft)
                 .flatMap(this::parseDatum)
                 .filter(this::isValidMetadata)
-                .forEach(referenceNftUtxoData -> {
-                    AssetType assetType = referenceNftUtxoData.referenceNft();
-                    FungibleTokenMetadata metadata = referenceNftUtxoData.fungibleTokenMetadata();
-                    MetadataReferenceNft referenceNftEntity = buildMetadataReferenceNft(metadata, assetType, referenceNftUtxoData.datum(), slot);
-                    metadataReferenceNftRepository.save(referenceNftEntity);
-                });
+                .map(referenceNftUtxoData -> buildMetadataReferenceNft(
+                        referenceNftUtxoData.fungibleTokenMetadata(),
+                        referenceNftUtxoData.referenceNft(),
+                        referenceNftUtxoData.datum(), slot))
+                .toList();
+
+        if (!entities.isEmpty()) {
+            metadataReferenceNftRepository.saveAll(entities);
+        }
     }
 
     private MetadataReferenceNft buildMetadataReferenceNft(FungibleTokenMetadata metadata, AssetType assetType, String datum, Long slot) {

@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.TokenMet
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -30,6 +31,7 @@ public class TokenMetadataService {
      *
      * @return true if successfully inserted, false if validation failed or error occurred
      */
+    @Transactional
     public boolean insertMapping(Mapping mapping, LocalDateTime updatedAt, String updateBy) {
         TokenMetadata tokenMetadata = MappingsUtil.toTokenMetadata(mapping, updateBy, updatedAt);
 
@@ -54,6 +56,7 @@ public class TokenMetadataService {
      *
      * @return true if successfully inserted, false if validation failed or error occurred
      */
+    @Transactional
     public boolean insertLogo(Mapping mapping) {
         TokenLogo tokenLogo = toTokenLogo(mapping);
 

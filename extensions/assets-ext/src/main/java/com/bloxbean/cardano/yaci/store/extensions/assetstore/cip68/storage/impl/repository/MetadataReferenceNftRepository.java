@@ -26,8 +26,15 @@ public interface MetadataReferenceNftRepository extends JpaRepository<MetadataRe
     Slice<MetadataReferenceNft> findByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
             String policyId, String assetName, int label, Pageable pageable);
 
-    @Query("SELECT e FROM MetadataReferenceNft e WHERE e.label = :label AND e.policyId IN :policyIds AND e.slot = " +
-            "(SELECT MAX(e2.slot) FROM MetadataReferenceNft e2 WHERE e2.policyId = e.policyId AND e2.assetName = e.assetName AND e2.label = :label)")
+    /**
+     * Find the latest entry per (policyId, assetName) for multiple policies, filtered by label.
+     * Uses a non-correlated subquery with GROUP BY for efficient execution across all DB engines.
+     */
+    @Query("SELECT e FROM MetadataReferenceNft e WHERE e.label = :label AND e.policyId IN :policyIds " +
+            "AND CONCAT(e.policyId, ':', e.assetName, ':', e.slot) IN " +
+            "(SELECT CONCAT(e2.policyId, ':', e2.assetName, ':', MAX(e2.slot)) " +
+            "FROM MetadataReferenceNft e2 WHERE e2.label = :label AND e2.policyId IN :policyIds " +
+            "GROUP BY e2.policyId, e2.assetName)")
     List<MetadataReferenceNft> findLatestByPolicyIdsAndLabel(@Param("policyIds") Collection<String> policyIds, @Param("label") int label);
 
     long countByLabelAndPolicyIdNotNull(int label);
@@ -38,8 +45,15 @@ public interface MetadataReferenceNftRepository extends JpaRepository<MetadataRe
 
     List<MetadataReferenceNft> findByPolicyId(String policyId);
 
-    @Query("SELECT e FROM MetadataReferenceNft e WHERE e.policyId IN :policyIds AND e.slot = " +
-            "(SELECT MAX(e2.slot) FROM MetadataReferenceNft e2 WHERE e2.policyId = e.policyId AND e2.assetName = e.assetName)")
+    /**
+     * Find the latest entry per (policyId, assetName) for multiple policies (all labels).
+     * Uses a non-correlated subquery with GROUP BY.
+     */
+    @Query("SELECT e FROM MetadataReferenceNft e WHERE e.policyId IN :policyIds " +
+            "AND CONCAT(e.policyId, ':', e.assetName, ':', e.slot) IN " +
+            "(SELECT CONCAT(e2.policyId, ':', e2.assetName, ':', MAX(e2.slot)) " +
+            "FROM MetadataReferenceNft e2 WHERE e2.policyId IN :policyIds " +
+            "GROUP BY e2.policyId, e2.assetName)")
     List<MetadataReferenceNft> findLatestByPolicyIds(@Param("policyIds") Collection<String> policyIds);
 
     int deleteBySlotGreaterThan(Long slot);

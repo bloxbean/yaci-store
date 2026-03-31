@@ -42,12 +42,14 @@ public class MetadataReferenceNft {
 
     private Long decimals;
 
+    @Basic(fetch = FetchType.LAZY)
     @Column(columnDefinition = "TEXT")
     private String logo;
 
     @Column(nullable = false)
     private Long version;
 
+    @Basic(fetch = FetchType.LAZY)
     @Column(nullable = false, columnDefinition = "TEXT")
     private String datum;
 

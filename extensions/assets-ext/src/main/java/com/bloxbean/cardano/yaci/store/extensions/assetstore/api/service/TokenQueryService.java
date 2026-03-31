@@ -126,7 +126,10 @@ public class TokenQueryService {
     private Optional<MetadataStandardsPair> findCip26Metadata(String subject, List<String> properties) {
         return cip26StorageReader.findBySubject(subject)
                 .map(entity -> {
-                    String logo = cip26StorageReader.findLogoBySubject(subject).orElse(null);
+                    // Only fetch logo if all properties requested or logo explicitly requested
+                    String logo = (properties.isEmpty() || properties.contains("logo"))
+                            ? cip26StorageReader.findLogoBySubject(subject).orElse(null)
+                            : null;
                     return new MetadataStandardsPair(
                             Metadata.from(entity, logo, properties),
                             new Standards(entity, null));
