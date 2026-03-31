@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.entity;
+package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model;
 
 import lombok.*;
 

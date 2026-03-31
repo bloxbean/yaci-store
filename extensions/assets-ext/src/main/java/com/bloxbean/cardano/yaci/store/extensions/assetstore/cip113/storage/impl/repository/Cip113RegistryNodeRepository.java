@@ -1,7 +1,7 @@
-package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.repository;
+package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.entity.Cip113RegistryNode;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.entity.Cip113RegistryNodeId;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNodeId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
