@@ -1,0 +1,83 @@
+import { Callout } from 'nextra/components'
+
+# Storage Modes
+
+The Analytics Store supports two storage modes for exported data: **DuckLake** (default) and **Parquet**. Both produce Parquet files, but differ in how they manage metadata and catalogs.
+
+## DuckLake (Default)
+
+DuckLake-managed Parquet files with a catalog storing metadata. This is the default storage mode.
+
+```properties
+yaci.store.analytics.storage.type=ducklake
+```
+
+### Catalog Options
+
+**PostgreSQL catalog (recommended for production):**
+
+```properties
+yaci.store.analytics.ducklake.catalog-type=postgresql
+```
+
+When using PostgreSQL as the catalog, it defaults to the main datasource connection. You can optionally configure a separate catalog connection:
+
+```properties
+yaci.store.analytics.ducklake.catalog-url=jdbc:postgresql://localhost:5432/yaci_store
+yaci.store.analytics.ducklake.catalog-username=postgres
+yaci.store.analytics.ducklake.catalog-password=pass
+```
+
+**DuckDB file catalog (development / single-instance):**
+
+```properties
+yaci.store.analytics.ducklake.catalog-type=duckdb
+yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
+```
+
+### Characteristics
+
+- ACID transactions, time-travel queries, schema evolution
+- PostgreSQL catalog supports multi-instance deployments
+- DuckDB catalog is lightweight for development
+- Query tables directly by name (e.g., `SELECT * FROM analytics.block`)
+
+## Parquet
+
+Direct Parquet file export without a catalog. Files are organized by table name and partition (date or epoch).
+
+```properties
+yaci.store.analytics.storage.type=parquet
+```
+
+### Directory Layout
+
+```
+./data/analytics/
+  block/
+    date=2024-01-15/data.parquet
+    date=2024-01-16/data.parquet
+  epoch_stake/
+    epoch=450/data.parquet
+```
+
+### Characteristics
+
+- Simple, no external dependencies beyond DuckDB JDBC
+- Files are immutable once written
+- No built-in catalog metadata
+- Query files using `read_parquet()` with Hive partitioning
+
+## Choosing a Storage Mode
+
+| | DuckLake (default) | Parquet |
+|---|---|---|
+| **Setup** | Requires catalog (PostgreSQL or DuckDB file) | No catalog needed |
+| **Querying** | SQL table names (e.g., `analytics.block`) and `read_parquet()` with file paths | `read_parquet()` with file paths |
+| **Multi-instance** | Supported (with PostgreSQL catalog) | Not supported |
+| **ACID / time-travel** | Yes | No |
+| **Best for** | Production, shared environments | Simple setups, ad-hoc analysis |
+
+<Callout type="info">
+For most users, the default **DuckLake** mode with PostgreSQL catalog is recommended. Use **Parquet** mode if you want a simpler setup without catalog management.
+</Callout>
