@@ -236,7 +236,7 @@ nexusPublishing {
             password = ossrhPassword
         }
     }
-    clientTimeout = java.time.Duration.ofMinutes(10)
+    clientTimeout = java.time.Duration.ofMinutes(30)
     connectTimeout = java.time.Duration.ofMinutes(5)
     transitionCheckOptions {
         maxRetries.set(60)
