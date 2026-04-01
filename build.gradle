@@ -155,6 +155,8 @@ task distZip(type: Zip) {
         include 'application.properties'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
+        include 'application-analytics.properties'
+        include 'application-custom-exporters.yml'
         into zipDirName + '/' + configDir
     }
 
@@ -199,6 +201,8 @@ task dockerZip(type: Zip) {
         include 'application.properties'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
+        include 'application-analytics.properties'
+        include 'application-custom-exporters.yml'
     }
 
     from('./docker/plugins') {
