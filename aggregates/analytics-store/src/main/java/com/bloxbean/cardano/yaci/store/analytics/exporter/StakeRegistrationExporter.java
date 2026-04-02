@@ -44,23 +44,25 @@ public class StakeRegistrationExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                sr.tx_hash,
-                sr.cert_index,
-                sr.tx_index,
-                sr.credential,
-                sr.cred_type,
-                sr.type,
-                sr.address,
-                sr.epoch,
-                sr.slot,
-                sr.block_hash,
-                sr.block,
-                to_timestamp(sr.block_time) as block_time
-            FROM source_db.%s.stake_registration sr
-            WHERE sr.slot >= %d
-              AND sr.slot < %d
-            ORDER BY sr.slot, sr.tx_index, sr.cert_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    sr.tx_hash,
+                    sr.cert_index,
+                    sr.tx_index,
+                    sr.credential,
+                    sr.cred_type,
+                    sr.type,
+                    sr.address,
+                    sr.epoch,
+                    sr.slot,
+                    sr.block_hash,
+                    sr.block,
+                    to_timestamp(COALESCE(sr.block_time, 0)) as block_time
+                FROM %s.stake_registration sr
+                WHERE sr.slot >= %d
+                  AND sr.slot < %d
+                ORDER BY sr.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

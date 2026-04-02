@@ -12,4 +12,5 @@ services:
 
 networks:
   yaci-store-net:
+    name: yaci-store-net-${INSTANCE_NAME:-default}
     external: true

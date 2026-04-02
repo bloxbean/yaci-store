@@ -171,6 +171,18 @@ public class ParquetWriterService implements StorageWriter {
         return connectionHelper.quoteIdentifier(schema);
     }
 
+    @Override
+    public boolean verifyExport(String outputPath, long expectedRowCount) {
+        if (expectedRowCount == 0) {
+            return true;
+        }
+        boolean exists = Files.exists(Paths.get(outputPath));
+        if (!exists) {
+            log.warn("Parquet file does not exist: {}", outputPath);
+        }
+        return exists;
+    }
+
     /**
      * Get row count from an already-exported local Parquet file using DuckDB's read_parquet().
      * This reads Parquet metadata locally and avoids re-executing the source query against PostgreSQL.

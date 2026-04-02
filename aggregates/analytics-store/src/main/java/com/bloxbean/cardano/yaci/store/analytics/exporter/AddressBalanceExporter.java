@@ -56,32 +56,36 @@ public class AddressBalanceExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                ab.address,
-                ab.quantity,
-                ab.unit,
-                to_timestamp(ab.block_time) as block_time,
-                ab.block,
-                ab.epoch,
-                ab.slot,
-                ab.addr_full
-            FROM source_db.%s.address_balance ab
-            INNER JOIN (
+            SELECT * FROM postgres_query('source_db', '
                 SELECT
                     address,
+                    quantity,
                     unit,
-                    MAX(slot) as max_slot
-                FROM source_db.%s.address_balance
-                WHERE slot >= %d
-                  AND slot < %d
-                GROUP BY address, unit
-            ) latest
-            ON ab.address = latest.address
-               AND ab.unit = latest.unit
-               AND ab.slot = latest.max_slot
-            ORDER BY ab.address, ab.unit
+                    to_timestamp(COALESCE(block_time, 0)) as block_time,
+                    block,
+                    epoch,
+                    slot,
+                    addr_full
+                FROM (
+                    SELECT
+                        address,
+                        quantity,
+                        unit,
+                        block_time,
+                        block,
+                        epoch,
+                        slot,
+                        addr_full,
+                        ROW_NUMBER() OVER (PARTITION BY address, unit ORDER BY slot DESC) as rn
+                    FROM %s.address_balance
+                    WHERE slot >= %d
+                      AND slot < %d
+                ) ranked
+                WHERE rn = 1
+                ORDER BY slot
+            ')
             """,
-            schema, schema,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

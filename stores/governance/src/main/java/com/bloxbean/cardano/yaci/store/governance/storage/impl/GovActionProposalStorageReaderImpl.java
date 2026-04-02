@@ -65,4 +65,11 @@ public class GovActionProposalStorageReaderImpl implements GovActionProposalStor
     public Optional<GovActionProposal> findByGovActionTxHashAndGovActionIndex(String txHash, int index) {
         return govActionProposalRepository.findByTxHashAndIndex(txHash, index).map(govActionProposalMapper::toGovActionProposal);
     }
+
+    @Override
+    public List<GovActionProposal> findByEpoch(int epoch) {
+        return govActionProposalRepository.findByEpoch(epoch).stream()
+                .map(govActionProposalMapper::toGovActionProposal)
+                .toList();
+    }
 }

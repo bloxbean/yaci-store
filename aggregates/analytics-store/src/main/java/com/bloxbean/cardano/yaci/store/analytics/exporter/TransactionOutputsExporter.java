@@ -63,30 +63,32 @@ public class TransactionOutputsExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                tx_hash,
-                output_index,
-                asset_unit,
-                policy_id,
-                asset_name,
-                CAST(quantity AS DECIMAL(38,0)) as quantity,
-                owner_addr,
-                owner_stake_addr,
-                owner_payment_credential,
-                owner_stake_credential,
-                inline_datum,
-                data_hash,
-                script_ref,
-                reference_script_hash,
-                is_collateral_return,
-                epoch,
-                slot,
-                block_hash,
-                to_timestamp(block_time) as block_time
-            FROM source_db.%s.address_utxo_flattened
-            WHERE slot >= %d
-              AND slot < %d
-            ORDER BY slot, tx_hash, output_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    tx_hash,
+                    output_index,
+                    asset_unit,
+                    policy_id,
+                    asset_name,
+                    CAST(quantity AS DECIMAL(38,0)) as quantity,
+                    owner_addr,
+                    owner_stake_addr,
+                    owner_payment_credential,
+                    owner_stake_credential,
+                    inline_datum,
+                    data_hash,
+                    script_ref,
+                    reference_script_hash,
+                    is_collateral_return,
+                    epoch,
+                    slot,
+                    block_hash,
+                    to_timestamp(COALESCE(block_time, 0)) as block_time
+                FROM %s.address_utxo_flattened
+                WHERE slot >= %d
+                  AND slot < %d
+                ORDER BY slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

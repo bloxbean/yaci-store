@@ -1,0 +1,74 @@
+# ============================================================================
+# Custom Exporters — Sample Configuration
+# ============================================================================
+# Activate with: --spring.profiles.active=analytics,custom-exporters
+#
+# Each entry under 'custom-exporters' defines a table exporter that runs a
+# SQL query and writes the results to the analytics storage (Parquet / DuckLake).
+#
+# ── Properties ──────────────────────────────────────────────────────────────
+#   name               (required)  Target table name in the analytics catalog.
+#   query              (required)  SQL template. Use placeholders below.
+#   partition-strategy (optional)  DAILY (default) or EPOCH.
+#   depends-on-adapot-job (optional) If true, waits for the AdaPot reward
+#                                    calculation to complete before exporting.
+#                                    Only meaningful with EPOCH strategy.
+#                                    Default: false.
+#
+# ── Query Placeholders ─────────────────────────────────────────────────────
+#   {source}     Resolves to the schema name  (e.g. mainnet)
+#   {start_slot} Slot range start (inclusive)
+#   {end_slot}   Slot range end   (exclusive)
+#   {epoch}      Epoch number (available only with EPOCH strategy)
+#
+# ── EPOCH Strategy: "epoch" column requirement ─────────────────────────────
+#   When using partition-strategy: EPOCH, the query MUST output a column
+#   named "epoch". If the source column has a different name, use an alias:
+#     e.g.  r.earned_epoch AS epoch
+#   Without this, the DuckLake table will not be partitioned and all parquet
+#   files will be written flat (no epoch=N/ subdirectories).
+# ============================================================================
+
+yaci:
+  store:
+    analytics:
+      custom-exporters:
+
+        # ── Example 1: DAILY exporter (slot-based) ──────────────────────────
+        # Exports daily transaction-count statistics per block.
+        # Uses the default partition-strategy (DAILY) and default
+        # partition-column (block_time), so both can be omitted.
+        # Column reference: see BlockEntity / block table schema.
+        - name: daily_tx_count
+          query: >-
+            SELECT b.number,
+                   to_timestamp(COALESCE(b.block_time, 0)) as block_time,
+                   b.slot,
+                   b.epoch,
+                   b.no_of_txs
+            FROM {source}.block b
+            WHERE b.slot >= {start_slot}
+              AND b.slot <  {end_slot}
+            ORDER BY b.slot
+          # partition-strategy: DAILY       # default
+
+        # ── Example 2: EPOCH exporter (epoch-based) ─────────────────────────
+        # Exports per-epoch pool reward summaries.
+        # Uses EPOCH partition strategy and depends on the AdaPot reward
+        # calculation job completing first.
+        # Note: The query aliases earned_epoch AS epoch (required for
+        # EPOCH partitioning — see note above).
+        - name: epoch_pool_rewards
+          partition-strategy: EPOCH
+          depends-on-adapot-job: true
+          query: >-
+            SELECT r.address,
+                   r.earned_epoch AS epoch,
+                   r.spendable_epoch,
+                   r.type,
+                   r.pool_id,
+                   r.amount,
+                   r.slot
+            FROM {source}.reward r
+            WHERE r.earned_epoch = {epoch}
+            ORDER BY r.earned_epoch, r.address

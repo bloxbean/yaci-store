@@ -36,7 +36,7 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         VotingStatus committeeVotingResult = new CommitteeVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.P_PARAM_UPDATE);
-        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isNotDelayed = context.isNotDelayed();
         final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(parameterChangeAction.getType(), parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
         boolean isAccepted;
 
@@ -90,6 +90,8 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
                 .committee(context.getGovernanceContext().getCommittee())
                 .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
+                .isInBootstrapPhase(context.getGovernanceContext().isInBootstrapPhase())
+                .committeeMinSize(context.getGovernanceContext().getProtocolParams().getCommitteeMinSize())
                 .build();
     }
 }

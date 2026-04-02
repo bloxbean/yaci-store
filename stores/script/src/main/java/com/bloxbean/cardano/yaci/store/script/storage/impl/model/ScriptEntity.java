@@ -28,4 +28,7 @@ public class ScriptEntity extends BaseEntity {
     @Type(JsonType.class)
     @Column(name = "content")
     private String content;
+
+    @Column(name = "slot")
+    private Long slot;
 }

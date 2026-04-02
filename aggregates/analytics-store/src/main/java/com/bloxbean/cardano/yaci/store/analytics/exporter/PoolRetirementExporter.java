@@ -44,20 +44,22 @@ public class PoolRetirementExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                pr.tx_hash,
-                pr.cert_index,
-                pr.tx_index,
-                pr.slot,
-                pr.pool_id,
-                pr.retirement_epoch,
-                pr.epoch,
-                pr.block_hash,
-                to_timestamp(pr.block_time) as block_time
-            FROM source_db.%s.pool_retirement pr
-            WHERE pr.slot >= %d
-              AND pr.slot < %d
-            ORDER BY pr.slot, pr.tx_hash, pr.cert_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    pr.tx_hash,
+                    pr.cert_index,
+                    pr.tx_index,
+                    pr.slot,
+                    pr.pool_id,
+                    pr.retirement_epoch,
+                    pr.epoch,
+                    pr.block_hash,
+                    to_timestamp(COALESCE(pr.block_time, 0)) as block_time
+                FROM %s.pool_retirement pr
+                WHERE pr.slot >= %d
+                  AND pr.slot < %d
+                ORDER BY pr.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

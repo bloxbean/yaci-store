@@ -81,6 +81,24 @@ public class TableExporterRegistry {
     }
 
     /**
+     * Register a single table exporter programmatically.
+     *
+     * Used by {@link com.bloxbean.cardano.yaci.store.analytics.config.CustomExporterRegistrar}
+     * to register custom exporters defined in YAML configuration after Spring auto-wiring.
+     *
+     * @param exporter The table exporter to register
+     * @throws IllegalStateException if an exporter with the same table name already exists
+     */
+    public void registerExporter(TableExporter exporter) {
+        String tableName = exporter.getTableName();
+        if (exporters.containsKey(tableName)) {
+            throw new IllegalStateException("Duplicate table exporter: " + tableName);
+        }
+        exporters.put(tableName, exporter);
+        log.info("Registered exporter: {} ({})", tableName, exporter.getPartitionStrategy());
+    }
+
+    /**
      * Get exporter for a specific table.
      *
      * @param tableName The table name
@@ -124,6 +142,7 @@ public class TableExporterRegistry {
      * Check if a table is enabled in configuration.
      *
      * Tables are enabled if:
+     * - {@code yaci.store.analytics.exporter.<tableName>.enabled} is not explicitly set to false, AND
      * - yaci.store.analytics.enabled-tables is empty (all enabled), OR
      * - yaci.store.analytics.enabled-tables contains the table name
      *
@@ -131,8 +150,15 @@ public class TableExporterRegistry {
      * @return true if table is enabled
      */
     public boolean isEnabled(String tableName) {
+        // Per-exporter flag: yaci.store.analytics.exporter.<tableName>.enabled=false disables the exporter
+        AnalyticsStoreProperties.ExporterConfig exporterConfig =
+                properties.getExporter().get(tableName);
+        if (exporterConfig != null && !exporterConfig.isEnabled()) {
+            return false;
+        }
+
+        // Existing whitelist: empty = all enabled
         Set<String> enabledTables = properties.getEnabledTables();
-        // Empty set means all tables are enabled
         return enabledTables.isEmpty() || enabledTables.contains(tableName);
     }
 

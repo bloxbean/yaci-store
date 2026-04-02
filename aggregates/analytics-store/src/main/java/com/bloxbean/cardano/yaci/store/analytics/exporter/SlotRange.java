@@ -10,7 +10,9 @@ package com.bloxbean.cardano.yaci.store.analytics.exporter;
  *
  * This aligns with SQL WHERE clauses: WHERE slot &gt;= startSlot AND slot &lt; endSlot
  *
- * @param startSlot Starting slot (inclusive)
+ * Note: startSlot may be -1 to include genesis data (slot=-1) in the range.
+ *
+ * @param startSlot Starting slot (inclusive), minimum -1 for genesis data
  * @param endSlot Ending slot (exclusive)
  */
 public record SlotRange(long startSlot, long endSlot) {
@@ -19,8 +21,8 @@ public record SlotRange(long startSlot, long endSlot) {
      * Validate that the slot range is valid.
      */
     public SlotRange {
-        if (startSlot < 0) {
-            throw new IllegalArgumentException("Start slot cannot be negative: " + startSlot);
+        if (startSlot < -1) {
+            throw new IllegalArgumentException("Start slot cannot be less than -1: " + startSlot);
         }
         if (endSlot < 0) {
             throw new IllegalArgumentException("End slot cannot be negative: " + endSlot);

@@ -44,21 +44,23 @@ public class CommitteeRegistrationExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                cr.tx_hash,
-                cr.cert_index,
-                cr.tx_index,
-                cr.slot,
-                cr.cold_key,
-                cr.hot_key,
-                cr.cred_type,
-                cr.epoch,
-                cr.block,
-                to_timestamp(cr.block_time) as block_time
-            FROM source_db.%s.committee_registration cr
-            WHERE cr.slot >= %d
-              AND cr.slot < %d
-            ORDER BY cr.slot, cr.tx_hash, cr.cert_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    cr.tx_hash,
+                    cr.cert_index,
+                    cr.tx_index,
+                    cr.slot,
+                    cr.cold_key,
+                    cr.hot_key,
+                    cr.cred_type,
+                    cr.epoch,
+                    cr.block,
+                    to_timestamp(COALESCE(cr.block_time, 0)) as block_time
+                FROM %s.committee_registration cr
+                WHERE cr.slot >= %d
+                  AND cr.slot < %d
+                ORDER BY cr.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

@@ -65,8 +65,11 @@ public sealed interface PartitionValue permits
 
             // On genesis day, start-of-day (midnight UTC) can be before the actual genesis time
             // (e.g., mainnet genesis is 2017-09-23T21:44:51Z), producing a negative slot.
-            // No blockchain data exists before slot 0, so clamp to 0.
-            startSlot = Math.max(0, startSlot);
+            // Clamp startSlot to -1 to include genesis data (stored with slot=-1).
+            // endSlot is clamped to 0 since it's exclusive and slot=-1 is the minimum data slot.
+            // If startSlot is 0 or negative, this is the genesis-day partition.
+            // Set to -1 to include genesis data (stored with slot=-1).
+            startSlot = startSlot <= 0 ? -1 : startSlot;
             endSlot = Math.max(0, endSlot);
 
             return new SlotRange(startSlot, endSlot);

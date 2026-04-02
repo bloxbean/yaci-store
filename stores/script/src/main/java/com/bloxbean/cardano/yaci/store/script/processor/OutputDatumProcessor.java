@@ -52,7 +52,7 @@ public class OutputDatumProcessor {
                 .mapToObj(i -> {
                     var output = outputs.get(i);
                     return output.getDatumHash() != null || output.getInlineDatum() != null
-                            ? getDatumFromTxOut(output, transaction.getTxHash(), i)
+                            ? getDatumFromTxOut(output, transaction.getTxHash(), i, metadata.getSlot())
                             : null;
                 })
                 .filter(Objects::nonNull)
@@ -64,7 +64,7 @@ public class OutputDatumProcessor {
         outputDatumContexts.forEach(datumContext -> datumHashToDatumMap.put(datumContext.getDatum().getHash(), datumContext.getDatum()));
 
         //If datum value exists in witnessset, create a map for such values
-        Map<String, WitnessDatumContext> witnessDatumMap = findWitnessDatum(transaction);
+        Map<String, WitnessDatumContext> witnessDatumMap = findWitnessDatum(transaction, metadata.getSlot());
         if (witnessDatumMap.size() > 0) {
             witnessDatumMap.forEach((hash, datumContext) -> {
                 datumHashToDatumMap.put(hash, datumContext.getDatum());
@@ -90,11 +90,16 @@ public class OutputDatumProcessor {
         }
     }
 
-    private static OutputDatumContext getDatumFromTxOut(TransactionOutput txOuput, String txHash, Integer outputIndex) {
+    private static OutputDatumContext getDatumFromTxOut(TransactionOutput txOuput, String txHash, Integer outputIndex, long slot) {
         try {
             if (txOuput.getDatumHash() == null && txOuput.getInlineDatum() != null) {
                 String datumHash = getDatumHash(txOuput.getInlineDatum());
-                var datum = new Datum(datumHash, txOuput.getInlineDatum(), txHash);
+                var datum = Datum.builder()
+                        .hash(datumHash)
+                        .datum(txOuput.getInlineDatum())
+                        .createdAtTx(txHash)
+                        .slot(slot)
+                        .build();
                 return OutputDatumContext.builder()
                         .txHash(txHash)
                         .outputIndex(outputIndex)
@@ -102,7 +107,12 @@ public class OutputDatumProcessor {
                         .datum(datum)
                         .build();
             } else {
-                var datum = new Datum(txOuput.getDatumHash(), txOuput.getInlineDatum(), txHash);
+                var datum = Datum.builder()
+                        .hash(txOuput.getDatumHash())
+                        .datum(txOuput.getInlineDatum())
+                        .createdAtTx(txHash)
+                        .slot(slot)
+                        .build();
                 return OutputDatumContext.builder()
                         .txHash(txHash)
                         .outputIndex(outputIndex)
@@ -115,7 +125,7 @@ public class OutputDatumProcessor {
         }
     }
 
-    private Map<String, WitnessDatumContext> findWitnessDatum(Transaction transaction) {
+    private Map<String, WitnessDatumContext> findWitnessDatum(Transaction transaction, long slot) {
         if (transaction.getWitnesses().getDatums() == null)
             return Collections.EMPTY_MAP;
 
@@ -127,7 +137,12 @@ public class OutputDatumProcessor {
                     if (datumHash != null) {
                         var witnessDatumContext = WitnessDatumContext.builder()
                                 .txHash(transaction.getTxHash())
-                                .datum(new Datum(datumHash, datum.getCbor(), transaction.getTxHash()))
+                                .datum(Datum.builder()
+                                        .hash(datumHash)
+                                        .datum(datum.getCbor())
+                                        .createdAtTx(transaction.getTxHash())
+                                        .slot(slot)
+                                        .build())
                                 .build();
 
                         datumHashMap.put(datumHash, witnessDatumContext);

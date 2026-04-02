@@ -63,19 +63,21 @@ public class SpentOutputsExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                ti.tx_hash,
-                ti.output_index,
-                ti.spent_tx_hash,
-                ti.spent_at_slot,
-                ti.spent_at_block,
-                ti.spent_at_block_hash,
-                to_timestamp(ti.spent_block_time) as spent_block_time,
-                ti.spent_epoch
-            FROM source_db.%s.tx_input ti
-            WHERE ti.spent_at_slot >= %d
-              AND ti.spent_at_slot < %d
-            ORDER BY ti.spent_at_slot, ti.spent_tx_hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ti.tx_hash,
+                    ti.output_index,
+                    ti.spent_tx_hash,
+                    ti.spent_at_slot,
+                    ti.spent_at_block,
+                    ti.spent_at_block_hash,
+                    to_timestamp(COALESCE(ti.spent_block_time, 0)) as spent_block_time,
+                    ti.spent_epoch
+                FROM %s.tx_input ti
+                WHERE ti.spent_at_slot >= %d
+                  AND ti.spent_at_slot < %d
+                ORDER BY ti.spent_at_slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

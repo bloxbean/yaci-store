@@ -47,28 +47,32 @@ public class StakeAddressBalanceExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                sab.address,
-                sab.quantity,
-                to_timestamp(COALESCE(sab.block_time, 0)) as block_time,
-                sab.block,
-                sab.epoch,
-                sab.slot
-            FROM source_db.%s.stake_address_balance sab
-            INNER JOIN (
+            SELECT * FROM postgres_query('source_db', '
                 SELECT
                     address,
-                    MAX(slot) as max_slot
-                FROM source_db.%s.stake_address_balance
-                WHERE slot >= %d
-                  AND slot < %d
-                GROUP BY address
-            ) latest
-            ON sab.address = latest.address
-               AND sab.slot = latest.max_slot
-            ORDER BY sab.address
+                    quantity,
+                    to_timestamp(COALESCE(block_time, 0)) as block_time,
+                    block,
+                    epoch,
+                    slot
+                FROM (
+                    SELECT
+                        address,
+                        quantity,
+                        block_time,
+                        block,
+                        epoch,
+                        slot,
+                        ROW_NUMBER() OVER (PARTITION BY address ORDER BY slot DESC) as rn
+                    FROM %s.stake_address_balance
+                    WHERE slot >= %d
+                      AND slot < %d
+                ) ranked
+                WHERE rn = 1
+                ORDER BY slot
+            ')
             """,
-            schema, schema,
+            schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

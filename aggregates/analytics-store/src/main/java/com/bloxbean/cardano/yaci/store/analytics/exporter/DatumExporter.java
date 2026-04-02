@@ -41,22 +41,29 @@ public class DatumExporter extends AbstractTableExporter {
     }
 
     @Override
+    public String getPartitionColumn() {
+        return "block_date";
+    }
+
+    @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
+        String dateStr = ((PartitionValue.DatePartition) partition).date().toString();
         return String.format("""
-            SELECT
-                d.hash,
-                d.datum,
-                d.created_at_tx,
-                t.slot,
-                to_timestamp(t.block_time) as block_time
-            FROM source_db.%s.datum d
-            INNER JOIN source_db.%s.transaction t ON d.created_at_tx = t.tx_hash
-            WHERE t.slot >= %d
-              AND t.slot < %d
-            ORDER BY t.slot, d.hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    d.hash,
+                    d.datum,
+                    d.created_at_tx,
+                    d.slot,
+                    CAST(''%s'' AS DATE) as block_date
+                FROM %s.datum d
+                WHERE d.slot >= %d
+                  AND d.slot < %d
+                ORDER BY d.slot
+            ')
             """,
-            schema, schema,
+            dateStr, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

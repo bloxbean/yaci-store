@@ -40,4 +40,5 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
     @Query("SELECT e FROM ExportState e " +
            "WHERE e.status = 'IN_PROGRESS'")
     List<ExportState> findAllInProgressExports();
+
 }

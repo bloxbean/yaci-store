@@ -118,32 +118,22 @@ public class GapDetectionService {
      * This ensures we don't export data for dates that are still being populated,
      * providing a safety buffer during initial blockchain synchronization.
      *
-     * The returned date is clamped to never be before genesis, even if the buffer
-     * period extends before the blockchain's start date.
+     * If the buffer pushes the end date before genesis, return it as-is.
      *
-     * @return Safe end date for exports as LocalDate (>= genesis date)
+     * @return Safe end date for exports as LocalDate
      */
     public LocalDate getExportEndDate() {
         LocalDate latestSynced = getLatestSyncedDate();
         int bufferDays = properties.getContinuousSync().getBufferDays();
-        LocalDate calculatedEndDate = latestSynced.minusDays(bufferDays);
-
-        // Ensure export end date is never before genesis
-        LocalDate genesisDate = getGenesisDate();
-        if (calculatedEndDate.isBefore(genesisDate)) {
-            log.debug("Export end date {} is before genesis {}, clamping to genesis",
-                calculatedEndDate, genesisDate);
-            return genesisDate;
-        }
-
-        return calculatedEndDate;
+        return latestSynced.minusDays(bufferDays);
     }
 
     /**
      * Find all missing epoch exports for a table.
      *
-     * Checks from the first non-Byron epoch (Shelley start) to the latest completed epoch.
-     * Epoch-based tables only contain Shelley+ data, so Byron epochs are skipped.
+     * Checks from the first non-Byron epoch (Shelley start) to the current epoch (inclusive).
+     * Each exporter's preExportValidation() decides whether the epoch is ready for export.
+     * Byron epochs are skipped.
      *
      * @param tableName The table to check for missing epoch exports
      * @return List of epoch numbers that are missing exports, sorted oldest to newest
@@ -156,9 +146,9 @@ public class GapDetectionService {
         }
 
         int startEpoch = startEpochOpt.get();
-        Optional<Integer> endEpochOpt = getLatestCompletedEpoch();
+        Optional<Integer> endEpochOpt = getCurrentEpoch();
         if (endEpochOpt.isEmpty()) {
-            log.debug("No completed epoch available yet, skipping epoch gap detection for {}", tableName);
+            log.debug("No epoch available yet, skipping epoch gap detection for {}", tableName);
             return List.of();
         }
 
@@ -185,22 +175,18 @@ public class GapDetectionService {
     }
 
     /**
-     * Get the latest fully completed epoch number.
+     * Get the current epoch number from the latest synced block.
      *
-     * Reads the current epoch from the latest block and returns currentEpoch - 1,
-     * since the current epoch is still in progress.
-     *
-     * @return Optional containing the latest completed epoch, or empty if no blocks exist
+     * @return Optional containing the current epoch, or empty if no blocks exist
      */
-    public Optional<Integer> getLatestCompletedEpoch() {
+    public Optional<Integer> getCurrentEpoch() {
         Block recentBlock = blockStorageReader.findRecentBlock().orElse(null);
 
         if (recentBlock == null) {
-            log.warn("No blocks synced yet, cannot determine latest completed epoch");
+            log.warn("No blocks synced yet, cannot determine epoch scan upper bound");
             return Optional.empty();
         }
 
-        int currentEpoch = recentBlock.getEpochNumber();
-        return Optional.of(currentEpoch - 1);
+        return Optional.of(recentBlock.getEpochNumber());
     }
 }
