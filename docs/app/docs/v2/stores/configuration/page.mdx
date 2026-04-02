@@ -166,6 +166,10 @@ store.executor.use-virtual-thread-for-batch-processing=true
 store.executor.use-virtual-thread-for-event-processing=true
 ```
 
+### DuckDB Memory Limit (Analytics Store)
+
+When the analytics store is enabled, DuckDB memory usage should be explicitly configured to prevent OOM issues in production and container environments. See the [Analytics Store Configuration Reference](/docs/v2/analytics/configuration#duckdb-memory-usage-in-jvm) for details.
+
 ### Database Insert Performance
 
 ```properties
