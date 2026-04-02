@@ -1,10 +1,12 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.health;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.SyncStatus;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.TokenMetadataSyncCronJob;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.TokenMetadataSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,8 +23,14 @@ import org.springframework.stereotype.Component;
  *   <li>{@code OUT_OF_SERVICE} — sync in progress or not yet started</li>
  *   <li>{@code DOWN} — sync encountered an error</li>
  * </ul>
+ *
+ * <p>Conditional on {@link TokenMetadataSyncCronJob} — this indicator is only registered when
+ * the CIP-26 sync cron job is active. In read-only mode or when CIP-26 is disabled, the cron
+ * job bean is absent and this indicator is silently skipped (reporting sync status without an
+ * active sync job would be misleading).
  */
 @Component("assetStoreOffchainSync")
+@ConditionalOnBean(TokenMetadataSyncCronJob.class)
 @RequiredArgsConstructor
 public class OffchainSyncHealthIndicator implements HealthIndicator {
 

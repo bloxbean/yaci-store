@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.core.service.SyncStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,8 +28,14 @@ import org.springframework.stereotype.Component;
  *   <li>{@code DOWN} — connection lost or sync error</li>
  *   <li>{@code UNKNOWN} — block fetcher not yet initialized</li>
  * </ul>
+ *
+ * <p>Conditional on {@link HealthService} — in read-only mode ({@code store.read-only-mode=true}),
+ * yaci-store does not create the {@code HealthService} or {@code SyncStatusService} beans
+ * (both are {@code @ReadOnly(false)}), so this indicator is silently skipped instead of
+ * crashing on missing dependencies.
  */
 @Component("assetStoreOnchainReadiness")
+@ConditionalOnBean(HealthService.class)
 @RequiredArgsConstructor
 public class OnchainReadinessHealthIndicator implements HealthIndicator {
 
