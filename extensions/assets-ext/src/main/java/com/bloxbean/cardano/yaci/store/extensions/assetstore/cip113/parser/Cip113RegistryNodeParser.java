@@ -19,7 +19,7 @@ import java.util.Optional;
  * <ol>
  *   <li>key — ByteString (policy ID of registered token, required)</li>
  *   <li>next — ByteString (next pointer in sorted linked list, required)</li>
- *   <li>transferLogicScript — ConstrPlutusData wrapping a ByteString credential (required)</li>
+ *   <li>transferLogicScript — ConstrPlutusData wrapping a ByteString credential (optional)</li>
  *   <li>thirdPartyTransferLogicScript — ConstrPlutusData wrapping a ByteString credential (optional)</li>
  *   <li>globalStatePolicyId — ByteString (optional, may be absent or empty)</li>
  * </ol>
@@ -29,13 +29,12 @@ import java.util.Optional;
 public class Cip113RegistryNodeParser {
 
     /**
-     * Parsed registry node data. {@code key}, {@code next}, and {@code transferLogicScript}
-     * are required by the CIP-113 linked list structure. Invalid entries (missing any of these)
-     * are rejected during parsing.
+     * Parsed registry node data. {@code key} and {@code next} are required by the CIP-113
+     * linked list structure. All three script/policy fields are optional.
      */
     public record ParsedRegistryNode(String key,
                                      String next,
-                                     String transferLogicScript,
+                                     @Nullable String transferLogicScript,
                                      @Nullable String thirdPartyTransferLogicScript,
                                      @Nullable String globalStatePolicyId) {
     }
@@ -56,14 +55,14 @@ public class Cip113RegistryNodeParser {
 
             String key = extractBytes(fields.get(0));
             String next = extractBytes(fields.get(1));
-            String transferLogicScript = extractCredentialBytes(fields.get(2));
+            String transferLogicScript = extractCredentialBytesOrNull(fields.get(2));
             String thirdPartyTransferLogicScript = extractCredentialBytesOrNull(fields.get(3));
             String globalStatePolicyId = fields.size() > 4 ? extractBytesOrNull(fields.get(4)) : null;
 
-            if (key == null || next == null || transferLogicScript == null) {
-                log.warn("Skipping invalid CIP-113 registry node: key={}, next={}, transferLogicScript={} — "
-                                + "all three fields are required by the on-chain linked list structure",
-                        key, next, transferLogicScript);
+            if (key == null || next == null) {
+                log.warn("Skipping invalid CIP-113 registry node: key={}, next={} — "
+                                + "both fields are required by the on-chain linked list structure",
+                        key, next);
                 return Optional.empty();
             }
 
@@ -116,7 +115,7 @@ public class Cip113RegistryNodeParser {
 
     /**
      * Like {@link #extractCredentialBytes} but returns null for empty credentials.
-     * Used for optional fields like thirdPartyTransferLogicScript.
+     * All three credential/script fields in a CIP-113 registry node are optional.
      */
     @Nullable
     private String extractCredentialBytesOrNull(PlutusData data) {

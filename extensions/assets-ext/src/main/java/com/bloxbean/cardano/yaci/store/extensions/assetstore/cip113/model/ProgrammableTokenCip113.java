@@ -10,8 +10,12 @@ import jakarta.annotation.Nullable;
 public record ProgrammableTokenCip113(
 
         @JsonProperty("transfer_logic_script")
-        @Schema(description = "Blake2b-224 hash of the Plutus script that validates every transfer.",
-                requiredMode = Schema.RequiredMode.REQUIRED)
+        @Nullable
+        @Schema(description = "Blake2b-224 hash of the Plutus script that validates every transfer of this token. "
+                + "This script runs on-chain via the withdraw-zero pattern whenever tokens move between addresses. "
+                + "Null when the registry node does not specify a transfer logic script.",
+                nullable = true,
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         String transferLogicScript,
 
         @JsonProperty("third_party_transfer_logic_script")

@@ -27,7 +27,8 @@ public class Cip113RegistryNode {
     @Column(nullable = false)
     private Long slot;
 
-    @Column(name = "transfer_logic_script", length = 56, nullable = false)
+    @Nullable
+    @Column(name = "transfer_logic_script", length = 56)
     private String transferLogicScript;
 
     @Nullable

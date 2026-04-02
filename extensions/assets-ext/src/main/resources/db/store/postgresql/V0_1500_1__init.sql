@@ -53,7 +53,7 @@ CREATE TABLE cip113_registry_node (
     policy_id                         VARCHAR(56) NOT NULL,
     slot                              BIGINT      NOT NULL,
     tx_hash                           VARCHAR(64) NOT NULL,
-    transfer_logic_script             VARCHAR(56) NOT NULL,
+    transfer_logic_script             VARCHAR(56),
     third_party_transfer_logic_script VARCHAR(56),
     global_state_policy_id            VARCHAR(56),
     next_key                          VARCHAR(56) NOT NULL,

@@ -77,6 +77,40 @@ class Cip113DatumParserTest {
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo("11223344");
             assertThat(result.get().globalStatePolicyId()).isNull();
         }
+
+        @Test
+        void parsesWithNullTransferLogicScript() throws Exception {
+            ConstrPlutusData registryNode = ConstrPlutusData.of(0,
+                    BytesPlutusData.of(HexUtil.decodeHexString("deadbeef")),
+                    BytesPlutusData.of(HexUtil.decodeHexString("cafebabe")),
+                    BytesPlutusData.of(new byte[0]),  // not wrapped in Constr — extractCredentialBytesOrNull returns null
+                    ConstrPlutusData.of(0, BytesPlutusData.of(HexUtil.decodeHexString("11223344")))
+            );
+            String inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(registryNode.serialize()));
+
+            Optional<Cip113RegistryNodeParser.ParsedRegistryNode> result = parser.parse(inlineDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().transferLogicScript()).isNull();
+            assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo("11223344");
+        }
+
+        @Test
+        void parsesWithNullThirdPartyLogicScript() throws Exception {
+            ConstrPlutusData registryNode = ConstrPlutusData.of(0,
+                    BytesPlutusData.of(HexUtil.decodeHexString("deadbeef")),
+                    BytesPlutusData.of(HexUtil.decodeHexString("cafebabe")),
+                    ConstrPlutusData.of(0, BytesPlutusData.of(HexUtil.decodeHexString("aabbccdd"))),
+                    BytesPlutusData.of(new byte[0])  // not wrapped in Constr — extractCredentialBytesOrNull returns null
+            );
+            String inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(registryNode.serialize()));
+
+            Optional<Cip113RegistryNodeParser.ParsedRegistryNode> result = parser.parse(inlineDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().transferLogicScript()).isEqualTo("aabbccdd");
+            assertThat(result.get().thirdPartyTransferLogicScript()).isNull();
+        }
     }
 
     @Nested
@@ -96,32 +130,6 @@ class Cip113DatumParserTest {
         @Test
         void returnsEmptyForBlank() {
             assertThat(parser.parse("  ")).isEmpty();
-        }
-
-        @Test
-        void returnsEmptyWhenTransferLogicScriptMissing() throws Exception {
-            ConstrPlutusData registryNode = ConstrPlutusData.of(0,
-                    BytesPlutusData.of(HexUtil.decodeHexString("deadbeef")),
-                    BytesPlutusData.of(HexUtil.decodeHexString("cafebabe")),
-                    BytesPlutusData.of(new byte[0]),  // not wrapped in Constr — extractCredentialBytes returns null
-                    ConstrPlutusData.of(0, BytesPlutusData.of(HexUtil.decodeHexString("11223344")))
-            );
-            String inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(registryNode.serialize()));
-
-            assertThat(parser.parse(inlineDatum)).isEmpty();
-        }
-
-        @Test
-        void returnsEmptyWhenThirdPartyLogicScriptMissing() throws Exception {
-            ConstrPlutusData registryNode = ConstrPlutusData.of(0,
-                    BytesPlutusData.of(HexUtil.decodeHexString("deadbeef")),
-                    BytesPlutusData.of(HexUtil.decodeHexString("cafebabe")),
-                    ConstrPlutusData.of(0, BytesPlutusData.of(HexUtil.decodeHexString("aabbccdd"))),
-                    BytesPlutusData.of(new byte[0])  // not wrapped in Constr — extractCredentialBytes returns null
-            );
-            String inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(registryNode.serialize()));
-
-            assertThat(parser.parse(inlineDatum)).isEmpty();
         }
     }
 

@@ -19,6 +19,7 @@ import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,10 +31,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -152,33 +150,107 @@ public class GitService {
         return getGitFolder().toPath().resolve(mappingsFolderName);
     }
 
-    public Optional<MappingUpdateDetails> getMappingDetails(File mappingFile) {
+    /**
+     * Batch-resolve mapping update details for all files in a single git log walk.
+     * Instead of running {@code git log --path=<file>} per file (O(files * commits)),
+     * this walks the commit history once and records the most recent non-merge commit
+     * that touched each file under the mappings folder — O(commits * tree-diff).
+     */
+    public Map<String, MappingUpdateDetails> getAllMappingDetails(Set<String> fileNames) {
+        Map<String, MappingUpdateDetails> result = new HashMap<>();
         if (git == null) {
             log.warn(GIT_NOT_INITIALIZED);
-            return Optional.empty();
+            return result;
         }
+
+        Set<String> remaining = new HashSet<>(fileNames);
+        int commitCount = 0;
+
         try {
-            String relativePath = mappingsFolderName + File.separator + mappingFile.getName();
+            Repository repository = git.getRepository();
+            try (RevWalk revWalk = new RevWalk(repository)) {
+                ObjectId head = repository.resolve("HEAD");
+                if (head == null) {
+                    log.warn("Could not resolve HEAD for batch mapping details");
+                    return result;
+                }
+                revWalk.markStart(revWalk.parseCommit(head));
+                revWalk.setRevFilter(RevFilter.NO_MERGES);
 
-            Iterator<RevCommit> commits = git.log()
-                    .addPath(relativePath)
-                    .setRevFilter(RevFilter.NO_MERGES)
-                    .setMaxCount(1)
-                    .call().iterator();
+                try (ObjectReader reader = repository.newObjectReader()) {
+                    for (RevCommit commit : revWalk) {
+                        if (remaining.isEmpty()) {
+                            break;
+                        }
+                        commitCount++;
 
-            if (commits.hasNext()) {
-                PersonIdent author = commits.next().getAuthorIdent();
-                String email = author.getEmailAddress();
-                LocalDateTime updatedAt = LocalDateTime.ofInstant(
-                        author.getWhenAsInstant(), ZoneOffset.UTC);
-                return Optional.of(new MappingUpdateDetails(email, updatedAt));
+                        List<String> touchedFiles = getFilesTouchedByCommit(repository, reader, commit);
+
+                        for (String touchedPath : touchedFiles) {
+                            if (!touchedPath.startsWith(mappingsFolderName + "/")) {
+                                continue;
+                            }
+                            String fileName = touchedPath.substring(mappingsFolderName.length() + 1);
+                            if (remaining.remove(fileName)) {
+                                PersonIdent author = commit.getAuthorIdent();
+                                result.put(fileName, new MappingUpdateDetails(
+                                        author.getEmailAddress(),
+                                        LocalDateTime.ofInstant(author.getWhenAsInstant(), ZoneOffset.UTC)));
+                            }
+                        }
+
+                        if (commitCount % 1000 == 0) {
+                            log.info("Git history walk: {} commits scanned, {}/{} files resolved",
+                                    commitCount, result.size(), fileNames.size());
+                        }
+                    }
+                }
             }
+        } catch (IOException e) {
+            log.warn("Failed to batch-resolve mapping details after {} commits: {}", commitCount, e.getMessage());
+        }
 
-            return Optional.empty();
+        log.info("Git history walk complete: {} commits scanned, {}/{} files resolved ({} unresolved)",
+                commitCount, result.size(), fileNames.size(), remaining.size());
+        return result;
+    }
+
+    private List<String> getFilesTouchedByCommit(Repository repository, ObjectReader reader, RevCommit commit)
+            throws IOException {
+        if (commit.getParentCount() == 0) {
+            // Root commit — use recursive TreeWalk to find all files under mappings folder
+            try (TreeWalk treeWalk = new TreeWalk(repository)) {
+                treeWalk.addTree(commit.getTree());
+                treeWalk.setRecursive(true);
+                treeWalk.setFilter(PathFilter.create(mappingsFolderName));
+                List<String> files = new ArrayList<>();
+                while (treeWalk.next()) {
+                    files.add(treeWalk.getPathString());
+                }
+                return files;
+            }
+        }
+
+        try (RevWalk parentWalk = new RevWalk(repository)) {
+            RevCommit parent = parentWalk.parseCommit(commit.getParent(0).getId());
+            CanonicalTreeParser oldTree = new CanonicalTreeParser();
+            oldTree.reset(reader, parent.getTree().getId());
+            CanonicalTreeParser newTree = new CanonicalTreeParser();
+            newTree.reset(reader, commit.getTree().getId());
+
+            List<DiffEntry> diffs = git.diff()
+                    .setOldTree(oldTree)
+                    .setNewTree(newTree)
+                    .setPathFilter(PathFilter.create(mappingsFolderName))
+                    .call();
+
+            return diffs.stream()
+                    .map(d -> d.getChangeType() == DiffEntry.ChangeType.DELETE
+                            ? d.getOldPath() : d.getNewPath())
+                    .toList();
         } catch (GitAPIException e) {
-            log.warn("it was not possible to determine updatedBy and updatedAt for mapping file: {}",
-                    mappingFile.getName(), e);
-            return Optional.empty();
+            log.warn("Failed to diff commit {}: {}", commit.getName(), e.getMessage());
+            return List.of();
         }
     }
 

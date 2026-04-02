@@ -78,6 +78,25 @@ class Cip113RegistryServiceTest {
         }
 
         @Test
+        void normalizesNullTransferLogicScript() {
+            Cip113RegistryNode entity = Cip113RegistryNode.builder()
+                    .policyId("deadbeef")
+                    .transferLogicScript(null)
+                    .thirdPartyTransferLogicScript("script2")
+                    .globalStatePolicyId(null)
+                    .build();
+
+            when(repository.findFirstByPolicyIdOrderBySlotDesc("deadbeef"))
+                    .thenReturn(Optional.of(entity));
+
+            Optional<ProgrammableTokenCip113> result = service.findByPolicyId("deadbeef");
+
+            assertThat(result).isPresent();
+            assertThat(result.get().transferLogicScript()).isNull();
+            assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo("script2");
+        }
+
+        @Test
         void returnsEmptyWhenNotFound() {
             when(repository.findFirstByPolicyIdOrderBySlotDesc("unknown"))
                     .thenReturn(Optional.empty());

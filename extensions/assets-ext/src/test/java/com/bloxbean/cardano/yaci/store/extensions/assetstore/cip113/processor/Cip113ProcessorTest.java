@@ -88,6 +88,27 @@ class Cip113ProcessorTest {
             assertThat(saved.getThirdPartyTransferLogicScript()).isEqualTo(THIRD_PARTY_LOGIC);
             assertThat(saved.getDatum()).isEqualTo(datum);
         }
+
+        @Test
+        void savesEntityWithNullTransferLogicScript() throws Exception {
+            // transfer_logic_script not wrapped in Constr — parser returns null, but entry is still saved
+            ConstrPlutusData registryNode = ConstrPlutusData.of(0,
+                    BytesPlutusData.of(HexUtil.decodeHexString(REGISTERED_POLICY_ID)),
+                    BytesPlutusData.of(HexUtil.decodeHexString("ffffffffffff")),
+                    BytesPlutusData.of(new byte[0]),  // not a Constr-wrapped credential → null
+                    ConstrPlutusData.of(0, BytesPlutusData.of(HexUtil.decodeHexString(THIRD_PARTY_LOGIC)))
+            );
+            String datum = HexUtil.encodeHexString(CborSerializationUtil.serialize(registryNode.serialize()));
+
+            processor.processTransaction(buildEvent(100L, REGISTRY_NFT_POLICY_ID, REGISTERED_POLICY_ID, datum, TX_HASH));
+
+            ArgumentCaptor<Cip113RegistryNode> captor = ArgumentCaptor.forClass(Cip113RegistryNode.class);
+            verify(repository).save(captor.capture());
+
+            Cip113RegistryNode saved = captor.getValue();
+            assertThat(saved.getTransferLogicScript()).isNull();
+            assertThat(saved.getThirdPartyTransferLogicScript()).isEqualTo(THIRD_PARTY_LOGIC);
+        }
     }
 
     @Nested
