@@ -8,8 +8,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import java.math.BigInteger;
 
 /**
- * MapStruct decorator that adds computed and approximated fields on top of
+ * MapStruct decorator that adds computed fields on top of
  * the base BigInteger → String conversion performed by {@link BFNetworkMapper}.
+ * <p>
+ * Computes {@code total = max - reserves}. The {@code locked}, {@code circulating},
+ * and {@code live} fields are set by {@link com.bloxbean.cardano.yaci.store.blockfrost.network.service.BFNetworkService}
+ * from UTxO-based queries via {@link com.bloxbean.cardano.yaci.store.blockfrost.network.storage.BFNetworkStorageReader}.
  */
 public abstract class BFNetworkMapperDecorator implements BFNetworkMapper {
 
@@ -28,15 +32,12 @@ public abstract class BFNetworkMapperDecorator implements BFNetworkMapper {
 
         BFNetworkDto.Supply supply = dto.getSupply();
         if (supply != null) {
-           
+            // total = max - reserves
             supply.setTotal(computeTotal(networkInfoDto.supply()));
-            supply.setLocked("0");
+            // locked and circulating are set by BFNetworkService after this mapper returns
         }
 
-        BFNetworkDto.Stake stake = dto.getStake();
-        if (stake != null) {
-            stake.setLive(stake.getActive());
-        }
+        // live stake is set by BFNetworkService after this mapper returns
 
         return dto;
     }

@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.network.dto.BFGenesisDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.dto.BFNetworkDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.dto.BFRootDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.mapper.BFNetworkMapper;
+import com.bloxbean.cardano.yaci.store.blockfrost.network.storage.BFNetworkStorageReader;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +36,7 @@ public class BFNetworkService {
     private static final int UPDATE_QUORUM = 5;
 
     private final ObjectProvider<NetworkInfoApiService> networkInfoApiServiceProvider;
+    private final ObjectProvider<BFNetworkStorageReader> bfNetworkStorageReaderProvider;
     private final EraService eraService;
     private final GenesisConfig genesisConfig;
     private final StoreProperties storeProperties;
@@ -48,10 +51,36 @@ public class BFNetworkService {
                     "Network info service not available. Enable the adapot aggregate.");
         }
 
-        return networkInfoApiService.getNetworkInfo()
+        BFNetworkDto dto = networkInfoApiService.getNetworkInfo()
                 .map(bfNetworkMapper::toBFNetworkDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Network information not found."));
+
+        // Enrich with UTxO-based locked supply, circulating supply, and live stake
+        BFNetworkStorageReader storageReader = bfNetworkStorageReaderProvider.getIfAvailable();
+        if (storageReader != null) {
+            BFNetworkDto.Supply supply = dto.getSupply();
+            if (supply != null) {
+                // locked = SUM(lovelace) from unspent UTxOs at script addresses
+                BigInteger locked = storageReader.getLockedSupply();
+                supply.setLocked(locked.toString());
+
+                // circulating = UTxO sum + spendable rewards + spendable reward_rest - withdrawals
+                // Uses the same formula as Blockfrost (cardano-db-sync backend)
+                int currentEpoch = storageReader.getCurrentEpoch();
+                BigInteger circulating = storageReader.getCirculatingSupply(currentEpoch);
+                supply.setCirculating(circulating.toString());
+            }
+
+            BFNetworkDto.Stake stake = dto.getStake();
+            if (stake != null) {
+                // live = latest epoch_stake snapshot total (approximation)
+                BigInteger liveStake = storageReader.getLiveStake();
+                stake.setLive(liveStake.toString());
+            }
+        }
+
+        return dto;
     }
 
     // ── /network/eras ─────────────────────────────────────────────────────────
@@ -69,25 +98,26 @@ public class BFNetworkService {
         int securityParam = genesisConfig.getSecurityParam();
         double activeSlotsCoeff = genesisConfig.getActiveSlotsCoeff();
 
-        // Safe-zone formulas derived from Cardano protocol constants
-        long byronSafeZone = (long) (securityParam * 2.0 / 5.0);
+        // Safe-zone: Byron = 2k, Shelley = 3k/f  (Cardano consensus constants)
+        long byronSafeZone = securityParam * 2L;
         long shelleySafeZone = (long) (3.0 * securityParam / activeSlotsCoeff);
 
         // ── Byron era (always epoch 0, slot 0) ───────────────────────────────
         if (!cardanoEras.isEmpty()) {
             CardanoEra firstNonByron = cardanoEras.get(0);
-            long byronEndSlot = firstNonByron.getStartSlot() - 1;
-            long byronEndTime = genesisStartTime + byronEndSlot * byronSlotLength;
+            // Blockfrost uses touching boundaries: current era end == next era start
+            long byronEndSlot = firstNonByron.getStartSlot();
+            long byronEndTimeAbs = genesisStartTime + byronEndSlot * byronSlotLength;
             int byronEndEpoch = (int) (byronEndSlot / byronEpochLength);
 
             BFEraDto byronEra = BFEraDto.builder()
                     .start(BFEraDto.EraBoundary.builder()
-                            .time(genesisStartTime)
+                            .time(0L)  // relative to genesis
                             .slot(0L)
                             .epoch(0)
                             .build())
                     .end(BFEraDto.EraBoundary.builder()
-                            .time(byronEndTime)
+                            .time(byronEndTimeAbs - genesisStartTime)  // relative to genesis
                             .slot(byronEndSlot)
                             .epoch(byronEndEpoch)
                             .build())
@@ -106,22 +136,23 @@ public class BFNetworkService {
             CardanoEra nextEra = (i + 1 < cardanoEras.size()) ? cardanoEras.get(i + 1) : null;
 
             long startSlot = era.getStartSlot();
-            long startTime = eraService.blockTime(era.getEra(), startSlot);
+            long startTimeAbs = eraService.blockTime(era.getEra(), startSlot);
             int startEpoch = eraService.getEpochNo(era.getEra(), startSlot);
 
             BFEraDto.EraBoundary start = BFEraDto.EraBoundary.builder()
-                    .time(startTime)
+                    .time(startTimeAbs - genesisStartTime)  // relative to genesis
                     .slot(startSlot)
                     .epoch(startEpoch)
                     .build();
 
             BFEraDto.EraBoundary end = null;
             if (nextEra != null) {
-                long endSlot = nextEra.getStartSlot() - 1;
-                long endTime = eraService.blockTime(era.getEra(), endSlot);
+                // Touching boundaries: end of current era == start of next era
+                long endSlot = nextEra.getStartSlot();
+                long endTimeAbs = eraService.blockTime(era.getEra(), endSlot);
                 int endEpoch = eraService.getEpochNo(era.getEra(), endSlot);
                 end = BFEraDto.EraBoundary.builder()
-                        .time(endTime)
+                        .time(endTimeAbs - genesisStartTime)  // relative to genesis
                         .slot(endSlot)
                         .epoch(endEpoch)
                         .build();

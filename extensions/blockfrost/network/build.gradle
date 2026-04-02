@@ -6,6 +6,7 @@ dependencies {
     api project(":aggregates:adapot")
     api project(":components:core")
 
+    implementation 'org.jooq:jooq'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 
