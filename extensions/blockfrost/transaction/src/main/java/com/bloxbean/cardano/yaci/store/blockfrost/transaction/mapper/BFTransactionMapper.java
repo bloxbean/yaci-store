@@ -119,6 +119,7 @@ public abstract class BFTransactionMapper {
                 .assetMintOrBurnCount(raw.getAssetMintOrBurnCount())
                 .redeemerCount(raw.getRedeemerCount())
                 .validContract(invalid == null || !invalid)
+                .treasuryDonation("0")
                 .build();
     }
 

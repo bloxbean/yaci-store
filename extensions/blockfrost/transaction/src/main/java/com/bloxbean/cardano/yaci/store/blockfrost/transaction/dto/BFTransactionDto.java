@@ -39,4 +39,5 @@ public class BFTransactionDto {
     private Integer assetMintOrBurnCount;
     private Integer redeemerCount;
     private Boolean validContract;
+    private String treasuryDonation;
 }
