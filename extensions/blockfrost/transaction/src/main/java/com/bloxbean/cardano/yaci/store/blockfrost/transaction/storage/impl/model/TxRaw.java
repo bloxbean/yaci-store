@@ -27,6 +27,8 @@ public class TxRaw {
     private int withdrawalCount;
     private int delegationCount;
     private int stakeCertCount;
+    private int stakeRegCount;
+    private int stakeDeregCount;
     private int poolUpdateCount;
     private int poolRetireCount;
     private int redeemerCount;

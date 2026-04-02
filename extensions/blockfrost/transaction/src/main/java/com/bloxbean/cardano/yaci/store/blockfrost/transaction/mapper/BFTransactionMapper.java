@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -310,7 +311,7 @@ public abstract class BFTransactionMapper {
 
     private List<String> parseOwners(String json) {
         List<String> hashes = parseJsonStringArray(json);
-        boolean isMainnet = storeProperties.getProtocolMagic() == 764824073L;
+        boolean isMainnet = storeProperties.getProtocolMagic() == NetworkType.MAINNET.getProtocolMagic();
         String prefix = isMainnet ? "stake" : "stake_test";
         byte headerByte = isMainnet ? (byte) 0xe1 : (byte) 0xe0;
         return hashes.stream()

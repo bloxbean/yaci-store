@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.transaction.service;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.mapper.BFTransactionMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.BFTransactionStorageReader;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.TxRaw;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.TxRedeemerPricesRaw;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
@@ -56,7 +57,7 @@ public class BFTransactionService {
             }
         }
 
-        String deposit = calculateDeposit(txHash);
+        String deposit = calculateDeposit(raw);
 
         return mapper.toTransactionDto(raw, outputAmounts, deposit, mirCertCount);
     }
@@ -163,45 +164,39 @@ public class BFTransactionService {
                         "The requested component has not been found."));
     }
 
-    private String calculateDeposit(String txHash) {
+    private String calculateDeposit(TxRaw raw) {
         BigInteger deposit = BigInteger.ZERO;
 
         // DRep deposit does not depend on epoch params — compute it independently.
         try {
-            BigInteger drepDeposit = storageReader.sumDrepDeposit(txHash);
+            BigInteger drepDeposit = storageReader.sumDrepDeposit(raw.getTxHash());
             if (drepDeposit != null && drepDeposit.compareTo(BigInteger.ZERO) != 0) {
                 deposit = deposit.add(drepDeposit);
             }
         } catch (Exception e) {
-            log.warn("Could not calculate drep deposit for tx {}: {}", txHash, e.getMessage());
+            log.warn("Could not calculate drep deposit for tx {}: {}", raw.getTxHash(), e.getMessage());
         }
 
         // Stake registration/deregistration and pool registration require epoch params.
         EpochParamStorage epochParamStorage = epochParamStorageProvider.getIfAvailable();
-        if (epochParamStorage != null) {
+        if (epochParamStorage != null && raw.getEpoch() != null) {
             try {
-                Txn txn = transactionStorageReader.getTransactionByTxHash(txHash).orElse(null);
-                if (txn != null && txn.getEpoch() != null) {
-                    EpochParam epochParam = epochParamStorage.getProtocolParams(txn.getEpoch()).orElse(null);
-                    if (epochParam != null && epochParam.getParams() != null) {
-                        BigInteger keyDeposit = epochParam.getParams().getKeyDeposit();
-                        BigInteger poolDeposit = epochParam.getParams().getPoolDeposit();
+                EpochParam epochParam = epochParamStorage.getProtocolParams(raw.getEpoch()).orElse(null);
+                if (epochParam != null && epochParam.getParams() != null) {
+                    BigInteger keyDeposit = epochParam.getParams().getKeyDeposit();
+                    BigInteger poolDeposit = epochParam.getParams().getPoolDeposit();
 
-                        int stakeRegCount = storageReader.countStakeRegistrations(txHash);
-                        int stakeDeregCount = storageReader.countStakeDeregistrations(txHash);
-                        int netStakeCount = stakeRegCount - stakeDeregCount;
-                        int poolRegCount = storageReader.countPoolRegistrations(txHash);
+                    int netStakeCount = raw.getStakeRegCount() - raw.getStakeDeregCount();
 
-                        if (keyDeposit != null && netStakeCount != 0) {
-                            deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(netStakeCount)));
-                        }
-                        if (poolDeposit != null && poolRegCount > 0) {
-                            deposit = deposit.add(poolDeposit.multiply(BigInteger.valueOf(poolRegCount)));
-                        }
+                    if (keyDeposit != null && netStakeCount != 0) {
+                        deposit = deposit.add(keyDeposit.multiply(BigInteger.valueOf(netStakeCount)));
+                    }
+                    if (poolDeposit != null && raw.getPoolUpdateCount() > 0) {
+                        deposit = deposit.add(poolDeposit.multiply(BigInteger.valueOf(raw.getPoolUpdateCount())));
                     }
                 }
             } catch (Exception e) {
-                log.warn("Could not calculate stake/pool deposit for tx {}: {}", txHash, e.getMessage());
+                log.warn("Could not calculate stake/pool deposit for tx {}: {}", raw.getTxHash(), e.getMessage());
             }
         }
 

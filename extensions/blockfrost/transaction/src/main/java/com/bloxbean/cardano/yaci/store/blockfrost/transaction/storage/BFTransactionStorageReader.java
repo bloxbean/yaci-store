@@ -37,11 +37,5 @@ public interface BFTransactionStorageReader {
      */
     List<BFAmountDto> findTxOutputAmounts(String txHash);
 
-    int countStakeRegistrations(String txHash);
-
-    int countStakeDeregistrations(String txHash);
-
-    int countPoolRegistrations(String txHash);
-
     BigInteger sumDrepDeposit(String txHash);
 }

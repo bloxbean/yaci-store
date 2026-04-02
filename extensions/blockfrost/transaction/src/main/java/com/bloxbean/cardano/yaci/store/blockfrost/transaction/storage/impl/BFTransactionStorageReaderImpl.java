@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl;
 
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFAmountDto;
@@ -55,6 +56,18 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .from(STAKE_REGISTRATION).where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
                 .asField("stake_cert_count");
 
+        Field<Integer> stakeRegCount = DSL.selectCount()
+                .from(STAKE_REGISTRATION)
+                .where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
+                .and(STAKE_REGISTRATION.TYPE.eq(CertificateType.STAKE_REGISTRATION.name()))
+                .asField("stake_reg_count");
+
+        Field<Integer> stakeDeregCount = DSL.selectCount()
+                .from(STAKE_REGISTRATION)
+                .where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
+                .and(STAKE_REGISTRATION.TYPE.eq(CertificateType.STAKE_DEREGISTRATION.name()))
+                .asField("stake_dereg_count");
+
         Field<Integer> poolUpdateCount = DSL.selectCount()
                 .from(POOL_REGISTRATION).where(POOL_REGISTRATION.TX_HASH.eq(txHash))
                 .asField("pool_update_count");
@@ -103,7 +116,8 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         TRANSACTION_CBOR.CBOR_SIZE,
                         withdrawalCount, delegationCount, stakeCertCount,
                         poolUpdateCount, poolRetireCount, redeemerCount,
-                        assetMintCount, inputCount, outputCount, collateralReturnCount
+                        assetMintCount, inputCount, outputCount, collateralReturnCount,
+                        stakeRegCount, stakeDeregCount
                 )
                 .from(TRANSACTION)
                 .leftJoin(TRANSACTION_CBOR).on(TRANSACTION_CBOR.TX_HASH.eq(TRANSACTION.TX_HASH))
@@ -124,6 +138,8 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         .withdrawalCount(orZero(record.get("withdrawal_count", Integer.class)))
                         .delegationCount(orZero(record.get("delegation_count", Integer.class)))
                         .stakeCertCount(orZero(record.get("stake_cert_count", Integer.class)))
+                        .stakeRegCount(orZero(record.get("stake_reg_count", Integer.class)))
+                        .stakeDeregCount(orZero(record.get("stake_dereg_count", Integer.class)))
                         .poolUpdateCount(orZero(record.get("pool_update_count", Integer.class)))
                         .poolRetireCount(orZero(record.get("pool_retire_count", Integer.class)))
                         .redeemerCount(orZero(record.get("redeemer_count", Integer.class)))
@@ -459,32 +475,6 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
         result.add(BFAmountDto.builder().unit(Constants.LOVELACE).quantity(lovelaceTotal.toString()).build());
         result.addAll(nonLovelace);
         return result;
-    }
-
-    @Override
-    public int countStakeRegistrations(String txHash) {
-        return dsl.fetchCount(
-                dsl.selectFrom(STAKE_REGISTRATION)
-                        .where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
-                        .and(STAKE_REGISTRATION.TYPE.eq("STAKE_REGISTRATION"))
-        );
-    }
-
-    @Override
-    public int countStakeDeregistrations(String txHash) {
-        return dsl.fetchCount(
-                dsl.selectFrom(STAKE_REGISTRATION)
-                        .where(STAKE_REGISTRATION.TX_HASH.eq(txHash))
-                        .and(STAKE_REGISTRATION.TYPE.eq("STAKE_DEREGISTRATION"))
-        );
-    }
-
-    @Override
-    public int countPoolRegistrations(String txHash) {
-        return dsl.fetchCount(
-                dsl.selectFrom(POOL_REGISTRATION)
-                        .where(POOL_REGISTRATION.TX_HASH.eq(txHash))
-        );
     }
 
     @Override
