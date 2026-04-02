@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import jakarta.annotation.Nullable;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Core query and merge logic for multi-standard token metadata.
@@ -72,26 +75,19 @@ public class TokenQueryService {
 
     /**
      * Query and merge metadata for a single subject in batch context,
-     * using a pre-fetched CIP-113 map to avoid N+1 queries.
-     *
-     * @param subject           the subject identifier
-     * @param queryPriority     ordered list of CIP standards to query
-     * @param queryProperties   list of properties to include (empty means all)
-     * @param cip113Map         pre-fetched CIP-113 data keyed by policy ID
-     * @param showCipsDetails   whether to include raw per-standard metadata
-     * @return the merged Subject (may have empty/invalid metadata -- caller should filter)
+     * using pre-fetched data maps to avoid N+1 queries.
      */
     public Subject querySubjectBatch(String subject,
                                      List<QueryPriority> queryPriority,
                                      List<String> queryProperties,
-                                     Map<String, ProgrammableTokenCip113> cip113Map,
+                                     BatchPrefetchData prefetchData,
                                      boolean showCipsDetails) {
 
         MetadataStandardsPair pair = queryPriority.stream()
-                .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
+                .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
 
         Map<String, Extension> extensions = new LinkedHashMap<>();
-        ProgrammableTokenCip113 cip113 = cip113Map.get(AssetType.fromUnit(subject).policyId());
+        ProgrammableTokenCip113 cip113 = prefetchData.cip113Map().get(AssetType.fromUnit(subject).policyId());
         if (cip113 != null) {
             extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113);
         }
@@ -103,17 +99,39 @@ public class TokenQueryService {
     }
 
     /**
-     * Pre-fetch CIP-113 data for a list of subjects to avoid N+1 queries.
-     * Returns an empty map if CIP-113 is not enabled.
+     * Pre-fetch all data for a batch of subjects in bulk queries to avoid N+1.
+     * Issues at most 4 queries regardless of batch size:
+     * CIP-26 metadata, CIP-26 logos, CIP-68 (per-subject, no batch yet), CIP-113.
      */
-    public Map<String, ProgrammableTokenCip113> prefetchCip113(List<String> subjects) {
-        return cip113StorageReader.map(reader -> {
+    public BatchPrefetchData prefetchBatch(List<String> subjects, List<String> queryProperties) {
+        // CIP-113: one query for all distinct policy IDs
+        Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.map(reader -> {
             List<String> policyIds = subjects.stream()
                     .map(s -> AssetType.fromUnit(s).policyId())
                     .distinct()
                     .toList();
             return reader.findByPolicyIds(policyIds);
         }).orElse(Map.of());
+
+        // CIP-26: one query for all metadata, one query for all logos
+        Map<String, TokenMetadata> cip26MetadataMap = cip26StorageReader.findBySubjects(subjects).stream()
+                .collect(Collectors.toMap(TokenMetadata::getSubject, Function.identity()));
+
+        boolean needLogos = queryProperties.isEmpty() || queryProperties.contains("logo");
+        Map<String, String> cip26LogoMap = needLogos
+                ? cip26StorageReader.findLogosBySubjects(subjects)
+                : Map.of();
+
+        return new BatchPrefetchData(cip113Map, cip26MetadataMap, cip26LogoMap);
+    }
+
+    /**
+     * Pre-fetched data for batch operations. Eliminates N+1 queries.
+     */
+    public record BatchPrefetchData(
+            Map<String, ProgrammableTokenCip113> cip113Map,
+            Map<String, TokenMetadata> cip26MetadataMap,
+            Map<String, String> cip26LogoMap) {
     }
 
     private Optional<MetadataStandardsPair> findMetadata(String subject, List<String> properties, QueryPriority priority) {
@@ -157,6 +175,37 @@ public class TokenQueryService {
                         accumulated.metadata().merge(found.metadata()),
                         accumulated.standards().merge(found.standards())))
                 .orElse(accumulated);
+    }
+
+    private BiFunction<MetadataStandardsPair, QueryPriority, MetadataStandardsPair> combineStandardsBatch(
+            String subject, List<String> properties, BatchPrefetchData prefetchData) {
+        return (accumulated, priority) -> findMetadataBatch(subject, properties, priority, prefetchData)
+                .map(found -> new MetadataStandardsPair(
+                        accumulated.metadata().merge(found.metadata()),
+                        accumulated.standards().merge(found.standards())))
+                .orElse(accumulated);
+    }
+
+    private Optional<MetadataStandardsPair> findMetadataBatch(String subject, List<String> properties,
+                                                               QueryPriority priority, BatchPrefetchData prefetchData) {
+        return switch (priority) {
+            case CIP_26 -> findCip26MetadataBatch(subject, properties, prefetchData);
+            case CIP_68 -> findCip68Metadata(subject, properties); // CIP-68 is per-subject (label-filtered)
+        };
+    }
+
+    private Optional<MetadataStandardsPair> findCip26MetadataBatch(String subject, List<String> properties,
+                                                                    BatchPrefetchData prefetchData) {
+        TokenMetadata entity = prefetchData.cip26MetadataMap().get(subject);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        String logo = (properties.isEmpty() || properties.contains("logo"))
+                ? prefetchData.cip26LogoMap().get(subject)
+                : null;
+        return Optional.of(new MetadataStandardsPair(
+                Metadata.from(entity, logo, properties),
+                new Standards(entity, null)));
     }
 
     private Map<String, Extension> buildExtensions(String subject) {

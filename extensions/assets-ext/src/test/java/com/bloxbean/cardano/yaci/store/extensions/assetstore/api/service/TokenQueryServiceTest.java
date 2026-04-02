@@ -108,6 +108,18 @@ class TokenQueryServiceTest {
                         "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd",
                         "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
                         "eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011")));
+
+        // CIP-26 batch: findBySubjects returns all known metadata
+        when(cip26StorageReader.findBySubjects(any())).thenAnswer(invocation -> {
+            List<String> subjects = invocation.getArgument(0);
+            return subjects.stream()
+                    .map(s -> cip26StorageReader.findBySubject(s).orElse(null))
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        });
+
+        // CIP-26 batch: findLogosBySubjects returns empty (no logos mocked)
+        when(cip26StorageReader.findLogosBySubjects(any())).thenReturn(Map.of());
     }
 
     @Nested
@@ -227,11 +239,11 @@ class TokenQueryServiceTest {
 
         @Test
         void returnsMergedMetadataForMultipleSubjects() {
-            Map<String, ProgrammableTokenCip113> cip113Map = service.prefetchCip113(
-                    List.of(KNOWN_SUBJECT, FLDT_SUBJECT));
+            TokenQueryService.BatchPrefetchData prefetchData = service.prefetchBatch(
+                    List.of(KNOWN_SUBJECT, FLDT_SUBJECT), List.of());
 
-            Subject known = service.querySubjectBatch(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), cip113Map, false);
-            Subject fldt = service.querySubjectBatch(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), cip113Map, false);
+            Subject known = service.querySubjectBatch(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
+            Subject fldt = service.querySubjectBatch(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
 
             assertThat(known.subject()).isEqualTo(KNOWN_SUBJECT);
             assertThat(known.metadata().url().value()).isEqualTo("https://cip68-url.com/nutcoin");
@@ -242,10 +254,10 @@ class TokenQueryServiceTest {
 
         @Test
         void unknownSubjectReturnsEmptyMetadata() {
-            Map<String, ProgrammableTokenCip113> cip113Map = service.prefetchCip113(
-                    List.of(UNKNOWN_SUBJECT));
+            TokenQueryService.BatchPrefetchData prefetchData = service.prefetchBatch(
+                    List.of(UNKNOWN_SUBJECT), List.of());
 
-            Subject unknown = service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), cip113Map, false);
+            Subject unknown = service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
             assertThat(unknown.metadata().isEmpty() || !unknown.metadata().isValid()).isTrue();
         }
     }

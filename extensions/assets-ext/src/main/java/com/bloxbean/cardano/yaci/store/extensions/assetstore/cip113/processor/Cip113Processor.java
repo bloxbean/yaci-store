@@ -13,6 +13,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -32,36 +36,37 @@ public class Cip113Processor {
 
         Long slot = addressUtxoEvent.getMetadata().getSlot();
 
-        addressUtxoEvent.getTxInputOutputs()
+        List<Cip113RegistryNode> entities = addressUtxoEvent.getTxInputOutputs()
                 .stream()
                 .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
                 .filter(utxo -> utxo.getInlineDatum() != null && cip113RegistryService.containsRegistryNode(utxo))
-                .forEach(output -> parseAndSave(output, slot));
+                .map(utxo -> toEntity(utxo, slot))
+                .flatMap(Optional::stream)
+                .toList();
+
+        if (!entities.isEmpty()) {
+            cip113RegistryNodeRepository.saveAll(entities);
+            entities.forEach(e -> log.info("Indexed CIP-113 registry node: policyId={}, slot={}, txHash={}",
+                    e.getPolicyId(), e.getSlot(), e.getTxHash()));
+        }
     }
 
-    private void parseAndSave(AddressUtxo utxo, Long slot) {
-        registryNodeParser.parse(utxo.getInlineDatum())
-                .ifPresentOrElse(
-                        parsed -> {
-                            Cip113RegistryNode entity = Cip113RegistryNode.builder()
-                                    .policyId(parsed.key())
-                                    .slot(slot)
-                                    .txHash(utxo.getTxHash())
-                                    .transferLogicScript(parsed.transferLogicScript())
-                                    .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())
-                                    .globalStatePolicyId(parsed.globalStatePolicyId())
-                                    .nextKey(parsed.next())
-                                    .datum(utxo.getInlineDatum())
-                                    .lastSyncedAt(java.time.LocalDateTime.now())
-                                    .build();
-
-                            cip113RegistryNodeRepository.save(entity);
-                            log.info("Indexed CIP-113 registry node: policyId={}, slot={}, txHash={}",
-                                    parsed.key(), slot, utxo.getTxHash());
-                        },
-                        () -> log.warn("Failed to parse CIP-113 registry node datum from txHash={}",
-                                utxo.getTxHash())
-                );
+    private Optional<Cip113RegistryNode> toEntity(AddressUtxo utxo, Long slot) {
+        return registryNodeParser.parse(utxo.getInlineDatum())
+                .map(parsed -> {
+                    Cip113RegistryNode entity = Cip113RegistryNode.builder()
+                            .policyId(parsed.key())
+                            .slot(slot)
+                            .txHash(utxo.getTxHash())
+                            .transferLogicScript(parsed.transferLogicScript())
+                            .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())
+                            .globalStatePolicyId(parsed.globalStatePolicyId())
+                            .nextKey(parsed.next())
+                            .datum(utxo.getInlineDatum())
+                            .lastSyncedAt(LocalDateTime.now())
+                            .build();
+                    return entity;
+                });
     }
 
 }

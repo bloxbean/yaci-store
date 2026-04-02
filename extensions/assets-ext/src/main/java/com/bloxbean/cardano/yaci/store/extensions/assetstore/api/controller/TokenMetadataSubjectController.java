@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -111,12 +111,12 @@ public class TokenMetadataSubjectController {
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
-        Map<String, ProgrammableTokenCip113> cip113Map = tokenQueryService.prefetchCip113(body.getSubjects());
+        BatchPrefetchData prefetchData = tokenQueryService.prefetchBatch(body.getSubjects(), queryProperties);
 
         List<Subject> subjects = body.getSubjects()
                 .stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
-                        subject, queryPriority, queryProperties, cip113Map, includeCipsDetails))
+                        subject, queryPriority, queryProperties, prefetchData, includeCipsDetails))
                 .filter(s -> !s.metadata().isEmpty() && s.metadata().isValid())
                 .toList();
 

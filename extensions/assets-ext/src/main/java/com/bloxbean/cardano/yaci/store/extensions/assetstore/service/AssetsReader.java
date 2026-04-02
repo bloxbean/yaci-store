@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.service;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
@@ -95,10 +95,10 @@ public class AssetsReader {
      * @return list of subjects with valid metadata (invalid/not-found subjects are excluded)
      */
     public List<Subject> getSubjects(List<String> subjects, List<QueryPriority> queryPriority) {
-        Map<String, ProgrammableTokenCip113> cip113Map = tokenQueryService.prefetchCip113(subjects);
+        BatchPrefetchData prefetchData = tokenQueryService.prefetchBatch(subjects, List.of());
         return subjects.stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
-                        subject, queryPriority, List.of(), cip113Map, false))
+                        subject, queryPriority, List.of(), prefetchData, false))
                 .filter(subject -> subject.metadata() != null && subject.metadata().isValid())
                 .toList();
     }

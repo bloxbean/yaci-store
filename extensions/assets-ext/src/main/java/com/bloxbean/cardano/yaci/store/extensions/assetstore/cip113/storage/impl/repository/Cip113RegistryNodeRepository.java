@@ -21,10 +21,11 @@ public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113Regist
 
     /**
      * Returns the latest registry node state per policy ID.
-     * Uses a correlated subquery to find the max slot per policy, portable across databases.
+     * Uses ROW_NUMBER() window function — portable across PostgreSQL, H2, and MySQL 8+.
      */
-    @Query("SELECT e FROM Cip113RegistryNode e WHERE e.policyId IN :policyIds AND e.slot = " +
-            "(SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.policyId = e.policyId)")
+    @Query(value = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_id ORDER BY slot DESC) AS rn " +
+            "FROM cip113_registry_node WHERE policy_id IN (:policyIds)) ranked WHERE rn = 1",
+            nativeQuery = true)
     List<Cip113RegistryNode> findLatestByPolicyIds(@Param("policyIds") Collection<String> policyIds);
 
     @Query("SELECT DISTINCT e.policyId FROM Cip113RegistryNode e")
