@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
+import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
+import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -201,6 +203,21 @@ public abstract class BFTransactionMapper {
                 .collect(Collectors.toList());
     }
 
+    public BFTxMirDto toMirDto(MoveInstataneousReward mir) {
+        String pot = MirPot.reserves == mir.getPot() ? "reserve"
+                : (mir.getPot() != null ? mir.getPot().name() : null);
+        return BFTxMirDto.builder()
+                .pot(pot)
+                .certIndex((int) mir.getCertIndex())
+                .address(mir.getAddress())
+                .amount(mir.getAmount() != null ? mir.getAmount().toString() : "0")
+                .build();
+    }
+
+    public List<BFTxMirDto> toMirDtos(List<MoveInstataneousReward> mirs) {
+        return mirs.stream().map(this::toMirDto).collect(Collectors.toList());
+    }
+
     public List<BFTxPoolUpdateDto> toPoolUpdateDtos(List<TxPoolUpdateRaw> raws) {
         return raws.stream()
                 .map(r -> {
@@ -235,8 +252,16 @@ public abstract class BFTransactionMapper {
     private String mapRedeemerPurpose(String purpose) {
         if (purpose == null) return null;
         return switch (purpose) {
-            case "Voting" -> "vote";
-            default -> purpose.toLowerCase();
+            case "Spend"     -> "spend";
+            case "Mint"      -> "mint";
+            case "Cert"      -> "cert";
+            case "Reward"    -> "reward";
+            case "Voting"    -> "vote";
+            case "Proposing" -> "proposing";
+            default -> {
+                log.warn("Unknown redeemer purpose: {}", purpose);
+                yield purpose.toLowerCase();
+            }
         };
     }
 
@@ -298,16 +323,17 @@ public abstract class BFTransactionMapper {
 
     private List<BFAmountDto> parseCollateralReturnAmounts(JsonNode amountsNode) {
         if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();
+        List<BFAmountDto> result = new ArrayList<>();
         for (JsonNode a : amountsNode) {
             String unit = a.path("unit").asText(null);
-            if (Constants.LOVELACE.equals(unit)) {
-                return Collections.singletonList(BFAmountDto.builder()
-                        .unit(Constants.LOVELACE)
-                        .quantity(String.valueOf(a.path("quantity").asLong(0)))
+            if (unit != null) {
+                result.add(BFAmountDto.builder()
+                        .unit(unit)
+                        .quantity(a.path("quantity").asText("0"))
                         .build());
             }
         }
-        return Collections.emptyList();
+        return result;
     }
 
     private List<String> parseOwners(String json) {

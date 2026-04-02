@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
@@ -280,7 +281,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 )
                 .from(TRANSACTION_SCRIPTS)
                 .where(TRANSACTION_SCRIPTS.TX_HASH.eq(txHash))
-                .orderBy(TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc())
+                .orderBy(TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc(), TRANSACTION_SCRIPTS.PURPOSE.asc())
                 .fetch(record -> TxRedeemerRaw.builder()
                         .txIndex(record.get(TRANSACTION_SCRIPTS.REDEEMER_INDEX))
                         .purpose(record.get(TRANSACTION_SCRIPTS.PURPOSE))
@@ -440,7 +441,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
         boolean txInvalid = Boolean.TRUE.equals(txInvalidRaw);
 
         BigInteger lovelaceTotal = BigInteger.ZERO;
-        List<BFAmountDto> nonLovelace = new ArrayList<>();
+        Map<String, BigInteger> nonLovelaceTotals = new TreeMap<>();
 
         List<org.jooq.Record2<Long, String>> rows = dsl.select(
                         ADDRESS_UTXO.LOVELACE_AMOUNT,
@@ -462,18 +463,18 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
             }
             String amountsJson = row.value2();
             if (amountsJson != null) {
-                AmountsJsonUtil.toQuantityByUnit(amountsJson).entrySet().stream()
-                        .filter(e -> !Constants.LOVELACE.equals(e.getKey()))
-                        .sorted(Map.Entry.comparingByKey())
-                        .forEach(e -> nonLovelace.add(
-                                BFAmountDto.builder().unit(e.getKey())
-                                        .quantity(e.getValue().toString()).build()));
+                AmountsJsonUtil.toQuantityByUnit(amountsJson).forEach((unit, qty) -> {
+                    if (!Constants.LOVELACE.equals(unit)) {
+                        nonLovelaceTotals.merge(unit, qty, BigInteger::add);
+                    }
+                });
             }
         }
 
         List<BFAmountDto> result = new ArrayList<>();
         result.add(BFAmountDto.builder().unit(Constants.LOVELACE).quantity(lovelaceTotal.toString()).build());
-        result.addAll(nonLovelace);
+        nonLovelaceTotals.forEach((unit, qty) ->
+                result.add(BFAmountDto.builder().unit(unit).quantity(qty.toString()).build()));
         return result;
     }
 
@@ -495,6 +496,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
     private List<TxInputRaw> fetchInputsByKeys(Set<String> utxoKeys,
                                                 boolean collateral, boolean reference) {
         if (utxoKeys.isEmpty()) return Collections.emptyList();
+        // Collateral/reference sets are typically small (1-3 entries); OR expansion is acceptable.
         org.jooq.Condition condition = utxoKeys.stream()
                 .map(key -> {
                     String[] parts = key.split(":");

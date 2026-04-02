@@ -9,8 +9,6 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorageReader;
-import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
-import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
 import com.bloxbean.cardano.yaci.store.mir.storage.MIRStorageReader;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
@@ -83,6 +81,7 @@ public class BFTransactionService {
     }
 
     public List<BFTxMetadataDto> getTxMetadata(String txHash) {
+        ensureTxExists(txHash);
         TxMetadataStorageReader metadataReader = metadataStorageProvider.getIfAvailable();
         if (metadataReader == null) {
             return Collections.emptyList();
@@ -126,14 +125,7 @@ public class BFTransactionService {
         if (mirReader == null) {
             return Collections.emptyList();
         }
-        return mirReader.findMIRsByTxHash(txHash).stream()
-                .map(mir -> BFTxMirDto.builder()
-                        .pot(mir.getPot() != null ? (MirPot.reserves == mir.getPot() ? "reserve" : mir.getPot().name()) : null)
-                        .certIndex((int) mir.getCertIndex())
-                        .address(mir.getAddress())
-                        .amount(mir.getAmount() != null ? mir.getAmount().toString() : "0")
-                        .build())
-                .collect(Collectors.toList());
+        return mapper.toMirDtos(mirReader.findMIRsByTxHash(txHash));
     }
 
     public List<BFTxPoolUpdateDto> getTxPoolUpdates(String txHash) {
