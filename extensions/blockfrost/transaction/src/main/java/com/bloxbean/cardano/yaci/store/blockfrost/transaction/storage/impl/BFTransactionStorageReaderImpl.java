@@ -281,7 +281,11 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 )
                 .from(TRANSACTION_SCRIPTS)
                 .where(TRANSACTION_SCRIPTS.TX_HASH.eq(txHash))
-                .orderBy(TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc(), TRANSACTION_SCRIPTS.PURPOSE.asc())
+                .orderBy(TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc(),
+                        DSL.choose(TRANSACTION_SCRIPTS.PURPOSE)
+                                .when("Spend", 0).when("Mint", 1).when("Cert", 2)
+                                .when("Reward", 3).when("Voting", 4).when("Proposing", 5)
+                                .otherwise(99).asc())
                 .fetch(record -> TxRedeemerRaw.builder()
                         .txIndex(record.get(TRANSACTION_SCRIPTS.REDEEMER_INDEX))
                         .purpose(record.get(TRANSACTION_SCRIPTS.PURPOSE))
