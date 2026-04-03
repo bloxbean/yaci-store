@@ -22,7 +22,7 @@ export default function LandingPage() {
         .devkit-landing {
           min-height: 100vh;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+          background: linear-gradient(135deg, #060a14 0%, #0a1628 50%, #0f172a 100%);
           color: #ffffff;
           overflow-x: hidden;
         }
@@ -129,7 +129,7 @@ export default function LandingPage() {
           font-size: 4rem;
           font-weight: 800;
           margin: 0;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+          background: linear-gradient(135deg, #93b5ff 0%, #ffffff 100%);
           background-clip: text;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -362,6 +362,34 @@ export default function LandingPage() {
           50% { transform: translateX(100%); }
         }
 
+        .flow-split-connector {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .flow-split-connector .enhanced-flow-connector {
+          flex: 1;
+        }
+
+        .flow-split-row {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .flow-split-row .flow-step {
+          flex: 1;
+        }
+
+        .enhanced-flow-node.analytics {
+          border-color: rgba(251, 191, 36, 0.4);
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+        }
+
+        .enhanced-flow-node.analytics:hover {
+          border-color: rgba(251, 191, 36, 0.7);
+          box-shadow: 0 10px 30px rgba(251, 191, 36, 0.2);
+        }
+
         .networks { border-color: rgba(34, 197, 94, 0.4); }
         .networks .detail-item { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.3); }
 
@@ -454,10 +482,7 @@ export default function LandingPage() {
           font-size: 3rem;
           font-weight: 700;
           margin-bottom: 1rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          background-clip: text;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          color: #ffffff;
         }
 
         .section-subtitle {
@@ -1047,6 +1072,31 @@ export default function LandingPage() {
           flex-shrink: 0;
         }
 
+        .supported-by-section {
+          padding: 4rem 0;
+          margin: 0;
+          text-align: center;
+        }
+
+        .supported-by-logo {
+          margin-bottom: 1.5rem;
+          display: flex;
+          justify-content: center;
+        }
+
+        .supported-by-logo img {
+          max-width: 280px;
+          height: auto;
+        }
+
+        .supported-by-text {
+          font-size: 1.1rem;
+          color: #94a3b8;
+          margin: 0 auto;
+          line-height: 1.6;
+          white-space: nowrap;
+        }
+
         /* What's New in Beta 3 Styles */
         .whats-new-section {
           padding: 5rem 0;
@@ -1516,21 +1566,41 @@ export default function LandingPage() {
                       </div>
                     </div>
 
-                    <div className="enhanced-flow-connector">
-                      <div className="connector-line"></div>
-                      <div className="data-flow"></div>
-                      <div className="connector-arrow">→</div>
+                    <div className="flow-split-connector">
+                      <div className="enhanced-flow-connector">
+                        <div className="connector-line"></div>
+                        <div className="data-flow"></div>
+                        <div className="connector-arrow">→</div>
+                      </div>
+                      <div className="enhanced-flow-connector">
+                        <div className="connector-line"></div>
+                        <div className="data-flow"></div>
+                        <div className="connector-arrow">→</div>
+                      </div>
                     </div>
 
-                    <div className="flow-step">
-                      <div className="enhanced-flow-node access">
-                        <div className="node-glow"></div>
-                        <div className="node-icon">🌐</div>
-                        <div className="node-title">Access Layer</div>
-                        <div className="node-details">
-                          <div className="detail-item">REST APIs</div>
-                          <div className="detail-item">Java SDK</div>
-                          <div className="detail-item">Direct SQL</div>
+                    <div className="flow-split-row">
+                      <div className="flow-step">
+                        <div className="enhanced-flow-node access">
+                          <div className="node-glow"></div>
+                          <div className="node-icon">🌐</div>
+                          <div className="node-title">Access Layer</div>
+                          <div className="node-details">
+                            <div className="detail-item">REST APIs</div>
+                            <div className="detail-item">Java SDK</div>
+                            <div className="detail-item">Direct SQL</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flow-step">
+                        <div className="enhanced-flow-node analytics">
+                          <div className="node-glow"></div>
+                          <div className="node-icon">📊</div>
+                          <div className="node-title">Analytics</div>
+                          <div className="node-details">
+                            <div className="detail-item">DuckLake (DuckDB)</div>
+                            <div className="detail-item">Parquet</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1917,8 +1987,36 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="project-card">
+                <div className="project-icon">🔍</div>
+                <div className="project-info">
+                  <h3 className="project-name">UPLC Link</h3>
+                  <p className="project-description">
+                    Open-source Cardano smart contract verification tool. Verify source code against on-chain scripts, explore the registry, and build trust.
+                  </p>
+                  <div className="project-links">
+                    <a href="https://uplc.link/" target="_blank" className="project-link">
+                      Visit Site
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
 
+          </section>
+
+          {/* Supported By Section */}
+          <section className="supported-by-section">
+            <div className="section-header">
+              <h2 className="section-title">Supported by</h2>
+            </div>
+            <div className="supported-by-logo">
+              <img src="/images/cf-logo-text-white.png" alt="Cardano Foundation" />
+            </div>
+            <p className="supported-by-text">
+              The Cardano Foundation supports this project through engineering resources.
+            </p>
           </section>
 
           {/* What's New in Beta 3 Section */}
