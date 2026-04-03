@@ -362,6 +362,34 @@ export default function LandingPage() {
           50% { transform: translateX(100%); }
         }
 
+        .flow-split-connector {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .flow-split-connector .enhanced-flow-connector {
+          flex: 1;
+        }
+
+        .flow-split-row {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .flow-split-row .flow-step {
+          flex: 1;
+        }
+
+        .enhanced-flow-node.analytics {
+          border-color: rgba(251, 191, 36, 0.4);
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+        }
+
+        .enhanced-flow-node.analytics:hover {
+          border-color: rgba(251, 191, 36, 0.7);
+          box-shadow: 0 10px 30px rgba(251, 191, 36, 0.2);
+        }
+
         .networks { border-color: rgba(34, 197, 94, 0.4); }
         .networks .detail-item { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.3); }
 
@@ -1538,21 +1566,41 @@ export default function LandingPage() {
                       </div>
                     </div>
 
-                    <div className="enhanced-flow-connector">
-                      <div className="connector-line"></div>
-                      <div className="data-flow"></div>
-                      <div className="connector-arrow">→</div>
+                    <div className="flow-split-connector">
+                      <div className="enhanced-flow-connector">
+                        <div className="connector-line"></div>
+                        <div className="data-flow"></div>
+                        <div className="connector-arrow">→</div>
+                      </div>
+                      <div className="enhanced-flow-connector">
+                        <div className="connector-line"></div>
+                        <div className="data-flow"></div>
+                        <div className="connector-arrow">→</div>
+                      </div>
                     </div>
 
-                    <div className="flow-step">
-                      <div className="enhanced-flow-node access">
-                        <div className="node-glow"></div>
-                        <div className="node-icon">🌐</div>
-                        <div className="node-title">Access Layer</div>
-                        <div className="node-details">
-                          <div className="detail-item">REST APIs</div>
-                          <div className="detail-item">Java SDK</div>
-                          <div className="detail-item">Direct SQL</div>
+                    <div className="flow-split-row">
+                      <div className="flow-step">
+                        <div className="enhanced-flow-node access">
+                          <div className="node-glow"></div>
+                          <div className="node-icon">🌐</div>
+                          <div className="node-title">Access Layer</div>
+                          <div className="node-details">
+                            <div className="detail-item">REST APIs</div>
+                            <div className="detail-item">Java SDK</div>
+                            <div className="detail-item">Direct SQL</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flow-step">
+                        <div className="enhanced-flow-node analytics">
+                          <div className="node-glow"></div>
+                          <div className="node-icon">📊</div>
+                          <div className="node-title">Analytics</div>
+                          <div className="node-details">
+                            <div className="detail-item">DuckLake (DuckDB)</div>
+                            <div className="detail-item">Parquet</div>
+                          </div>
                         </div>
                       </div>
                     </div>
