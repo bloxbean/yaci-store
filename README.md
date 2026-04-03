@@ -131,6 +131,15 @@ The latest documentation source is maintained in the `main` branch.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Supported by
+
+<p align="left">
+  <img src="docs/public/images/cf-logo-text.svg" alt="Cardano Foundation" width="180"/>
+</p>
+
+The Cardano Foundation supports this project through engineering resources.
+
+
 ## Acknowledgments
 
 ### YourKit
