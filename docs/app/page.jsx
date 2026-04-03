@@ -129,7 +129,7 @@ export default function LandingPage() {
           font-size: 4rem;
           font-weight: 800;
           margin: 0;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+          background: linear-gradient(135deg, #93b5ff 0%, #ffffff 100%);
           background-clip: text;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -454,10 +454,7 @@ export default function LandingPage() {
           font-size: 3rem;
           font-weight: 700;
           margin-bottom: 1rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          background-clip: text;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          color: #ffffff;
         }
 
         .section-subtitle {
@@ -1045,6 +1042,31 @@ export default function LandingPage() {
           width: 1.5rem;
           height: 1.5rem;
           flex-shrink: 0;
+        }
+
+        .supported-by-section {
+          padding: 4rem 0;
+          margin: 0;
+          text-align: center;
+        }
+
+        .supported-by-logo {
+          margin-bottom: 1.5rem;
+          display: flex;
+          justify-content: center;
+        }
+
+        .supported-by-logo img {
+          max-width: 280px;
+          height: auto;
+        }
+
+        .supported-by-text {
+          font-size: 1.1rem;
+          color: #94a3b8;
+          margin: 0 auto;
+          line-height: 1.6;
+          white-space: nowrap;
         }
 
         /* What's New in Beta 3 Styles */
@@ -1917,8 +1939,36 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="project-card">
+                <div className="project-icon">🔍</div>
+                <div className="project-info">
+                  <h3 className="project-name">UPLC Link</h3>
+                  <p className="project-description">
+                    Open-source Cardano smart contract verification tool. Verify source code against on-chain scripts, explore the registry, and build trust.
+                  </p>
+                  <div className="project-links">
+                    <a href="https://uplc.link/" target="_blank" className="project-link">
+                      Visit Site
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
 
+          </section>
+
+          {/* Supported By Section */}
+          <section className="supported-by-section">
+            <div className="section-header">
+              <h2 className="section-title">Supported by</h2>
+            </div>
+            <div className="supported-by-logo">
+              <img src="/images/cf-logo-text-white.png" alt="Cardano Foundation" />
+            </div>
+            <p className="supported-by-text">
+              The Cardano Foundation supports this project through engineering resources.
+            </p>
           </section>
 
           {/* What's New in Beta 3 Section */}
