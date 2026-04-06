@@ -103,4 +103,7 @@ project(':extensions:blockfrost:blockfrost-block').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
+include ':extensions:blockfrost:blockfrost-metadata'
+project(':extensions:blockfrost:blockfrost-metadata').projectDir = new File('extensions/blockfrost/metadata')
+
 include 'e2e-tests'

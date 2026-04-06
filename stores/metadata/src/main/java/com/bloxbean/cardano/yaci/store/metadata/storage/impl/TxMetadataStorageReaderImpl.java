@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.metadata.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorageReader;
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.mapper.MetadataMapper;
@@ -30,6 +31,19 @@ public class TxMetadataStorageReaderImpl implements TxMetadataStorageReader {
                 PageRequest.of(page, count, Sort.by("slot").descending());
 
         return txMetadataLabelReadRepository.findByLabel(label, sortedBySlot)
+                .stream()
+                .map(metadataMapper::toTxMetadataLabel)
+                .toList();
+    }
+
+    @Override
+    public List<TxMetadataLabel> findByLabel(String label, int page, int count, Order order) {
+        Sort sort = (order == Order.asc)
+                ? Sort.by("slot").ascending()
+                : Sort.by("slot").descending();
+        Pageable pageable = PageRequest.of(page, count, sort);
+
+        return txMetadataLabelReadRepository.findByLabel(label, pageable)
                 .stream()
                 .map(metadataMapper::toTxMetadataLabel)
                 .toList();
