@@ -93,10 +93,17 @@ public final class VoteTallyCalculator {
     public static VoteTallies.CommitteeTallies computeCommitteeTallies(Map<String, Vote> votesByHotKey, List<CommitteeMember> members) {
         int yes, no, abstain, didNotVote;
 
+        // Members with no registered hot key are excluded from the vote tally (treated as abstain).
+        // Only members with a registered hot key participate in yes/no/abstain/didNotVote counting.
+        List<CommitteeMember> membersWithHotKey = members.stream()
+                .filter(m -> m.getHotKey() != null)
+                .toList();
+        abstain = members.size() - membersWithHotKey.size();
+
         // calculate cc yes vote
 
         // Many CC Cold Credentials map to the same Hot Credential act as many votes.
-        Map<String, List<String>> hotKeyColdKeysMap = members.stream()
+        Map<String, List<String>> hotKeyColdKeysMap = membersWithHotKey.stream()
                 .collect(Collectors.groupingBy(
                         CommitteeMember::getHotKey,
                         Collectors.mapping(CommitteeMember::getColdKey, Collectors.toList())
@@ -111,23 +118,20 @@ public final class VoteTallyCalculator {
                 .mapToInt(e -> hotKeyColdKeysMap.get(e.getKey()).size())
                 .sum();
 
-        abstain = votesByHotKey.entrySet().stream()
+        abstain += votesByHotKey.entrySet().stream()
                 .filter(e -> e.getValue() == Vote.ABSTAIN && hotKeyColdKeysMap.containsKey(e.getKey()))
                 .mapToInt(e -> hotKeyColdKeysMap.get(e.getKey()).size())
                 .sum();
 
-        Map<String, String> coldKeyHotKeyMap = members.stream()
+        Map<String, String> coldKeyHotKeyMap = membersWithHotKey.stream()
                 .collect(Collectors.toMap(
                         CommitteeMember::getColdKey,
                         CommitteeMember::getHotKey,
                         (v1, v2) -> v1
                 ));
 
-        didNotVote = (int) members.stream()
-                .filter(member -> {
-                    String hotKey = coldKeyHotKeyMap.get(member.getColdKey());
-                    return hotKey == null || !votesByHotKey.containsKey(hotKey);
-                })
+        didNotVote = (int) membersWithHotKey.stream()
+                .filter(member -> !votesByHotKey.containsKey(coldKeyHotKeyMap.get(member.getColdKey())))
                 .count();
 
         return VoteTallies.CommitteeTallies.builder()
