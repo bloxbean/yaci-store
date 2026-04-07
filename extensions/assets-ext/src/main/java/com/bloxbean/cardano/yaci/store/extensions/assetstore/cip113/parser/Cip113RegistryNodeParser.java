@@ -76,12 +76,11 @@ public class Cip113RegistryNodeParser {
     }
 
     private List<PlutusData> extractFields(PlutusData plutusData) {
-        if (plutusData instanceof ConstrPlutusData constr) {
-            return constr.getData().getPlutusDataList();
-        } else if (plutusData instanceof ListPlutusData list) {
-            return list.getPlutusDataList();
-        }
-        return List.of();
+        return switch (plutusData) {
+            case ConstrPlutusData constr -> constr.getData().getPlutusDataList();
+            case ListPlutusData list -> list.getPlutusDataList();
+            default -> List.of();
+        };
     }
 
     @Nullable
