@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -52,9 +51,8 @@ public class BFTransactionController {
 
     @GetMapping("/{hash}/metadata/cbor")
     @Operation(summary = "Transaction metadata in CBOR", description = "Obtain the transaction metadata in CBOR.")
-    public List<Object> getTxMetadataCbor(@PathVariable String hash) {
-        // TODO: CBOR-encoded metadata is not currently stored. Implement when CBOR metadata storage is available.
-        return Collections.emptyList();
+    public List<BFTxMetadataCborDto> getTxMetadataCbor(@PathVariable String hash) {
+        return bfTransactionService.getTxMetadataCbor(hash);
     }
 
     @GetMapping("/{hash}/redeemers")

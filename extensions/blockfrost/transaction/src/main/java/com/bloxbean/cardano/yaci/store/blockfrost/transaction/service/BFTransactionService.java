@@ -95,6 +95,21 @@ public class BFTransactionService {
                 .collect(Collectors.toList());
     }
 
+    public List<BFTxMetadataCborDto> getTxMetadataCbor(String txHash) {
+        ensureTxExists(txHash);
+        TxMetadataStorageReader metadataReader = metadataStorageProvider.getIfAvailable();
+        if (metadataReader == null) {
+            return Collections.emptyList();
+        }
+        List<TxMetadataLabel> labels = metadataReader.findByTxHash(txHash);
+        return labels.stream()
+                .map(label -> BFTxMetadataCborDto.builder()
+                        .label(label.getLabel())
+                        .cborMetadata(label.getCbor())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     public List<BFTxRedeemerDto> getTxRedeemers(String txHash) {
         ensureTxExists(txHash);
         var raws = storageReader.findTxRedeemers(txHash);
