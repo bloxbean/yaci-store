@@ -18,6 +18,8 @@ public interface AdaPotRepository extends JpaRepository<AdaPotEntity, AdaPotId> 
 
     int deleteBySlotGreaterThan(Long slot);
 
+    int deleteByEpoch(Integer epoch);
+
     //Optional
     @Query("select a from AdaPotEntity a")
     Slice<AdaPotEntity> findAdaPots(Pageable pageable);
