@@ -2,21 +2,23 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import jakarta.persistence.*;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Table(name = "ft_offchain_metadata")
 @Getter
 @Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class TokenMetadata {
 
     @Id
+    @EqualsAndHashCode.Include
     private String subject;
 
     @Column(length = 56)
@@ -42,18 +44,4 @@ public class TokenMetadata {
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
-
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TokenMetadata that = (TokenMetadata) o;
-        return Objects.equals(subject, that.subject);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(subject);
-    }
 }

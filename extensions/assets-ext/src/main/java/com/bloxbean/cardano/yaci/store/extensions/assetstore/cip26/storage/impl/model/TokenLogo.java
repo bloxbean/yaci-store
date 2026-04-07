@@ -1,36 +1,25 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model;
 
 import jakarta.persistence.*;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 @Entity
 @Table(name = "ft_offchain_logo")
 @Getter
 @Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class TokenLogo {
 
     @Id
+    @EqualsAndHashCode.Include
     private String subject;
 
     private String logo;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TokenLogo tokenLogo = (TokenLogo) o;
-        return Objects.equals(subject, tokenLogo.subject);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(subject);
-    }
 }
