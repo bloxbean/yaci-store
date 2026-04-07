@@ -44,26 +44,28 @@ public class TransactionScriptsExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                ts.id,
-                ts.slot,
-                ts.block_hash,
-                ts.tx_hash,
-                ts.script_hash,
-                ts.script_type,
-                ts.datum_hash,
-                ts.redeemer_cbor,
-                ts.unit_mem,
-                ts.unit_steps,
-                ts.purpose,
-                ts.redeemer_index,
-                ts.redeemer_datahash,
-                ts.block,
-                to_timestamp(COALESCE(ts.block_time, 0)) as block_time
-            FROM source_db.%s.transaction_scripts ts
-            WHERE ts.slot >= %d
-              AND ts.slot < %d
-            ORDER BY ts.slot, ts.tx_hash, ts.redeemer_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ts.id,
+                    ts.slot,
+                    ts.block_hash,
+                    ts.tx_hash,
+                    ts.script_hash,
+                    ts.script_type,
+                    ts.datum_hash,
+                    ts.redeemer_cbor,
+                    ts.unit_mem,
+                    ts.unit_steps,
+                    ts.purpose,
+                    ts.redeemer_index,
+                    ts.redeemer_datahash,
+                    ts.block,
+                    to_timestamp(COALESCE(ts.block_time, 0)) as block_time
+                FROM %s.transaction_scripts ts
+                WHERE ts.slot >= %d
+                  AND ts.slot < %d
+                ORDER BY ts.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

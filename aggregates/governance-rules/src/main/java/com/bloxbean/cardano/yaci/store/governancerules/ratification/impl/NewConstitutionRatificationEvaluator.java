@@ -33,7 +33,7 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.CONSTITUTION);
 
-        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isNotDelayed = context.isNotDelayed();
 
         final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(newConstitution.getType(), newConstitution.getGovActionId(), lastEnactedGovActionId);
 
@@ -66,6 +66,8 @@ public class NewConstitutionRatificationEvaluator implements RatificationEvaluat
                 .committee(context.getGovernanceContext().getCommittee())
                 .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
+                .isInBootstrapPhase(context.getGovernanceContext().isInBootstrapPhase())
+                .committeeMinSize(context.getGovernanceContext().getProtocolParams().getCommitteeMinSize())
                 .build();
     }
 }

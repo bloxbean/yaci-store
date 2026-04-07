@@ -47,16 +47,18 @@ public class CostModelExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                cm.hash,
-                cm.costs,
-                cm.slot,
-                cm.block,
-                to_timestamp(COALESCE(cm.block_time, 0)) as block_time
-            FROM source_db.%s.cost_model cm
-            WHERE cm.slot >= %d
-              AND cm.slot < %d
-            ORDER BY cm.slot, cm.hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    cm.hash,
+                    cm.costs,
+                    cm.slot,
+                    cm.block,
+                    to_timestamp(COALESCE(cm.block_time, 0)) as block_time
+                FROM %s.cost_model cm
+                WHERE cm.slot >= %d
+                  AND cm.slot < %d
+                ORDER BY cm.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

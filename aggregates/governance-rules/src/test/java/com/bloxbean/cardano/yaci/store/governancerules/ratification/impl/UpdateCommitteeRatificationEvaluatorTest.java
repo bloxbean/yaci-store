@@ -1,0 +1,214 @@
+package com.bloxbean.cardano.yaci.store.governancerules.ratification.impl;
+
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
+import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
+import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.*;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+
+class UpdateCommitteeRatificationEvaluatorTest {
+
+    private final UpdateCommitteeRatificationEvaluator evaluator = new UpdateCommitteeRatificationEvaluator();
+
+    /**
+     * UpdateCommittee is ratified when committee is in NO_CONFIDENCE state and DRep + SPO Votes Pass Threshold
+     */
+    @Test
+    void evaluate_returnsAccept_whenCommitteeIsInNoConfidence_andDRepAndSPOApprove_andValidTerm() {
+        VotingData votingData = buildPassingDRepAndSPOVotes();
+
+        UpdateCommittee updateCommittee = mock(UpdateCommittee.class);
+        when(updateCommittee.getType()).thenReturn(GovActionType.UPDATE_COMMITTEE);
+        when(updateCommittee.getGovActionId()).thenReturn(null);
+        when(updateCommittee.getNewMembersAndTerms()).thenReturn(Map.of());
+
+        GovernanceContext governanceContext = buildGovernanceContext(
+                ConstitutionCommitteeState.NO_CONFIDENCE,
+                /* isDelayed= */ false,
+                /* currentEpoch= */ 5,
+                /* committeeMaxTermLength= */ 200 // large term → always valid
+        );
+
+        RatificationContext context = RatificationContext.builder()
+                .govAction(updateCommittee)
+                .votingData(votingData)
+                .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(8)
+                .build();
+
+        RatificationResult result = evaluator.evaluate(context);
+
+        assertThat(result).isEqualTo(RatificationResult.ACCEPT);
+    }
+
+    @Test
+    void evaluate_returnsAccept_whenCommitteeIsNormal_andDRepAndSPOApprove() {
+        VotingData votingData = buildPassingDRepAndSPOVotes();
+
+        UpdateCommittee updateCommittee = mock(UpdateCommittee.class);
+        when(updateCommittee.getType()).thenReturn(GovActionType.UPDATE_COMMITTEE);
+        when(updateCommittee.getGovActionId()).thenReturn(null);
+        when(updateCommittee.getNewMembersAndTerms()).thenReturn(Map.of());
+
+        GovernanceContext governanceContext = buildGovernanceContext(
+                ConstitutionCommitteeState.NORMAL,
+                /* isDelayed= */ false,
+                /* currentEpoch= */ 5,
+                /* committeeMaxTermLength= */ 200);
+
+        RatificationContext context = RatificationContext.builder()
+                .govAction(updateCommittee)
+                .votingData(votingData)
+                .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(8)
+                .build();
+
+        RatificationResult result = evaluator.evaluate(context);
+
+        assertThat(result).isEqualTo(RatificationResult.ACCEPT);
+    }
+
+    @Test
+    void evaluate_returnsContinue_whenVotesBelowThreshold() {
+        // DRep below threshold
+        VotingData.DRepVotes drepVotes = VotingData.DRepVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(300))
+                .noVoteStake(BigInteger.valueOf(700))
+                .noConfidenceStake(BigInteger.ZERO)
+                .doNotVoteStake(BigInteger.ZERO)
+                .build();
+
+        VotingData.SPOVotes spoVotes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(1000))
+                .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
+                .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
+                .abstainVoteStake(BigInteger.ZERO)
+                .doNotVoteStake(BigInteger.ZERO)
+                .totalStake(BigInteger.valueOf(1000))
+                .build();
+
+        VotingData votingData = VotingData.builder()
+                .drepVotes(drepVotes)
+                .spoVotes(spoVotes)
+                .build();
+
+        UpdateCommittee updateCommittee = mock(UpdateCommittee.class);
+        when(updateCommittee.getType()).thenReturn(GovActionType.UPDATE_COMMITTEE);
+        when(updateCommittee.getGovActionId()).thenReturn(null);
+        when(updateCommittee.getNewMembersAndTerms()).thenReturn(Map.of());
+
+        GovernanceContext governanceContext = buildGovernanceContext(
+                ConstitutionCommitteeState.NO_CONFIDENCE,
+                /* isDelayed= */ false,
+                /* currentEpoch= */ 5,
+                /* committeeMaxTermLength= */ 200);
+
+        RatificationContext context = RatificationContext.builder()
+                .govAction(updateCommittee)
+                .votingData(votingData)
+                .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(8)
+                .build();
+
+        RatificationResult result = evaluator.evaluate(context);
+
+        assertThat(result).isEqualTo(RatificationResult.CONTINUE);
+    }
+
+    @Test
+    void evaluate_returnsReject_whenOutOfLifecycle() {
+        UpdateCommittee updateCommittee = mock(UpdateCommittee.class);
+        when(updateCommittee.getType()).thenReturn(GovActionType.UPDATE_COMMITTEE);
+        when(updateCommittee.getGovActionId()).thenReturn(null);
+        when(updateCommittee.getNewMembersAndTerms()).thenReturn(Map.of());
+
+        GovernanceContext governanceContext = buildGovernanceContext(
+                ConstitutionCommitteeState.NO_CONFIDENCE,
+                false, 15, 200);
+
+        RatificationContext context = RatificationContext.builder()
+                .govAction(updateCommittee)
+                .votingData(buildPassingDRepAndSPOVotes())
+                .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(8) // 15 - 8 = 7 > 1 → expired
+                .build();
+
+        RatificationResult result = evaluator.evaluate(context);
+
+        assertThat(result).isEqualTo(RatificationResult.REJECT);
+    }
+
+    private VotingData buildPassingDRepAndSPOVotes() {
+        VotingData.DRepVotes drepVotes = VotingData.DRepVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(1000))
+                .noVoteStake(BigInteger.ZERO)
+                .noConfidenceStake(BigInteger.ZERO)
+                .doNotVoteStake(BigInteger.ZERO)
+                .build();
+
+        VotingData.SPOVotes spoVotes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(1000))
+                .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
+                .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
+                .abstainVoteStake(BigInteger.ZERO)
+                .doNotVoteStake(BigInteger.ZERO)
+                .totalStake(BigInteger.valueOf(1000))
+                .build();
+
+        return VotingData.builder()
+                .drepVotes(drepVotes)
+                .spoVotes(spoVotes)
+                .build();
+    }
+
+    private GovernanceContext buildGovernanceContext(ConstitutionCommitteeState committeeState,
+                                                     boolean isDelayed,
+                                                     int currentEpoch,
+                                                     int committeeMaxTermLength) {
+        ConstitutionCommittee committee = ConstitutionCommittee.builder()
+                .state(committeeState)
+                .threshold(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.51")))
+                .members(List.of())
+                .build();
+
+        DrepVoteThresholds drepThresholds = DrepVoteThresholds.builder()
+                .dvtCommitteeNoConfidence(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.51")))
+                .dvtCommitteeNormal(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.6")))
+                .build();
+
+        PoolVotingThresholds poolThresholds = PoolVotingThresholds.builder()
+                .pvtCommitteeNormal(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.51")))
+                .pvtCommitteeNoConfidence(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.51")))
+                .build();
+
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .drepVotingThresholds(drepThresholds)
+                .poolVotingThresholds(poolThresholds)
+                .committeeMaxTermLength(committeeMaxTermLength)
+                .build();
+
+        return GovernanceContext.builder()
+                .currentEpoch(currentEpoch)
+                .committee(committee)
+                .protocolParams(protocolParams)
+                .isInBootstrapPhase(false)
+                .isActionRatificationDelayed(isDelayed)
+                .treasury(BigInteger.ZERO)
+                .lastEnactedGovActionIds(Map.of())
+                .build();
+    }
+}

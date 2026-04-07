@@ -30,6 +30,8 @@ Key files and directories included:
 │   ├── env                          # Environment file (e.g., to enable ledger-state profile)
 │   ├── application.properties
 │   ├── application-ledger-state.properties
+│   ├── application-analytics.properties
+│   ├── application-custom-exporters.yml
 │   ├── application-plugins.yml
 ├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
 ├── grafana/                 # Grafana configuration and dashboards
@@ -120,6 +122,31 @@ Block No: 4746  , Era: Shelley
  	Time taken to delete stake address balance history: 0
 ### Total balance processing and saving time 1 ###
 ```
+
+## Enable Analytics Store Profile
+
+To run Yaci Store with the analytics store profile for exporting blockchain data to Parquet/DuckLake:
+
+1. Open the `env` file under the `config/` folder.
+2. Uncomment or add the following line:
+
+```env
+SPRING_PROFILES_ACTIVE=analytics
+```
+
+To combine with ledger-state:
+
+```env
+SPRING_PROFILES_ACTIVE=ledger-state,analytics
+```
+
+3. Start the application:
+
+```bash
+./yaci-store.sh start
+```
+
+For storage mode selection, configuration options, custom exporters, and querying exported data, see the [Analytics Store](/docs/v2/analytics/overview) documentation.
 
 ## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
 

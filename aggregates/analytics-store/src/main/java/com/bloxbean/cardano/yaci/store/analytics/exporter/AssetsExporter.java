@@ -44,22 +44,24 @@ public class AssetsExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                a.id,
-                a.slot,
-                a.tx_hash,
-                a.policy,
-                a.asset_name,
-                a.unit,
-                a.fingerprint,
-                a.quantity,
-                a.mint_type,
-                a.block,
-                to_timestamp(COALESCE(a.block_time, 0)) as block_time
-            FROM source_db.%s.assets a
-            WHERE a.slot >= %d
-              AND a.slot < %d
-            ORDER BY a.slot, a.tx_hash, a.unit
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    a.id,
+                    a.slot,
+                    a.tx_hash,
+                    a.policy,
+                    a.asset_name,
+                    a.unit,
+                    a.fingerprint,
+                    a.quantity,
+                    a.mint_type,
+                    a.block,
+                    to_timestamp(COALESCE(a.block_time, 0)) as block_time
+                FROM %s.assets a
+                WHERE a.slot >= %d
+                  AND a.slot < %d
+                ORDER BY a.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

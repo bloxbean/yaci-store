@@ -15,7 +15,7 @@ public class ProtocolParamUtil {
         List<ProtocolParamGroup> groups = new ArrayList<>();
         if (isNonNull(params.getMinFeeA(), params.getMinFeeB(), params.getKeyDeposit(), params.getPoolDeposit(),
                 params.getMinPoolCost(), params.getPriceMem(), params.getPriceStep(), params.getAdaPerUtxoByte(),
-                params.getExpansionRate(), params.getTreasuryGrowthRate())) {
+                params.getExpansionRate(), params.getTreasuryGrowthRate(), params.getMinFeeRefScriptCostPerByte())) {
             groups.add(ProtocolParamGroup.ECONOMIC);
         }
 

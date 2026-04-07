@@ -53,15 +53,17 @@ public class ConstitutionExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                c.active_epoch AS epoch,
-                c.slot,
-                c.anchor_url,
-                c.anchor_hash,
-                c.script
-            FROM source_db.%s.constitution c
-            WHERE c.active_epoch = %d
-            ORDER BY c.slot
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    c.active_epoch AS epoch,
+                    c.slot,
+                    c.anchor_url,
+                    c.anchor_hash,
+                    c.script
+                FROM %s.constitution c
+                WHERE c.active_epoch = %d
+                ORDER BY c.slot
+            ')
             """,
             schema,
             epoch

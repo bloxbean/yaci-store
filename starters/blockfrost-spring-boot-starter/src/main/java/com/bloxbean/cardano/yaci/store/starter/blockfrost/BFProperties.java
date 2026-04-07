@@ -24,6 +24,8 @@ public class BFProperties {
             private Address address = new Address();
             private Asset asset = new Asset();
             private Account account = new Account();
+            private Transaction transaction = new Transaction();
+            private Blocks blocks = new Blocks();
 
             @Getter
             @Setter
@@ -46,6 +48,18 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Account {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Transaction {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Blocks {
                 private boolean enabled = false;
             }
 

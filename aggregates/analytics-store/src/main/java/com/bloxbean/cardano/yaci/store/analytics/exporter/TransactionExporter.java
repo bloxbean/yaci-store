@@ -56,34 +56,36 @@ public class TransactionExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                t.tx_hash,
-                t.block_hash,
-                t.block,
-                t.slot,
-                t.epoch,
-                to_timestamp(COALESCE(t.block_time, 0)) as block_time,
-                t.tx_index,
-                t.fee,
-                t.invalid,
-                t.network_id,
-                t.auxiliary_datahash,
-                t.script_datahash,
-                t.total_collateral,
-                t.ttl,
-                t.validity_interval_start,
-                t.treasury_donation,
-                t.inputs,
-                t.outputs,
-                t.reference_inputs,
-                t.collateral_inputs,
-                t.collateral_return,
-                t.collateral_return_json,
-                t.required_signers
-            FROM source_db.%s.transaction t
-            WHERE t.slot >= %d
-              AND t.slot < %d
-            ORDER BY t.slot, t.tx_hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    t.tx_hash,
+                    t.block_hash,
+                    t.block,
+                    t.slot,
+                    t.epoch,
+                    to_timestamp(COALESCE(t.block_time, 0)) as block_time,
+                    t.tx_index,
+                    t.fee,
+                    t.invalid,
+                    t.network_id,
+                    t.auxiliary_datahash,
+                    t.script_datahash,
+                    t.total_collateral,
+                    t.ttl,
+                    t.validity_interval_start,
+                    t.treasury_donation,
+                    t.inputs,
+                    t.outputs,
+                    t.reference_inputs,
+                    t.collateral_inputs,
+                    t.collateral_return,
+                    t.collateral_return_json,
+                    t.required_signers
+                FROM %s.transaction t
+                WHERE t.slot >= %d
+                  AND t.slot < %d
+                ORDER BY t.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

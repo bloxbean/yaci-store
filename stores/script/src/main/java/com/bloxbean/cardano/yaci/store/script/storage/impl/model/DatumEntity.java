@@ -26,4 +26,7 @@ public class DatumEntity extends BaseEntity {
 
     @Column(name = "created_at_tx", length = 256)
     private String createdAtTx;
+
+    @Column(name = "slot")
+    private Long slot;
 }

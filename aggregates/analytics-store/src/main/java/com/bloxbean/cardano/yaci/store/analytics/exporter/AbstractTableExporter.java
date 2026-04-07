@@ -86,11 +86,19 @@ public abstract class AbstractTableExporter implements TableExporter {
     public boolean exportForPartition(PartitionValue partition) {
         String partitionKey = partition.toPathSegment();
 
-        // Check if already completed
+        // Check if already completed — verify files still exist before skipping
         ExportState existingState = stateService.getState(getTableName(), partitionKey);
         if (existingState != null && existingState.getStatus() == ExportStatus.COMPLETED) {
-            log.info("Partition {} already exported for table {}, skipping", partitionKey, getTableName());
-            return true;
+            String outputPath = buildOutputPath(partition);
+            long rowCount = existingState.getRowCount() != null ? existingState.getRowCount() : 0;
+
+            if (storageWriter.verifyExport(outputPath, rowCount)) {
+                log.info("Partition {} already exported for table {}, skipping", partitionKey, getTableName());
+                return true;
+            }
+
+            log.warn("Partition {} marked COMPLETED for table {} but files missing on disk, re-exporting",
+                    partitionKey, getTableName());
         }
 
         // Pre-export validation (e.g., check if dependent jobs have completed)
@@ -114,6 +122,14 @@ public abstract class AbstractTableExporter implements TableExporter {
             // Execute export
             log.info("Exporting {} for partition {} using {}", getTableName(), partitionKey, storageWriter.getStorageFormat());
             ExportResult result = storageWriter.export(query, outputPath, getPartitionColumn());
+
+            // Verify that export actually created files on storage
+            if (result.getRowCount() > 0 && !storageWriter.verifyExport(outputPath, result.getRowCount())) {
+                throw new RuntimeException(
+                    String.format("Export verification failed for %s partition %s: " +
+                        "executeUpdate reported %d rows but no parquet files found on disk",
+                        getTableName(), partitionKey, result.getRowCount()));
+            }
 
             // Calculate checksum (skip for DuckLake - files are managed internally)
             String checksum = null;

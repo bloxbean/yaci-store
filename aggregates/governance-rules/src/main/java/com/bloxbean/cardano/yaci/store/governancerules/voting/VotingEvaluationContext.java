@@ -14,5 +14,6 @@ public class VotingEvaluationContext {
     ConstitutionCommittee committee;
     DrepVoteThresholds drepThresholds;
     PoolVotingThresholds poolThresholds;
+    Integer committeeMinSize;
     boolean isInBootstrapPhase;
 }

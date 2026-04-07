@@ -42,9 +42,10 @@ public class RewardExporter extends AbstractTableExporter {
 
     @Override
     public boolean preExportValidation(PartitionValue partition) {
-        // Reward table depends on AdaPot job completion
+        // reward[earned_epoch=N] is populated by AdaPot job N+2, which calls updateEpochRewards()
+        // with earnedEpoch = epoch - 2. Wait for job N+2 to complete before exporting epoch N.
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-        return isRewardCalcAdaPotJobCompleted(epoch);
+        return isRewardCalcAdaPotJobCompleted(epoch + 2);
     }
 
     @Override
@@ -54,17 +55,18 @@ public class RewardExporter extends AbstractTableExporter {
 
         // We use earned_epoch for partitioning rewards.
         return String.format("""
-            SELECT
-                r.address,
-                r.earned_epoch AS epoch,
-                r.spendable_epoch ,
-                r.type,
-                r.pool_id,
-                r.amount,
-                r.slot
-            FROM source_db.%s.reward r
-            WHERE r.earned_epoch = %d
-            ORDER BY r.earned_epoch, r.address
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    r.address,
+                    r.earned_epoch AS epoch,
+                    r.spendable_epoch ,
+                    r.type,
+                    r.pool_id,
+                    r.amount,
+                    r.slot
+                FROM %s.reward r
+                WHERE r.earned_epoch = %d
+            ')
             """,
             schema,
             epoch

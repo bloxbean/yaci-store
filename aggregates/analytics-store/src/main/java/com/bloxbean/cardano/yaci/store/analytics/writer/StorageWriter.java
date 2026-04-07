@@ -46,4 +46,22 @@ public interface StorageWriter {
      * @return Schema name (e.g., "mainnet", "preprod", "preview")
      */
     String getSourceSchema();
+
+    /**
+     * Verify that exported data actually exists on storage after export.
+     *
+     * DuckLake exports may report success (row count > 0) without actually
+     * writing parquet files to disk. This method provides a post-export
+     * integrity check.
+     *
+     * Default implementation returns true (e.g., ParquetWriterService uses
+     * atomic file moves which guarantee file existence on success).
+     *
+     * @param outputPath The output path used during export
+     * @param expectedRowCount The row count returned by export
+     * @return true if data is verified to exist, false otherwise
+     */
+    default boolean verifyExport(String outputPath, long expectedRowCount) {
+        return true;
+    }
 }

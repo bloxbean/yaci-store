@@ -32,6 +32,25 @@ Some of the key files and directories included in this distribution:
 
 ```
 
+## 🖥️ Running Multiple Instances on the Same Host
+
+You can run multiple Yaci Store instances (e.g., mainnet + preprod) on the same server. For each deployment, edit `compose/.env` and set a unique instance name and port set:
+
+```env
+# Unique identifier for this deployment (e.g., mainnet, preprod, preview)
+COMPOSE_PROJECT_NAME=yaci-store-preprod
+INSTANCE_NAME=preprod
+
+YACI_STORE_PORT=8080
+YACI_STORE_DB_PORT=54333
+MONITORING_PROMETHEUS_PORT=9090
+MONITORING_GRAFANA_PORT=3000
+```
+
+Then start normally with `./yaci-store.sh start` from each deployment directory.
+
+---
+
 ## 🔧 Edit Configuration
 
 Before starting Yaci Store, you may want to update the Cardano node connection details.

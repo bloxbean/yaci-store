@@ -4,8 +4,10 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @ConfigurationProperties(prefix = "yaci.store.analytics")
@@ -41,6 +43,21 @@ public class AnalyticsStoreProperties {
 
     private List<CustomExporterConfig> customExporters = new ArrayList<>();
 
+    /**
+     * Per-exporter enable/disable flags (enabled by default).
+     *
+     * Key = table name (e.g., "reward", "epoch_stake").
+     * Example:
+     *   yaci.store.analytics.exporter.reward.enabled=false
+     *   yaci.store.analytics.exporter.epoch_stake.enabled=false
+     */
+    private Map<String, ExporterConfig> exporter = new HashMap<>();
+
+    @Data
+    public static class ExporterConfig {
+        private boolean enabled = true;
+    }
+
     private StateManagement stateManagement = new StateManagement();
     private ContinuousSync continuousSync = new ContinuousSync();
     private Admin admin = new Admin();
@@ -59,6 +76,13 @@ public class AnalyticsStoreProperties {
         private int bufferDays = 2;
         private int syncCheckIntervalMinutes = 15;
         private int catchUpIntervalMinutes = 1;
+
+        /**
+         * When true (default), analytics exports are deferred until the sync reaches chain tip.
+         * During initial sync (block range sync mode), all exports are skipped.
+         * Set to false to allow exports during sync
+         */
+        private boolean exportAfterSync = true;
     }
 
     @Data
@@ -85,6 +109,21 @@ public class AnalyticsStoreProperties {
 
     @Data
     public static class DuckDb {
+        /**
+         * DuckDB memory_limit setting.
+         * Controls the maximum memory DuckDB's buffer manager can use per connection.
+         * DuckDB defaults to 80% of system RAM if not set, which can cause OOM
+         * when running inside a JVM process.
+         *
+         * Format: DuckDB size string (e.g., "1GB", "512MB", "2GB")
+         * Empty = use DuckDB default (80% of system RAM).
+         * Recommended: Set explicitly in production/container environments.
+         *
+         * Note: Some aggregate functions may allocate memory outside the buffer
+         * manager, so actual usage can slightly exceed this limit.
+         */
+        private String memoryLimit;
+
         private DuckDbDataSource datasource = new DuckDbDataSource();
         private ReaderConfig reader = new ReaderConfig();
 

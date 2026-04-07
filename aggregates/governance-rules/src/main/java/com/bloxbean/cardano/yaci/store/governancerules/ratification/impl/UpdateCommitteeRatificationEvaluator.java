@@ -38,7 +38,7 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
 
         GovActionId lastEnactedGovActionId = context.getGovernanceContext().getLastEnactedGovActionIds().get(ProposalType.COMMITTEE);
 
-        final boolean isNotDelayed = context.isNotDelayed() && context.isCommitteeNormal();
+        final boolean isNotDelayed = context.isNotDelayed();
         final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(updateCommittee.getType(), updateCommittee.getGovActionId(), lastEnactedGovActionId);
 
         if (context.isLastRatificationOpportunity()) {
@@ -67,6 +67,8 @@ public class UpdateCommitteeRatificationEvaluator implements RatificationEvaluat
                 .committee(context.getGovernanceContext().getCommittee())
                 .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
+                .isInBootstrapPhase(context.getGovernanceContext().isInBootstrapPhase())
+                .committeeMinSize(context.getGovernanceContext().getProtocolParams().getCommitteeMinSize())
                 .build();
     }
 }
