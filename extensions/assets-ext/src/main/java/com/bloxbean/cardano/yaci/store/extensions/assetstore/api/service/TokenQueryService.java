@@ -8,8 +8,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
  * and appends CIP-113 extensions when applicable.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class TokenQueryService {
 
@@ -33,15 +34,6 @@ public class TokenQueryService {
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
     private final Cip113StorageReader cip113StorageReader;
-
-    @Autowired
-    public TokenQueryService(Cip26StorageReader cip26StorageReader,
-                             Cip68StorageReader cip68StorageReader,
-                             Cip113StorageReader cip113StorageReader) {
-        this.cip26StorageReader = cip26StorageReader;
-        this.cip68StorageReader = cip68StorageReader;
-        this.cip113StorageReader = cip113StorageReader;
-    }
 
     /**
      * Query and merge metadata for a single subject.

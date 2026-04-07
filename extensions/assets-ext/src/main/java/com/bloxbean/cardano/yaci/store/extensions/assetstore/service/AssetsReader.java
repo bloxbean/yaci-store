@@ -10,8 +10,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -33,6 +33,7 @@ import java.util.Optional;
  * </ul>
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class AssetsReader {
 
@@ -40,17 +41,6 @@ public class AssetsReader {
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
     private final Cip113StorageReader cip113StorageReader;
-
-    @Autowired
-    public AssetsReader(TokenQueryService tokenQueryService,
-                        Cip26StorageReader cip26StorageReader,
-                        Cip68StorageReader cip68StorageReader,
-                        Cip113StorageReader cip113StorageReader) {
-        this.tokenQueryService = tokenQueryService;
-        this.cip26StorageReader = cip26StorageReader;
-        this.cip68StorageReader = cip68StorageReader;
-        this.cip113StorageReader = cip113StorageReader;
-    }
 
     // ========== Merged queries ==========
 
