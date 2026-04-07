@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("java:S2187") // tests are in @Nested inner classes
 @DisplayName("TokenMetadataValidator")
 class TokenMetadataValidatorTest {
 
