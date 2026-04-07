@@ -84,8 +84,7 @@ public class AssetsReader {
      * @return the merged subject with metadata and extensions, or empty if not found
      */
     public Optional<Subject> getSubject(String subject, List<QueryPriority> queryPriority, List<String> properties) {
-        Subject result = tokenQueryService.querySubject(subject, queryPriority, properties, false);
-        return Optional.ofNullable(result);
+        return tokenQueryService.querySubject(subject, queryPriority, properties, false);
     }
 
     /**

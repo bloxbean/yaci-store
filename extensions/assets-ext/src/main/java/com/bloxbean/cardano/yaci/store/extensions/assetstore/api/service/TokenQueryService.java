@@ -8,7 +8,6 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
-import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -51,26 +50,25 @@ public class TokenQueryService {
      * @param queryPriority   ordered list of CIP standards to query
      * @param queryProperties list of properties to include (empty means all)
      * @param showCipsDetails whether to include raw per-standard metadata
-     * @return the merged Subject, or null if no valid metadata found
+     * @return the merged Subject, or empty if no valid metadata found
      */
-    @Nullable
-    public Subject querySubject(String subject,
-                                List<QueryPriority> queryPriority,
-                                List<String> queryProperties,
-                                boolean showCipsDetails) {
+    public Optional<Subject> querySubject(String subject,
+                                          List<QueryPriority> queryPriority,
+                                          List<String> queryProperties,
+                                          boolean showCipsDetails) {
 
         MetadataStandardsPair pair = queryPriority.stream()
                 .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
 
         if (pair.metadata().isEmpty() || !pair.metadata().isValid()) {
-            return null;
+            return Optional.empty();
         }
 
         Map<String, Extension> extensions = buildExtensions(subject);
         TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
-        return new Subject(subject, type, pair.metadata(),
+        return Optional.of(new Subject(subject, type, pair.metadata(),
                 showCipsDetails ? pair.standards() : null,
-                extensions.isEmpty() ? null : extensions);
+                extensions.isEmpty() ? null : extensions));
     }
 
     /**

@@ -127,9 +127,8 @@ class TokenQueryServiceTest {
     class UnknownSubject {
 
         @Test
-        void returnsNullForNonExistingSubject() {
-            Subject result = service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-            assertThat(result).isNull();
+        void returnsEmptyForNonExistingSubject() {
+            assertThat(service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false)).isEmpty();
         }
     }
 
@@ -139,16 +138,14 @@ class TokenQueryServiceTest {
 
         @Test
         void returnsMetadataWithCorrectSubject() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
             assertThat(result.subject()).isEqualTo(KNOWN_SUBJECT);
         }
 
         @Test
         void cip68TakesPriorityForNameAndUrl() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
+            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
 
-            assertThat(result).isNotNull();
             assertThat(result.metadata().name().value()).isEqualTo("NUTCOIN");
             assertThat(result.metadata().name().source()).isEqualTo("CIP_68");
             assertThat(result.metadata().url().value()).isEqualTo("https://cip68-url.com/nutcoin");
@@ -159,8 +156,7 @@ class TokenQueryServiceTest {
 
         @Test
         void nonProgrammableTokenShouldNotHaveExtensions() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
             assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
             assertThat(result.extensions()).isNull();
         }
@@ -172,9 +168,7 @@ class TokenQueryServiceTest {
 
         @Test
         void mergesMetadataWithCip68Priority() {
-            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
             assertThat(result.metadata().name().value()).isEqualTo("FLDT");
             assertThat(result.metadata().name().source()).isEqualTo("CIP_68");
             assertThat(result.metadata().url().value()).isEqualTo("https://fluidtokens.com");
@@ -183,9 +177,7 @@ class TokenQueryServiceTest {
 
         @Test
         void showCipsDetailsReturnsStandards() {
-            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), true);
-
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), true).orElseThrow();
             assertThat(result.standards()).isNotNull();
             assertThat(result.standards().cip26()).isNotNull();
             assertThat(result.standards().cip26().getName()).isEqualTo("FLDT");
@@ -196,9 +188,7 @@ class TokenQueryServiceTest {
         @Test
         void cip26PriorityOverrideChangesMergeOrder() {
             List<QueryPriority> cip26First = List.of(QueryPriority.CIP_26, QueryPriority.CIP_68);
-            Subject result = service.querySubject(FLDT_SUBJECT, cip26First, List.of(), false);
-
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(FLDT_SUBJECT, cip26First, List.of(), false).orElseThrow();
             assertThat(result.metadata().name().value()).isEqualTo("FLDT");
             assertThat(result.metadata().name().source()).isEqualTo("CIP_26");
             assertThat(result.metadata().url().value()).isEqualTo("https://fluidtokens.com");
@@ -212,9 +202,7 @@ class TokenQueryServiceTest {
 
         @Test
         void cip113ExtensionShouldAppearForProgrammableToken() {
-            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
             assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.PROGRAMMABLE);
             assertThat(result.extensions()).isNotNull();
             assertThat(result.extensions()).containsKey("cip113");
@@ -226,8 +214,7 @@ class TokenQueryServiceTest {
 
         @Test
         void nonProgrammableTokenShouldNotHaveExtensions() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false);
-            assertThat(result).isNotNull();
+            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
             assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
             assertThat(result.extensions()).isNull();
         }

@@ -93,14 +93,10 @@ public class TokenMetadataSubjectController {
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
-        Subject result = tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails);
-
-        if (result == null) {
-            return ResponseEntity.notFound().build();
-        }
-
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
-        return ResponseEntity.ok(new SubjectResponse(result, stringPriorities));
+        return tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails)
+                .map(result -> ResponseEntity.ok(new SubjectResponse(result, stringPriorities)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects",
