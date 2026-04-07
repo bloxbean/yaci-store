@@ -11,8 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public record AssetType(String policyId, String assetName) {
 
+    private static final int POLICY_ID_LENGTH = 56;
     private static final String LOVELACE = "lovelace";
-
     private static final AssetType ADA_ASSET = new AssetType("", LOVELACE);
 
     public String toUnit() {
@@ -20,19 +20,19 @@ public record AssetType(String policyId, String assetName) {
     }
 
     public static AssetType fromUnit(String unit) {
-        if (unit.equalsIgnoreCase(LOVELACE) || unit.trim().isEmpty()) {
+        if (unit.equalsIgnoreCase(LOVELACE) || unit.isBlank()) {
             return ADA_ASSET;
         }
 
-        String sanitizedUnit = unit.replace(".", "");
-        if (sanitizedUnit.length() > 56) {
-            return new AssetType(sanitizedUnit.substring(0, 56), sanitizedUnit.substring(56));
-        } else if (sanitizedUnit.length() == 56) {
-            return new AssetType(sanitizedUnit, "");
-        } else {
-            log.warn("Invalid unit '{}': must be at least 56 hex characters (28-byte policy id)", unit);
-            return new AssetType(sanitizedUnit, "");
-        }
+        String sanitized = unit.replace(".", "");
+        return switch (Integer.compare(sanitized.length(), POLICY_ID_LENGTH)) {
+            case 1  -> new AssetType(sanitized.substring(0, POLICY_ID_LENGTH), sanitized.substring(POLICY_ID_LENGTH));
+            case 0  -> new AssetType(sanitized, "");
+            default -> {
+                log.warn("Invalid unit '{}': must be at least {} hex characters (28-byte policy id)", unit, POLICY_ID_LENGTH);
+                yield new AssetType(sanitized, "");
+            }
+        };
     }
 
 }
