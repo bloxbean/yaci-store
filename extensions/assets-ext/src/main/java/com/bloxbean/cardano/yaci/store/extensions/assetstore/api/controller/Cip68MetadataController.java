@@ -47,14 +47,14 @@ public class Cip68MetadataController {
                     @ApiResponse(responseCode = "200", description = "Fungible token metadata found"),
                     @ApiResponse(responseCode = "404", description = "No CIP-68 reference NFT found for this policy/asset")
             })
-    @GetMapping(path = "/cip68/ft/{policyId}/{assetName}", produces = {"application/json;charset=utf-8"})
+    @GetMapping(path = "/cip68/ft/{policyId}/{rawAssetName}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<FungibleTokenMetadata> getFungibleTokenMetadata(
             @Parameter(description = "The policy ID (56 hex characters)")
             @PathVariable("policyId") String policyId,
             @Parameter(description = "The raw asset name (hex) without CIP-68 label prefix")
-            @PathVariable("assetName") String assetName) {
+            @PathVariable("rawAssetName") String rawAssetName) {
 
-        String referenceNftAssetName = Cip68Constants.REFERENCE_TOKEN_PREFIX + assetName;
+        String referenceNftAssetName = Cip68Constants.REFERENCE_TOKEN_PREFIX + rawAssetName;
         return cip68StorageReader.findByPolicyIdAndAssetName(policyId, referenceNftAssetName)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
