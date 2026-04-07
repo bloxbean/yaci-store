@@ -22,7 +22,6 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.DELEGATION;
@@ -380,27 +379,63 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public Optional<AccountAddressesTotal> getAddressesTotal(String stakeAddress) {
         try {
-            var rows = dsl.select(ADDRESS_TX_AMOUNT.UNIT, ADDRESS_TX_AMOUNT.QUANTITY, ADDRESS_TX_AMOUNT.TX_HASH)
-                    .from(ADDRESS_TX_AMOUNT)
-                    .where(ADDRESS_TX_AMOUNT.STAKE_ADDRESS.eq(stakeAddress))
+            // Received: all outputs (UTXOs) belonging to this stake address
+            // Each ADDRESS_UTXO row represents an output; lovelace + multi-asset amounts are received
+            var outputRows = dsl.select(
+                            ADDRESS_UTXO.TX_HASH,
+                            ADDRESS_UTXO.LOVELACE_AMOUNT,
+                            ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts"))
+                    .from(ADDRESS_UTXO)
+                    .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                     .fetch();
 
-            Map<String, BigInteger> receivedMap = new HashMap<>();
-            Map<String, BigInteger> sentMap = new HashMap<>();
+            // Sent: all inputs (spent UTXOs) belonging to this stake address
+            // TX_INPUT.TX_HASH = the utxo's creating tx hash (matches ADDRESS_UTXO.TX_HASH)
+            // TX_INPUT.SPENT_TX_HASH = the spending tx hash
+            var inputRows = dsl.select(
+                            TX_INPUT.SPENT_TX_HASH.as("spending_tx_hash"),
+                            ADDRESS_UTXO.LOVELACE_AMOUNT,
+                            ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts"))
+                    .from(ADDRESS_UTXO)
+                    .join(TX_INPUT)
+                    .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
+                            .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
+                    .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                    .fetch();
+
+            Map<String, BigInteger> receivedMap = new LinkedHashMap<>();
+            Map<String, BigInteger> sentMap = new LinkedHashMap<>();
             Set<String> txHashes = new HashSet<>();
 
-            for (Record rec : rows) {
-                String unit = rec.get(ADDRESS_TX_AMOUNT.UNIT);
-                BigInteger qty = rec.get(ADDRESS_TX_AMOUNT.QUANTITY);
-                String txHash = rec.get(ADDRESS_TX_AMOUNT.TX_HASH);
-
+            for (Record rec : outputRows) {
+                String txHash = rec.get(ADDRESS_UTXO.TX_HASH);
                 if (txHash != null) txHashes.add(txHash);
-                if (qty == null) continue;
 
-                if (qty.compareTo(BigInteger.ZERO) > 0) {
-                    receivedMap.merge(unit, qty, BigInteger::add);
-                } else if (qty.compareTo(BigInteger.ZERO) < 0) {
-                    sentMap.merge(unit, qty.abs(), BigInteger::add);
+                Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
+                if (lovelace != null && lovelace > 0) {
+                    receivedMap.merge("lovelace", BigInteger.valueOf(lovelace), BigInteger::add);
+                }
+                Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
+                for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
+                    if (!"lovelace".equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                        receivedMap.merge(e.getKey(), e.getValue(), BigInteger::add);
+                    }
+                }
+            }
+
+            for (Record rec : inputRows) {
+                String spendingTxHash = rec.get("spending_tx_hash", String.class);
+                if (spendingTxHash != null) txHashes.add(spendingTxHash);
+
+                Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
+                if (lovelace != null && lovelace > 0) {
+                    sentMap.merge("lovelace", BigInteger.valueOf(lovelace), BigInteger::add);
+                }
+                Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
+                for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
+                    if (!"lovelace".equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                        sentMap.merge(e.getKey(), e.getValue(), BigInteger::add);
+                    }
                 }
             }
 
@@ -462,45 +497,74 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountTransaction> findTransactions(String stakeAddress, int page, int count, Order order, String from, String to) {
         int offset = Math.max(page, 0) * count;
-        SortField<?> slotOrder = order == Order.desc ? ADDRESS_TX_AMOUNT.SLOT.desc() : ADDRESS_TX_AMOUNT.SLOT.asc();
 
-        Condition condition = ADDRESS_TX_AMOUNT.STAKE_ADDRESS.eq(stakeAddress);
+        // Parse block range filters
+        Long fromBlock = null;
+        Long toBlock = null;
         if (from != null && !from.isBlank()) {
-            try {
-                long fromBlock = Long.parseLong(from.split(":")[0]);
-                condition = condition.and(ADDRESS_TX_AMOUNT.BLOCK.ge(fromBlock));
-            } catch (NumberFormatException e) {
-                log.warn("Invalid 'from' block reference: {}", from);
-            }
+            try { fromBlock = Long.parseLong(from.split(":")[0]); }
+            catch (NumberFormatException e) { log.warn("Invalid 'from' block reference: {}", from); }
         }
         if (to != null && !to.isBlank()) {
-            try {
-                long toBlock = Long.parseLong(to.split(":")[0]);
-                condition = condition.and(ADDRESS_TX_AMOUNT.BLOCK.le(toBlock));
-            } catch (NumberFormatException e) {
-                log.warn("Invalid 'to' block reference: {}", to);
-            }
+            try { toBlock = Long.parseLong(to.split(":")[0]); }
+            catch (NumberFormatException e) { log.warn("Invalid 'to' block reference: {}", to); }
         }
+        final Long fromBlockFinal = fromBlock;
+        final Long toBlockFinal = toBlock;
 
-        return dsl.selectDistinct(
-                        ADDRESS_TX_AMOUNT.ADDRESS,
-                        ADDRESS_TX_AMOUNT.TX_HASH,
-                        ADDRESS_TX_AMOUNT.SLOT,
-                        ADDRESS_TX_AMOUNT.BLOCK,
-                        ADDRESS_TX_AMOUNT.BLOCK_TIME,
-                        TRANSACTION.TX_INDEX
-                )
-                .from(ADDRESS_TX_AMOUNT)
-                .leftJoin(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_TX_AMOUNT.TX_HASH))
-                .where(condition)
-                .orderBy(slotOrder, TRANSACTION.TX_INDEX.asc(), ADDRESS_TX_AMOUNT.ADDRESS.asc())
+        // Receiving txs: transactions that created outputs for this stake address
+        // (ADDRESS_UTXO.TX_HASH is the creating tx)
+        Condition receiveCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
+        if (fromBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.ge(fromBlockFinal));
+        if (toBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.le(toBlockFinal));
+
+        var receivingTxs = dsl.selectDistinct(
+                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
+                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                        ADDRESS_UTXO.SLOT.as("slot"),
+                        ADDRESS_UTXO.BLOCK.as("block_height"),
+                        ADDRESS_UTXO.BLOCK_TIME.as("block_time"))
+                .from(ADDRESS_UTXO)
+                .where(receiveCondition);
+
+        // Spending txs: transactions that spent outputs belonging to this stake address
+        // TX_INPUT.TX_HASH = utxo's creating tx; TX_INPUT.SPENT_TX_HASH = the spending tx
+        // TRANSACTION joined on SPENT_TX_HASH for block/slot/block_time of the spending tx
+        Condition spendCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
+        if (fromBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.ge(fromBlockFinal));
+        if (toBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.le(toBlockFinal));
+
+        var spendingTxs = dsl.selectDistinct(
+                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
+                        TX_INPUT.SPENT_TX_HASH.as("tx_hash"),
+                        TRANSACTION.SLOT.as("slot"),
+                        TRANSACTION.BLOCK.as("block_height"),
+                        TRANSACTION.BLOCK_TIME.as("block_time"))
+                .from(ADDRESS_UTXO)
+                .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
+                .where(spendCondition);
+
+        // UNION both, then sort and paginate
+        Field<String> fAddress = DSL.field(DSL.name("address"), String.class);
+        Field<String> fTxHash = DSL.field(DSL.name("tx_hash"), String.class);
+        Field<Long> fSlot = DSL.field(DSL.name("slot"), Long.class);
+        Field<Long> fBlock = DSL.field(DSL.name("block_height"), Long.class);
+        Field<Long> fBlockTime = DSL.field(DSL.name("block_time"), Long.class);
+
+        SortField<?> slotOrder = order == Order.desc ? fSlot.desc() : fSlot.asc();
+
+        return dsl.selectDistinct(fAddress, fTxHash, fSlot, fBlock, fBlockTime)
+                .from(receivingTxs.union(spendingTxs))
+                .orderBy(slotOrder, fTxHash.asc(), fAddress.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(rec -> new AccountTransaction(
-                        rec.get(ADDRESS_TX_AMOUNT.ADDRESS),
-                        rec.get(ADDRESS_TX_AMOUNT.TX_HASH),
-                        rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
-                        rec.get(ADDRESS_TX_AMOUNT.BLOCK) != null ? rec.get(ADDRESS_TX_AMOUNT.BLOCK) : 0L,
-                        rec.get(ADDRESS_TX_AMOUNT.BLOCK_TIME) != null ? rec.get(ADDRESS_TX_AMOUNT.BLOCK_TIME) : 0L));
+                        rec.get(fAddress),
+                        rec.get(fTxHash),
+                        0L, // tx_index not available from ADDRESS_UTXO; use 0
+                        rec.get(fBlock) != null ? rec.get(fBlock) : 0L,
+                        rec.get(fBlockTime) != null ? rec.get(fBlockTime) : 0L));
     }
 }
