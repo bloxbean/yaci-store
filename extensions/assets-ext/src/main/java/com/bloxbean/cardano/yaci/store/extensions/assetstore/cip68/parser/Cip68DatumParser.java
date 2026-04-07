@@ -29,69 +29,54 @@ public class Cip68DatumParser {
      * @return the CIP-68 token metadata
      */
     public Optional<FungibleTokenMetadata> parse(String inlineDatum) {
-
-        if (inlineDatum == null || inlineDatum.trim().isEmpty()) {
+        if (inlineDatum == null || inlineDatum.isBlank()) {
             return Optional.empty();
         }
 
         try {
-
             PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(inlineDatum));
 
-            if (plutusData instanceof ConstrPlutusData cip68Data) {
-
-                List<PlutusData> dataList = cip68Data.getData().getPlutusDataList();
-
-                if (dataList.size() < 2 || !(dataList.getFirst() instanceof MapPlutusData properties)) {
-                    return Optional.empty();
-                }
-
-                Optional<Long> decimals = getNumericProperty(DECIMALS, properties);
-                Optional<String> description = getStringProperty(DESCRIPTION, properties);
-                Optional<String> logo = getStringProperty(LOGO, properties);
-                Optional<String> name = getStringProperty(NAME, properties);
-                Optional<String> ticker = getStringProperty(TICKER, properties);
-                Optional<String> url = getStringProperty(URL, properties);
-
-                PlutusData versionData = dataList.get(1);
-
-                if (!(versionData instanceof BigIntPlutusData version)) {
-                    return Optional.empty();
-                }
-
-                return Optional.of(new FungibleTokenMetadata(decimals.orElse(null),
-                        description.orElse(null),
-                        logo.orElse(null),
-                        name.orElse(null),
-                        ticker.orElse(null), url.orElse(null),
-                        version.getValue().longValue()));
-
+            if (!(plutusData instanceof ConstrPlutusData cip68Data)) {
+                return Optional.empty();
             }
 
-            return Optional.empty();
+            List<PlutusData> dataList = cip68Data.getData().getPlutusDataList();
+            if (dataList.size() < 2 || !(dataList.getFirst() instanceof MapPlutusData properties)) {
+                return Optional.empty();
+            }
+
+            if (!(dataList.get(1) instanceof BigIntPlutusData version)) {
+                return Optional.empty();
+            }
+
+            return Optional.of(new FungibleTokenMetadata(
+                    getNumericProperty(DECIMALS, properties).orElse(null),
+                    getStringProperty(DESCRIPTION, properties).orElse(null),
+                    getStringProperty(LOGO, properties).orElse(null),
+                    getStringProperty(NAME, properties).orElse(null),
+                    getStringProperty(TICKER, properties).orElse(null),
+                    getStringProperty(URL, properties).orElse(null),
+                    version.getValue().longValue()));
+
         } catch (Exception e) {
             log.warn("Unexpected error while parsing CIP FT Datum: {}", inlineDatum, e);
             return Optional.empty();
         }
-
     }
 
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-        if (property instanceof BytesPlutusData bytes) {
-            return Optional.of(new String(bytes.getValue()).replace("\0", ""));
-        } else {
-            return Optional.empty();
-        }
+        return switch (property) {
+            case BytesPlutusData bytes -> Optional.of(new String(bytes.getValue()).replace("\0", ""));
+            case null, default -> Optional.empty();
+        };
     }
 
     private Optional<Long> getNumericProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-        if (property instanceof BigIntPlutusData bigInteger) {
-            return Optional.of(bigInteger.getValue().longValue());
-        } else {
-            return Optional.empty();
-        }
+        return switch (property) {
+            case BigIntPlutusData bigInt -> Optional.of(bigInt.getValue().longValue());
+            case null, default -> Optional.empty();
+        };
     }
-
 }
