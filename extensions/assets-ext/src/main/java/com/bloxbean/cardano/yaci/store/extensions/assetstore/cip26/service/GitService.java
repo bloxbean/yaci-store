@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import jakarta.annotation.PostConstruct;
@@ -22,7 +23,6 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 
@@ -41,10 +41,9 @@ public class GitService {
     private static final String GIT_NOT_INITIALIZED = "Git repository not initialized";
 
     private final Cip26NetworkDefaults networkDefaults;
+    private final AssetsStoreProperties assetsStoreProperties;
 
-    @Value("${store.assets.cip26.git.tmp-folder:/tmp}")
     String gitTempFolder;
-    @Value("${store.assets.cip26.git.force-clone:false}")
     boolean forceClone;
 
     String organization;
@@ -58,6 +57,9 @@ public class GitService {
         organization = networkDefaults.getOrganization();
         projectName = networkDefaults.getProjectName();
         mappingsFolderName = networkDefaults.getMappingsFolder();
+
+        gitTempFolder = assetsStoreProperties.getCip26().getGitTmpFolder();
+        forceClone = assetsStoreProperties.getCip26().isForceClone();
 
         if (gitTempFolder == null || gitTempFolder.isBlank()) {
             log.warn("store.assets.cip26.git.tmp-folder is blank, defaulting to system temp directory");

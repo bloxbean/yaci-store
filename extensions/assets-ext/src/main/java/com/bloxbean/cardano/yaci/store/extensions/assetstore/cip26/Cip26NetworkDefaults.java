@@ -2,11 +2,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,15 +33,7 @@ import org.springframework.stereotype.Component;
 public class Cip26NetworkDefaults {
 
     private final StoreProperties storeProperties;
-
-    @Value("${store.assets.cip26.git.organization:#{null}}")
-    private String userOrganization;
-
-    @Value("${store.assets.cip26.git.project-name:#{null}}")
-    private String userProjectName;
-
-    @Value("${store.assets.cip26.git.mappings-folder:#{null}}")
-    private String userMappingsFolder;
+    private final AssetsStoreProperties assetsStoreProperties;
 
     @Getter
     private String organization;
@@ -55,6 +47,9 @@ public class Cip26NetworkDefaults {
     @PostConstruct
     void resolve() {
         NetworkType network = NetworkType.fromProtocolMagic(storeProperties.getProtocolMagic());
+        String userOrganization = assetsStoreProperties.getCip26().getGitOrganization();
+        String userProjectName = assetsStoreProperties.getCip26().getGitProjectName();
+        String userMappingsFolder = assetsStoreProperties.getCip26().getGitMappingsFolder();
         boolean hasUserOverride = userOrganization != null || userProjectName != null;
 
         if (network == NetworkType.MAINNET) {

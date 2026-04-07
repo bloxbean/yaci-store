@@ -40,6 +40,10 @@ public class AssetsExtProperties {
     @Setter
     public static final class Cip113 {
         private boolean enabled = false;
+        /**
+         * Comma-separated list of CIP-113 registry NFT policy IDs to monitor.
+         * If empty, policy IDs are auto-detected from the network's property file.
+         */
         private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 

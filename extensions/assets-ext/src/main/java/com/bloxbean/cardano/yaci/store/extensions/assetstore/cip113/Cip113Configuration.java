@@ -2,11 +2,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.ComponentScan;
@@ -55,9 +55,7 @@ public class Cip113Configuration {
     );
 
     private final StoreProperties storeProperties;
-
-    @Value("${store.assets.cip113.registry-nft-policy-ids:#{null}}")
-    private List<String> userPolicyIds;
+    private final AssetsStoreProperties assetsStoreProperties;
 
     @Getter
     private Set<String> registryNftPolicyIdSet;
@@ -65,7 +63,7 @@ public class Cip113Configuration {
     @PostConstruct
     public void init() {
         if (hasUserOverride()) {
-            registryNftPolicyIdSet = userPolicyIds.stream()
+            registryNftPolicyIdSet = assetsStoreProperties.getCip113().getRegistryNftPolicyIds().stream()
                     .filter(id -> !id.isBlank())
                     .collect(Collectors.toUnmodifiableSet());
         } else {
@@ -87,6 +85,7 @@ public class Cip113Configuration {
     }
 
     private boolean hasUserOverride() {
+        List<String> userPolicyIds = assetsStoreProperties.getCip113().getRegistryNftPolicyIds();
         return userPolicyIds != null && !userPolicyIds.isEmpty()
                 && userPolicyIds.stream().anyMatch(id -> !id.isBlank());
     }

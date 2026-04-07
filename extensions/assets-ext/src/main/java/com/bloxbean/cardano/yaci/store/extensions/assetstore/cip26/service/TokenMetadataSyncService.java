@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.OffChainSyncState;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
@@ -10,7 +11,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -29,16 +29,14 @@ public class TokenMetadataSyncService {
     private final TokenMappingService tokenMappingService;
     private final SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
-
-    @Value("${store.assets.cip26.enabled:false}")
-    boolean isSyncEnabled;
+    private final AssetsStoreProperties assetsStoreProperties;
 
     @Getter
     private SyncStatus syncStatus;
 
     @PostConstruct
     void initSyncStatus() {
-        if (isSyncEnabled) {
+        if (assetsStoreProperties.getCip26().isEnabled()) {
             syncStatus = new SyncStatus(false, SyncStatusEnum.SYNC_NOT_STARTED);
         } else {
             syncStatus = new SyncStatus(true, SyncStatusEnum.SYNC_IN_EXTRA_JOB);

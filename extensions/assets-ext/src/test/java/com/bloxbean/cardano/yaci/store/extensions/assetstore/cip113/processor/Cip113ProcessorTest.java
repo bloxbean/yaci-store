@@ -50,7 +50,7 @@ class Cip113ProcessorTest {
         config = buildConfig(REGISTRY_NFT_POLICY_ID);
 
         Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
-        Cip113RegistryService registryService = new Cip113RegistryService(repository, config);
+        Cip113RegistryService registryService = new Cip113RegistryService(config);
         processor = new Cip113Processor(config, parser, repository, registryService);
     }
 
@@ -121,7 +121,7 @@ class Cip113ProcessorTest {
         void skipsWhenNoPolicyIdsConfigured() {
             config = buildConfig();
             Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
-            Cip113RegistryService registryService = new Cip113RegistryService(repository, config);
+            Cip113RegistryService registryService = new Cip113RegistryService(config);
             processor = new Cip113Processor(config, parser, repository, registryService);
             processor.processTransaction(buildEvent(100L, REGISTRY_NFT_POLICY_ID, REGISTERED_POLICY_ID, "d8799f40ff", TX_HASH));
             verifyNoInteractions(repository);

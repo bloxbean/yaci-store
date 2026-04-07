@@ -3,14 +3,15 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -51,9 +52,18 @@ public class TokenMetadataSubjectController {
     private static final List<String> REQUIRED_PROPERTIES = List.of("name", "description");
 
     private final TokenQueryService tokenQueryService;
+    private final AssetsStoreProperties assetsStoreProperties;
 
-    @Value("${store.assets.default-query-priority:CIP_68,CIP_26}")
     private List<QueryPriority> defaultQueryPriority;
+
+    @PostConstruct
+    void init() {
+        String priority = assetsStoreProperties.getDefaultQueryPriority();
+        defaultQueryPriority = java.util.Arrays.stream(priority.split(","))
+                .map(String::trim)
+                .map(QueryPriority::valueOf)
+                .toList();
+    }
 
     @Operation(operationId = "getSubject", summary = "Query either all or a subset of properties of a given subject",
             responses = {
