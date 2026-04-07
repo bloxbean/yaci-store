@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.List;
@@ -11,27 +13,25 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * JPA-backed implementation of {@link Cip113StorageReader}.
- * <p>
- * Bean is created by {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtConfiguration}
- * (not by component scan) so it is always available even when CIP-113 is disabled.
- * When CIP-113 is disabled, an empty no-op reader is used instead.
- */
+@Component
 @RequiredArgsConstructor
 public class Cip113StorageReaderImpl implements Cip113StorageReader {
 
     private final Cip113RegistryNodeRepository cip113RegistryNodeRepository;
+    private final Cip113Configuration cip113Configuration;
 
     @Override
     public Optional<ProgrammableTokenCip113> findByPolicyId(String policyId) {
+        if (!cip113Configuration.isEnabled()) {
+            return Optional.empty();
+        }
         return cip113RegistryNodeRepository.findFirstByPolicyIdOrderBySlotDesc(policyId)
                 .map(Cip113StorageReaderImpl::toDto);
     }
 
     @Override
     public Map<String, ProgrammableTokenCip113> findByPolicyIds(Collection<String> policyIds) {
-        if (policyIds.isEmpty()) {
+        if (!cip113Configuration.isEnabled() || policyIds.isEmpty()) {
             return Map.of();
         }
         return cip113RegistryNodeRepository.findLatestByPolicyIds(policyIds)

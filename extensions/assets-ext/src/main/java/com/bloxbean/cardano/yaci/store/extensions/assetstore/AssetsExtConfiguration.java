@@ -1,9 +1,5 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.NoOpCip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenLogoRepository;
@@ -11,14 +7,12 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -29,20 +23,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         havingValue = "true",
         matchIfMissing = false
 )
-@ComponentScan(
-        basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"},
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.REGEX,
-                pattern = "com\\.bloxbean\\.cardano\\.yaci\\.store\\.extensions\\.assetstore\\.cip113\\..*"
-        )
-)
-@EnableJpaRepositories(
-        basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"},
-        excludeFilters = @ComponentScan.Filter(
-                type = FilterType.REGEX,
-                pattern = "com\\.bloxbean\\.cardano\\.yaci\\.store\\.extensions\\.assetstore\\.cip113\\..*"
-        )
-)
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
+@EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
 @EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
 @EnableTransactionManagement
 @EnableScheduling
@@ -59,15 +41,5 @@ public class AssetsExtConfiguration {
     @ConditionalOnMissingBean
     public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService) {
         return new Cip68StorageReaderImpl(cip68TokenService);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public Cip113StorageReader cip113StorageReader(ObjectProvider<Cip113RegistryNodeRepository> repositoryProvider) {
-        Cip113RegistryNodeRepository repository = repositoryProvider.getIfAvailable();
-        if (repository != null) {
-            return new Cip113StorageReaderImpl(repository);
-        }
-        return new NoOpCip113StorageReader();
     }
 }
