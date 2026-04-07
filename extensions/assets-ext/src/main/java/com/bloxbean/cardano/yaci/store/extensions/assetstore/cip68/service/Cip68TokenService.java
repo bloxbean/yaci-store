@@ -91,8 +91,22 @@ public class Cip68TokenService {
     }
 
     /**
-     * Converts a fungible token subject (prefix 0014df10) to its corresponding reference NFT subject (prefix 000643b0).
-     * Returns empty if the subject does not have a fungible token prefix.
+     * Converts a fungible token subject to its corresponding reference NFT subject.
+     * <p>
+     * CIP-68 stores metadata in a <b>reference NFT</b> (label 100, prefix {@code 000643b0}),
+     * not in the fungible token itself (label 333, prefix {@code 0014df10}). Both tokens are
+     * minted together under the same policy with the same base name — only the 8-char label
+     * prefix differs.
+     * <p>
+     * When a user queries by the fungible token subject they see in their wallet
+     * (e.g. {@code <policyId>0014df10<name>}), this method swaps the prefix to produce the
+     * reference NFT subject ({@code <policyId>000643b0<name>}) that the database stores.
+     * <p>
+     * Returns empty if the subject does not have a fungible token prefix ({@code 0014df10}),
+     * indicating the subject is not a CIP-68 fungible token.
+     *
+     * @param subject the fungible token unit (policyId + 0014df10 + hex name)
+     * @return the reference NFT AssetType if the subject has a fungible token prefix, empty otherwise
      */
     public Optional<AssetType> getReferenceNftSubject(String subject) {
         AssetType assetType = AssetType.fromUnit(subject);
