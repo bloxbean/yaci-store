@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
 public class Cip26NetworkDefaults {
 
     private final StoreProperties storeProperties;
-    private final AssetsStoreProperties assetsStoreProperties;
+    private final AssetsExtStoreProperties assetsStoreProperties;
 
     @Getter
     private String organization;

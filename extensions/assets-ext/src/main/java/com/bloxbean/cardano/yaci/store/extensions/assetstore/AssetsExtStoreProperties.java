@@ -20,7 +20,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class AssetsStoreProperties {
+public class AssetsExtStoreProperties {
 
     @Builder.Default
     private Cip26 cip26 = new Cip26();

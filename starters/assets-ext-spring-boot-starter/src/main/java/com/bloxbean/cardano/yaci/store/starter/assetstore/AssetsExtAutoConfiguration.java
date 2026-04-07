@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.starter.assetstore;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtConfiguration;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -21,18 +21,18 @@ public class AssetsExtAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AssetsStoreProperties assetsStoreProperties() {
-        AssetsStoreProperties.Cip26 cip26 = new AssetsStoreProperties.Cip26();
+    public AssetsExtStoreProperties assetsStoreProperties() {
+        AssetsExtStoreProperties.Cip26 cip26 = new AssetsExtStoreProperties.Cip26();
         cip26.setEnabled(properties.getCip26().isEnabled());
         cip26.setGitOrganization(properties.getCip26().getGitOrganization());
         cip26.setGitProjectName(properties.getCip26().getGitProjectName());
         cip26.setGitMappingsFolder(properties.getCip26().getGitMappingsFolder());
         cip26.setGitTmpFolder(properties.getCip26().getGitTmpFolder());
 
-        AssetsStoreProperties.Cip113 cip113 = new AssetsStoreProperties.Cip113();
+        AssetsExtStoreProperties.Cip113 cip113 = new AssetsExtStoreProperties.Cip113();
         cip113.setRegistryNftPolicyIds(properties.getCip113().getRegistryNftPolicyIds());
 
-        AssetsStoreProperties assetsStoreProperties = new AssetsStoreProperties();
+        AssetsExtStoreProperties assetsStoreProperties = new AssetsExtStoreProperties();
         assetsStoreProperties.setCip26(cip26);
         assetsStoreProperties.setCip113(cip113);
         assetsStoreProperties.setDefaultQueryPriority(properties.getQuery().getPriority());

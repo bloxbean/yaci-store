@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -52,7 +52,7 @@ public class TokenMetadataSubjectController {
     private static final List<String> REQUIRED_PROPERTIES = List.of("name", "description");
 
     private final TokenQueryService tokenQueryService;
-    private final AssetsStoreProperties assetsStoreProperties;
+    private final AssetsExtStoreProperties assetsStoreProperties;
 
     private List<QueryPriority> defaultQueryPriority;
 

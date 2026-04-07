@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import org.eclipse.jgit.api.Git;
@@ -38,7 +38,7 @@ class GitServiceTest {
     @BeforeEach
     void setUp() {
         Cip26NetworkDefaults networkDefaults = mock(Cip26NetworkDefaults.class);
-        AssetsStoreProperties props = new AssetsStoreProperties();
+        AssetsExtStoreProperties props = new AssetsExtStoreProperties();
         gitService = new GitService(networkDefaults, props);
         gitService.organization = "test-org";
         gitService.projectName = "test-repo";

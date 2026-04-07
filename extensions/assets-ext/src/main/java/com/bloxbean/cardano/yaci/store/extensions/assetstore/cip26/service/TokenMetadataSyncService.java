@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsStoreProperties;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.OffChainSyncState;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
@@ -29,7 +29,7 @@ public class TokenMetadataSyncService {
     private final TokenMappingService tokenMappingService;
     private final SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
-    private final AssetsStoreProperties assetsStoreProperties;
+    private final AssetsExtStoreProperties assetsStoreProperties;
 
     @Getter
     private SyncStatus syncStatus;
