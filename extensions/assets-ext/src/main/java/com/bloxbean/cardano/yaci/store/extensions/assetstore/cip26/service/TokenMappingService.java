@@ -20,7 +20,7 @@ public class TokenMappingService {
         try {
             return Optional.of(objectMapper.readValue(mappingFile, Mapping.class));
         } catch (Exception e) {
-            log.warn(String.format("could not process file %s", mappingFile.getName()), e);
+            log.warn("could not process file {}", mappingFile.getName(), e);
             return Optional.empty();
         }
     }

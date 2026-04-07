@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import jakarta.annotation.Nullable;
