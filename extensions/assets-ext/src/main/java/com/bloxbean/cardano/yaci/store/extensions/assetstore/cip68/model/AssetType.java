@@ -5,8 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Record/Utility class to group in one place Asset unit, policy and name manipulation and comparison
  *
- * @param policyId
- * @param assetName
+ * @param policyId  the 56-character hex policy ID
+ * @param assetName the hex-encoded asset name (may be empty for policy-only assets)
  */
 @Slf4j
 public record AssetType(String policyId, String assetName) {
