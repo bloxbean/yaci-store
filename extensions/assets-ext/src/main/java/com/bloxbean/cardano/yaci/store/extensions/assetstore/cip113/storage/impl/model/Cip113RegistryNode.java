@@ -21,11 +21,12 @@ public class Cip113RegistryNode {
     private String policyId;
 
     @Id
-    @Column(name = "tx_hash", length = 64, nullable = false)
-    private String txHash;
-
     @Column(nullable = false)
     private Long slot;
+
+    @Id
+    @Column(name = "tx_hash", length = 64, nullable = false)
+    private String txHash;
 
     @Nullable
     @Column(name = "transfer_logic_script", length = 56)

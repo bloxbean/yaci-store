@@ -11,6 +11,7 @@ import lombok.*;
 public class Cip113RegistryNodeId {
 
     private String policyId;
+    private Long slot;
     private String txHash;
 
 }

@@ -18,5 +18,5 @@ CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_ticker ON ft_offchain_metada
 -- CIP-68: label-filtered lookups by policy (for findByPolicyIdAndLabel, findLatestByPolicyIdsAndLabel)
 CREATE INDEX IF NOT EXISTS idx_metadata_reference_nft_policy_label ON metadata_reference_nft(policy_id, label, slot DESC);
 
--- CIP-113: policy + slot descending (for latest-by-policy queries, only useful when CIP-113 is enabled)
-CREATE INDEX IF NOT EXISTS idx_cip113_policy_slot ON cip113_registry_node(policy_id, slot DESC);
+-- CIP-113: no additional index needed — PK (policy_id, slot, tx_hash) supports backward scan
+-- for findFirstByPolicyIdOrderBySlotDesc and findLatestByPolicyIds queries.

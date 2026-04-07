@@ -49,6 +49,7 @@ CREATE INDEX idx_metadata_reference_nft_slot ON metadata_reference_nft(slot);
 
 -- CIP-113 programmable token registry nodes
 CREATE TABLE cip113_registry_node (
+    -- policy_id stores the 'key' field from the CIP-113 registry node datum (first field in the linked list node)
     policy_id                         VARCHAR(56) NOT NULL,
     slot                              BIGINT      NOT NULL,
     tx_hash                           VARCHAR(64) NOT NULL,
@@ -58,7 +59,8 @@ CREATE TABLE cip113_registry_node (
     next_key                          VARCHAR(56) NOT NULL,
     datum                             TEXT        NOT NULL,
     last_synced_at                    TIMESTAMP,
-    PRIMARY KEY (policy_id, tx_hash)
+    PRIMARY KEY (policy_id, slot, tx_hash)
 );
 
+-- Cip113RegistryNodeRepository.deleteBySlotGreaterThan(Long)
 CREATE INDEX idx_cip113_slot ON cip113_registry_node(slot);
