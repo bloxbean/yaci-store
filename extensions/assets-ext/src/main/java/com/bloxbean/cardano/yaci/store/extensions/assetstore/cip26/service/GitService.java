@@ -62,7 +62,7 @@ public class GitService {
         forceClone = assetsStoreProperties.getCip26().isForceClone();
 
         if (gitTempFolder == null || gitTempFolder.isBlank()) {
-            log.warn("store.assets.cip26.git.tmp-folder is blank, defaulting to system temp directory");
+            log.warn("store.assets.ext.cip26.git.tmp-folder is blank, defaulting to system temp directory");
             gitTempFolder = System.getProperty("java.io.tmpdir");
         }
     }

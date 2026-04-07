@@ -12,7 +12,7 @@ import java.util.List;
  * Plain properties POJO for the assets-ext extension module.
  * <p>
  * Bean is created by the starter's AutoConfiguration, which maps
- * {@code store.assets.*} Spring Boot properties into this object.
+ * {@code store.assets.ext.*} Spring Boot properties into this object.
  * This follows the yaci-store convention of keeping {@code @Value} annotations
  * out of extension modules.
  */

@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  * CIP-113 programmable token configuration.
  * <p>
  * This entire module is disabled by default. Enable it with
- * {@code store.assets.cip113.enabled=true}.
+ * {@code store.assets.ext.cip113.enabled=true}.
  * <p>
  * Registry NFT policy IDs are maintained per-network in property files:
  * <ul>
@@ -31,12 +31,12 @@ import java.util.stream.Collectors;
  *   <li>{@code cip113/cip113-preview.properties}</li>
  * </ul>
  * The correct file is loaded based on {@code store.cardano.protocol-magic}.
- * Users can override via {@code store.assets.cip113.registry-nft-policy-ids}
+ * Users can override via {@code store.assets.ext.cip113.registry-nft-policy-ids}
  * if needed.
  */
 @Configuration
 @ConditionalOnProperty(
-        prefix = "store.assets",
+        prefix = "store.assets.ext",
         name = "cip113.enabled",
         havingValue = "true",
         matchIfMissing = false

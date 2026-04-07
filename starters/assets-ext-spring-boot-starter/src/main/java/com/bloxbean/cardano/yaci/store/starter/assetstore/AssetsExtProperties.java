@@ -9,7 +9,7 @@ import java.util.List;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "store.assets", ignoreUnknownFields = true)
+@ConfigurationProperties(prefix = "store.assets.ext", ignoreUnknownFields = true)
 public class AssetsExtProperties {
     private boolean enabled = false;
     private Cip26 cip26 = new Cip26();

@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  * When the same property (e.g. {@code name}) exists in both CIP-26 and CIP-68, the standard
  * with higher priority wins. The default order is {@code CIP_68, CIP_26} (on-chain preferred),
  * configurable per-request via the {@code query_priority} parameter or globally via
- * {@code store.assets.default-query-priority}.
+ * {@code store.assets.ext.default-query-priority}.
  *
  * @see TokenQueryService
  */

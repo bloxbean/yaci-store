@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
 @ConditionalOnProperty(
-        name = "store.assets.enabled",
+        name = "store.assets.ext.enabled",
         havingValue = "true",
         matchIfMissing = false
 )
