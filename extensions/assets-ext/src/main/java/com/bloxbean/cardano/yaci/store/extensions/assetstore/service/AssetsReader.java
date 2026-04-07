@@ -39,17 +39,17 @@ public class AssetsReader {
     private final TokenQueryService tokenQueryService;
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Optional<Cip113StorageReader> cip113StorageReader;
+    private final Cip113StorageReader cip113StorageReader;
 
     @Autowired
     public AssetsReader(TokenQueryService tokenQueryService,
-                            Cip26StorageReader cip26StorageReader,
-                            Cip68StorageReader cip68StorageReader,
-                            @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
+                        Cip26StorageReader cip26StorageReader,
+                        Cip68StorageReader cip68StorageReader,
+                        Cip113StorageReader cip113StorageReader) {
         this.tokenQueryService = tokenQueryService;
         this.cip26StorageReader = cip26StorageReader;
         this.cip68StorageReader = cip68StorageReader;
-        this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
+        this.cip113StorageReader = cip113StorageReader;
     }
 
     // ========== Merged queries ==========
@@ -130,27 +130,25 @@ public class AssetsReader {
 
     /**
      * Look up CIP-113 programmable token registry node for a policy ID.
-     * Returns empty if CIP-113 module is not enabled.
+     * Returns empty if CIP-113 is not enabled (no-op reader returns empty).
      */
     public Optional<ProgrammableTokenCip113> getCip113RegistryNode(String policyId) {
-        return cip113StorageReader.flatMap(reader -> reader.findByPolicyId(policyId));
+        return cip113StorageReader.findByPolicyId(policyId);
     }
 
     /**
      * Batch look up CIP-113 registry nodes for multiple policy IDs.
-     * Returns empty map if CIP-113 module is not enabled.
+     * Returns empty map if CIP-113 is not enabled (no-op reader returns empty map).
      */
     public Map<String, ProgrammableTokenCip113> getCip113RegistryNodes(Collection<String> policyIds) {
-        return cip113StorageReader.map(reader -> reader.findByPolicyIds(policyIds))
-                .orElse(Map.of());
+        return cip113StorageReader.findByPolicyIds(policyIds);
     }
 
     /**
      * Check whether a policy ID is registered as a CIP-113 programmable token.
-     * Returns false if CIP-113 module is not enabled.
+     * Returns false if CIP-113 is not enabled.
      */
     public boolean isProgrammableToken(String policyId) {
-        return cip113StorageReader.map(reader -> reader.isProgrammableToken(policyId))
-                .orElse(false);
+        return cip113StorageReader.isProgrammableToken(policyId);
     }
 }

@@ -33,15 +33,15 @@ public class TokenQueryService {
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Optional<Cip113StorageReader> cip113StorageReader;
+    private final Cip113StorageReader cip113StorageReader;
 
     @Autowired
     public TokenQueryService(Cip26StorageReader cip26StorageReader,
-                                   Cip68StorageReader cip68StorageReader,
-                                   @Autowired(required = false) Cip113StorageReader cip113StorageReader) {
+                             Cip68StorageReader cip68StorageReader,
+                             Cip113StorageReader cip113StorageReader) {
         this.cip26StorageReader = cip26StorageReader;
         this.cip68StorageReader = cip68StorageReader;
-        this.cip113StorageReader = Optional.ofNullable(cip113StorageReader);
+        this.cip113StorageReader = cip113StorageReader;
     }
 
     /**
@@ -105,13 +105,11 @@ public class TokenQueryService {
      */
     public BatchPrefetchData prefetchBatch(List<String> subjects, List<String> queryProperties) {
         // CIP-113: one query for all distinct policy IDs
-        Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.map(reader -> {
-            List<String> policyIds = subjects.stream()
-                    .map(s -> AssetType.fromUnit(s).policyId())
-                    .distinct()
-                    .toList();
-            return reader.findByPolicyIds(policyIds);
-        }).orElse(Map.of());
+        List<String> policyIds = subjects.stream()
+                .map(s -> AssetType.fromUnit(s).policyId())
+                .distinct()
+                .toList();
+        Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.findByPolicyIds(policyIds);
 
         // CIP-26: one query for all metadata, one query for all logos
         Map<String, TokenMetadata> cip26MetadataMap = cip26StorageReader.findBySubjects(subjects).stream()
@@ -210,7 +208,7 @@ public class TokenQueryService {
 
     private Map<String, Extension> buildExtensions(String subject) {
         Map<String, Extension> extensions = new LinkedHashMap<>();
-        cip113StorageReader.flatMap(reader -> reader.findByPolicyId(AssetType.fromUnit(subject).policyId()))
+        cip113StorageReader.findByPolicyId(AssetType.fromUnit(subject).policyId())
                 .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
         return extensions;
     }

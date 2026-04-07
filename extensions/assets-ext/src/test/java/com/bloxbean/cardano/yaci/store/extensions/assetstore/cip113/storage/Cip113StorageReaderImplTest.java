@@ -1,6 +1,5 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
@@ -16,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.service.Cip113RegistryServiceTest.buildConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -24,18 +22,14 @@ import static org.mockito.Mockito.when;
 @DisplayName("Cip113StorageReaderImpl")
 class Cip113StorageReaderImplTest {
 
-    private static final String MONITORED_POLICY = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
-
     @Mock
     private Cip113RegistryNodeRepository repository;
 
-    private Cip113Configuration config;
     private Cip113StorageReaderImpl reader;
 
     @BeforeEach
     void setUp() {
-        config = buildConfig(MONITORED_POLICY);
-        reader = new Cip113StorageReaderImpl(repository, config);
+        reader = new Cip113StorageReaderImpl(repository);
     }
 
     @Nested
@@ -90,10 +84,10 @@ class Cip113StorageReaderImplTest {
         }
 
         @Test
-        void returnsEmptyWhenDisabled() {
-            config = buildConfig();
-            reader = new Cip113StorageReaderImpl(repository, config);
-            assertThat(reader.findByPolicyId("deadbeef")).isEmpty();
+        void returnsEmptyWhenNotFound() {
+            when(repository.findFirstByPolicyIdOrderBySlotDesc("unknown"))
+                    .thenReturn(Optional.empty());
+            assertThat(reader.findByPolicyId("unknown")).isEmpty();
         }
     }
 
@@ -121,10 +115,10 @@ class Cip113StorageReaderImplTest {
         }
 
         @Test
-        void returnsEmptyMapWhenDisabled() {
-            config = buildConfig();
-            reader = new Cip113StorageReaderImpl(repository, config);
-            assertThat(reader.findByPolicyIds(List.of("policy1"))).isEmpty();
+        void returnsEmptyMapForUnknownPolicies() {
+            when(repository.findLatestByPolicyIds(List.of("unknown")))
+                    .thenReturn(List.of());
+            assertThat(reader.findByPolicyIds(List.of("unknown"))).isEmpty();
         }
 
         @Test
