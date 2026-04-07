@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("java:S2187") // tests are in @Nested inner classes
 class AssetTypeTest {
 
     private static final String POLICY_ID_56 = "f6f49b186751e61f1fb8c64e7504e771f968cea9f4d11f5222b169e3";

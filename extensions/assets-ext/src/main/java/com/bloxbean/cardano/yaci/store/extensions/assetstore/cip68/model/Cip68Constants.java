@@ -20,9 +20,11 @@ public final class Cip68Constants {
      * When NFT support is added, this should inspect the co-minted user token
      * to determine if it's FT (333), NFT (222), or RFT (444).
      *
-     * @param referenceNftAssetName the asset name of the reference NFT (with 000643b0 prefix)
+     * @param referenceNftAssetName the asset name of the reference NFT (with 000643b0 prefix).
+     *                              Currently unused — reserved for future NFT/RFT label derivation.
      * @return the label value (currently always 333)
      */
+    @SuppressWarnings("java:S1172") // parameter will be used when NFT support is added
     public static int labelFromReferenceNft(String referenceNftAssetName) {
         // TODO: derive actual label when NFT/RFT support is added
         // For now, all reference NFTs we index are for fungible tokens

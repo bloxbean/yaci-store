@@ -185,21 +185,7 @@ public class GitService {
                             break;
                         }
                         commitCount++;
-
-                        List<String> touchedFiles = getFilesTouchedByCommit(repository, reader, commit);
-
-                        for (String touchedPath : touchedFiles) {
-                            if (!touchedPath.startsWith(mappingsFolderName + "/")) {
-                                continue;
-                            }
-                            String fileName = touchedPath.substring(mappingsFolderName.length() + 1);
-                            if (remaining.remove(fileName)) {
-                                PersonIdent author = commit.getAuthorIdent();
-                                result.put(fileName, new MappingUpdateDetails(
-                                        author.getEmailAddress(),
-                                        LocalDateTime.ofInstant(author.getWhenAsInstant(), ZoneOffset.UTC)));
-                            }
-                        }
+                        recordTouchedMappings(repository, reader, commit, remaining, result);
 
                         if (commitCount % 1000 == 0) {
                             log.info("Git history walk: {} commits scanned, {}/{} files resolved",
@@ -215,6 +201,25 @@ public class GitService {
         log.info("Git history walk complete: {} commits scanned, {}/{} files resolved ({} unresolved)",
                 commitCount, result.size(), fileNames.size(), remaining.size());
         return result;
+    }
+
+    private void recordTouchedMappings(Repository repository, ObjectReader reader, RevCommit commit,
+                                         Set<String> remaining, Map<String, MappingUpdateDetails> result)
+            throws IOException {
+        List<String> touchedFiles = getFilesTouchedByCommit(repository, reader, commit);
+        String prefix = mappingsFolderName + "/";
+        for (String touchedPath : touchedFiles) {
+            if (!touchedPath.startsWith(prefix)) {
+                continue;
+            }
+            String fileName = touchedPath.substring(prefix.length());
+            if (remaining.remove(fileName)) {
+                PersonIdent author = commit.getAuthorIdent();
+                result.put(fileName, new MappingUpdateDetails(
+                        author.getEmailAddress(),
+                        LocalDateTime.ofInstant(author.getWhenAsInstant(), ZoneOffset.UTC)));
+            }
+        }
     }
 
     private List<String> getFilesTouchedByCommit(Repository repository, ObjectReader reader, RevCommit commit)

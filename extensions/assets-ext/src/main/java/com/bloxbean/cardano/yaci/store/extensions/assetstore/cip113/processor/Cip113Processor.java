@@ -53,20 +53,17 @@ public class Cip113Processor {
 
     private Optional<Cip113RegistryNode> toEntity(AddressUtxo utxo, Long slot) {
         return registryNodeParser.parse(utxo.getInlineDatum())
-                .map(parsed -> {
-                    Cip113RegistryNode entity = Cip113RegistryNode.builder()
-                            .policyId(parsed.key())
-                            .slot(slot)
-                            .txHash(utxo.getTxHash())
-                            .transferLogicScript(parsed.transferLogicScript())
-                            .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())
-                            .globalStatePolicyId(parsed.globalStatePolicyId())
-                            .nextKey(parsed.next())
-                            .datum(utxo.getInlineDatum())
-                            .lastSyncedAt(LocalDateTime.now())
-                            .build();
-                    return entity;
-                });
+                .map(parsed -> Cip113RegistryNode.builder()
+                        .policyId(parsed.key())
+                        .slot(slot)
+                        .txHash(utxo.getTxHash())
+                        .transferLogicScript(parsed.transferLogicScript())
+                        .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())
+                        .globalStatePolicyId(parsed.globalStatePolicyId())
+                        .nextKey(parsed.next())
+                        .datum(utxo.getInlineDatum())
+                        .lastSyncedAt(LocalDateTime.now())
+                        .build());
     }
 
 }

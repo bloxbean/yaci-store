@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("java:S2187") // tests are in @Nested inner classes
 @DisplayName("Cip113RegistryNodeParser")
 class Cip113DatumParserTest {
 
