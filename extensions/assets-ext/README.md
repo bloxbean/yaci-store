@@ -87,9 +87,7 @@ store:
       sync-interval-minutes: 60
 
     cip68:
-      enabled: true
-      fungible-enabled: true           # Index fungible tokens (label 333)
-      nft-enabled: false               # NFT support (label 222) — not yet implemented
+      enabled: true                    # Fungible token support (label 333)
 
     cip113:
       enabled: false                   # Disabled by default

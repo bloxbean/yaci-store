@@ -32,8 +32,6 @@ public class AssetsExtProperties {
     @Setter
     public static final class Cip68 {
         private boolean enabled = true;
-        private boolean fungibleEnabled = true;
-        private boolean nftEnabled = false;
     }
 
     @Getter
