@@ -2,8 +2,9 @@
 """Export Cardano db-sync tables to Parquet format with resolved foreign keys.
 
 Uses DuckDB + postgres_scanner for high-performance columnar streaming.
-Data flows: PostgreSQL -> DuckDB (Arrow columnar) -> Parquet file
-This avoids slow row-by-row Python processing entirely.
+Lookup tables (stake_address, pool_hash, drep_hash) are loaded into DuckDB
+memory once, then raw data is streamed from PostgreSQL WITHOUT JOINs.
+JOINs happen inside DuckDB's vectorized engine — much faster than PostgreSQL.
 """
 
 import argparse
@@ -30,84 +31,89 @@ DEFAULTS = {
 }
 # =============================================================================
 
-# Tables that should be exported per-epoch for better performance and logging.
-# Each epoch is exported as a separate COPY command, then merged into one file.
-EPOCH_PARTITIONED = {"epoch_stake", "reward"}
-
 # Starting epoch for filtered exports
 START_EPOCH = 504
 
+# Lookup tables to cache in DuckDB memory before exporting.
+# These are loaded once and reused for all JOINs.
+LOOKUP_TABLES = {
+    "stake_address": "SELECT id, view FROM stake_address",
+    "pool_hash": "SELECT id, view FROM pool_hash",
+    "drep_hash": "SELECT id, encode(raw, 'hex') AS raw, view, has_script FROM drep_hash",
+}
+
+# Which lookup tables each export table needs
+TABLE_LOOKUPS = {
+    "epoch_stake": ["stake_address", "pool_hash"],
+    "reward": ["stake_address", "pool_hash"],
+    "reward_rest": ["stake_address"],
+    "drep_distr": ["drep_hash"],
+    "drep_hash": [],
+    "drep_registration": ["drep_hash"],
+}
+
+# Tables exported epoch-by-epoch for progress tracking
+EPOCH_PARTITIONED = {"epoch_stake", "reward"}
+
 TABLE_CONFIGS = {
     "epoch_stake": {
-        "sql": """
-            SELECT es.epoch_no, sa.view AS stake_address, ph.view AS pool, es.amount
-            FROM epoch_stake es
-            JOIN stake_address sa ON es.addr_id = sa.id
-            JOIN pool_hash ph ON es.pool_id = ph.id
-            WHERE es.epoch_no = {epoch}
-        """,
-        "sql_all": """
-            SELECT es.epoch_no, sa.view AS stake_address, ph.view AS pool, es.amount
-            FROM epoch_stake es
-            JOIN stake_address sa ON es.addr_id = sa.id
-            JOIN pool_hash ph ON es.pool_id = ph.id
-            WHERE es.epoch_no >= {start_epoch}
-            ORDER BY es.epoch_no
-        """,
+        # Raw query: NO JOINs, just IDs — fast PostgreSQL index scan
+        "raw_sql": "SELECT epoch_no, addr_id, pool_id, amount FROM epoch_stake WHERE epoch_no = {epoch}",
+        "raw_sql_all": "SELECT epoch_no, addr_id, pool_id, amount FROM epoch_stake WHERE epoch_no >= {start_epoch}",
         "epoch_query": "SELECT DISTINCT epoch_no FROM epoch_stake WHERE epoch_no >= {start_epoch} ORDER BY epoch_no",
+        # DuckDB-side JOIN with cached lookup tables
+        "join_sql": """
+            SELECT es.epoch_no, sa.view AS stake_address, ph.view AS pool, es.amount
+            FROM raw_data es
+            JOIN stake_address sa ON es.addr_id = sa.id
+            JOIN pool_hash ph ON es.pool_id = ph.id
+        """,
         "filename": "epoch_stake_from504.parquet",
     },
     "reward": {
-        "sql": """
-            SELECT sa.view AS stake_address, r.type::text AS type, r.amount,
-                   r.earned_epoch, r.spendable_epoch, ph.view AS pool
-            FROM reward r
-            JOIN stake_address sa ON r.addr_id = sa.id
-            JOIN pool_hash ph ON r.pool_id = ph.id
-            WHERE r.earned_epoch = {epoch}
-        """,
-        "sql_all": """
-            SELECT sa.view AS stake_address, r.type::text AS type, r.amount,
-                   r.earned_epoch, r.spendable_epoch, ph.view AS pool
-            FROM reward r
-            JOIN stake_address sa ON r.addr_id = sa.id
-            JOIN pool_hash ph ON r.pool_id = ph.id
-            WHERE r.earned_epoch >= {start_epoch}
-            ORDER BY r.earned_epoch
-        """,
+        "raw_sql": "SELECT addr_id, type::text AS type, amount, earned_epoch, spendable_epoch, pool_id FROM reward WHERE earned_epoch = {epoch}",
+        "raw_sql_all": "SELECT addr_id, type::text AS type, amount, earned_epoch, spendable_epoch, pool_id FROM reward WHERE earned_epoch >= {start_epoch}",
         "epoch_query": "SELECT DISTINCT earned_epoch AS epoch_no FROM reward WHERE earned_epoch >= {start_epoch} ORDER BY earned_epoch",
+        "join_sql": """
+            SELECT sa.view AS stake_address, r.type, r.amount,
+                   r.earned_epoch, r.spendable_epoch, ph.view AS pool
+            FROM raw_data r
+            JOIN stake_address sa ON r.addr_id = sa.id
+            JOIN pool_hash ph ON r.pool_id = ph.id
+        """,
         "filename": "reward_from504.parquet",
     },
     "drep_distr": {
-        "sql_all": """
-            SELECT dd.epoch_no, dh.view AS drep_id, dh.has_script,
-                   dd.amount, dd.active_until
-            FROM drep_distr dd
+        "raw_sql_all": "SELECT hash_id, epoch_no, amount, active_until FROM drep_distr WHERE epoch_no >= {start_epoch}",
+        "join_sql": """
+            SELECT dd.epoch_no, dh.view AS drep_id, dh.has_script, dd.amount, dd.active_until
+            FROM raw_data dd
             JOIN drep_hash dh ON dd.hash_id = dh.id
-            WHERE dd.epoch_no >= {start_epoch}
         """,
         "filename": "drep_distr_from504.parquet",
     },
     "drep_hash": {
-        "sql_all": "SELECT encode(raw, 'hex') AS raw, view, has_script FROM drep_hash",
+        "raw_sql_all": "SELECT encode(raw, 'hex') AS raw, view, has_script FROM drep_hash",
+        "join_sql": "SELECT * FROM raw_data",
         "filename": "drep_hash.parquet",
     },
     "drep_registration": {
-        "sql_all": """
+        "raw_sql_all": "SELECT drep_hash_id, deposit, cert_index, tx_id, voting_anchor_id FROM drep_registration",
+        "join_sql": """
             SELECT dh.view AS drep_id, dh.has_script, dr.deposit,
                    dr.cert_index, dr.tx_id, dr.voting_anchor_id
-            FROM drep_registration dr
+            FROM raw_data dr
             JOIN drep_hash dh ON dr.drep_hash_id = dh.id
         """,
         "filename": "drep_registration.parquet",
     },
     "reward_rest": {
-        "sql_all": """
-            SELECT sa.view AS stake_address, rr.type::text AS type, rr.amount,
+        "raw_sql_all": "SELECT addr_id, type::text AS type, amount, earned_epoch, spendable_epoch FROM reward_rest WHERE earned_epoch >= {start_epoch}",
+        "join_sql": """
+            SELECT sa.view AS stake_address, rr.type, rr.amount,
                    rr.earned_epoch, rr.spendable_epoch
-            FROM reward_rest rr
+            FROM raw_data rr
             JOIN stake_address sa ON rr.addr_id = sa.id
-            WHERE rr.earned_epoch >= {start_epoch}
         """,
         "filename": "reward_rest_from504.parquet",
     },
@@ -193,6 +199,29 @@ def setup_duckdb(db_config):
     return conn
 
 
+def load_lookup_tables(duck_conn, tables_needed):
+    """Load lookup tables from PostgreSQL into DuckDB memory (once)."""
+    for table_name in tables_needed:
+        if table_name not in LOOKUP_TABLES:
+            continue
+        # Check if already loaded
+        existing = duck_conn.execute(
+            f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table_name}'"
+        ).fetchone()[0]
+        if existing:
+            continue
+
+        sql = LOOKUP_TABLES[table_name]
+        start = time.time()
+        duck_conn.execute(
+            f"CREATE TABLE {table_name} AS "
+            f"SELECT * FROM postgres_query('pg_db', $$ {sql} $$)"
+        )
+        row_count = duck_conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        elapsed = time.time() - start
+        log(f"  Cached {table_name}: {row_count:,} rows in {elapsed:.1f}s")
+
+
 def copy_to_parquet(duck_conn, sql, filepath, codec="ZSTD", compression_level=3):
     """Execute COPY (sql) TO parquet via DuckDB."""
     tmp_path = filepath + ".tmp"
@@ -222,10 +251,8 @@ def export_epoch_partitioned(duck_conn, table_name, config, output_dir):
 
     if not epochs:
         log(f"  No epochs found for {table_name} >= {START_EPOCH}")
-        # Write empty file
-        all_sql = config["sql_all"].format(start_epoch=START_EPOCH)
-        pg_sql = f"SELECT * FROM postgres_query('pg_db', $$ {all_sql} $$)"
-        copy_to_parquet(duck_conn, pg_sql, filepath)
+        duck_conn.execute("CREATE OR REPLACE TEMP TABLE raw_data AS SELECT 1 WHERE false")
+        copy_to_parquet(duck_conn, config["join_sql"], filepath)
         return 0
 
     log(f"  Found {len(epochs)} epochs to export: {epochs[0]} - {epochs[-1]}")
@@ -238,9 +265,15 @@ def export_epoch_partitioned(duck_conn, table_name, config, output_dir):
         epoch_start = time.time()
         epoch_file = os.path.join(epoch_dir, f"epoch_{epoch}.parquet")
 
-        sql = config["sql"].format(epoch=epoch)
-        pg_sql = f"SELECT * FROM postgres_query('pg_db', $$ {sql} $$)"
-        copy_to_parquet(duck_conn, pg_sql, epoch_file)
+        # Stream raw data (no JOINs) from PostgreSQL into DuckDB temp table
+        raw_sql = config["raw_sql"].format(epoch=epoch)
+        duck_conn.execute(
+            f"CREATE OR REPLACE TEMP TABLE raw_data AS "
+            f"SELECT * FROM postgres_query('pg_db', $$ {raw_sql} $$)"
+        )
+
+        # JOIN with cached lookup tables in DuckDB and write to parquet
+        copy_to_parquet(duck_conn, config["join_sql"], epoch_file)
 
         row_count = get_row_count(duck_conn, epoch_file)
         file_size = os.path.getsize(epoch_file)
@@ -282,15 +315,26 @@ def export_epoch_partitioned(duck_conn, table_name, config, output_dir):
 def export_simple(duck_conn, table_name, config, output_dir):
     """Export a small table in one shot via DuckDB COPY."""
     filepath = os.path.join(output_dir, config["filename"])
-    sql = config["sql_all"].format(start_epoch=START_EPOCH)
-    pg_sql = f"SELECT * FROM postgres_query('pg_db', $$ {sql} $$)"
-    copy_to_parquet(duck_conn, pg_sql, filepath)
+
+    raw_sql = config["raw_sql_all"].format(start_epoch=START_EPOCH)
+    duck_conn.execute(
+        f"CREATE OR REPLACE TEMP TABLE raw_data AS "
+        f"SELECT * FROM postgres_query('pg_db', $$ {raw_sql} $$)"
+    )
+
+    copy_to_parquet(duck_conn, config["join_sql"], filepath)
     return get_row_count(duck_conn, filepath)
 
 
 def export_table(duck_conn, table_name, config, output_dir):
     """Export a single table and print summary."""
     log(f"Exporting {table_name}...")
+
+    # Load required lookup tables into DuckDB memory
+    needed_lookups = TABLE_LOOKUPS.get(table_name, [])
+    if needed_lookups:
+        load_lookup_tables(duck_conn, needed_lookups)
+
     start = time.time()
 
     if table_name in EPOCH_PARTITIONED:
