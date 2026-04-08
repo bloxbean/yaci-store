@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Cip113RegistryService")
-class Cip113RegistryServiceTest {
+public class Cip113RegistryServiceTest {
 
     private static final String MONITORED_POLICY = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
     private static final String OTHER_POLICY = "9999999999999999999999999999999999999999999999999999999999";
@@ -32,7 +32,7 @@ class Cip113RegistryServiceTest {
         service = new Cip113RegistryService(config);
     }
 
-    static Cip113Configuration buildConfig(String... policyIds) {
+    public static Cip113Configuration buildConfig(String... policyIds) {
         Cip113Configuration config = org.mockito.Mockito.mock(Cip113Configuration.class,
                 org.mockito.Mockito.withSettings().lenient());
         java.util.Set<String> policyIdSet = java.util.Set.of(policyIds);
