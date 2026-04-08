@@ -61,12 +61,12 @@ TABLE_CONFIGS = {
         "raw_sql": "SELECT epoch_no, addr_id, pool_id, amount FROM epoch_stake WHERE epoch_no = {epoch}",
         "raw_sql_all": "SELECT epoch_no, addr_id, pool_id, amount FROM epoch_stake WHERE epoch_no >= {start_epoch}",
         "epoch_query": "SELECT DISTINCT epoch_no FROM epoch_stake WHERE epoch_no >= {start_epoch} ORDER BY epoch_no",
-        # DuckDB-side JOIN with cached lookup tables
+        # DuckDB-side JOIN with cached lookup tables (main. prefix = DuckDB local)
         "join_sql": """
             SELECT es.epoch_no, sa.view AS stake_address, ph.view AS pool, es.amount
             FROM raw_data es
-            JOIN stake_address sa ON es.addr_id = sa.id
-            JOIN pool_hash ph ON es.pool_id = ph.id
+            JOIN main.stake_address sa ON es.addr_id = sa.id
+            JOIN main.pool_hash ph ON es.pool_id = ph.id
         """,
         "filename": "epoch_stake_from504.parquet",
     },
@@ -78,8 +78,8 @@ TABLE_CONFIGS = {
             SELECT sa.view AS stake_address, r.type, r.amount,
                    r.earned_epoch, r.spendable_epoch, ph.view AS pool
             FROM raw_data r
-            JOIN stake_address sa ON r.addr_id = sa.id
-            JOIN pool_hash ph ON r.pool_id = ph.id
+            JOIN main.stake_address sa ON r.addr_id = sa.id
+            JOIN main.pool_hash ph ON r.pool_id = ph.id
         """,
         "filename": "reward_from504.parquet",
     },
@@ -88,7 +88,7 @@ TABLE_CONFIGS = {
         "join_sql": """
             SELECT dd.epoch_no, dh.view AS drep_id, dh.has_script, dd.amount, dd.active_until
             FROM raw_data dd
-            JOIN drep_hash dh ON dd.hash_id = dh.id
+            JOIN main.drep_hash dh ON dd.hash_id = dh.id
         """,
         "filename": "drep_distr_from504.parquet",
     },
@@ -103,7 +103,7 @@ TABLE_CONFIGS = {
             SELECT dh.view AS drep_id, dh.has_script, dr.deposit,
                    dr.cert_index, dr.tx_id, dr.voting_anchor_id
             FROM raw_data dr
-            JOIN drep_hash dh ON dr.drep_hash_id = dh.id
+            JOIN main.drep_hash dh ON dr.drep_hash_id = dh.id
         """,
         "filename": "drep_registration.parquet",
     },
@@ -113,7 +113,7 @@ TABLE_CONFIGS = {
             SELECT sa.view AS stake_address, rr.type, rr.amount,
                    rr.earned_epoch, rr.spendable_epoch
             FROM raw_data rr
-            JOIN stake_address sa ON rr.addr_id = sa.id
+            JOIN main.stake_address sa ON rr.addr_id = sa.id
         """,
         "filename": "reward_rest_from504.parquet",
     },
@@ -199,26 +199,25 @@ def setup_duckdb(db_config):
     return conn
 
 
+_loaded_lookups = set()
+
+
 def load_lookup_tables(duck_conn, tables_needed):
     """Load lookup tables from PostgreSQL into DuckDB memory (once)."""
     for table_name in tables_needed:
-        if table_name not in LOOKUP_TABLES:
-            continue
-        # Check if already loaded
-        existing = duck_conn.execute(
-            f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table_name}'"
-        ).fetchone()[0]
-        if existing:
+        if table_name not in LOOKUP_TABLES or table_name in _loaded_lookups:
             continue
 
         sql = LOOKUP_TABLES[table_name]
         start = time.time()
+        # Use main. prefix to create in DuckDB's local catalog, not pg_db
         duck_conn.execute(
-            f"CREATE TABLE {table_name} AS "
+            f"CREATE OR REPLACE TABLE main.{table_name} AS "
             f"SELECT * FROM postgres_query('pg_db', $$ {sql} $$)"
         )
-        row_count = duck_conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        row_count = duck_conn.execute(f"SELECT COUNT(*) FROM main.{table_name}").fetchone()[0]
         elapsed = time.time() - start
+        _loaded_lookups.add(table_name)
         log(f"  Cached {table_name}: {row_count:,} rows in {elapsed:.1f}s")
 
 
