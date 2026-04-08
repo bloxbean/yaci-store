@@ -13,7 +13,7 @@ Uses **DuckDB + postgres_scanner** for high-performance columnar streaming — t
 ## Setup
 
 ```bash
-pip install duckdb psycopg2-binary
+pip3 install duckdb psycopg2-binary
 ```
 
 ## Configuration
@@ -44,7 +44,7 @@ OUTPUT_DIR=./output
 Then run with:
 
 ```bash
-python export_dbsync_parquet.py --env-file .env
+python3 export_dbsync_parquet.py --env-file .env
 ```
 
 ### Option 2: Edit defaults in script
@@ -65,7 +65,7 @@ DEFAULTS = {
 Then run without any arguments:
 
 ```bash
-python export_dbsync_parquet.py
+python3 export_dbsync_parquet.py
 ```
 
 ### Option 3: CLI parameters
@@ -73,7 +73,7 @@ python export_dbsync_parquet.py
 Pass everything directly on the command line:
 
 ```bash
-python export_dbsync_parquet.py \
+python3 export_dbsync_parquet.py \
     --pg-host db.example.com \
     --pg-port 5432 \
     --pg-user admin \
@@ -87,14 +87,14 @@ python export_dbsync_parquet.py \
 You can combine methods. For example, use `.env` for DB credentials and CLI for output dir and table selection:
 
 ```bash
-python export_dbsync_parquet.py --env-file .env --output-dir /data/parquet --tables drep_hash
+python3 export_dbsync_parquet.py --env-file .env --output-dir /data/parquet --tables drep_hash
 ```
 
 Or set environment variables in your shell and override just one via CLI:
 
 ```bash
 export PGHOST=db.example.com PGUSER=admin PGPASSWORD=secret PGDATABASE=dbsync
-python export_dbsync_parquet.py --output-dir /data/parquet
+python3 export_dbsync_parquet.py --output-dir /data/parquet
 ```
 
 ## Usage
@@ -102,37 +102,37 @@ python export_dbsync_parquet.py --output-dir /data/parquet
 ### Export all tables
 
 ```bash
-python export_dbsync_parquet.py --env-file .env
+python3 export_dbsync_parquet.py --env-file .env
 ```
 
 ### Export specific tables
 
 ```bash
 # Small tables first (quick test to verify connectivity)
-python export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
+python3 export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
 
 # Then the large ones
-python export_dbsync_parquet.py --env-file .env --tables epoch_stake reward
+python3 export_dbsync_parquet.py --env-file .env --tables epoch_stake reward
 ```
 
 ### Recommended execution order
 
 ```bash
 # Step 1: Quick test with tiny tables (~seconds)
-python export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
+python3 export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
 
 # Step 2: Small filtered tables (~seconds to minutes)
-python export_dbsync_parquet.py --env-file .env --tables drep_distr reward_rest
+python3 export_dbsync_parquet.py --env-file .env --tables drep_distr reward_rest
 
 # Step 3: Large tables (epoch-by-epoch with progress logging)
-python export_dbsync_parquet.py --env-file .env --tables epoch_stake
-python export_dbsync_parquet.py --env-file .env --tables reward
+python3 export_dbsync_parquet.py --env-file .env --tables epoch_stake
+python3 export_dbsync_parquet.py --env-file .env --tables reward
 ```
 
 ### CLI reference
 
 ```
-python export_dbsync_parquet.py --help
+python3 export_dbsync_parquet.py --help
 
 Options:
   --tables          Tables to export (default: all)
@@ -260,7 +260,7 @@ Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, the
 
 ```bash
 # Check with DuckDB CLI or Python
-python -c "
+python3 -c "
 import duckdb
 conn = duckdb.connect()
 print(conn.execute(\"SELECT COUNT(*) FROM read_parquet('drep_hash.parquet')\").fetchone())
@@ -268,7 +268,7 @@ conn.execute(\"SELECT * FROM read_parquet('drep_hash.parquet') LIMIT 10\").show(
 "
 
 # Or with pyarrow (if installed)
-python -c "
+python3 -c "
 import pyarrow.parquet as pq
 meta = pq.read_metadata('epoch_stake_from504.parquet')
 print(f'Rows: {meta.num_rows}, Row groups: {meta.num_row_groups}')
