@@ -13,10 +13,8 @@ Uses **DuckDB + postgres_scanner** for high-performance columnar streaming — t
 ## Setup
 
 ```bash
-pip install duckdb
+pip install duckdb psycopg2-binary
 ```
-
-> **Note**: Only `duckdb` is required. DuckDB bundles its own postgres_scanner extension (auto-installed on first run). No need for `psycopg2` or `pyarrow`.
 
 ## Configuration
 
@@ -170,20 +168,20 @@ Options:
 
 ## Performance
 
-### Why DuckDB + postgres_scanner?
+### Pipeline: PostgreSQL COPY -> CSV -> DuckDB -> Parquet
 
-| Approach | epoch_stake (160M rows) | Bottleneck |
+| Step | Tool | Why |
 |---|---|---|
-| **psycopg2 + pyarrow** (old) | ~2-3 hours | Row-by-row Python processing, Decimal->int conversion |
-| **DuckDB postgres_scanner** (current) | ~5-10 minutes | Columnar Arrow streaming, vectorized COPY TO |
+| JOIN + extract | PostgreSQL `COPY TO STDOUT` | Native protocol, fastest data export path (~2s per epoch) |
+| CSV -> Parquet | DuckDB `COPY TO` | Vectorized conversion with ZSTD compression |
 
-DuckDB's `postgres_scanner` streams data from PostgreSQL in **columnar Arrow format** and writes directly to Parquet via `COPY TO` — no Python row processing at all. This is the same approach used by yaci-store's analytics-store module.
+PostgreSQL does the JOIN (it has the indexes, ~2s per epoch). `COPY TO STDOUT` streams results via PostgreSQL's native binary protocol — much faster than `postgres_scanner` over network. DuckDB handles only local CSV-to-Parquet conversion.
 
 ### Epoch-by-epoch strategy
 
 Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, then merged. This provides:
-- Per-epoch progress logging with ETA
-- ~2s per epoch (~1M rows) instead of one monolithic query
+- Per-epoch progress logging with timing breakdown (CSV export vs Parquet conversion)
+- ETA based on running average
 - Atomic temp file writes (`.tmp` -> final rename)
 
 ## Exported Tables
@@ -282,8 +280,9 @@ psql -c "SELECT count(*) FROM epoch_stake WHERE epoch_no >= 504;"
 
 ## Notes
 
-- Uses **DuckDB's postgres_scanner** for vectorized columnar streaming — no row-by-row Python processing.
-- Large tables are exported **epoch-by-epoch** with per-epoch timing, row counts, and ETA.
+- Uses **PostgreSQL `COPY TO STDOUT`** (native protocol, fastest export path) for data extraction.
+- **DuckDB** handles local CSV-to-Parquet conversion with ZSTD compression.
+- Large tables are exported **epoch-by-epoch** with per-epoch timing breakdown and ETA.
 - All Parquet files use **ZSTD compression** (level 3) for good compression ratio and speed.
 - Atomic writes: data is written to `.tmp` files first, then renamed on success.
-- Only dependency: `duckdb` Python package. DuckDB auto-installs `postgres_scanner` on first run.
+- Dependencies: `duckdb` + `psycopg2-binary`.
