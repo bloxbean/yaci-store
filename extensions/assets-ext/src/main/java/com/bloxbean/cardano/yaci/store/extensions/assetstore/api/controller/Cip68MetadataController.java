@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("${apiPrefix:/api/v1}")
+@RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @Tag(name = "CIP-68 Metadata", description = "On-chain fungible token metadata parsed from CIP-68 reference NFT inline datums")
 @Slf4j

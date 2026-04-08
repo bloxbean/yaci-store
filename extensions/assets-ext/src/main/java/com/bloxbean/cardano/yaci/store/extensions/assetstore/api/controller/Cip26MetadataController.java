@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("${apiPrefix:/api/v1}")
+@RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @Tag(name = "CIP-26 Metadata", description = "Off-chain fungible token metadata from the GitHub cardano-token-registry")
 @Slf4j

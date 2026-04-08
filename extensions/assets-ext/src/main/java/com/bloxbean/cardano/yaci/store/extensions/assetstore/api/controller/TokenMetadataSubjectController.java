@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
  * @see TokenQueryService
  */
 @RestController
-@RequestMapping("${apiPrefix:/api/v1}")
+@RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Token Metadata Subjects",
         description = "Multi-standard merged metadata API for token subjects")
