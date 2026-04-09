@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.account.mapper;
 
+import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
@@ -126,8 +127,8 @@ public interface BFAccountMapper {
         // Blockfrost returns lovelace first, then other assets sorted alphabetically by unit
         return map.entrySet().stream()
                 .sorted((a, b) -> {
-                    if ("lovelace".equals(a.getKey())) return -1;
-                    if ("lovelace".equals(b.getKey())) return 1;
+                    if (Constants.LOVELACE.equals(a.getKey())) return -1;
+                    if (Constants.LOVELACE.equals(b.getKey())) return 1;
                     return a.getKey().compareTo(b.getKey());
                 })
                 .map(e -> Amount.builder()

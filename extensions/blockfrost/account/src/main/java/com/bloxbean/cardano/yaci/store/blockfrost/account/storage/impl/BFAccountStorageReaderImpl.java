@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl;
 
+import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
@@ -493,7 +494,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                     .join(DSL.lateral(amountTable)).on(DSL.trueCondition())
                     .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                     .and(unspentCondition)
-                    .and(unitField.ne("lovelace"))
+                    .and(unitField.ne(Constants.LOVELACE))
                     .groupBy(unitField)
                     .orderBy(unitField.asc())
                     .limit(count)
@@ -515,7 +516,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
             for (Record rec : rows) {
                 Map<String, BigInteger> unitQty = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
                 for (Map.Entry<String, BigInteger> e : unitQty.entrySet()) {
-                    if (!"lovelace".equals(e.getKey())) {
+                    if (!Constants.LOVELACE.equals(e.getKey())) {
                         totals.merge(e.getKey(), e.getValue(), BigInteger::add);
                     }
                 }
@@ -566,11 +567,11 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
                 Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
                 if (lovelace != null && lovelace > 0) {
-                    receivedMap.merge("lovelace", BigInteger.valueOf(lovelace), BigInteger::add);
+                    receivedMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
                 }
                 Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
                 for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
-                    if (!"lovelace".equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                    if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
                         receivedMap.merge(e.getKey(), e.getValue(), BigInteger::add);
                     }
                 }
@@ -582,11 +583,11 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
                 Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
                 if (lovelace != null && lovelace > 0) {
-                    sentMap.merge("lovelace", BigInteger.valueOf(lovelace), BigInteger::add);
+                    sentMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
                 }
                 Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
                 for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
-                    if (!"lovelace".equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                    if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
                         sentMap.merge(e.getKey(), e.getValue(), BigInteger::add);
                     }
                 }
@@ -633,7 +634,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                     Map<String, BigInteger> amounts = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
                     Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
                     if (lovelace != null && lovelace != 0) {
-                        amounts.put("lovelace", BigInteger.valueOf(lovelace));
+                        amounts.put(Constants.LOVELACE, BigInteger.valueOf(lovelace));
                     }
                     return new AccountUtxo(
                             rec.get(ADDRESS_UTXO.OWNER_ADDR),
