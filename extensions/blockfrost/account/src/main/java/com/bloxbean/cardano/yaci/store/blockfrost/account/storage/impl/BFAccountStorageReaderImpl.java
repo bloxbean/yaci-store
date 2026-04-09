@@ -46,23 +46,19 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
     @Override
     public Optional<AccountInfo> getAccountInfo(String stakeAddress) {
-        var registrations = dsl.select(STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.EPOCH)
+        var registrations = dsl.select(STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.EPOCH, STAKE_REGISTRATION.SLOT,
+                        STAKE_REGISTRATION.TX_INDEX, STAKE_REGISTRATION.CERT_INDEX)
                 .from(STAKE_REGISTRATION)
                 .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
-                .orderBy(STAKE_REGISTRATION.SLOT.asc())
+                .orderBy(STAKE_REGISTRATION.SLOT.asc(), STAKE_REGISTRATION.TX_INDEX.asc(), STAKE_REGISTRATION.CERT_INDEX.asc())
                 .fetch();
 
         if (registrations.isEmpty()) {
             return Optional.empty();
         }
 
-        var lastReg = dsl.select(STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.EPOCH, STAKE_REGISTRATION.SLOT,
-                        STAKE_REGISTRATION.TX_INDEX, STAKE_REGISTRATION.CERT_INDEX)
-                .from(STAKE_REGISTRATION)
-                .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
-                .orderBy(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
-                .limit(1)
-                .fetchOne();
+        var firstReg = registrations.get(0);
+        var lastReg = registrations.get(registrations.size() - 1);
 
         String lastType = lastReg != null ? lastReg.get(STAKE_REGISTRATION.TYPE) : null;
         boolean registered = lastType != null
@@ -70,17 +66,20 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 && !lastType.toUpperCase().contains("DEREGISTRATION");
 
         // active_epoch = epoch of the most recent effective registration (not deregistration)
-        var lastActiveReg = dsl.select(STAKE_REGISTRATION.EPOCH, STAKE_REGISTRATION.SLOT,
-                        STAKE_REGISTRATION.TX_INDEX, STAKE_REGISTRATION.CERT_INDEX)
-                .from(STAKE_REGISTRATION)
-                .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
-                .and(DSL.upper(STAKE_REGISTRATION.TYPE).contains("REGISTRATION"))
-                .and(DSL.upper(STAKE_REGISTRATION.TYPE).notContains("DEREGISTRATION"))
-                .orderBy(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
-                .limit(1)
-                .fetchOne();
-        Integer activeEpoch = lastActiveReg != null ? lastActiveReg.get(STAKE_REGISTRATION.EPOCH)
-                : registrations.get(0).get(STAKE_REGISTRATION.EPOCH);
+        Integer activeEpoch = null;
+        for (int i = registrations.size() - 1; i >= 0; i--) {
+            var registration = registrations.get(i);
+            String type = registration.get(STAKE_REGISTRATION.TYPE);
+            if (type != null
+                    && type.toUpperCase().contains("REGISTRATION")
+                    && !type.toUpperCase().contains("DEREGISTRATION")) {
+                activeEpoch = registration.get(STAKE_REGISTRATION.EPOCH);
+                break;
+            }
+        }
+        if (activeEpoch == null) {
+            activeEpoch = firstReg.get(STAKE_REGISTRATION.EPOCH);
+        }
 
         Long currentCycleSlot = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.SLOT) : null;
         Integer currentCycleTxIndex = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.TX_INDEX) : null;
