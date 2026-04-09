@@ -683,14 +683,123 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         }
         final Long fromBlockFinal = fromBlock;
         final Long toBlockFinal = toBlock;
+        int targetRowCount = offset + count;
+        int txBatchSize = Math.max(count * 4, 200);
+        int txOffset = 0;
 
+        List<AccountTransaction> normalizedRows = new ArrayList<>(targetRowCount);
+        Map<String, Long> addressTxCountsCache = new HashMap<>();
+        Map<String, AccountTransactionCandidate> lastCandidateByAddressCache = new HashMap<>();
+
+        while (normalizedRows.size() < targetRowCount) {
+            List<String> txHashes = fetchTransactionHashBatch(stakeAddress, order, fromBlockFinal, toBlockFinal, txOffset, txBatchSize);
+            if (txHashes.isEmpty()) {
+                break;
+            }
+            txOffset += txHashes.size();
+
+            List<AccountTransactionCandidate> txCandidates = fetchTransactionCandidates(stakeAddress, txHashes);
+            if (txCandidates.isEmpty()) {
+                continue;
+            }
+
+            Set<String> batchAddresses = txCandidates.stream()
+                    .map(AccountTransactionCandidate::address)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
+            Set<String> uncachedAddresses = batchAddresses.stream()
+                    .filter(address -> !addressTxCountsCache.containsKey(address) || !lastCandidateByAddressCache.containsKey(address))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
+            if (!uncachedAddresses.isEmpty()) {
+                addressTxCountsCache.putAll(fetchAddressTxCounts(stakeAddress, uncachedAddresses, fromBlockFinal, toBlockFinal));
+                lastCandidateByAddressCache.putAll(fetchLastCandidateByAddress(stakeAddress, uncachedAddresses, fromBlockFinal, toBlockFinal));
+            }
+
+            Map<String, List<AccountTransactionCandidate>> groupedByTx = new LinkedHashMap<>();
+            txHashes.forEach(txHash -> groupedByTx.put(txHash, new ArrayList<>()));
+            for (AccountTransactionCandidate candidate : txCandidates) {
+                groupedByTx.computeIfAbsent(candidate.txHash(), ignored -> new ArrayList<>()).add(candidate);
+            }
+
+            for (String txHash : txHashes) {
+                List<AccountTransactionCandidate> candidatesForTx = groupedByTx.get(txHash);
+                if (candidatesForTx == null || candidatesForTx.isEmpty()) {
+                    continue;
+                }
+
+                normalizeTransactionCandidates(candidatesForTx, lastCandidateByAddressCache, addressTxCountsCache)
+                        .stream()
+                        .map(candidate -> new AccountTransaction(
+                                candidate.address(),
+                                candidate.txHash(),
+                                candidate.txIndex(),
+                                candidate.blockHeight(),
+                                candidate.blockTime()))
+                        .forEach(normalizedRows::add);
+            }
+        }
+
+        int fromIndex = Math.min(offset, normalizedRows.size());
+        int toIndex = Math.min(fromIndex + count, normalizedRows.size());
+
+        return normalizedRows.subList(fromIndex, toIndex);
+    }
+
+    private List<String> fetchTransactionHashBatch(String stakeAddress, Order order, Long fromBlock, Long toBlock,
+                                                   int txOffset, int txBatchSize) {
         Condition receiveCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
-        if (fromBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.ge(fromBlockFinal));
-        if (toBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.le(toBlockFinal));
-
-        List<AccountTransactionCandidate> candidates = new ArrayList<>();
+        if (fromBlock != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.ge(fromBlock));
+        if (toBlock != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.le(toBlock));
 
         var receivingTxs = dsl.selectDistinct(
+                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                        ADDRESS_UTXO.SLOT.as("slot"))
+                .from(ADDRESS_UTXO)
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                .where(receiveCondition);
+
+        Condition spendCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
+        if (fromBlock != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.ge(fromBlock));
+        if (toBlock != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.le(toBlock));
+
+        Field<String> spentTxHashField = TX_INPUT.SPENT_TX_HASH.as("tx_hash");
+
+        var spendingTxs = dsl.selectDistinct(
+                        spentTxHashField,
+                        TRANSACTION.SLOT.as("slot"))
+                .from(ADDRESS_UTXO)
+                .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
+                .where(spendCondition);
+
+        Table<?> accountTxs = receivingTxs
+                .union(spendingTxs)
+                .asTable("account_txs");
+
+        Field<String> txHashField = DSL.field(DSL.name("account_txs", "tx_hash"), String.class);
+        Field<Long> slotField = DSL.field(DSL.name("account_txs", "slot"), Long.class);
+        SortField<?> slotOrder = order == Order.desc ? slotField.desc() : slotField.asc();
+
+        return dsl.select(txHashField)
+                .from(accountTxs)
+                .orderBy(slotOrder, txHashField.asc())
+                .limit(txBatchSize)
+                .offset(txOffset)
+                .fetch(txHashField);
+    }
+
+    private List<AccountTransactionCandidate> fetchTransactionCandidates(String stakeAddress, List<String> txHashes) {
+        if (txHashes.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Field<String> spentTxHashField = TX_INPUT.SPENT_TX_HASH.as("tx_hash");
+        List<AccountTransactionCandidate> candidates = new ArrayList<>();
+
+        candidates.addAll(dsl.selectDistinct(
                         ADDRESS_UTXO.OWNER_ADDR,
                         ADDRESS_UTXO.TX_HASH,
                         ADDRESS_UTXO.SLOT,
@@ -699,15 +808,19 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                         TRANSACTION.TX_INDEX)
                 .from(ADDRESS_UTXO)
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                .where(receiveCondition);
+                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                .and(ADDRESS_UTXO.TX_HASH.in(txHashes))
+                .fetch(rec -> new AccountTransactionCandidate(
+                        rec.get(ADDRESS_UTXO.OWNER_ADDR),
+                        rec.get(ADDRESS_UTXO.TX_HASH),
+                        rec.get(ADDRESS_UTXO.SLOT) != null ? rec.get(ADDRESS_UTXO.SLOT) : 0L,
+                        rec.get(ADDRESS_UTXO.BLOCK) != null ? rec.get(ADDRESS_UTXO.BLOCK) : 0L,
+                        rec.get(ADDRESS_UTXO.BLOCK_TIME) != null ? rec.get(ADDRESS_UTXO.BLOCK_TIME) : 0L,
+                        rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
+                        TX_SIDE_OUT
+                )));
 
-        Condition spendCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
-        if (fromBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.ge(fromBlockFinal));
-        if (toBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.le(toBlockFinal));
-
-        Field<String> spentTxHashField = TX_INPUT.SPENT_TX_HASH.as(ADDRESS_UTXO.TX_HASH.getName());
-
-        var spendingTxs = dsl.selectDistinct(
+        candidates.addAll(dsl.selectDistinct(
                         ADDRESS_UTXO.OWNER_ADDR,
                         spentTxHashField,
                         TRANSACTION.SLOT,
@@ -718,79 +831,151 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
                         .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
+                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                .and(TX_INPUT.SPENT_TX_HASH.in(txHashes))
+                .fetch(rec -> new AccountTransactionCandidate(
+                        rec.get(ADDRESS_UTXO.OWNER_ADDR),
+                        rec.get(spentTxHashField),
+                        rec.get(TRANSACTION.SLOT) != null ? rec.get(TRANSACTION.SLOT) : 0L,
+                        rec.get(TRANSACTION.BLOCK) != null ? rec.get(TRANSACTION.BLOCK) : 0L,
+                        rec.get(TRANSACTION.BLOCK_TIME) != null ? rec.get(TRANSACTION.BLOCK_TIME) : 0L,
+                        rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
+                        TX_SIDE_IN
+                )));
+
+        Map<String, Integer> txOrder = new HashMap<>();
+        for (int i = 0; i < txHashes.size(); i++) {
+            txOrder.put(txHashes.get(i), i);
+        }
+
+        candidates.sort(Comparator
+                .comparingInt((AccountTransactionCandidate candidate) -> txOrder.getOrDefault(candidate.txHash(), Integer.MAX_VALUE))
+                .thenComparing(AccountTransactionCandidate::address)
+                .thenComparing(candidate -> TX_SIDE_OUT.equals(candidate.side()) ? 0 : 1));
+
+        return candidates;
+    }
+
+    private Map<String, Long> fetchAddressTxCounts(String stakeAddress, Collection<String> addresses, Long fromBlock, Long toBlock) {
+        if (addresses.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Table<?> candidateTable = buildAccountTransactionCandidateTable(stakeAddress, addresses, fromBlock, toBlock);
+        Field<String> addressField = DSL.field(DSL.name("account_tx_candidates", "address"), String.class);
+        Field<String> txHashField = DSL.field(DSL.name("account_tx_candidates", "tx_hash"), String.class);
+
+        return dsl.select(addressField, DSL.countDistinct(txHashField).as("tx_count"))
+                .from(candidateTable)
+                .groupBy(addressField)
+                .fetchMap(addressField, rec -> rec.get("tx_count", Long.class));
+    }
+
+    private Map<String, AccountTransactionCandidate> fetchLastCandidateByAddress(String stakeAddress, Collection<String> addresses,
+                                                                                 Long fromBlock, Long toBlock) {
+        if (addresses.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Table<?> candidateTable = buildAccountTransactionCandidateTable(stakeAddress, addresses, fromBlock, toBlock);
+        Field<String> addressField = DSL.field(DSL.name("account_tx_candidates", "address"), String.class);
+        Field<String> txHashField = DSL.field(DSL.name("account_tx_candidates", "tx_hash"), String.class);
+        Field<Long> slotField = DSL.field(DSL.name("account_tx_candidates", "slot"), Long.class);
+        Field<Long> blockHeightField = DSL.field(DSL.name("account_tx_candidates", "block_height"), Long.class);
+        Field<Long> blockTimeField = DSL.field(DSL.name("account_tx_candidates", "block_time"), Long.class);
+        Field<Integer> txIndexField = DSL.field(DSL.name("account_tx_candidates", "tx_index"), Integer.class);
+        Field<String> sideField = DSL.field(DSL.name("account_tx_candidates", "side"), String.class);
+
+        Table<?> rankedCandidates = dsl.select(
+                        addressField.as("address"),
+                        txHashField.as("tx_hash"),
+                        slotField.as("slot"),
+                        blockHeightField.as("block_height"),
+                        blockTimeField.as("block_time"),
+                        txIndexField.as("tx_index"),
+                        sideField.as("side"),
+                        DSL.rowNumber().over(
+                                DSL.partitionBy(addressField)
+                                        .orderBy(
+                                                DSL.coalesce(slotField, 0L).desc(),
+                                                DSL.coalesce(txIndexField, 0).desc(),
+                                                txHashField.desc(),
+                                                DSL.when(sideField.eq(TX_SIDE_OUT), 0).otherwise(1).asc()
+                                        )
+                        ).as("rn"))
+                .from(candidateTable)
+                .asTable("ranked_candidates");
+
+        Field<String> rankedAddressField = DSL.field(DSL.name("ranked_candidates", "address"), String.class);
+        Field<String> rankedTxHashField = DSL.field(DSL.name("ranked_candidates", "tx_hash"), String.class);
+        Field<Long> rankedSlotField = DSL.field(DSL.name("ranked_candidates", "slot"), Long.class);
+        Field<Long> rankedBlockHeightField = DSL.field(DSL.name("ranked_candidates", "block_height"), Long.class);
+        Field<Long> rankedBlockTimeField = DSL.field(DSL.name("ranked_candidates", "block_time"), Long.class);
+        Field<Integer> rankedTxIndexField = DSL.field(DSL.name("ranked_candidates", "tx_index"), Integer.class);
+        Field<String> rankedSideField = DSL.field(DSL.name("ranked_candidates", "side"), String.class);
+        Field<Integer> rnField = DSL.field(DSL.name("ranked_candidates", "rn"), Integer.class);
+
+        return dsl.select(
+                        rankedAddressField,
+                        rankedTxHashField,
+                        rankedSlotField,
+                        rankedBlockHeightField,
+                        rankedBlockTimeField,
+                        rankedTxIndexField,
+                        rankedSideField)
+                .from(rankedCandidates)
+                .where(rnField.eq(1))
+                .fetchMap(rankedAddressField, rec -> new AccountTransactionCandidate(
+                        rec.get(rankedAddressField),
+                        rec.get(rankedTxHashField),
+                        rec.get(rankedSlotField) != null ? rec.get(rankedSlotField) : 0L,
+                        rec.get(rankedBlockHeightField) != null ? rec.get(rankedBlockHeightField) : 0L,
+                        rec.get(rankedBlockTimeField) != null ? rec.get(rankedBlockTimeField) : 0L,
+                        rec.get(rankedTxIndexField) != null ? rec.get(rankedTxIndexField).longValue() : 0L,
+                        rec.get(rankedSideField)
+                ));
+    }
+
+    private Table<?> buildAccountTransactionCandidateTable(String stakeAddress, Collection<String> addresses, Long fromBlock, Long toBlock) {
+        Condition receiveCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
+        if (fromBlock != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.ge(fromBlock));
+        if (toBlock != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.le(toBlock));
+        receiveCondition = receiveCondition.and(ADDRESS_UTXO.OWNER_ADDR.in(addresses));
+
+        var receivingCandidates = dsl.selectDistinct(
+                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
+                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                        ADDRESS_UTXO.SLOT.as("slot"),
+                        ADDRESS_UTXO.BLOCK.as("block_height"),
+                        ADDRESS_UTXO.BLOCK_TIME.as("block_time"),
+                        TRANSACTION.TX_INDEX.as("tx_index"),
+                        DSL.val(TX_SIDE_OUT).as("side"))
+                .from(ADDRESS_UTXO)
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                .where(receiveCondition);
+
+        Condition spendCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
+        if (fromBlock != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.ge(fromBlock));
+        if (toBlock != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.le(toBlock));
+        spendCondition = spendCondition.and(ADDRESS_UTXO.OWNER_ADDR.in(addresses));
+
+        var spendingCandidates = dsl.selectDistinct(
+                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
+                        TX_INPUT.SPENT_TX_HASH.as("tx_hash"),
+                        TRANSACTION.SLOT.as("slot"),
+                        TRANSACTION.BLOCK.as("block_height"),
+                        TRANSACTION.BLOCK_TIME.as("block_time"),
+                        TRANSACTION.TX_INDEX.as("tx_index"),
+                        DSL.val(TX_SIDE_IN).as("side"))
+                .from(ADDRESS_UTXO)
+                .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
                 .where(spendCondition);
 
-        candidates.addAll(receivingTxs.fetch(rec -> new AccountTransactionCandidate(
-                rec.get(ADDRESS_UTXO.OWNER_ADDR),
-                rec.get(ADDRESS_UTXO.TX_HASH),
-                rec.get(ADDRESS_UTXO.SLOT) != null ? rec.get(ADDRESS_UTXO.SLOT) : 0L,
-                rec.get(ADDRESS_UTXO.BLOCK) != null ? rec.get(ADDRESS_UTXO.BLOCK) : 0L,
-                rec.get(ADDRESS_UTXO.BLOCK_TIME) != null ? rec.get(ADDRESS_UTXO.BLOCK_TIME) : 0L,
-                rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
-                TX_SIDE_OUT
-        )));
-
-        candidates.addAll(spendingTxs.fetch(rec -> new AccountTransactionCandidate(
-                rec.get(ADDRESS_UTXO.OWNER_ADDR),
-                rec.get(spentTxHashField),
-                rec.get(TRANSACTION.SLOT) != null ? rec.get(TRANSACTION.SLOT) : 0L,
-                rec.get(TRANSACTION.BLOCK) != null ? rec.get(TRANSACTION.BLOCK) : 0L,
-                rec.get(TRANSACTION.BLOCK_TIME) != null ? rec.get(TRANSACTION.BLOCK_TIME) : 0L,
-                rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
-                TX_SIDE_IN
-        )));
-
-        Comparator<AccountTransactionCandidate> comparator = Comparator
-                .comparingLong(AccountTransactionCandidate::slot);
-        if (order == Order.desc) {
-            comparator = comparator.reversed();
-        }
-        comparator = comparator
-                .thenComparing(AccountTransactionCandidate::txHash)
-                .thenComparing(AccountTransactionCandidate::address);
-
-        candidates.sort(comparator);
-
-        Map<String, List<AccountTransactionCandidate>> groupedByTx = new LinkedHashMap<>();
-        for (AccountTransactionCandidate candidate : candidates) {
-            groupedByTx.computeIfAbsent(candidate.txHash(), ignored -> new ArrayList<>()).add(candidate);
-        }
-
-        Comparator<AccountTransactionCandidate> txPositionComparator = Comparator
-                .comparingLong(AccountTransactionCandidate::slot)
-                .thenComparingLong(AccountTransactionCandidate::txIndex)
-                .thenComparing(AccountTransactionCandidate::txHash);
-
-        Map<String, AccountTransactionCandidate> lastCandidateByAddress = candidates.stream()
-                .collect(Collectors.toMap(
-                        AccountTransactionCandidate::address,
-                        candidate -> candidate,
-                        (left, right) -> txPositionComparator.compare(left, right) >= 0 ? left : right
-                ));
-
-        Map<String, Long> addressTxCounts = candidates.stream()
-                .collect(Collectors.groupingBy(
-                        AccountTransactionCandidate::address,
-                        Collectors.mapping(AccountTransactionCandidate::txHash,
-                                Collectors.collectingAndThen(Collectors.toSet(), set -> (long) set.size()))
-                ));
-
-        List<AccountTransactionCandidate> normalized = new ArrayList<>();
-        for (List<AccountTransactionCandidate> txCandidates : groupedByTx.values()) {
-            normalized.addAll(normalizeTransactionCandidates(txCandidates, lastCandidateByAddress, addressTxCounts));
-        }
-
-        int fromIndex = Math.min(offset, normalized.size());
-        int toIndex = Math.min(fromIndex + count, normalized.size());
-
-        return normalized.subList(fromIndex, toIndex).stream()
-                .map(candidate -> new AccountTransaction(
-                        candidate.address(),
-                        candidate.txHash(),
-                        candidate.txIndex(),
-                        candidate.blockHeight(),
-                        candidate.blockTime()))
-                .toList();
+        return receivingCandidates
+                .union(spendingCandidates)
+                .asTable("account_tx_candidates");
     }
 
     private List<AccountTransactionCandidate> normalizeTransactionCandidates(List<AccountTransactionCandidate> txCandidates,
