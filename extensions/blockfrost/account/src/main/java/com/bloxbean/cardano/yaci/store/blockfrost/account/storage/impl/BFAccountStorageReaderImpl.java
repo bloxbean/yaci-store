@@ -302,7 +302,9 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountDelegation> findDelegations(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        SortField<?> orderBy = order == Order.desc ? DELEGATION.SLOT.desc() : DELEGATION.SLOT.asc();
+        List<SortField<?>> orderBy = order == Order.desc
+                ? List.of(DELEGATION.SLOT.desc(), DELEGATION.TX_INDEX.desc(), DELEGATION.CERT_INDEX.desc())
+                : List.of(DELEGATION.SLOT.asc(), DELEGATION.TX_INDEX.asc(), DELEGATION.CERT_INDEX.asc());
 
         // Older pointer-address outputs may not have owner_stake_addr populated.
         // Use the stake-attributed sum when available; otherwise fall back to the
@@ -386,7 +388,9 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountRegistration> findRegistrations(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        SortField<?> orderBy = order == Order.desc ? STAKE_REGISTRATION.SLOT.desc() : STAKE_REGISTRATION.SLOT.asc();
+        List<SortField<?>> orderBy = order == Order.desc
+                ? List.of(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
+                : List.of(STAKE_REGISTRATION.SLOT.asc(), STAKE_REGISTRATION.TX_INDEX.asc(), STAKE_REGISTRATION.CERT_INDEX.asc());
         return dsl.select(STAKE_REGISTRATION.TX_HASH, STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.SLOT,
                         TRANSACTION.BLOCK_TIME, TRANSACTION.BLOCK)
                 .from(STAKE_REGISTRATION)
