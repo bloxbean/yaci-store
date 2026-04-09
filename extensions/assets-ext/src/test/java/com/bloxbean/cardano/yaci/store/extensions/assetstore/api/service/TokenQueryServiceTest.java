@@ -120,6 +120,17 @@ class TokenQueryServiceTest {
 
         // CIP-26 batch: findLogosBySubjects returns empty (no logos mocked)
         when(cip26StorageReader.findLogosBySubjects(any())).thenReturn(Map.of());
+
+        // CIP-68 batch: findBySubjects falls back to the per-subject mocks above
+        when(cip68StorageReader.findBySubjects(any(), any())).thenAnswer(invocation -> {
+            List<String> subjects = invocation.getArgument(0);
+            List<String> props = invocation.getArgument(1);
+            java.util.Map<String, FungibleTokenMetadata> result = new java.util.HashMap<>();
+            for (String s : subjects) {
+                cip68StorageReader.findBySubject(s, props).ifPresent(md -> result.put(s, md));
+            }
+            return result;
+        });
     }
 
     @Nested

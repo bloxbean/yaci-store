@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetTy
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.*;
 
@@ -73,13 +76,46 @@ public class Cip68TokenService {
     public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
         return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
                         policyId, assetName, LABEL_FT)
-                .map(referenceNft -> new FungibleTokenMetadata(getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
-                        getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
-                        getPropertyIfRequired(Cip68DatumParser.LOGO, referenceNft.getLogo(), properties),
-                        getPropertyIfRequired(Cip68DatumParser.NAME, referenceNft.getName(), properties),
-                        getPropertyIfRequired(Cip68DatumParser.TICKER, referenceNft.getTicker(), properties),
-                        getPropertyIfRequired(Cip68DatumParser.URL, referenceNft.getUrl(), properties),
-                        getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties)));
+                .map(referenceNft -> toFungibleTokenMetadata(referenceNft, properties));
+    }
+
+    /**
+     * Batch variant of {@link #findSubject(String, String, List)}: fetches the latest FT metadata
+     * for every given {@code (policyId, assetName)} pair in a single DB round-trip.
+     * <p>
+     * The input {@code assetName} values are <b>reference NFT</b> asset names (prefix {@code 000643b0}),
+     * not fungible token asset names. Callers should use
+     * {@link #getReferenceNftSubject(String)} first to map fungible-token subjects to reference-NFT keys.
+     * <p>
+     * The returned map is keyed by reference-NFT subject ({@code policyId + assetName}) — mirroring the
+     * input key shape — so callers can do O(1) lookups without rebuilding keys.
+     *
+     * @param refNftKeys reference-NFT asset-type pairs (policyId + ref-NFT asset name)
+     * @param properties property filter (empty list = include all)
+     * @return map keyed by reference-NFT subject; pairs with no data are omitted
+     */
+    public Map<String, FungibleTokenMetadata> findSubjects(List<AssetType> refNftKeys, List<String> properties) {
+        if (refNftKeys.isEmpty()) {
+            return Map.of();
+        }
+        List<String> concatenatedKeys = refNftKeys.stream()
+                .map(AssetType::toUnit)
+                .toList();
+        return metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys, LABEL_FT).stream()
+                .collect(Collectors.toMap(
+                        row -> row.getPolicyId() + row.getAssetName(),
+                        row -> toFungibleTokenMetadata(row, properties)));
+    }
+
+    private FungibleTokenMetadata toFungibleTokenMetadata(MetadataReferenceNft referenceNft, List<String> properties) {
+        return new FungibleTokenMetadata(
+                getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
+                getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
+                getPropertyIfRequired(Cip68DatumParser.LOGO, referenceNft.getLogo(), properties),
+                getPropertyIfRequired(Cip68DatumParser.NAME, referenceNft.getName(), properties),
+                getPropertyIfRequired(Cip68DatumParser.TICKER, referenceNft.getTicker(), properties),
+                getPropertyIfRequired(Cip68DatumParser.URL, referenceNft.getUrl(), properties),
+                getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties));
     }
 
     private <T> T getPropertyIfRequired(String propertyName, T propertyValue, List<String> properties) {

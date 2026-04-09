@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,9 +16,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("java:S2187")
 @ExtendWith(MockitoExtension.class)
@@ -197,6 +204,101 @@ class Cip68TokenServiceTest {
         void invalidWhenDescriptionMissing() {
             FungibleTokenMetadata m = new FungibleTokenMetadata(null, null, null, "name", null, null, null);
             assertThat(service.isValidMetadata(m)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("findSubjects (batch)")
+    class FindSubjects {
+
+        private static final String POLICY_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        private static final String POLICY_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        private static final String REF_NAME_A = "000643b0aaaa"; // reference NFT asset name
+        private static final String REF_NAME_B = "000643b0bbbb";
+
+        @Test
+        void returnsEmptyMapForEmptyInput() {
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(List.of(), List.of());
+
+            assertThat(result).isEmpty();
+            verifyNoInteractions(repository);
+        }
+
+        @Test
+        void issuesSingleBatchQuery() {
+            List<AssetType> keys = List.of(
+                    new AssetType(POLICY_A, REF_NAME_A),
+                    new AssetType(POLICY_B, REF_NAME_B));
+            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+                    .thenReturn(List.of());
+
+            service.findSubjects(keys, List.of());
+
+            verify(repository).findLatestByConcatenatedKeys(
+                    List.of(POLICY_A + REF_NAME_A, POLICY_B + REF_NAME_B), 333);
+        }
+
+        @Test
+        void mapsResultsKeyedByRefNftSubject() {
+            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
+            MetadataReferenceNft row = MetadataReferenceNft.builder()
+                    .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
+                    .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L).build();
+            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+                    .thenReturn(List.of(row));
+
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
+
+            assertThat(result).hasSize(1);
+            FungibleTokenMetadata md = result.get(POLICY_A + REF_NAME_A);
+            assertThat(md).isNotNull();
+            assertThat(md.name()).isEqualTo("TokenA");
+            assertThat(md.description()).isEqualTo("desc A");
+            assertThat(md.ticker()).isEqualTo("TKA");
+            assertThat(md.decimals()).isEqualTo(6L);
+            assertThat(md.version()).isEqualTo(1L);
+        }
+
+        @Test
+        void omitsPairsWithNoData() {
+            List<AssetType> keys = List.of(
+                    new AssetType(POLICY_A, REF_NAME_A),
+                    new AssetType(POLICY_B, REF_NAME_B));
+            MetadataReferenceNft rowA = MetadataReferenceNft.builder()
+                    .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
+                    .name("A").description("desc A").version(1L).build();
+            // Only one row returned from the DB — POLICY_B has no matching row
+            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+                    .thenReturn(List.of(rowA));
+
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
+
+            assertThat(result).hasSize(1);
+            assertThat(result).containsOnlyKeys(POLICY_A + REF_NAME_A);
+        }
+
+        @Test
+        void appliesPropertyFilter() {
+            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
+            MetadataReferenceNft row = MetadataReferenceNft.builder()
+                    .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
+                    .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L)
+                    .logo("aGVsbG8=").url("https://example.com").build();
+            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+                    .thenReturn(List.of(row));
+
+            // Request only name and decimals — everything else should be null
+            Map<String, FungibleTokenMetadata> result =
+                    service.findSubjects(keys, List.of("name", "decimals"));
+
+            FungibleTokenMetadata md = result.get(POLICY_A + REF_NAME_A);
+            assertThat(md.name()).isEqualTo("TokenA");
+            assertThat(md.decimals()).isEqualTo(6L);
+            assertThat(md.description()).isNull();
+            assertThat(md.ticker()).isNull();
+            assertThat(md.logo()).isNull();
+            assertThat(md.url()).isNull();
+            assertThat(md.version()).isNull();
         }
     }
 

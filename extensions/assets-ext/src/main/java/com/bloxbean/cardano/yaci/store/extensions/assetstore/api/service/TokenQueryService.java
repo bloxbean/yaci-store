@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip1
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -91,7 +92,7 @@ public class TokenQueryService {
     /**
      * Pre-fetch all data for a batch of subjects in bulk queries to avoid N+1.
      * Issues at most 4 queries regardless of batch size:
-     * CIP-26 metadata, CIP-26 logos, CIP-68 (per-subject, no batch yet), CIP-113.
+     * CIP-26 metadata, CIP-26 logos, CIP-68 reference NFTs, CIP-113 registry nodes.
      */
     public BatchPrefetchData prefetchBatch(List<String> subjects, List<String> queryProperties) {
         // CIP-113: one query for all distinct policy IDs
@@ -110,7 +111,12 @@ public class TokenQueryService {
                 ? cip26StorageReader.findLogosBySubjects(subjects)
                 : Map.of();
 
-        return new BatchPrefetchData(cip113Map, cip26MetadataMap, cip26LogoMap);
+        // CIP-68: one query for all fungible token subjects, result keyed by the original subject.
+        // Non-fungible subjects are silently filtered inside findBySubjects, so passing the full
+        // batch is safe and avoids a double prefix-check here.
+        Map<String, FungibleTokenMetadata> cip68MetadataMap = cip68StorageReader.findBySubjects(subjects, queryProperties);
+
+        return new BatchPrefetchData(cip113Map, cip26MetadataMap, cip26LogoMap, cip68MetadataMap);
     }
 
     /**
@@ -119,7 +125,8 @@ public class TokenQueryService {
     public record BatchPrefetchData(
             Map<String, ProgrammableTokenCip113> cip113Map,
             Map<String, TokenMetadata> cip26MetadataMap,
-            Map<String, String> cip26LogoMap) {
+            Map<String, String> cip26LogoMap,
+            Map<String, FungibleTokenMetadata> cip68MetadataMap) {
     }
 
     private Optional<MetadataStandardsPair> findMetadata(String subject, List<String> properties, QueryPriority priority) {
@@ -178,7 +185,7 @@ public class TokenQueryService {
                                                                QueryPriority priority, BatchPrefetchData prefetchData) {
         return switch (priority) {
             case CIP_26 -> findCip26MetadataBatch(subject, properties, prefetchData);
-            case CIP_68 -> findCip68Metadata(subject, properties); // CIP-68 is per-subject (label-filtered)
+            case CIP_68 -> findCip68MetadataBatch(subject, prefetchData);
         };
     }
 
@@ -194,6 +201,20 @@ public class TokenQueryService {
         return Optional.of(new MetadataStandardsPair(
                 Metadata.from(entity, logo, properties),
                 new Standards(entity, null)));
+    }
+
+    /**
+     * Looks up CIP-68 metadata from the pre-fetched batch map keyed by fungible-token subject.
+     * Property filtering was already applied when the map was built in {@link #prefetchBatch}.
+     */
+    private Optional<MetadataStandardsPair> findCip68MetadataBatch(String subject, BatchPrefetchData prefetchData) {
+        FungibleTokenMetadata cip68TokenMetadata = prefetchData.cip68MetadataMap().get(subject);
+        if (cip68TokenMetadata == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new MetadataStandardsPair(
+                Metadata.from(cip68TokenMetadata),
+                new Standards(null, cip68TokenMetadata)));
     }
 
     private Map<String, Extension> buildExtensions(String subject) {
