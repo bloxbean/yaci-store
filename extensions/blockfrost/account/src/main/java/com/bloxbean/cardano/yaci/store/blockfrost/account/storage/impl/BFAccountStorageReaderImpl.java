@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
@@ -32,6 +33,7 @@ import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.DELEGATION;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.STAKE_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
+import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 
@@ -41,6 +43,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
     private final DSLContext dsl;
+    private final UtxoStoreProperties utxoStoreProperties;
     private static final String TX_SIDE_IN = "in";
     private static final String TX_SIDE_OUT = "out";
 
@@ -459,10 +462,26 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountAddress> findAddresses(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
+        if (utxoStoreProperties.isSaveAddress()) {
+            var addressRecords = dsl.select(ADDRESS.ADDR_FULL)
+                    .from(ADDRESS)
+                    .where(ADDRESS.STAKE_ADDRESS.eq(stakeAddress))
+                    .orderBy(order == Order.desc ? ADDRESS.ADDR_FULL.desc() : ADDRESS.ADDR_FULL.asc())
+                    .limit(count)
+                    .offset(offset)
+                    .fetch(ADDRESS.ADDR_FULL);
+
+            if (!addressRecords.isEmpty()) {
+                return addressRecords.stream()
+                        .map(AccountAddress::new)
+                        .toList();
+            }
+        }
+
         return dsl.selectDistinct(ADDRESS_UTXO.OWNER_ADDR)
                 .from(ADDRESS_UTXO)
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                .orderBy(ADDRESS_UTXO.OWNER_ADDR.asc())
+                .orderBy(order == Order.desc ? ADDRESS_UTXO.OWNER_ADDR.desc() : ADDRESS_UTXO.OWNER_ADDR.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(rec -> new AccountAddress(rec.get(ADDRESS_UTXO.OWNER_ADDR)));
