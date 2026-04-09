@@ -8,6 +8,7 @@ dependencies {
     api project(":stores:mir")
     api project(":aggregates:account")
     api project(":aggregates:adapot")
+    api project(":stores:governance")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

@@ -12,5 +12,6 @@ public record AccountInfo(
         BigInteger withdrawalsSum,
         BigInteger reservesSum,
         BigInteger treasurySum,
-        String poolId
+        String poolId,
+        String drepId
 ) {}

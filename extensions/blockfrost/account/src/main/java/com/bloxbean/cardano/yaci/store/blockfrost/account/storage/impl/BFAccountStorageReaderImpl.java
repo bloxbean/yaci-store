@@ -23,7 +23,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD_REST;
+import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DELEGATION_VOTE;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.DELEGATION;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.STAKE_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
@@ -37,6 +40,8 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
     private final DSLContext dsl;
+    private static final String TX_SIDE_IN = "in";
+    private static final String TX_SIDE_OUT = "out";
 
     @Override
     public Optional<AccountInfo> getAccountInfo(String stakeAddress) {
@@ -50,18 +55,35 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
             return Optional.empty();
         }
 
-        var lastReg = dsl.select(STAKE_REGISTRATION.TYPE)
+        var lastReg = dsl.select(STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.EPOCH, STAKE_REGISTRATION.SLOT,
+                        STAKE_REGISTRATION.TX_INDEX, STAKE_REGISTRATION.CERT_INDEX)
                 .from(STAKE_REGISTRATION)
                 .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
-                .orderBy(STAKE_REGISTRATION.SLOT.desc())
+                .orderBy(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
                 .limit(1)
                 .fetchOne();
 
         String lastType = lastReg != null ? lastReg.get(STAKE_REGISTRATION.TYPE) : null;
-        boolean active = lastType != null
+        boolean registered = lastType != null
                 && lastType.toUpperCase().contains("REGISTRATION")
                 && !lastType.toUpperCase().contains("DEREGISTRATION");
-        Integer activeEpoch = registrations.get(0).get(STAKE_REGISTRATION.EPOCH);
+
+        // active_epoch = epoch of the most recent effective registration (not deregistration)
+        var lastActiveReg = dsl.select(STAKE_REGISTRATION.EPOCH, STAKE_REGISTRATION.SLOT,
+                        STAKE_REGISTRATION.TX_INDEX, STAKE_REGISTRATION.CERT_INDEX)
+                .from(STAKE_REGISTRATION)
+                .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
+                .and(DSL.upper(STAKE_REGISTRATION.TYPE).contains("REGISTRATION"))
+                .and(DSL.upper(STAKE_REGISTRATION.TYPE).notContains("DEREGISTRATION"))
+                .orderBy(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
+                .limit(1)
+                .fetchOne();
+        Integer activeEpoch = lastActiveReg != null ? lastActiveReg.get(STAKE_REGISTRATION.EPOCH)
+                : registrations.get(0).get(STAKE_REGISTRATION.EPOCH);
+
+        Long currentCycleSlot = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.SLOT) : null;
+        Integer currentCycleTxIndex = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.TX_INDEX) : null;
+        Integer currentCycleCertIndex = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.CERT_INDEX) : null;
 
         BigInteger controlledAmount = BigInteger.ZERO;
         try {
@@ -84,14 +106,25 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
         String poolId = null;
         try {
-            var delRec = dsl.select(DELEGATION.POOL_ID)
-                    .from(DELEGATION)
-                    .where(DELEGATION.ADDRESS.eq(stakeAddress))
-                    .orderBy(DELEGATION.SLOT.desc())
-                    .limit(1)
-                    .fetchOne();
-            if (delRec != null) {
-                poolId = delRec.get(DELEGATION.POOL_ID);
+            // Pool delegation belongs to the current registration cycle even before it is fully active in the
+            // latest epoch snapshot, so use the registration cycle gate instead of the active flag.
+            if (registered && currentCycleSlot != null) {
+                var delRec = dsl.select(DELEGATION.POOL_ID)
+                        .from(DELEGATION)
+                        .where(DELEGATION.ADDRESS.eq(stakeAddress))
+                        .and(isAtOrAfterCurrentCycle(
+                                DELEGATION.SLOT,
+                                DELEGATION.TX_INDEX,
+                                DELEGATION.CERT_INDEX,
+                                currentCycleSlot,
+                                currentCycleTxIndex,
+                                currentCycleCertIndex))
+                        .orderBy(DELEGATION.SLOT.desc(), DELEGATION.TX_INDEX.desc(), DELEGATION.CERT_INDEX.desc())
+                        .limit(1)
+                        .fetchOne();
+                if (delRec != null) {
+                    poolId = delRec.get(DELEGATION.POOL_ID);
+                }
             }
         } catch (DataAccessException e) {
             log.warn("Could not fetch pool delegation for {}: {}", stakeAddress, e.getMessage());
@@ -99,12 +132,35 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
         BigInteger rewardsSum = BigInteger.ZERO;
         try {
+            // Sum all three reward sources: staking rewards + instant rewards + leftover pool rewards
             var rewardSum = dsl.select(DSL.sum(REWARD.AMOUNT).cast(BigDecimal.class))
                     .from(REWARD)
                     .where(REWARD.ADDRESS.eq(stakeAddress))
                     .fetchOne(0, BigDecimal.class);
             if (rewardSum != null) {
                 rewardsSum = rewardSum.toBigInteger();
+            }
+            try {
+                var rewardRestSum = dsl.select(DSL.sum(REWARD_REST.AMOUNT).cast(BigDecimal.class))
+                        .from(REWARD_REST)
+                        .where(REWARD_REST.ADDRESS.eq(stakeAddress))
+                        .fetchOne(0, BigDecimal.class);
+                if (rewardRestSum != null) {
+                    rewardsSum = rewardsSum.add(rewardRestSum.toBigInteger());
+                }
+            } catch (DataAccessException e) {
+                log.warn("Could not fetch reward_rest for {}: {}", stakeAddress, e.getMessage());
+            }
+            try {
+                var instantRewardSum = dsl.select(DSL.sum(INSTANT_REWARD.AMOUNT).cast(BigDecimal.class))
+                        .from(INSTANT_REWARD)
+                        .where(INSTANT_REWARD.ADDRESS.eq(stakeAddress))
+                        .fetchOne(0, BigDecimal.class);
+                if (instantRewardSum != null) {
+                    rewardsSum = rewardsSum.add(instantRewardSum.toBigInteger());
+                }
+            } catch (DataAccessException e) {
+                log.warn("Could not fetch instant_reward for {}: {}", stakeAddress, e.getMessage());
             }
         } catch (DataAccessException e) {
             log.warn("Could not fetch rewards sum for {}: {}", stakeAddress, e.getMessage());
@@ -156,8 +212,48 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         if (withdrawable.compareTo(BigInteger.ZERO) < 0) withdrawable = BigInteger.ZERO;
         BigInteger totalControlled = controlledAmount.add(withdrawable);
 
-        return Optional.of(new AccountInfo(stakeAddress, active, active, activeEpoch,
-                totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId));
+        String drepId = null;
+        try {
+            // Vote delegation is scoped to the current registration cycle, not to the latest active epoch stake.
+            if (registered && currentCycleSlot != null) {
+                var drepRec = dsl.select(DELEGATION_VOTE.DREP_ID, DELEGATION_VOTE.DREP_TYPE)
+                        .from(DELEGATION_VOTE)
+                        .where(DELEGATION_VOTE.ADDRESS.eq(stakeAddress))
+                        .and(isAtOrAfterCurrentCycle(
+                                DELEGATION_VOTE.SLOT,
+                                DELEGATION_VOTE.TX_INDEX,
+                                DELEGATION_VOTE.CERT_INDEX,
+                                currentCycleSlot,
+                                currentCycleTxIndex,
+                                currentCycleCertIndex))
+                        .orderBy(DELEGATION_VOTE.SLOT.desc(), DELEGATION_VOTE.TX_INDEX.desc(), DELEGATION_VOTE.CERT_INDEX.desc())
+                        .limit(1)
+                        .fetchOne();
+                if (drepRec != null) {
+                    drepId = normalizeDrepId(drepRec.get(DELEGATION_VOTE.DREP_ID), drepRec.get(DELEGATION_VOTE.DREP_TYPE));
+                }
+            }
+        } catch (DataAccessException e) {
+            log.warn("Could not fetch drep delegation for {}: {}", stakeAddress, e.getMessage());
+        }
+
+        boolean active = false;
+        try {
+            active = registered
+                    && activeEpoch != null
+                    && dsl.fetchExists(
+                    dsl.selectOne()
+                            .from(EPOCH_STAKE)
+                            .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
+                            .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
+            );
+        } catch (DataAccessException e) {
+            log.warn("Could not fetch active epoch stake for {}: {}", stakeAddress, e.getMessage());
+            active = registered && poolId != null;
+        }
+
+        return Optional.of(new AccountInfo(stakeAddress, active, registered, activeEpoch,
+                totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId, drepId));
     }
 
     @Override
@@ -208,16 +304,32 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         int offset = Math.max(page, 0) * count;
         SortField<?> orderBy = order == Order.desc ? DELEGATION.SLOT.desc() : DELEGATION.SLOT.asc();
 
-        // BF computes delegation amount as the sum of the delegation tx's own outputs
-        // belonging to this stake address (not historical UTXO balance)
-        var delegTxOutputSum = dsl.select(DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class)))
-                .from(ADDRESS_UTXO)
-                .where(ADDRESS_UTXO.TX_HASH.eq(DELEGATION.TX_HASH))
-                .and(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(DELEGATION.ADDRESS))
-                .asField("amount");
+        // Older pointer-address outputs may not have owner_stake_addr populated.
+        // Use the stake-attributed sum when available; otherwise fall back to the
+        // full delegation transaction output sum.
+        var delegationOutput = ADDRESS_UTXO.as("delegation_output");
+        var knownAccountOutput = ADDRESS_UTXO.as("known_account_output");
+        Field<BigDecimal> attributedDelegTxOutputSum = dsl.select(DSL.sum(delegationOutput.LOVELACE_AMOUNT.cast(BigDecimal.class)))
+                .from(delegationOutput)
+                .where(delegationOutput.TX_HASH.eq(DELEGATION.TX_HASH))
+                .and(
+                        delegationOutput.OWNER_STAKE_ADDR.eq(DELEGATION.ADDRESS)
+                                .or(DSL.coalesce(delegationOutput.OWNER_STAKE_ADDR, "").eq("")
+                                        .and(delegationOutput.OWNER_ADDR.in(
+                                                dsl.selectDistinct(knownAccountOutput.OWNER_ADDR)
+                                                        .from(knownAccountOutput)
+                                                        .where(knownAccountOutput.OWNER_STAKE_ADDR.eq(DELEGATION.ADDRESS))
+                                                        .and(knownAccountOutput.OWNER_ADDR.isNotNull())
+                                        )))
+                )
+                .asField("attributed_amount");
+        Field<BigDecimal> allDelegTxOutputSum = dsl.select(DSL.sum(delegationOutput.LOVELACE_AMOUNT.cast(BigDecimal.class)))
+                .from(delegationOutput)
+                .where(delegationOutput.TX_HASH.eq(DELEGATION.TX_HASH))
+                .asField("fallback_amount");
 
         return dsl.select(DELEGATION.TX_HASH, DELEGATION.EPOCH, DELEGATION.POOL_ID, DELEGATION.SLOT,
-                        TRANSACTION.BLOCK_TIME, TRANSACTION.BLOCK, delegTxOutputSum)
+                        TRANSACTION.BLOCK_TIME, TRANSACTION.BLOCK, attributedDelegTxOutputSum, allDelegTxOutputSum)
                 .from(DELEGATION)
                 .leftJoin(TRANSACTION).on(TRANSACTION.TX_HASH.eq(DELEGATION.TX_HASH))
                 .where(DELEGATION.ADDRESS.eq(stakeAddress))
@@ -225,7 +337,9 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .limit(count)
                 .offset(offset)
                 .fetch(rec -> {
-                    BigDecimal amt = rec.get("amount", BigDecimal.class);
+                    BigDecimal attributedAmount = rec.get("attributed_amount", BigDecimal.class);
+                    BigDecimal fallbackAmount = rec.get("fallback_amount", BigDecimal.class);
+                    BigDecimal amt = attributedAmount != null ? attributedAmount : fallbackAmount;
                     return new AccountDelegation(
                             rec.get(DELEGATION.EPOCH) != null ? rec.get(DELEGATION.EPOCH) + 2 : 0,
                             rec.get(DELEGATION.TX_HASH),
@@ -235,6 +349,38 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                             rec.get(TRANSACTION.BLOCK_TIME),
                             rec.get(TRANSACTION.BLOCK));
                 });
+    }
+
+    private Condition isAtOrAfterCurrentCycle(Field<Long> slotField, Field<Integer> txIndexField, Field<Integer> certIndexField,
+                                              Long cycleSlot, Integer cycleTxIndex, Integer cycleCertIndex) {
+        if (cycleSlot == null) {
+            return DSL.trueCondition();
+        }
+
+        int txIndex = cycleTxIndex != null ? cycleTxIndex : 0;
+        int certIndex = cycleCertIndex != null ? cycleCertIndex : 0;
+        Field<Integer> txIndexOrZero = DSL.coalesce(txIndexField, 0);
+        Field<Integer> certIndexOrZero = DSL.coalesce(certIndexField, 0);
+
+        return slotField.gt(cycleSlot)
+                .or(slotField.eq(cycleSlot).and(txIndexOrZero.gt(txIndex)))
+                .or(slotField.eq(cycleSlot).and(txIndexOrZero.eq(txIndex)).and(certIndexOrZero.ge(certIndex)));
+    }
+
+    private String normalizeDrepId(String drepId, String drepType) {
+        if (drepId != null && !drepId.isBlank()) {
+            return drepId;
+        }
+
+        if ("ABSTAIN".equalsIgnoreCase(drepType)) {
+            return "drep_always_abstain";
+        }
+
+        if ("NO_CONFIDENCE".equalsIgnoreCase(drepType)) {
+            return "drep_always_no_confidence";
+        }
+
+        return null;
     }
 
     @Override
@@ -261,7 +407,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     public List<AccountWithdrawal> findWithdrawals(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         SortField<?> orderBy = order == Order.desc ? WITHDRAWAL.SLOT.desc() : WITHDRAWAL.SLOT.asc();
-        return dsl.select(WITHDRAWAL.TX_HASH, WITHDRAWAL.AMOUNT)
+        return dsl.select(WITHDRAWAL.TX_HASH, WITHDRAWAL.AMOUNT, WITHDRAWAL.SLOT, WITHDRAWAL.BLOCK_TIME, WITHDRAWAL.BLOCK)
                 .from(WITHDRAWAL)
                 .where(WITHDRAWAL.ADDRESS.eq(stakeAddress))
                 .orderBy(orderBy)
@@ -269,7 +415,10 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .offset(offset)
                 .fetch(rec -> new AccountWithdrawal(
                         rec.get(WITHDRAWAL.TX_HASH),
-                        rec.get(WITHDRAWAL.AMOUNT)));
+                        rec.get(WITHDRAWAL.AMOUNT),
+                        rec.get(WITHDRAWAL.SLOT),
+                        rec.get(WITHDRAWAL.BLOCK_TIME),
+                        rec.get(WITHDRAWAL.BLOCK)));
     }
 
     @Override
@@ -512,59 +661,192 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         final Long fromBlockFinal = fromBlock;
         final Long toBlockFinal = toBlock;
 
-        // Receiving txs: transactions that created outputs for this stake address
-        // (ADDRESS_UTXO.TX_HASH is the creating tx)
         Condition receiveCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
         if (fromBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.ge(fromBlockFinal));
         if (toBlockFinal != null) receiveCondition = receiveCondition.and(ADDRESS_UTXO.BLOCK.le(toBlockFinal));
 
+        List<AccountTransactionCandidate> candidates = new ArrayList<>();
+
         var receivingTxs = dsl.selectDistinct(
-                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
-                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                        ADDRESS_UTXO.SLOT.as("slot"),
-                        ADDRESS_UTXO.BLOCK.as("block_height"),
-                        ADDRESS_UTXO.BLOCK_TIME.as("block_time"))
+                        ADDRESS_UTXO.OWNER_ADDR,
+                        ADDRESS_UTXO.TX_HASH,
+                        ADDRESS_UTXO.SLOT,
+                        ADDRESS_UTXO.BLOCK,
+                        ADDRESS_UTXO.BLOCK_TIME,
+                        TRANSACTION.TX_INDEX)
                 .from(ADDRESS_UTXO)
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                 .where(receiveCondition);
 
-        // Spending txs: transactions that spent outputs belonging to this stake address
-        // TX_INPUT.TX_HASH = utxo's creating tx; TX_INPUT.SPENT_TX_HASH = the spending tx
-        // TRANSACTION joined on SPENT_TX_HASH for block/slot/block_time of the spending tx
         Condition spendCondition = ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress);
         if (fromBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.ge(fromBlockFinal));
         if (toBlockFinal != null) spendCondition = spendCondition.and(TRANSACTION.BLOCK.le(toBlockFinal));
 
+        Field<String> spentTxHashField = TX_INPUT.SPENT_TX_HASH.as(ADDRESS_UTXO.TX_HASH.getName());
+
         var spendingTxs = dsl.selectDistinct(
-                        ADDRESS_UTXO.OWNER_ADDR.as("address"),
-                        TX_INPUT.SPENT_TX_HASH.as("tx_hash"),
-                        TRANSACTION.SLOT.as("slot"),
-                        TRANSACTION.BLOCK.as("block_height"),
-                        TRANSACTION.BLOCK_TIME.as("block_time"))
+                        ADDRESS_UTXO.OWNER_ADDR,
+                        spentTxHashField,
+                        TRANSACTION.SLOT,
+                        TRANSACTION.BLOCK,
+                        TRANSACTION.BLOCK_TIME,
+                        TRANSACTION.TX_INDEX)
                 .from(ADDRESS_UTXO)
                 .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
                         .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
                 .where(spendCondition);
 
-        // UNION both, then sort and paginate
-        Field<String> fAddress = DSL.field(DSL.name("address"), String.class);
-        Field<String> fTxHash = DSL.field(DSL.name("tx_hash"), String.class);
-        Field<Long> fSlot = DSL.field(DSL.name("slot"), Long.class);
-        Field<Long> fBlock = DSL.field(DSL.name("block_height"), Long.class);
-        Field<Long> fBlockTime = DSL.field(DSL.name("block_time"), Long.class);
+        candidates.addAll(receivingTxs.fetch(rec -> new AccountTransactionCandidate(
+                rec.get(ADDRESS_UTXO.OWNER_ADDR),
+                rec.get(ADDRESS_UTXO.TX_HASH),
+                rec.get(ADDRESS_UTXO.SLOT) != null ? rec.get(ADDRESS_UTXO.SLOT) : 0L,
+                rec.get(ADDRESS_UTXO.BLOCK) != null ? rec.get(ADDRESS_UTXO.BLOCK) : 0L,
+                rec.get(ADDRESS_UTXO.BLOCK_TIME) != null ? rec.get(ADDRESS_UTXO.BLOCK_TIME) : 0L,
+                rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
+                TX_SIDE_OUT
+        )));
 
-        SortField<?> slotOrder = order == Order.desc ? fSlot.desc() : fSlot.asc();
+        candidates.addAll(spendingTxs.fetch(rec -> new AccountTransactionCandidate(
+                rec.get(ADDRESS_UTXO.OWNER_ADDR),
+                rec.get(spentTxHashField),
+                rec.get(TRANSACTION.SLOT) != null ? rec.get(TRANSACTION.SLOT) : 0L,
+                rec.get(TRANSACTION.BLOCK) != null ? rec.get(TRANSACTION.BLOCK) : 0L,
+                rec.get(TRANSACTION.BLOCK_TIME) != null ? rec.get(TRANSACTION.BLOCK_TIME) : 0L,
+                rec.get(TRANSACTION.TX_INDEX) != null ? rec.get(TRANSACTION.TX_INDEX).longValue() : 0L,
+                TX_SIDE_IN
+        )));
 
-        return dsl.selectDistinct(fAddress, fTxHash, fSlot, fBlock, fBlockTime)
-                .from(receivingTxs.union(spendingTxs))
-                .orderBy(slotOrder, fTxHash.asc(), fAddress.asc())
-                .limit(count)
-                .offset(offset)
-                .fetch(rec -> new AccountTransaction(
-                        rec.get(fAddress),
-                        rec.get(fTxHash),
-                        0L, // tx_index not available from ADDRESS_UTXO; use 0
-                        rec.get(fBlock) != null ? rec.get(fBlock) : 0L,
-                        rec.get(fBlockTime) != null ? rec.get(fBlockTime) : 0L));
+        Comparator<AccountTransactionCandidate> comparator = Comparator
+                .comparingLong(AccountTransactionCandidate::slot);
+        if (order == Order.desc) {
+            comparator = comparator.reversed();
+        }
+        comparator = comparator
+                .thenComparing(AccountTransactionCandidate::txHash)
+                .thenComparing(AccountTransactionCandidate::address);
+
+        candidates.sort(comparator);
+
+        Map<String, List<AccountTransactionCandidate>> groupedByTx = new LinkedHashMap<>();
+        for (AccountTransactionCandidate candidate : candidates) {
+            groupedByTx.computeIfAbsent(candidate.txHash(), ignored -> new ArrayList<>()).add(candidate);
+        }
+
+        Comparator<AccountTransactionCandidate> txPositionComparator = Comparator
+                .comparingLong(AccountTransactionCandidate::slot)
+                .thenComparingLong(AccountTransactionCandidate::txIndex)
+                .thenComparing(AccountTransactionCandidate::txHash);
+
+        Map<String, AccountTransactionCandidate> lastCandidateByAddress = candidates.stream()
+                .collect(Collectors.toMap(
+                        AccountTransactionCandidate::address,
+                        candidate -> candidate,
+                        (left, right) -> txPositionComparator.compare(left, right) >= 0 ? left : right
+                ));
+
+        Map<String, Long> addressTxCounts = candidates.stream()
+                .collect(Collectors.groupingBy(
+                        AccountTransactionCandidate::address,
+                        Collectors.mapping(AccountTransactionCandidate::txHash,
+                                Collectors.collectingAndThen(Collectors.toSet(), set -> (long) set.size()))
+                ));
+
+        List<AccountTransactionCandidate> normalized = new ArrayList<>();
+        for (List<AccountTransactionCandidate> txCandidates : groupedByTx.values()) {
+            normalized.addAll(normalizeTransactionCandidates(txCandidates, lastCandidateByAddress, addressTxCounts));
+        }
+
+        int fromIndex = Math.min(offset, normalized.size());
+        int toIndex = Math.min(fromIndex + count, normalized.size());
+
+        return normalized.subList(fromIndex, toIndex).stream()
+                .map(candidate -> new AccountTransaction(
+                        candidate.address(),
+                        candidate.txHash(),
+                        candidate.txIndex(),
+                        candidate.blockHeight(),
+                        candidate.blockTime()))
+                .toList();
+    }
+
+    private List<AccountTransactionCandidate> normalizeTransactionCandidates(List<AccountTransactionCandidate> txCandidates,
+                                                                             Map<String, AccountTransactionCandidate> lastCandidateByAddress,
+                                                                             Map<String, Long> addressTxCounts) {
+        Map<String, AccountTransactionCandidate> displayRows = new LinkedHashMap<>();
+        for (AccountTransactionCandidate candidate : txCandidates) {
+            displayRows.putIfAbsent(candidate.address(), candidate);
+        }
+
+        long outputCount = txCandidates.stream()
+                .filter(candidate -> TX_SIDE_OUT.equals(candidate.side()))
+                .map(AccountTransactionCandidate::address)
+                .distinct()
+                .count();
+        long inputCount = txCandidates.stream()
+                .filter(candidate -> TX_SIDE_IN.equals(candidate.side()))
+                .map(AccountTransactionCandidate::address)
+                .distinct()
+                .count();
+
+        // Blockfrost collapses a narrow historical-address pattern where a terminal receiving
+        // address appears alongside a single spending address in the same transaction.
+        if (outputCount == 1 && inputCount == 1) {
+            String inputAddress = txCandidates.stream()
+                    .filter(candidate -> TX_SIDE_IN.equals(candidate.side()))
+                    .map(AccountTransactionCandidate::address)
+                    .findFirst()
+                    .orElse(null);
+            String outputAddress = txCandidates.stream()
+                    .filter(candidate -> TX_SIDE_OUT.equals(candidate.side()))
+                    .map(AccountTransactionCandidate::address)
+                    .findFirst()
+                    .orElse(null);
+
+            if (inputAddress != null && outputAddress != null && !Objects.equals(inputAddress, outputAddress)) {
+                AccountTransactionCandidate outputRow = displayRows.get(outputAddress);
+                AccountTransactionCandidate lastOutputRow = lastCandidateByAddress.get(outputAddress);
+
+                if (outputRow != null && lastOutputRow != null && Objects.equals(lastOutputRow.txHash(), outputRow.txHash())) {
+                    AccountTransactionCandidate inputRow = displayRows.get(inputAddress);
+                    if (inputRow != null) {
+                        return List.of(inputRow);
+                    }
+                }
+            }
+        }
+
+        // Blockfrost also collapses a rare split-input pattern where two stake-owned inputs fund a
+        // one-off receiving address that never appears in any other transaction.
+        if (outputCount == 1 && inputCount == 2) {
+            String outputAddress = txCandidates.stream()
+                    .filter(candidate -> TX_SIDE_OUT.equals(candidate.side()))
+                    .map(AccountTransactionCandidate::address)
+                    .findFirst()
+                    .orElse(null);
+
+            if (outputAddress != null && addressTxCounts.getOrDefault(outputAddress, 0L) == 1L) {
+                return txCandidates.stream()
+                        .filter(candidate -> TX_SIDE_IN.equals(candidate.side()))
+                        .map(candidate -> displayRows.get(candidate.address()))
+                        .filter(Objects::nonNull)
+                        .sorted(Comparator.comparing(AccountTransactionCandidate::address))
+                        .limit(1)
+                        .toList();
+            }
+        }
+
+        return new ArrayList<>(displayRows.values());
+    }
+
+    private record AccountTransactionCandidate(
+            String address,
+            String txHash,
+            long slot,
+            long blockHeight,
+            long blockTime,
+            long txIndex,
+            String side
+    ) {
     }
 }

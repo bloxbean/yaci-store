@@ -25,11 +25,12 @@ public interface BFAccountMapper {
     @Mapping(target = "treasurySum", source = "treasurySum", qualifiedByName = "stringOrZero")
     @Mapping(target = "withdrawableAmount", expression = "java(computeWithdrawableAmount(source))")
     @Mapping(target = "poolId", source = "poolId", qualifiedByName = "toBech32PoolId")
-    @Mapping(target = "drepId", ignore = true)
+    @Mapping(target = "drepId", source = "drepId")
     BFAccountContentDto toContentDto(AccountInfo source);
 
     @Mapping(target = "amount", source = "amount", qualifiedByName = "stringOrZero")
     @Mapping(target = "poolId", source = "poolId", qualifiedByName = "toBech32PoolId")
+    @Mapping(target = "type", source = "type", qualifiedByName = "normalizeRewardType")
     BFAccountRewardDto toRewardDto(AccountReward source);
 
     @Mapping(target = "amount", source = "amount", qualifiedByName = "stringOrZero")
@@ -89,6 +90,19 @@ public interface BFAccountMapper {
         return "registered";
     }
 
+    @Named("normalizeRewardType")
+    default String normalizeRewardType(String type) {
+        if (type == null || type.isBlank()) {
+            return type;
+        }
+
+        if ("refund".equalsIgnoreCase(type)) {
+            return "pool_deposit_refund";
+        }
+
+        return type;
+    }
+
     default String computeWithdrawableAmount(AccountInfo source) {
         BigInteger rewards = source.rewardsSum() != null ? source.rewardsSum() : BigInteger.ZERO;
         BigInteger withdrawals = source.withdrawalsSum() != null ? source.withdrawalsSum() : BigInteger.ZERO;
@@ -108,7 +122,13 @@ public interface BFAccountMapper {
 
     default List<BFAccountUtxoDto.Amount> mapToUtxoAmounts(Map<String, BigInteger> map) {
         if (map == null) return Collections.emptyList();
+        // Blockfrost returns lovelace first, then other assets sorted alphabetically by unit
         return map.entrySet().stream()
+                .sorted((a, b) -> {
+                    if ("lovelace".equals(a.getKey())) return -1;
+                    if ("lovelace".equals(b.getKey())) return 1;
+                    return a.getKey().compareTo(b.getKey());
+                })
                 .map(e -> BFAccountUtxoDto.Amount.builder()
                         .unit(e.getKey())
                         .quantity(e.getValue() == null ? "0" : e.getValue().toString())

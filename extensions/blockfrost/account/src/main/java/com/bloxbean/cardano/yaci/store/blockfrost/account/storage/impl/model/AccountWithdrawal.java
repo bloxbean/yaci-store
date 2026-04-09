@@ -4,5 +4,8 @@ import java.math.BigInteger;
 
 public record AccountWithdrawal(
         String txHash,
-        BigInteger amount
+        BigInteger amount,
+        Long txSlot,
+        Long blockTime,
+        Long blockHeight
 ) {}

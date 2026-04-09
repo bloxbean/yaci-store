@@ -17,4 +17,7 @@ import lombok.NoArgsConstructor;
 public class BFAccountWithdrawalDto {
     private String txHash;
     private String amount;
+    private Long txSlot;
+    private Long blockTime;
+    private Long blockHeight;
 }
