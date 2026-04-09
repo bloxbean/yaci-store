@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.account.mapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.common.util.PoolUtil;
+import com.bloxbean.cardano.yaci.store.utxo.domain.Amount;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -110,17 +111,17 @@ public interface BFAccountMapper {
         return withdrawable.compareTo(BigInteger.ZERO) < 0 ? "0" : withdrawable.toString();
     }
 
-    default List<BFAccountAddressesTotalDto.Amount> mapToAddressesTotalAmounts(Map<String, BigInteger> map) {
+    default List<Amount> mapToAddressesTotalAmounts(Map<String, BigInteger> map) {
         if (map == null) return Collections.emptyList();
         return map.entrySet().stream()
-                .map(e -> BFAccountAddressesTotalDto.Amount.builder()
+                .map(e -> Amount.builder()
                         .unit(e.getKey())
-                        .quantity(e.getValue() == null ? "0" : e.getValue().toString())
+                        .quantity(e.getValue() == null ? BigInteger.ZERO : e.getValue())
                         .build())
                 .toList();
     }
 
-    default List<BFAccountUtxoDto.Amount> mapToUtxoAmounts(Map<String, BigInteger> map) {
+    default List<Amount> mapToUtxoAmounts(Map<String, BigInteger> map) {
         if (map == null) return Collections.emptyList();
         // Blockfrost returns lovelace first, then other assets sorted alphabetically by unit
         return map.entrySet().stream()
@@ -129,9 +130,9 @@ public interface BFAccountMapper {
                     if ("lovelace".equals(b.getKey())) return 1;
                     return a.getKey().compareTo(b.getKey());
                 })
-                .map(e -> BFAccountUtxoDto.Amount.builder()
+                .map(e -> Amount.builder()
                         .unit(e.getKey())
-                        .quantity(e.getValue() == null ? "0" : e.getValue().toString())
+                        .quantity(e.getValue() == null ? BigInteger.ZERO : e.getValue())
                         .build())
                 .toList();
     }

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.account.dto;
 
+import com.bloxbean.cardano.yaci.store.utxo.domain.Amount;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -21,15 +22,4 @@ public class BFAccountAddressesTotalDto {
     private List<Amount> receivedSum;
     private List<Amount> sentSum;
     private long txCount;
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public static class Amount {
-        private String unit;
-        private String quantity;
-    }
 }
