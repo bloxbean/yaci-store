@@ -54,15 +54,25 @@ CREATE INDEX idx_metadata_reference_nft_slot ON metadata_reference_nft(slot);
 
 -- CIP-113 programmable token registry nodes
 CREATE TABLE cip113_registry_node (
-    -- policy_id stores the 'key' field from the CIP-113 registry node datum (first field in the linked list node)
-    policy_id                         VARCHAR(56) NOT NULL,
-    slot                              BIGINT      NOT NULL,
-    tx_hash                           VARCHAR(64) NOT NULL,
+    -- policy_id stores the 'key' field from the CIP-113 registry node datum (first field in the
+    -- linked list node). Usually the empty string (head sentinel) or a 28-byte policy_id
+    -- (56 hex chars), but some aiken-linked-list implementations materialize a physical tail
+    -- sentinel node whose key is longer — hence VARCHAR(128), not VARCHAR(56). DO NOT shrink.
+    policy_id                         VARCHAR(128) NOT NULL,
+    slot                              BIGINT       NOT NULL,
+    tx_hash                           VARCHAR(64)  NOT NULL,
+    -- transfer_logic_script / third_party_transfer_logic_script are Aiken Credentials (28-byte
+    -- vkey or script hashes, 56 hex chars). global_state_policy_id is a currency symbol
+    -- (28-byte policy_id). All three are protocol-bounded to 56 hex chars.
     transfer_logic_script             VARCHAR(56),
     third_party_transfer_logic_script VARCHAR(56),
     global_state_policy_id            VARCHAR(56),
-    next_key                          VARCHAR(56) NOT NULL,
-    datum                             LONGTEXT    NOT NULL,
+    -- next_key stores the 'next' field (sorted linked list pointer). For the last real node in
+    -- the list, this is the TAIL SENTINEL — conventionally ~32 bytes of 0xFF (64+ hex chars) in
+    -- the aiken-linked-list library. DO NOT shrink to VARCHAR(56) on the (wrong) assumption that
+    -- this is always a 28-byte policy_id.
+    next_key                          VARCHAR(128) NOT NULL,
+    datum                             LONGTEXT     NOT NULL,
     last_synced_at                    TIMESTAMP NULL,
     PRIMARY KEY (policy_id, slot, tx_hash)
 );
