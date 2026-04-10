@@ -2,9 +2,6 @@
 -- These are NOT applied automatically during sync. Apply after initial sync reaches chain tip,
 -- or use the yaci-store admin CLI tool.
 
--- CIP-26: lookup by policy ID (for findByPolicy via StorageReader)
-CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_policy ON ft_offchain_metadata(policy);
-
 -- CIP-26: lookup by ticker (for findByTicker via StorageReader)
 CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_ticker ON ft_offchain_metadata(ticker);
 

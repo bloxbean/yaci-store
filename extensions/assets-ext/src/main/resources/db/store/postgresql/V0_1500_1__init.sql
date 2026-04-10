@@ -1,7 +1,12 @@
 -- CIP-26 offchain fungible token metadata
 CREATE TABLE ft_offchain_metadata (
     subject        VARCHAR(255) PRIMARY KEY,
-    policy         VARCHAR(56),
+    -- CIP-26 'policy' field: base16 CBOR-encoded phase-1 monetary script (a native script),
+    -- NOT the 28-byte policyId hash (that lives in the first 56 hex chars of 'subject').
+    -- CIP-26 spec bounds: minLength 56, maxLength 120. DO NOT shrink to VARCHAR(56) —
+    -- many real registry entries (e.g. any time-locked or multisig script) exceed 56 chars.
+    -- Reference: https://github.com/cardano-foundation/CIPs/blob/main/CIP-0026/README.md
+    policy         VARCHAR(120),
     name           VARCHAR(255),
     ticker         VARCHAR(32),
     url            VARCHAR(255),

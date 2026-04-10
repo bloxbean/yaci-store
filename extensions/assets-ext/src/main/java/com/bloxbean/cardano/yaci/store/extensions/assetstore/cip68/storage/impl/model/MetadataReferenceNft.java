@@ -20,7 +20,7 @@ public class MetadataReferenceNft {
     private String policyId;
 
     @Id
-    @Column(name = "asset_name", length = 255, nullable = false)
+    @Column(name = "asset_name", length = 64, nullable = false)
     private String assetName;
 
     @Id
