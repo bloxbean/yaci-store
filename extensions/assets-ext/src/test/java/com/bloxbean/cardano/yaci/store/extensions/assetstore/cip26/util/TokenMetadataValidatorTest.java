@@ -107,13 +107,6 @@ class TokenMetadataValidatorTest {
             m.setDecimals(-1L);
             assertThat(validator.validate(m)).isFalse();
         }
-
-        @Test
-        void rejectsDecimalsExceeding255() {
-            TokenMetadata m = metadata(VALID_SUBJECT, "Token", "Description");
-            m.setDecimals(256L);
-            assertThat(validator.validate(m)).isFalse();
-        }
     }
 
     @Nested

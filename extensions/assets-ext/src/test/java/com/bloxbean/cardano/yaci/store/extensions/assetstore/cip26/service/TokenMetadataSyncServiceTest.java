@@ -12,16 +12,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -139,8 +140,6 @@ class TokenMetadataSyncServiceTest {
                     .thenReturn(Optional.of(Path.of("/tmp/repo")));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
 
-            File mockFile = mock(File.class);
-            when(mockFile.getName()).thenReturn("test.json");
             when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
                     .thenReturn(List.of(Path.of("/tmp/repo/mappings/test.json")));
 
@@ -167,8 +166,6 @@ class TokenMetadataSyncServiceTest {
                     .thenReturn(Optional.of(Path.of("/tmp/repo")));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
 
-            File mockFile = mock(File.class);
-            when(mockFile.getName()).thenReturn("fail.json");
             when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
                     .thenReturn(List.of(Path.of("/tmp/repo/mappings/fail.json")));
 
@@ -217,6 +214,9 @@ class TokenMetadataSyncServiceTest {
     @DisplayName("processMappingFiles — edge cases")
     class ProcessMappingFiles {
 
+        @TempDir
+        Path repoDir;
+
         @BeforeEach
         void initStatus() {
             assetsStoreProperties.getCip26().setEnabled(true);
@@ -224,12 +224,13 @@ class TokenMetadataSyncServiceTest {
             when(networkDefaults.isRegistryAvailable()).thenReturn(true);
             when(syncStateRepository.findTopByOrderByIdDesc()).thenReturn(Optional.empty());
             when(gitService.cloneCardanoTokenRegistryGitRepository())
-                    .thenReturn(Optional.of(Path.of("/tmp/repo")));
+                    .thenReturn(Optional.of(repoDir));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
         }
 
         @Test
-        void skipsFileWhenMappingParsingFails() {
+        void skipsFileWhenMappingParsingFails() throws IOException {
+            Files.writeString(repoDir.resolve("bad.json"), "{}");
             when(gitService.getAllMappingDetails(any())).thenReturn(
                     Map.of("bad.json", new MappingUpdateDetails("a@test.com", LocalDateTime.now())));
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.empty());
@@ -242,7 +243,8 @@ class TokenMetadataSyncServiceTest {
         }
 
         @Test
-        void skipsFileWhenGitHistoryMissing() {
+        void skipsFileWhenGitHistoryMissing() throws IOException {
+            Files.writeString(repoDir.resolve("any.json"), "{}");
             when(gitService.getAllMappingDetails(any())).thenReturn(Map.of()); // no history resolved
 
             Mapping mapping = new Mapping("subject", null, null, null, null, null, null, null);
@@ -255,7 +257,8 @@ class TokenMetadataSyncServiceTest {
         }
 
         @Test
-        void skipsLogoInsertWhenMetadataNotInserted() {
+        void skipsLogoInsertWhenMetadataNotInserted() throws IOException {
+            Files.writeString(repoDir.resolve("exists.json"), "{}");
             when(gitService.getAllMappingDetails(any())).thenReturn(
                     Map.of("exists.json", new MappingUpdateDetails("a@test.com", LocalDateTime.now())));
 
