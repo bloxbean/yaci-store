@@ -34,7 +34,27 @@ class VoteTallyCalculatorTest {
 
         VoteTallies.DRepTallies tallies = VoteTallyCalculator.computeDRepTallies(votes, GovActionType.NO_CONFIDENCE);
 
+        // yes = 100 + 30 (noConfidence added to YES for NO_CONFIDENCE actions)
         assertEquals(BigInteger.valueOf(130), tallies.getTotalYesStake());
+        // no = 20 + 10 (noConfidence NOT added to NO — already counted in YES)
+        assertEquals(BigInteger.valueOf(30), tallies.getTotalNoStake());
+    }
+
+    @Test
+    // For non-NoConfidence actions, AlwaysNoConfidence stake should only appear in NO (not YES)
+    void computeDRepTalliesWhenActionIsNotNoConfidence() {
+        VotingData.DRepVotes votes = VotingData.DRepVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(100))
+                .noConfidenceStake(BigInteger.valueOf(30))
+                .noVoteStake(BigInteger.valueOf(20))
+                .doNotVoteStake(BigInteger.valueOf(10))
+                .build();
+
+        VoteTallies.DRepTallies tallies = VoteTallyCalculator.computeDRepTallies(votes, GovActionType.HARD_FORK_INITIATION_ACTION);
+
+        // yes = 100 (noConfidence NOT added to YES for non-NoConfidence actions)
+        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
+        // no = 20 + 10 + 30 (noConfidence acts as implicit NO)
         assertEquals(BigInteger.valueOf(60), tallies.getTotalNoStake());
     }
 
