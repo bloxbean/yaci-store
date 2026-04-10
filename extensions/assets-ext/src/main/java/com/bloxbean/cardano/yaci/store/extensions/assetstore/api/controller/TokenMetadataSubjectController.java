@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -74,7 +75,10 @@ public class TokenMetadataSubjectController {
     @GetMapping(path = "/subject/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<SubjectResponse> getSubject(
             @Parameter(description = "the concatenation of policy id and asset name (if any) to query")
-            @PathVariable("subject") String subject,
+            @PathVariable("subject")
+            @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
+                    message = "subject must be 56-120 hex characters (policyId + assetName)")
+            String subject,
             @Parameter(description = "the list of properties to be returned in the response, if none specified, all properties will be returned")
             @RequestParam(value = "property", required = false) List<String> properties,
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")

@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,10 @@ public class Cip26MetadataController {
     @GetMapping(path = "/cip26/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<TokenMetadata> getMetadataBySubject(
             @Parameter(description = "The subject identifier (policy ID + asset name hex)")
-            @PathVariable("subject") String subject) {
+            @PathVariable("subject")
+            @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
+                    message = "subject must be 56-120 hex characters (policyId + assetName)")
+            String subject) {
 
         return cip26StorageReader.findBySubject(subject)
                 .map(ResponseEntity::ok)
@@ -45,9 +49,15 @@ public class Cip26MetadataController {
     @GetMapping(path = "/cip26/{policyId}/{assetName}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<TokenMetadata> getMetadataByPolicyAndAssetName(
             @Parameter(description = "The policy ID (56 hex characters)")
-            @PathVariable("policyId") String policyId,
+            @PathVariable("policyId")
+            @Pattern(regexp = TokenPatterns.POLICY_ID_REGEX,
+                    message = "policyId must be exactly 56 hex characters")
+            String policyId,
             @Parameter(description = "The asset name (hex-encoded)")
-            @PathVariable("assetName") String assetName) {
+            @PathVariable("assetName")
+            @Pattern(regexp = TokenPatterns.ASSET_NAME_REGEX,
+                    message = "assetName must be 0-64 hex characters")
+            String assetName) {
 
         return cip26StorageReader.findBySubject(policyId + assetName)
                 .map(ResponseEntity::ok)

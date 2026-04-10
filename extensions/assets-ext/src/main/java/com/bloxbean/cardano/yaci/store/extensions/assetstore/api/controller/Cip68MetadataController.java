@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +33,10 @@ public class Cip68MetadataController {
     @GetMapping(path = "/cip68/ft/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<FungibleTokenMetadata> getFungibleTokenMetadataBySubject(
             @Parameter(description = "The fungible token subject (policyId + 0014df10 + hex asset name)")
-            @PathVariable("subject") String subject) {
+            @PathVariable("subject")
+            @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
+                    message = "subject must be 56-120 hex characters (policyId + assetName)")
+            String subject) {
 
         return cip68StorageReader.findBySubject(subject)
                 .map(ResponseEntity::ok)
@@ -50,9 +54,15 @@ public class Cip68MetadataController {
     @GetMapping(path = "/cip68/ft/{policyId}/{rawAssetName}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<FungibleTokenMetadata> getFungibleTokenMetadata(
             @Parameter(description = "The policy ID (56 hex characters)")
-            @PathVariable("policyId") String policyId,
+            @PathVariable("policyId")
+            @Pattern(regexp = TokenPatterns.POLICY_ID_REGEX,
+                    message = "policyId must be exactly 56 hex characters")
+            String policyId,
             @Parameter(description = "The raw asset name (hex) without CIP-68 label prefix")
-            @PathVariable("rawAssetName") String rawAssetName) {
+            @PathVariable("rawAssetName")
+            @Pattern(regexp = TokenPatterns.CIP68_RAW_ASSET_NAME_REGEX,
+                    message = "rawAssetName must be 0-56 hex characters (CIP-68 label is prepended automatically)")
+            String rawAssetName) {
 
         String referenceNftAssetName = Cip68Constants.REFERENCE_TOKEN_PREFIX + rawAssetName;
         return cip68StorageReader.findByPolicyIdAndAssetName(policyId, referenceNftAssetName)
