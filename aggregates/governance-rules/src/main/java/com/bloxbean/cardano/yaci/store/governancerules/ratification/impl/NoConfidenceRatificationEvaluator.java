@@ -65,6 +65,8 @@ public class NoConfidenceRatificationEvaluator implements RatificationEvaluator 
                 .committee(context.getGovernanceContext().getCommittee())
                 .drepThresholds(context.getGovernanceContext().getProtocolParams().getDrepVotingThresholds())
                 .poolThresholds(context.getGovernanceContext().getProtocolParams().getPoolVotingThresholds())
+                .isInBootstrapPhase(context.getGovernanceContext().isInBootstrapPhase())
+                .committeeMinSize(context.getGovernanceContext().getProtocolParams().getCommitteeMinSize())
                 .build();
     }
 }
