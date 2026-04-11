@@ -540,6 +540,17 @@ class Cip113DatumParserTest {
 
             assertThat(parser.parse(datum)).isEmpty();
         }
+
+        @Test
+        void rejectsHexExceedingMaxSize() {
+            // 4097 hex chars — over the 4096-char cap. Uses valid hex characters to prove
+            // the rejection is from the size cap, not from HexUtil failing on invalid input.
+            // This defends against library-layer DoS (deeply nested CBOR / pre-allocation bomb)
+            // by refusing to feed an oversized payload into PlutusData.deserialize at all.
+            String tooLarge = "a".repeat(4098); // even length so it's still decodable as hex
+
+            assertThat(parser.parse(tooLarge)).isEmpty();
+        }
     }
 
     // ----- Sentinel detection ----------------------------------------------------------

@@ -73,6 +73,17 @@ public class Cip113RegistryNodeParser {
     private static final int MAX_KEY_BYTE_LEN = 32;
 
     /**
+     * Hard cap on the size of the serialized inline datum <em>before</em> it reaches the
+     * recursive CBOR decoder. A well-formed CIP-113 {@code RegistryNode} encodes to roughly
+     * 200–400 bytes (≤ 800 hex chars) in the worst realistic case. 4096 hex chars (2048
+     * bytes) gives ~10× margin while tightly bounding the input fed to
+     * {@code PlutusData.deserialize} — prevents the library-layer DoS classes (deeply
+     * nested Constr → {@link StackOverflowError}; CBOR pre-allocation bomb →
+     * {@link OutOfMemoryError}) from ever reaching the recursive decoder at all.
+     */
+    private static final int MAX_DATUM_HEX_LEN = 4096;
+
+    /**
      * Parsed registry node fields. Byte-string fields are lowercase hex. {@code key} and
      * {@code next} are always non-null; the three optional script/policy fields are null
      * when the corresponding on-chain field encodes "absent" (empty bytes — see class
@@ -99,6 +110,18 @@ public class Cip113RegistryNodeParser {
 
     public Optional<ParsedRegistryNode> parse(String inlineDatum) {
         if (inlineDatum == null || inlineDatum.isBlank()) {
+            return Optional.empty();
+        }
+
+        // Hard size cap BEFORE we touch HexUtil or the recursive CBOR decoder.
+        // This is the only parser-layer defence against library-layer DoS (deep nesting
+        // or pre-allocation bombs) — those attacks execute inside PlutusData.deserialize
+        // and manifest as Error instances (not RuntimeException), which our catch clause
+        // deliberately does not swallow. Bounding the input at 4096 hex chars keeps the
+        // decoder's working set small enough that neither class of attack is realistic.
+        if (inlineDatum.length() > MAX_DATUM_HEX_LEN) {
+            log.warn("CIP-113 registry node: inline datum too large ({} hex chars, max {})",
+                    inlineDatum.length(), MAX_DATUM_HEX_LEN);
             return Optional.empty();
         }
 
