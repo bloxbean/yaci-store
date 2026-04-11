@@ -56,6 +56,13 @@ class TokenMetadataValidatorTest {
             m.setDecimals(255L);
             assertThat(validator.validate(m)).isTrue();
         }
+
+        @Test
+        void acceptsDescriptionAtMaxLength() {
+            // CIP-26: description max 500 chars.
+            TokenMetadata m = metadata(VALID_SUBJECT, "Token", "d".repeat(500));
+            assertThat(validator.validate(m)).isTrue();
+        }
     }
 
     @Nested
@@ -105,6 +112,14 @@ class TokenMetadataValidatorTest {
         void rejectsNegativeDecimals() {
             TokenMetadata m = metadata(VALID_SUBJECT, "Token", "Description");
             m.setDecimals(-1L);
+            assertThat(validator.validate(m)).isFalse();
+        }
+
+        @Test
+        void rejectsDescriptionExceedingMaxLength() {
+            // CIP-26: description max 500 chars (enforced by cf-tokens-cip26 validator;
+            // see MetadataValidationRules.MAX_DESCRIPTION_LENGTH).
+            TokenMetadata m = metadata(VALID_SUBJECT, "Token", "d".repeat(501));
             assertThat(validator.validate(m)).isFalse();
         }
     }

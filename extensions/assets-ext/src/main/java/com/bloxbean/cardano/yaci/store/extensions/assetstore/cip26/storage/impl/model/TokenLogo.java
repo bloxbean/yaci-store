@@ -14,8 +14,10 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class TokenLogo {
 
+    /** Matches {@link TokenMetadata#getSubject()} length (CIP-26 spec: 56-120 hex chars). */
     @Id
     @EqualsAndHashCode.Include
+    @Column(length = 120)
     private String subject;
 
     private String logo;

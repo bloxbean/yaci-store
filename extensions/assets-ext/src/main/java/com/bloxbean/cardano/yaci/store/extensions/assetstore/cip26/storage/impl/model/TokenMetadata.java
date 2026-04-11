@@ -17,8 +17,13 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class TokenMetadata {
 
+    /**
+     * Subject = policyId (28 bytes) + optional assetName (0-32 bytes), hex-encoded.
+     * CIP-26 spec: {@code minLength: 56, maxLength: 120}.
+     */
     @Id
     @EqualsAndHashCode.Include
+    @Column(length = 120)
     private String subject;
 
     /**
@@ -37,14 +42,23 @@ public class TokenMetadata {
     @Column(length = 120)
     private String policy;
 
+    /** CIP-26 name: max 50 chars (enforced by cf-tokens-cip26 validator). */
+    @Column(length = 50)
     private String name;
 
+    /** CIP-26 ticker: 2-9 chars (enforced by cf-tokens-cip26 validator). */
+    @Column(length = 9)
     private String ticker;
 
+    /** CIP-26 url: max 250 chars (enforced by cf-tokens-cip26 validator). */
+    @Column(length = 250)
     private String url;
 
+    /** CIP-26 description: max 500 chars per spec. */
+    @Column(length = 500)
     private String description;
 
+    /** CIP-26 decimals: spec range [0, 19] inclusive (well-known property 'decimals'). */
     private Long decimals;
 
     @Temporal(TemporalType.TIMESTAMP)
