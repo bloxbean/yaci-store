@@ -29,7 +29,7 @@ import java.util.Optional;
  *       28 bytes are a real currency symbol.</li>
  * </ol>
  *
- * <h3>Absent credential encoding</h3>
+ * <h2>Absent credential encoding</h2>
  * Although the Aiken type signature declares the two credential fields as non-optional
  * {@code Credential}, real CIP-113 registry datums in the wild encode "no credential" using
  * one of these conventions:
@@ -40,7 +40,7 @@ import java.util.Optional;
  * Both are normalised to {@code null} in the parsed output. Any other deviation from the
  * expected shape or byte-length is rejected with a warning and {@link Optional#empty()}.
  *
- * <h3>Non-enforced invariant</h3>
+ * <h2>Non-enforced invariant</h2>
  * The sort invariant {@code key < next} is NOT checked here because materialized tail-sentinel
  * nodes in some aiken-linked-list implementations legitimately violate it. The on-chain
  * minting policy is the source of truth for that invariant.
