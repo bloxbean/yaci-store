@@ -1,6 +1,8 @@
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":aggregates:analytics-store")
+    api project(":aggregates:analytics-query")
+    api project(":aggregates:mcp-server")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
