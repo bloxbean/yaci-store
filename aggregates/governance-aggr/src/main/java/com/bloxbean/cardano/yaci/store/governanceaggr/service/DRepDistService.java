@@ -106,6 +106,11 @@ public class DRepDistService {
             }
         }
 
+        // PV9 era boundary used for stale reverse clearing computation.
+        // During bootstrap (PV9): every epoch up to current snapshot epoch is PV9.
+        // After PV10 hardfork: PV9 ended at maxBootstrapPhaseEpoch.
+        int pv9MaxEpoch = isInBootstrapPhase ? epoch : maxBootstrapPhaseEpoch;
+
         log.info("Taking dRep stake snapshot for epoch : " + currentEpoch);
 
         String tableType = "";
@@ -140,7 +145,8 @@ public class DRepDistService {
             "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits",
             "DROP TABLE IF EXISTS ss_gov_scheduled_to_drop_proposal_deposits",
             "DROP TABLE IF EXISTS ss_gov_spendable_reward_rest",
-            "DROP TABLE IF EXISTS ss_gov_pool_refund_rewards"
+            "DROP TABLE IF EXISTS ss_gov_pool_refund_rewards",
+            "DROP TABLE IF EXISTS ss_pv9_cleared_addresses"
         );
 
         for (String query : dropQueries) {
@@ -353,6 +359,92 @@ public class DRepDistService {
                 GROUP BY r.address
                 """, tableType);
 
+        // PV9 stale reverse clearing: identifies addresses whose forward delegation was cleared
+        // because they re-delegated (to a credential DRep) in PV9, and the old DRep they originally
+        // delegated to deregistered in PV9 — Haskell's stale drepDelegs reverse index caused clearing.
+        // Reproduces Haskell PV9 stale reverse-index clearing behavior.
+        //
+        // In PV9, Haskell maintains an internal reverse index (drepDelegs): DRep -> Set<StakeCred>.
+        // When a credential re-delegates from DRep-A to DRep-B (both credential DReps), the forward
+        // pointer is updated (cred -> B) but the old reverse entry (A -> {cred}) is NOT removed — it
+        // becomes "stale". When DRep-A later deregisters, ConwayUnRegDRep scans drepDelegs[A], finds
+        // the stale entry, and clears the credential's forward delegation (cred -> null).
+        //
+        // yaci-store uses "latest delegation wins" and never models this clearing, so it keeps counting
+        // the credential under DRep-B — causing yaci-store amounts to be larger than DBSync/Haskell.
+        //
+        // This query collects every address whose delegation was cleared by that mechanism and should
+        // therefore be excluded from the DRep distribution snapshot.
+        String pv9ClearedAddressesQuery = String.format("""
+                CREATE %s TABLE ss_pv9_cleared_addresses AS
+                SELECT DISTINCT stale_del.address
+                FROM delegation_vote stale_del
+                -- stale_del: the original delegation that created the stale reverse entry.
+                --   address delegated to old_drep (a credential DRep) in PV9.
+                --   Haskell added old_drep -> {address} to the reverse index at this point.
+                INNER JOIN drep_registration unreg
+                    -- old_drep deregistered IN the PV9 era (epoch <= pv9_max_epoch) and
+                    -- the deregistration happened AFTER the original delegation was recorded,
+                    -- so the stale reverse entry old_drep -> {address} still existed at that time.
+                    ON  unreg.drep_hash   = stale_del.drep_hash
+                    AND unreg.type        = 'UNREG_DREP_CERT'
+                    AND unreg.epoch      <= :pv9_max_epoch
+                    AND (   unreg.slot > stale_del.slot
+                         OR (unreg.slot = stale_del.slot AND unreg.tx_index > stale_del.tx_index)
+                         OR (unreg.slot = stale_del.slot AND unreg.tx_index = stale_del.tx_index
+                             AND unreg.cert_index > stale_del.cert_index))
+                -- Only credential-DRep delegations create reverse entries; virtual DReps do not.
+                WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+                -- The original delegation must itself be in the PV9 era.
+                AND   stale_del.epoch <= :pv9_max_epoch
+                AND   stale_del.epoch <= :epoch
+                -- The address re-delegated to a DIFFERENT credential DRep (redel) between the
+                -- original delegation and the deregistration of old_drep.
+                -- This is what makes the reverse entry stale: the forward pointer moved to redel's
+                -- DRep, but old_drep's reverse index was never updated in PV9.
+                AND EXISTS (
+                    SELECT 1 FROM delegation_vote redel
+                    WHERE redel.address   = stale_del.address
+                    AND   redel.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+                    AND   redel.drep_hash <> stale_del.drep_hash
+                    AND   redel.epoch    <= :epoch
+                    AND (   redel.slot > stale_del.slot
+                         OR (redel.slot = stale_del.slot AND redel.tx_index > stale_del.tx_index)
+                         OR (redel.slot = stale_del.slot AND redel.tx_index = stale_del.tx_index
+                             AND redel.cert_index > stale_del.cert_index))
+                    AND (   redel.slot < unreg.slot
+                         OR (redel.slot = unreg.slot AND redel.tx_index < unreg.tx_index)
+                         OR (redel.slot = unreg.slot AND redel.tx_index = unreg.tx_index
+                             AND redel.cert_index < unreg.cert_index))
+                )
+                -- If the address re-delegated to a VIRTUAL DRep (AlwaysAbstain / NoConfidence)
+                -- between the original delegation and the deregistration, Haskell would have
+                -- removed old_drep -> {address} from the reverse index at that point (virtual DReps
+                -- have no reverse entries). The stale entry no longer exists, so old_drep's
+                -- deregistration cannot clear this address — exclude it from the cleared set.
+                AND NOT EXISTS (
+                    SELECT 1 FROM delegation_vote virt_del
+                    WHERE virt_del.address   = stale_del.address
+                    AND   virt_del.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
+                    AND   virt_del.epoch    <= :epoch
+                    AND (   virt_del.slot > stale_del.slot
+                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index > stale_del.tx_index))
+                    AND (   virt_del.slot < unreg.slot
+                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index < unreg.tx_index))
+                )
+                -- If the address delegated again AFTER old_drep's deregistration, that new
+                -- delegation is a fresh, valid forward pointer — the address should not be excluded.
+                AND NOT EXISTS (
+                    SELECT 1 FROM delegation_vote after_del
+                    WHERE after_del.address  = stale_del.address
+                    AND   after_del.epoch   <= :epoch
+                    AND (   after_del.slot > unreg.slot
+                         OR (after_del.slot = unreg.slot AND after_del.tx_index > unreg.tx_index)
+                         OR (after_del.slot = unreg.slot AND after_del.tx_index = unreg.tx_index
+                             AND after_del.cert_index > unreg.cert_index))
+                )
+                """, tableType);
+
         List<String> createTableQueries = List.of(
                 rankedDelegationsQuery,
                 drepStatusQuery,
@@ -366,6 +458,7 @@ public class DRepDistService {
         var epochParam = new MapSqlParameterSource();
         epochParam.addValue("epoch", epoch);
         epochParam.addValue("snapshot_epoch", currentEpoch);
+        epochParam.addValue("pv9_max_epoch", pv9MaxEpoch);
 
         for (String query : createTableQueries) {
             log.info("Executing query : " + query);
@@ -394,6 +487,13 @@ public class DRepDistService {
         }
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
+
+        // Build ss_pv9_cleared_addresses after other temp tables (needs delegation_vote only)
+        start = System.currentTimeMillis();
+        jdbcTemplate.update(pv9ClearedAddressesQuery, epochParam);
+        jdbcTemplate.update("CREATE INDEX idx_ss_pv9_cleared_addresses ON ss_pv9_cleared_addresses(address)", Map.of());
+        end = System.currentTimeMillis();
+        log.info(">> ss_pv9_cleared_addresses created ({} ms)", end - start);
 
         String excludeDelegationCondition;
 
@@ -490,6 +590,7 @@ public class DRepDistService {
                   where
                     sd.address IS NULL
                     """ + excludeDelegationCondition + hardcodedDelegationExclusionCondition + """
+                    AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
                   group by
                     rd.drep_hash,
                     rd.drep_type,
