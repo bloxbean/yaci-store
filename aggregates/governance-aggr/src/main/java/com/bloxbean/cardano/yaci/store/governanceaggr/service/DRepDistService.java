@@ -386,7 +386,17 @@ public class DRepDistService {
                     -- old_drep deregistered IN the PV9 era (epoch <= pv9_max_epoch) and
                     -- the deregistration happened AFTER the original delegation was recorded,
                     -- so the stale reverse entry old_drep -> {address} still existed at that time.
+                    --
+                    -- cred_type MUST match drep_type: in Haskell, a DRep is keyed by
+                    -- (drep_hash, cred_type). The same 28-byte hash can be used for both
+                    -- (KeyHashObj h) and (ScriptHashObj h) credentials, and these are two
+                    -- distinct DReps with separate drepDelegs sets. If a stale_del targets
+                    -- (KeyHashObj h) but only (ScriptHashObj h) is registered, the delegation's
+                    -- `Map.adjust drepDelegsL` is a no-op (key missing), so drepDelegs was
+                    -- never populated and the later UNREG of (ScriptHashObj h) cannot clear
+                    -- this address's forward pointer.
                     ON  unreg.drep_hash   = stale_del.drep_hash
+                    AND unreg.cred_type   = stale_del.drep_type
                     AND unreg.type        = 'UNREG_DREP_CERT'
                     AND unreg.epoch      <= :pv9_max_epoch
                     AND (   unreg.slot > stale_del.slot
@@ -416,6 +426,26 @@ public class DRepDistService {
                          OR (redel.slot = unreg.slot AND redel.tx_index < unreg.tx_index)
                          OR (redel.slot = unreg.slot AND redel.tx_index = unreg.tx_index
                              AND redel.cert_index < unreg.cert_index))
+                )
+                -- Enforce that `unreg` is the FIRST UNREG (of the same drep_hash + cred_type)
+                -- that occurs strictly after stale_del. If an earlier UNREG existed between
+                -- stale_del and unreg, Haskell would have already cleared the address's forward
+                -- at that earlier UNREG and deleted drepDelegs[old_drep]. Any subsequent REG
+                -- re-initializes drepDelegs to empty, so this later UNREG has nothing to clear
+                -- for this stale_del and the PV9 stale-clearing does not apply to that pairing.
+                AND NOT EXISTS (
+                    SELECT 1 FROM drep_registration earlier_unreg
+                    WHERE earlier_unreg.drep_hash = stale_del.drep_hash
+                    AND   earlier_unreg.cred_type = stale_del.drep_type
+                    AND   earlier_unreg.type      = 'UNREG_DREP_CERT'
+                    AND (   earlier_unreg.slot > stale_del.slot
+                         OR (earlier_unreg.slot = stale_del.slot AND earlier_unreg.tx_index > stale_del.tx_index)
+                         OR (earlier_unreg.slot = stale_del.slot AND earlier_unreg.tx_index = stale_del.tx_index
+                             AND earlier_unreg.cert_index > stale_del.cert_index))
+                    AND (   earlier_unreg.slot < unreg.slot
+                         OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index < unreg.tx_index)
+                         OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index = unreg.tx_index
+                             AND earlier_unreg.cert_index < unreg.cert_index))
                 )
                 -- If the address re-delegated to a VIRTUAL DRep (AlwaysAbstain / NoConfidence)
                 -- between the original delegation and the deregistration, Haskell would have
