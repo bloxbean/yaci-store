@@ -12,8 +12,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.Record;
 import org.jooq.SortField;
+import org.jooq.Table;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigInteger;
@@ -36,59 +38,106 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     @Override
     public List<String> getPoolIds(int page, int count, String order) {
         int offset = page * count;
-        SortField<?> orderBy = "desc".equals(order) ? min(POOL_REGISTRATION.SLOT).desc() : min(POOL_REGISTRATION.SLOT).asc();
+        Table<?> currentPools = latestPoolStateTable(true, false, false);
+        SortField<?> registrationOrder = "desc".equals(order)
+                ? field(name("current_pools", "registration_slot"), Long.class).desc()
+                : field(name("current_pools", "registration_slot"), Long.class).asc();
+        SortField<?> slotOrder = "desc".equals(order)
+                ? field(name("current_pools", "slot"), Long.class).desc()
+                : field(name("current_pools", "slot"), Long.class).asc();
 
-        return dsl.select(POOL_REGISTRATION.POOL_ID)
-                .from(POOL_REGISTRATION)
-                .groupBy(POOL_REGISTRATION.POOL_ID)
-                .orderBy(orderBy)
+        return dsl.select(field(name("current_pools", "pool_id"), String.class))
+                .from(currentPools)
+                .orderBy(registrationOrder, slotOrder)
                 .limit(count)
                 .offset(offset)
-                .fetch(record -> PoolUtil.getBech32PoolId(record.get(POOL_REGISTRATION.POOL_ID)));
+                .fetch(record -> PoolUtil.getBech32PoolId(record.get(field(name("current_pools", "pool_id"), String.class))));
     }
 
     @Override
     public List<BFPoolRetireItem> getRetiredPools(int page, int count, String order) {
         int offset = page * count;
-        SortField<?> orderBy = "desc".equals(order) ? POOL.RETIRE_EPOCH.desc() : POOL.RETIRE_EPOCH.asc();
-
-        return dsl.select(POOL.POOL_ID, POOL.RETIRE_EPOCH)
+        Integer currentEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
+        Field<Integer> rn = rowNumber()
+                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
+                .as("rn");
+        Table<?> rankedRetired = dsl.select(
+                        POOL.POOL_ID,
+                        POOL.STATUS,
+                        POOL.RETIRE_EPOCH,
+                        POOL.SLOT,
+                        POOL.TX_HASH,
+                        POOL.TX_INDEX,
+                        POOL.CERT_INDEX,
+                        rn
+                )
                 .from(POOL)
-                .where(POOL.STATUS.eq("RETIRED"))
-                .orderBy(orderBy)
+                .where(currentEpoch != null ? POOL.EPOCH.le(currentEpoch) : noCondition())
+                .asTable("ranked_retired");
+        Table<?> retiredPools = dsl.select(
+                        field(name("ranked_retired", "pool_id")).as("pool_id"),
+                        field(name("ranked_retired", "retire_epoch")).as("retire_epoch"),
+                        field(name("ranked_retired", "slot")).as("slot"),
+                        field(name("ranked_retired", "tx_hash")).as("tx_hash"),
+                        field(name("ranked_retired", "tx_index")).as("tx_index"),
+                        field(name("ranked_retired", "cert_index")).as("cert_index")
+                )
+                .from(rankedRetired)
+                .where(field(name("ranked_retired", "rn"), Integer.class).eq(1))
+                .and(field(name("ranked_retired", "status"), String.class).eq("RETIRED"))
+                .asTable("retired_pools");
+        Table<?> latestRetiring = latestPoolStatusTable("RETIRING", "latest_retiring");
+        Field<String> poolIdField = retiredPools.field("pool_id", String.class);
+        Field<Integer> retireEpochField = retiredPools.field("retire_epoch", Integer.class);
+        Field<Long> slotField = retiredPools.field("slot", Long.class);
+        Field<String> txHashField = retiredPools.field("tx_hash", String.class);
+        Field<Integer> certIndexField = retiredPools.field("cert_index", Integer.class);
+        Field<Long> retireSortSlotField = coalesce(latestRetiring.field("slot", Long.class), slotField);
+        Field<String> retireSortTxHashField = coalesce(latestRetiring.field("tx_hash", String.class), txHashField);
+        Field<Integer> retireSortCertIndexField = coalesce(latestRetiring.field("cert_index", Integer.class), certIndexField);
+        SortField<?> retireEpochOrder = "desc".equals(order)
+                ? retireEpochField.desc()
+                : retireEpochField.asc();
+        SortField<?> slotOrder = "desc".equals(order)
+                ? retireSortSlotField.desc()
+                : retireSortSlotField.asc();
+
+        return dsl.select(poolIdField, retireEpochField)
+                .from(retiredPools)
+                .leftJoin(latestRetiring).on(poolIdField.eq(latestRetiring.field("pool_id", String.class)))
+                .orderBy(retireEpochOrder, slotOrder, retireSortTxHashField.asc(), retireSortCertIndexField.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(record -> new BFPoolRetireItem(
-                        record.get(POOL.POOL_ID),
-                        record.get(POOL.RETIRE_EPOCH)
+                        record.get(poolIdField),
+                        record.get(retireEpochField)
                 ));
     }
 
     @Override
     public List<BFPoolRetireItem> getRetiringPools(int page, int count, String order) {
         int offset = page * count;
-        // Deduplicate: one pool may have multiple RETIRING rows; take max retire_epoch per pool_id.
-        // Exclude pools that already have a RETIRED row.
-        var maxRetireEpoch = max(POOL.RETIRE_EPOCH).as("max_retire_epoch");
-        SortField<?> orderBy = "desc".equals(order)
-                ? field(name("max_retire_epoch"), Integer.class).desc()
-                : field(name("max_retire_epoch"), Integer.class).asc();
+        Table<?> retiringPools = latestPoolStateTable(false, false, true);
+        Field<String> poolIdField = retiringPools.field("pool_id", String.class);
+        Field<Integer> retireEpochField = retiringPools.field("retire_epoch", Integer.class);
+        Field<Long> slotField = retiringPools.field("slot", Long.class);
+        Field<String> txHashField = retiringPools.field("tx_hash", String.class);
+        Field<Integer> certIndexField = retiringPools.field("cert_index", Integer.class);
+        SortField<?> retireEpochOrder = "desc".equals(order)
+                ? retireEpochField.desc()
+                : retireEpochField.asc();
+        SortField<?> slotOrder = "desc".equals(order)
+                ? slotField.desc()
+                : slotField.asc();
 
-        var retiredPoolIds = dsl.select(POOL.POOL_ID)
-                .from(POOL)
-                .where(POOL.STATUS.eq("RETIRED"));
-
-        return dsl.select(POOL.POOL_ID, maxRetireEpoch)
-                .from(POOL)
-                .where(POOL.STATUS.eq("RETIRING"))
-                .and(POOL.POOL_ID.notIn(retiredPoolIds))
-                .groupBy(POOL.POOL_ID)
-                .orderBy(orderBy)
+        return dsl.select(poolIdField, retireEpochField)
+                .from(retiringPools)
+                .orderBy(retireEpochOrder, slotOrder, txHashField.asc(), certIndexField.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(record -> new BFPoolRetireItem(
-                        record.get(POOL.POOL_ID),
-                        record.get(maxRetireEpoch)
+                        record.get(poolIdField),
+                        record.get(retireEpochField)
                 ));
     }
 
@@ -317,14 +366,8 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     @Override
     public List<BFPoolRegistrationInfo> getExtendedPools(int page, int count, String order) {
         int offset = page * count;
-
-        var latestSlot = dsl.select(
-                        POOL_REGISTRATION.POOL_ID,
-                        max(POOL_REGISTRATION.SLOT).as("max_slot")
-                )
-                .from(POOL_REGISTRATION)
-                .groupBy(POOL_REGISTRATION.POOL_ID)
-                .asTable("latest_slot");
+        Table<?> currentPools = latestPoolStateTable(true, false, false);
+        Table<?> latestRegistration = latestPoolRegistrationTable();
 
         var blockCounts = dsl.select(
                         BLOCK.SLOT_LEADER,
@@ -334,11 +377,106 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .groupBy(BLOCK.SLOT_LEADER)
                 .asTable("block_counts");
 
-        SortField<?> orderBy = "desc".equals(order) ?
-                field(name("latest_slot", "max_slot"), Long.class).desc() :
-                field(name("latest_slot", "max_slot"), Long.class).asc();
+        SortField<?> registrationOrder = "desc".equals(order)
+                ? field(name("current_pools", "registration_slot"), Long.class).desc()
+                : field(name("current_pools", "registration_slot"), Long.class).asc();
+        SortField<?> slotOrder = "desc".equals(order)
+                ? field(name("current_pools", "slot"), Long.class).desc()
+                : field(name("current_pools", "slot"), Long.class).asc();
 
         return dsl.select(
+                        field(name("latest_reg", "pool_id"), String.class).as(POOL_REGISTRATION.POOL_ID.getName()),
+                        field(name("latest_reg", "vrf_key"), String.class).as(POOL_REGISTRATION.VRF_KEY.getName()),
+                        field(name("latest_reg", "pledge"), BigInteger.class).as(POOL_REGISTRATION.PLEDGE.getName()),
+                        field(name("latest_reg", "cost"), BigInteger.class).as(POOL_REGISTRATION.COST.getName()),
+                        field(name("latest_reg", "margin_numerator"), BigInteger.class).as(POOL_REGISTRATION.MARGIN_NUMERATOR.getName()),
+                        field(name("latest_reg", "margin_denominator"), BigInteger.class).as(POOL_REGISTRATION.MARGIN_DENOMINATOR.getName()),
+                        field(name("latest_reg", "metadata_url")).as(POOL_REGISTRATION.METADATA_URL.getName()),
+                        field(name("latest_reg", "metadata_hash"), String.class).as(POOL_REGISTRATION.METADATA_HASH.getName()),
+                        coalesce(field(name("block_counts", "blocks_minted"), Integer.class), val(0)).as("blocks_minted")
+                )
+                .from(currentPools)
+                .innerJoin(latestRegistration)
+                .on(field(name("current_pools", "pool_id"), String.class).eq(field(name("latest_reg", "pool_id"), String.class)))
+                // Fix: block.slot_leader = pool_id hex, not vrf_key
+                .leftJoin(blockCounts)
+                .on(field(name("latest_reg", "pool_id"), String.class).eq(field(name("block_counts", "slot_leader"), String.class)))
+                .orderBy(registrationOrder, slotOrder)
+                .limit(count)
+                .offset(offset)
+                .fetch(record -> {
+                    Object metadataUrlField = record.get(POOL_REGISTRATION.METADATA_URL.getName());
+                    String metadataUrl = metadataUrlField != null
+                            ? metadataUrlField.toString()
+                            : null;
+                    return new BFPoolRegistrationInfo(
+                            record.get(POOL_REGISTRATION.POOL_ID.getName(), String.class),
+                            record.get(POOL_REGISTRATION.VRF_KEY.getName(), String.class),
+                            toBigInteger(record.get(POOL_REGISTRATION.PLEDGE.getName())),
+                            toBigInteger(record.get(POOL_REGISTRATION.COST.getName())),
+                            toBigInteger(record.get(POOL_REGISTRATION.MARGIN_NUMERATOR.getName())),
+                            toBigInteger(record.get(POOL_REGISTRATION.MARGIN_DENOMINATOR.getName())),
+                            metadataUrl,
+                            record.get(POOL_REGISTRATION.METADATA_HASH.getName(), String.class),
+                            record.get("blocks_minted", Integer.class)
+                    );
+                });
+    }
+
+    private Table<?> latestPoolStateTable(boolean includeRegistered, boolean includeRetired, boolean includeRetiring) {
+        Integer currentEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
+
+        Field<Integer> rn = rowNumber()
+                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
+                .as("rn");
+
+        Table<?> ranked = dsl.select(
+                        POOL.POOL_ID,
+                        POOL.STATUS,
+                        POOL.RETIRE_EPOCH,
+                        POOL.SLOT,
+                        POOL.TX_HASH,
+                        POOL.TX_INDEX,
+                        POOL.CERT_INDEX,
+                        POOL.REGISTRATION_SLOT,
+                        rn
+                )
+                .from(POOL)
+                .where(currentEpoch != null ? POOL.EPOCH.le(currentEpoch) : noCondition())
+                .asTable("ranked_pools");
+
+        Field<String> statusField = field(name("ranked_pools", "status"), String.class);
+        List<String> includedStatuses = new ArrayList<>();
+        if (includeRegistered) {
+            includedStatuses.add("REGISTRATION");
+            includedStatuses.add("UPDATE");
+        }
+        if (includeRetired) includedStatuses.add("RETIRED");
+        if (includeRetiring) includedStatuses.add("RETIRING");
+
+        return dsl.select(
+                        field(name("ranked_pools", "pool_id")).as("pool_id"),
+                        statusField.as("status"),
+                        field(name("ranked_pools", "retire_epoch")).as("retire_epoch"),
+                        field(name("ranked_pools", "slot")).as("slot"),
+                        field(name("ranked_pools", "tx_hash")).as("tx_hash"),
+                        field(name("ranked_pools", "tx_index")).as("tx_index"),
+                        field(name("ranked_pools", "cert_index")).as("cert_index"),
+                        field(name("ranked_pools", "registration_slot")).as("registration_slot")
+                )
+                .from(ranked)
+                .where(field(name("ranked_pools", "rn"), Integer.class).eq(1))
+                .and(statusField.in(includedStatuses))
+                .asTable("current_pools");
+    }
+
+    private Table<?> latestPoolRegistrationTable() {
+        Field<Integer> rn = rowNumber()
+                .over(partitionBy(POOL_REGISTRATION.POOL_ID)
+                        .orderBy(POOL_REGISTRATION.SLOT.desc(), POOL_REGISTRATION.TX_INDEX.desc(), POOL_REGISTRATION.CERT_INDEX.desc()))
+                .as("rn");
+
+        Table<?> ranked = dsl.select(
                         POOL_REGISTRATION.POOL_ID,
                         POOL_REGISTRATION.VRF_KEY,
                         POOL_REGISTRATION.PLEDGE,
@@ -347,34 +485,53 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                         POOL_REGISTRATION.MARGIN_DENOMINATOR,
                         POOL_REGISTRATION.METADATA_URL,
                         POOL_REGISTRATION.METADATA_HASH,
-                        coalesce(field(name("block_counts", "blocks_minted"), Integer.class), val(0)).as("blocks_minted")
+                        rn
                 )
                 .from(POOL_REGISTRATION)
-                .innerJoin(latestSlot)
-                .on(POOL_REGISTRATION.POOL_ID.eq(field(name("latest_slot", "pool_id"), String.class)))
-                .and(POOL_REGISTRATION.SLOT.eq(field(name("latest_slot", "max_slot"), Long.class)))
-                // Fix: block.slot_leader = pool_id hex, not vrf_key
-                .leftJoin(blockCounts)
-                .on(POOL_REGISTRATION.POOL_ID.eq(field(name("block_counts", "slot_leader"), String.class)))
-                .orderBy(orderBy)
-                .limit(count)
-                .offset(offset)
-                .fetch(record -> {
-                    String metadataUrl = record.get(POOL_REGISTRATION.METADATA_URL) != null
-                            ? record.get(POOL_REGISTRATION.METADATA_URL).toString()
-                            : null;
-                    return new BFPoolRegistrationInfo(
-                            record.get(POOL_REGISTRATION.POOL_ID),
-                            record.get(POOL_REGISTRATION.VRF_KEY),
-                            toBigInteger(record.get(POOL_REGISTRATION.PLEDGE)),
-                            toBigInteger(record.get(POOL_REGISTRATION.COST)),
-                            toBigInteger(record.get(POOL_REGISTRATION.MARGIN_NUMERATOR)),
-                            toBigInteger(record.get(POOL_REGISTRATION.MARGIN_DENOMINATOR)),
-                            metadataUrl,
-                            record.get(POOL_REGISTRATION.METADATA_HASH),
-                            record.get("blocks_minted", Integer.class)
-                    );
-                });
+                .asTable("ranked_reg");
+
+        return dsl.select(
+                        field(name("ranked_reg", "pool_id")).as("pool_id"),
+                        field(name("ranked_reg", "vrf_key")).as("vrf_key"),
+                        field(name("ranked_reg", "pledge")).as("pledge"),
+                        field(name("ranked_reg", "cost")).as("cost"),
+                        field(name("ranked_reg", "margin_numerator")).as("margin_numerator"),
+                        field(name("ranked_reg", "margin_denominator")).as("margin_denominator"),
+                        field(name("ranked_reg", "metadata_url")).as("metadata_url"),
+                        field(name("ranked_reg", "metadata_hash")).as("metadata_hash")
+                )
+                .from(ranked)
+                .where(field(name("ranked_reg", "rn"), Integer.class).eq(1))
+                .asTable("latest_reg");
+    }
+
+    private Table<?> latestPoolStatusTable(String status, String alias) {
+        Field<Integer> rn = rowNumber()
+                .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
+                .as("rn");
+
+        Table<?> ranked = dsl.select(
+                        POOL.POOL_ID,
+                        POOL.SLOT,
+                        POOL.TX_HASH,
+                        POOL.TX_INDEX,
+                        POOL.CERT_INDEX,
+                        rn
+                )
+                .from(POOL)
+                .where(POOL.STATUS.eq(status))
+                .asTable("ranked_" + alias);
+
+        return dsl.select(
+                        field(name("ranked_" + alias, "pool_id")).as("pool_id"),
+                        field(name("ranked_" + alias, "slot")).as("slot"),
+                        field(name("ranked_" + alias, "tx_hash")).as("tx_hash"),
+                        field(name("ranked_" + alias, "tx_index")).as("tx_index"),
+                        field(name("ranked_" + alias, "cert_index")).as("cert_index")
+                )
+                .from(ranked)
+                .where(field(name("ranked_" + alias, "rn"), Integer.class).eq(1))
+                .asTable(alias);
     }
 
     // -------------------------------------------------------------------------
