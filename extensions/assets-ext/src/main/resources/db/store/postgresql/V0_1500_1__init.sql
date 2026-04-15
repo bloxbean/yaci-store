@@ -15,9 +15,13 @@ CREATE TABLE ft_offchain_metadata (
     subject        VARCHAR(120) PRIMARY KEY,
     -- CIP-26 'policy' field: base16 CBOR-encoded phase-1 monetary script (a native script),
     -- NOT the 28-byte policyId hash (that lives in the first 56 hex chars of 'subject').
-    -- CIP-26 spec bounds: minLength 56, maxLength 120. DO NOT shrink to VARCHAR(56) —
-    -- many real registry entries (e.g. any time-locked or multisig script) exceed 56 chars.
-    policy         VARCHAR(120),
+    -- The CIP-26 spec places NO upper bound on this field; real entries with time-locked
+    -- or k-of-n multisig scripts routinely exceed 200 hex chars (MCOS at 216, Incy at 586).
+    -- An earlier VARCHAR(120) caused PostgreSQL to reject the INSERT for any such entry;
+    -- TokenMetadataService caught the exception, logged ERROR, and skipped the row — so
+    -- entries were dropped from sync with a log line but no fatal failure. DO NOT cap
+    -- this column.
+    policy         TEXT,
     -- CIP-26 name: max 50 chars (enforced by cf-tokens-cip26 validator).
     name           VARCHAR(50),
     -- CIP-26 ticker: 2-9 chars (enforced by cf-tokens-cip26 validator).
