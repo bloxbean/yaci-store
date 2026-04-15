@@ -589,6 +589,10 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         boolean asc = !"desc".equalsIgnoreCase(order);
         int offset = page * count;
         Integer currentBlockEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
+        Integer maxRewardEpoch = dsl.select(max(REWARD.EARNED_EPOCH))
+                .from(REWARD)
+                .where(REWARD.POOL_ID.eq(poolIdHex))
+                .fetchOneInto(Integer.class);
         List<PoolFeeParam> poolFeeParams = getPoolFeeParams(poolIdHex);
 
         // Cardano epoch offset: epoch_stake at epoch E records the snapshot taken at
@@ -664,9 +668,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                     Integer epoch          = r.get("active_epoch", Integer.class);
                     PoolFeeParam poolFeeParam = findEffectivePoolFeeParam(poolFeeParams, epoch);
                     Double activeSize = calculateActiveSize(activeStake, totalStake);
-                    String rewardsValue = rewards != null
-                            ? rewards.toString()
-                            : ((blocks == null || blocks == 0) ? "0" : null);
+                    String rewardsValue = mapHistoryRewardsValue(rewards, blocks, epoch, maxRewardEpoch);
                     String feesValue = calculateOperatorFees(rewards, poolFeeParam);
                     return BFPoolHistoryDto.builder()
                             .epoch(epoch)
@@ -679,6 +681,22 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                             .build();
                 })
                 .toList();
+    }
+
+    private String mapHistoryRewardsValue(BigInteger rewards, Integer blocks, Integer epoch, Integer maxRewardEpoch) {
+        if (rewards != null) {
+            return rewards.toString();
+        }
+
+        if (epoch != null
+                && maxRewardEpoch != null
+                && epoch > maxRewardEpoch
+                && blocks != null
+                && blocks > 0) {
+            return null;
+        }
+
+        return "0";
     }
 
     private List<PoolFeeParam> getPoolFeeParams(String poolIdHex) {
@@ -757,7 +775,6 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
 
         return new BigDecimal(activeStake)
                 .divide(new BigDecimal(totalStake), 20, RoundingMode.HALF_UP)
-                .setScale(19, RoundingMode.HALF_UP)
                 .doubleValue();
     }
 
