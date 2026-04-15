@@ -26,6 +26,8 @@ public interface BFPoolsStorageReader {
 
     Optional<String> getVrfKeyByPoolId(String poolIdHex);
 
+    Optional<String> getLatestPoolStatus(String poolIdHex);
+
     List<String> getPoolBlockHashes(String vrfKeyHash, int page, int count, String order);
 
     List<BFPoolVote> getPoolVotes(String poolIdHex, int page, int count, String order);
@@ -72,4 +74,3 @@ public interface BFPoolsStorageReader {
      */
     java.util.Map<String, BFPoolStakeInfo> getPoolsStakeInfoBatch(List<String> poolIdHexes);
 }
-

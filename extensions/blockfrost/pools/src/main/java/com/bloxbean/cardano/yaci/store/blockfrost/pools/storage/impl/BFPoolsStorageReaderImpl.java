@@ -327,6 +327,16 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     }
 
     @Override
+    public Optional<String> getLatestPoolStatus(String poolIdHex) {
+        return dsl.select(POOL.STATUS)
+                .from(POOL)
+                .where(POOL.POOL_ID.eq(poolIdHex))
+                .orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc())
+                .limit(1)
+                .fetchOptional(POOL.STATUS);
+    }
+
+    @Override
     public List<String> getPoolBlockHashes(String poolIdHex, int page, int count, String order) {
         int offset = page * count;
         SortField<?> orderBy = "desc".equals(order) ? BLOCK.NUMBER.desc() : BLOCK.NUMBER.asc();
