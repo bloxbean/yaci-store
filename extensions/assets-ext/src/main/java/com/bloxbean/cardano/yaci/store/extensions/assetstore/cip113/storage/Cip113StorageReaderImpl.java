@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * Read-only access to the CIP-113 programmable-token registry.
  *
  * <p><b>Naming note:</b> this reader is deliberately named in policy-ID terms even though the
- * underlying column is {@code key} (see {@link Cip113RegistryNode#getKey()} — the registry's
+ * underlying column is {@code key} (see {@link Cip113RegistryNode} — the registry's
  * {@code key} is a policy ID for real rows, a linked-list marker for sentinel rows). The
  * reader contract with API callers is <i>"give me the programmable-token data for this
  * token's policy ID"</i>, so its public methods speak policy IDs and translate to

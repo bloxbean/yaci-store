@@ -18,7 +18,7 @@ import java.util.Optional;
  * registry node's sort key in the on-chain sorted linked list. For real registration rows it
  * equals the 56-hex policy ID of the registered programmable token; for the two sentinel rows
  * per registry (head and tail) it is a non-policy-ID linked-list marker. See
- * {@link Cip113RegistryNode#getKey()} for the full explanation. Methods on this repository
+ * {@link Cip113RegistryNode} for the full explanation. Methods on this repository
  * name their parameter {@code key} to stay honest about that dual role, but in practice
  * callers always pass a real 56-hex policy ID — there is never a reason to look up a sentinel.
  *
