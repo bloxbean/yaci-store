@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.account.jooq.tables.StakeAddressBalanceView;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.dto.BFPoolDelegatorDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.pools.dto.BFPoolHistoryDto;
@@ -25,9 +26,12 @@ import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.VOTING_PROCEDURE;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD_REST;
 import static org.jooq.impl.DSL.*;
 
 @Repository
@@ -835,23 +839,123 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
 
         if (latestEpoch == null) return List.of();
 
-        // Sort by amount (primary), then address (secondary for stable pagination)
-        var amountOrder = asc ? EPOCH_STAKE.AMOUNT.asc().nullsLast() : EPOCH_STAKE.AMOUNT.desc().nullsLast();
-        return dsl.select(EPOCH_STAKE.ADDRESS, EPOCH_STAKE.AMOUNT)
-                .from(EPOCH_STAKE)
-                .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex)
-                        .and(EPOCH_STAKE.EPOCH.eq(latestEpoch)))
-                .orderBy(amountOrder, EPOCH_STAKE.ADDRESS.asc())
+        Table<?> currentDelegators = currentDelegatorStateTable();
+        Field<String> addressField = field(name("current_delegators", "address"), String.class);
+        Field<Long> slotField = field(name("current_delegators", "slot"), Long.class);
+        Field<Integer> certIndexField = field(name("current_delegators", "cert_index"), Integer.class);
+        Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
+        Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
+        Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
+        Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
+        Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+
+        StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
+        Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> rewardRestTotalField = coalesce(field(name("reward_rest_totals", "reward_rest_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> instantRewardTotalField = coalesce(field(name("instant_reward_totals", "instant_reward_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> withdrawalTotalField = coalesce(field(name("withdrawal_totals", "withdrawal_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> availableRewardField = rewardTotalField
+                .add(rewardRestTotalField)
+                .add(instantRewardTotalField)
+                .sub(withdrawalTotalField);
+        Field<BigInteger> nonNegativeAvailableRewardField = when(availableRewardField.lt(BigInteger.ZERO), BigInteger.ZERO)
+                .otherwise(availableRewardField);
+        Field<BigInteger> currentStakeBalance = when(stakeBalanceView.EPOCH.gt(latestEpoch),
+                        stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
+                .otherwise((BigInteger) null);
+        Field<BigInteger> liveStakeField = coalesce(currentStakeBalance, EPOCH_STAKE.AMOUNT).as("live_stake");
+        SortField<?> slotOrder = asc ? slotField.asc() : slotField.desc();
+        SortField<?> certIndexOrder = asc ? certIndexField.asc() : certIndexField.desc();
+        SortField<?> addressOrder = asc ? addressField.asc() : addressField.desc();
+
+        return dsl.select(addressField, liveStakeField)
+                .from(currentDelegators)
+                .join(EPOCH_STAKE)
+                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                    .and(EPOCH_STAKE.EPOCH.eq(latestEpoch))
+                .leftJoin(stakeBalanceView)
+                    .on(stakeBalanceView.ADDRESS.eq(addressField))
+                .leftJoin(rewardTotals)
+                    .on(field(name("reward_totals", "address"), String.class).eq(addressField))
+                .leftJoin(rewardRestTotals)
+                    .on(field(name("reward_rest_totals", "address"), String.class).eq(addressField))
+                .leftJoin(instantRewardTotals)
+                    .on(field(name("instant_reward_totals", "address"), String.class).eq(addressField))
+                .leftJoin(withdrawalTotals)
+                    .on(field(name("withdrawal_totals", "address"), String.class).eq(addressField))
+                .where(poolIdField.eq(poolIdHex))
+                .orderBy(slotOrder, certIndexOrder, addressOrder)
                 .limit(count).offset(offset)
                 .fetch()
                 .stream()
                 .map(r -> BFPoolDelegatorDto.builder()
-                        .address(r.get(EPOCH_STAKE.ADDRESS))
-                        .liveStake(r.get(EPOCH_STAKE.AMOUNT) != null
-                                ? r.get(EPOCH_STAKE.AMOUNT).toString()
+                        .address(r.get(addressField))
+                        .liveStake(r.get(liveStakeField) != null
+                                ? r.get(liveStakeField).toString()
                                 : null)
                         .build())
                 .toList();
+    }
+
+    private Table<?> aggregatedAddressAmountTable(Table<?> sourceTable, String totalAlias, String tableAlias) {
+        Field<String> address = field(name(sourceTable.getName(), "address"), String.class);
+        Field<BigInteger> amount = field(name(sourceTable.getName(), "amount"), BigInteger.class);
+
+        return dsl.select(
+                        address.as("address"),
+                        coalesce(sum(amount), BigInteger.ZERO).as(totalAlias)
+                )
+                .from(sourceTable)
+                .groupBy(address)
+                .asTable(tableAlias);
+    }
+
+    private Table<?> currentDelegatorStateTable() {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            var latestDel = dsl
+                    .select(
+                            field("DISTINCT ON (address) address", String.class).as("address"),
+                            DELEGATION.POOL_ID.as("pool_id"),
+                            DELEGATION.SLOT.as("slot"),
+                            DELEGATION.CERT_INDEX.as("cert_index")
+                    )
+                    .from(DELEGATION)
+                    .orderBy(DELEGATION.ADDRESS, DELEGATION.SLOT.desc(), DELEGATION.CERT_INDEX.desc())
+                    .asTable("latest_del");
+
+            return dsl.select(
+                            field(name("latest_del", "address")).as("address"),
+                            field(name("latest_del", "pool_id")).as("pool_id"),
+                            field(name("latest_del", "slot")).as("slot"),
+                            field(name("latest_del", "cert_index")).as("cert_index")
+                    )
+                    .from(latestDel)
+                    .asTable("current_delegators");
+        }
+
+        var ranked = dsl.select(
+                        DELEGATION.ADDRESS.as("address"),
+                        DELEGATION.POOL_ID.as("pool_id"),
+                        DELEGATION.SLOT.as("slot"),
+                        DELEGATION.CERT_INDEX.as("cert_index"),
+                        rowNumber().over(
+                                partitionBy(DELEGATION.ADDRESS)
+                                        .orderBy(DELEGATION.SLOT.desc(), DELEGATION.CERT_INDEX.desc())
+                        ).as("rn")
+                )
+                .from(DELEGATION)
+                .asTable("ranked_delegation");
+
+        return dsl.select(
+                        field(name("ranked_delegation", "address")).as("address"),
+                        field(name("ranked_delegation", "pool_id")).as("pool_id"),
+                        field(name("ranked_delegation", "slot")).as("slot"),
+                        field(name("ranked_delegation", "cert_index")).as("cert_index")
+                )
+                .from(ranked)
+                .where(field(name("ranked_delegation", "rn"), Integer.class).eq(1))
+                .asTable("current_delegators");
     }
 
     // -------------------------------------------------------------------------
