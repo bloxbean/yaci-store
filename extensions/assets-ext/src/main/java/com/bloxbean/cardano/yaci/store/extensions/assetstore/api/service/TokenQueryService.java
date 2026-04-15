@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TokenQueryService {
 
-    private static final MetadataStandardsPair IDENTITY = new MetadataStandardsPair(Metadata.empty(), Standards.empty());
+    private static final ResolvedMetadata IDENTITY = new ResolvedMetadata(Metadata.empty(), Standards.empty());
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
@@ -50,17 +50,17 @@ public class TokenQueryService {
                                           List<String> queryProperties,
                                           boolean showCipsDetails) {
 
-        MetadataStandardsPair pair = queryPriority.stream()
+        ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
 
-        if (pair.metadata().isEmpty() || !pair.metadata().isValid()) {
+        if (resolved.metadata().isEmpty() || !resolved.metadata().isValid()) {
             return Optional.empty();
         }
 
         Map<String, Extension> extensions = buildExtensions(subject);
         TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
-        return Optional.of(new Subject(subject, type, pair.metadata(),
-                showCipsDetails ? pair.standards() : null,
+        return Optional.of(new Subject(subject, type, resolved.metadata(),
+                showCipsDetails ? resolved.standards() : null,
                 extensions.isEmpty() ? null : extensions));
     }
 
@@ -74,7 +74,7 @@ public class TokenQueryService {
                                      BatchPrefetchData prefetchData,
                                      boolean showCipsDetails) {
 
-        MetadataStandardsPair pair = queryPriority.stream()
+        ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
 
         Map<String, Extension> extensions = new LinkedHashMap<>();
@@ -84,8 +84,8 @@ public class TokenQueryService {
         }
 
         TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
-        return new Subject(subject, type, pair.metadata(),
-                showCipsDetails ? pair.standards() : null,
+        return new Subject(subject, type, resolved.metadata(),
+                showCipsDetails ? resolved.standards() : null,
                 extensions.isEmpty() ? null : extensions);
     }
 
@@ -129,59 +129,59 @@ public class TokenQueryService {
             Map<String, FungibleTokenMetadata> cip68MetadataMap) {
     }
 
-    private Optional<MetadataStandardsPair> findMetadata(String subject, List<String> properties, QueryPriority priority) {
+    private Optional<ResolvedMetadata> findMetadata(String subject, List<String> properties, QueryPriority priority) {
         return switch (priority) {
             case CIP_26 -> findCip26Metadata(subject, properties);
             case CIP_68 -> findCip68Metadata(subject, properties);
         };
     }
 
-    private Optional<MetadataStandardsPair> findCip26Metadata(String subject, List<String> properties) {
+    private Optional<ResolvedMetadata> findCip26Metadata(String subject, List<String> properties) {
         return cip26StorageReader.findBySubject(subject)
                 .map(entity -> {
                     // Only fetch logo if all properties requested or logo explicitly requested
                     String logo = (properties.isEmpty() || properties.contains("logo"))
                             ? cip26StorageReader.findLogoBySubject(subject).orElse(null)
                             : null;
-                    return new MetadataStandardsPair(
+                    return new ResolvedMetadata(
                             Metadata.from(entity, logo, properties),
                             new Standards(entity, null));
                 });
     }
 
-    private Optional<MetadataStandardsPair> findCip68Metadata(String subject, List<String> properties) {
+    private Optional<ResolvedMetadata> findCip68Metadata(String subject, List<String> properties) {
         return cip68StorageReader.findBySubject(subject, properties)
-                .map(cip68TokenMetadata -> new MetadataStandardsPair(
+                .map(cip68TokenMetadata -> new ResolvedMetadata(
                         Metadata.from(cip68TokenMetadata),
                         new Standards(null, cip68TokenMetadata)));
     }
 
-    private static BinaryOperator<MetadataStandardsPair> aggregateResults() {
+    private static BinaryOperator<ResolvedMetadata> aggregateResults() {
         return (thisPair, thatPair) -> {
             Metadata metadata = thisPair.metadata().merge(thatPair.metadata());
             Standards standards = thisPair.standards().merge(thatPair.standards());
-            return new MetadataStandardsPair(metadata, standards);
+            return new ResolvedMetadata(metadata, standards);
         };
     }
 
-    private BiFunction<MetadataStandardsPair, QueryPriority, MetadataStandardsPair> combineStandards(String subject, List<String> properties) {
+    private BiFunction<ResolvedMetadata, QueryPriority, ResolvedMetadata> combineStandards(String subject, List<String> properties) {
         return (accumulated, priority) -> findMetadata(subject, properties, priority)
-                .map(found -> new MetadataStandardsPair(
+                .map(found -> new ResolvedMetadata(
                         accumulated.metadata().merge(found.metadata()),
                         accumulated.standards().merge(found.standards())))
                 .orElse(accumulated);
     }
 
-    private BiFunction<MetadataStandardsPair, QueryPriority, MetadataStandardsPair> combineStandardsBatch(
+    private BiFunction<ResolvedMetadata, QueryPriority, ResolvedMetadata> combineStandardsBatch(
             String subject, List<String> properties, BatchPrefetchData prefetchData) {
         return (accumulated, priority) -> findMetadataBatch(subject, properties, priority, prefetchData)
-                .map(found -> new MetadataStandardsPair(
+                .map(found -> new ResolvedMetadata(
                         accumulated.metadata().merge(found.metadata()),
                         accumulated.standards().merge(found.standards())))
                 .orElse(accumulated);
     }
 
-    private Optional<MetadataStandardsPair> findMetadataBatch(String subject, List<String> properties,
+    private Optional<ResolvedMetadata> findMetadataBatch(String subject, List<String> properties,
                                                                QueryPriority priority, BatchPrefetchData prefetchData) {
         return switch (priority) {
             case CIP_26 -> findCip26MetadataBatch(subject, properties, prefetchData);
@@ -189,7 +189,7 @@ public class TokenQueryService {
         };
     }
 
-    private Optional<MetadataStandardsPair> findCip26MetadataBatch(String subject, List<String> properties,
+    private Optional<ResolvedMetadata> findCip26MetadataBatch(String subject, List<String> properties,
                                                                     BatchPrefetchData prefetchData) {
         TokenMetadata entity = prefetchData.cip26MetadataMap().get(subject);
         if (entity == null) {
@@ -198,7 +198,7 @@ public class TokenQueryService {
         String logo = (properties.isEmpty() || properties.contains("logo"))
                 ? prefetchData.cip26LogoMap().get(subject)
                 : null;
-        return Optional.of(new MetadataStandardsPair(
+        return Optional.of(new ResolvedMetadata(
                 Metadata.from(entity, logo, properties),
                 new Standards(entity, null)));
     }
@@ -207,12 +207,12 @@ public class TokenQueryService {
      * Looks up CIP-68 metadata from the pre-fetched batch map keyed by fungible-token subject.
      * Property filtering was already applied when the map was built in {@link #prefetchBatch}.
      */
-    private Optional<MetadataStandardsPair> findCip68MetadataBatch(String subject, BatchPrefetchData prefetchData) {
+    private Optional<ResolvedMetadata> findCip68MetadataBatch(String subject, BatchPrefetchData prefetchData) {
         FungibleTokenMetadata cip68TokenMetadata = prefetchData.cip68MetadataMap().get(subject);
         if (cip68TokenMetadata == null) {
             return Optional.empty();
         }
-        return Optional.of(new MetadataStandardsPair(
+        return Optional.of(new ResolvedMetadata(
                 Metadata.from(cip68TokenMetadata),
                 new Standards(null, cip68TokenMetadata)));
     }
@@ -225,8 +225,11 @@ public class TokenQueryService {
     }
 
     /**
-     * Internal pair used during the reduce/merge algorithm.
+     * Merged result of a query-priority reduce: the {@link Metadata} view assembled from one
+     * or more standards, plus the raw per-standard {@link Standards} breakdown. Named after
+     * its role (the resolved metadata for a subject) rather than "pair" so the accessors
+     * {@link #metadata()} and {@link #standards()} read at call sites.
      */
-    private record MetadataStandardsPair(Metadata metadata, Standards standards) {
+    private record ResolvedMetadata(Metadata metadata, Standards standards) {
     }
 }

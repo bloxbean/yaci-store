@@ -46,21 +46,21 @@ public class Cip113Processor {
 
         if (!entities.isEmpty()) {
             cip113RegistryNodeRepository.saveAll(entities);
-            entities.forEach(e -> log.info("Indexed CIP-113 registry node: policyId={}, slot={}, txHash={}",
-                    e.getPolicyId(), e.getSlot(), e.getTxHash()));
+            entities.forEach(e -> log.info("Indexed CIP-113 registry node: key={}, slot={}, txHash={}",
+                    e.getKey(), e.getSlot(), e.getTxHash()));
         }
     }
 
     private Optional<Cip113RegistryNode> toEntity(AddressUtxo utxo, Long slot) {
         return registryNodeParser.parse(utxo.getInlineDatum())
                 .map(parsed -> Cip113RegistryNode.builder()
-                        .policyId(parsed.key())
+                        .key(parsed.key())
                         .slot(slot)
                         .txHash(utxo.getTxHash())
                         .transferLogicScript(parsed.transferLogicScript())
                         .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())
                         .globalStatePolicyId(parsed.globalStatePolicyId())
-                        .nextKey(parsed.next())
+                        .next(parsed.next())
                         .datum(utxo.getInlineDatum())
                         .lastSyncedAt(LocalDateTime.now())
                         .build());

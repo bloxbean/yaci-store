@@ -45,13 +45,13 @@ class Cip113StorageReaderImplTest {
         @Test
         void returnsDto() {
             Cip113RegistryNode entity = Cip113RegistryNode.builder()
-                    .policyId("deadbeef")
+                    .key("deadbeef")
                     .transferLogicScript("script1")
                     .thirdPartyTransferLogicScript("script2")
                     .globalStatePolicyId("globalState")
                     .build();
 
-            when(repository.findFirstByPolicyIdOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -65,13 +65,13 @@ class Cip113StorageReaderImplTest {
         @Test
         void normalizesNullTransferLogicScript() {
             Cip113RegistryNode entity = Cip113RegistryNode.builder()
-                    .policyId("deadbeef")
+                    .key("deadbeef")
                     .transferLogicScript(null)
                     .thirdPartyTransferLogicScript("script2")
                     .globalStatePolicyId(null)
                     .build();
 
-            when(repository.findFirstByPolicyIdOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -83,7 +83,7 @@ class Cip113StorageReaderImplTest {
 
         @Test
         void returnsEmptyWhenNotFound() {
-            when(repository.findFirstByPolicyIdOrderBySlotDesc("unknown"))
+            when(repository.findFirstByKeyOrderBySlotDesc("unknown"))
                     .thenReturn(Optional.empty());
 
             assertThat(reader.findByPolicyId("unknown")).isEmpty();
@@ -104,13 +104,13 @@ class Cip113StorageReaderImplTest {
         @Test
         void returnsMappedDtos() {
             Cip113RegistryNode entity1 = Cip113RegistryNode.builder()
-                    .policyId("policy1").transferLogicScript("s1")
+                    .key("policy1").transferLogicScript("s1")
                     .thirdPartyTransferLogicScript("s2").globalStatePolicyId("").build();
             Cip113RegistryNode entity2 = Cip113RegistryNode.builder()
-                    .policyId("policy2").transferLogicScript("s3")
+                    .key("policy2").transferLogicScript("s3")
                     .thirdPartyTransferLogicScript("s4").globalStatePolicyId("gs").build();
 
-            when(repository.findLatestByPolicyIds(List.of("policy1", "policy2")))
+            when(repository.findLatestByKeys(List.of("policy1", "policy2")))
                     .thenReturn(List.of(entity1, entity2));
 
             Map<String, ProgrammableTokenCip113> result = reader.findByPolicyIds(List.of("policy1", "policy2"));

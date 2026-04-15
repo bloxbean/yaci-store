@@ -17,18 +17,55 @@ import java.time.LocalDateTime;
 public class Cip113RegistryNode {
 
     /**
-     * The {@code key} field of the CIP-113 registry node datum. Three possible values:
+     * The {@code key} field of the CIP-113 registry node datum.
+     *
+     * <h2>Dual role — read carefully</h2>
+     *
+     * The registry is stored on-chain as a sorted linked list (see the aiken-linked-list library).
+     * That means {@code key} serves two purposes depending on which row you are looking at:
+     *
      * <ul>
-     *   <li>empty string — head sentinel of the sorted linked list,</li>
-     *   <li>56 hex chars — a real 28-byte policy_id,</li>
-     *   <li>58–64 hex chars — tail sentinel (conventionally 32 bytes of {@code 0xFF} in the
-     *       aiken-linked-list library).</li>
+     *   <li><b>Real registration rows</b> — {@code key} is the 28-byte (56-hex) policy ID of the
+     *       programmable token being registered. The CIP-113 spec (Aiken source: {@code registry_node.ak})
+     *       describes the field as <i>"the key (currency symbol) of the programmable token policy"</i>,
+     *       and in Cardano <i>currency symbol = policy ID</i>. This is the vast majority of rows
+     *       and is what callers normally look up.</li>
+     *   <li><b>Sentinel rows</b> — the head and tail of the sorted linked list are marker rows
+     *       that store a non-policy-ID value in the {@code key} slot. They exist because a sorted
+     *       linked list needs boundaries so that inserts and deletes can always reference a node
+     *       "before the first real entry" or "after the last real entry". They are not registrations.</li>
      * </ul>
-     * {@code VARCHAR(64)} is the tightest bound that fits all three — DO NOT shrink to 56.
+     *
+     * <h2>Distinguishing the three cases by length</h2>
+     *
+     * <ul>
+     *   <li><b>empty string (0 hex)</b> — head sentinel. <i>Not</i> a policy ID.</li>
+     *   <li><b>exactly 56 hex chars</b> — real registered programmable token policy ID.</li>
+     *   <li><b>58–64 hex chars</b> — tail sentinel. <i>Not</i> a policy ID. The aiken-linked-list
+     *       implementation in use on preprod materializes a 30-byte (60-hex) sentinel of
+     *       {@code 0xFF}; the upper bound of 32 bytes (64 hex) is kept for safety since the exact
+     *       length is a library-level convention, not a CIP-113 protocol guarantee.</li>
+     * </ul>
+     *
+     * {@code VARCHAR(64)} is the tightest bound that fits all three — DO NOT shrink to 56,
+     * even though real policy IDs are exactly 56 hex, because that would reject sentinel rows.
+     *
+     * <h2>Why the column is not named {@code policy_id}</h2>
+     *
+     * Naming it {@code policy_id} would overclaim what is stored: two rows per registry (head
+     * and tail sentinels) do not hold policy IDs. The column name {@code key} matches the
+     * on-chain Aiken datum field and the parsed record field ({@code ParsedRegistryNode.key()}).
+     *
+     * <h2>Column quoting</h2>
+     *
+     * {@code KEY} is a reserved word in H2 and MySQL (but not PostgreSQL). The surrounding
+     * backticks in {@code @Column(name = "`key`")} trigger Hibernate's proprietary identifier
+     * quoting — at SQL generation time Hibernate applies the dialect-appropriate quote character
+     * (double quotes for PostgreSQL / H2, backticks for MySQL).
      */
     @Id
-    @Column(name = "policy_id", length = 64, nullable = false)
-    private String policyId;
+    @Column(name = "`key`", length = 64, nullable = false)
+    private String key;
 
     @Id
     @Column(nullable = false)
@@ -54,13 +91,17 @@ public class Cip113RegistryNode {
     private String globalStatePolicyId;
 
     /**
-     * The {@code next} field of the CIP-113 registry node datum — the pointer in the sorted
-     * linked list. Same length range as {@link #policyId}: either a real 56-hex policy_id or
-     * the tail sentinel (58–64 hex chars, conventionally 32 bytes of {@code 0xFF}).
+     * The {@code next} field of the CIP-113 registry node datum — this row's pointer to the
+     * next node in the sorted linked list. Same dual role and length range as {@link #key}:
+     * it is a real 56-hex policy ID when it points at a registered entry, or a sentinel marker
+     * (60 hex on preprod; up to 64 hex allowed for safety) when it points at the tail.
      * {@code VARCHAR(64)} is the tightest bound — DO NOT shrink to 56.
+     *
+     * <p>Backtick-quoted for the same reason as {@link #key}: {@code NEXT} is reserved in H2
+     * and MySQL.
      */
-    @Column(name = "next_key", length = 64, nullable = false)
-    private String nextKey;
+    @Column(name = "`next`", length = 64, nullable = false)
+    private String next;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String datum;

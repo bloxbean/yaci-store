@@ -83,7 +83,7 @@ class Cip113ProcessorTest {
             verify(repository).saveAll(captor.capture());
 
             Cip113RegistryNode saved = captor.getValue().getFirst();
-            assertThat(saved.getPolicyId()).isEqualTo(REGISTERED_POLICY_ID);
+            assertThat(saved.getKey()).isEqualTo(REGISTERED_POLICY_ID);
             assertThat(saved.getSlot()).isEqualTo(100L);
             assertThat(saved.getTxHash()).isEqualTo(TX_HASH);
             assertThat(saved.getTransferLogicScript()).isEqualTo(TRANSFER_LOGIC);
