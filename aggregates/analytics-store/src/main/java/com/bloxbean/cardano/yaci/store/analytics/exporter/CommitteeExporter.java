@@ -56,17 +56,18 @@ public class CommitteeExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                c.gov_action_tx_hash,
-                c.gov_action_index,
-                c.threshold_numerator,
-                c.threshold_denominator,
-                c.threshold,
-                c.epoch,
-                c.slot
-            FROM source_db.%s.committee c
-            WHERE c.epoch = %d
-            ORDER BY c.epoch
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    c.gov_action_tx_hash,
+                    c.gov_action_index,
+                    c.threshold_numerator,
+                    c.threshold_denominator,
+                    c.threshold,
+                    c.epoch,
+                    c.slot
+                FROM %s.committee c
+                WHERE c.epoch = %d
+            ')
             """,
             schema,
             epoch

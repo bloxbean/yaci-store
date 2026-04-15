@@ -16,7 +16,7 @@
 #                                    Default: false.
 #
 # ── Query Placeholders ─────────────────────────────────────────────────────
-#   {source}     Resolves to source_db.<schema>  (e.g. source_db.mainnet)
+#   {source}     Resolves to the schema name  (e.g. mainnet)
 #   {start_slot} Slot range start (inclusive)
 #   {end_slot}   Slot range end   (exclusive)
 #   {epoch}      Epoch number (available only with EPOCH strategy)

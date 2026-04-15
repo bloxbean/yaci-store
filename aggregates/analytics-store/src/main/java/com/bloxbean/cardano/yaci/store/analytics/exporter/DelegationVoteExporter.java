@@ -44,24 +44,26 @@ public class DelegationVoteExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                dv.tx_hash,
-                dv.cert_index,
-                dv.tx_index,
-                dv.address,
-                dv.drep_hash,
-                dv.drep_id,
-                dv.drep_type,
-                dv.epoch,
-                dv.credential,
-                dv.cred_type,
-                dv.slot,
-                dv.block,
-                to_timestamp(COALESCE(dv.block_time, 0)) as block_time
-            FROM source_db.%s.delegation_vote dv
-            WHERE dv.slot >= %d
-              AND dv.slot < %d
-            ORDER BY dv.slot, dv.tx_index, dv.cert_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    dv.tx_hash,
+                    dv.cert_index,
+                    dv.tx_index,
+                    dv.address,
+                    dv.drep_hash,
+                    dv.drep_id,
+                    dv.drep_type,
+                    dv.epoch,
+                    dv.credential,
+                    dv.cred_type,
+                    dv.slot,
+                    dv.block,
+                    to_timestamp(COALESCE(dv.block_time, 0)) as block_time
+                FROM %s.delegation_vote dv
+                WHERE dv.slot >= %d
+                  AND dv.slot < %d
+                ORDER BY dv.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

@@ -56,17 +56,18 @@ public class DRepDistExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         
         return String.format("""
-            SELECT
-                dd.drep_hash,
-                dd.drep_type,
-                dd.drep_id,
-                dd.amount,
-                dd.epoch,
-                dd.active_until,
-                dd.expiry
-            FROM source_db.%s.drep_dist dd
-            WHERE dd.epoch = %d
-            ORDER BY dd.epoch, dd.drep_hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    dd.drep_hash,
+                    dd.drep_type,
+                    dd.drep_id,
+                    dd.amount,
+                    dd.epoch,
+                    dd.active_until,
+                    dd.expiry
+                FROM %s.drep_dist dd
+                WHERE dd.epoch = %d
+            ')
             """,
             schema,
             epoch

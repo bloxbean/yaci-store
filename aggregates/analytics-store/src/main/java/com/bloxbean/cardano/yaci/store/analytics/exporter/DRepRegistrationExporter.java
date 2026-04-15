@@ -44,25 +44,27 @@ public class DRepRegistrationExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                dr.tx_hash,
-                dr.cert_index,
-                dr.tx_index,
-                dr.slot,
-                dr.drep_hash,
-                dr.drep_id,
-                dr.deposit,
-                dr.type,
-                dr.anchor_url,
-                dr.anchor_hash,
-                dr.cred_type,
-                dr.epoch,
-                dr.block,
-                to_timestamp(COALESCE(dr.block_time, 0)) as block_time
-            FROM source_db.%s.drep_registration dr
-            WHERE dr.slot >= %d
-              AND dr.slot < %d
-            ORDER BY dr.slot, dr.tx_hash, dr.cert_index
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    dr.tx_hash,
+                    dr.cert_index,
+                    dr.tx_index,
+                    dr.slot,
+                    dr.drep_hash,
+                    dr.drep_id,
+                    dr.deposit,
+                    dr.type,
+                    dr.anchor_url,
+                    dr.anchor_hash,
+                    dr.cred_type,
+                    dr.epoch,
+                    dr.block,
+                    to_timestamp(COALESCE(dr.block_time, 0)) as block_time
+                FROM %s.drep_registration dr
+                WHERE dr.slot >= %d
+                  AND dr.slot < %d
+                ORDER BY dr.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

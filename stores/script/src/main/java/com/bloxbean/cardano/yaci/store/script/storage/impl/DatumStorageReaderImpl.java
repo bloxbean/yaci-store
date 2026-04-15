@@ -16,6 +16,11 @@ public class DatumStorageReaderImpl implements DatumStorageReader {
     @Override
     public Optional<Datum> getDatum(String datumHash) {
         return datumRepository.findByHash(datumHash)
-                .map(datumEntity -> new Datum(datumEntity.getHash(), datumEntity.getDatum(), datumEntity.getCreatedAtTx()));
+                .map(datumEntity -> Datum.builder()
+                        .hash(datumEntity.getHash())
+                        .datum(datumEntity.getDatum())
+                        .createdAtTx(datumEntity.getCreatedAtTx())
+                        .slot(datumEntity.getSlot())
+                        .build());
     }
 }

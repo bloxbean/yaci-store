@@ -107,6 +107,7 @@ public class ScriptStorageImpl implements ScriptStorage {
                             .set(SCRIPT.SCRIPT_HASH, script.getScriptHash())
                             .set(SCRIPT.SCRIPT_TYPE, script.getScriptType().toString())
                             .set(SCRIPT.CONTENT, JSON.valueOf(script.getContent()))
+                            .set(SCRIPT.SLOT, script.getSlot())
                             .set(SCRIPT.CREATE_DATETIME, localDateTime)
                             .set(SCRIPT.UPDATE_DATETIME, localDateTime)
                             .onDuplicateKeyIgnore()

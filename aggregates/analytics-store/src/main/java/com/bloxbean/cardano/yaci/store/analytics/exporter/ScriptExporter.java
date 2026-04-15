@@ -41,23 +41,29 @@ public class ScriptExporter extends AbstractTableExporter {
     }
 
     @Override
+    public String getPartitionColumn() {
+        return "block_date";
+    }
+
+    @Override
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
+        String dateStr = ((PartitionValue.DatePartition) partition).date().toString();
         return String.format("""
-            SELECT DISTINCT
-                s.script_hash,
-                s.script_type,
-                s.content,
-                -- We align with transaction_scripts slot to drive the partition
-                ts.slot,
-                to_timestamp(COALESCE(ts.block_time, 0)) as block_time
-            FROM source_db.%s.transaction_scripts ts
-            INNER JOIN source_db.%s.script s ON s.script_hash = ts.script_hash
-            WHERE ts.slot >= %d
-              AND ts.slot < %d
-            ORDER BY ts.slot, s.script_hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    s.script_hash,
+                    s.script_type,
+                    s.content,
+                    s.slot,
+                    CAST(''%s'' AS DATE) as block_date
+                FROM %s.script s
+                WHERE s.slot >= %d
+                  AND s.slot < %d
+                ORDER BY s.slot
+            ')
             """,
-            schema, schema,
+            dateStr, schema,
             slotRange.startSlot(),
             slotRange.endSlot()
         );

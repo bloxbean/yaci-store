@@ -110,6 +110,7 @@ public class DatumStorageImpl implements DatumStorage {
                             .set(DATUM.HASH, datum.getHash())
                             .set(DATUM.DATUM_, datum.getDatum())
                             .set(DATUM.CREATED_AT_TX, datum.getCreatedAtTx())
+                            .set(DATUM.SLOT, datum.getSlot())
                             .set(DATUM.CREATE_DATETIME, localDateTime)
                             .set(DATUM.UPDATE_DATETIME, localDateTime)
                             .onDuplicateKeyIgnore()

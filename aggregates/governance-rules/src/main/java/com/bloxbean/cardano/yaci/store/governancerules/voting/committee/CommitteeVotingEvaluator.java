@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governancerules.voting.committee;
 
-import com.bloxbean.cardano.yaci.store.common.util.BigNumberUtils;
 import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governancerules.domain.ConstitutionCommitteeState;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VoteTallyCalculator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
@@ -20,7 +20,19 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         if (committee == null || votes == null) {
             return VotingStatus.INSUFFICIENT_DATA;
         }
-        
+
+        // When committee is in no confidence state (NO_CONFIDENCE), committee vote fails.
+        if (ConstitutionCommitteeState.NO_CONFIDENCE.equals(committee.getState())) {
+            return VotingStatus.NOT_PASS_THRESHOLD;
+        }
+
+        // Post-bootstrap: committee must meet minimum size requirement
+        if (!context.isInBootstrapPhase()
+                && context.getCommitteeMinSize() != null
+                && committee.getMembers().size() < context.getCommitteeMinSize()) {
+            return VotingStatus.NOT_PASS_THRESHOLD;
+        }
+
         var threshold = committee.getThreshold().safeRatio();
         if (threshold.equals(BigDecimal.ZERO)) {
             return VotingStatus.PASS_THRESHOLD;

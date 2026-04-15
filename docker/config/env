@@ -6,6 +6,12 @@
 ## Enable Ledger State profile
 #SPRING_PROFILES_ACTIVE=ledger-state
 
+## Enable Analytics Store profile
+#SPRING_PROFILES_ACTIVE=analytics
+
+## Enable both Ledger State and Analytics profiles
+#SPRING_PROFILES_ACTIVE=ledger-state,analytics
+
 ## Enable polyglot plugins (Python, JS) support.
 # JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
 

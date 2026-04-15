@@ -51,9 +51,11 @@ public class RewardRestExporter extends AbstractTableExporter {
 
     @Override
     public boolean preExportValidation(PartitionValue partition) {
-        // Reward rest table depends on AdaPot job completion
+        // reward_rest[earned_epoch=N] is populated at the start of AdaPot job N+1 via
+        // PreAdaPotJobProcessingEvent(N+1), which triggers TreasuryWithdrawalProcessor and
+        // ProposalRefundProcessor with epoch = N. Wait for job N+1 to complete before exporting epoch N.
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-        return isRewardCalcAdaPotJobCompleted(epoch);
+        return isRewardCalcAdaPotJobCompleted(epoch + 1);
     }
 
     /**
@@ -65,17 +67,18 @@ public class RewardRestExporter extends AbstractTableExporter {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
 
         return String.format("""
-            SELECT
-                rr.id,
-                rr.address,
-                rr.type,
-                rr.earned_epoch as epoch,
-                rr.amount,
-                rr.spendable_epoch,
-                rr.slot
-            FROM source_db.%s.reward_rest rr
-            WHERE rr.earned_epoch = %d
-            ORDER BY rr.earned_epoch, rr.address
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    rr.id,
+                    rr.address,
+                    rr.type,
+                    rr.earned_epoch as epoch,
+                    rr.amount,
+                    rr.spendable_epoch,
+                    rr.slot
+                FROM %s.reward_rest rr
+                WHERE rr.earned_epoch = %d
+            ')
             """,
             schema,
             epoch
