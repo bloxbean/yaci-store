@@ -18,7 +18,9 @@ import org.jooq.SortField;
 import org.jooq.Table;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.*;
@@ -572,6 +574,8 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     public List<BFPoolHistoryDto> getPoolHistoryFull(String poolIdHex, int page, int count, String order) {
         boolean asc = !"desc".equalsIgnoreCase(order);
         int offset = page * count;
+        Integer currentBlockEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
+        List<PoolFeeParam> poolFeeParams = getPoolFeeParams(poolIdHex);
 
         // Cardano epoch offset: epoch_stake at epoch E records the snapshot taken at
         // the boundary of epoch E. This stake becomes *active* at epoch E+2.
@@ -591,8 +595,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         // Subquery: total rewards + leader-only rewards per earned_epoch for this pool
         var rewardSub = dsl.select(
                         REWARD.EARNED_EPOCH.as("r_epoch"),
-                        sum(REWARD.AMOUNT).as("rewards"),
-                        sum(when(REWARD.TYPE.eq("leader"), REWARD.AMOUNT).otherwise(val(BigInteger.ZERO))).as("leader_rewards")
+                        sum(REWARD.AMOUNT).as("rewards")
                 )
                 .from(REWARD)
                 .where(REWARD.POOL_ID.eq(poolIdHex))
@@ -602,8 +605,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         // Subquery: blocks and fees per epoch for this pool
         var blockSub = dsl.select(
                         BLOCK.EPOCH.as("b_epoch"),
-                        count().as("blocks"),
-                        coalesce(sum(BLOCK.TOTAL_FEES), val(0L)).as("fees")
+                        count().as("blocks")
                 )
                 .from(BLOCK)
                 .where(BLOCK.SLOT_LEADER.eq(poolIdHex))
@@ -616,9 +618,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                         count(EPOCH_STAKE.ADDRESS).as("delegators_count"),
                         field(name("total_stake_sub", "total_stake")),
                         field(name("reward_sub", "rewards")),
-                        field(name("reward_sub", "leader_rewards")),
-                        field(name("block_sub", "blocks")),
-                        field(name("block_sub", "fees"))
+                        field(name("block_sub", "blocks"))
                 )
                 .from(EPOCH_STAKE)
                 .leftJoin(totalStakeSub)
@@ -628,13 +628,14 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .leftJoin(blockSub)
                     .on(field(name("block_sub", "b_epoch"), Integer.class).eq(EPOCH_STAKE.EPOCH.plus(2)))
                 .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .and(currentBlockEpoch != null
+                        ? EPOCH_STAKE.EPOCH.plus(2).le(currentBlockEpoch - 1)
+                        : noCondition())
                 .groupBy(
                         EPOCH_STAKE.EPOCH,
                         field(name("total_stake_sub", "total_stake")),
                         field(name("reward_sub", "rewards")),
-                        field(name("reward_sub", "leader_rewards")),
-                        field(name("block_sub", "blocks")),
-                        field(name("block_sub", "fees"))
+                        field(name("block_sub", "blocks"))
                 )
                 .orderBy(asc ? EPOCH_STAKE.EPOCH.asc() : EPOCH_STAKE.EPOCH.desc())
                 .limit(count)
@@ -645,22 +646,108 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                     BigInteger activeStake = r.get("active_stake", BigInteger.class);
                     BigInteger totalStake  = r.get("total_stake",  BigInteger.class);
                     BigInteger rewards     = r.get("rewards",      BigInteger.class);
-                    BigInteger leaderRew   = r.get("leader_rewards", BigInteger.class);
-                    Double activeSize = (activeStake != null && totalStake != null
-                            && totalStake.compareTo(BigInteger.ZERO) > 0)
-                            ? activeStake.doubleValue() / totalStake.doubleValue()
-                            : null;
+                    Integer blocks         = r.get("blocks", Integer.class);
+                    Integer epoch          = r.get("active_epoch", Integer.class);
+                    PoolFeeParam poolFeeParam = findEffectivePoolFeeParam(poolFeeParams, epoch);
+                    Double activeSize = calculateActiveSize(activeStake, totalStake);
+                    String rewardsValue = rewards != null
+                            ? rewards.toString()
+                            : ((blocks == null || blocks == 0) ? "0" : null);
+                    String feesValue = calculateOperatorFees(rewards, poolFeeParam);
                     return BFPoolHistoryDto.builder()
-                            .epoch(r.get("active_epoch", Integer.class))
-                            .blocks(r.get("blocks", Integer.class) != null ? r.get("blocks", Integer.class) : 0)
-                            .fees(leaderRew != null ? leaderRew.toString() : "0")
+                            .epoch(epoch)
+                            .blocks(blocks != null ? blocks : 0)
+                            .fees(feesValue)
                             .activeStake(activeStake != null ? activeStake.toString() : null)
                             .activeSize(activeSize)
                             .delegatorsCount(r.get("delegators_count", Integer.class))
-                            .rewards(rewards != null ? rewards.toString() : null)
+                            .rewards(rewardsValue)
                             .build();
                 })
                 .toList();
+    }
+
+    private List<PoolFeeParam> getPoolFeeParams(String poolIdHex) {
+        return dsl.select(
+                        POOL.ACTIVE_EPOCH,
+                        POOL_REGISTRATION.COST,
+                        POOL_REGISTRATION.MARGIN_NUMERATOR,
+                        POOL_REGISTRATION.MARGIN_DENOMINATOR
+                )
+                .from(POOL)
+                .join(POOL_REGISTRATION)
+                    .on(POOL_REGISTRATION.POOL_ID.eq(POOL.POOL_ID))
+                    .and(POOL_REGISTRATION.TX_HASH.eq(POOL.TX_HASH))
+                    .and(POOL_REGISTRATION.TX_INDEX.eq(POOL.TX_INDEX))
+                    .and(POOL_REGISTRATION.CERT_INDEX.eq(POOL.CERT_INDEX))
+                .where(POOL.POOL_ID.eq(poolIdHex))
+                .and(POOL.STATUS.in("REGISTRATION", "UPDATE"))
+                .orderBy(POOL.ACTIVE_EPOCH.asc(), POOL.SLOT.asc(), POOL.TX_INDEX.asc(), POOL.CERT_INDEX.asc())
+                .fetch(record -> new PoolFeeParam(
+                        record.get(POOL.ACTIVE_EPOCH),
+                        record.get(POOL_REGISTRATION.COST),
+                        record.get(POOL_REGISTRATION.MARGIN_NUMERATOR),
+                        record.get(POOL_REGISTRATION.MARGIN_DENOMINATOR)
+                ));
+    }
+
+    private PoolFeeParam findEffectivePoolFeeParam(List<PoolFeeParam> poolFeeParams, Integer epoch) {
+        if (epoch == null) {
+            return null;
+        }
+
+        PoolFeeParam effective = null;
+        for (PoolFeeParam poolFeeParam : poolFeeParams) {
+            if (poolFeeParam.effectiveActiveEpoch() != null && poolFeeParam.effectiveActiveEpoch() <= epoch) {
+                effective = poolFeeParam;
+            } else {
+                break;
+            }
+        }
+
+        return effective;
+    }
+
+    private String calculateOperatorFees(BigInteger rewards, PoolFeeParam poolFeeParam) {
+        if (rewards == null || rewards.signum() <= 0) {
+            return "0";
+        }
+
+        if (poolFeeParam == null
+                || poolFeeParam.cost() == null
+                || poolFeeParam.marginNumerator() == null
+                || poolFeeParam.marginDenominator() == null
+                || BigInteger.ZERO.equals(poolFeeParam.marginDenominator())) {
+            return "0";
+        }
+
+        BigInteger cost = poolFeeParam.cost();
+        BigInteger marginNumerator = poolFeeParam.marginNumerator();
+        BigInteger marginDenominator = poolFeeParam.marginDenominator();
+
+        if (rewards.compareTo(cost) <= 0) {
+            return rewards.toString();
+        }
+
+        BigInteger variablePortion = rewards.subtract(cost)
+                .multiply(marginNumerator)
+                .divide(marginDenominator);
+
+        return cost.add(variablePortion).toString();
+    }
+
+    private Double calculateActiveSize(BigInteger activeStake, BigInteger totalStake) {
+        if (activeStake == null || totalStake == null || totalStake.compareTo(BigInteger.ZERO) <= 0) {
+            return null;
+        }
+
+        return new BigDecimal(activeStake)
+                .divide(new BigDecimal(totalStake), 20, RoundingMode.HALF_UP)
+                .setScale(19, RoundingMode.HALF_UP)
+                .doubleValue();
+    }
+
+    private record PoolFeeParam(Integer effectiveActiveEpoch, BigInteger cost, BigInteger marginNumerator, BigInteger marginDenominator) {
     }
 
     // -------------------------------------------------------------------------
