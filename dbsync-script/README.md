@@ -2,18 +2,18 @@
 
 Export specific tables from a Cardano db-sync PostgreSQL database to Parquet format, with foreign key IDs resolved to human-readable bech32 values.
 
-Uses **DuckDB + postgres_scanner** for high-performance columnar streaming — the same approach as yaci-store's analytics-store. Data flows directly: `PostgreSQL -> DuckDB (Arrow columnar) -> Parquet`, bypassing slow row-by-row Python processing.
+Uses `psycopg2` + `pyarrow`. Best run on the **same server** or **same LAN** as the db-sync database.
 
 ## Prerequisites
 
 - Python 3.8+
 - Access to a running Cardano db-sync PostgreSQL database
-- Sufficient disk space for output files (epoch_stake and reward are large tables)
+- Sufficient disk space for output files
 
 ## Setup
 
 ```bash
-pip3 install duckdb psycopg2-binary
+pip3 install psycopg2-binary pyarrow
 ```
 
 ## Configuration
@@ -22,15 +22,14 @@ There are **3 ways** to provide DB connection settings and output directory. The
 
 **CLI arguments > .env file / environment variables > DEFAULTS in script**
 
+Configurable settings: DB connection, `OUTPUT_DIR`, and `START_EPOCH` (the starting epoch for filtered tables). Filenames of filtered outputs include the resolved start epoch, e.g. `epoch_stake_from504.parquet`.
+
 ### Option 1: `.env` file
 
 ```bash
-# Copy the example and edit
 cp .env.example .env
 nano .env
 ```
-
-`.env` file format:
 
 ```env
 PGHOST=localhost
@@ -39,9 +38,8 @@ PGUSER=your_user
 PGPASSWORD=your_password
 PGDATABASE=dbsync
 OUTPUT_DIR=./output
+START_EPOCH=504
 ```
-
-Then run with:
 
 ```bash
 python3 export_dbsync_parquet.py --env-file .env
@@ -62,19 +60,15 @@ DEFAULTS = {
 }
 ```
 
-Then run without any arguments:
-
 ```bash
 python3 export_dbsync_parquet.py
 ```
 
 ### Option 3: CLI parameters
 
-Pass everything directly on the command line:
-
 ```bash
 python3 export_dbsync_parquet.py \
-    --pg-host db.example.com \
+    --pg-host localhost \
     --pg-port 5432 \
     --pg-user admin \
     --pg-password secret \
@@ -84,16 +78,12 @@ python3 export_dbsync_parquet.py \
 
 ### Mixing options
 
-You can combine methods. For example, use `.env` for DB credentials and CLI for output dir and table selection:
-
 ```bash
+# .env for DB, CLI for output and table selection
 python3 export_dbsync_parquet.py --env-file .env --output-dir /data/parquet --tables drep_hash
-```
 
-Or set environment variables in your shell and override just one via CLI:
-
-```bash
-export PGHOST=db.example.com PGUSER=admin PGPASSWORD=secret PGDATABASE=dbsync
+# Shell env vars + CLI override
+export PGHOST=localhost PGUSER=admin PGPASSWORD=secret PGDATABASE=dbsync
 python3 export_dbsync_parquet.py --output-dir /data/parquet
 ```
 
@@ -108,23 +98,23 @@ python3 export_dbsync_parquet.py --env-file .env
 ### Export specific tables
 
 ```bash
-# Small tables first (quick test to verify connectivity)
+# Quick test with tiny tables (~seconds)
 python3 export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
 
-# Then the large ones
+# Large tables
 python3 export_dbsync_parquet.py --env-file .env --tables epoch_stake reward
 ```
 
 ### Recommended execution order
 
 ```bash
-# Step 1: Quick test with tiny tables (~seconds)
+# Step 1: Quick test (~seconds)
 python3 export_dbsync_parquet.py --env-file .env --tables drep_hash drep_registration
 
 # Step 2: Small filtered tables (~seconds to minutes)
 python3 export_dbsync_parquet.py --env-file .env --tables drep_distr reward_rest
 
-# Step 3: Large tables (epoch-by-epoch with progress logging)
+# Step 3: Large tables (~3-5s per epoch on same server)
 python3 export_dbsync_parquet.py --env-file .env --tables epoch_stake
 python3 export_dbsync_parquet.py --env-file .env --tables reward
 ```
@@ -140,6 +130,7 @@ Options:
                              drep_registration, reward_rest
   --output-dir      Output directory for parquet files
   --env-file        Path to .env file to load DB variables from
+  --start-epoch     Starting epoch for filtered exports (default: 504)
 
   Database connection:
   --pg-host         PostgreSQL host
@@ -152,48 +143,40 @@ Options:
 ### Sample output log
 
 ```
-[2026-04-08 10:30:00] Output directory: /data/parquet
-[2026-04-08 10:30:00] DuckDB connected to PostgreSQL: localhost:5432/dbsync
-[2026-04-08 10:30:00] Starting export of 1 table(s): epoch_stake
+[2026-04-08 16:00:00] Output directory: /data/parquet
+[2026-04-08 16:00:00] Connecting to PostgreSQL: localhost:5432/cexplorer
+[2026-04-08 16:00:00] PostgreSQL connected.
+[2026-04-08 16:00:00] Starting export of 1 table(s): epoch_stake
 
-[2026-04-08 10:30:00] Exporting epoch_stake...
-[2026-04-08 10:30:01]   Found 50 epochs to export: 504 - 553
-[2026-04-08 10:30:03]   Epoch 504: 1,200,000 rows, 18.5 MB, 2.1s | Total: 1,200,000 rows, 2.1s elapsed, ETA: 1.7m (1/50 epochs)
-[2026-04-08 10:30:05]   Epoch 505: 1,210,000 rows, 18.7 MB, 1.9s | Total: 2,410,000 rows, 4.0s elapsed, ETA: 3.2m (2/50 epochs)
+[2026-04-08 16:00:00] Exporting epoch_stake...
+[2026-04-08 16:00:01]   Found 121 epochs to export: 504 - 624
+[2026-04-08 16:00:04]   Epoch 504: 1,333,448 rows, PG COPY 165.5 MB in 2.1s, Parquet 51.4 MB in 0.8s | Total: 1,333,448 rows, 2.9s elapsed, ETA: 5.8m (1/121)
+[2026-04-08 16:00:07]   Epoch 505: 1,340,000 rows, PG COPY 166.2 MB in 2.0s, Parquet 51.6 MB in 0.7s | Total: 2,673,448 rows, 5.7s elapsed, ETA: 5.6m (2/121)
 ...
-[2026-04-08 10:32:30]   Merging 50 epoch files into epoch_stake_from504.parquet...
-[2026-04-08 10:32:35]   Merge complete in 5.2s
-[2026-04-08 10:32:35] DONE epoch_stake: 62,000,000 rows, 1.20 GB, 2.6m -> epoch_stake_from504.parquet
 ```
 
 ## Performance
 
-### Pipeline: PostgreSQL COPY -> CSV -> DuckDB -> Parquet
+### Pipeline
 
-| Step | Tool | Why |
+| Step | Tool | Time (per epoch, local) |
 |---|---|---|
-| JOIN + extract | PostgreSQL `COPY TO STDOUT` | Native protocol, fastest data export path (~2s per epoch) |
-| CSV -> Parquet | DuckDB `COPY TO` | Vectorized conversion with ZSTD compression |
+| JOIN + extract | PostgreSQL `COPY TO STDOUT` | ~2-3s |
+| CSV -> Parquet | pyarrow `read_csv` + `write_table` | ~0.5-1s |
+| **Total per epoch** | | **~3-4s** |
 
-PostgreSQL does the JOIN (it has the indexes, ~2s per epoch). `COPY TO STDOUT` streams results via PostgreSQL's native binary protocol — much faster than `postgres_scanner` over network. DuckDB handles only local CSV-to-Parquet conversion.
-
-### Epoch-by-epoch strategy
-
-Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, then merged. This provides:
-- Per-epoch progress logging with timing breakdown (CSV export vs Parquet conversion)
-- ETA based on running average
-- Atomic temp file writes (`.tmp` -> final rename)
+**Important**: This script is designed for **local or same-LAN** execution. If running over a slow network, the COPY transfer becomes the bottleneck (e.g., 155s for 165 MB at ~1 MB/s). For remote databases, consider the DuckDB version (`export_dbsync_parquet.py`) or run this script directly on the db-sync server.
 
 ## Exported Tables
 
-| Table | Filter | Output File | Est. Size | Description |
-|---|---|---|---|---|
-| `epoch_stake` | epoch >= 504 | `epoch_stake_from504.parquet` | Large | Stake distribution per epoch with bech32 stake addresses and pool IDs |
-| `reward` | earned_epoch >= 504 | `reward_from504.parquet` | Large | Staking rewards (member, leader, refund) with resolved addresses and pools |
-| `reward_rest` | earned_epoch >= 504 | `reward_rest_from504.parquet` | Small | Non-pool rewards (reserves, treasury, proposal_refund) |
-| `drep_distr` | epoch >= 504 | `drep_distr_from504.parquet` | Small | DRep voting power distribution per epoch |
-| `drep_hash` | All rows | `drep_hash.parquet` | Tiny | DRep identifier lookup (raw hash + bech32 view) |
-| `drep_registration` | All rows | `drep_registration.parquet` | Tiny | DRep registration/deregistration/update events |
+| Table | Filter | Output File | Description |
+|---|---|---|---|
+| `epoch_stake` | epoch >= 504 | `epoch_stake_from504.parquet` | Stake distribution with bech32 addresses and pool IDs |
+| `reward` | earned_epoch >= 504 | `reward_from504.parquet` | Staking rewards (member, leader, refund) |
+| `reward_rest` | earned_epoch >= 504 | `reward_rest_from504.parquet` | Non-pool rewards (reserves, treasury, proposal_refund) |
+| `drep_distr` | epoch >= 504 | `drep_distr_from504.parquet` | DRep voting power distribution per epoch |
+| `drep_hash` | All rows | `drep_hash.parquet` | DRep identifier lookup |
+| `drep_registration` | All rows | `drep_registration.parquet` | DRep registration/deregistration events |
 
 ## Output Schema
 
@@ -201,7 +184,7 @@ Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, the
 
 | Column | Type | Description |
 |---|---|---|
-| `epoch_no` | int32 | Epoch number |
+| `epoch_no` | int64 | Epoch number |
 | `stake_address` | string | Bech32 stake address (stake1...) |
 | `pool` | string | Bech32 pool ID (pool1...) |
 | `amount` | int64 | Staked amount in lovelace |
@@ -231,11 +214,11 @@ Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, the
 
 | Column | Type | Description |
 |---|---|---|
-| `epoch_no` | int32 | Epoch number |
+| `epoch_no` | int64 | Epoch number |
 | `drep_id` | string | DRep bech32 identifier (drep1...) |
 | `has_script` | bool | Whether this is a script-controlled DRep |
 | `amount` | int64 | Total voting power delegated to this DRep |
-| `active_until` | int32 | Epoch until which this DRep is active (nullable) |
+| `active_until` | int64 | Epoch until which this DRep is active (nullable) |
 
 ### drep_hash.parquet
 
@@ -252,25 +235,25 @@ Large tables (`epoch_stake`, `reward`) are exported **one epoch at a time**, the
 | `drep_id` | string | DRep bech32 identifier |
 | `has_script` | bool | Whether this is a script-controlled DRep |
 | `deposit` | int64 | Deposit amount (positive=register, negative=deregister, null=update) |
-| `cert_index` | int32 | Certificate index within the transaction |
+| `cert_index` | int64 | Certificate index within the transaction |
 | `tx_id` | int64 | Transaction ID (db-sync internal) |
 | `voting_anchor_id` | int64 | Voting anchor reference (nullable) |
 
 ## Verifying Output
 
 ```bash
-# Check with DuckDB CLI or Python
-python3 -c "
-import duckdb
-conn = duckdb.connect()
-print(conn.execute(\"SELECT COUNT(*) FROM read_parquet('drep_hash.parquet')\").fetchone())
-conn.execute(\"SELECT * FROM read_parquet('drep_hash.parquet') LIMIT 10\").show()
-"
-
-# Or with pyarrow (if installed)
+# Quick preview
 python3 -c "
 import pyarrow.parquet as pq
-meta = pq.read_metadata('epoch_stake_from504.parquet')
+t = pq.read_table('output/drep_hash.parquet')
+print(f'Rows: {t.num_rows}')
+print(t.to_pandas().head(10))
+"
+
+# Check metadata
+python3 -c "
+import pyarrow.parquet as pq
+meta = pq.read_metadata('output/epoch_stake_from504.parquet')
 print(f'Rows: {meta.num_rows}, Row groups: {meta.num_row_groups}')
 "
 
@@ -280,9 +263,8 @@ psql -c "SELECT count(*) FROM epoch_stake WHERE epoch_no >= 504;"
 
 ## Notes
 
-- Uses **PostgreSQL `COPY TO STDOUT`** (native protocol, fastest export path) for data extraction.
-- **DuckDB** handles local CSV-to-Parquet conversion with ZSTD compression.
-- Large tables are exported **epoch-by-epoch** with per-epoch timing breakdown and ETA.
-- All Parquet files use **ZSTD compression** (level 3) for good compression ratio and speed.
-- Atomic writes: data is written to `.tmp` files first, then renamed on success.
-- Dependencies: `duckdb` + `psycopg2-binary`.
+- Uses **PostgreSQL `COPY TO STDOUT`** — the fastest way to extract data from PostgreSQL.
+- Large tables exported **epoch-by-epoch** with per-epoch timing breakdown and ETA.
+- All Parquet files use **ZSTD compression** (level 3).
+- Atomic writes: `.tmp` file + rename on success.
+- Dependencies: `psycopg2-binary` + `pyarrow` only.

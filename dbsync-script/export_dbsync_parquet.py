@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """Export Cardano db-sync tables to Parquet format with resolved foreign keys.
 
-Strategy:
-  1. PostgreSQL does the JOINs (fast, ~2s per epoch with indexes)
-  2. COPY TO STDOUT streams results via PostgreSQL's native protocol (fastest path)
-  3. DuckDB converts CSV to Parquet with ZSTD compression
+Simple version: psycopg2 + pyarrow only (no DuckDB).
+Best for running on the same server or LAN as the db-sync PostgreSQL database.
 
-This avoids postgres_scanner's slow wire protocol for large data transfers.
+Strategy:
+  1. PostgreSQL does JOINs (fast locally, ~2s per epoch with indexes)
+  2. COPY TO STDOUT streams results via PostgreSQL's native protocol
+  3. pyarrow converts CSV to Parquet with ZSTD compression
 """
 
 import argparse
 import datetime
+import io
 import os
 import sys
 import time
 
-import duckdb
 import psycopg2
+import pyarrow as pa
+import pyarrow.csv as pa_csv
+import pyarrow.parquet as pq
 
 # =============================================================================
 # DEFAULT CONFIGURATION
@@ -31,14 +35,15 @@ DEFAULTS = {
     "PGPASSWORD": "",
     "PGDATABASE": "dbsync",
     "OUTPUT_DIR": ".",
+    "START_EPOCH": "504",
 }
 # =============================================================================
 
-# Starting epoch for filtered exports
-START_EPOCH = 504
-
 # Tables exported epoch-by-epoch for progress tracking
 EPOCH_PARTITIONED = {"epoch_stake", "reward"}
+
+# Tables whose output filename is suffixed with the start epoch
+EPOCH_SUFFIXED = {"epoch_stake", "reward", "drep_distr", "reward_rest"}
 
 TABLE_CONFIGS = {
     "epoch_stake": {
@@ -49,16 +54,8 @@ TABLE_CONFIGS = {
             JOIN pool_hash ph ON es.pool_id = ph.id
             WHERE es.epoch_no = {epoch}
         """,
-        "sql_all": """
-            SELECT es.epoch_no, sa.view AS stake_address, ph.view AS pool, es.amount
-            FROM epoch_stake es
-            JOIN stake_address sa ON es.addr_id = sa.id
-            JOIN pool_hash ph ON es.pool_id = ph.id
-            WHERE es.epoch_no >= {start_epoch}
-            ORDER BY es.epoch_no
-        """,
         "epoch_query": "SELECT DISTINCT epoch_no FROM epoch_stake WHERE epoch_no >= {start_epoch} ORDER BY epoch_no",
-        "filename": "epoch_stake_from504.parquet",
+        "filename": "epoch_stake_from{start_epoch}.parquet",
     },
     "reward": {
         "sql": """
@@ -69,17 +66,8 @@ TABLE_CONFIGS = {
             JOIN pool_hash ph ON r.pool_id = ph.id
             WHERE r.earned_epoch = {epoch}
         """,
-        "sql_all": """
-            SELECT sa.view AS stake_address, r.type::text AS type, r.amount,
-                   r.earned_epoch, r.spendable_epoch, ph.view AS pool
-            FROM reward r
-            JOIN stake_address sa ON r.addr_id = sa.id
-            JOIN pool_hash ph ON r.pool_id = ph.id
-            WHERE r.earned_epoch >= {start_epoch}
-            ORDER BY r.earned_epoch
-        """,
         "epoch_query": "SELECT DISTINCT earned_epoch AS epoch_no FROM reward WHERE earned_epoch >= {start_epoch} ORDER BY earned_epoch",
-        "filename": "reward_from504.parquet",
+        "filename": "reward_from{start_epoch}.parquet",
     },
     "drep_distr": {
         "sql_all": """
@@ -89,7 +77,7 @@ TABLE_CONFIGS = {
             JOIN drep_hash dh ON dd.hash_id = dh.id
             WHERE dd.epoch_no >= {start_epoch}
         """,
-        "filename": "drep_distr_from504.parquet",
+        "filename": "drep_distr_from{start_epoch}.parquet",
     },
     "drep_hash": {
         "sql_all": "SELECT encode(raw, 'hex') AS raw, view, has_script FROM drep_hash",
@@ -112,9 +100,13 @@ TABLE_CONFIGS = {
             JOIN stake_address sa ON rr.addr_id = sa.id
             WHERE rr.earned_epoch >= {start_epoch}
         """,
-        "filename": "reward_rest_from504.parquet",
+        "filename": "reward_rest_from{start_epoch}.parquet",
     },
 }
+
+
+def resolve_filename(table_name, config, start_epoch):
+    return config["filename"].format(start_epoch=start_epoch)
 
 
 def log(msg):
@@ -178,49 +170,47 @@ def resolve_config(args):
     return cfg
 
 
-def pg_copy_to_csv(pg_conn, sql, csv_path):
-    """Use PostgreSQL COPY TO STDOUT to stream query results to a local CSV file.
-
-    This is the fastest way to extract data from PostgreSQL — uses the native
-    COPY protocol with minimal overhead, much faster than row-by-row fetch
-    or postgres_scanner.
-    """
+def pg_copy_to_buffer(pg_conn, sql):
+    """COPY query results to an in-memory BytesIO buffer via PostgreSQL's native protocol."""
+    buf = io.BytesIO()
     copy_sql = f"COPY ({sql}) TO STDOUT WITH (FORMAT CSV, HEADER, NULL '')"
-    with open(csv_path, "wb") as f:
-        with pg_conn.cursor() as cur:
-            cur.copy_expert(copy_sql, f)
+    with pg_conn.cursor() as cur:
+        cur.copy_expert(copy_sql, buf)
+    buf.seek(0)
+    return buf
 
 
-def csv_to_parquet(duck_conn, csv_path, parquet_path, codec="ZSTD", compression_level=3):
-    """Convert a CSV file to Parquet using DuckDB."""
-    tmp_path = parquet_path + ".tmp"
-    duck_conn.execute(
-        f"COPY (SELECT * FROM read_csv('{csv_path}', header=true, auto_detect=true, null_padding=true)) "
-        f"TO '{tmp_path}' (FORMAT PARQUET, CODEC '{codec}', COMPRESSION_LEVEL {compression_level})"
-    )
-    os.replace(tmp_path, parquet_path)
+def buffer_to_table(buf):
+    """Convert a CSV buffer to a pyarrow Table."""
+    read_opts = pa_csv.ReadOptions()
+    parse_opts = pa_csv.ParseOptions()
+    convert_opts = pa_csv.ConvertOptions(strings_can_be_null=True)
+    return pa_csv.read_csv(buf, read_options=read_opts, parse_options=parse_opts,
+                           convert_options=convert_opts)
 
 
-def get_row_count(duck_conn, filepath):
-    """Get row count from a parquet file via DuckDB."""
-    result = duck_conn.execute(f"SELECT COUNT(*) FROM read_parquet('{filepath}')").fetchone()
-    return result[0]
+def write_parquet(table, filepath):
+    """Write a pyarrow Table to Parquet with ZSTD compression, atomically."""
+    tmp_path = filepath + ".tmp"
+    pq.write_table(table, tmp_path, compression="zstd", compression_level=3)
+    os.replace(tmp_path, filepath)
 
 
-def export_epoch_partitioned(pg_conn, duck_conn, table_name, config, output_dir):
-    """Export a large table epoch-by-epoch, then combine into one parquet file."""
-    filepath = os.path.join(output_dir, config["filename"])
+def export_epoch_partitioned(pg_conn, table_name, config, output_dir, start_epoch):
+    """Export a large table epoch-by-epoch, then merge into one parquet file."""
+    filename = resolve_filename(table_name, config, start_epoch)
+    filepath = os.path.join(output_dir, filename)
     epoch_dir = os.path.join(output_dir, f".{table_name}_epochs")
     os.makedirs(epoch_dir, exist_ok=True)
 
     # Get list of epochs
     with pg_conn.cursor() as cur:
-        cur.execute(config["epoch_query"].format(start_epoch=START_EPOCH))
+        cur.execute(config["epoch_query"].format(start_epoch=start_epoch))
         epochs = [row[0] for row in cur.fetchall()]
 
     if not epochs:
-        log(f"  No epochs found for {table_name} >= {START_EPOCH}")
-        return 0
+        log(f"  No epochs found for {table_name} >= {start_epoch}")
+        return 0, filename
 
     log(f"  Found {len(epochs)} epochs to export: {epochs[0]} - {epochs[-1]}")
 
@@ -230,31 +220,28 @@ def export_epoch_partitioned(pg_conn, duck_conn, table_name, config, output_dir)
 
     for i, epoch in enumerate(epochs):
         epoch_start = time.time()
-        epoch_csv = os.path.join(epoch_dir, f"epoch_{epoch}.csv")
-        epoch_parquet = os.path.join(epoch_dir, f"epoch_{epoch}.parquet")
+        epoch_file = os.path.join(epoch_dir, f"epoch_{epoch}.parquet")
 
-        # Step 1: PostgreSQL JOIN + COPY TO STDOUT -> CSV
+        # Step 1: PostgreSQL JOIN + COPY TO STDOUT -> memory buffer
         sql = config["sql"].format(epoch=epoch)
         t1 = time.time()
-        pg_copy_to_csv(pg_conn, sql, epoch_csv)
-        csv_time = time.time() - t1
-        csv_size = os.path.getsize(epoch_csv)
+        buf = pg_copy_to_buffer(pg_conn, sql)
+        csv_size = buf.getbuffer().nbytes
+        copy_time = time.time() - t1
 
-        # Step 2: DuckDB CSV -> Parquet
+        # Step 2: CSV buffer -> pyarrow Table -> Parquet
         t2 = time.time()
-        csv_to_parquet(duck_conn, epoch_csv, epoch_parquet)
+        table = buffer_to_table(buf)
+        write_parquet(table, epoch_file)
         parquet_time = time.time() - t2
 
-        # Cleanup CSV immediately
-        os.remove(epoch_csv)
-
-        row_count = get_row_count(duck_conn, epoch_parquet)
-        file_size = os.path.getsize(epoch_parquet)
+        row_count = table.num_rows
+        file_size = os.path.getsize(epoch_file)
         epoch_elapsed = time.time() - epoch_start
         total_rows += row_count
         total_elapsed = time.time() - table_start
 
-        epoch_files.append(epoch_parquet)
+        epoch_files.append(epoch_file)
 
         # Calculate ETA
         epochs_done = i + 1
@@ -264,21 +251,24 @@ def export_epoch_partitioned(pg_conn, duck_conn, table_name, config, output_dir)
 
         log(
             f"  Epoch {epoch}: {row_count:,} rows, "
-            f"CSV {format_size(csv_size)} in {csv_time:.1f}s, "
+            f"PG COPY {format_size(csv_size)} in {copy_time:.1f}s, "
             f"Parquet {format_size(file_size)} in {parquet_time:.1f}s | "
             f"Total: {total_rows:,} rows, {format_duration(total_elapsed)} elapsed, "
             f"ETA: {format_duration(eta_seconds)} ({epochs_done}/{len(epochs)})"
         )
 
     # Merge all epoch parquet files into one
-    log(f"  Merging {len(epoch_files)} epoch files into {config['filename']}...")
+    log(f"  Merging {len(epoch_files)} epoch files into {filename}...")
     merge_start = time.time()
-    glob_pattern = os.path.join(epoch_dir, "epoch_*.parquet")
-    duck_conn.execute(
-        f"COPY (SELECT * FROM read_parquet('{glob_pattern}')) "
-        f"TO '{filepath}.tmp' (FORMAT PARQUET, CODEC 'ZSTD', COMPRESSION_LEVEL 3)"
-    )
+
+    writer = pq.ParquetWriter(filepath + ".tmp", pq.read_schema(epoch_files[0]),
+                              compression="zstd", compression_level=3)
+    for ef in epoch_files:
+        t = pq.read_table(ef)
+        writer.write_table(t)
+    writer.close()
     os.replace(filepath + ".tmp", filepath)
+
     merge_elapsed = time.time() - merge_start
     log(f"  Merge complete in {format_duration(merge_elapsed)}")
 
@@ -287,93 +277,86 @@ def export_epoch_partitioned(pg_conn, duck_conn, table_name, config, output_dir)
         os.remove(f)
     os.rmdir(epoch_dir)
 
-    return total_rows
+    return total_rows, filename
 
 
-def export_simple(pg_conn, duck_conn, table_name, config, output_dir):
+def export_simple(pg_conn, table_name, config, output_dir, start_epoch):
     """Export a small table in one shot."""
-    filepath = os.path.join(output_dir, config["filename"])
-    csv_path = filepath + ".csv"
+    filename = resolve_filename(table_name, config, start_epoch)
+    filepath = os.path.join(output_dir, filename)
 
-    sql = config["sql_all"].format(start_epoch=START_EPOCH)
+    sql = config["sql_all"].format(start_epoch=start_epoch)
 
     t1 = time.time()
-    pg_copy_to_csv(pg_conn, sql, csv_path)
-    csv_time = time.time() - t1
-    csv_size = os.path.getsize(csv_path)
-    log(f"  CSV exported: {format_size(csv_size)} in {csv_time:.1f}s")
+    buf = pg_copy_to_buffer(pg_conn, sql)
+    csv_size = buf.getbuffer().nbytes
+    copy_time = time.time() - t1
+    log(f"  PG COPY: {format_size(csv_size)} in {copy_time:.1f}s")
 
     t2 = time.time()
-    csv_to_parquet(duck_conn, csv_path, filepath)
+    table = buffer_to_table(buf)
+    write_parquet(table, filepath)
     parquet_time = time.time() - t2
-    log(f"  Parquet converted in {parquet_time:.1f}s")
+    log(f"  Parquet: {table.num_rows:,} rows in {parquet_time:.1f}s")
 
-    os.remove(csv_path)
-    return get_row_count(duck_conn, filepath)
+    return table.num_rows, filename
 
 
-def export_table(pg_conn, duck_conn, table_name, config, output_dir):
+def export_table(pg_conn, table_name, config, output_dir, start_epoch):
     """Export a single table and print summary."""
     log(f"Exporting {table_name}...")
     start = time.time()
 
     if table_name in EPOCH_PARTITIONED:
-        row_count = export_epoch_partitioned(pg_conn, duck_conn, table_name, config, output_dir)
+        row_count, filename = export_epoch_partitioned(pg_conn, table_name, config, output_dir, start_epoch)
     else:
-        row_count = export_simple(pg_conn, duck_conn, table_name, config, output_dir)
+        row_count, filename = export_simple(pg_conn, table_name, config, output_dir, start_epoch)
 
     elapsed = time.time() - start
-    filepath = os.path.join(output_dir, config["filename"])
-    file_size = os.path.getsize(filepath)
+    filepath = os.path.join(output_dir, filename)
+    file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
 
     log(
         f"DONE {table_name}: {row_count:,} rows, "
-        f"{format_size(file_size)}, {format_duration(elapsed)} -> {config['filename']}"
+        f"{format_size(file_size)}, {format_duration(elapsed)} -> {filename}"
     )
     print(flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export Cardano db-sync tables to Parquet format",
+        description="Export Cardano db-sync tables to Parquet (psycopg2 + pyarrow)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Configuration priority: CLI args > .env file / env vars > DEFAULTS in script.
 
 Examples:
-  # Use .env file
-  python export_dbsync_parquet.py --env-file .env
-
-  # Pass everything via CLI
-  python export_dbsync_parquet.py --pg-host db.example.com --pg-user admin \\
+  python3 export_dbsync_parquet.py --env-file .env
+  python3 export_dbsync_parquet.py --env-file .env --tables drep_hash
+  python3 export_dbsync_parquet.py --pg-host localhost --pg-user admin \\
       --pg-password secret --pg-database dbsync --output-dir /data/parquet
-
-  # Mix: env file for DB, CLI for output and table selection
-  python export_dbsync_parquet.py --env-file .env --output-dir /data --tables drep_hash
         """,
     )
 
-    # Table selection
     parser.add_argument(
         "--tables", nargs="+",
         choices=list(TABLE_CONFIGS.keys()),
         default=list(TABLE_CONFIGS.keys()),
         help="Tables to export (default: all)",
     )
-
-    # Output directory
     parser.add_argument(
         "--output-dir", default=None,
-        help=f"Output directory for parquet files (default: DEFAULTS['{DEFAULTS['OUTPUT_DIR']}'])",
+        help="Output directory for parquet files",
     )
-
-    # Env file
     parser.add_argument(
         "--env-file", default=None,
         help="Path to .env file to load DB connection variables from",
     )
+    parser.add_argument(
+        "--start-epoch", type=int, default=None,
+        help="Starting epoch for filtered exports (default: from env START_EPOCH or DEFAULTS)",
+    )
 
-    # DB connection overrides
     db_group = parser.add_argument_group("database connection (override env vars / defaults)")
     db_group.add_argument("--pg-host", default=None, help="PostgreSQL host")
     db_group.add_argument("--pg-port", default=None, help="PostgreSQL port")
@@ -383,21 +366,23 @@ Examples:
 
     args = parser.parse_args()
 
-    # Load .env file if provided (before resolving config)
     if args.env_file:
         load_env_file(args.env_file)
 
-    # Resolve DB config
     db_config = resolve_config(args)
 
-    # Resolve output directory: CLI > env > DEFAULTS
     output_dir = args.output_dir or os.environ.get("OUTPUT_DIR", DEFAULTS["OUTPUT_DIR"])
     os.makedirs(output_dir, exist_ok=True)
 
-    log(f"Output directory: {os.path.abspath(output_dir)}")
+    if args.start_epoch is not None:
+        start_epoch = args.start_epoch
+    else:
+        start_epoch = int(os.environ.get("START_EPOCH", DEFAULTS["START_EPOCH"]))
 
-    # Connect to PostgreSQL directly (for COPY TO STDOUT)
+    log(f"Output directory: {os.path.abspath(output_dir)}")
+    log(f"Start epoch: {start_epoch}")
     log(f"Connecting to PostgreSQL: {db_config['host']}:{db_config['port']}/{db_config['database']}")
+
     pg_conn = psycopg2.connect(
         host=db_config["host"],
         port=db_config["port"],
@@ -408,19 +393,15 @@ Examples:
     pg_conn.autocommit = True
     log("PostgreSQL connected.")
 
-    # DuckDB for CSV -> Parquet conversion (local only, no postgres_scanner needed)
-    duck_conn = duckdb.connect()
-
     log(f"Starting export of {len(args.tables)} table(s): {', '.join(args.tables)}")
     print(flush=True)
 
     overall_start = time.time()
     try:
         for table_name in args.tables:
-            export_table(pg_conn, duck_conn, table_name, TABLE_CONFIGS[table_name], output_dir)
+            export_table(pg_conn, table_name, TABLE_CONFIGS[table_name], output_dir, start_epoch)
     finally:
         pg_conn.close()
-        duck_conn.close()
 
     overall_elapsed = time.time() - overall_start
     log(f"All exports complete in {format_duration(overall_elapsed)}")
