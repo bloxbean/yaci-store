@@ -849,12 +849,16 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         boolean asc = !"desc".equalsIgnoreCase(order);
         int offset = page * count;
 
+        Integer globalLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+                .from(EPOCH_STAKE)
+                .fetchOneInto(Integer.class);
         Integer latestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
                 .from(EPOCH_STAKE)
                 .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
                 .fetchOneInto(Integer.class);
 
-        if (latestEpoch == null) return List.of();
+        if (latestEpoch == null || globalLatestEpoch == null) return List.of();
+        boolean historicalPool = latestEpoch < globalLatestEpoch;
 
         Table<?> currentDelegators = currentDelegatorStateTable();
         Field<String> addressField = field(name("current_delegators", "address"), String.class);
@@ -877,20 +881,29 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .sub(withdrawalTotalField);
         Field<BigInteger> nonNegativeAvailableRewardField = when(availableRewardField.lt(BigInteger.ZERO), BigInteger.ZERO)
                 .otherwise(availableRewardField);
-        Field<BigInteger> currentStakeBalance = when(stakeBalanceView.EPOCH.gt(latestEpoch),
-                        stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
-                .otherwise((BigInteger) null);
+        Field<BigInteger> currentStakeBalance = historicalPool
+                ? stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField)
+                : when(stakeBalanceView.EPOCH.gt(latestEpoch), stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
+                    .otherwise((BigInteger) null);
         Field<BigInteger> liveStakeField = coalesce(currentStakeBalance, EPOCH_STAKE.AMOUNT).as("live_stake");
         SortField<?> slotOrder = asc ? slotField.asc() : slotField.desc();
         SortField<?> certIndexOrder = asc ? certIndexField.asc() : certIndexField.desc();
         SortField<?> addressOrder = asc ? addressField.asc() : addressField.desc();
 
-        return dsl.select(addressField, liveStakeField)
-                .from(currentDelegators)
-                .join(EPOCH_STAKE)
+        var query = dsl.select(addressField, liveStakeField)
+                .from(currentDelegators);
+
+        var joined = historicalPool
+                ? query.leftJoin(EPOCH_STAKE)
                     .on(EPOCH_STAKE.ADDRESS.eq(addressField))
                     .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
                     .and(EPOCH_STAKE.EPOCH.eq(latestEpoch))
+                : query.join(EPOCH_STAKE)
+                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                    .and(EPOCH_STAKE.EPOCH.eq(latestEpoch));
+
+        return joined
                 .leftJoin(stakeBalanceView)
                     .on(stakeBalanceView.ADDRESS.eq(addressField))
                 .leftJoin(rewardTotals)
@@ -981,29 +994,80 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
 
     @Override
     public Optional<BFPoolStakeInfo> getPoolStakeInfo(String poolIdHex) {
-        // Find the latest epoch in epoch_stake (global, not per-pool, to ensure consistency)
-        Integer latestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+        Integer globalLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
                 .from(EPOCH_STAKE)
                 .fetchOneInto(Integer.class);
-        if (latestEpoch == null) return Optional.empty();
+        if (globalLatestEpoch == null) return Optional.empty();
 
-        int activeEpoch = Math.max(latestEpoch - 2, 0);
-
-        // Pool aggregation at latest epoch (live)
-        Record liveRec = dsl.select(
-                        coalesce(sum(EPOCH_STAKE.AMOUNT), val(BigInteger.ZERO)).as("live_stake"),
-                        count().as("live_delegators")
-                )
+        Integer poolLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
                 .from(EPOCH_STAKE)
                 .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
-                .and(EPOCH_STAKE.EPOCH.eq(latestEpoch))
-                .fetchOne();
+                .fetchOneInto(Integer.class);
 
-        BigInteger liveStake = liveRec != null ? toBigInteger(liveRec.get("live_stake")) : BigInteger.ZERO;
-        int liveDelegators = liveRec != null ? liveRec.get("live_delegators", Integer.class) : 0;
+        int activeEpoch = Math.max(globalLatestEpoch - 2, 0);
 
-        // If pool has no stake at latest epoch, return empty (pool might not be active)
-        if (liveDelegators == 0) return Optional.empty();
+        BigInteger liveStake = BigInteger.ZERO;
+        int liveDelegators = 0;
+        if (poolLatestEpoch != null) {
+            boolean historicalPool = poolLatestEpoch < globalLatestEpoch;
+            Table<?> currentDelegators = currentDelegatorStateTable();
+            Field<String> addressField = field(name("current_delegators", "address"), String.class);
+            Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
+            Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
+            Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
+            Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
+            Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+
+            StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
+            Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
+            Field<BigInteger> rewardRestTotalField = coalesce(field(name("reward_rest_totals", "reward_rest_total"), BigInteger.class), BigInteger.ZERO);
+            Field<BigInteger> instantRewardTotalField = coalesce(field(name("instant_reward_totals", "instant_reward_total"), BigInteger.class), BigInteger.ZERO);
+            Field<BigInteger> withdrawalTotalField = coalesce(field(name("withdrawal_totals", "withdrawal_total"), BigInteger.class), BigInteger.ZERO);
+            Field<BigInteger> availableRewardField = rewardTotalField
+                    .add(rewardRestTotalField)
+                    .add(instantRewardTotalField)
+                    .sub(withdrawalTotalField);
+            Field<BigInteger> nonNegativeAvailableRewardField = when(availableRewardField.lt(BigInteger.ZERO), BigInteger.ZERO)
+                    .otherwise(availableRewardField);
+            Field<BigInteger> currentStakeBalance = historicalPool
+                    ? stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField)
+                    : when(stakeBalanceView.EPOCH.gt(poolLatestEpoch), stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
+                        .otherwise((BigInteger) null);
+            Field<BigInteger> liveStakeValueField = coalesce(currentStakeBalance, EPOCH_STAKE.AMOUNT);
+            var base = dsl.select(
+                            coalesce(sum(liveStakeValueField), val(BigInteger.ZERO)).as("live_stake"),
+                            count().as("live_delegators")
+                    )
+                    .from(currentDelegators);
+            var joined = historicalPool
+                    ? base.leftJoin(EPOCH_STAKE)
+                        .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                        .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                        .and(EPOCH_STAKE.EPOCH.eq(poolLatestEpoch))
+                    : base.join(EPOCH_STAKE)
+                        .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                        .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                        .and(EPOCH_STAKE.EPOCH.eq(poolLatestEpoch));
+
+            Record liveRec = joined
+                    .leftJoin(stakeBalanceView)
+                        .on(stakeBalanceView.ADDRESS.eq(addressField))
+                    .leftJoin(rewardTotals)
+                        .on(field(name("reward_totals", "address"), String.class).eq(addressField))
+                    .leftJoin(rewardRestTotals)
+                        .on(field(name("reward_rest_totals", "address"), String.class).eq(addressField))
+                    .leftJoin(instantRewardTotals)
+                        .on(field(name("instant_reward_totals", "address"), String.class).eq(addressField))
+                    .leftJoin(withdrawalTotals)
+                        .on(field(name("withdrawal_totals", "address"), String.class).eq(addressField))
+                    .where(poolIdField.eq(poolIdHex))
+                    .fetchOne();
+
+            liveStake = liveRec != null ? toBigInteger(liveRec.get("live_stake")) : BigInteger.ZERO;
+            liveDelegators = liveRec != null ? liveRec.get("live_delegators", Integer.class) : 0;
+        }
+
+        if (liveDelegators == 0 && poolLatestEpoch == null) return Optional.empty();
 
         // Pool aggregation at active epoch (latest - 2)
         BigInteger activeStake = dsl.select(coalesce(sum(EPOCH_STAKE.AMOUNT), val(BigInteger.ZERO)).as("active_stake"))
@@ -1015,7 +1079,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         // Total stake at each epoch
         BigInteger totalLiveStake = dsl.select(coalesce(sum(EPOCH_STAKE.AMOUNT), val(BigInteger.ZERO)).as("total"))
                 .from(EPOCH_STAKE)
-                .where(EPOCH_STAKE.EPOCH.eq(latestEpoch))
+                .where(EPOCH_STAKE.EPOCH.eq(globalLatestEpoch))
                 .fetchOne("total", BigInteger.class);
 
         BigInteger totalActiveStake = dsl.select(coalesce(sum(EPOCH_STAKE.AMOUNT), val(BigInteger.ZERO)).as("total"))
@@ -1024,13 +1088,80 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .fetchOne("total", BigInteger.class);
 
         // nopt and circulation from adapot/epoch_param
-        int nopt = fetchNopt(latestEpoch);
-        BigInteger circulation = fetchCirculation(latestEpoch);
+        int nopt = fetchNopt(globalLatestEpoch);
+        BigInteger circulation = fetchCirculation(globalLatestEpoch);
 
         return Optional.of(new BFPoolStakeInfo(
                 poolIdHex, liveStake, liveDelegators, activeStake,
                 totalLiveStake, totalActiveStake, circulation, nopt
         ));
+    }
+
+    @Override
+    public BigInteger getPoolOwnerLiveStake(String poolIdHex, List<String> ownerAddresses) {
+        if (ownerAddresses == null || ownerAddresses.isEmpty()) return BigInteger.ZERO;
+
+        Integer globalLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+                .from(EPOCH_STAKE)
+                .fetchOneInto(Integer.class);
+        Integer poolLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+                .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .fetchOneInto(Integer.class);
+        if (globalLatestEpoch == null || poolLatestEpoch == null) return BigInteger.ZERO;
+
+        boolean historicalPool = poolLatestEpoch < globalLatestEpoch;
+        Table<?> currentDelegators = currentDelegatorStateTable();
+        Field<String> addressField = field(name("current_delegators", "address"), String.class);
+        Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
+        Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
+        Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
+        Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
+        Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+
+        StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
+        Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> rewardRestTotalField = coalesce(field(name("reward_rest_totals", "reward_rest_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> instantRewardTotalField = coalesce(field(name("instant_reward_totals", "instant_reward_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> withdrawalTotalField = coalesce(field(name("withdrawal_totals", "withdrawal_total"), BigInteger.class), BigInteger.ZERO);
+        Field<BigInteger> availableRewardField = rewardTotalField
+                .add(rewardRestTotalField)
+                .add(instantRewardTotalField)
+                .sub(withdrawalTotalField);
+        Field<BigInteger> nonNegativeAvailableRewardField = when(availableRewardField.lt(BigInteger.ZERO), BigInteger.ZERO)
+                .otherwise(availableRewardField);
+        Field<BigInteger> currentStakeBalance = historicalPool
+                ? stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField)
+                : when(stakeBalanceView.EPOCH.gt(poolLatestEpoch), stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
+                    .otherwise((BigInteger) null);
+        Field<BigInteger> liveStakeValueField = coalesce(currentStakeBalance, EPOCH_STAKE.AMOUNT);
+
+        var base = dsl.select(coalesce(sum(liveStakeValueField), val(BigInteger.ZERO)).as("live_pledge"))
+                .from(currentDelegators);
+        var joined = historicalPool
+                ? base.leftJoin(EPOCH_STAKE)
+                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                    .and(EPOCH_STAKE.EPOCH.eq(poolLatestEpoch))
+                : base.join(EPOCH_STAKE)
+                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                    .and(EPOCH_STAKE.EPOCH.eq(poolLatestEpoch));
+
+        return joined
+                .leftJoin(stakeBalanceView)
+                    .on(stakeBalanceView.ADDRESS.eq(addressField))
+                .leftJoin(rewardTotals)
+                    .on(field(name("reward_totals", "address"), String.class).eq(addressField))
+                .leftJoin(rewardRestTotals)
+                    .on(field(name("reward_rest_totals", "address"), String.class).eq(addressField))
+                .leftJoin(instantRewardTotals)
+                    .on(field(name("instant_reward_totals", "address"), String.class).eq(addressField))
+                .leftJoin(withdrawalTotals)
+                    .on(field(name("withdrawal_totals", "address"), String.class).eq(addressField))
+                .where(poolIdField.eq(poolIdHex))
+                .and(addressField.in(ownerAddresses))
+                .fetchOne("live_pledge", BigInteger.class);
     }
 
     @Override

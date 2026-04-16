@@ -66,6 +66,9 @@ public class BFPoolsService {
         // Enrich with live/active stake info from epoch_stake (if adapot is available)
         if (isAdapotAvailable()) {
             enrichPoolDtoWithStakeInfo(dto, poolIdHex);
+            if (dto.getOwners() != null && !dto.getOwners().isEmpty()) {
+                dto.setLivePledge(storageReader.getPoolOwnerLiveStake(poolIdHex, dto.getOwners()).toString());
+            }
         }
         return dto;
     }

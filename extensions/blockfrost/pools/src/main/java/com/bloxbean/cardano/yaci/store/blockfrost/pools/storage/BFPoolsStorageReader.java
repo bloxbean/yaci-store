@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.impl.model.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigInteger;
 
 public interface BFPoolsStorageReader {
 
@@ -67,6 +68,12 @@ public interface BFPoolsStorageReader {
      * Returns Optional.empty() if no epoch_stake data exists for this pool.
      */
     Optional<BFPoolStakeInfo> getPoolStakeInfo(String poolIdHex);
+
+    /**
+     * Returns the live pledge amount for the given owner stake addresses under the pool's
+     * current live-stake semantics.
+     */
+    BigInteger getPoolOwnerLiveStake(String poolIdHex, List<String> ownerAddresses);
 
     /**
      * Returns aggregated stake info for multiple pools in a single query (batch lookup for extended list).
