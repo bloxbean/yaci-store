@@ -59,6 +59,7 @@ public class TokenQueryService {
 
         Map<String, Extension> extensions = buildExtensions(subject);
         TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
+
         return Optional.of(new Subject(subject, type, resolved.metadata(),
                 showCipsDetails ? resolved.standards() : null,
                 extensions.isEmpty() ? null : extensions));
@@ -84,6 +85,7 @@ public class TokenQueryService {
         }
 
         TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
+
         return new Subject(subject, type, resolved.metadata(),
                 showCipsDetails ? resolved.standards() : null,
                 extensions.isEmpty() ? null : extensions);

@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import jakarta.annotation.Nullable;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -98,9 +99,11 @@ public class Cip68TokenService {
         if (refNftKeys.isEmpty()) {
             return Map.of();
         }
+
         List<String> concatenatedKeys = refNftKeys.stream()
                 .map(AssetType::toUnit)
                 .toList();
+
         return metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys, LABEL_FT).stream()
                 .collect(Collectors.toMap(
                         row -> row.getPolicyId() + row.getAssetName(),
@@ -118,12 +121,13 @@ public class Cip68TokenService {
                 getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties));
     }
 
+    @Nullable
     private <T> T getPropertyIfRequired(String propertyName, T propertyValue, List<String> properties) {
         if (properties.isEmpty() || properties.contains(propertyName)) {
             return propertyValue;
-        } else {
-            return null;
         }
+
+        return null;
     }
 
     /**
@@ -148,12 +152,13 @@ public class Cip68TokenService {
         AssetType assetType = AssetType.fromUnit(subject);
         String assetName = assetType.assetName();
         int tokenPrefixLength = REFERENCE_TOKEN_PREFIX.length();
+
         if (assetName.length() > tokenPrefixLength && assetName.startsWith(FUNGIBLE_TOKEN_PREFIX)) {
             String refNftAssetName = String.format("%s%s", REFERENCE_TOKEN_PREFIX, assetType.assetName().substring(tokenPrefixLength));
             return Optional.of(new AssetType(assetType.policyId(), refNftAssetName));
-        } else {
-            return Optional.empty();
         }
+
+        return Optional.empty();
     }
 
     /**

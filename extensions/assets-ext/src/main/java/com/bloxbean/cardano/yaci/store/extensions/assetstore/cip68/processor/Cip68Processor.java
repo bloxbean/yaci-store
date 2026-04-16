@@ -26,12 +26,6 @@ import java.util.stream.Stream;
 @Slf4j
 public class Cip68Processor {
 
-    private record ReferenceNftUtxoData(AssetType referenceNft,
-                                        FungibleTokenMetadata fungibleTokenMetadata,
-                                        String datum) {
-
-    }
-
     private final Cip68TokenService cip68TokenService;
     private final Cip68DatumParser cip68DatumParser;
     private final MetadataReferenceNftRepository metadataReferenceNftRepository;
@@ -40,6 +34,7 @@ public class Cip68Processor {
     @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         Long slot = addressUtxoEvent.getMetadata().getSlot();
+
         List<MetadataReferenceNft> entities = addressUtxoEvent.getTxInputOutputs()
                 .stream()
                 .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
@@ -79,10 +74,6 @@ public class Cip68Processor {
         return cip68TokenService.isValidMetadata(referenceNftUtxoData.fungibleTokenMetadata());
     }
 
-    private record AmtWithUtxo(Amt amt, AddressUtxo utxo) {
-
-    }
-
     private Stream<ReferenceNftUtxoData> parseDatum(AmtWithUtxo referenceNftUtxo) {
         return cip68DatumParser.parse(referenceNftUtxo.utxo().getInlineDatum())
                 .stream()
@@ -93,6 +84,14 @@ public class Cip68Processor {
 
     private Stream<AmtWithUtxo> findReferenceNft(AddressUtxo utxo) {
         return cip68TokenService.extractReferenceNft(utxo).map(amt -> new AmtWithUtxo(amt, utxo)).stream();
+    }
+
+    private record ReferenceNftUtxoData(AssetType referenceNft,
+                                        FungibleTokenMetadata fungibleTokenMetadata,
+                                        String datum) {
+    }
+
+    private record AmtWithUtxo(Amt amt, AddressUtxo utxo) {
     }
 
 }
