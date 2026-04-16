@@ -28,13 +28,20 @@ tick (which fails the same way). Zero entries reach `ft_offchain_metadata`.
 
 ## Enums registered
 
-Two families, both on the sync's hot path:
+Three families, each on a distinct part of the sync's hot path:
 
 - **`org.eclipse.jgit.lib.CoreConfig.*`** — read during repo init and
   working-tree setup (`CloneCommand` → `InitCommand` → `FileRepository` →
-  `RefDirectory`).
+  `RefDirectory`). Exercised by the initial full-sync clone.
 - **`org.eclipse.jgit.diff.{DiffAlgorithm.SupportedAlgorithm, DiffConfig.RenameDetectionType}`**
-  — read by `DiffFormatter.setReader` during commit-history traversal.
+  — read by `DiffFormatter.setReader` during commit-history traversal
+  (`GitService.getAllMappingDetails` uses `LogCommand` + diffs to resolve
+  per-file `updatedAt` / `updatedBy`).
+- **`org.eclipse.jgit.lib.CommitConfig.CleanupMode`** — read by
+  `CommitConfig.<init>` when `Config.get(COMMIT_KEY)` materialises the
+  section. Exercised by incremental sync: `PullCommand` → `RebaseCommand`
+  → reads `commit.cleanup`. Only surfaces on cron ticks after the first
+  (which did a clone, not a pull).
 
 `allDeclaredMethods: true` keeps `values()` / `valueOf(String)` reachable;
 `allDeclaredFields: true` keeps the enum constants introspectable.
