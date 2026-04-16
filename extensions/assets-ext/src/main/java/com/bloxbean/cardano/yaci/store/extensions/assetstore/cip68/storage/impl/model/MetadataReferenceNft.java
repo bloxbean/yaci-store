@@ -13,19 +13,26 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Business-key equals/hashCode: all three PK components are app-assigned and non-null at
+// construction, so they're stable across the transient → managed → detached lifecycle.
+// Lombok's generated equals uses `instanceof` (proxy-safe for lazy-loaded associations).
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class MetadataReferenceNft {
 
     /** Policy id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded. */
     @Id
     @Column(name = "policy_id", length = 56, nullable = false)
+    @EqualsAndHashCode.Include
     private String policyId;
 
     /** Asset name: 0–32 bytes = 0–64 hex chars (Cardano ledger max). Protocol-bounded. */
     @Id
     @Column(name = "asset_name", length = 64, nullable = false)
+    @EqualsAndHashCode.Include
     private String assetName;
 
     @Id
+    @EqualsAndHashCode.Include
     private Long slot;
 
     /** CIP-68 label: 222 (NFT), 333 (FT), 444 (RFT). Only 333 is currently indexed. */

@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Business-key equals/hashCode: all three PK components are app-assigned and non-null at
+// construction, so they're stable across the transient → managed → detached lifecycle.
+// Lombok's generated equals uses `instanceof` (proxy-safe for lazy-loaded associations).
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Cip113RegistryNode {
 
     /**
@@ -65,14 +69,17 @@ public class Cip113RegistryNode {
      */
     @Id
     @Column(name = "`key`", length = 64, nullable = false)
+    @EqualsAndHashCode.Include
     private String key;
 
     @Id
     @Column(nullable = false)
+    @EqualsAndHashCode.Include
     private Long slot;
 
     @Id
     @Column(name = "tx_hash", length = 64, nullable = false)
+    @EqualsAndHashCode.Include
     private String txHash;
 
     /** Aiken {@code Credential} (28-byte vkey or script hash, 56 hex chars). Protocol-bounded. */
