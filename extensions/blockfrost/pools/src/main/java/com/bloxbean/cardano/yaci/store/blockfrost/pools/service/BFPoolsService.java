@@ -155,9 +155,6 @@ public class BFPoolsService {
         // 404 if pool not registered
         storageReader.getVrfKeyByPoolId(poolIdHex)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pool not found: " + poolId));
-        if (storageReader.getLatestPoolStatus(poolIdHex).filter("RETIRED"::equals).isPresent()) {
-            return List.of();
-        }
         int p = page - 1;
         if (isAdapotAvailable()) {
             return storageReader.getPoolDelegatorsFull(poolIdHex, p, count, BFPoolIdUtil.normalizeOrder(order));
