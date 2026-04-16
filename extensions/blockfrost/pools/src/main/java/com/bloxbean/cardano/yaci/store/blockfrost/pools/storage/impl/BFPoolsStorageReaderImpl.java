@@ -610,13 +610,16 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .groupBy(EPOCH_STAKE.EPOCH)
                 .asTable("total_stake_sub");
 
-        // Subquery: total rewards + leader-only rewards per earned_epoch for this pool
+        // Subquery: total rewards per earned_epoch for this pool.
+        // Exclude type='refund': that is the 500 ADA pool deposit returned on retirement,
+        // not a staking reward. Including it inflates rewards and fees for the retirement epoch.
         var rewardSub = dsl.select(
                         REWARD.EARNED_EPOCH.as("r_epoch"),
                         sum(REWARD.AMOUNT).as("rewards")
                 )
                 .from(REWARD)
                 .where(REWARD.POOL_ID.eq(poolIdHex))
+                .and(REWARD.TYPE.ne("refund"))
                 .groupBy(REWARD.EARNED_EPOCH)
                 .asTable("reward_sub");
 
