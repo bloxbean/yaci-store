@@ -7,18 +7,18 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenMetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.TokenMetadataValidator;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil.toTokenLogo;
 
-@Component
+@Service
 @Slf4j
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class TokenMetadataService {
 
     private final TokenMetadataRepository tokenMetadataRepository;

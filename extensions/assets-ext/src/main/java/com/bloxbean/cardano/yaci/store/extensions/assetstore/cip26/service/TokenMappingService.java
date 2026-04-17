@@ -4,12 +4,12 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.Optional;
 
-@Component
+@Service
 @RequiredArgsConstructor
 @Slf4j
 public class TokenMappingService {
