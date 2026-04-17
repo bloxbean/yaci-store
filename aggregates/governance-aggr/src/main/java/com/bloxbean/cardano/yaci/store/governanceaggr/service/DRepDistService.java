@@ -398,6 +398,7 @@ public class DRepDistService {
                     ON  unreg.drep_hash   = stale_del.drep_hash
                     AND unreg.cred_type   = stale_del.drep_type
                     AND unreg.type        = 'UNREG_DREP_CERT'
+                    AND unreg.epoch      <= :epoch
                     AND unreg.epoch      <= :pv9_max_epoch
                     AND (   unreg.slot > stale_del.slot
                          OR (unreg.slot = stale_del.slot AND unreg.tx_index > stale_del.tx_index)
@@ -447,20 +448,63 @@ public class DRepDistService {
                          OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index = unreg.tx_index
                              AND earlier_unreg.cert_index < unreg.cert_index))
                 )
-                -- If the address re-delegated to a VIRTUAL DRep (AlwaysAbstain / NoConfidence)
-                -- between the original delegation and the deregistration, Haskell would have
-                -- removed old_drep -> {address} from the reverse index at that point (virtual DReps
-                -- have no reverse entries). The stale entry no longer exists, so old_drep's
-                -- deregistration cannot clear this address — exclude it from the cleared set.
+                -- A virtual delegation does NOT automatically remove every stale reverse entry for
+                -- old_drep. In bootstrap, `unDelegReDelegDRep` removes only the reverse entry of the
+                -- credential DRep that is CURRENT immediately before the virtual delegation.
+                -- Therefore, exclude this address only if some virtual delegation between stale_del
+                -- and unreg actually removed old_drep, AND old_drep was not delegated to again
+                -- before its UNREG.
                 AND NOT EXISTS (
                     SELECT 1 FROM delegation_vote virt_del
                     WHERE virt_del.address   = stale_del.address
                     AND   virt_del.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
                     AND   virt_del.epoch    <= :epoch
                     AND (   virt_del.slot > stale_del.slot
-                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index > stale_del.tx_index))
+                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index > stale_del.tx_index)
+                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index = stale_del.tx_index
+                             AND virt_del.cert_index > stale_del.cert_index))
                     AND (   virt_del.slot < unreg.slot
-                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index < unreg.tx_index))
+                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index < unreg.tx_index)
+                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index = unreg.tx_index
+                             AND virt_del.cert_index < unreg.cert_index))
+                    AND EXISTS (
+                        SELECT 1 FROM delegation_vote prev_del
+                        WHERE prev_del.address   = stale_del.address
+                        AND   prev_del.drep_hash = stale_del.drep_hash
+                        AND   prev_del.drep_type = stale_del.drep_type
+                        AND   prev_del.epoch    <= :epoch
+                        AND (   prev_del.slot < virt_del.slot
+                             OR (prev_del.slot = virt_del.slot AND prev_del.tx_index < virt_del.tx_index)
+                             OR (prev_del.slot = virt_del.slot AND prev_del.tx_index = virt_del.tx_index
+                                 AND prev_del.cert_index < virt_del.cert_index))
+                        AND NOT EXISTS (
+                            SELECT 1 FROM delegation_vote between_del
+                            WHERE between_del.address = stale_del.address
+                            AND (   between_del.slot > prev_del.slot
+                                 OR (between_del.slot = prev_del.slot AND between_del.tx_index > prev_del.tx_index)
+                                 OR (between_del.slot = prev_del.slot AND between_del.tx_index = prev_del.tx_index
+                                     AND between_del.cert_index > prev_del.cert_index))
+                            AND (   between_del.slot < virt_del.slot
+                                 OR (between_del.slot = virt_del.slot AND between_del.tx_index < virt_del.tx_index)
+                                 OR (between_del.slot = virt_del.slot AND between_del.tx_index = virt_del.tx_index
+                                     AND between_del.cert_index < virt_del.cert_index))
+                        )
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM delegation_vote readd_del
+                        WHERE readd_del.address   = stale_del.address
+                        AND   readd_del.drep_hash = stale_del.drep_hash
+                        AND   readd_del.drep_type = stale_del.drep_type
+                        AND   readd_del.epoch    <= :epoch
+                        AND (   readd_del.slot > virt_del.slot
+                             OR (readd_del.slot = virt_del.slot AND readd_del.tx_index > virt_del.tx_index)
+                             OR (readd_del.slot = virt_del.slot AND readd_del.tx_index = virt_del.tx_index
+                                 AND readd_del.cert_index > virt_del.cert_index))
+                        AND (   readd_del.slot < unreg.slot
+                             OR (readd_del.slot = unreg.slot AND readd_del.tx_index < unreg.tx_index)
+                             OR (readd_del.slot = unreg.slot AND readd_del.tx_index = unreg.tx_index
+                                 AND readd_del.cert_index < unreg.cert_index))
+                    )
                 )
                 -- If the address delegated again AFTER old_drep's deregistration, that new
                 -- delegation is a fresh, valid forward pointer — the address should not be excluded.
@@ -667,7 +711,8 @@ public class DRepDistService {
                                                  )
                   where
                     (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
-                    AND sd.address IS NULL              
+                    AND sd.address IS NULL
+                    AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
                   group by
                     rd.drep_type
                 """;
