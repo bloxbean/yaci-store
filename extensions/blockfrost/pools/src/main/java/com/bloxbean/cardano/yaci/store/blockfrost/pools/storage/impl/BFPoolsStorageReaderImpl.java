@@ -305,12 +305,20 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
             List<Map<String, Object>> relays = objectMapper.readValue(relaysObj.toString(), new TypeReference<>() {});
             List<BFPoolRelayDto> result = new ArrayList<>();
             for (Map<String, Object> relay : relays) {
+                // Cardano relay type 1 (SingleHostName): has port + dnsName → dns field
+                // Cardano relay type 2 (MultiHostName / SRV): no port, only dnsName → dns_srv field
+                // yaci stores both as "dnsName"; type 2 has port=null or port=0
+                String dnsName = getStringField(relay, "dnsName");
+                Integer port   = getIntField(relay, "port");
+                boolean isSrv  = dnsName != null && (port == null || port == 0);
+                String dns    = (!isSrv) ? dnsName : null;
+                String dnsSrv = isSrv ? dnsName : null;
                 result.add(BFPoolRelayDto.builder()
                         .ipv4(getStringField(relay, "ipv4"))
                         .ipv6(getStringField(relay, "ipv6"))
-                        .dns(getStringField(relay, "dnsName"))
-                        .dnsSrv(getStringField(relay, "dnsSrvName"))
-                        .port(getIntField(relay, "port"))
+                        .dns(dns)
+                        .dnsSrv(dnsSrv)
+                        .port(port)
                         .build());
             }
             Comparator<BFPoolRelayDto> relayOrder = Comparator
