@@ -48,15 +48,6 @@ public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113Regist
             "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.key = e.key)")
     List<Cip113RegistryNode> findLatestByKeys(@Param("keys") Collection<String> keys);
 
-    /**
-     * Returns the set of distinct {@code key} values currently in the registry node table.
-     * Includes sentinel values if any are present — callers that want only real registered
-     * policy IDs should filter out empty strings and 58–64-hex tail-sentinel values, or use
-     * a more specific query.
-     */
-    @Query("SELECT DISTINCT e.key FROM Cip113RegistryNode e")
-    List<String> findDistinctKeys();
-
     int deleteBySlotGreaterThan(Long slot);
 
 }

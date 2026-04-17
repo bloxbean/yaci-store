@@ -1,10 +1,8 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -40,20 +38,4 @@ public interface Cip113StorageReader {
      * @return true if a registry node exists for this policy
      */
     boolean isProgrammableToken(String policyId);
-
-    /**
-     * Get the raw registry node entity for a policy ID (includes slot, tx_hash, datum).
-     * Useful when you need the full on-chain context, not just the parsed scripts.
-     *
-     * @param policyId the policy ID
-     * @return the latest raw entity if found
-     */
-    Optional<Cip113RegistryNode> findRawByPolicyId(String policyId);
-
-    /**
-     * Get all known programmable token policy IDs.
-     *
-     * @return list of distinct policy IDs that have registry nodes
-     */
-    List<String> findAllProgrammableTokenPolicyIds();
 }

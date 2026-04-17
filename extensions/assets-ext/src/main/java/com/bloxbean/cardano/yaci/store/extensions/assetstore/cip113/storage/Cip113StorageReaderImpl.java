@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -56,16 +55,6 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
     @Override
     public boolean isProgrammableToken(String policyId) {
         return findByPolicyId(policyId).isPresent();
-    }
-
-    @Override
-    public Optional<Cip113RegistryNode> findRawByPolicyId(String policyId) {
-        return cip113RegistryNodeRepository.findFirstByKeyOrderBySlotDesc(policyId);
-    }
-
-    @Override
-    public List<String> findAllProgrammableTokenPolicyIds() {
-        return cip113RegistryNodeRepository.findDistinctKeys();
     }
 
     static ProgrammableTokenCip113 toDto(Cip113RegistryNode entity) {
