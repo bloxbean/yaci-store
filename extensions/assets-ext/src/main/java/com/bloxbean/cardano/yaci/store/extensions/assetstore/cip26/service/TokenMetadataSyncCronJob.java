@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "store.assets.ext.cip26.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "store.assets.ext.cip26.enabled", havingValue = "true", matchIfMissing = true)
 @ReadOnly(false)
 public class TokenMetadataSyncCronJob implements Runnable {
 
@@ -30,7 +30,8 @@ public class TokenMetadataSyncCronJob implements Runnable {
     }
 
     @Override
-    @Scheduled(timeUnit = TimeUnit.MINUTES, initialDelay = 1L, fixedDelay = 60L)
+    @Scheduled(timeUnit = TimeUnit.MINUTES, initialDelay = 1L,
+            fixedDelayString = "${store.assets.ext.cip26.sync-interval-minutes:60}")
     public void run() {
         log.info("about to start syncing");
         tokenMetadataSyncService.synchronizeDatabase();

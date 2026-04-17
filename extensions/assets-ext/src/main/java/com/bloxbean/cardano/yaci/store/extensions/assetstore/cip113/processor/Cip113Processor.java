@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.service.Cip1
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnProperty(name = "store.assets.ext.cip113.enabled", havingValue = "true", matchIfMissing = true)
 public class Cip113Processor {
 
     private final Cip113Configuration cip113Configuration;

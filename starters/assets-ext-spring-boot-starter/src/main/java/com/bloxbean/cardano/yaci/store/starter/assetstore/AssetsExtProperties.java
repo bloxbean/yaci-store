@@ -20,12 +20,13 @@ public class AssetsExtProperties {
     @Getter
     @Setter
     public static final class Cip26 {
-        private boolean enabled = false;
+        private boolean enabled = true;
         private String gitOrganization = "cardano-foundation";
         private String gitProjectName = "cardano-token-registry";
         private String gitMappingsFolder = "mappings";
         private String gitTmpFolder = "/tmp";
         private long syncIntervalMinutes = 60;
+        private boolean forceClone = false;
     }
 
     @Getter
@@ -37,10 +38,12 @@ public class AssetsExtProperties {
     @Getter
     @Setter
     public static final class Cip113 {
-        private boolean enabled = false;
+        private boolean enabled = true;
         /**
          * Comma-separated list of CIP-113 registry NFT policy IDs to monitor.
-         * If empty, policy IDs are auto-detected from the network's property file.
+         * If empty (and no per-network defaults exist), CIP-113 is disabled.
+         * If empty but defaults are available, policy IDs are auto-detected from
+         * the network's property file.
          */
         private List<String> registryNftPolicyIds = new ArrayList<>();
     }

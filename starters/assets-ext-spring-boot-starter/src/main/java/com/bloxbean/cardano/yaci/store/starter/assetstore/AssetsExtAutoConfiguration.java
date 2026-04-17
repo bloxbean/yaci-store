@@ -28,6 +28,7 @@ public class AssetsExtAutoConfiguration {
         cip26.setGitProjectName(properties.getCip26().getGitProjectName());
         cip26.setGitMappingsFolder(properties.getCip26().getGitMappingsFolder());
         cip26.setGitTmpFolder(properties.getCip26().getGitTmpFolder());
+        cip26.setForceClone(properties.getCip26().isForceClone());
 
         AssetsExtStoreProperties.Cip113 cip113 = new AssetsExtStoreProperties.Cip113();
         cip113.setRegistryNftPolicyIds(properties.getCip113().getRegistryNftPolicyIds());
