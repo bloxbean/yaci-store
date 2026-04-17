@@ -111,7 +111,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         return dsl.select(poolIdField, retireEpochField)
                 .from(retiredPools)
                 .leftJoin(latestRetiring).on(poolIdField.eq(latestRetiring.field("pool_id", String.class)))
-                .orderBy(retireEpochOrder, slotOrder, retireSortTxHashField.asc(), retireSortCertIndexField.asc())
+                .orderBy(retireEpochOrder, slotOrder, retireSortTxHashField.asc(), retireSortCertIndexField.asc(), poolIdField.asc())
                 .limit(count)
                 .offset(offset)
                 .fetch(record -> new BFPoolRetireItem(
