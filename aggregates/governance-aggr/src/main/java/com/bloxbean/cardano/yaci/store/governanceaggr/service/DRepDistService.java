@@ -448,6 +448,62 @@ public class DRepDistService {
                          OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index = unreg.tx_index
                              AND earlier_unreg.cert_index < unreg.cert_index))
                 )
+                -- Stake deregistration removes only the CURRENT DRep reverse entry.
+                -- Stale reverse entries from older DReps survive stake deregistration in PV9.
+                -- Therefore, exempt stale_del only when old_drep is still the CURRENT delegation
+                -- immediately before stake_dereg. If the address had already re-delegated to some
+                -- other DRep (credential or virtual), stake_dereg deletes that current reverse entry
+                -- instead, and the stale old_drep entry remains to be cleared later at UNREG.
+                AND NOT EXISTS (
+                    SELECT 1 FROM stake_registration stake_dereg
+                    WHERE stake_dereg.address = stale_del.address
+                    AND   stake_dereg.type    = 'STAKE_DEREGISTRATION'
+                    AND   stake_dereg.epoch  <= :epoch
+                    AND (   stake_dereg.slot > stale_del.slot
+                         OR (stake_dereg.slot = stale_del.slot AND stake_dereg.tx_index > stale_del.tx_index)
+                         OR (stake_dereg.slot = stale_del.slot AND stake_dereg.tx_index = stale_del.tx_index
+                             AND stake_dereg.cert_index > stale_del.cert_index))
+                    AND (   stake_dereg.slot < unreg.slot
+                         OR (stake_dereg.slot = unreg.slot AND stake_dereg.tx_index < unreg.tx_index)
+                         OR (stake_dereg.slot = unreg.slot AND stake_dereg.tx_index = unreg.tx_index
+                             AND stake_dereg.cert_index < unreg.cert_index))
+                    AND EXISTS (
+                        SELECT 1 FROM delegation_vote current_before_dereg
+                        WHERE current_before_dereg.address   = stale_del.address
+                        AND   current_before_dereg.drep_hash = stale_del.drep_hash
+                        AND   current_before_dereg.drep_type = stale_del.drep_type
+                        AND   current_before_dereg.epoch    <= :epoch
+                        AND (   current_before_dereg.slot > stale_del.slot
+                             OR (current_before_dereg.slot = stale_del.slot
+                                 AND current_before_dereg.tx_index > stale_del.tx_index)
+                             OR (current_before_dereg.slot = stale_del.slot
+                                 AND current_before_dereg.tx_index = stale_del.tx_index
+                                 AND current_before_dereg.cert_index >= stale_del.cert_index))
+                        AND (   current_before_dereg.slot < stake_dereg.slot
+                             OR (current_before_dereg.slot = stake_dereg.slot
+                                 AND current_before_dereg.tx_index < stake_dereg.tx_index)
+                             OR (current_before_dereg.slot = stake_dereg.slot
+                                 AND current_before_dereg.tx_index = stake_dereg.tx_index
+                                 AND current_before_dereg.cert_index < stake_dereg.cert_index))
+                        AND NOT EXISTS (
+                            SELECT 1 FROM delegation_vote later_del
+                            WHERE later_del.address = stale_del.address
+                            AND   later_del.epoch  <= :epoch
+                            AND (   later_del.slot > current_before_dereg.slot
+                                 OR (later_del.slot = current_before_dereg.slot
+                                     AND later_del.tx_index > current_before_dereg.tx_index)
+                                 OR (later_del.slot = current_before_dereg.slot
+                                     AND later_del.tx_index = current_before_dereg.tx_index
+                                     AND later_del.cert_index > current_before_dereg.cert_index))
+                            AND (   later_del.slot < stake_dereg.slot
+                                 OR (later_del.slot = stake_dereg.slot
+                                     AND later_del.tx_index < stake_dereg.tx_index)
+                                 OR (later_del.slot = stake_dereg.slot
+                                     AND later_del.tx_index = stake_dereg.tx_index
+                                     AND later_del.cert_index < stake_dereg.cert_index))
+                        )
+                    )
+                )
                 -- A virtual delegation does NOT automatically remove every stale reverse entry for
                 -- old_drep. In bootstrap, `unDelegReDelegDRep` removes only the reverse entry of the
                 -- credential DRep that is CURRENT immediately before the virtual delegation.
@@ -546,7 +602,6 @@ public class DRepDistService {
         List<String> createIndexQueries = List.of(
                 "CREATE INDEX idx_ss_drep_ranked_delegations_address ON ss_drep_ranked_delegations(address)",
                 "CREATE INDEX idx_ss_drep_ranked_delegations_drep_hash ON ss_drep_ranked_delegations(drep_hash)",
-                "CREATE INDEX idx_ss_drep_ranked_delegations_rn ON ss_ranked_delegations(rn)",
                 "CREATE INDEX idx_ss_gov_spendable_reward_rest_address ON ss_gov_spendable_reward_rest(address)",
                 "CREATE INDEX idx_ss_gov_pool_refund_rewards_address ON ss_gov_pool_refund_rewards(address)",
                 "CREATE INDEX idx_ss_drep_status_drep_hash ON ss_drep_status(drep_hash)",
