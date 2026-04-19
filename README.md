@@ -93,6 +93,7 @@ Yaci Store powers various production applications in the Cardano ecosystem:
 - [**CF Cardano Ballot**](https://github.com/cardano-foundation/cf-cardano-ballot) - Cardano Foundation's voting platform
 - [**CF Reeve Platform**](https://github.com/cardano-foundation/cf-reeve-platform) - Cardano Foundation's Ledger on the Blockchain Project
 - [**CF AdaHandle Resolver**](https://github.com/cardano-foundation/cf-adahandle-resolver) - AdaHandle resolution service
+- [**CF Token Metadata Registry**](https://github.com/cardano-foundation/cf-token-metadata-registry) - Cardano Foundation's token metadata registry (off-chain and on-chain via CIP-26 and CIP-68)
 - [**AdaMatic**](https://adamatic.xyz/) - Cardano automation platform
 - [**SundaeSwap Scooper Analytics**](https://github.com/easy1staking-com/sundaeswap-scooper-analytics) - DEX analytics platform
 
