@@ -885,14 +885,35 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         boolean historicalPool = latestEpoch < globalLatestEpoch;
 
         Table<?> currentDelegators = currentDelegatorStateTable();
-        Field<String> addressField = field(name("current_delegators", "address"), String.class);
-        Field<Long> slotField = field(name("current_delegators", "slot"), Long.class);
-        Field<Integer> certIndexField = field(name("current_delegators", "cert_index"), Integer.class);
-        Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
-        Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
-        Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
-        Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
-        Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+        Field<String> currentAddressField = field(name("current_delegators", "address"), String.class);
+        Field<Long> currentSlotField = field(name("current_delegators", "slot"), Long.class);
+        Field<Integer> currentCertIndexField = field(name("current_delegators", "cert_index"), Integer.class);
+        Field<String> currentPoolIdField = field(name("current_delegators", "pool_id"), String.class);
+
+        SortField<?> currentSlotOrder = asc ? currentSlotField.asc() : currentSlotField.desc();
+        SortField<?> currentCertIndexOrder = asc ? currentCertIndexField.asc() : currentCertIndexField.desc();
+        SortField<?> currentAddressOrder = asc ? currentAddressField.asc() : currentAddressField.desc();
+
+        Table<?> pageDelegators = dsl.select(
+                        currentAddressField.as("address"),
+                        currentSlotField.as("slot"),
+                        currentCertIndexField.as("cert_index")
+                )
+                .from(currentDelegators)
+                .where(currentPoolIdField.eq(poolIdHex))
+                .orderBy(currentSlotOrder, currentCertIndexOrder, currentAddressOrder)
+                .limit(count)
+                .offset(offset)
+                .asTable("page_delegators");
+
+        Field<String> addressField = field(name("page_delegators", "address"), String.class);
+        Field<Long> slotField = field(name("page_delegators", "slot"), Long.class);
+        Field<Integer> certIndexField = field(name("page_delegators", "cert_index"), Integer.class);
+
+        Table<?> rewardTotals = aggregatedAddressAmountTableForAddresses(REWARD, pageDelegators, addressField, "reward_total", "reward_totals");
+        Table<?> rewardRestTotals = aggregatedAddressAmountTableForAddresses(REWARD_REST, pageDelegators, addressField, "reward_rest_total", "reward_rest_totals");
+        Table<?> instantRewardTotals = aggregatedAddressAmountTableForAddresses(INSTANT_REWARD, pageDelegators, addressField, "instant_reward_total", "instant_reward_totals");
+        Table<?> withdrawalTotals = aggregatedAddressAmountTableForAddresses(WITHDRAWAL, pageDelegators, addressField, "withdrawal_total", "withdrawal_totals");
 
         StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
         Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
@@ -908,39 +929,38 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         Field<BigInteger> currentStakeBalance = historicalPool
                 ? stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField)
                 : when(stakeBalanceView.EPOCH.gt(latestEpoch), stakeBalanceView.QUANTITY.add(nonNegativeAvailableRewardField))
-                    .otherwise((BigInteger) null);
+                .otherwise((BigInteger) null);
         Field<BigInteger> liveStakeField = coalesce(currentStakeBalance, EPOCH_STAKE.AMOUNT).as("live_stake");
+
         SortField<?> slotOrder = asc ? slotField.asc() : slotField.desc();
         SortField<?> certIndexOrder = asc ? certIndexField.asc() : certIndexField.desc();
         SortField<?> addressOrder = asc ? addressField.asc() : addressField.desc();
 
         var query = dsl.select(addressField, liveStakeField)
-                .from(currentDelegators);
+                .from(pageDelegators);
 
         var joined = historicalPool
                 ? query.leftJoin(EPOCH_STAKE)
-                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
-                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
-                    .and(EPOCH_STAKE.EPOCH.eq(latestEpoch))
+                .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .and(EPOCH_STAKE.EPOCH.eq(latestEpoch))
                 : query.join(EPOCH_STAKE)
-                    .on(EPOCH_STAKE.ADDRESS.eq(addressField))
-                    .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
-                    .and(EPOCH_STAKE.EPOCH.eq(latestEpoch));
+                .on(EPOCH_STAKE.ADDRESS.eq(addressField))
+                .and(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .and(EPOCH_STAKE.EPOCH.eq(latestEpoch));
 
         return joined
                 .leftJoin(stakeBalanceView)
-                    .on(stakeBalanceView.ADDRESS.eq(addressField))
+                .on(stakeBalanceView.ADDRESS.eq(addressField))
                 .leftJoin(rewardTotals)
-                    .on(field(name("reward_totals", "address"), String.class).eq(addressField))
+                .on(field(name("reward_totals", "address"), String.class).eq(addressField))
                 .leftJoin(rewardRestTotals)
-                    .on(field(name("reward_rest_totals", "address"), String.class).eq(addressField))
+                .on(field(name("reward_rest_totals", "address"), String.class).eq(addressField))
                 .leftJoin(instantRewardTotals)
-                    .on(field(name("instant_reward_totals", "address"), String.class).eq(addressField))
+                .on(field(name("instant_reward_totals", "address"), String.class).eq(addressField))
                 .leftJoin(withdrawalTotals)
-                    .on(field(name("withdrawal_totals", "address"), String.class).eq(addressField))
-                .where(poolIdField.eq(poolIdHex))
+                .on(field(name("withdrawal_totals", "address"), String.class).eq(addressField))
                 .orderBy(slotOrder, certIndexOrder, addressOrder)
-                .limit(count).offset(offset)
                 .fetch()
                 .stream()
                 .map(r -> BFPoolDelegatorDto.builder()
@@ -962,6 +982,28 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 )
                 .from(sourceTable)
                 .groupBy(address)
+                .asTable(tableAlias);
+    }
+
+    private Table<?> aggregatedAddressAmountTableForAddresses(
+            Table<?> sourceTable,
+            Table<?> addressesTable,
+            Field<String> candidateAddressField,
+            String totalAlias,
+            String tableAlias
+    ) {
+        Field<String> sourceAddress = field(name(sourceTable.getName(), "address"), String.class);
+        Field<BigInteger> amount = field(name(sourceTable.getName(), "amount"), BigInteger.class);
+
+        return dsl.select(
+                        sourceAddress.as("address"),
+                        coalesce(sum(amount), BigInteger.ZERO).as(totalAlias)
+                )
+                .from(sourceTable)
+                .where(sourceAddress.in(
+                        dsl.select(candidateAddressField).from(addressesTable)
+                ))
+                .groupBy(sourceAddress)
                 .asTable(tableAlias);
     }
 
