@@ -483,6 +483,46 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     private Table<?> latestPoolStateTable(boolean includeRegistered, boolean includeRetired, boolean includeRetiring) {
         Integer currentEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
 
+        List<String> includedStatuses = new ArrayList<>();
+        if (includeRegistered) {
+            includedStatuses.add("REGISTRATION");
+            includedStatuses.add("UPDATE");
+        }
+        if (includeRetired) includedStatuses.add("RETIRED");
+        if (includeRetiring) includedStatuses.add("RETIRING");
+
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            Table<?> latestPools = dsl.select(
+                            field("DISTINCT ON (pool_id) pool_id", String.class).as("pool_id"),
+                            POOL.STATUS,
+                            POOL.RETIRE_EPOCH,
+                            POOL.SLOT,
+                            POOL.TX_HASH,
+                            POOL.TX_INDEX,
+                            POOL.CERT_INDEX,
+                            POOL.REGISTRATION_SLOT
+                    )
+                    .from(POOL)
+                    .where(currentEpoch != null ? POOL.EPOCH.le(currentEpoch) : noCondition())
+                    .orderBy(POOL.POOL_ID.asc(), POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc())
+                    .asTable("latest_pools");
+
+            Field<String> statusField = field(name("latest_pools", "status"), String.class);
+            return dsl.select(
+                            field(name("latest_pools", "pool_id")).as("pool_id"),
+                            statusField.as("status"),
+                            field(name("latest_pools", "retire_epoch")).as("retire_epoch"),
+                            field(name("latest_pools", "slot")).as("slot"),
+                            field(name("latest_pools", "tx_hash")).as("tx_hash"),
+                            field(name("latest_pools", "tx_index")).as("tx_index"),
+                            field(name("latest_pools", "cert_index")).as("cert_index"),
+                            field(name("latest_pools", "registration_slot")).as("registration_slot")
+                    )
+                    .from(latestPools)
+                    .where(statusField.in(includedStatuses))
+                    .asTable("current_pools");
+        }
+
         Field<Integer> rn = rowNumber()
                 .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
                 .as("rn");
@@ -503,14 +543,6 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .asTable("ranked_pools");
 
         Field<String> statusField = field(name("ranked_pools", "status"), String.class);
-        List<String> includedStatuses = new ArrayList<>();
-        if (includeRegistered) {
-            includedStatuses.add("REGISTRATION");
-            includedStatuses.add("UPDATE");
-        }
-        if (includeRetired) includedStatuses.add("RETIRED");
-        if (includeRetiring) includedStatuses.add("RETIRING");
-
         return dsl.select(
                         field(name("ranked_pools", "pool_id")).as("pool_id"),
                         statusField.as("status"),
@@ -528,6 +560,27 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     }
 
     private Table<?> latestPoolRegistrationTable() {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return dsl.select(
+                            field("DISTINCT ON (pool_id) pool_id", String.class).as("pool_id"),
+                            POOL_REGISTRATION.VRF_KEY.as("vrf_key"),
+                            POOL_REGISTRATION.PLEDGE.as("pledge"),
+                            POOL_REGISTRATION.COST.as("cost"),
+                            POOL_REGISTRATION.MARGIN_NUMERATOR.as("margin_numerator"),
+                            POOL_REGISTRATION.MARGIN_DENOMINATOR.as("margin_denominator"),
+                            POOL_REGISTRATION.METADATA_URL.as("metadata_url"),
+                            POOL_REGISTRATION.METADATA_HASH.as("metadata_hash")
+                    )
+                    .from(POOL_REGISTRATION)
+                    .orderBy(
+                            POOL_REGISTRATION.POOL_ID.asc(),
+                            POOL_REGISTRATION.SLOT.desc(),
+                            POOL_REGISTRATION.TX_INDEX.desc(),
+                            POOL_REGISTRATION.CERT_INDEX.desc()
+                    )
+                    .asTable("latest_reg");
+        }
+
         Field<Integer> rn = rowNumber()
                 .over(partitionBy(POOL_REGISTRATION.POOL_ID)
                         .orderBy(POOL_REGISTRATION.SLOT.desc(), POOL_REGISTRATION.TX_INDEX.desc(), POOL_REGISTRATION.CERT_INDEX.desc()))
