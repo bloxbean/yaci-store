@@ -632,24 +632,44 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         Integer currentBlockEpoch = dsl.select(max(BLOCK.EPOCH)).from(BLOCK).fetchOneInto(Integer.class);
         List<PoolFeeParam> poolFeeParams = getPoolFeeParams(poolIdHex);
 
-        // Cardano epoch offset: epoch_stake at epoch E records the snapshot taken at
-        // the boundary of epoch E. This stake becomes *active* at epoch E+2.
-        // Blockfrost's /history shows the "active epoch" — the epoch where the stake
-        // was actually used for block production and reward calculation.
-        var activeEpoch = EPOCH_STAKE.EPOCH.plus(2).as("active_epoch");
+        Table<?> pageEpochs = dsl.select(
+                        EPOCH_STAKE.EPOCH.as("epoch"),
+                        EPOCH_STAKE.EPOCH.plus(2).as("active_epoch")
+                )
+                .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .and(currentBlockEpoch != null
+                        ? EPOCH_STAKE.EPOCH.plus(2).le(currentBlockEpoch - 1)
+                        : noCondition())
+                .groupBy(EPOCH_STAKE.EPOCH)
+                .orderBy(asc ? EPOCH_STAKE.EPOCH.asc() : EPOCH_STAKE.EPOCH.desc())
+                .limit(count)
+                .offset(offset)
+                .asTable("page_epochs");
 
-        // Subquery: total epoch stake per active epoch (denominator for active_size)
+        Field<Integer> pageEpochField = field(name("page_epochs", "epoch"), Integer.class);
+        Field<Integer> pageActiveEpochField = field(name("page_epochs", "active_epoch"), Integer.class);
+
+        var poolStakeSub = dsl.select(
+                        EPOCH_STAKE.EPOCH.as("pool_epoch"),
+                        sum(EPOCH_STAKE.AMOUNT).as("active_stake"),
+                        count(EPOCH_STAKE.ADDRESS).as("delegators_count")
+                )
+                .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                .and(EPOCH_STAKE.EPOCH.in(dsl.select(pageEpochField).from(pageEpochs)))
+                .groupBy(EPOCH_STAKE.EPOCH)
+                .asTable("pool_stake_sub");
+
         var totalStakeSub = dsl.select(
-                        EPOCH_STAKE.EPOCH.plus(2).as("ts_epoch"),
+                        EPOCH_STAKE.EPOCH.as("ts_epoch"),
                         sum(EPOCH_STAKE.AMOUNT).as("total_stake")
                 )
                 .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.EPOCH.in(dsl.select(pageEpochField).from(pageEpochs)))
                 .groupBy(EPOCH_STAKE.EPOCH)
                 .asTable("total_stake_sub");
 
-        // Subquery: total rewards per earned_epoch for this pool.
-        // Exclude type='refund': that is the 500 ADA pool deposit returned on retirement,
-        // not a staking reward. Including it inflates rewards and fees for the retirement epoch.
         var rewardSub = dsl.select(
                         REWARD.EARNED_EPOCH.as("r_epoch"),
                         sum(REWARD.AMOUNT).as("rewards")
@@ -657,55 +677,46 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .from(REWARD)
                 .where(REWARD.POOL_ID.eq(poolIdHex))
                 .and(REWARD.TYPE.ne("refund"))
+                .and(REWARD.EARNED_EPOCH.in(dsl.select(pageActiveEpochField).from(pageEpochs)))
                 .groupBy(REWARD.EARNED_EPOCH)
                 .asTable("reward_sub");
 
-        // Subquery: blocks and fees per epoch for this pool
         var blockSub = dsl.select(
                         BLOCK.EPOCH.as("b_epoch"),
                         count().as("blocks")
                 )
                 .from(BLOCK)
                 .where(BLOCK.SLOT_LEADER.eq(poolIdHex))
+                .and(BLOCK.EPOCH.in(dsl.select(pageActiveEpochField).from(pageEpochs)))
                 .groupBy(BLOCK.EPOCH)
                 .asTable("block_sub");
 
         return dsl.select(
-                        activeEpoch,
-                        sum(EPOCH_STAKE.AMOUNT).as("active_stake"),
-                        count(EPOCH_STAKE.ADDRESS).as("delegators_count"),
-                        field(name("total_stake_sub", "total_stake")),
-                        field(name("reward_sub", "rewards")),
-                        field(name("block_sub", "blocks"))
+                        pageActiveEpochField.as("active_epoch"),
+                        field(name("pool_stake_sub", "active_stake"), BigInteger.class).as("active_stake"),
+                        field(name("pool_stake_sub", "delegators_count"), Integer.class).as("delegators_count"),
+                        field(name("total_stake_sub", "total_stake"), BigInteger.class).as("total_stake"),
+                        field(name("reward_sub", "rewards"), BigInteger.class).as("rewards"),
+                        field(name("block_sub", "blocks"), Integer.class).as("blocks")
                 )
-                .from(EPOCH_STAKE)
+                .from(pageEpochs)
+                .leftJoin(poolStakeSub)
+                .on(field(name("pool_stake_sub", "pool_epoch"), Integer.class).eq(pageEpochField))
                 .leftJoin(totalStakeSub)
-                    .on(field(name("total_stake_sub", "ts_epoch"), Integer.class).eq(EPOCH_STAKE.EPOCH.plus(2)))
+                .on(field(name("total_stake_sub", "ts_epoch"), Integer.class).eq(pageEpochField))
                 .leftJoin(rewardSub)
-                    .on(field(name("reward_sub", "r_epoch"), Integer.class).eq(EPOCH_STAKE.EPOCH.plus(2)))
+                .on(field(name("reward_sub", "r_epoch"), Integer.class).eq(pageActiveEpochField))
                 .leftJoin(blockSub)
-                    .on(field(name("block_sub", "b_epoch"), Integer.class).eq(EPOCH_STAKE.EPOCH.plus(2)))
-                .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
-                .and(currentBlockEpoch != null
-                        ? EPOCH_STAKE.EPOCH.plus(2).le(currentBlockEpoch - 1)
-                        : noCondition())
-                .groupBy(
-                        EPOCH_STAKE.EPOCH,
-                        field(name("total_stake_sub", "total_stake")),
-                        field(name("reward_sub", "rewards")),
-                        field(name("block_sub", "blocks"))
-                )
-                .orderBy(asc ? EPOCH_STAKE.EPOCH.asc() : EPOCH_STAKE.EPOCH.desc())
-                .limit(count)
-                .offset(offset)
+                .on(field(name("block_sub", "b_epoch"), Integer.class).eq(pageActiveEpochField))
+                .orderBy(asc ? pageEpochField.asc() : pageEpochField.desc())
                 .fetch()
                 .stream()
                 .map(r -> {
                     BigInteger activeStake = r.get("active_stake", BigInteger.class);
-                    BigInteger totalStake  = r.get("total_stake",  BigInteger.class);
-                    BigInteger rewards     = r.get("rewards",      BigInteger.class);
-                    Integer blocks         = r.get("blocks", Integer.class);
-                    Integer epoch          = r.get("active_epoch", Integer.class);
+                    BigInteger totalStake = r.get("total_stake", BigInteger.class);
+                    BigInteger rewards = r.get("rewards", BigInteger.class);
+                    Integer blocks = r.get("blocks", Integer.class);
+                    Integer epoch = r.get("active_epoch", Integer.class);
                     PoolFeeParam poolFeeParam = findEffectivePoolFeeParam(poolFeeParams, epoch);
                     Double activeSize = calculateActiveSize(activeStake, totalStake);
                     String rewardsValue = mapHistoryRewardsValue(rewards);
