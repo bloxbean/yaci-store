@@ -23,6 +23,7 @@ public class BFProperties {
             private Epoch epoch = new Epoch();
             private Address address = new Address();
             private Asset asset = new Asset();
+            private Pools pools = new Pools();
             private Transaction transaction = new Transaction();
             private Blocks blocks = new Blocks();
 
@@ -53,6 +54,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Blocks {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Pools {
                 private boolean enabled = false;
             }
 
