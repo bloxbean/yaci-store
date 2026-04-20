@@ -205,3 +205,9 @@ docs/
 - [Next.js Documentation](https://nextjs.org/docs)
 - [MDX Documentation](https://mdxjs.com/)
 - [Yaci Store Main Repository](https://github.com/bloxbean/yaci-store)
+
+## Internal Notes
+
+- [DRep Stake Distribution Queries](./drep-stake-distribution-queries.md)
+- [PV9 Cleared Addresses Query Explained](./pv9-cleared-addresses-query.md)
+- [DRep Hybrid Batch Compare Design and Usage](./drep-dist-hybrid-batch-compare.md)
