@@ -53,6 +53,11 @@ public class DuckDbDataSourceConfig {
         dataSource.setMaxLifetime(0);             // No max lifetime (connection reused indefinitely)
         dataSource.setIdleTimeout(0);             // No idle timeout (keep connection alive)
 
+        String initSql = buildConnectionInitSql();
+        if (initSql != null) {
+            dataSource.setConnectionInitSql(initSql);
+        }
+
         return dataSource;
     }
 
@@ -82,6 +87,11 @@ public class DuckDbDataSourceConfig {
         dataSource.setMaximumPoolSize(poolSize);
         dataSource.setMinimumIdle(Math.min(2, poolSize));
 
+        String initSql = buildConnectionInitSql();
+        if (initSql != null) {
+            dataSource.setConnectionInitSql(initSql);
+        }
+
         return dataSource;
     }
 
@@ -96,5 +106,17 @@ public class DuckDbDataSourceConfig {
      */
     private String buildJdbcUrl() {
         return "jdbc:duckdb:";
+    }
+
+    /**
+     * Build SQL to configure DuckDB instance settings.
+     * Executed once per new physical connection by HikariCP's connectionInitSql.
+     */
+    private String buildConnectionInitSql() {
+        String memoryLimit = properties.getDuckdb().getMemoryLimit();
+        if (memoryLimit != null && !memoryLimit.isBlank()) {
+            return "SET memory_limit = '" + memoryLimit + "'";
+        }
+        return null;
     }
 }

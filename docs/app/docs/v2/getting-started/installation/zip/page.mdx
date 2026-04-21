@@ -87,25 +87,7 @@ To combine with ledger-state:
 ./bin/start.sh ledger-state,analytics
 ```
 
-Analytics export configuration is in `application-analytics.properties`. Key settings include:
-
-- **Storage type**: `yaci.store.analytics.storage.type` — choose `parquet` (direct file export) or `ducklake` (managed catalog with ACID transactions and time-travel queries). The code default is `parquet`, but the out-of-box `application-analytics.properties` ships with `ducklake`.
-- **Export path**: `yaci.store.analytics.export-path` — directory for exported files (default: `./data/analytics`)
-
-### Custom Exporters
-
-You can define custom SQL-based exporters to export any data from PostgreSQL to Parquet/DuckLake without writing Java code.
-
-1. Edit `application-custom-exporters.yml` to define your custom exporters.
-2. Activate with the `custom-exporters` profile:
-
-```bash
-./bin/start.sh analytics,custom-exporters
-```
-
-Each exporter needs a `name`, a SQL `query` with placeholders (`{source}`, `{start_slot}`, `{end_slot}`, `{epoch}`), and an optional `partition-strategy` (`DAILY` or `EPOCH`).
-
-See the [Analytics Store README](https://github.com/bloxbean/yaci-store/tree/main/aggregates/analytics-store#custom-exporters) for full configuration reference and examples.
+For storage mode selection, configuration options, custom exporters, and querying exported data, see the [Analytics Store](/docs/v2/analytics/overview) documentation.
 
 ## Apply Optional Indexes
 

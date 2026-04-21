@@ -98,6 +98,51 @@ class VoteTallyCalculatorTest {
     }
 
     @Test
+    // A member with no registered hot key is excluded from the tally (treated as abstain).
+    void computeCommitteeTallies_memberWithNullHotKey_isCountedAsAbstain() {
+        List<CommitteeMember> members = List.of(
+                member("cold1111111111111111111111111111111111111111111111111111", null),
+                member("cold2222222222222222222222222222222222222222222222222222", "hot1111111111111111111111111111111111111111111111111111"),
+                member("cold3333333333333333333333333333333333333333333333333333", "hot2222222222222222222222222222222222222222222222222222")
+        );
+
+        Map<String, Vote> votes = Map.of(
+                "hot1111111111111111111111111111111111111111111111111111", Vote.YES,
+                "hot2222222222222222222222222222222222222222222222222222", Vote.NO
+        );
+
+        VoteTallies.CommitteeTallies tallies = VoteTallyCalculator.computeCommitteeTallies(votes, members);
+
+        assertEquals(1, tallies.getYesCount());
+        assertEquals(1, tallies.getNoCount());
+        assertEquals(1, tallies.getAbstainCount()); // null-hotKey member
+        assertEquals(0, tallies.getDoNotVoteCount());
+    }
+
+    @Test
+    // A member with a registered hot key who did not vote is counted as doNotVote (→ NO in evaluator).
+    void computeCommitteeTallies_memberWithHotKey_noVote_isCountedAsDoNotVote() {
+        List<CommitteeMember> members = List.of(
+                member("cold1111111111111111111111111111111111111111111111111111", "hot1111111111111111111111111111111111111111111111111111"),
+                member("cold2222222222222222222222222222222222222222222222222222", "hot2222222222222222222222222222222222222222222222222222"),
+                member("cold3333333333333333333333333333333333333333333333333333", "hot3333333333333333333333333333333333333333333333333333")
+        );
+
+        Map<String, Vote> votes = Map.of(
+                "hot1111111111111111111111111111111111111111111111111111", Vote.YES,
+                "hot2222222222222222222222222222222222222222222222222222", Vote.NO
+                // hot3 did not vote
+        );
+
+        VoteTallies.CommitteeTallies tallies = VoteTallyCalculator.computeCommitteeTallies(votes, members);
+
+        assertEquals(1, tallies.getYesCount());
+        assertEquals(1, tallies.getNoCount());
+        assertEquals(0, tallies.getAbstainCount());
+        assertEquals(1, tallies.getDoNotVoteCount());
+    }
+
+    @Test
     void computeCommitteeTalliesCountsEachMemberSharingHotKey() {
         List<CommitteeMember> members = List.of(
                 member("111111f83e9af24813e6cb368df6a80d38951b2a334dfcdf26815558", "aaaaaad4b9a2e70e88965d91dd69be182d5605b23bb5250b1c94bf64"),

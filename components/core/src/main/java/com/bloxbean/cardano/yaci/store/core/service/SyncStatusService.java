@@ -1,39 +1,38 @@
-package com.bloxbean.cardano.yaci.store.adminui.service;
+package com.bloxbean.cardano.yaci.store.core.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
-import com.bloxbean.cardano.yaci.store.adminui.dto.SyncStatusDto;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
+import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import com.bloxbean.cardano.yaci.store.core.service.ChainTipService;
-import com.bloxbean.cardano.yaci.store.core.service.EraService;
-import com.bloxbean.cardano.yaci.store.core.service.StartService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-@Service
+@Component
+@ReadOnly(false)
 @RequiredArgsConstructor
 @Slf4j
 public class SyncStatusService {
     private final CursorService cursorService;
     private final ChainTipService chainTipService;
-    private final StartService startService;
     private final EraService eraService;
     private final StoreProperties storeProperties;
 
     private volatile Tuple<Tip, Integer> cachedTipAndEpoch;
     private volatile long lastTipFetchTime = 0;
 
-    private static final long INITIAL_SYNC_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
-    private static final long SYNCED_REFRESH_INTERVAL = 3 * 60 * 1000;        // 3 minutes
+    private static final long INITIAL_SYNC_REFRESH_INTERVAL = 15L * 60 * 1000; // 15 minutes
+    private static final long SYNCED_REFRESH_INTERVAL = 3L * 60 * 1000;       // 3 minutes
     private static final long SYNC_THRESHOLD_BLOCKS = 1000;                   // Consider syncing if > 1000 blocks behind
+    private static final long SYNCED_BLOCK_TOLERANCE = 10;                    // Consider synced if within 10 blocks
 
-    public SyncStatusDto getSyncStatus() {
+    public SyncStatus getSyncStatus() {
         Optional<Cursor> cursorOpt = cursorService.getCursor();
 
         long currentBlock = 0;
@@ -68,18 +67,17 @@ public class SyncStatusService {
             Tip tip = tipAndEpoch.get()._1;
             networkBlock = tip.getBlock();
             networkSlot = tip.getPoint().getSlot();
-            // No longer overwrite currentEpoch with networkEpoch
         }
 
         double syncPercentage = 0.0;
         if (networkBlock > 0) {
-            long finalNetworkBlock = currentBlock > networkBlock ? currentBlock : networkBlock;
+            long finalNetworkBlock = Math.max(currentBlock, networkBlock);
             syncPercentage = (double) currentBlock / finalNetworkBlock * 100.0;
         }
 
-        boolean isSynced = networkBlock > 0 && currentBlock >= networkBlock - 10; // Allow 10 block tolerance
+        boolean isSynced = networkBlock > 0 && currentBlock >= networkBlock - SYNCED_BLOCK_TOLERANCE;
 
-        return SyncStatusDto.builder()
+        return SyncStatus.builder()
                 .block(currentBlock)
                 .slot(currentSlot)
                 .epoch(currentEpoch)
@@ -91,25 +89,6 @@ public class SyncStatusService {
                 .synced(isSynced)
                 .protocolMagic(storeProperties.getProtocolMagic())
                 .build();
-    }
-
-    public void startSync() {
-        if (!startService.isStarted()) {
-            startService.start();
-        }
-    }
-
-    public void stopSync() {
-        if (startService.isStarted()) {
-            startService.stop();
-        }
-    }
-
-    public void restartSync() {
-        if (startService.isStarted()) {
-            startService.stop();
-        }
-        startService.start();
     }
 
     private Optional<Tuple<Tip, Integer>> getCachedTipAndEpoch(long currentBlock) {
