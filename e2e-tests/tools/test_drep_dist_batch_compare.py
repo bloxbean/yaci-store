@@ -37,6 +37,12 @@ class CommandParsingTest(unittest.TestCase):
             ["prepare-range", "--epochs", "624"],
         )
 
+    def test_inject_default_command_preserves_invalidate_cache_subcommand(self):
+        self.assertEqual(
+            tool.inject_default_command(["invalidate-cache", "--epochs", "624"]),
+            ["invalidate-cache", "--epochs", "624"],
+        )
+
     def test_parse_args_loads_defaults_from_env_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_file = Path(temp_dir) / "drep.env"
@@ -114,6 +120,33 @@ class CommandParsingTest(unittest.TestCase):
 
         self.assertEqual(args.store_host, "127.0.0.1")
         self.assertEqual(args.store_port, 5432)
+
+    def test_parse_args_supports_invalidate_cache(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "STORE_HOST": "10.0.0.10",
+                "STORE_DB": "yaci_store",
+                "STORE_USER": "yaci",
+                "STORE_PASSWORD": "dbpass",
+            },
+            clear=True,
+        ):
+            args = tool.parse_args(
+                [
+                    "invalidate-cache",
+                    "--epochs",
+                    "624-625",
+                    "--cache-name",
+                    "pv9",
+                    "--include-shadow",
+                ]
+            )
+
+        self.assertEqual(args.command, "invalidate-cache")
+        self.assertEqual(args.cache_name, "pv9")
+        self.assertTrue(args.include_shadow)
+        self.assertEqual(args.workers, 1)
 
 
 class EnvFileParsingTest(unittest.TestCase):
@@ -269,6 +302,31 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn("s.epoch = 623", sql)
         self.assertNotIn("LEFT JOIN gov_action_proposal_status", sql)
         self.assertNotIn("s.status IS NULL", sql)
+
+    def test_render_pv9_cleared_insert_sql_matches_drep_identity_on_hash_and_type(self):
+        sql = tool.render_pv9_cleared_insert_sql(
+            debug_schema="drep_debug",
+            snapshot_epoch=624,
+            epoch=623,
+            pv9_max_epoch=536,
+        )
+
+        self.assertIn("redel.drep_hash <> stale_del.drep_hash", sql)
+        self.assertIn("OR redel.drep_type <> stale_del.drep_type", sql)
+
+    def test_render_invalidate_sql_targets_selected_cache_and_shadow(self):
+        sql = tool.render_invalidate_sql(
+            debug_schema="drep_debug",
+            snapshot_epoch=624,
+            cache_name="pv9",
+            include_shadow=True,
+        )
+
+        self.assertIn('FROM "drep_debug".pv9_cleared_address_epoch', sql)
+        self.assertIn('DELETE FROM "drep_debug".pv9_cleared_address_epoch WHERE snapshot_epoch = 624', sql)
+        self.assertIn("cache_name = 'pv9_cleared_address_epoch'", sql)
+        self.assertIn('DELETE FROM "drep_debug".shadow_drep_dist WHERE snapshot_epoch = 624', sql)
+        self.assertNotIn('FROM "drep_debug".missing_address_epoch', sql)
 
     def test_render_compare_sql_never_targets_official_drep_dist_table(self):
         sql = tool.render_compare_sql(

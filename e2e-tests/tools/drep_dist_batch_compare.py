@@ -23,6 +23,12 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 DEFAULT_ENV_FILE_PATH = SCRIPT_DIR / "drep_dist_batch_compare.env"
 ZERO_HASH = "00000000000000000000000000000000000000000000000000000000"
 
+INVALIDATION_TARGETS = {
+    "all": ("missing_address_epoch", "pv9_cleared_address_epoch"),
+    "missing-address": ("missing_address_epoch",),
+    "pv9": ("pv9_cleared_address_epoch",),
+}
+
 PUBLIC_PROTOCOL_MAGICS = {
     "mainnet": 764824073,
     "preprod": 1,
@@ -150,6 +156,16 @@ class EpochPrepareResult:
     error: Optional[str]
 
 
+@dataclass
+class EpochInvalidateResult:
+    epoch: int
+    status: str
+    duration_ms: int
+    report_file: str
+    error: Optional[str]
+    deleted_counts: Dict[str, int]
+
+
 def sql_identifier(identifier: str) -> str:
     if not IDENTIFIER_RE.match(identifier):
         raise ValueError("Invalid SQL identifier: %s" % identifier)
@@ -270,12 +286,13 @@ def resolve_value(
 
 
 def apply_env_defaults(args: argparse.Namespace, env_values: Dict[str, str]) -> None:
-    args.store_host = resolve_value(args.store_host, env_values, "STORE_HOST")
-    args.store_port = resolve_value(args.store_port, env_values, "STORE_PORT", 5432, int)
-    args.store_db = resolve_value(args.store_db, env_values, "STORE_DB")
-    args.store_user = resolve_value(args.store_user, env_values, "STORE_USER")
-    args.store_password = resolve_value(args.store_password, env_values, "STORE_PASSWORD")
-    args.store_schema = resolve_value(args.store_schema, env_values, "STORE_SCHEMA", "yaci_store")
+    if hasattr(args, "store_host"):
+        args.store_host = resolve_value(args.store_host, env_values, "STORE_HOST")
+        args.store_port = resolve_value(args.store_port, env_values, "STORE_PORT", 5432, int)
+        args.store_db = resolve_value(args.store_db, env_values, "STORE_DB")
+        args.store_user = resolve_value(args.store_user, env_values, "STORE_USER")
+        args.store_password = resolve_value(args.store_password, env_values, "STORE_PASSWORD")
+        args.store_schema = resolve_value(args.store_schema, env_values, "STORE_SCHEMA", "yaci_store")
 
     if hasattr(args, "dbsync_host"):
         args.dbsync_host = resolve_value(args.dbsync_host, env_values, "DBSYNC_HOST")
@@ -285,58 +302,76 @@ def apply_env_defaults(args: argparse.Namespace, env_values: Dict[str, str]) -> 
         args.dbsync_password = resolve_value(args.dbsync_password, env_values, "DBSYNC_PASSWORD")
         args.dbsync_schema = resolve_value(args.dbsync_schema, env_values, "DBSYNC_SCHEMA", "public")
 
-    args.workers = resolve_value(args.workers, env_values, "WORKERS", 1, int)
-    args.protocol_magic = resolve_value(
-        args.protocol_magic,
-        env_values,
-        "PROTOCOL_MAGIC",
-        PUBLIC_PROTOCOL_MAGICS["mainnet"],
-        int,
-    )
-    args.max_bootstrap_phase_epoch = resolve_value(
-        args.max_bootstrap_phase_epoch,
-        env_values,
-        "MAX_BOOTSTRAP_PHASE_EPOCH",
-        None,
-        int,
-    )
-    args.debug_schema = resolve_value(args.debug_schema, env_values, "DREP_DEBUG_SCHEMA", "drep_debug")
-    args.lock_timeout = resolve_value(args.lock_timeout, env_values, "LOCK_TIMEOUT", "5s")
-    args.statement_timeout = resolve_value(args.statement_timeout, env_values, "STATEMENT_TIMEOUT", "0")
-    args.work_mem = resolve_value(args.work_mem, env_values, "WORK_MEM", "1GB")
-    args.maintenance_work_mem = resolve_value(
-        args.maintenance_work_mem,
-        env_values,
-        "MAINTENANCE_WORK_MEM",
-        "2GB",
-    )
-    args.temp_buffers = resolve_value(args.temp_buffers, env_values, "TEMP_BUFFERS", "512MB")
-    args.parallel_workers_per_gather = resolve_value(
-        args.parallel_workers_per_gather,
-        env_values,
-        "PARALLEL_WORKERS_PER_GATHER",
-        4,
-        int,
-    )
-    args.effective_cache_size = resolve_value(
-        args.effective_cache_size,
-        env_values,
-        "EFFECTIVE_CACHE_SIZE",
-        "48GB",
-    )
-    args.random_page_cost = resolve_value(args.random_page_cost, env_values, "RANDOM_PAGE_COST", "1.1")
-    args.effective_io_concurrency = resolve_value(
-        args.effective_io_concurrency,
-        env_values,
-        "EFFECTIVE_IO_CONCURRENCY",
-        64,
-        int,
-    )
-    args.parallel_setup_cost = resolve_value(args.parallel_setup_cost, env_values, "PARALLEL_SETUP_COST", "0")
-    args.parallel_tuple_cost = resolve_value(args.parallel_tuple_cost, env_values, "PARALLEL_TUPLE_COST", "0.01")
-    args.keep_jit = resolve_value(args.keep_jit, env_values, "KEEP_JIT", False, parse_env_bool)
-    args.save_store_sql = resolve_value(args.save_store_sql, env_values, "SAVE_STORE_SQL", False, parse_env_bool)
-    args.report_dir = resolve_value(args.report_dir, env_values, "REPORT_DIR")
+    if hasattr(args, "workers"):
+        args.workers = resolve_value(args.workers, env_values, "WORKERS", 1, int)
+    if hasattr(args, "protocol_magic"):
+        args.protocol_magic = resolve_value(
+            args.protocol_magic,
+            env_values,
+            "PROTOCOL_MAGIC",
+            PUBLIC_PROTOCOL_MAGICS["mainnet"],
+            int,
+        )
+    if hasattr(args, "max_bootstrap_phase_epoch"):
+        args.max_bootstrap_phase_epoch = resolve_value(
+            args.max_bootstrap_phase_epoch,
+            env_values,
+            "MAX_BOOTSTRAP_PHASE_EPOCH",
+            None,
+            int,
+        )
+    if hasattr(args, "debug_schema"):
+        args.debug_schema = resolve_value(args.debug_schema, env_values, "DREP_DEBUG_SCHEMA", "drep_debug")
+    if hasattr(args, "lock_timeout"):
+        args.lock_timeout = resolve_value(args.lock_timeout, env_values, "LOCK_TIMEOUT", "5s")
+    if hasattr(args, "statement_timeout"):
+        args.statement_timeout = resolve_value(args.statement_timeout, env_values, "STATEMENT_TIMEOUT", "0")
+    if hasattr(args, "work_mem"):
+        args.work_mem = resolve_value(args.work_mem, env_values, "WORK_MEM", "1GB")
+    if hasattr(args, "maintenance_work_mem"):
+        args.maintenance_work_mem = resolve_value(
+            args.maintenance_work_mem,
+            env_values,
+            "MAINTENANCE_WORK_MEM",
+            "2GB",
+        )
+    if hasattr(args, "temp_buffers"):
+        args.temp_buffers = resolve_value(args.temp_buffers, env_values, "TEMP_BUFFERS", "512MB")
+    if hasattr(args, "parallel_workers_per_gather"):
+        args.parallel_workers_per_gather = resolve_value(
+            args.parallel_workers_per_gather,
+            env_values,
+            "PARALLEL_WORKERS_PER_GATHER",
+            4,
+            int,
+        )
+    if hasattr(args, "effective_cache_size"):
+        args.effective_cache_size = resolve_value(
+            args.effective_cache_size,
+            env_values,
+            "EFFECTIVE_CACHE_SIZE",
+            "48GB",
+        )
+    if hasattr(args, "random_page_cost"):
+        args.random_page_cost = resolve_value(args.random_page_cost, env_values, "RANDOM_PAGE_COST", "1.1")
+    if hasattr(args, "effective_io_concurrency"):
+        args.effective_io_concurrency = resolve_value(
+            args.effective_io_concurrency,
+            env_values,
+            "EFFECTIVE_IO_CONCURRENCY",
+            64,
+            int,
+        )
+    if hasattr(args, "parallel_setup_cost"):
+        args.parallel_setup_cost = resolve_value(args.parallel_setup_cost, env_values, "PARALLEL_SETUP_COST", "0")
+    if hasattr(args, "parallel_tuple_cost"):
+        args.parallel_tuple_cost = resolve_value(args.parallel_tuple_cost, env_values, "PARALLEL_TUPLE_COST", "0.01")
+    if hasattr(args, "keep_jit"):
+        args.keep_jit = resolve_value(args.keep_jit, env_values, "KEEP_JIT", False, parse_env_bool)
+    if hasattr(args, "save_store_sql"):
+        args.save_store_sql = resolve_value(args.save_store_sql, env_values, "SAVE_STORE_SQL", False, parse_env_bool)
+    if hasattr(args, "report_dir"):
+        args.report_dir = resolve_value(args.report_dir, env_values, "REPORT_DIR")
 
 
 def parse_epoch_spec(spec: str) -> List[int]:
@@ -358,7 +393,7 @@ def parse_epoch_spec(spec: str) -> List[int]:
 
 
 def inject_default_command(argv: Sequence[str]) -> List[str]:
-    if argv and argv[0] in {"prepare-range", "compare-range"}:
+    if argv and argv[0] in {"prepare-range", "compare-range", "invalidate-cache"}:
         return list(argv)
     return ["compare-range", *argv]
 
@@ -998,7 +1033,12 @@ WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
       FROM delegation_vote redel
       WHERE redel.address = stale_del.address
         AND redel.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
-        AND redel.drep_hash <> stale_del.drep_hash
+        -- Ledger identity is (drep_type, drep_hash), so either field changing
+        -- means the old reverse entry became stale before UNREG.
+        AND (
+            redel.drep_hash <> stale_del.drep_hash
+            OR redel.drep_type <> stale_del.drep_type
+        )
         AND redel.epoch <= {epoch}
         AND (
             redel.slot > stale_del.slot
@@ -1887,6 +1927,96 @@ def extract_compare_counts(metadata: Dict[str, str]) -> Dict[str, int]:
     }
 
 
+def render_invalidate_sql(
+    debug_schema: str,
+    snapshot_epoch: int,
+    cache_name: str,
+    include_shadow: bool,
+) -> str:
+    debug = sql_identifier(debug_schema)
+    targets = INVALIDATION_TARGETS[cache_name]
+    parts = [
+        "BEGIN;\n",
+        "SET LOCAL client_min_messages = warning;\n",
+    ]
+
+    if "missing_address_epoch" in targets:
+        parts.append(
+            """
+SELECT COUNT(*) AS __meta_value
+FROM %s.missing_address_epoch
+WHERE snapshot_epoch = %d \\gset
+\\echo META|deleted_missing_address_count|:__meta_value
+"""
+            % (debug, snapshot_epoch)
+        )
+        parts.append(
+            timed_sql(
+                "delete_missing_address_epoch",
+                "DELETE FROM %s.missing_address_epoch WHERE snapshot_epoch = %d" % (debug, snapshot_epoch),
+            )
+        )
+        parts.append(
+            timed_sql(
+                "delete_missing_address_cache_state",
+                "DELETE FROM %s.cache_state WHERE cache_name = 'missing_address_epoch' AND snapshot_epoch = %d"
+                % (debug, snapshot_epoch),
+            )
+        )
+
+    if "pv9_cleared_address_epoch" in targets:
+        parts.append(
+            """
+SELECT COUNT(*) AS __meta_value
+FROM %s.pv9_cleared_address_epoch
+WHERE snapshot_epoch = %d \\gset
+\\echo META|deleted_pv9_cleared_address_count|:__meta_value
+"""
+            % (debug, snapshot_epoch)
+        )
+        parts.append(
+            timed_sql(
+                "delete_pv9_cleared_address_epoch",
+                "DELETE FROM %s.pv9_cleared_address_epoch WHERE snapshot_epoch = %d" % (debug, snapshot_epoch),
+            )
+        )
+        parts.append(
+            timed_sql(
+                "delete_pv9_cache_state",
+                "DELETE FROM %s.cache_state WHERE cache_name = 'pv9_cleared_address_epoch' AND snapshot_epoch = %d"
+                % (debug, snapshot_epoch),
+            )
+        )
+
+    if include_shadow:
+        parts.append(
+            """
+SELECT COUNT(*) AS __meta_value
+FROM %s.shadow_drep_dist
+WHERE snapshot_epoch = %d \\gset
+\\echo META|deleted_shadow_drep_dist_count|:__meta_value
+"""
+            % (debug, snapshot_epoch)
+        )
+        parts.append(
+            timed_sql(
+                "delete_shadow_drep_dist",
+                "DELETE FROM %s.shadow_drep_dist WHERE snapshot_epoch = %d" % (debug, snapshot_epoch),
+            )
+        )
+
+    parts.append("COMMIT;\n")
+    return "".join(parts)
+
+
+def extract_invalidate_counts(metadata: Dict[str, str]) -> Dict[str, int]:
+    return {
+        "missing_address_epoch": meta_int(metadata, "deleted_missing_address_count"),
+        "pv9_cleared_address_epoch": meta_int(metadata, "deleted_pv9_cleared_address_count"),
+        "shadow_drep_dist": meta_int(metadata, "deleted_shadow_drep_dist_count"),
+    }
+
+
 def ensure_debug_schema(store: DbConfig, debug_schema: str) -> None:
     debug = sql_identifier(debug_schema)
     sql = f"""
@@ -2304,6 +2434,113 @@ def prepare_epoch_with_error_handling(
         )
 
 
+def invalidate_single_epoch(
+    epoch: int,
+    store: DbConfig,
+    debug_schema: str,
+    cache_name: str,
+    include_shadow: bool,
+    report_dir: Path,
+    save_store_sql: bool,
+) -> EpochInvalidateResult:
+    started = time.time()
+    error_file = report_dir / "epochs" / ("epoch_%d.error.json" % epoch)
+    timings: List[Dict[str, object]] = []
+
+    invalidate_sql = timed_call(
+        "render_invalidate_sql",
+        timings,
+        lambda: render_invalidate_sql(
+            debug_schema=debug_schema,
+            snapshot_epoch=epoch,
+            cache_name=cache_name,
+            include_shadow=include_shadow,
+        ),
+    )
+    maybe_write_sql(report_dir, "invalidate_epoch_%d.sql" % epoch, invalidate_sql, save_store_sql)
+    invalidate_output = timed_call("invalidate_phase_total", timings, lambda: run_psql(store, invalidate_sql))
+    timings.extend(parse_step_timings(invalidate_output))
+    deleted_counts = extract_invalidate_counts(parse_meta_lines(invalidate_output))
+
+    report_file = report_dir / "epochs" / ("epoch_%d.json" % epoch)
+    report_payload = {
+        "epoch": epoch,
+        "status": "invalidated",
+        "cache_name": cache_name,
+        "include_shadow": include_shadow,
+        "deleted_counts": deleted_counts,
+        "timings": timings,
+    }
+    write_json(report_file, report_payload)
+    if error_file.exists():
+        error_file.unlink()
+
+    return EpochInvalidateResult(
+        epoch=epoch,
+        status="invalidated",
+        duration_ms=int((time.time() - started) * 1000),
+        report_file=str(report_file),
+        error=None,
+        deleted_counts=deleted_counts,
+    )
+
+
+def invalidate_epoch_with_error_handling(
+    epoch: int,
+    store: DbConfig,
+    debug_schema: str,
+    cache_name: str,
+    include_shadow: bool,
+    report_dir: Path,
+    save_store_sql: bool,
+) -> EpochInvalidateResult:
+    try:
+        result = invalidate_single_epoch(
+            epoch=epoch,
+            store=store,
+            debug_schema=debug_schema,
+            cache_name=cache_name,
+            include_shadow=include_shadow,
+            report_dir=report_dir,
+            save_store_sql=save_store_sql,
+        )
+        print_line(
+            "epoch=%d status=%s deleted_missing=%d deleted_pv9=%d deleted_shadow=%d duration_ms=%d"
+            % (
+                result.epoch,
+                result.status,
+                result.deleted_counts["missing_address_epoch"],
+                result.deleted_counts["pv9_cleared_address_epoch"],
+                result.deleted_counts["shadow_drep_dist"],
+                result.duration_ms,
+            )
+        )
+        return result
+    except Exception as exc:
+        report_file = report_dir / "epochs" / ("epoch_%d.error.json" % epoch)
+        write_json(
+            report_file,
+            {
+                "epoch": epoch,
+                "status": "error",
+                "error": str(exc),
+            },
+        )
+        print_line("epoch=%d status=error error=%s" % (epoch, exc))
+        return EpochInvalidateResult(
+            epoch=epoch,
+            status="error",
+            duration_ms=0,
+            report_file=str(report_file),
+            error=str(exc),
+            deleted_counts={
+                "missing_address_epoch": 0,
+                "pv9_cleared_address_epoch": 0,
+                "shadow_drep_dist": 0,
+            },
+        )
+
+
 def write_compare_summary(report_dir: Path, results: Sequence[EpochCompareResult]) -> None:
     summary_csv = report_dir / "summary.csv"
     summary_json = report_dir / "summary.json"
@@ -2374,6 +2611,52 @@ def write_prepare_summary(report_dir: Path, results: Sequence[EpochPrepareResult
     write_json(summary_json, payload)
 
 
+def write_invalidate_summary(report_dir: Path, results: Sequence[EpochInvalidateResult]) -> None:
+    summary_csv = report_dir / "summary.csv"
+    summary_json = report_dir / "summary.json"
+    summary_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    with summary_csv.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "epoch",
+                "status",
+                "deleted_missing_address_epoch",
+                "deleted_pv9_cleared_address_epoch",
+                "deleted_shadow_drep_dist",
+                "duration_ms",
+                "report_file",
+                "error",
+            ]
+        )
+        for result in sorted(results, key=lambda item: item.epoch):
+            writer.writerow(
+                [
+                    result.epoch,
+                    result.status,
+                    result.deleted_counts["missing_address_epoch"],
+                    result.deleted_counts["pv9_cleared_address_epoch"],
+                    result.deleted_counts["shadow_drep_dist"],
+                    result.duration_ms,
+                    result.report_file,
+                    result.error or "",
+                ]
+            )
+
+    payload = {
+        "epochs": [asdict(result) for result in sorted(results, key=lambda item: item.epoch)],
+        "total_epochs": len(results),
+        "epochs_with_errors": sum(1 for result in results if result.status == "error"),
+        "deleted_totals": {
+            "missing_address_epoch": sum(result.deleted_counts["missing_address_epoch"] for result in results),
+            "pv9_cleared_address_epoch": sum(result.deleted_counts["pv9_cleared_address_epoch"] for result in results),
+            "shadow_drep_dist": sum(result.deleted_counts["shadow_drep_dist"] for result in results),
+        },
+    }
+    write_json(summary_json, payload)
+
+
 def add_epoch_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--epochs", help="Comma-separated epoch list/ranges, for example 624-630,635,640-642")
     parser.add_argument("--epoch-start", type=int, help="Start epoch when running a contiguous range")
@@ -2423,6 +2706,24 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--report-dir", help="Directory for summaries and per-epoch reports")
 
 
+def add_invalidation_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--workers", type=int, help="Number of epochs to invalidate in parallel")
+    parser.add_argument("--debug-schema")
+    parser.add_argument(
+        "--cache-name",
+        choices=sorted(INVALIDATION_TARGETS.keys()),
+        default="all",
+        help="Which debug cache to invalidate",
+    )
+    parser.add_argument(
+        "--include-shadow",
+        action="store_true",
+        help="Also delete persisted rows from drep_debug.shadow_drep_dist for the selected epochs",
+    )
+    parser.add_argument("--save-store-sql", action="store_true", default=None, help="Persist rendered invalidate SQL for each epoch under the report directory")
+    parser.add_argument("--report-dir", help="Directory for summaries and per-epoch reports")
+
+
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     normalized_argv = inject_default_command(argv)
     env_file = resolve_env_file_path(normalized_argv)
@@ -2443,6 +2744,12 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     add_store_args(compare_parser)
     add_dbsync_args(compare_parser)
     add_runtime_args(compare_parser)
+
+    invalidate_parser = subparsers.add_parser("invalidate-cache", help="Invalidate cached debug state in drep_debug for selected epochs")
+    add_config_args(invalidate_parser)
+    add_epoch_args(invalidate_parser)
+    add_store_args(invalidate_parser)
+    add_invalidation_args(invalidate_parser)
 
     args = parser.parse_args(normalized_argv)
     args.env_file = args.env_file or env_file
@@ -2480,8 +2787,8 @@ def resolve_epochs(args: argparse.Namespace, store: DbConfig, dbsync: Optional[D
             raise ValueError("--epoch-end must be greater than or equal to --epoch-start")
         return list(range(args.epoch_start, args.epoch_end + 1))
 
-    if args.command == "prepare-range":
-        raise ValueError("prepare-range requires --epochs or --epoch-start/--epoch-end")
+    if args.command in {"prepare-range", "invalidate-cache"}:
+        raise ValueError("%s requires --epochs or --epoch-start/--epoch-end" % args.command)
 
     if dbsync is None:
         raise ValueError("dbsync configuration is required to auto-detect compare-range epochs")
@@ -2523,7 +2830,7 @@ def main(argv: Sequence[str]) -> int:
     dbsync = resolve_db_config(args, "dbsync", "public") if args.command == "compare-range" else None
     epochs = resolve_epochs(args, store, dbsync)
     report_dir = make_report_dir(args.report_dir, args.command)
-    settings = build_query_settings(args)
+    settings = build_query_settings(args) if args.command in {"prepare-range", "compare-range"} else None
     run_id = "drep-batch-%s-%d" % (time.strftime("%Y%m%d_%H%M%S"), os.getpid())
 
     ensure_debug_schema(store, args.debug_schema)
@@ -2547,14 +2854,20 @@ def main(argv: Sequence[str]) -> int:
             "schema": dbsync.schema,
         },
         "epochs": epochs,
-        "protocol_magic": args.protocol_magic,
-        "max_bootstrap_phase_epoch": args.max_bootstrap_phase_epoch,
         "workers": args.workers,
         "debug_schema": args.debug_schema,
-        "query_settings": asdict(settings),
         "save_store_sql": args.save_store_sql,
         "report_dir": str(report_dir),
     }
+    if hasattr(args, "protocol_magic"):
+        run_config["protocol_magic"] = args.protocol_magic
+    if hasattr(args, "max_bootstrap_phase_epoch"):
+        run_config["max_bootstrap_phase_epoch"] = args.max_bootstrap_phase_epoch
+    if settings is not None:
+        run_config["query_settings"] = asdict(settings)
+    if args.command == "invalidate-cache":
+        run_config["cache_name"] = args.cache_name
+        run_config["include_shadow"] = args.include_shadow
     write_json(report_dir / "run_config.json", run_config)
 
     print_line(
@@ -2589,6 +2902,43 @@ def main(argv: Sequence[str]) -> int:
             "done total_epochs=%d error_epochs=%d summary=%s" % (
                 len(results),
                 error_epochs,
+                report_dir / "summary.json",
+            )
+        )
+        return 0 if error_epochs == 0 else 1
+
+    if args.command == "invalidate-cache":
+        results: List[EpochInvalidateResult] = []
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            future_map = {
+                executor.submit(
+                    invalidate_epoch_with_error_handling,
+                    epoch,
+                    store,
+                    args.debug_schema,
+                    args.cache_name,
+                    args.include_shadow,
+                    report_dir,
+                    args.save_store_sql,
+                ): epoch
+                for epoch in epochs
+            }
+            for future in as_completed(future_map):
+                results.append(future.result())
+
+        write_invalidate_summary(report_dir, results)
+        error_epochs = sum(1 for result in results if result.status == "error")
+        deleted_missing = sum(result.deleted_counts["missing_address_epoch"] for result in results)
+        deleted_pv9 = sum(result.deleted_counts["pv9_cleared_address_epoch"] for result in results)
+        deleted_shadow = sum(result.deleted_counts["shadow_drep_dist"] for result in results)
+        print_line(
+            "done total_epochs=%d error_epochs=%d deleted_missing=%d deleted_pv9=%d deleted_shadow=%d summary=%s"
+            % (
+                len(results),
+                error_epochs,
+                deleted_missing,
+                deleted_pv9,
+                deleted_shadow,
                 report_dir / "summary.json",
             )
         )
