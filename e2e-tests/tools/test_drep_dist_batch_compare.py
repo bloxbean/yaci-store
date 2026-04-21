@@ -175,6 +175,16 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertNotIn("INSERT INTO drep_dist", sql)
         self.assertNotIn("UPDATE drep_dist", sql)
 
+    def test_render_active_proposal_deposits_sql_uses_replay_safe_exists_logic(self):
+        sql = tool.render_active_proposal_deposits_sql(623)
+
+        self.assertIn("WHERE g.epoch = 623", sql)
+        self.assertIn("OR EXISTS (", sql)
+        self.assertIn("s.status = 'ACTIVE'", sql)
+        self.assertIn("s.epoch = 623", sql)
+        self.assertNotIn("LEFT JOIN gov_action_proposal_status", sql)
+        self.assertNotIn("s.status IS NULL", sql)
+
     def test_render_compare_sql_never_targets_official_drep_dist_table(self):
         sql = tool.render_compare_sql(
             store_schema="yaci_store",

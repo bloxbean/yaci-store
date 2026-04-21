@@ -765,22 +765,31 @@ WHERE d.epoch <= %d
 
 
 def render_active_proposal_deposits_sql(epoch: int) -> str:
+    # Replay-safe version of the "active proposal deposits" logic.
+    # New proposals at the snapshot boundary must still count even if status rows
+    # already exist when we rerun/debug after the original live snapshot window.
     return """
 CREATE TEMP TABLE ss_gov_active_proposal_deposits ON COMMIT DROP AS
 SELECT
     g.return_address,
     SUM(g.deposit) AS deposit
 FROM gov_action_proposal g
-LEFT JOIN gov_action_proposal_status s
-    ON g.tx_hash = s.gov_action_tx_hash
-   AND g.idx = s.gov_action_index
-WHERE (s.status = 'ACTIVE' AND g.epoch < %d AND s.epoch = %d)
-   OR (s.status IS NULL AND g.epoch = %d)
+WHERE g.epoch = %d
+   OR EXISTS (
+       SELECT 1
+       FROM gov_action_proposal_status s
+       WHERE s.gov_action_tx_hash = g.tx_hash
+         AND s.gov_action_index = g.idx
+         AND s.status = 'ACTIVE'
+         AND s.epoch = %d
+   )
 GROUP BY g.return_address
-""" % (epoch, epoch, epoch)
+""" % (epoch, epoch)
 
 
 def render_dropped_proposal_deposits_sql(epoch: int) -> str:
+    # Rebuild the same "scheduled to drop" proposal set as the Java service by
+    # walking proposal purpose-chains from expired/ratified roots.
     return """
 CREATE TEMP TABLE ss_gov_scheduled_to_drop_proposal_deposits ON COMMIT DROP AS
 WITH RECURSIVE
@@ -884,6 +893,8 @@ GROUP BY g.return_address
 
 def render_pv9_cleared_insert_sql(debug_schema: str, snapshot_epoch: int, epoch: int, pv9_max_epoch: int) -> str:
     debug = sql_identifier(debug_schema)
+    # Cache the expensive PV9 stale reverse-clearing calculation once per epoch
+    # so compare runs can reuse it without touching source tables.
     return f"""
 INSERT INTO {debug}.pv9_cleared_address_epoch (snapshot_epoch, pv9_max_epoch, address)
 SELECT DISTINCT {snapshot_epoch}, {pv9_max_epoch}, stale_del.address
@@ -1177,6 +1188,8 @@ def render_prepare_sql(
     parts.append("SELECT COUNT(*) AS __meta_value FROM ss_current_drep_address \\gset\n\\echo META|current_drep_address_count|:__meta_value\n")
 
     parts.append(
+        # Cache the subset of current DRep addresses that cannot be sourced from
+        # epoch_stake and therefore must be recomputed from raw tables.
         """
 SELECT CASE
          WHEN EXISTS (
@@ -1238,6 +1251,8 @@ WHERE es.address IS NULL
     )
 
     parts.append(
+        # PV9 clearing is logically part of DRepDistService but expensive enough
+        # to materialize once and reuse across repeated compare runs.
         """
 SELECT CASE
          WHEN EXISTS (
@@ -1375,6 +1390,8 @@ GROUP BY w.address
     parts.append(
         timed_sql(
             "ss_epoch_stake_base_create",
+            # Reuse epoch_stake as the primary financial base whenever an address
+            # already exists in the previous epoch snapshot.
             """
 CREATE TEMP TABLE ss_epoch_stake_base ON COMMIT DROP AS
 SELECT
@@ -1568,6 +1585,8 @@ GROUP BY r.address
     parts.append(
         timed_sql(
             "ss_base_from_missing_raw_create",
+            # Only addresses absent from epoch_stake fall back to the full raw
+            # reconstruction path, which keeps the hybrid flow exact but cheaper.
             """
 CREATE TEMP TABLE ss_base_from_missing_raw ON COMMIT DROP AS
 SELECT
@@ -1614,6 +1633,8 @@ LEFT JOIN ss_missing_reward_rest rr ON rr.address = c.address
     parts.append(
         timed_sql(
             "ss_effective_address_amount_create",
+            # Governance deposits are applied after rebuilding the financial base,
+            # matching the order used by DRepDistService.
             """
 CREATE TEMP TABLE ss_effective_address_amount ON COMMIT DROP AS
 SELECT

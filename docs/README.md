@@ -210,4 +210,4 @@ docs/
 
 - [DRep Stake Distribution Queries](./drep-stake-distribution-queries.md)
 - [PV9 Cleared Addresses Query Explained](./pv9-cleared-addresses-query.md)
-- [DRep Hybrid Batch Compare Design and Usage](./drep-dist-hybrid-batch-compare.md)
+- [DRep Hybrid Batch Compare Design and Usage](../e2e-tests/tools/README.md)
