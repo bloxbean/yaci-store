@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import ast
 import argparse
 import csv
 import io
@@ -20,6 +21,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 EXCLUSION_SOURCE_PATH = REPO_ROOT / "aggregates/governance-aggr/src/main/java/com/bloxbean/cardano/yaci/store/governanceaggr/service/HardcodedDRepDelegationExclusionProvider.java"
+DEFAULT_ENV_FILE_PATH = SCRIPT_DIR / "drep_dist_batch_compare.env"
 ZERO_HASH = "00000000000000000000000000000000000000000000000000000000"
 
 PUBLIC_PROTOCOL_MAGICS = {
@@ -87,6 +89,7 @@ BOOTSTRAP_VALID_DELEGATION_CONDITION = """
 """.strip("\n")
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 EXCLUSION_BLOCK_RE = re.compile(
     r"private List<DRepDelegationExclusion> (?P<network>\w+)Exclusions\(\) \{\s+return List\.of\((?P<body>.*?)\);\s+\}",
     re.DOTALL,
@@ -200,6 +203,165 @@ def require_value(name: str, explicit: Optional[str], env_name: str) -> str:
     if env_value:
         return env_value
     raise ValueError("Missing %s. Pass --%s or set %s." % (name, name.replace("_", "-"), env_name))
+
+
+def parse_env_bool(raw_value: str) -> bool:
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("Invalid boolean value in env file: %s" % raw_value)
+
+
+def load_env_file(path_text: str) -> Dict[str, str]:
+    path = Path(path_text).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError("Env file not found: %s" % path)
+
+    values: Dict[str, str] = {}
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped.startswith("export "):
+            stripped = stripped[7:].lstrip()
+
+        if "=" not in stripped:
+            raise ValueError("Invalid env file entry at %s:%d" % (path, line_number))
+
+        key, raw_value = stripped.split("=", 1)
+        key = key.strip()
+        if not ENV_VAR_NAME_RE.match(key):
+            raise ValueError("Invalid env var name at %s:%d: %s" % (path, line_number, key))
+
+        value = raw_value.strip()
+        if value[:1] in {"'", '"'}:
+            try:
+                parsed_value = ast.literal_eval(value)
+            except (SyntaxError, ValueError) as exc:
+                raise ValueError("Invalid quoted value at %s:%d" % (path, line_number)) from exc
+            if not isinstance(parsed_value, str):
+                parsed_value = str(parsed_value)
+        else:
+            parsed_value = value.split(" #", 1)[0].rstrip()
+
+        values[key] = parsed_value
+
+    return values
+
+
+def resolve_env_file_path(argv: Sequence[str]) -> Optional[str]:
+    for index, token in enumerate(argv):
+        if token == "--env-file":
+            if index + 1 >= len(argv):
+                raise ValueError("--env-file requires a value")
+            return str(Path(argv[index + 1]).expanduser().resolve())
+        if token.startswith("--env-file="):
+            return str(Path(token.split("=", 1)[1]).expanduser().resolve())
+
+    env_override = os.getenv("DREP_DIST_BATCH_COMPARE_ENV_FILE")
+    if env_override:
+        return str(Path(env_override).expanduser().resolve())
+
+    if DEFAULT_ENV_FILE_PATH.is_file():
+        return str(DEFAULT_ENV_FILE_PATH.resolve())
+
+    return None
+
+
+def resolve_value(
+    explicit: Optional[object],
+    env_values: Dict[str, str],
+    env_name: str,
+    default: Optional[object] = None,
+    caster=None,
+):
+    if explicit is not None:
+        return explicit
+
+    raw_value = env_values.get(env_name)
+    if raw_value is None:
+        raw_value = os.getenv(env_name)
+
+    if raw_value is None:
+        return default
+
+    if caster is None:
+        return raw_value
+
+    return caster(raw_value)
+
+
+def apply_env_defaults(args: argparse.Namespace, env_values: Dict[str, str]) -> None:
+    args.store_host = resolve_value(args.store_host, env_values, "STORE_HOST")
+    args.store_port = resolve_value(args.store_port, env_values, "STORE_PORT", 5432, int)
+    args.store_db = resolve_value(args.store_db, env_values, "STORE_DB")
+    args.store_user = resolve_value(args.store_user, env_values, "STORE_USER")
+    args.store_password = resolve_value(args.store_password, env_values, "STORE_PASSWORD")
+    args.store_schema = resolve_value(args.store_schema, env_values, "STORE_SCHEMA", "yaci_store")
+
+    if hasattr(args, "dbsync_host"):
+        args.dbsync_host = resolve_value(args.dbsync_host, env_values, "DBSYNC_HOST")
+        args.dbsync_port = resolve_value(args.dbsync_port, env_values, "DBSYNC_PORT", 5432, int)
+        args.dbsync_db = resolve_value(args.dbsync_db, env_values, "DBSYNC_DB")
+        args.dbsync_user = resolve_value(args.dbsync_user, env_values, "DBSYNC_USER")
+        args.dbsync_password = resolve_value(args.dbsync_password, env_values, "DBSYNC_PASSWORD")
+        args.dbsync_schema = resolve_value(args.dbsync_schema, env_values, "DBSYNC_SCHEMA", "public")
+
+    args.workers = resolve_value(args.workers, env_values, "WORKERS", 1, int)
+    args.protocol_magic = resolve_value(
+        args.protocol_magic,
+        env_values,
+        "PROTOCOL_MAGIC",
+        PUBLIC_PROTOCOL_MAGICS["mainnet"],
+        int,
+    )
+    args.max_bootstrap_phase_epoch = resolve_value(
+        args.max_bootstrap_phase_epoch,
+        env_values,
+        "MAX_BOOTSTRAP_PHASE_EPOCH",
+        None,
+        int,
+    )
+    args.debug_schema = resolve_value(args.debug_schema, env_values, "DREP_DEBUG_SCHEMA", "drep_debug")
+    args.lock_timeout = resolve_value(args.lock_timeout, env_values, "LOCK_TIMEOUT", "5s")
+    args.statement_timeout = resolve_value(args.statement_timeout, env_values, "STATEMENT_TIMEOUT", "0")
+    args.work_mem = resolve_value(args.work_mem, env_values, "WORK_MEM", "1GB")
+    args.maintenance_work_mem = resolve_value(
+        args.maintenance_work_mem,
+        env_values,
+        "MAINTENANCE_WORK_MEM",
+        "2GB",
+    )
+    args.temp_buffers = resolve_value(args.temp_buffers, env_values, "TEMP_BUFFERS", "512MB")
+    args.parallel_workers_per_gather = resolve_value(
+        args.parallel_workers_per_gather,
+        env_values,
+        "PARALLEL_WORKERS_PER_GATHER",
+        4,
+        int,
+    )
+    args.effective_cache_size = resolve_value(
+        args.effective_cache_size,
+        env_values,
+        "EFFECTIVE_CACHE_SIZE",
+        "48GB",
+    )
+    args.random_page_cost = resolve_value(args.random_page_cost, env_values, "RANDOM_PAGE_COST", "1.1")
+    args.effective_io_concurrency = resolve_value(
+        args.effective_io_concurrency,
+        env_values,
+        "EFFECTIVE_IO_CONCURRENCY",
+        64,
+        int,
+    )
+    args.parallel_setup_cost = resolve_value(args.parallel_setup_cost, env_values, "PARALLEL_SETUP_COST", "0")
+    args.parallel_tuple_cost = resolve_value(args.parallel_tuple_cost, env_values, "PARALLEL_TUPLE_COST", "0.01")
+    args.keep_jit = resolve_value(args.keep_jit, env_values, "KEEP_JIT", False, parse_env_bool)
+    args.save_store_sql = resolve_value(args.save_store_sql, env_values, "SAVE_STORE_SQL", False, parse_env_bool)
+    args.report_dir = resolve_value(args.report_dir, env_values, "REPORT_DIR")
 
 
 def parse_epoch_spec(spec: str) -> List[int]:
@@ -2319,63 +2481,74 @@ def add_epoch_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--epoch-end", type=int, help="End epoch when running a contiguous range")
 
 
+def add_config_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--env-file", help="Path to a .env-style file with STORE_*, DBSYNC_* and runtime settings")
+
+
 def add_store_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--store-host", default=os.getenv("STORE_HOST"))
-    parser.add_argument("--store-port", type=int, default=int(os.getenv("STORE_PORT", "5432")))
-    parser.add_argument("--store-db", default=os.getenv("STORE_DB"))
-    parser.add_argument("--store-user", default=os.getenv("STORE_USER"))
-    parser.add_argument("--store-password", default=os.getenv("STORE_PASSWORD"))
-    parser.add_argument("--store-schema", default=os.getenv("STORE_SCHEMA", "yaci_store"))
+    parser.add_argument("--store-host")
+    parser.add_argument("--store-port", type=int)
+    parser.add_argument("--store-db")
+    parser.add_argument("--store-user")
+    parser.add_argument("--store-password")
+    parser.add_argument("--store-schema")
 
 
 def add_dbsync_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--dbsync-host", default=os.getenv("DBSYNC_HOST"))
-    parser.add_argument("--dbsync-port", type=int, default=int(os.getenv("DBSYNC_PORT", "5432")))
-    parser.add_argument("--dbsync-db", default=os.getenv("DBSYNC_DB"))
-    parser.add_argument("--dbsync-user", default=os.getenv("DBSYNC_USER"))
-    parser.add_argument("--dbsync-password", default=os.getenv("DBSYNC_PASSWORD"))
-    parser.add_argument("--dbsync-schema", default=os.getenv("DBSYNC_SCHEMA", "public"))
+    parser.add_argument("--dbsync-host")
+    parser.add_argument("--dbsync-port", type=int)
+    parser.add_argument("--dbsync-db")
+    parser.add_argument("--dbsync-user")
+    parser.add_argument("--dbsync-password")
+    parser.add_argument("--dbsync-schema")
 
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--workers", type=int, default=int(os.getenv("WORKERS", "1")), help="Number of epochs to process in parallel")
-    parser.add_argument("--protocol-magic", type=int, default=int(os.getenv("PROTOCOL_MAGIC", str(PUBLIC_PROTOCOL_MAGICS["mainnet"]))), help="Protocol magic used to load hardcoded exclusions and bootstrap logic")
+    parser.add_argument("--workers", type=int, help="Number of epochs to process in parallel")
+    parser.add_argument("--protocol-magic", type=int, help="Protocol magic used to load hardcoded exclusions and bootstrap logic")
     parser.add_argument("--max-bootstrap-phase-epoch", type=int, help="Override bootstrap/PV9 boundary for non-public or custom networks")
-    parser.add_argument("--debug-schema", default=os.getenv("DREP_DEBUG_SCHEMA", "drep_debug"))
-    parser.add_argument("--lock-timeout", default=os.getenv("LOCK_TIMEOUT", "5s"))
-    parser.add_argument("--statement-timeout", default=os.getenv("STATEMENT_TIMEOUT", "0"))
-    parser.add_argument("--work-mem", default=os.getenv("WORK_MEM", "1GB"))
-    parser.add_argument("--maintenance-work-mem", default=os.getenv("MAINTENANCE_WORK_MEM", "2GB"))
-    parser.add_argument("--temp-buffers", default=os.getenv("TEMP_BUFFERS", "512MB"))
-    parser.add_argument("--parallel-workers-per-gather", type=int, default=int(os.getenv("PARALLEL_WORKERS_PER_GATHER", "4")))
-    parser.add_argument("--effective-cache-size", default=os.getenv("EFFECTIVE_CACHE_SIZE", "48GB"))
-    parser.add_argument("--random-page-cost", default=os.getenv("RANDOM_PAGE_COST", "1.1"))
-    parser.add_argument("--effective-io-concurrency", type=int, default=int(os.getenv("EFFECTIVE_IO_CONCURRENCY", "64")))
-    parser.add_argument("--parallel-setup-cost", default=os.getenv("PARALLEL_SETUP_COST", "0"))
-    parser.add_argument("--parallel-tuple-cost", default=os.getenv("PARALLEL_TUPLE_COST", "0.01"))
-    parser.add_argument("--keep-jit", action="store_true", help="Keep PostgreSQL JIT enabled")
-    parser.add_argument("--save-store-sql", action="store_true", help="Persist rendered store SQL for each epoch under the report directory")
+    parser.add_argument("--debug-schema")
+    parser.add_argument("--lock-timeout")
+    parser.add_argument("--statement-timeout")
+    parser.add_argument("--work-mem")
+    parser.add_argument("--maintenance-work-mem")
+    parser.add_argument("--temp-buffers")
+    parser.add_argument("--parallel-workers-per-gather", type=int)
+    parser.add_argument("--effective-cache-size")
+    parser.add_argument("--random-page-cost")
+    parser.add_argument("--effective-io-concurrency", type=int)
+    parser.add_argument("--parallel-setup-cost")
+    parser.add_argument("--parallel-tuple-cost")
+    parser.add_argument("--keep-jit", action="store_true", default=None, help="Keep PostgreSQL JIT enabled")
+    parser.add_argument("--save-store-sql", action="store_true", default=None, help="Persist rendered store SQL for each epoch under the report directory")
     parser.add_argument("--report-dir", help="Directory for summaries and per-epoch reports")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    normalized_argv = inject_default_command(argv)
+    env_file = resolve_env_file_path(normalized_argv)
     parser = argparse.ArgumentParser(
         description="Prepare and compare shadow drep_dist snapshots without touching official yaci-store source tables.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     prepare_parser = subparsers.add_parser("prepare-range", help="Prepare persistent debug caches in drep_debug")
+    add_config_args(prepare_parser)
     add_epoch_args(prepare_parser)
     add_store_args(prepare_parser)
     add_runtime_args(prepare_parser)
 
     compare_parser = subparsers.add_parser("compare-range", help="Compare shadow drep_dist snapshots against cardano-db-sync")
+    add_config_args(compare_parser)
     add_epoch_args(compare_parser)
     add_store_args(compare_parser)
     add_dbsync_args(compare_parser)
     add_runtime_args(compare_parser)
 
-    return parser.parse_args(inject_default_command(argv))
+    args = parser.parse_args(normalized_argv)
+    args.env_file = args.env_file or env_file
+    apply_env_defaults(args, load_env_file(args.env_file) if args.env_file else {})
+    return args
 
 
 def resolve_db_config(args: argparse.Namespace, prefix: str, default_schema: str) -> DbConfig:
@@ -2460,6 +2633,7 @@ def main(argv: Sequence[str]) -> int:
     run_config = {
         "command": args.command,
         "run_id": run_id,
+        "env_file": args.env_file,
         "store": {
             "host": store.host,
             "port": store.port,
@@ -2485,7 +2659,10 @@ def main(argv: Sequence[str]) -> int:
     }
     write_json(report_dir / "run_config.json", run_config)
 
-    print_line("report_dir=%s command=%s epochs=%d first_epoch=%d last_epoch=%d workers=%d" % (report_dir, args.command, len(epochs), epochs[0], epochs[-1], args.workers))
+    print_line(
+        "report_dir=%s command=%s epochs=%d first_epoch=%d last_epoch=%d workers=%d env_file=%s"
+        % (report_dir, args.command, len(epochs), epochs[0], epochs[-1], args.workers, args.env_file or "-")
+    )
 
     if args.command == "prepare-range":
         results: List[EpochPrepareResult] = []

@@ -494,7 +494,55 @@ Các business filters sau phải giữ nguyên:
 
 ## Hướng dẫn sử dụng
 
-### 1. Chuẩn bị biến môi trường
+### 1. Cấu hình bằng file `.env` khuyến nghị
+
+Tool hỗ trợ đọc file cấu hình theo 2 cách:
+
+- truyền trực tiếp `--env-file /path/to/drep_dist_batch_compare.env`
+- hoặc tạo file mặc định tại `e2e-tests/tools/drep_dist_batch_compare.env`, wrapper sẽ tự nạp
+
+Thứ tự ưu tiên là:
+
+- CLI args
+- env file
+- shell environment
+- hardcoded default của tool
+
+Bạn có thể bắt đầu từ file mẫu:
+
+```bash
+cp yaci-store/e2e-tests/tools/drep_dist_batch_compare.env.example \
+   yaci-store/e2e-tests/tools/drep_dist_batch_compare.env
+```
+
+Ví dụ nội dung file:
+
+```dotenv
+STORE_HOST=10.4.10.112
+STORE_PORT=5432
+STORE_DB=yaci_store
+STORE_USER=yaci
+STORE_PASSWORD=dbpass
+STORE_SCHEMA=yaci_store
+
+DBSYNC_HOST=10.4.10.135
+DBSYNC_PORT=5678
+DBSYNC_DB=cexplorer
+DBSYNC_USER=dbsync
+DBSYNC_PASSWORD=dbsync
+DBSYNC_SCHEMA=public
+
+WORKERS=1
+WORK_MEM=1GB
+MAINTENANCE_WORK_MEM=2GB
+TEMP_BUFFERS=512MB
+PARALLEL_WORKERS_PER_GATHER=4
+EFFECTIVE_CACHE_SIZE=48GB
+RANDOM_PAGE_COST=1.1
+EFFECTIVE_IO_CONCURRENCY=64
+```
+
+### 2. Hoặc tiếp tục dùng biến môi trường như cũ
 
 ```bash
 export STORE_HOST=10.4.10.112
@@ -512,7 +560,7 @@ export DBSYNC_PASSWORD=dbsync
 export DBSYNC_SCHEMA=public
 ```
 
-### 2. Build cache trước
+### 3. Build cache trước
 
 ```bash
 yaci-store/bin/drep-dist-batch-compare.sh prepare-range \
@@ -520,7 +568,16 @@ yaci-store/bin/drep-dist-batch-compare.sh prepare-range \
   --workers 1
 ```
 
-### 3. Chạy compare
+Nếu file config không nằm ở path mặc định, truyền rõ:
+
+```bash
+yaci-store/bin/drep-dist-batch-compare.sh prepare-range \
+  --env-file /path/to/drep_dist_batch_compare.env \
+  --epochs 624-700 \
+  --workers 1
+```
+
+### 4. Chạy compare
 
 ```bash
 yaci-store/bin/drep-dist-batch-compare.sh compare-range \
@@ -528,7 +585,7 @@ yaci-store/bin/drep-dist-batch-compare.sh compare-range \
   --workers 1
 ```
 
-### 4. Chạy một epoch để benchmark
+### 5. Chạy một epoch để benchmark
 
 ```bash
 yaci-store/bin/drep-dist-batch-compare.sh compare-range \
@@ -537,7 +594,7 @@ yaci-store/bin/drep-dist-batch-compare.sh compare-range \
   --report-dir /tmp/drep-compare-624
 ```
 
-### 5. Một số option quan trọng
+### 6. Một số option quan trọng
 
 - `--debug-schema drep_debug`
 - `--work-mem 1GB`

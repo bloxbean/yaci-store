@@ -1,6 +1,8 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -33,6 +35,112 @@ class CommandParsingTest(unittest.TestCase):
         self.assertEqual(
             tool.inject_default_command(["prepare-range", "--epochs", "624"]),
             ["prepare-range", "--epochs", "624"],
+        )
+
+    def test_parse_args_loads_defaults_from_env_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "drep.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "STORE_HOST=10.0.0.10",
+                        "STORE_PORT=15432",
+                        "STORE_DB=yaci_store",
+                        "STORE_USER=yaci",
+                        "STORE_PASSWORD=dbpass",
+                        "DBSYNC_HOST=10.0.0.20",
+                        "DBSYNC_PORT=25678",
+                        "DBSYNC_DB=cexplorer",
+                        "DBSYNC_USER=dbsync",
+                        "DBSYNC_PASSWORD=dbsyncpass",
+                        "WORKERS=3",
+                        'REPORT_DIR="/tmp/drep compare reports"',
+                        "KEEP_JIT=true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {}, clear=True):
+                args = tool.parse_args(
+                    [
+                        "compare-range",
+                        "--env-file",
+                        str(env_file),
+                        "--epochs",
+                        "624",
+                    ]
+                )
+
+        self.assertEqual(args.store_host, "10.0.0.10")
+        self.assertEqual(args.store_port, 15432)
+        self.assertEqual(args.dbsync_host, "10.0.0.20")
+        self.assertEqual(args.dbsync_port, 25678)
+        self.assertEqual(args.workers, 3)
+        self.assertEqual(args.report_dir, "/tmp/drep compare reports")
+        self.assertTrue(args.keep_jit)
+        self.assertEqual(args.env_file, str(env_file.resolve()))
+
+    def test_parse_args_prefers_cli_over_env_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "drep.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "STORE_HOST=10.0.0.10",
+                        "STORE_PORT=15432",
+                        "STORE_DB=yaci_store",
+                        "STORE_USER=yaci",
+                        "STORE_PASSWORD=dbpass",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {}, clear=True):
+                args = tool.parse_args(
+                    [
+                        "prepare-range",
+                        "--env-file",
+                        str(env_file),
+                        "--epochs",
+                        "624",
+                        "--store-host",
+                        "127.0.0.1",
+                        "--store-port",
+                        "5432",
+                    ]
+                )
+
+        self.assertEqual(args.store_host, "127.0.0.1")
+        self.assertEqual(args.store_port, 5432)
+
+
+class EnvFileParsingTest(unittest.TestCase):
+    def test_load_env_file_supports_export_quotes_and_inline_comments(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / "drep.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "# comment",
+                        "export STORE_HOST=10.0.0.10",
+                        'STORE_PASSWORD="db pass"',
+                        "WORKERS=2 # keep low on local machine",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            values = tool.load_env_file(str(env_file))
+
+        self.assertEqual(
+            values,
+            {
+                "STORE_HOST": "10.0.0.10",
+                "STORE_PASSWORD": "db pass",
+                "WORKERS": "2",
+            },
         )
 
 
