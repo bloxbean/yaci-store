@@ -20,7 +20,6 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
-EXCLUSION_SOURCE_PATH = REPO_ROOT / "aggregates/governance-aggr/src/main/java/com/bloxbean/cardano/yaci/store/governanceaggr/service/HardcodedDRepDelegationExclusionProvider.java"
 DEFAULT_ENV_FILE_PATH = SCRIPT_DIR / "drep_dist_batch_compare.env"
 ZERO_HASH = "00000000000000000000000000000000000000000000000000000000"
 
@@ -90,19 +89,6 @@ BOOTSTRAP_VALID_DELEGATION_CONDITION = """
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-EXCLUSION_BLOCK_RE = re.compile(
-    r"private List<DRepDelegationExclusion> (?P<network>\w+)Exclusions\(\) \{\s+return List\.of\((?P<body>.*?)\);\s+\}",
-    re.DOTALL,
-)
-EXCLUSION_ENTRY_RE = re.compile(
-    r'address\("(?P<address>[^"]*)"\).*?'
-    r'drepHash\("(?P<drep_hash>[^"]*)"\).*?'
-    r'drepType\(DrepType\.(?P<drep_type>[A-Z_]+)\).*?'
-    r'slot\((?P<slot>\d+)L\).*?'
-    r'txIndex\((?P<tx_index>\d+)\).*?'
-    r'certIndex\((?P<cert_index>\d+)\)',
-    re.DOTALL,
-)
 STEP_TIMING_RE = re.compile(r"^STEP_TIMING\|(?P<name>[^|]+)\|(?P<duration_ms>-?\d+(?:\.\d+)?)$")
 META_RE = re.compile(r"^META\|(?P<name>[^|]+)\|(?P<value>.*)$")
 
@@ -135,23 +121,12 @@ class QuerySettings:
     parallel_tuple_cost: str
 
 
-@dataclass(frozen=True)
-class DRepDelegationExclusion:
-    address: str
-    drep_hash: str
-    drep_type: str
-    slot: Optional[int]
-    tx_index: Optional[int]
-    cert_index: Optional[int]
-
-
 @dataclass
 class EpochExecutionContext:
     epoch: int
     is_bootstrap_phase: bool
     pv9_max_epoch: int
     max_bootstrap_phase_epoch: Optional[int]
-    exclusions: List[DRepDelegationExclusion]
 
 
 @dataclass
@@ -490,64 +465,6 @@ def timed_call(name: str, timings: List[Dict[str, object]], fn):
     return result
 
 
-def load_hardcoded_exclusions(protocol_magic: int) -> List[DRepDelegationExclusion]:
-    if protocol_magic != PUBLIC_PROTOCOL_MAGICS["mainnet"]:
-        return []
-
-    source = EXCLUSION_SOURCE_PATH.read_text(encoding="utf-8")
-    for match in EXCLUSION_BLOCK_RE.finditer(source):
-        if match.group("network") != "mainnet":
-            continue
-        exclusions = []
-        for entry in EXCLUSION_ENTRY_RE.finditer(match.group("body")):
-            exclusions.append(
-                DRepDelegationExclusion(
-                    address=entry.group("address"),
-                    drep_hash=entry.group("drep_hash"),
-                    drep_type=entry.group("drep_type"),
-                    slot=int(entry.group("slot")),
-                    tx_index=int(entry.group("tx_index")),
-                    cert_index=int(entry.group("cert_index")),
-                )
-            )
-        if exclusions:
-            return exclusions
-    raise RuntimeError("Unable to parse mainnet exclusions from %s" % EXCLUSION_SOURCE_PATH)
-
-
-def build_hardcoded_exclusion_condition(exclusions: Sequence[DRepDelegationExclusion], enabled: bool) -> str:
-    if not enabled or not exclusions:
-        return ""
-
-    rows = []
-    for exclusion in exclusions:
-        rows.append(
-            "(%s, %s, %s, %s, %s, %s)" % (
-                sql_literal(exclusion.address),
-                sql_literal(exclusion.drep_hash),
-                sql_literal(exclusion.drep_type),
-                "NULL" if exclusion.slot is None else str(exclusion.slot),
-                "NULL" if exclusion.tx_index is None else str(exclusion.tx_index),
-                "NULL" if exclusion.cert_index is None else str(exclusion.cert_index),
-            )
-        )
-
-    return (
-        "\n  AND NOT EXISTS (\n"
-        "      SELECT 1\n"
-        "      FROM (VALUES\n"
-        "          %s\n"
-        "      ) AS excl(address, drep_hash, drep_type, slot, tx_index, cert_index)\n"
-        "      WHERE excl.address = rd.address\n"
-        "        AND excl.drep_hash = rd.drep_hash\n"
-        "        AND excl.drep_type = rd.drep_type\n"
-        "        AND (excl.slot IS NULL OR excl.slot = rd.slot)\n"
-        "        AND (excl.tx_index IS NULL OR excl.tx_index = rd.tx_index)\n"
-        "        AND (excl.cert_index IS NULL OR excl.cert_index = rd.cert_index)\n"
-        "  )"
-    ) % ",\n          ".join(rows)
-
-
 def build_valid_delegation_condition(epoch_context: EpochExecutionContext) -> str:
     if epoch_context.is_bootstrap_phase:
         return BOOTSTRAP_VALID_DELEGATION_CONDITION
@@ -578,7 +495,6 @@ def resolve_epoch_context(
     snapshot_epoch: int,
     protocol_magic: int,
     override_max_bootstrap_phase_epoch: Optional[int],
-    exclusions: List[DRepDelegationExclusion],
 ) -> EpochExecutionContext:
     epoch = snapshot_epoch - 1
     if override_max_bootstrap_phase_epoch is not None:
@@ -588,7 +504,6 @@ def resolve_epoch_context(
             is_bootstrap_phase=is_bootstrap_phase,
             pv9_max_epoch=min(epoch, override_max_bootstrap_phase_epoch),
             max_bootstrap_phase_epoch=override_max_bootstrap_phase_epoch,
-            exclusions=exclusions,
         )
 
     if protocol_magic not in PUBLIC_PROTOCOL_MAGICS.values():
@@ -621,7 +536,6 @@ SELECT
         is_bootstrap_phase=is_bootstrap_phase,
         pv9_max_epoch=epoch if is_bootstrap_phase else max_bootstrap_phase_epoch,
         max_bootstrap_phase_epoch=None if is_bootstrap_phase else max_bootstrap_phase_epoch,
-        exclusions=exclusions,
     )
 
 
@@ -1493,10 +1407,6 @@ def render_compare_sql(
     debug = sql_identifier(debug_schema)
     epoch = epoch_context.epoch
     valid_condition = build_valid_delegation_condition(epoch_context)
-    hardcoded_condition = build_hardcoded_exclusion_condition(
-        epoch_context.exclusions,
-        not epoch_context.is_bootstrap_phase,
-    )
 
     parts = [render_session_settings(store_schema, settings)]
     parts.append(timed_sql("ss_current_drep_address_create", render_current_drep_delegations_sql(epoch)))
@@ -1863,14 +1773,13 @@ LEFT JOIN stake_registration sd
 WHERE rd.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
   AND sd.address IS NULL
 %s
-%s
   AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
 GROUP BY
     rd.drep_hash,
     rd.drep_type,
     rd.drep_id
 """
-            % (epoch, valid_condition, hardcoded_condition),
+            % (epoch, valid_condition),
         )
     )
 
@@ -2087,7 +1996,6 @@ def run_prepare_phase(
     epoch: int,
     store: DbConfig,
     protocol_magic: int,
-    exclusions: List[DRepDelegationExclusion],
     debug_schema: str,
     settings: QuerySettings,
     override_max_bootstrap_phase_epoch: Optional[int],
@@ -2103,7 +2011,6 @@ def run_prepare_phase(
             snapshot_epoch=epoch,
             protocol_magic=protocol_magic,
             override_max_bootstrap_phase_epoch=override_max_bootstrap_phase_epoch,
-            exclusions=exclusions,
         ),
     )
     prepare_sql = timed_call(
@@ -2130,7 +2037,6 @@ def compare_single_epoch(
     store: DbConfig,
     dbsync: DbConfig,
     protocol_magic: int,
-    exclusions: List[DRepDelegationExclusion],
     debug_schema: str,
     settings: QuerySettings,
     report_dir: Path,
@@ -2145,7 +2051,6 @@ def compare_single_epoch(
         epoch=epoch,
         store=store,
         protocol_magic=protocol_magic,
-        exclusions=exclusions,
         debug_schema=debug_schema,
         settings=settings,
         override_max_bootstrap_phase_epoch=override_max_bootstrap_phase_epoch,
@@ -2252,7 +2157,6 @@ def prepare_single_epoch(
     epoch: int,
     store: DbConfig,
     protocol_magic: int,
-    exclusions: List[DRepDelegationExclusion],
     debug_schema: str,
     settings: QuerySettings,
     report_dir: Path,
@@ -2266,7 +2170,6 @@ def prepare_single_epoch(
         epoch=epoch,
         store=store,
         protocol_magic=protocol_magic,
-        exclusions=exclusions,
         debug_schema=debug_schema,
         settings=settings,
         override_max_bootstrap_phase_epoch=override_max_bootstrap_phase_epoch,
@@ -2304,7 +2207,6 @@ def compare_epoch_with_error_handling(
     store: DbConfig,
     dbsync: DbConfig,
     protocol_magic: int,
-    exclusions: List[DRepDelegationExclusion],
     debug_schema: str,
     settings: QuerySettings,
     report_dir: Path,
@@ -2318,7 +2220,6 @@ def compare_epoch_with_error_handling(
             store=store,
             dbsync=dbsync,
             protocol_magic=protocol_magic,
-            exclusions=exclusions,
             debug_schema=debug_schema,
             settings=settings,
             report_dir=report_dir,
@@ -2362,7 +2263,6 @@ def prepare_epoch_with_error_handling(
     epoch: int,
     store: DbConfig,
     protocol_magic: int,
-    exclusions: List[DRepDelegationExclusion],
     debug_schema: str,
     settings: QuerySettings,
     report_dir: Path,
@@ -2375,7 +2275,6 @@ def prepare_epoch_with_error_handling(
             epoch=epoch,
             store=store,
             protocol_magic=protocol_magic,
-            exclusions=exclusions,
             debug_schema=debug_schema,
             settings=settings,
             report_dir=report_dir,
@@ -2505,7 +2404,7 @@ def add_dbsync_args(parser: argparse.ArgumentParser) -> None:
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--workers", type=int, help="Number of epochs to process in parallel")
-    parser.add_argument("--protocol-magic", type=int, help="Protocol magic used to load hardcoded exclusions and bootstrap logic")
+    parser.add_argument("--protocol-magic", type=int, help="Protocol magic used to reproduce bootstrap/PV9/PV10 logic")
     parser.add_argument("--max-bootstrap-phase-epoch", type=int, help="Override bootstrap/PV9 boundary for non-public or custom networks")
     parser.add_argument("--debug-schema")
     parser.add_argument("--lock-timeout")
@@ -2624,7 +2523,6 @@ def main(argv: Sequence[str]) -> int:
     dbsync = resolve_db_config(args, "dbsync", "public") if args.command == "compare-range" else None
     epochs = resolve_epochs(args, store, dbsync)
     report_dir = make_report_dir(args.report_dir, args.command)
-    exclusions = load_hardcoded_exclusions(args.protocol_magic)
     settings = build_query_settings(args)
     run_id = "drep-batch-%s-%d" % (time.strftime("%Y%m%d_%H%M%S"), os.getpid())
 
@@ -2673,7 +2571,6 @@ def main(argv: Sequence[str]) -> int:
                     epoch,
                     store,
                     args.protocol_magic,
-                    exclusions,
                     args.debug_schema,
                     settings,
                     report_dir,
@@ -2706,7 +2603,6 @@ def main(argv: Sequence[str]) -> int:
                 store,
                 dbsync,
                 args.protocol_magic,
-                exclusions,
                 args.debug_schema,
                 settings,
                 report_dir,

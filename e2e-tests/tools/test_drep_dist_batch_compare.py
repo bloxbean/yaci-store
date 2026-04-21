@@ -183,28 +183,6 @@ class CompareRowsTest(unittest.TestCase):
         )
 
 
-class HardcodedExclusionsTest(unittest.TestCase):
-    def test_load_hardcoded_exclusions_reads_mainnet_entries_from_java_source(self):
-        exclusions = tool.load_hardcoded_exclusions(tool.PUBLIC_PROTOCOL_MAGICS["mainnet"])
-
-        self.assertGreater(len(exclusions), 0)
-        self.assertEqual(exclusions[0].drep_type, "ADDR_KEYHASH")
-
-    def test_build_hardcoded_exclusion_condition_is_empty_when_disabled(self):
-        exclusions = [
-            tool.DRepDelegationExclusion(
-                address="stake1test",
-                drep_hash="abc",
-                drep_type="ADDR_KEYHASH",
-                slot=1,
-                tx_index=2,
-                cert_index=3,
-            )
-        ]
-
-        self.assertEqual(tool.build_hardcoded_exclusion_condition(exclusions, False), "")
-
-
 class StepTimingParserTest(unittest.TestCase):
     def test_parse_step_timings_extracts_named_durations(self):
         output = "\n".join(
@@ -250,7 +228,6 @@ class SqlGenerationTest(unittest.TestCase):
             is_bootstrap_phase=False,
             pv9_max_epoch=536,
             max_bootstrap_phase_epoch=536,
-            exclusions=[],
         )
 
     def build_settings(self):
@@ -310,6 +287,7 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn('INSERT INTO "drep_debug".shadow_drep_dist', sql)
         self.assertNotIn("INSERT INTO drep_dist", sql)
         self.assertNotIn("DELETE FROM drep_dist", sql)
+        self.assertNotIn("AS excl(address, drep_hash, drep_type, slot, tx_index, cert_index)", sql)
 
 
 if __name__ == "__main__":

@@ -252,7 +252,7 @@ Tool vẫn áp dụng nguyên vẹn:
 
 Sau khi reconstruct financial base, tool mới cộng/trừ governance adjustment, đúng thứ tự logic của `DRepDistService`.
 
-### DRep validity / bootstrap / PV9 / exclusions có bị thay đổi không?
+### DRep validity / bootstrap / PV9 có bị thay đổi không?
 
 Không.
 
@@ -262,7 +262,6 @@ Hybrid flow vẫn giữ nguyên:
 - current DRep delegation logic
 - `ss_drep_status`
 - `valid delegation condition`
-- hardcoded delegation exclusions
 - `ss_pv9_cleared_addresses`
 - virtual DRep handling cho `ABSTAIN` và `NO_CONFIDENCE`
 
@@ -294,7 +293,7 @@ flowchart TD
     F --> H["apply gov adjustments"]
     G --> H
     H --> I["apply DRep validity filters"]
-    I --> J["apply PV9 cleared + hardcoded exclusions"]
+    I --> J["apply PV9 cleared addresses"]
     J --> K["aggregate by DRep"]
     K --> L["compare with cardano-db-sync"]
     L --> M["write reports + timings"]
@@ -487,7 +486,6 @@ Với address thuộc `missing_base_from_raw`:
 Các business filters sau phải giữ nguyên:
 
 - `valid delegation condition`
-- hardcoded exclusions
 - PV9 cleared addresses
 - stake deregistration filter
 - governance deposit adjustment
