@@ -103,12 +103,6 @@ public abstract class BFScriptsMapperDecorator implements BFScriptsMapper {
 
     @Override
     public BFScriptRedeemerDto toRedeemerDto(BFScriptRedeemer model) {
-        // datum_hash: use the UTxO datum hash when present (Spend redeemers),
-        // fall back to redeemer_datahash for Mint/Cert/Reward redeemers (matches BF behaviour)
-        String datumHash = (model.datumHash() != null && !model.datumHash().isBlank())
-                ? model.datumHash()
-                : model.redeemerDataHash();
-
         return BFScriptRedeemerDto.builder()
                 .txHash(model.txHash())
                 .txIndex(model.txIndex() != null ? model.txIndex() : 0)
@@ -117,7 +111,7 @@ public abstract class BFScriptsMapperDecorator implements BFScriptsMapper {
                 .unitSteps(model.unitSteps() != null ? String.valueOf(model.unitSteps()) : "0")
                 .fee(model.fee() != null ? model.fee() : "0")
                 .redeemerDataHash(model.redeemerDataHash())
-                .datumHash(datumHash)
+                .datumHash(model.redeemerDataHash())
                 .build();
     }
 

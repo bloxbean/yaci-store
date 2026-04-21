@@ -37,7 +37,7 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     public List<BFScriptListItem> getScripts(int page, int count, String order) {
         int offset = page * count;
         SortField<?> sortField = "asc".equalsIgnoreCase(order)
-                ? SCRIPT.SLOT.asc().nullsLast()
+                ? SCRIPT.SLOT.asc().nullsFirst()
                 : SCRIPT.SLOT.desc().nullsLast();
 
         return dsl.select(SCRIPT.SCRIPT_HASH)
