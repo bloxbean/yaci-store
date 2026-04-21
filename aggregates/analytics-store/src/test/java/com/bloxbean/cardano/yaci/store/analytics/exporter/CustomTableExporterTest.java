@@ -26,7 +26,7 @@ class CustomTableExporterTest {
                 PartitionValue.ofDate(LocalDate.of(2024, 1, 15)),
                 new SlotRange(10, 20));
 
-        assertThat(sql).isEqualTo("SELECT * FROM source_db.mainnet.tx WHERE slot >= 10 AND slot < 20");
+        assertThat(sql).isEqualTo("SELECT * FROM postgres_query('source_db', 'SELECT * FROM mainnet.tx WHERE slot >= 10 AND slot < 20')");
     }
 
     @Test
@@ -39,7 +39,7 @@ class CustomTableExporterTest {
                 PartitionValue.ofEpoch(450),
                 new SlotRange(100, 200));
 
-        assertThat(sql).isEqualTo("SELECT * FROM source_db.mainnet.rewards WHERE epoch_no = 450");
+        assertThat(sql).isEqualTo("SELECT * FROM postgres_query('source_db', 'SELECT * FROM mainnet.rewards WHERE epoch_no = 450')");
     }
 
     @Test
@@ -53,7 +53,7 @@ class CustomTableExporterTest {
                 new SlotRange(100, 200));
 
         assertThat(sql).isEqualTo(
-                "SELECT * FROM source_db.mainnet.data WHERE slot >= 100 AND slot < 200 AND epoch = 450");
+                "SELECT * FROM postgres_query('source_db', 'SELECT * FROM mainnet.data WHERE slot >= 100 AND slot < 200 AND epoch = 450')");
     }
 
     @Test

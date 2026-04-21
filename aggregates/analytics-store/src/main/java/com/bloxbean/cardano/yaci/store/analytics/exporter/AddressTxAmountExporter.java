@@ -44,21 +44,23 @@ public class AddressTxAmountExporter extends AbstractTableExporter {
     protected String buildQuery(PartitionValue partition, SlotRange slotRange) {
         String schema = getSourceSchema();
         return String.format("""
-            SELECT
-                ata.address,
-                ata.unit,
-                ata.tx_hash,
-                ata.slot,
-                ata.quantity,
-                ata.addr_full,
-                ata.stake_address,
-                ata.block,
-                ata.epoch,
-                to_timestamp(COALESCE(ata.block_time, 0)) as block_time
-            FROM source_db.%s.address_tx_amount ata
-            WHERE ata.slot >= %d
-              AND ata.slot < %d
-            ORDER BY ata.slot, ata.address, ata.unit, ata.tx_hash
+            SELECT * FROM postgres_query('source_db', '
+                SELECT
+                    ata.address,
+                    ata.unit,
+                    ata.tx_hash,
+                    ata.slot,
+                    ata.quantity,
+                    ata.addr_full,
+                    ata.stake_address,
+                    ata.block,
+                    ata.epoch,
+                    to_timestamp(COALESCE(ata.block_time, 0)) as block_time
+                FROM %s.address_tx_amount ata
+                WHERE ata.slot >= %d
+                  AND ata.slot < %d
+                ORDER BY ata.slot
+            ')
             """,
             schema,
             slotRange.startSlot(),

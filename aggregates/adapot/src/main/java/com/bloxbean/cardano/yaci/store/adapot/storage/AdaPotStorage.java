@@ -15,4 +15,6 @@ public interface AdaPotStorage {
     Optional<AdaPot> findByEpoch(long epoch);
 
     int deleteBySlotGreaterThan(long slot);
+
+    int deleteByEpoch(int epoch);
 }

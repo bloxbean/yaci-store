@@ -1,6 +1,7 @@
 services:
   yaci-store-postgres:
     image: postgres:17.4
+    container_name: yaci-store-postgres-${INSTANCE_NAME:-default}
 #    shm_size: 2g
     environment:
       - POSTGRES_USER=yaci
@@ -8,7 +9,7 @@ services:
       - POSTGRES_DB=yaci_store
       - POSTGRES_LOGGING=true
     ports:
-      - "54333:5432"
+      - "${YACI_STORE_DB_PORT:-54333}:5432"
     volumes:
       - $PWD/db-data/yaci-store/:/var/lib/postgresql/data
     healthcheck:

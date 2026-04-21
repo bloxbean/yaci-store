@@ -101,31 +101,26 @@ public class UniversalExportService {
     }
 
     /**
-     * Export all epoch tables for the previous completed epoch.
+     * Export all epoch tables for the current epoch.
      *
-     * Exports data for the most recently completed epoch (currentEpoch - 1).
-     *
-     * This ensures:
-     * - Epoch is fully completed (all 432,000 slots)
-     * - All epoch-specific data (rewards, stake snapshots) is available
-     * - No partial epoch exports
+     * Attempts to export data for the current epoch. Each exporter's
+     * preExportValidation() gates whether the data is actually ready
+     * (e.g. adapot job completion check).
      *
      * Example: If current epoch is 451:
-     * - Exports data for epoch 450
+     * - Attempts to export epoch 451
+     * - Exporters with adapot dependency will skip if job not yet complete
      */
     public void exportEpochTables() {
-        // Get current epoch from latest block and export previous (completed) epoch
         Optional<Block> latestBlock = blockStorageReader.findRecentBlock();
         if (latestBlock.isEmpty()) {
             log.warn("No blocks found, cannot determine current epoch. Skipping epoch export.");
             return;
         }
 
-        int currentEpoch = latestBlock.get().getEpochNumber();
-        int exportEpoch = currentEpoch - 1;
+        int exportEpoch = latestBlock.get().getEpochNumber();
 
-        log.info("Starting epoch table exports for epoch: {} (current epoch: {})",
-                exportEpoch, currentEpoch);
+        log.info("Starting epoch table exports for epoch: {}", exportEpoch);
 
         // Get enabled epoch tables
         List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
