@@ -1,0 +1,311 @@
+
+### @name getAccountInfoBlockfrost
+### Get account info from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountInfo", response.body);
+
+    client.test("Get account info from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountInfoYaci
+### Get account info from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}
+
+> {%
+    const bfResponse = client.global.get("bfAccountInfo");
+    const yaciResponse = response.body;
+
+    client.test("Compare account info between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bfResponse.stake_address === yaciResponse.stake_address, `stake_address mismatch`);
+        client.assert(bfResponse.active === yaciResponse.active, `active mismatch`);
+        client.assert(bfResponse.pool_id === yaciResponse.pool_id, `pool_id mismatch`);
+    });
+%}
+
+### @name getAccountRewardsBlockfrost
+### Get account rewards from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/rewards?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountRewards", response.body);
+    client.test("Get account rewards from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountRewardsYaci
+### Get account rewards from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/rewards?count=5
+
+> {%
+    const bfResponse = client.global.get("bfAccountRewards");
+    const yaciResponse = response.body;
+
+    client.test("Compare account rewards between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaciResponse), "Response should be an array");
+    });
+%}
+
+### @name getAccountHistoryBlockfrost
+### Get account history from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/history?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountHistory", response.body);
+    client.test("Get account history from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountHistoryYaci
+### Get account history from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/history?count=5
+
+> {%
+    client.test("Get account history from Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getAccountDelegationsBlockfrost
+### Get account delegations from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/delegations?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountDelegations", response.body);
+    client.test("Get account delegations from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountDelegationsYaci
+### Get account delegations from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/delegations?count=5
+
+> {%
+    const bfResponse = client.global.get("bfAccountDelegations");
+    const yaciResponse = response.body;
+
+    client.test("Compare account delegations between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaciResponse), "Response should be an array");
+        if (bfResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(bfResponse[0].tx_hash === yaciResponse[0].tx_hash, `First delegation tx_hash mismatch`);
+            client.assert(bfResponse[0].pool_id === yaciResponse[0].pool_id, `First delegation pool_id mismatch`);
+        }
+    });
+%}
+
+### @name getAccountRegistrationsBlockfrost
+### Get account registrations from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/registrations?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountRegistrations", response.body);
+    client.test("Get account registrations from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountRegistrationsYaci
+### Get account registrations from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/registrations?count=5
+
+> {%
+    const bfResponse = client.global.get("bfAccountRegistrations");
+    const yaciResponse = response.body;
+
+    client.test("Compare account registrations between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaciResponse), "Response should be an array");
+        if (bfResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(bfResponse[0].tx_hash === yaciResponse[0].tx_hash, `First registration tx_hash mismatch`);
+            client.assert(bfResponse[0].action === yaciResponse[0].action, `First registration action mismatch`);
+        }
+    });
+%}
+
+### @name getAccountWithdrawalsBlockfrost
+### Get account withdrawals from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/withdrawals?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountWithdrawals", response.body);
+    client.test("Get account withdrawals from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountWithdrawalsYaci
+### Get account withdrawals from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/withdrawals?count=5
+
+> {%
+    const bfResponse = client.global.get("bfAccountWithdrawals");
+    const yaciResponse = response.body;
+
+    client.test("Compare account withdrawals between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaciResponse), "Response should be an array");
+        if (bfResponse.length > 0 && yaciResponse.length > 0) {
+            client.assert(bfResponse[0].tx_hash === yaciResponse[0].tx_hash, `First withdrawal tx_hash mismatch`);
+        }
+    });
+%}
+
+### @name getAccountMirsBlockfrost
+### Get account MIRs from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/mirs
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountMirs", response.body);
+    client.test("Get account MIRs from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountMirsYaci
+### Get account MIRs from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/mirs
+
+> {%
+    client.test("Get account MIRs from Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getAccountAddressesBlockfrost
+### Get account addresses from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/addresses?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountAddresses", response.body);
+    client.test("Get account addresses from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountAddressesYaci
+### Get account addresses from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/addresses?count=5
+
+> {%
+    const bfResponse = client.global.get("bfAccountAddresses");
+    const yaciResponse = response.body;
+
+    client.test("Compare account addresses between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(yaciResponse), "Response should be an array");
+    });
+%}
+
+### @name getAccountAddressAssetsBlockfrost
+### Get account address assets from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/addresses/assets?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountAddressAssets", response.body);
+    client.test("Get account address assets from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountAddressAssetsYaci
+### Get account address assets from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/addresses/assets?count=5
+
+> {%
+    client.test("Get account address assets from Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getAccountAddressesTotalBlockfrost
+### Get account addresses total from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/addresses/total
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountAddressesTotal", response.body);
+    client.test("Get account addresses total from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountAddressesTotalYaci
+### Get account addresses total from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/addresses/total
+
+> {%
+    const bfResponse = client.global.get("bfAccountAddressesTotal");
+    const yaciResponse = response.body;
+
+    client.test("Compare account addresses total between Blockfrost and Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(bfResponse.stake_address === yaciResponse.stake_address, `stake_address mismatch`);
+    });
+%}
+
+### @name getAccountUtxosBlockfrost
+### Get account UTXOs from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/utxos?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountUtxos", response.body);
+    client.test("Get account UTXOs from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountUtxosYaci
+### Get account UTXOs from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/utxos?count=5
+
+> {%
+    client.test("Get account UTXOs from Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
+
+### @name getAccountTransactionsBlockfrost
+### Get account transactions from Blockfrost
+GET {{blockfrost_base_url}}/accounts/{{test_stake_address}}/transactions?count=5
+project_id: {{blockfrost_project_id}}
+
+> {%
+    client.global.set("bfAccountTransactions", response.body);
+    client.test("Get account transactions from Blockfrost", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+### @name getAccountTransactionsYaci
+### Get account transactions from Yaci Store
+GET {{base_url}}/api/v1/blockfrost/accounts/{{test_stake_address}}/transactions?count=5
+
+> {%
+    client.test("Get account transactions from Yaci", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(Array.isArray(response.body), "Response should be an array");
+    });
+%}
