@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
+import org.jooq.Cursor;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.Record;
@@ -551,21 +552,43 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public Optional<AccountAddressesTotal> getAddressesTotal(String stakeAddress) {
         try {
-            // Received: all outputs (UTXOs) belonging to this stake address
-            // Each ADDRESS_UTXO row represents an output; lovelace + multi-asset amounts are received
-            var outputRows = dsl.select(
-                            ADDRESS_UTXO.TX_HASH,
+            var receivedHashesQuery = dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
+                    .from(ADDRESS_UTXO)
+                    .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress));
+
+            var spentHashesQuery = dsl.select(TX_INPUT.SPENT_TX_HASH.as("tx_hash"))
+                    .from(ADDRESS_UTXO)
+                    .join(TX_INPUT)
+                    .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
+                            .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
+                    .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress));
+
+            long txCount = dsl.fetchCount(receivedHashesQuery.union(spentHashesQuery));
+
+            Map<String, BigInteger> receivedMap = new LinkedHashMap<>();
+            Map<String, BigInteger> sentMap = new LinkedHashMap<>();
+
+            try (Cursor<?> outputCursor = dsl.select(
                             ADDRESS_UTXO.LOVELACE_AMOUNT,
                             ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts"))
                     .from(ADDRESS_UTXO)
                     .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                    .fetch();
+                    .fetchLazy()) {
+                for (Record rec : outputCursor) {
+                    Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
+                    if (lovelace != null && lovelace > 0) {
+                        receivedMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
+                    }
+                    Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
+                    for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
+                        if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                            receivedMap.merge(e.getKey(), e.getValue(), BigInteger::add);
+                        }
+                    }
+                }
+            }
 
-            // Sent: all inputs (spent UTXOs) belonging to this stake address
-            // TX_INPUT.TX_HASH = the utxo's creating tx hash (matches ADDRESS_UTXO.TX_HASH)
-            // TX_INPUT.SPENT_TX_HASH = the spending tx hash
-            var inputRows = dsl.select(
-                            TX_INPUT.SPENT_TX_HASH.as("spending_tx_hash"),
+            try (Cursor<?> inputCursor = dsl.select(
                             ADDRESS_UTXO.LOVELACE_AMOUNT,
                             ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts"))
                     .from(ADDRESS_UTXO)
@@ -573,45 +596,22 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                     .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
                             .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
                     .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                    .fetch();
-
-            Map<String, BigInteger> receivedMap = new LinkedHashMap<>();
-            Map<String, BigInteger> sentMap = new LinkedHashMap<>();
-            Set<String> txHashes = new HashSet<>();
-
-            for (Record rec : outputRows) {
-                String txHash = rec.get(ADDRESS_UTXO.TX_HASH);
-                if (txHash != null) txHashes.add(txHash);
-
-                Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
-                if (lovelace != null && lovelace > 0) {
-                    receivedMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
-                }
-                Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
-                for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
-                    if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
-                        receivedMap.merge(e.getKey(), e.getValue(), BigInteger::add);
+                    .fetchLazy()) {
+                for (Record rec : inputCursor) {
+                    Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
+                    if (lovelace != null && lovelace > 0) {
+                        sentMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
+                    }
+                    Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
+                    for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
+                        if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
+                            sentMap.merge(e.getKey(), e.getValue(), BigInteger::add);
+                        }
                     }
                 }
             }
 
-            for (Record rec : inputRows) {
-                String spendingTxHash = rec.get("spending_tx_hash", String.class);
-                if (spendingTxHash != null) txHashes.add(spendingTxHash);
-
-                Long lovelace = rec.get(ADDRESS_UTXO.LOVELACE_AMOUNT);
-                if (lovelace != null && lovelace > 0) {
-                    sentMap.merge(Constants.LOVELACE, BigInteger.valueOf(lovelace), BigInteger::add);
-                }
-                Map<String, BigInteger> assets = AmountsJsonUtil.toQuantityByUnit(rec.get("amounts", String.class));
-                for (Map.Entry<String, BigInteger> e : assets.entrySet()) {
-                    if (!Constants.LOVELACE.equals(e.getKey()) && e.getValue() != null && e.getValue().compareTo(BigInteger.ZERO) > 0) {
-                        sentMap.merge(e.getKey(), e.getValue(), BigInteger::add);
-                    }
-                }
-            }
-
-            return Optional.of(new AccountAddressesTotal(stakeAddress, receivedMap, sentMap, txHashes.size()));
+            return Optional.of(new AccountAddressesTotal(stakeAddress, receivedMap, sentMap, txCount));
         } catch (DataAccessException e) {
             log.warn("Could not fetch addresses total for {}: {}", stakeAddress, e.getMessage());
             return Optional.empty();
