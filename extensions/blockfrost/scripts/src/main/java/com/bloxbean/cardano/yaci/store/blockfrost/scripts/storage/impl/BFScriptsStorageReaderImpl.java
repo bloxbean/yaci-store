@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.scripts.storage.impl.model.BFD
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.storage.impl.model.BFScript;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.storage.impl.model.BFScriptListItem;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.storage.impl.model.BFScriptRedeemer;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +35,11 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     private final ObjectMapper objectMapper;
 
     @Override
-    public List<BFScriptListItem> getScripts(int page, int count, String order) {
+    public List<BFScriptListItem> getScripts(int page, int count, Order order) {
         int offset = page * count;
-        SortField<?> sortField = "asc".equalsIgnoreCase(order)
-                ? SCRIPT.SLOT.asc().nullsFirst()
-                : SCRIPT.SLOT.desc().nullsLast();
+        SortField<?> sortField = order == Order.desc
+                ? SCRIPT.SLOT.desc().nullsLast()
+                : SCRIPT.SLOT.asc().nullsFirst();
 
         return dsl.select(SCRIPT.SCRIPT_HASH)
                 .from(SCRIPT)
@@ -61,11 +62,11 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     }
 
     @Override
-    public List<BFScriptRedeemer> getScriptRedeemers(String scriptHash, int page, int count, String order) {
+    public List<BFScriptRedeemer> getScriptRedeemers(String scriptHash, int page, int count, Order order) {
         int offset = page * count;
-        SortField<?> sortField = "asc".equalsIgnoreCase(order)
-                ? TRANSACTION_SCRIPTS.SLOT.asc().nullsLast()
-                : TRANSACTION_SCRIPTS.SLOT.desc().nullsLast();
+        SortField<?> sortField = order == Order.desc
+                ? TRANSACTION_SCRIPTS.SLOT.desc().nullsLast()
+                : TRANSACTION_SCRIPTS.SLOT.asc().nullsLast();
 
         // Fetch execution unit prices once for the entire page — more efficient than per-row
         ExecUnitPrices prices = fetchExecUnitPrices();

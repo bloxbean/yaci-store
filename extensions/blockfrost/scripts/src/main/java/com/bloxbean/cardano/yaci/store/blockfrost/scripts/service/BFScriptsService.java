@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.scripts.service;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.mapper.BFScriptsMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.storage.BFScriptsStorageReader;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,7 +20,7 @@ public class BFScriptsService {
     private final BFScriptsStorageReader storageReader;
     private final BFScriptsMapper mapper;
 
-    public List<BFScriptListItemDto> getScripts(int page, int count, String order) {
+    public List<BFScriptListItemDto> getScripts(int page, int count, Order order) {
         return storageReader.getScripts(page, count, order).stream()
                 .map(mapper::toListItemDto)
                 .toList();
@@ -46,7 +47,7 @@ public class BFScriptsService {
                         "The requested component has not been found."));
     }
 
-    public List<BFScriptRedeemerDto> getScriptRedeemers(String scriptHash, int page, int count, String order) {
+    public List<BFScriptRedeemerDto> getScriptRedeemers(String scriptHash, int page, int count, Order order) {
         return storageReader.getScriptRedeemers(scriptHash, page, count, order).stream()
                 .map(mapper::toRedeemerDto)
                 .toList();

@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.scripts.controller;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.service.BFScriptsService;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
@@ -38,7 +39,7 @@ public class BFScriptsController {
     public List<BFScriptListItemDto> getScripts(
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
         return bfScriptsService.getScripts(p, count, order);
     }
@@ -78,7 +79,7 @@ public class BFScriptsController {
             @PathVariable("script_hash") String scriptHash,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         validateScriptHash(scriptHash);
         int p = page - 1;
         return bfScriptsService.getScriptRedeemers(scriptHash, p, count, order);
