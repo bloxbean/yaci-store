@@ -102,22 +102,22 @@ public class BFNetworkService {
         long byronSafeZone = securityParam * 2L;
         long shelleySafeZone = (long) (3.0 * securityParam / activeSlotsCoeff);
 
+        // Compute Byron→Shelley boundary (byronEndSlot is the actual first Shelley slot,
+        // which on all known networks coincides with the theoretical epoch boundary)
+        long byronEndSlot = cardanoEras.isEmpty() ? 0L : cardanoEras.get(0).getStartSlot();
+        long byronEndTimeAbs = genesisStartTime + byronEndSlot * byronSlotLength;
+        int byronEndEpoch = (int) (byronEndSlot / byronEpochLength);
+
         // ── Byron era (always epoch 0, slot 0) ───────────────────────────────
         if (!cardanoEras.isEmpty()) {
-            CardanoEra firstNonByron = cardanoEras.get(0);
-            // Blockfrost uses touching boundaries: current era end == next era start
-            long byronEndSlot = firstNonByron.getStartSlot();
-            long byronEndTimeAbs = genesisStartTime + byronEndSlot * byronSlotLength;
-            int byronEndEpoch = (int) (byronEndSlot / byronEpochLength);
-
             BFEraDto byronEra = BFEraDto.builder()
                     .start(BFEraDto.EraBoundary.builder()
-                            .time(0L)  // relative to genesis
+                            .time(0L)
                             .slot(0L)
                             .epoch(0)
                             .build())
                     .end(BFEraDto.EraBoundary.builder()
-                            .time(byronEndTimeAbs - genesisStartTime)  // relative to genesis
+                            .time(byronEndTimeAbs - genesisStartTime)
                             .slot(byronEndSlot)
                             .epoch(byronEndEpoch)
                             .build())
@@ -135,24 +135,26 @@ public class BFNetworkService {
             CardanoEra era = cardanoEras.get(i);
             CardanoEra nextEra = (i + 1 < cardanoEras.size()) ? cardanoEras.get(i + 1) : null;
 
-            long startSlot = era.getStartSlot();
-            long startTimeAbs = eraService.blockTime(era.getEra(), startSlot);
-            int startEpoch = eraService.getEpochNo(era.getEra(), startSlot);
+            // epoch number derived from the actual first-block slot is reliable
+            int startEpoch = eraService.getEpochNo(era.getEra(), era.getStartSlot());
+            // getShelleyAbsoluteSlot(epoch, 0) gives the theoretical epoch-boundary slot,
+            // matching Blockfrost which uses protocol-parameter values, not actual first-block slots
+            long startSlot = eraService.getShelleyAbsoluteSlot(startEpoch, 0);
+            long startTimeRel = eraService.blockTime(Era.Shelley, startSlot) - genesisStartTime;
 
             BFEraDto.EraBoundary start = BFEraDto.EraBoundary.builder()
-                    .time(startTimeAbs - genesisStartTime)  // relative to genesis
+                    .time(startTimeRel)
                     .slot(startSlot)
                     .epoch(startEpoch)
                     .build();
 
             BFEraDto.EraBoundary end = null;
             if (nextEra != null) {
-                // Touching boundaries: end of current era == start of next era
-                long endSlot = nextEra.getStartSlot();
-                long endTimeAbs = eraService.blockTime(era.getEra(), endSlot);
-                int endEpoch = eraService.getEpochNo(era.getEra(), endSlot);
+                int endEpoch = eraService.getEpochNo(era.getEra(), nextEra.getStartSlot());
+                long endSlot = eraService.getShelleyAbsoluteSlot(endEpoch, 0);
+                long endTimeRel = eraService.blockTime(Era.Shelley, endSlot) - genesisStartTime;
                 end = BFEraDto.EraBoundary.builder()
-                        .time(endTimeAbs - genesisStartTime)  // relative to genesis
+                        .time(endTimeRel)
                         .slot(endSlot)
                         .epoch(endEpoch)
                         .build();
