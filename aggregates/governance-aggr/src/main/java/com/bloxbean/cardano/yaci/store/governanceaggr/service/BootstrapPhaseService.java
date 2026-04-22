@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
@@ -56,6 +57,7 @@ public class BootstrapPhaseService {
     private boolean isPublicNetwork() {
         return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
-                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
+                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == NetworkType.SANCHONET.getProtocolMagic();
     }
 }
