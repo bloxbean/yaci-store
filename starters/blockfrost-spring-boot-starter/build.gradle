@@ -6,6 +6,7 @@ dependencies {
     api project(":extensions:blockfrost:blockfrost-account")
     api project(":extensions:blockfrost:blockfrost-transaction")
     api project(":extensions:blockfrost:blockfrost-block")
+    api project(":extensions:blockfrost:blockfrost-network")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
