@@ -391,8 +391,7 @@ public class DRepDistService {
                 -- Later UNREG/REG cycles do not inherit stale entries from an older lifecycle.
                 AND NOT EXISTS (
                     SELECT 1 FROM drep_registration earlier_unreg
-                    WHERE earlier_unreg.drep_h
-                    ash = stale_del.drep_hash
+                    WHERE earlier_unreg.drep_hash = stale_del.drep_hash
                     AND   earlier_unreg.cred_type = stale_del.drep_type
                     AND   earlier_unreg.type      = 'UNREG_DREP_CERT'
                     AND (   earlier_unreg.slot > stale_del.slot
