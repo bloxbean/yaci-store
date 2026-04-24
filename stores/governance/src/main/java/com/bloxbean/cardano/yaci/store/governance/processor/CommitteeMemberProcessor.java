@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
@@ -28,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -136,7 +139,7 @@ public class CommitteeMemberProcessor {
                 continue;
             }
 
-            var currentCommitteeMembers = committeeMemberStorage.getCommitteeMembersByEpoch(epoch - 1);
+            var currentCommitteeMembers = getCommitteeMembersBeforeUpdate(epoch);
 
             Set<String> membersForRemovalHashes = updateCommittee.getMembersForRemoval()
                     .stream().map(Credential::getHash).collect(Collectors.toSet());
@@ -172,6 +175,39 @@ public class CommitteeMemberProcessor {
         if (!updatedCommitteeMembers.isEmpty()) {
             committeeMemberStorage.saveAll(updatedCommitteeMembers);
         }
+    }
+
+    private List<CommitteeMember> getCommitteeMembersBeforeUpdate(int epoch) {
+        int previousEpoch = epoch - 1;
+
+        Optional<GovActionProposal> lastUpdateCommittee =
+                proposalStateClient.getLastEnactedProposal(GovActionType.UPDATE_COMMITTEE, previousEpoch);
+        Optional<GovActionProposal> lastNoConfidence =
+                proposalStateClient.getLastEnactedProposal(GovActionType.NO_CONFIDENCE, previousEpoch);
+
+        // Ledger ENACT clears the committee on NoConfidence, so the first UpdateCommittee after that
+        // must start from an empty committee instead of carrying forward an older snapshot.
+        if (isMoreRecent(lastNoConfidence, lastUpdateCommittee)) {
+            return List.of();
+        }
+
+        return committeeMemberStorage.getCommitteeMembersByEpoch(previousEpoch);
+    }
+
+    private boolean isMoreRecent(Optional<GovActionProposal> left, Optional<GovActionProposal> right) {
+        if (left.isEmpty()) {
+            return false;
+        }
+
+        if (right.isEmpty()) {
+            return true;
+        }
+
+        Comparator<GovActionProposal> byEpochAndSlot = Comparator
+                .comparing(GovActionProposal::getEpoch)
+                .thenComparing(GovActionProposal::getSlot, Comparator.nullsFirst(Long::compareTo));
+
+        return byEpochAndSlot.compare(left.get(), right.get()) > 0;
     }
 
     @EventListener
