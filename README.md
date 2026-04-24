@@ -25,6 +25,7 @@
 ### Latest Releases
 
 - **Stable Release**: [v2.0.0](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.0) - Production-ready release
+- **Pre-release**: [v2.1.0-pre3](https://github.com/bloxbean/yaci-store/releases/tag/v2.1.0-pre3) - Latest pre-release with new features and improvements
 
 ### Core Stores
 
@@ -130,6 +131,15 @@ The latest documentation source is maintained in the `main` branch.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Supported by
+
+<p align="left">
+  <img src="docs/public/images/cf-logo-text.svg" alt="Cardano Foundation" width="180"/>
+</p>
+
+The Cardano Foundation supports this project through engineering resources.
+
 
 ## Acknowledgments
 

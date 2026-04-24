@@ -19,10 +19,10 @@ yaci.store.analytics.storage.type=parquet
 
 ### 2. Start yaci-store
 
-Analytics exports begin automatically:
-- **Daily tables** export at midnight (configurable via `yaci.store.analytics.daily-export-cron`)
-- **Epoch tables** export at 1 AM (configurable via `yaci.store.analytics.epoch-export-cron`)
-- **Continuous sync** fills gaps every 15 minutes
+Analytics exports begin automatically via the `ContinuousSyncScheduler`:
+- Uses adaptive gap detection to find and export missing daily and epoch partitions
+- **Catching up**: checks every 1 minute by default (`yaci.store.analytics.continuous-sync.catch-up-interval-minutes`)
+- **Fully synced**: checks every 15 minutes by default (`yaci.store.analytics.continuous-sync.sync-check-interval-minutes`)
 
 Exported files are written to `./data/analytics/` by default.
 
@@ -48,7 +48,7 @@ analytics/
   admin/           - Admin REST controller and service
   config/          - Spring configuration and properties
   ducklake/        - DuckLake catalog initialization
-  exporter/        - 47 table exporter implementations
+  exporter/        - 47 built-in table exporters (31 daily + 16 epoch)
   gap/             - Gap detection for continuous sync
   helper/          - DuckDB connection helper utilities
   query/           - DuckLake query controller and service
@@ -106,39 +106,13 @@ yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
 
 ### Prerequisites: Installing DuckDB CLI
 
-To query exported analytics data from external tools, you need the DuckDB command-line interface:
+To query exported analytics data from external tools, you need the DuckDB command-line interface. Follow the official installation guide: https://duckdb.org/docs/installation/
 
-**Linux/macOS:**
-```bash
-# Download and install latest DuckDB CLI
-wget https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
-unzip duckdb_cli-linux-amd64.zip
-sudo mv duckdb /usr/local/bin/
-```
+If you're using DuckLake storage mode (`yaci.store.analytics.storage.type=ducklake`), also install the DuckLake extension:
 
-**macOS (Homebrew):**
-```bash
-brew install duckdb
-```
-
-**Windows:**
-```powershell
-# Download from: https://github.com/duckdb/duckdb/releases/latest
-# Extract duckdb.exe and add to PATH
-```
-
-**Verify installation:**
-```bash
-duckdb --version
-# Example output: v1.4.2 (or later)
-```
-
-**Install DuckLake extension (only needed for DuckLake mode):**
 ```bash
 duckdb -c "INSTALL ducklake;"
 ```
-
-> **Note**: The DuckLake extension is only required if you're using DuckLake storage mode (`yaci.store.analytics.storage.type=ducklake`). For direct Parquet file queries, the extension is not needed.
 
 ### Querying from DuckDB CLI
 
@@ -215,6 +189,7 @@ duckdb -c "
 | `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
+| `yaci.store.analytics.continuous-sync.export-after-sync` | `true` | Defer exports until the sync reaches chain tip. Set `false` to export during the sync |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
@@ -223,7 +198,11 @@ duckdb -c "
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
-| `yaci.store.analytics.logging.file` | `./logs/analytics-store.log` | Dedicated analytics log file path |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
+| `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
+| `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
+| `yaci.store.analytics.exporter.{name}.enabled` | `true` | Per-exporter enable/disable (e.g., `exporter.reward.enabled=false`) |
 
 ## Known Caveats
 
@@ -237,6 +216,21 @@ When querying with DuckDB CLI or Python, you **must start from the same working 
 ```properties
 yaci.store.analytics.export-path=/var/lib/yaci-store/analytics
 ```
+
+### DuckDB memory usage in JVM
+
+DuckDB defaults to using 80% of system physical RAM for its buffer manager. Since DuckDB runs inside the JVM process, this can cause memory contention — JVM heap + DuckDB buffer may together exceed available system RAM, leading to OOM kills (especially in containers/Kubernetes).
+
+To limit DuckDB memory usage:
+
+```properties
+# Limit DuckDB buffer manager to 1GB per connection
+yaci.store.analytics.duckdb.memory-limit=1GB
+```
+
+If not set, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments.
+
+Note: With writer pool (1 connection) + reader pool (N connections), total potential DuckDB memory is `memory_limit * (1 + N)`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
 
 ### DuckLake requires `public` schema in PostgreSQL
 
@@ -272,15 +266,15 @@ duckdb -c "SELECT COUNT(*) FROM read_parquet('./data/analytics/transaction/date=
 
 ## Table Exporters
 
-The module includes 50+ table exporters covering all indexed Cardano data. Each exporter uses a Template Method pattern (`AbstractTableExporter`) and is auto-discovered by the `TableExporterRegistry`.
+The module includes 47 built-in table exporters (31 daily + 16 epoch) covering all indexed Cardano data. Each exporter uses a Template Method pattern (`AbstractTableExporter`) and is auto-discovered by the `TableExporterRegistry`.
 
 ### Daily Tables (partitioned by date)
 
-`block`, `transaction`, `transaction_outputs`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `invalid_transaction`, `address`, `address_balance`, `address_tx_amount`, `assets`, `stake_address_balance`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `stake_registration`, `pool`, `pool_registration`, `pool_retirement`, `voting_procedure`, `gov_action_proposal`, `committee_registration`, `committee_deregistration`, `script`, `datum`, `cost_model`, `spent_outputs`, `rollback`, `protocol_params_proposal`, `move_instantaneous_reward`, `withdrawal`
+`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `rollback`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
 
 ### Epoch Tables (partitioned by epoch)
 
-`epoch`, `epoch_param`, `epoch_stake`, `reward`, `reward_rest`, `unclaimed_reward_rest`, `adapot`, `drep_dist`, `committee`, `committee_member`, `committee_state`, `constitution`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`
+`adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`, `mir`, `reward`, `reward_rest`, `unclaimed_reward_rest`
 
 ### Selecting specific tables
 
@@ -302,6 +296,68 @@ yaci.store.analytics.exporter.epoch_stake.enabled=false
 ```
 
 Both options can be combined: per-exporter flags are evaluated first, then the whitelist filter is applied.
+
+### Custom Exporters
+
+You can define custom SQL-based exporters to export any data from PostgreSQL to Parquet/DuckLake without writing Java code. Custom exporters are configured in a YAML file and activated via Spring profile.
+
+**Sample Configuration file:** `config/application-custom-exporters.yml`
+
+> **Note:** The file `config/application-custom-exporters.yml` shipped in this repository is just a **sample configuration** with examples. You can define your own exporters.
+
+Each custom exporter requires:
+
+| Property | Required | Description                                                                                                                                 |
+|---|---|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `name` | Yes | Target table name in the analytics catalog                                                                                                  |
+| `query` | Yes | SQL template with placeholders (see below)                                                                                                  |
+| `partition-strategy` | No | `DAILY` (default) or `EPOCH`                                                                                                                |
+| `depends-on-adapot-job` | No | If `true`, need to wait for AdaPot reward calculation to complete before exporting. Only meaningful with `EPOCH` strategy. Default: `false` |
+
+**Query placeholders:**
+
+| Placeholder | Description |
+|---|---|
+| `{source}` | Resolves to the schema name (e.g. `mainnet`) |
+| `{start_slot}` | Slot range start (inclusive) |
+| `{end_slot}` | Slot range end (exclusive) |
+| `{epoch}` | Epoch number (only available with `EPOCH` strategy) |
+
+**Example — Daily exporter:**
+
+```yaml
+yaci:
+  store:
+    analytics:
+      custom-exporters:
+        - name: daily_tx_count
+          query: >-
+            SELECT b.number,
+                   to_timestamp(COALESCE(b.block_time, 0)) as block_time,
+                   b.slot, b.epoch, b.no_of_txs
+            FROM {source}.block b
+            WHERE b.slot >= {start_slot}
+              AND b.slot <  {end_slot}
+            ORDER BY b.slot
+```
+
+**Example — Epoch exporter:**
+
+```yaml
+        - name: epoch_pool_rewards
+          partition-strategy: EPOCH
+          depends-on-adapot-job: true
+          query: >-
+            SELECT r.address,
+                   r.earned_epoch AS epoch,
+                   r.spendable_epoch, r.type, r.pool_id,
+                   r.amount, r.slot
+            FROM {source}.reward r
+            WHERE r.earned_epoch = {epoch}
+            ORDER BY r.earned_epoch, r.address
+```
+
+> **Note:** When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g. `r.earned_epoch AS epoch`). Without this, the DuckLake table will not be partitioned and all Parquet files will be written flat without `epoch=N/` subdirectories.
 
 ## Export State Management
 
