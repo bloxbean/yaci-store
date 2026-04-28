@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
+import java.time.Clock;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +53,7 @@ class Cip113ProcessorTest {
 
         Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
         Cip113RegistryService registryService = new Cip113RegistryService(config);
-        processor = new Cip113Processor(config, parser, repository, registryService);
+        processor = new Cip113Processor(config, parser, repository, registryService, Clock.systemDefaultZone());
     }
 
     private static Cip113Configuration buildConfig(String... policyIds) {
@@ -125,7 +126,7 @@ class Cip113ProcessorTest {
             config = buildConfig();
             Cip113RegistryNodeParser parser = new Cip113RegistryNodeParser();
             Cip113RegistryService registryService = new Cip113RegistryService(config);
-            processor = new Cip113Processor(config, parser, repository, registryService);
+            processor = new Cip113Processor(config, parser, repository, registryService, Clock.systemDefaultZone());
             processor.processTransaction(buildEvent(100L, REGISTRY_NFT_POLICY_ID, REGISTERED_POLICY_ID, "d8799f40ff", TX_HASH));
             verifyNoInteractions(repository);
         }

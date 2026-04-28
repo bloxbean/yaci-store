@@ -26,11 +26,6 @@ public class OffChainSyncState {
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
 
-    public OffChainSyncState(String lastCommitHash) {
-        this.lastCommitHash = lastCommitHash;
-        this.lastSyncedAt = LocalDateTime.now();
-    }
-
     /**
      * ID-based equality with a null-safe check — the id is {@code null} for transient
      * instances (before the first flush) under {@code GenerationType.IDENTITY}.

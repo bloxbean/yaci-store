@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetTy
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
@@ -31,6 +32,7 @@ public class Cip68Processor {
     private final Cip68TokenService cip68TokenService;
     private final Cip68DatumParser cip68DatumParser;
     private final MetadataReferenceNftRepository metadataReferenceNftRepository;
+    private final Clock clock;
 
     @EventListener
     @Transactional
@@ -68,7 +70,7 @@ public class Cip68Processor {
                 .logo(metadata.logo())
                 .version(metadata.version())
                 .datum(datum)
-                .lastSyncedAt(LocalDateTime.now())
+                .lastSyncedAt(LocalDateTime.now(clock))
                 .build();
     }
 

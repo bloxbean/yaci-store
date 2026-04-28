@@ -14,6 +14,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,7 @@ public class Cip113Processor {
     private final Cip113RegistryNodeParser registryNodeParser;
     private final Cip113RegistryNodeRepository cip113RegistryNodeRepository;
     private final Cip113RegistryService cip113RegistryService;
+    private final Clock clock;
 
     @EventListener
     @Transactional
@@ -64,7 +66,7 @@ public class Cip113Processor {
                         .globalStatePolicyId(parsed.globalStatePolicyId())
                         .next(parsed.next())
                         .datum(utxo.getInlineDatum())
-                        .lastSyncedAt(LocalDateTime.now())
+                        .lastSyncedAt(LocalDateTime.now(clock))
                         .build());
     }
 

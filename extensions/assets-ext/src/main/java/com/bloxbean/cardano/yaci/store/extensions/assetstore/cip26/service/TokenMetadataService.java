@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil.toTokenLogo;
@@ -24,6 +25,7 @@ public class TokenMetadataService {
     private final TokenMetadataRepository tokenMetadataRepository;
     private final TokenLogoRepository tokenLogoRepository;
     private final TokenMetadataValidator tokenMetadataValidator;
+    private final Clock clock;
 
     /**
      * Inserts mapping metadata into the database.
@@ -41,7 +43,7 @@ public class TokenMetadataService {
         }
 
         try {
-            tokenMetadata.setLastSyncedAt(java.time.LocalDateTime.now());
+            tokenMetadata.setLastSyncedAt(LocalDateTime.now(clock));
             tokenMetadataRepository.save(tokenMetadata);
             return true;
         } catch (Exception e) {
@@ -66,7 +68,7 @@ public class TokenMetadataService {
         }
 
         try {
-            tokenLogo.setLastSyncedAt(java.time.LocalDateTime.now());
+            tokenLogo.setLastSyncedAt(LocalDateTime.now(clock));
             tokenLogoRepository.save(tokenLogo);
             return true;
         } catch (Exception e) {
