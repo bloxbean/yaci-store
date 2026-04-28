@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.governance.processor;
 import com.bloxbean.cardano.yaci.core.model.Credential;
 import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.NoConfidence;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.UpdateCommittee;
 import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
@@ -20,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,11 +68,16 @@ class CommitteeMemberProcessorTest {
 
         GovActionProposal proposal = GovActionProposal
                 .builder()
+                .epoch(100)
                 .govAction(updateCommittee)
                 .build();
 
         when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
                 .thenReturn(List.of(proposal));
+        when(proposalStateClient.getLastEnactedProposal(GovActionType.UPDATE_COMMITTEE, 100))
+                .thenReturn(Optional.empty());
+        when(proposalStateClient.getLastEnactedProposal(GovActionType.NO_CONFIDENCE, 100))
+                .thenReturn(Optional.empty());
 
         List<CommitteeMember> existingMembers = List.of(
                 CommitteeMember.builder()
@@ -130,5 +138,68 @@ class CommitteeMemberProcessorTest {
                 && member.getSlot() == 6000L))
                 .isTrue();
 
+    }
+
+    @Test
+    void handlePreAdaPotJobProcessingEvent_ShouldResetCommitteeMembers_WhenNoConfidenceWasLatestCommitteeAction() {
+        PreAdaPotJobProcessingEvent event = PreAdaPotJobProcessingEvent.builder()
+                .epoch(101)
+                .slot(6000)
+                .block(500)
+                .build();
+
+        Credential newMember1 = new Credential(StakeCredType.ADDR_KEYHASH, "eeeeee06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b");
+        Credential newMember2 = new Credential(StakeCredType.SCRIPTHASH, "ffffff06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b");
+
+        UpdateCommittee updateCommittee = new UpdateCommittee(null, Set.of(),
+                Map.of(newMember1, 150, newMember2, 160),
+                UnitInterval.fromString("75/100"));
+
+        GovActionProposal enactedUpdateProposal = GovActionProposal
+                .builder()
+                .epoch(100)
+                .slot(5000L)
+                .govAction(updateCommittee)
+                .build();
+
+        GovActionProposal lastUpdateCommittee = GovActionProposal.builder()
+                .epoch(90)
+                .slot(4000L)
+                .govAction(new UpdateCommittee(null, Set.of(), Map.of(), UnitInterval.fromString("50/100")))
+                .build();
+
+        GovActionProposal lastNoConfidence = GovActionProposal.builder()
+                .epoch(95)
+                .slot(4500L)
+                .govAction(new NoConfidence(null))
+                .build();
+
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 100))
+                .thenReturn(List.of(enactedUpdateProposal));
+        when(proposalStateClient.getLastEnactedProposal(GovActionType.UPDATE_COMMITTEE, 100))
+                .thenReturn(Optional.of(lastUpdateCommittee));
+        when(proposalStateClient.getLastEnactedProposal(GovActionType.NO_CONFIDENCE, 100))
+                .thenReturn(Optional.of(lastNoConfidence));
+
+        when(committeeMemberStorage.getCommitteeMembersByEpoch(100)).thenReturn(List.of(
+                CommitteeMember.builder()
+                        .credType(CredentialType.ADDR_KEYHASH)
+                        .startEpoch(80)
+                        .expiredEpoch(199)
+                        .hash("aaaaaa06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
+                        .build()
+        ));
+
+        committeeMemberProcessor.handlePreAdaPotJobProcessingEvent(event);
+
+        Mockito.verify(committeeMemberStorage).saveAll(committeeMembersCaptor.capture());
+        List<CommitteeMember> savedMembers = committeeMembersCaptor.getValue();
+
+        assertThat(savedMembers).hasSize(2);
+        assertThat(savedMembers)
+                .allMatch(member -> member.getHash().equals("eeeeee06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
+                        || member.getHash().equals("ffffff06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b"));
+        assertThat(savedMembers.stream().anyMatch(member -> member.getHash().equals("aaaaaa06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")))
+                .isFalse();
     }
 }
