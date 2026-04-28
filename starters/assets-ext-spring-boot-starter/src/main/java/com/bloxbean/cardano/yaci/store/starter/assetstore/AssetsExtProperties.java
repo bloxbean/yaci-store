@@ -38,7 +38,9 @@ public class AssetsExtProperties {
     @Getter
     @Setter
     public static final class Cip113 {
-        private boolean enabled = true;
+        // Disabled by default until CIP-113 is officially live on mainnet.
+        // Re-enable per deployment via store.assets.ext.cip113.enabled=true.
+        private boolean enabled = false;
         /**
          * Comma-separated list of CIP-113 registry NFT policy IDs to monitor.
          * If empty (and no per-network defaults exist), CIP-113 is disabled.

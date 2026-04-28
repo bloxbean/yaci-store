@@ -17,8 +17,11 @@ import java.util.stream.Collectors;
 /**
  * CIP-113 programmable token configuration.
  * <p>
- * Beans are always registered. When disabled ({@code store.assets.ext.cip113.enabled=false}),
- * {@link #isEnabled()} returns false and processors/readers skip processing and return empty.
+ * Disabled by default — CIP-113 is not yet officially live on mainnet.
+ * Enable explicitly via {@code store.assets.ext.cip113.enabled=true}; otherwise
+ * the processor and rollback-processor beans are not registered. The storage
+ * reader is always registered and returns empty when {@link #isEnabled()} is false
+ * (i.e. when no registry NFT policy IDs are configured).
  * <p>
  * Registry NFT policy IDs are maintained per-network in property files:
  * <ul>

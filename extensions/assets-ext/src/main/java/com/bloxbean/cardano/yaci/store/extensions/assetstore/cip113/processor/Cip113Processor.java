@@ -22,7 +22,7 @@ import java.util.Optional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "store.assets.ext.cip113.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "store.assets.ext.cip113.enabled", havingValue = "true", matchIfMissing = false)
 public class Cip113Processor {
 
     private final Cip113Configuration cip113Configuration;

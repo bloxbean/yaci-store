@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "store.assets.ext.cip113.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "store.assets.ext.cip113.enabled", havingValue = "true", matchIfMissing = false)
 public class Cip113RollbackProcessor {
 
     private final Cip113RegistryNodeRepository cip113RegistryNodeRepository;
