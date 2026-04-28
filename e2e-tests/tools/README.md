@@ -267,6 +267,9 @@ Hybrid flow vẫn giữ nguyên:
 
 Trong `ss_pv9_cleared_addresses`, tool bám theo ledger identity hiện tại của
 `DRepDistService`: một DRep được định danh bởi cả `(drep_type, drep_hash)`.
+Khi xét redel để clear stale reverse delegation trong PV9, DRep đích của redel
+phải có `REG_DREP_CERT` trước redel và không có `UNREG_DREP_CERT` nằm giữa
+registration đó và redel.
 
 Tức là phần được tối ưu chỉ là **financial base reconstruction**, không phải business filters của DRep.
 

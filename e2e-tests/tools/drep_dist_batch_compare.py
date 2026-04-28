@@ -1058,6 +1058,52 @@ WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
                 AND redel.cert_index < unreg.cert_index
             )
         )
+        -- Bootstrap allows delegating to a DRep before that DRep registers.
+        -- Such a delegation should not be treated as a registered-DRep reverse
+        -- index move for stale PV9 clearing.
+        AND EXISTS (
+            SELECT 1
+            FROM drep_registration redel_reg
+            WHERE redel_reg.drep_hash = redel.drep_hash
+              AND redel_reg.cred_type = redel.drep_type
+              AND redel_reg.type = 'REG_DREP_CERT'
+              AND redel_reg.epoch <= {epoch}
+              AND (
+                  redel_reg.slot < redel.slot
+                  OR (redel_reg.slot = redel.slot AND redel_reg.tx_index < redel.tx_index)
+                  OR (
+                      redel_reg.slot = redel.slot
+                      AND redel_reg.tx_index = redel.tx_index
+                      AND redel_reg.cert_index < redel.cert_index
+                  )
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM drep_registration redel_unreg
+                  WHERE redel_unreg.drep_hash = redel.drep_hash
+                    AND redel_unreg.cred_type = redel.drep_type
+                    AND redel_unreg.type = 'UNREG_DREP_CERT'
+                    AND redel_unreg.epoch <= {epoch}
+                    AND (
+                        redel_unreg.slot > redel_reg.slot
+                        OR (redel_unreg.slot = redel_reg.slot AND redel_unreg.tx_index > redel_reg.tx_index)
+                        OR (
+                            redel_unreg.slot = redel_reg.slot
+                            AND redel_unreg.tx_index = redel_reg.tx_index
+                            AND redel_unreg.cert_index > redel_reg.cert_index
+                        )
+                    )
+                    AND (
+                        redel_unreg.slot < redel.slot
+                        OR (redel_unreg.slot = redel.slot AND redel_unreg.tx_index < redel.tx_index)
+                        OR (
+                            redel_unreg.slot = redel.slot
+                            AND redel_unreg.tx_index = redel.tx_index
+                            AND redel_unreg.cert_index < redel.cert_index
+                        )
+                    )
+              )
+        )
   )
   AND NOT EXISTS (
       SELECT 1

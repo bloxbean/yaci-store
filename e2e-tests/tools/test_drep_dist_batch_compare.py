@@ -314,6 +314,22 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn("redel.drep_hash <> stale_del.drep_hash", sql)
         self.assertIn("OR redel.drep_type <> stale_del.drep_type", sql)
 
+    def test_render_pv9_cleared_insert_sql_requires_redel_target_registered_before_redel(self):
+        sql = tool.render_pv9_cleared_insert_sql(
+            debug_schema="drep_debug",
+            snapshot_epoch=624,
+            epoch=623,
+            pv9_max_epoch=536,
+        )
+
+        self.assertIn("FROM drep_registration redel_reg", sql)
+        self.assertIn("redel_reg.drep_hash = redel.drep_hash", sql)
+        self.assertIn("redel_reg.cred_type = redel.drep_type", sql)
+        self.assertIn("redel_reg.type = 'REG_DREP_CERT'", sql)
+        self.assertIn("redel_reg.cert_index < redel.cert_index", sql)
+        self.assertIn("FROM drep_registration redel_unreg", sql)
+        self.assertIn("redel_unreg.type = 'UNREG_DREP_CERT'", sql)
+
     def test_render_invalidate_sql_targets_selected_cache_and_shadow(self):
         sql = tool.render_invalidate_sql(
             debug_schema="drep_debug",
