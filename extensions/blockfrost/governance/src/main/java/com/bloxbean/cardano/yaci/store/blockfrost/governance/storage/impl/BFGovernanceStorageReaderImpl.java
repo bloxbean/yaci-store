@@ -31,6 +31,7 @@ import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.GOV_ACTION_PROPOSAL_STATUS;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
@@ -316,14 +317,22 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .fetchOptional(DREP_REGISTRATION.EPOCH)
                 .orElse(null);
 
+        // Try local_drep_dist first (from local node), fall back to drep_dist (from epoch state)
         Long amount = dsl.select(LOCAL_DREP_DIST.AMOUNT)
                 .from(LOCAL_DREP_DIST)
                 .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHex))
                 .orderBy(LOCAL_DREP_DIST.EPOCH.desc())
                 .limit(1)
-                .fetchOptional()
-                .map(r -> r.get(LOCAL_DREP_DIST.AMOUNT))
-                .orElse(null);
+                .fetchOptional(LOCAL_DREP_DIST.AMOUNT)
+                .orElseGet(() ->
+                        dsl.select(DREP_DIST.AMOUNT)
+                                .from(DREP_DIST)
+                                .where(DREP_DIST.DREP_HASH.eq(drepHex))
+                                .orderBy(DREP_DIST.EPOCH.desc())
+                                .limit(1)
+                                .fetchOptional(DREP_DIST.AMOUNT)
+                                .orElse(null)
+                );
 
         String status = record.get(DREP.STATUS) != null ? record.get(DREP.STATUS).toString() : null;
         Integer lastCertEpoch = record.get(DREP.EPOCH);
