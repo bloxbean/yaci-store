@@ -30,7 +30,7 @@ public class BFProposalsController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Proposals", description = "Return the information about Proposals")
-    public List<BFProposalDto> getProposals(
+    public List<BFProposalListItemDto> getProposals(
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
             @RequestParam(required = false, defaultValue = "asc") String order) {

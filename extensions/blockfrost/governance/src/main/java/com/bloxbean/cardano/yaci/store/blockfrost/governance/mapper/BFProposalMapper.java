@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepDelegatorDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFProposalDto;
+import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFProposalListItemDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFProposalMetadataDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFProposalParametersDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFProposalVoteDto;
@@ -19,6 +20,14 @@ import org.mapstruct.factory.Mappers;
 public interface BFProposalMapper {
 
     BFProposalMapper INSTANCE = Mappers.getMapper(BFProposalMapper.class);
+
+    // ── Proposal list item (summary only) ─────────────────────────────────
+
+    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getCertIndex()))")
+    @Mapping(target = "txHash", source = "txHash")
+    @Mapping(target = "certIndex", source = "certIndex")
+    @Mapping(target = "governanceType", source = "type", qualifiedByName = "govActionTypeToString")
+    BFProposalListItemDto toListItemDto(BFProposal row);
 
     // ── Proposal ──────────────────────────────────────────────────────────
 

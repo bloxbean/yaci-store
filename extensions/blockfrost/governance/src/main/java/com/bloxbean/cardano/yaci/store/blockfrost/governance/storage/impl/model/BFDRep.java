@@ -17,7 +17,10 @@ public class BFDRep {
     private String drepId;
     private String drepHash;
     private String status;
+    /** Epoch of most recent DRep activity (last update/vote) */
     private Integer epoch;
+    /** Epoch of first DRep registration */
+    private Integer activeEpoch;
     /** Voting power from local_drep_dist (null if adapot disabled) */
     private Long amount;
     /** True if credential type is SCRIPTHASH */

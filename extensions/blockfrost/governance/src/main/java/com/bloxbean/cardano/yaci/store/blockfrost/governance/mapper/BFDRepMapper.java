@@ -33,7 +33,7 @@ public interface BFDRepMapper {
     @Mapping(target = "hex", expression = "java(addCip129Prefix(row.getDrepHash(), row.getHasScript()))")
     @Mapping(target = "amount", source = "amount", qualifiedByName = "longToString")
     @Mapping(target = "active", expression = "java(!\"RETIRED\".equalsIgnoreCase(row.getStatus()))")
-    @Mapping(target = "activeEpoch", source = "epoch")
+    @Mapping(target = "activeEpoch", source = "activeEpoch")
     @Mapping(target = "hasScript", source = "hasScript")
     @Mapping(target = "retired", expression = "java(\"RETIRED\".equalsIgnoreCase(row.getStatus()))")
     @Mapping(target = "expired", source = "expired")
@@ -66,7 +66,7 @@ public interface BFDRepMapper {
     // ── DRep metadata ─────────────────────────────────────────────────────
 
     @Mapping(target = "drepId", source = "drepId")
-    @Mapping(target = "hex", source = "drepHash")
+    @Mapping(target = "hex", expression = "java(addCip129PrefixFromDrepId(registration.getDrepId(), registration.getDrepHash()))")
     @Mapping(target = "url", source = "anchorUrl")
     @Mapping(target = "hash", source = "anchorHash")
     @Mapping(target = "jsonMetadata", ignore = true)
@@ -105,6 +105,14 @@ public interface BFDRepMapper {
         if (rawHex == null) return null;
         String prefix = (hasScript != null && hasScript) ? "23" : "22";
         return prefix + rawHex;
+    }
+
+    /**
+     * Derives the CIP-129 hex for metadata using drep_id bech32 to determine credential type.
+     * Falls back to "22" prefix (key hash) if bech32 decode fails.
+     */
+    default String addCip129PrefixFromDrepId(String drepId, String rawHash) {
+        return hexFromDrepId(drepId, rawHash);
     }
 
     /**

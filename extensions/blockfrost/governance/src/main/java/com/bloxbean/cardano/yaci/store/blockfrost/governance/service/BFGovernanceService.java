@@ -88,10 +88,10 @@ public class BFGovernanceService {
     // Proposal endpoints
     // ────────────────────────────────────────────────────────────────────────
 
-    public List<BFProposalDto> getProposals(int page, int count, String order) {
+    public List<BFProposalListItemDto> getProposals(int page, int count, String order) {
         return storageReader.findAllProposals(page, count, toOrder(order))
                 .stream()
-                .map(proposalMapper::toDto)
+                .map(proposalMapper::toListItemDto)
                 .collect(Collectors.toList());
     }
 

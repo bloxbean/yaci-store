@@ -307,6 +307,15 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .map(r -> "SCRIPTHASH".equalsIgnoreCase(r.get(DREP_REGISTRATION.CRED_TYPE)))
                 .orElse(false);
 
+        Integer firstRegistrationEpoch = dsl.select(DREP_REGISTRATION.EPOCH)
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                .and(DREP_REGISTRATION.TYPE.eq("REG_DREP_CERT"))
+                .orderBy(DREP_REGISTRATION.SLOT.asc())
+                .limit(1)
+                .fetchOptional(DREP_REGISTRATION.EPOCH)
+                .orElse(null);
+
         Long amount = dsl.select(LOCAL_DREP_DIST.AMOUNT)
                 .from(LOCAL_DREP_DIST)
                 .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHex))
@@ -317,7 +326,17 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .orElse(null);
 
         String status = record.get(DREP.STATUS) != null ? record.get(DREP.STATUS).toString() : null;
-        Integer lastActiveEpoch = record.get(DREP.EPOCH);
+        Integer lastCertEpoch = record.get(DREP.EPOCH);
+
+        // last_active_epoch = max(last cert epoch, last vote epoch)
+        Integer lastVoteEpoch = dsl.select(DSL.max(VOTING_PROCEDURE.EPOCH))
+                .from(VOTING_PROCEDURE)
+                .where(VOTING_PROCEDURE.VOTER_HASH.eq(drepHex))
+                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
+                .fetchOne(0, Integer.class);
+        Integer lastActiveEpoch = (lastVoteEpoch != null && (lastCertEpoch == null || lastVoteEpoch > lastCertEpoch))
+                ? lastVoteEpoch : lastCertEpoch;
+
         boolean retired = "RETIRED".equalsIgnoreCase(status);
 
         // A DRep is expired if it is not retired and has been inactive for more than drep_activity epochs
@@ -335,6 +354,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .drepHash(drepHex)
                 .status(status)
                 .epoch(lastActiveEpoch)
+                .activeEpoch(firstRegistrationEpoch)
                 .amount(amount)
                 .hasScript(hasScript)
                 .expired(expired)
@@ -343,30 +363,39 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     @Override
     public List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order) {
-        SortField<?> sortField = order == Order.desc
-                ? DELEGATION_VOTE.SLOT.desc()
-                : DELEGATION_VOTE.SLOT.asc();
-
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            // Subquery: latest delegation row per address using window function
+            var latestDelegation = dsl.select(
+                            DELEGATION_VOTE.ADDRESS,
+                            DELEGATION_VOTE.DREP_HASH,
+                            DSL.rowNumber()
+                                    .over(DSL.partitionBy(DELEGATION_VOTE.ADDRESS).orderBy(DELEGATION_VOTE.SLOT.desc()))
+                                    .as("rn"),
+                            DELEGATION_VOTE.SLOT.as("max_slot")
+                    )
+                    .from(DELEGATION_VOTE)
+                    .asTable("latest_del");
+
             return dsl.select(
-                            DELEGATION_VOTE.ADDRESS.as("address"),
+                            latestDelegation.field("address", String.class).as("address"),
                             DSL.coalesce(
                                     DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT).cast(Long.class),
                                     DSL.inline(0L)
                             ).as("amount")
                     )
-                    .from(DELEGATION_VOTE)
+                    .from(latestDelegation)
                     .leftJoin(ADDRESS_UTXO)
-                    .on(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(DELEGATION_VOTE.ADDRESS))
+                    .on(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(latestDelegation.field("address", String.class)))
                     .and(DSL.notExists(
                             dsl.selectOne()
                                     .from(TX_INPUT)
                                     .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                                     .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
                     ))
-                    .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
-                    .groupBy(DELEGATION_VOTE.ADDRESS)
-                    .orderBy(DSL.max(DELEGATION_VOTE.SLOT).sort(order == Order.desc ? SortOrder.DESC : SortOrder.ASC))
+                    .where(latestDelegation.field("rn", Integer.class).eq(1))
+                    .and(latestDelegation.field("drep_hash", String.class).eq(drepHex))
+                    .groupBy(latestDelegation.field("address", String.class), latestDelegation.field("max_slot", Long.class))
+                    .orderBy(latestDelegation.field("max_slot", Long.class).sort(order == Order.desc ? SortOrder.DESC : SortOrder.ASC))
                     .limit(count)
                     .offset(offset(page, count))
                     .fetch()
@@ -375,10 +404,17 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                             .amount(r.get("amount", Long.class))
                             .build());
         } else {
+            // SQLite/H2 fallback: fetch addresses whose latest delegation is to this DRep
             List<String> addresses = dsl.select(DELEGATION_VOTE.ADDRESS)
                     .from(DELEGATION_VOTE)
                     .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
-                    .orderBy(sortField)
+                    .and(DSL.notExists(
+                            dsl.selectOne()
+                                    .from(DELEGATION_VOTE.as("newer"))
+                                    .where(DELEGATION_VOTE.as("newer").field(DELEGATION_VOTE.ADDRESS).eq(DELEGATION_VOTE.ADDRESS))
+                                    .and(DELEGATION_VOTE.as("newer").field(DELEGATION_VOTE.SLOT).gt(DELEGATION_VOTE.SLOT))
+                    ))
+                    .orderBy(order == Order.desc ? DELEGATION_VOTE.SLOT.desc() : DELEGATION_VOTE.SLOT.asc())
                     .limit(count)
                     .offset(offset(page, count))
                     .fetch(DELEGATION_VOTE.ADDRESS);
