@@ -121,18 +121,21 @@ CREATE TABLE cip113_registry_node (
     -- Cardano transaction hash: exactly 32 bytes = 64 hex chars. Protocol-bounded.
     tx_hash                           VARCHAR(64)  NOT NULL,
     -- Aiken Credential inner hash (either VerificationKey or Script): 28 bytes = 56 hex.
-    -- The constructor variant (VKey vs Script) is currently NOT preserved — if that
-    -- distinction becomes important downstream, add a separate column.
-    transfer_logic_script             VARCHAR(56),
-    third_party_transfer_logic_script VARCHAR(56),
+    -- The constructor variant is preserved in the *_type companion column as the string
+    -- 'VKEY' or 'SCRIPT'. The hash and its type are populated together — both NULL when
+    -- the on-chain Credential field encodes "absent", both non-NULL otherwise.
+    transfer_logic_script                  VARCHAR(56),
+    transfer_logic_script_type             VARCHAR(8),
+    third_party_transfer_logic_script      VARCHAR(56),
+    third_party_transfer_logic_script_type VARCHAR(8),
     -- Currency symbol of the global-state NFT (28-byte policy_id). Protocol-bounded.
-    global_state_policy_id            VARCHAR(56),
+    global_state_policy_id                 VARCHAR(56),
     -- 'next' field — sorted linked list pointer. Same length range as 'key' above
     -- (head is never a 'next'; real policy or tail sentinel 58–64 hex chars).
-    "next"                            VARCHAR(64)  NOT NULL,
+    "next"                                 VARCHAR(64)  NOT NULL,
     -- Full CBOR hex of the inline datum. Variable length.
-    datum                             TEXT         NOT NULL,
-    last_synced_at                    TIMESTAMP,
+    datum                                  TEXT         NOT NULL,
+    last_synced_at                         TIMESTAMP,
     PRIMARY KEY ("key", slot, tx_hash)
 );
 

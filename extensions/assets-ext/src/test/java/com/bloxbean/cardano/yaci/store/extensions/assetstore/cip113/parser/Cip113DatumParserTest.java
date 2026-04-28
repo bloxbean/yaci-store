@@ -7,6 +7,7 @@ import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -59,13 +60,16 @@ class Cip113DatumParserTest {
             assertThat(result.get().key()).isEqualTo(POLICY_A_HEX);
             assertThat(result.get().next()).isEqualTo(POLICY_B_HEX);
             assertThat(result.get().transferLogicScript()).isEqualTo(CRED_TRANSFER_HEX);
+            assertThat(result.get().transferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo(CRED_THIRD_PARTY_HEX);
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(result.get().globalStatePolicyId()).isEqualTo(GLOBAL_STATE_POLICY_HEX);
         }
 
         @Test
         void parsesNodeWithScriptCredential() throws Exception {
-            // Credential alternative 1 = Script (vs 0 = VerificationKey). Both are valid.
+            // Credential alternative 1 = Script (vs 0 = VerificationKey). Both are valid; the
+            // discriminator is preserved so downstream verifiers know which check to apply.
             String datum = buildDatum(
                     hex(POLICY_A_HEX),
                     hex(POLICY_B_HEX),
@@ -76,9 +80,28 @@ class Cip113DatumParserTest {
             Optional<Cip113RegistryNodeParser.ParsedRegistryNode> result = parser.parse(datum);
 
             assertThat(result).isPresent();
-            // Note: the VKey vs Script variant is intentionally discarded — both surface as the same hex.
             assertThat(result.get().transferLogicScript()).isEqualTo(CRED_TRANSFER_HEX);
+            assertThat(result.get().transferLogicScriptType()).isEqualTo(Cip113CredentialType.SCRIPT);
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo(CRED_THIRD_PARTY_HEX);
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.SCRIPT);
+        }
+
+        @Test
+        void parsesNodeWithMixedCredentialTypes() throws Exception {
+            // Real registries can have a vkey-credential transfer logic and a script-credential
+            // third-party logic (or vice versa). Each discriminator is independent.
+            String datum = buildDatum(
+                    hex(POLICY_A_HEX),
+                    hex(POLICY_B_HEX),
+                    vkeyCred(hex(CRED_TRANSFER_HEX)),
+                    scriptCred(hex(CRED_THIRD_PARTY_HEX)),
+                    EMPTY_BYTES);
+
+            Optional<Cip113RegistryNodeParser.ParsedRegistryNode> result = parser.parse(datum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().transferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.SCRIPT);
         }
 
         @Test
@@ -146,8 +169,11 @@ class Cip113DatumParserTest {
             Optional<Cip113RegistryNodeParser.ParsedRegistryNode> result = parser.parse(datum);
 
             assertThat(result).isPresent();
+            // Absent credential: hash AND type are both null — they're populated together.
             assertThat(result.get().transferLogicScript()).isNull();
+            assertThat(result.get().transferLogicScriptType()).isNull();
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo(CRED_THIRD_PARTY_HEX);
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
         }
 
         @Test

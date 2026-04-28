@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
@@ -47,7 +48,9 @@ class Cip113StorageReaderImplTest {
             Cip113RegistryNode entity = Cip113RegistryNode.builder()
                     .key("deadbeef")
                     .transferLogicScript("script1")
+                    .transferLogicScriptType(Cip113CredentialType.SCRIPT)
                     .thirdPartyTransferLogicScript("script2")
+                    .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
                     .globalStatePolicyId("globalState")
                     .build();
 
@@ -58,16 +61,21 @@ class Cip113StorageReaderImplTest {
 
             assertThat(result).isPresent();
             assertThat(result.get().transferLogicScript()).isEqualTo("script1");
+            assertThat(result.get().transferLogicScriptType()).isEqualTo(Cip113CredentialType.SCRIPT);
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo("script2");
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(result.get().globalStatePolicyId()).isEqualTo("globalState");
         }
 
         @Test
         void normalizesNullTransferLogicScript() {
+            // Absent transfer-logic credential: hash AND type both null on entity → both null on DTO.
             Cip113RegistryNode entity = Cip113RegistryNode.builder()
                     .key("deadbeef")
                     .transferLogicScript(null)
+                    .transferLogicScriptType(null)
                     .thirdPartyTransferLogicScript("script2")
+                    .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
                     .globalStatePolicyId(null)
                     .build();
 
@@ -78,7 +86,31 @@ class Cip113StorageReaderImplTest {
 
             assertThat(result).isPresent();
             assertThat(result.get().transferLogicScript()).isNull();
+            assertThat(result.get().transferLogicScriptType()).isNull();
             assertThat(result.get().thirdPartyTransferLogicScript()).isEqualTo("script2");
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
+        }
+
+        @Test
+        void normalizesEmptyStringTransferLogicScriptToNullTypePair() {
+            // Defensive: if persistence has empty-string ('') for the hash, the type companion is
+            // also dropped to null on the DTO so the (hash, type) invariant holds out at the API.
+            Cip113RegistryNode entity = Cip113RegistryNode.builder()
+                    .key("deadbeef")
+                    .transferLogicScript("")
+                    .transferLogicScriptType(Cip113CredentialType.SCRIPT)
+                    .thirdPartyTransferLogicScript("script2")
+                    .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
+                    .build();
+
+            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+                    .thenReturn(Optional.of(entity));
+
+            Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
+
+            assertThat(result).isPresent();
+            assertThat(result.get().transferLogicScript()).isNull();
+            assertThat(result.get().transferLogicScriptType()).isNull();
         }
 
         @Test

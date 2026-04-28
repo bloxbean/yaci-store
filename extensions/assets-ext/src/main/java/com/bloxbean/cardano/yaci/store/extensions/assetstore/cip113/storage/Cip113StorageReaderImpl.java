@@ -61,9 +61,13 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
         String transferLogic = entity.getTransferLogicScript();
         String thirdParty = entity.getThirdPartyTransferLogicScript();
         String globalState = entity.getGlobalStatePolicyId();
+        boolean transferLogicAbsent = transferLogic == null || transferLogic.isEmpty();
+        boolean thirdPartyAbsent = thirdParty == null || thirdParty.isEmpty();
         return new ProgrammableTokenCip113(
-                (transferLogic == null || transferLogic.isEmpty()) ? null : transferLogic,
-                (thirdParty == null || thirdParty.isEmpty()) ? null : thirdParty,
+                transferLogicAbsent ? null : transferLogic,
+                transferLogicAbsent ? null : entity.getTransferLogicScriptType(),
+                thirdPartyAbsent ? null : thirdParty,
+                thirdPartyAbsent ? null : entity.getThirdPartyTransferLogicScriptType(),
                 (globalState == null || globalState.isEmpty()) ? null : globalState
         );
     }

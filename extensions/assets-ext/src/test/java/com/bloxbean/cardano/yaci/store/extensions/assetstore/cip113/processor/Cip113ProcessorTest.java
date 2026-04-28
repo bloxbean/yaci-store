@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.parser.Cip113RegistryNodeParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
@@ -88,7 +89,9 @@ class Cip113ProcessorTest {
             assertThat(saved.getSlot()).isEqualTo(100L);
             assertThat(saved.getTxHash()).isEqualTo(TX_HASH);
             assertThat(saved.getTransferLogicScript()).isEqualTo(TRANSFER_LOGIC);
+            assertThat(saved.getTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(saved.getThirdPartyTransferLogicScript()).isEqualTo(THIRD_PARTY_LOGIC);
+            assertThat(saved.getThirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(saved.getDatum()).isEqualTo(datum);
         }
 
@@ -112,8 +115,11 @@ class Cip113ProcessorTest {
             verify(repository).saveAll(captor.capture());
 
             Cip113RegistryNode saved = captor.getValue().getFirst();
+            // Absent credential: hash AND type are both null — they're populated together.
             assertThat(saved.getTransferLogicScript()).isNull();
+            assertThat(saved.getTransferLogicScriptType()).isNull();
             assertThat(saved.getThirdPartyTransferLogicScript()).isEqualTo(THIRD_PARTY_LOGIC);
+            assertThat(saved.getThirdPartyTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
         }
     }
 

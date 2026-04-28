@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import jakarta.persistence.*;
 import lombok.*;
 import jakarta.annotation.Nullable;
@@ -87,10 +88,26 @@ public class Cip113RegistryNode {
     @Column(name = "transfer_logic_script", length = 56)
     private String transferLogicScript;
 
+    /**
+     * Aiken {@code Credential} discriminator for {@link #transferLogicScript}. Non-null iff
+     * {@code transferLogicScript} is non-null. Persisted as a string ({@code "VKEY"} or
+     * {@code "SCRIPT"}) so the column is queryable from raw SQL without Java enum awareness.
+     */
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transfer_logic_script_type", length = 8)
+    private Cip113CredentialType transferLogicScriptType;
+
     /** Aiken {@code Credential} (28-byte vkey or script hash, 56 hex chars). Protocol-bounded. */
     @Nullable
     @Column(name = "third_party_transfer_logic_script", length = 56)
     private String thirdPartyTransferLogicScript;
+
+    /** Aiken {@code Credential} discriminator for {@link #thirdPartyTransferLogicScript}. */
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "third_party_transfer_logic_script_type", length = 8)
+    private Cip113CredentialType thirdPartyTransferLogicScriptType;
 
     /** Currency symbol of the global-state NFT (28-byte policy_id, 56 hex chars). Protocol-bounded. */
     @Nullable

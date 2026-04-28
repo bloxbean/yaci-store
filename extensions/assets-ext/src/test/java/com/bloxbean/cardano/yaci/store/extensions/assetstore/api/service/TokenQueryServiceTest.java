@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
@@ -94,7 +95,9 @@ class TokenQueryServiceTest {
         when(cip113StorageReader.findByPolicyId(FLDT_POLICY_ID))
                 .thenReturn(Optional.of(new ProgrammableTokenCip113(
                         "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd",
+                        Cip113CredentialType.SCRIPT,
                         "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+                        Cip113CredentialType.SCRIPT,
                         "eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011")));
 
         // CIP-113: non-programmable tokens return empty
@@ -106,7 +109,9 @@ class TokenQueryServiceTest {
         when(cip113StorageReader.findByPolicyIds(anyCollection()))
                 .thenReturn(Map.of(FLDT_POLICY_ID, new ProgrammableTokenCip113(
                         "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd",
+                        Cip113CredentialType.SCRIPT,
                         "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+                        Cip113CredentialType.SCRIPT,
                         "eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011")));
 
         // CIP-26 batch: findBySubjects returns all known metadata

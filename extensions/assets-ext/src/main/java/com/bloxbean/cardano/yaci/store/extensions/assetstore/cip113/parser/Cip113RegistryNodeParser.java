@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -85,19 +86,21 @@ public class Cip113RegistryNodeParser {
 
     /**
      * Parsed registry node fields. Byte-string fields are lowercase hex. {@code key} and
-     * {@code next} are always non-null; the three optional script/policy fields are null
-     * when the corresponding on-chain field encodes "absent" (empty bytes — see class
-     * javadoc for the exact encoding).
+     * {@code next} are always non-null; the optional script/policy fields are null when the
+     * corresponding on-chain field encodes "absent" (empty bytes — see class javadoc for the
+     * exact encoding).
      * <p>
-     * Note: the Aiken {@code Credential} variant ({@code VerificationKey} vs {@code Script})
-     * is intentionally NOT preserved — both hash types are 28 bytes and downstream storage
-     * flattens them to a single column. If the distinction becomes load-bearing downstream,
-     * add a companion column and a second field here.
+     * For each transfer-logic-script field, the {@code *Type} companion records the Aiken
+     * {@code Credential} discriminator ({@link Cip113CredentialType#VKEY} vs
+     * {@link Cip113CredentialType#SCRIPT}). The hash and its type are populated together —
+     * both null when the credential is absent, both non-null when present.
      */
     public record ParsedRegistryNode(String key,
                                      String next,
                                      @Nullable String transferLogicScript,
+                                     @Nullable Cip113CredentialType transferLogicScriptType,
                                      @Nullable String thirdPartyTransferLogicScript,
+                                     @Nullable Cip113CredentialType thirdPartyTransferLogicScriptType,
                                      @Nullable String globalStatePolicyId) {
 
         /**
@@ -106,6 +109,15 @@ public class Cip113RegistryNodeParser {
         public boolean isHeadSentinel() {
             return key.isEmpty();
         }
+    }
+
+    /**
+     * Result of parsing one of the two transfer-logic credential fields. Either both
+     * fields are non-null (a real credential is present), or both are null (the on-chain
+     * field encodes "absent credential").
+     */
+    private record OptionalCredential(@Nullable String hash, @Nullable Cip113CredentialType type) {
+        static final OptionalCredential ABSENT = new OptionalCredential(null, null);
     }
 
     public Optional<ParsedRegistryNode> parse(String inlineDatum) {
@@ -165,10 +177,10 @@ public class Cip113RegistryNodeParser {
             }
 
             // Invariant #5: transfer_logic_script — optional Credential (null when empty bytes).
-            String transferLogicScript = extractOptionalCredentialHash(fields.get(2), "transfer_logic_script");
+            OptionalCredential transferLogic = extractOptionalCredential(fields.get(2), "transfer_logic_script");
 
             // Invariant #6: third_party_transfer_logic_script — optional Credential.
-            String thirdPartyTransferLogicScript = extractOptionalCredentialHash(
+            OptionalCredential thirdPartyTransferLogic = extractOptionalCredential(
                     fields.get(3), "third_party_transfer_logic_script");
 
             // Invariant #7: global_state_cs — ByteString, 0 bytes (null) or exactly 28 bytes.
@@ -177,8 +189,10 @@ public class Cip113RegistryNodeParser {
             return Optional.of(new ParsedRegistryNode(
                     HexUtil.encodeHexString(keyBytes),
                     HexUtil.encodeHexString(nextBytes),
-                    transferLogicScript,
-                    thirdPartyTransferLogicScript,
+                    transferLogic.hash(),
+                    transferLogic.type(),
+                    thirdPartyTransferLogic.hash(),
+                    thirdPartyTransferLogic.type(),
                     globalStatePolicyId));
 
         } catch (InvalidDatumException e) {
@@ -207,26 +221,28 @@ public class Cip113RegistryNodeParser {
     }
 
     /**
-     * Extracts an optional credential hash from one of the two script fields.
+     * Extracts an optional credential (hash + Aiken {@code Credential} discriminator) from one
+     * of the two script fields.
      * <p>
      * Accepts:
      * <ul>
      *   <li>An Aiken {@code Credential} Constr ({@code VerificationKey} alt 0 or {@code Script}
-     *       alt 1) wrapping a 28-byte ByteString → returns the 56-hex-char hash.</li>
+     *       alt 1) wrapping a 28-byte ByteString → returns the 56-hex-char hash and the
+     *       matching {@link Cip113CredentialType}.</li>
      *   <li>{@code BytesPlutusData(h'')} (plain empty bytes, off-spec but convention in the
-     *       wild) → returns {@code null}.</li>
-     *   <li>A {@code Credential} Constr whose inner ByteString is empty → returns {@code null}.</li>
+     *       wild) → returns {@link OptionalCredential#ABSENT}.</li>
+     *   <li>A {@code Credential} Constr whose inner ByteString is empty → returns
+     *       {@link OptionalCredential#ABSENT}.</li>
      * </ul>
      * Throws {@link InvalidDatumException} for any other shape or a wrong inner byte length,
      * which causes the enclosing {@link #parse(String)} to reject the whole datum.
      */
-    @Nullable
-    private String extractOptionalCredentialHash(PlutusData data, String fieldName) {
+    private OptionalCredential extractOptionalCredential(PlutusData data, String fieldName) {
         // Off-spec tolerance: plain BytesPlutusData in place of a Credential Constr.
         // Empty bytes are accepted as "absent credential"; non-empty plain bytes are malformed.
         if (data instanceof BytesPlutusData bytes) {
             if (bytes.getValue().length == 0) {
-                return null;
+                return OptionalCredential.ABSENT;
             }
             throw new InvalidDatumException("'" + fieldName
                     + "' is a non-empty ByteString (expected Credential Constr or empty bytes)");
@@ -237,7 +253,12 @@ public class Cip113RegistryNodeParser {
                     + data.getClass().getSimpleName());
         }
         long alt = constr.getAlternative();
-        if (alt != CREDENTIAL_VKEY_ALTERNATIVE && alt != CREDENTIAL_SCRIPT_ALTERNATIVE) {
+        Cip113CredentialType type;
+        if (alt == CREDENTIAL_VKEY_ALTERNATIVE) {
+            type = Cip113CredentialType.VKEY;
+        } else if (alt == CREDENTIAL_SCRIPT_ALTERNATIVE) {
+            type = Cip113CredentialType.SCRIPT;
+        } else {
             throw new InvalidDatumException("'" + fieldName
                     + "' Credential has invalid alternative " + alt + " (expected 0 or 1)");
         }
@@ -252,13 +273,13 @@ public class Cip113RegistryNodeParser {
         }
         // Also tolerate an explicitly wrapped empty-hash as "absent credential".
         if (hash.length == 0) {
-            return null;
+            return OptionalCredential.ABSENT;
         }
         if (hash.length != HASH_BYTE_LEN) {
             throw new InvalidDatumException("'" + fieldName
                     + "' Credential inner hash must be " + HASH_BYTE_LEN + " bytes, got " + hash.length);
         }
-        return HexUtil.encodeHexString(hash);
+        return new OptionalCredential(HexUtil.encodeHexString(hash), type);
     }
 
     /**
