@@ -62,9 +62,10 @@ public class ProposalStateService {
         var committee = committeeStorage.getCommitteeByEpoch(epoch)
                 .orElseThrow(() -> new IllegalStateException("Committee not found for epoch: " + (epoch)));
 
-        // Ratification in epoch N uses the committee state effective in epoch N,
-        // after enactments from epoch N-1 have been applied at the epoch boundary.
-        List<CommitteeMemberDetails> membersCanVote = committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(epoch);
+        // Ratification in epoch N uses the committee effective in epoch N,
+        // but only hot-key registrations that existed before entering epoch N.
+        List<CommitteeMemberDetails> membersCanVote =
+                committeeMemberStorage.getActiveCommitteeMembersDetailsForRatificationByEpoch(epoch);
         var committeeState = committeeStateService.getCurrentCommitteeState();
 
         // Get treasury
