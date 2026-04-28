@@ -9,5 +9,6 @@ public interface CommitteeMemberStorage {
     void saveAll(List<CommitteeMember> committeeMembers);
     List<CommitteeMember> getCommitteeMembersByEpoch(int epoch);
     List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsByEpoch(int epoch);
+    List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsForRatificationByEpoch(int epoch);
     int deleteBySlotGreaterThan(long slot);
 }

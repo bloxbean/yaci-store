@@ -56,21 +56,21 @@ class ProposalStateServiceTest {
     private VotingDataCollector votingDataCollector;
 
     @Test
-    void collectGovernanceData_shouldUseCurrentEpochCommitteeMembersForRatification() {
-        int currentEpoch = 762;
+    void collectGovernanceData_shouldUseRatificationBoundaryCommitteeMembers() {
+        int currentEpoch = 712;
 
         GovActionProposal proposal = GovActionProposal.builder()
-                .txHash("a84674f5b7f77af7791e452c0b6a11eabb888ed474e635613b211236b942d1a1")
+                .txHash("d547ed244b8e16c88dc7b1aca73becc4d0339a6a02ea947df04c84647e44cba2")
                 .index(0)
                 .build();
         List<GovActionProposal> proposals = List.of(proposal);
 
-        List<CommitteeMemberDetails> currentCommitteeMembers = List.of(
+        List<CommitteeMemberDetails> ratificationBoundaryCommitteeMembers = List.of(
                 CommitteeMemberDetails.builder()
-                        .coldKey("33e984fd73ede865bf1e385fe001d08efc99d187b854f69bb04c4aab")
-                        .hotKey("20c883612be5e35889df3bac348f2860bbf7524d2fde2b5c41c9f15a")
-                        .startEpoch(719)
-                        .expiredEpoch(866)
+                        .coldKey("1cae94f48e3d78072280a6a55c35ec3864f7464be920f4d7b51f3b98")
+                        .hotKey("c06b66e048fe22440bec76f20ad2e28b0d8cc9bde0e5b36ca39601f5")
+                        .startEpoch(709)
+                        .expiredEpoch(766)
                         .build()
         );
 
@@ -90,7 +90,8 @@ class ProposalStateServiceTest {
         when(votingDataCollector.collectVotingDataBatch(proposals, currentEpoch - 1)).thenReturn(Map.<GovActionId, AggregatedVotingData>of());
         when(epochParamStorage.getProtocolParams(currentEpoch)).thenReturn(Optional.of(epochParam));
         when(committeeStorage.getCommitteeByEpoch(currentEpoch)).thenReturn(Optional.of(committee));
-        when(committeeMemberStorage.getActiveCommitteeMembersDetailsByEpoch(currentEpoch)).thenReturn(currentCommitteeMembers);
+        when(committeeMemberStorage.getActiveCommitteeMembersDetailsForRatificationByEpoch(currentEpoch))
+                .thenReturn(ratificationBoundaryCommitteeMembers);
         when(committeeStateService.getCurrentCommitteeState()).thenReturn(ConstitutionCommitteeState.NORMAL);
         when(adaPotStorage.findByEpoch(currentEpoch)).thenReturn(Optional.of(AdaPot.builder().epoch(currentEpoch).treasury(BigInteger.TEN).build()));
         when(proposalStateClient.getLastEnactedProposal(any(GovActionType.class), eq(currentEpoch))).thenReturn(Optional.empty());
@@ -108,9 +109,10 @@ class ProposalStateServiceTest {
         ).collectGovernanceData(currentEpoch);
 
         assertThat(result).isNotNull();
-        assertThat(result.committeeMembers()).containsExactlyElementsOf(currentCommitteeMembers);
+        assertThat(result.committeeMembers()).containsExactlyElementsOf(ratificationBoundaryCommitteeMembers);
         verify(votingDataCollector).collectVotingDataBatch(proposals, currentEpoch - 1);
-        verify(committeeMemberStorage).getActiveCommitteeMembersDetailsByEpoch(currentEpoch);
+        verify(committeeMemberStorage).getActiveCommitteeMembersDetailsForRatificationByEpoch(currentEpoch);
+        verify(committeeMemberStorage, never()).getActiveCommitteeMembersDetailsByEpoch(currentEpoch);
         verify(committeeMemberStorage, never()).getActiveCommitteeMembersDetailsByEpoch(currentEpoch - 1);
     }
 }
