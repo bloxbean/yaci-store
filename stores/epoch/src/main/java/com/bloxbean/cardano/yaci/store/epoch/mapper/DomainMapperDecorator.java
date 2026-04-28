@@ -93,6 +93,9 @@ public class DomainMapperDecorator implements DomainMapper {
             if (protocolParamsDto.getCostModels() == null)
                 protocolParamsDto.setCostModels(new TreeMap<>());
 
+            if (protocolParamsDto.getCostModelsRaw() == null)
+                protocolParamsDto.setCostModelsRaw(new LinkedHashMap<>());
+
             for (var key : costModelMap.keySet()) {
                 List<String> ops = switch (key) {
                     case PlutusKeys.PLUTUS_V1 -> PlutusOps.getOperations(1);
@@ -117,6 +120,7 @@ public class DomainMapperDecorator implements DomainMapper {
                 }
 
                 protocolParamsDto.getCostModels().put(key, langCost);
+                protocolParamsDto.getCostModelsRaw().put(key, Arrays.stream(costArr).boxed().toList());
             }
         }
 

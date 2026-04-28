@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -46,6 +47,8 @@ public class ProtocolParamsDto {
 
     //Alonzo changes
     private Map<String, Map<String, Long>> costModels;
+    @JsonProperty("cost_models_raw")
+    private Map<String, List<Long>> costModelsRaw;
     private BigDecimal priceMem;
     private BigDecimal priceStep;
     private String maxTxExMem;
