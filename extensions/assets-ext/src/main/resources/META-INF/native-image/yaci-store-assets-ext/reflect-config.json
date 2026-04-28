@@ -10,5 +10,6 @@
   { "name": "org.eclipse.jgit.lib.CoreConfig$TrustLooseRefStat",      "allDeclaredMethods": true, "allDeclaredFields": true },
   { "name": "org.eclipse.jgit.diff.DiffAlgorithm$SupportedAlgorithm", "allDeclaredMethods": true, "allDeclaredFields": true },
   { "name": "org.eclipse.jgit.diff.DiffConfig$RenameDetectionType",   "allDeclaredMethods": true, "allDeclaredFields": true },
-  { "name": "org.eclipse.jgit.lib.CommitConfig$CleanupMode",          "allDeclaredMethods": true, "allDeclaredFields": true }
+  { "name": "org.eclipse.jgit.lib.CommitConfig$CleanupMode",          "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType", "allDeclaredMethods": true, "allDeclaredFields": true }
 ]
