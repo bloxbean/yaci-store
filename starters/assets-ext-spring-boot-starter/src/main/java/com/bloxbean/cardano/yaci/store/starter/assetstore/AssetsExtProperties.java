@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.starter.assetstore;
 
+import jakarta.annotation.Nullable;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -21,9 +22,14 @@ public class AssetsExtProperties {
     @Setter
     public static final class Cip26 {
         private boolean enabled = true;
-        private String gitOrganization = "cardano-foundation";
-        private String gitProjectName = "cardano-token-registry";
-        private String gitMappingsFolder = "mappings";
+        // Org / project / mappings-folder default to null so Cip26NetworkDefaults
+        // can resolve them per protocol-magic. Hardcoding mainnet values here would
+        // override that resolution and force every network to clone the mainnet
+        // registry — which used to be the case and broke preprod / preview /
+        // sanchonet / devkit by silently indexing mainnet data.
+        @Nullable private String gitOrganization;
+        @Nullable private String gitProjectName;
+        @Nullable private String gitMappingsFolder;
         private String gitTmpFolder = "/tmp";
         private long syncIntervalMinutes = 60;
         private boolean forceClone = false;

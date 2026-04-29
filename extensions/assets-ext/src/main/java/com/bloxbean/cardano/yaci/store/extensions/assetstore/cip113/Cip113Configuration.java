@@ -62,8 +62,14 @@ public class Cip113Configuration {
 
         NetworkType network = NetworkType.fromProtocolMagic(storeProperties.getProtocolMagic());
         String networkName = network != null ? network.name() : "UNKNOWN (magic=" + storeProperties.getProtocolMagic() + ")";
-        log.info("CIP-113 programmable tokens: network={}, enabled={}, policyIds={}",
-                networkName, isEnabled(), registryNftPolicyIdSet);
+        // We deliberately do NOT log "enabled=..." here — the master
+        // store.assets.ext.cip113.enabled flag is enforced by @ConditionalOnProperty
+        // on the processor beans and isn't visible to this configuration. This line
+        // reports what THIS class is responsible for: which registry NFT policy IDs
+        // were resolved for the network. If the master flag is off, those policy
+        // IDs are irrelevant because no processor will be registered to use them.
+        log.info("CIP-113 registry NFT policy IDs resolved: network={}, count={}, ids={}",
+                networkName, registryNftPolicyIdSet.size(), registryNftPolicyIdSet);
     }
 
     public boolean isEnabled() {

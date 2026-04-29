@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore;
 
+import jakarta.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -39,12 +40,16 @@ public class AssetsExtStoreProperties {
         @Builder.Default
         private boolean enabled = false;
 
+        // Null means "let Cip26NetworkDefaults pick the per-network default".
+        @Nullable
         @Builder.Default
         private String gitOrganization = null;
 
+        @Nullable
         @Builder.Default
         private String gitProjectName = null;
 
+        @Nullable
         @Builder.Default
         private String gitMappingsFolder = null;
 
