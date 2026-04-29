@@ -44,30 +44,24 @@ POST_BOOTSTRAP_VALID_DELEGATION_CONDITION = """
         AND ds.rn = 1
         AND (ds.type = 'REG_DREP_CERT' OR ds.type = 'UPDATE_DREP_CERT')
         AND (
-            rd.slot > ds.registration_slot
-            OR (rd.slot = ds.registration_slot AND rd.tx_index > ds.registration_tx_index)
-            OR (rd.slot = ds.registration_slot AND rd.tx_index <= ds.registration_tx_index AND rd.epoch <= {{MAX_BOOTSTRAP_PHASE_EPOCH}})
-            OR (
-                rd.slot < ds.registration_slot
-                AND (
-                    ds.unregistration_slot IS NULL
-                    OR rd.slot > ds.unregistration_slot
-                    OR (rd.slot = ds.unregistration_slot AND rd.tx_index > ds.unregistration_tx_index)
-                    OR (
-                        rd.slot = ds.unregistration_slot
-                        AND rd.tx_index = ds.unregistration_tx_index
-                        AND rd.cert_index > ds.unregistration_cert_index
-                    )
-                )
-                AND rd.epoch <= {{MAX_BOOTSTRAP_PHASE_EPOCH}}
+            (
+                rd.epoch <= {{MAX_BOOTSTRAP_PHASE_EPOCH}}
                 AND ds.registration_epoch <= {{MAX_BOOTSTRAP_PHASE_EPOCH}}
             )
+            OR rd.slot > ds.registration_slot
+            OR (rd.slot = ds.registration_slot AND rd.tx_index > ds.registration_tx_index)
+            OR (rd.slot = ds.registration_slot AND rd.tx_index = ds.registration_tx_index AND rd.cert_index > ds.registration_cert_index)
+        )
+        AND (
+            ds.unregistration_slot IS NULL
+            OR rd.slot > ds.unregistration_slot
+            OR (rd.slot = ds.unregistration_slot AND rd.tx_index > ds.unregistration_tx_index)
             OR (
-                rd.slot = ds.registration_slot
-                AND rd.tx_index = ds.registration_tx_index
-                AND rd.epoch > {{MAX_BOOTSTRAP_PHASE_EPOCH}}
-                AND rd.cert_index > ds.registration_cert_index
+                rd.slot = ds.unregistration_slot
+                AND rd.tx_index = ds.unregistration_tx_index
+                AND rd.cert_index > ds.unregistration_cert_index
             )
+            OR ds.unregistration_epoch <= {{MAX_BOOTSTRAP_PHASE_EPOCH}}
         )
   )
 """.strip("\n")
@@ -80,16 +74,6 @@ BOOTSTRAP_VALID_DELEGATION_CONDITION = """
         AND ds.cred_type = rd.drep_type
         AND ds.rn = 1
         AND (ds.type = 'REG_DREP_CERT' OR ds.type = 'UPDATE_DREP_CERT')
-        AND (
-            ds.unregistration_slot IS NULL
-            OR rd.slot > ds.unregistration_slot
-            OR (rd.slot = ds.unregistration_slot AND rd.tx_index > ds.unregistration_tx_index)
-            OR (
-                rd.slot = ds.unregistration_slot
-                AND rd.tx_index = ds.unregistration_tx_index
-                AND rd.cert_index > ds.unregistration_cert_index
-            )
-        )
   )
 """.strip("\n")
 
@@ -863,11 +847,12 @@ SELECT
     lr.registration_slot,
     lr.registration_tx_index,
     lr.registration_cert_index,
+    lu.unregistration_epoch,
     lu.unregistration_slot,
     lu.unregistration_tx_index,
     lu.unregistration_cert_index,
     ROW_NUMBER() OVER (
-        PARTITION BY d.drep_hash
+        PARTITION BY d.drep_hash, d.cred_type
         ORDER BY d.slot DESC, d.tx_index DESC, d.cert_index DESC
     ) AS rn
 FROM drep_registration d
@@ -1081,37 +1066,6 @@ WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
                       AND unreg_before_stale.cert_index < stale_del.cert_index
                   )
               )
-        )
-  )
-  AND EXISTS (
-      SELECT 1
-      FROM delegation_vote redel
-      WHERE redel.address = stale_del.address
-        AND redel.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
-        -- Ledger identity is (drep_type, drep_hash), so either field changing
-        -- means the old reverse entry became stale before UNREG.
-        AND (
-            redel.drep_hash <> stale_del.drep_hash
-            OR redel.drep_type <> stale_del.drep_type
-        )
-        AND redel.epoch <= {epoch}
-        AND (
-            redel.slot > stale_del.slot
-            OR (redel.slot = stale_del.slot AND redel.tx_index > stale_del.tx_index)
-            OR (
-                redel.slot = stale_del.slot
-                AND redel.tx_index = stale_del.tx_index
-                AND redel.cert_index > stale_del.cert_index
-            )
-        )
-        AND (
-            redel.slot < unreg.slot
-            OR (redel.slot = unreg.slot AND redel.tx_index < unreg.tx_index)
-            OR (
-                redel.slot = unreg.slot
-                AND redel.tx_index = unreg.tx_index
-                AND redel.cert_index < unreg.cert_index
-            )
         )
   )
   AND NOT EXISTS (

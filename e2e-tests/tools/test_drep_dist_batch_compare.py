@@ -309,8 +309,40 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn("PARTITION BY drep_hash, cred_type", sql)
         self.assertIn("du.cred_type", sql)
         self.assertIn("COALESCE(lr.cred_type, d.cred_type) AS cred_type", sql)
+        self.assertIn("lu.unregistration_epoch", sql)
         self.assertIn("AND d.cred_type = lr.cred_type", sql)
         self.assertIn("AND d.cred_type = lu.cred_type", sql)
+        self.assertIn("PARTITION BY d.drep_hash, d.cred_type", sql)
+
+    def test_build_valid_delegation_condition_matches_latest_fix_drep_distr_logic(self):
+        sql = tool.build_valid_delegation_condition(
+            tool.EpochExecutionContext(
+                epoch=624,
+                is_bootstrap_phase=False,
+                pv9_max_epoch=536,
+                max_bootstrap_phase_epoch=536,
+            )
+        )
+
+        self.assertIn("rd.epoch <= 536", sql)
+        self.assertIn("ds.registration_epoch <= 536", sql)
+        self.assertIn("rd.cert_index > ds.registration_cert_index", sql)
+        self.assertIn("OR ds.unregistration_epoch <= 536", sql)
+        self.assertNotIn("rd.tx_index <= ds.registration_tx_index", sql)
+        self.assertNotIn("rd.slot < ds.registration_slot", sql)
+
+    def test_bootstrap_valid_delegation_condition_does_not_filter_by_unregistration_slot(self):
+        sql = tool.build_valid_delegation_condition(
+            tool.EpochExecutionContext(
+                epoch=536,
+                is_bootstrap_phase=True,
+                pv9_max_epoch=536,
+                max_bootstrap_phase_epoch=536,
+            )
+        )
+
+        self.assertIn("ds.type = 'REG_DREP_CERT' OR ds.type = 'UPDATE_DREP_CERT'", sql)
+        self.assertNotIn("ds.unregistration_slot", sql)
 
     def test_render_pv9_cleared_insert_sql_matches_drep_identity_on_hash_and_type(self):
         sql = tool.render_pv9_cleared_insert_sql(
@@ -320,11 +352,10 @@ class SqlGenerationTest(unittest.TestCase):
             pv9_max_epoch=536,
         )
 
-        self.assertIn("redel.drep_hash <> stale_del.drep_hash", sql)
-        self.assertIn("OR redel.drep_type <> stale_del.drep_type", sql)
         self.assertIn("FROM drep_registration reg_before_stale", sql)
         self.assertIn("reg_before_stale.type = 'REG_DREP_CERT'", sql)
         self.assertIn("FROM drep_registration unreg_before_stale", sql)
+        self.assertNotIn("FROM delegation_vote redel", sql)
 
     def test_render_invalidate_sql_targets_selected_cache_and_shadow(self):
         sql = tool.render_invalidate_sql(
