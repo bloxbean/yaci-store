@@ -253,12 +253,13 @@ public class DRepDistService {
                     lr.registration_tx_index,
                     lr.registration_cert_index,
                     
+                    lu.unregistration_epoch,
                     lu.unregistration_slot,
                     lu.unregistration_tx_index,
                     lu.unregistration_cert_index,
                 
                     ROW_NUMBER() OVER (
-                        PARTITION BY d.drep_hash
+                        PARTITION BY d.drep_hash, d.cred_type
                         ORDER BY d.slot DESC, d.tx_index DESC, d.cert_index DESC
                     ) AS rn
                 FROM drep_registration d
@@ -361,7 +362,7 @@ public class DRepDistService {
                 SELECT DISTINCT stale_del.address
                 FROM delegation_vote stale_del
                 INNER JOIN drep_registration unreg
-                    -- The stale reverse entry belongs to the exact credential DRep lifecycle.
+                    -- The reverse entry belongs to the exact credential DRep lifecycle.
                     ON  unreg.drep_hash   = stale_del.drep_hash
                     AND unreg.cred_type   = stale_del.drep_type
                     AND unreg.type        = 'UNREG_DREP_CERT'
@@ -374,9 +375,9 @@ public class DRepDistService {
                 WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
                 AND   stale_del.epoch <= :pv9_max_epoch
                 AND   stale_del.epoch <= :epoch
-                -- A stale reverse entry can only exist if old_drep was registered when
-                -- stale_del was processed. In ledger this is Map.adjust on vsDReps; a
-                -- delegation to an unknown DRep in bootstrap phase does not create drepDelegs.
+                -- A reverse entry can only exist if old_drep was registered when stale_del
+                -- was processed. In ledger this is Map.adjust on vsDReps; a delegation to an
+                -- unknown DRep in bootstrap phase does not create drepDelegs.
                 AND EXISTS (
                     SELECT 1 FROM drep_registration reg_before_stale
                     WHERE reg_before_stale.drep_hash = stale_del.drep_hash
@@ -408,24 +409,6 @@ public class DRepDistService {
                                  AND unreg_before_stale.tx_index = stale_del.tx_index
                                  AND unreg_before_stale.cert_index < stale_del.cert_index))
                     )
-                )
-                -- Ledger identity is (drep_type, drep_hash), so either field changing makes
-                -- the old reverse entry stale.
-                AND EXISTS (
-                    SELECT 1 FROM delegation_vote redel
-                    WHERE redel.address   = stale_del.address
-                    AND   redel.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
-                    AND   (redel.drep_hash <> stale_del.drep_hash
-                        OR redel.drep_type <> stale_del.drep_type)
-                    AND   redel.epoch    <= :epoch
-                    AND (   redel.slot > stale_del.slot
-                         OR (redel.slot = stale_del.slot AND redel.tx_index > stale_del.tx_index)
-                         OR (redel.slot = stale_del.slot AND redel.tx_index = stale_del.tx_index
-                             AND redel.cert_index > stale_del.cert_index))
-                    AND (   redel.slot < unreg.slot
-                         OR (redel.slot = unreg.slot AND redel.tx_index < unreg.tx_index)
-                         OR (redel.slot = unreg.slot AND redel.tx_index = unreg.tx_index
-                             AND redel.cert_index < unreg.cert_index))
                 )
                 -- Later UNREG/REG cycles do not inherit stale entries from an older lifecycle.
                 AND NOT EXISTS (
@@ -618,23 +601,26 @@ public class DRepDistService {
                     and ds.cred_type = rd.drep_type
                     and ds.rn = 1
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
-                    and ( 
-                        rd.slot > ds.registration_slot
+                    and (
+                        -- Bootstrap delegations can predate DRep registration. At the PV10
+                        -- boundary, updateDRepDelegations keeps only forward delegations to
+                        -- DReps registered during bootstrap.
+                        (rd.epoch <= :max_bootstrap_phase_epoch
+                            and ds.registration_epoch <= :max_bootstrap_phase_epoch)
+                        or rd.slot > ds.registration_slot
                         or (rd.slot = ds.registration_slot and rd.tx_index > ds.registration_tx_index)
-                        or (rd.slot = ds.registration_slot and rd.tx_index <= ds.registration_tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
-                        or (
-                            rd.slot < ds.registration_slot 
-                            and (
-                                ds.unregistration_slot is null
-                                or
-                                ( rd.slot > ds.unregistration_slot 
-                                    or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
-                                    or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
-                                )
-                            )
-                            and rd.epoch <= :max_bootstrap_phase_epoch and ds.registration_epoch <= :max_bootstrap_phase_epoch
+                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index
+                            and rd.cert_index > ds.registration_cert_index)
+                    )
+                    and (
+                        ds.unregistration_slot is null
+                        or
+                        (rd.slot > ds.unregistration_slot
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
                         )
-                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.registration_cert_index)
+                        -- PV9/bootstrap clears are represented by ss_pv9_cleared_addresses.
+                        or ds.unregistration_epoch <= :max_bootstrap_phase_epoch
                     )
                 )
             """;
@@ -647,14 +633,6 @@ public class DRepDistService {
                     and ds.cred_type = rd.drep_type
                     and ds.rn = 1 
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
-                    and (
-                        ds.unregistration_slot is null
-                        or
-                        (rd.slot > ds.unregistration_slot 
-                            or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
-                            or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
-                        )
-                    )
                 )
             """;
         }
