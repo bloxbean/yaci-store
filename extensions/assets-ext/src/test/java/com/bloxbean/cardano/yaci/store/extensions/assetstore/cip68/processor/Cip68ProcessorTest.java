@@ -17,11 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
-import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,9 +42,6 @@ class Cip68ProcessorTest {
 
     @Mock
     private MetadataReferenceNftRepository metadataReferenceNftRepository;
-
-    @Spy
-    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private Cip68Processor processor;

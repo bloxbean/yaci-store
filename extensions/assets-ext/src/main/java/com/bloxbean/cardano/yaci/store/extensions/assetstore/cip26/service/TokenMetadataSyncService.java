@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,7 +31,6 @@ public class TokenMetadataSyncService {
     private final SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
     private final AssetsExtStoreProperties assetsStoreProperties;
-    private final Clock clock;
 
     @Getter
     private SyncStatus syncStatus;
@@ -100,7 +98,7 @@ public class TokenMetadataSyncService {
             } else if (newHashOpt.isPresent()) {
                 OffChainSyncState offChainSyncStateToSave = lastSyncState.orElse(new OffChainSyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
-                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now(clock));
+                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now());
                 syncStateRepository.save(offChainSyncStateToSave);
                 log.info("Commit hash advanced to {}", newHashOpt.get());
             }

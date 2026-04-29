@@ -19,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +50,7 @@ class TokenMetadataSyncServiceTest {
         assetsStoreProperties = new AssetsExtStoreProperties();
         service = new TokenMetadataSyncService(
                 gitService, tokenMetadataService, tokenMappingService,
-                syncStateRepository, networkDefaults, assetsStoreProperties, Clock.systemDefaultZone());
+                syncStateRepository, networkDefaults, assetsStoreProperties);
     }
 
     @Nested

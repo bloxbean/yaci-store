@@ -14,7 +14,6 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil.toTokenLogo;
@@ -27,7 +26,6 @@ public class TokenMetadataService {
     private final TokenMetadataRepository tokenMetadataRepository;
     private final TokenLogoRepository tokenLogoRepository;
     private final TokenMetadataValidator tokenMetadataValidator;
-    private final Clock clock;
 
     /**
      * Validates and inserts CIP-26 metadata for one mapping.
@@ -49,7 +47,7 @@ public class TokenMetadataService {
         }
 
         try {
-            tokenMetadata.setLastSyncedAt(LocalDateTime.now(clock));
+            tokenMetadata.setLastSyncedAt(LocalDateTime.now());
             tokenMetadataRepository.save(tokenMetadata);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {
@@ -86,7 +84,7 @@ public class TokenMetadataService {
         }
 
         try {
-            tokenLogo.setLastSyncedAt(LocalDateTime.now(clock));
+            tokenLogo.setLastSyncedAt(LocalDateTime.now());
             tokenLogoRepository.save(tokenLogo);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {

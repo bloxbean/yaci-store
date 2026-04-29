@@ -17,7 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,8 +38,7 @@ class TokenMetadataServiceTest {
     @BeforeEach
     void setUp() {
         service = new TokenMetadataService(
-                tokenMetadataRepository, tokenLogoRepository, tokenMetadataValidator,
-                Clock.systemDefaultZone());
+                tokenMetadataRepository, tokenLogoRepository, tokenMetadataValidator);
     }
 
     private static Mapping mapping(String subject) {
