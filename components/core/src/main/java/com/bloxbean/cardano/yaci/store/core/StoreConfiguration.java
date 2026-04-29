@@ -26,6 +26,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
+import java.time.Clock;
+
 @Configuration
 @ConditionalOnProperty(
         prefix = "store.core",
@@ -79,5 +81,21 @@ public class StoreConfiguration {
     @Bean
     public ErrorStorage errorStorage(ErrorRepository errorRepository) {
         return new ErrorStorageImpl(errorRepository);
+    }
+
+    /**
+     * Shared {@link Clock} for time-stamping persisted rows and any other
+     * wall-clock reads in the application. Returns {@link Clock#systemDefaultZone()} —
+     * bytecode-equivalent to {@code LocalDateTime.now()}, which preserves the
+     * existing behaviour of every call site that hasn't yet been migrated.
+     *
+     * <p>Tests can substitute a {@link Clock#fixed(java.time.Instant, java.time.ZoneId)}
+     * via {@code @TestConfiguration} or any other override mechanism;
+     * {@link ConditionalOnMissingBean} ensures the user-supplied bean wins.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public Clock systemClock() {
+        return Clock.systemDefaultZone();
     }
 }
