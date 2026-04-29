@@ -93,10 +93,10 @@ public class TokenMetadataSyncService {
             log.info("Git history resolved in {} ms", System.currentTimeMillis() - gitHistoryStart);
 
             long processStart = System.currentTimeMillis();
-            boolean hasFailures = processMappingFiles(filesToProcess, mappingDetailsMap);
+            boolean anyTransientFailure = processMappingFiles(filesToProcess, mappingDetailsMap);
 
-            if (hasFailures) {
-                log.warn("Some mappings failed to process. Commit hash will not be advanced so failed mappings are retried on next sync.");
+            if (anyTransientFailure) {
+                log.warn("At least one entry hit a transient failure. Commit hash will not be advanced so those entries are retried on next sync.");
             } else if (newHashOpt.isPresent()) {
                 OffChainSyncState offChainSyncStateToSave = lastSyncState.orElse(new OffChainSyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
@@ -118,51 +118,80 @@ public class TokenMetadataSyncService {
 
     }
 
+    /**
+     * Returns true iff at least one entry hit a transient (recoverable) failure
+     * — those block the cursor advance so the next sync retries them.
+     * Permanently-skipped entries (validation rejected, non-transient DB
+     * errors) do NOT block: they're documented and we move on, otherwise the
+     * sync would loop forever on bad data.
+     */
     private boolean processMappingFiles(List<File> filesToProcess, Map<String, MappingUpdateDetails> mappingDetailsMap) {
-        AtomicBoolean failures = new AtomicBoolean(false);
+        AtomicBoolean anyTransient = new AtomicBoolean(false);
         int total = filesToProcess.size();
         int processed = 0;
         int inserted = 0;
-        int skipped = 0;
+        int permanentlySkipped = 0;
+        int transientlyFailed = 0;
+        int skippedNoMapping = 0;
 
         for (File mappingFile : filesToProcess) {
             processed++;
             Optional<Mapping> mapping = tokenMappingService.parseMappings(mappingFile);
             if (mapping.isEmpty()) {
-                skipped++;
+                skippedNoMapping++;
                 continue;
             }
 
             MappingUpdateDetails updateDetails = mappingDetailsMap.get(mappingFile.getName());
             if (updateDetails == null) {
-                skipped++;
+                skippedNoMapping++;
                 continue;
             }
 
             try {
-                boolean metadataInserted = tokenMetadataService.insertMapping(
+                InsertOutcome metadataOutcome = tokenMetadataService.insertMapping(
                         mapping.get(),
                         updateDetails.updatedAt(),
                         updateDetails.updatedBy());
-                if (metadataInserted) {
-                    tokenMetadataService.insertLogo(mapping.get());
-                    inserted++;
+
+                switch (metadataOutcome) {
+                    case INSERTED -> {
+                        // Logo may also be transient — fold its outcome into the same tally.
+                        InsertOutcome logoOutcome = tokenMetadataService.insertLogo(mapping.get());
+                        if (logoOutcome == InsertOutcome.TRANSIENTLY_FAILED) {
+                            anyTransient.set(true);
+                            transientlyFailed++;
+                        }
+                        inserted++;
+                    }
+                    case TRANSIENTLY_FAILED -> {
+                        anyTransient.set(true);
+                        transientlyFailed++;
+                    }
+                    case PERMANENTLY_SKIPPED -> permanentlySkipped++;
                 }
             } catch (Exception e) {
-                failures.set(true);
-                log.warn("Failed to process token '{}': {}. Continuing with next token.",
+                // Defensive: should not normally bubble up — the service classifies
+                // its own exceptions. Treat anything that does as transient so it
+                // retries; a real bug will keep showing up in logs.
+                anyTransient.set(true);
+                transientlyFailed++;
+                log.warn("Unexpected exception while processing token '{}': {}. Will retry next sync.",
                         mapping.get().subject(), e.getMessage());
             }
 
             if (processed % 500 == 0) {
-                log.info("Processing mappings: {}/{} done ({} inserted, {} skipped)",
-                        processed, total, inserted, skipped);
+                log.info("Processing mappings: {}/{} done (inserted={}, perm-skipped={}, transient={}, no-mapping={})",
+                        processed, total, inserted, permanentlySkipped, transientlyFailed, skippedNoMapping);
             }
         }
 
-        log.info("Mapping processing complete: {}/{} processed, {} inserted, {} skipped, failures={}",
-                processed, total, inserted, skipped, failures.get());
-        return failures.get();
+        log.info("Mapping processing complete: {}/{} processed " +
+                        "(inserted={}, perm-skipped={}, transient={}, no-mapping={}). " +
+                        "Cursor will {} advance.",
+                processed, total, inserted, permanentlySkipped, transientlyFailed, skippedNoMapping,
+                anyTransient.get() ? "NOT" : "");
+        return anyTransient.get();
     }
 
     private List<File> resolveFilesToProcess(String lastHash, Optional<String> newHashOpt, Path repoPath) {

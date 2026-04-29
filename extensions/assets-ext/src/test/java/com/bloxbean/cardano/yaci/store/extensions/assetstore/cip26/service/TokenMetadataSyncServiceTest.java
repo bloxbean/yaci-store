@@ -148,7 +148,9 @@ class TokenMetadataSyncServiceTest {
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
             when(gitService.getAllMappingDetails(any()))
                     .thenReturn(Map.of("test.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
-            when(tokenMetadataService.insertMapping(any(), any(), any())).thenReturn(true);
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.insertLogo(any())).thenReturn(InsertOutcome.INSERTED);
 
             service.synchronizeDatabase();
 
@@ -160,7 +162,8 @@ class TokenMetadataSyncServiceTest {
         }
 
         @Test
-        void doesNotAdvanceHashWhenProcessingFails() {
+        void doesNotAdvanceHashOnTransientFailure() {
+            // Transient outcomes block the cursor advance so the next sync retries.
             when(syncStateRepository.findTopByOrderByIdDesc())
                     .thenReturn(Optional.of(offChainState(OLD_HASH)));
             when(gitService.cloneCardanoTokenRegistryGitRepository())
@@ -175,12 +178,38 @@ class TokenMetadataSyncServiceTest {
             when(gitService.getAllMappingDetails(any()))
                     .thenReturn(Map.of("fail.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
             when(tokenMetadataService.insertMapping(any(), any(), any()))
-                    .thenThrow(new RuntimeException("DB error"));
+                    .thenReturn(InsertOutcome.TRANSIENTLY_FAILED);
 
             service.synchronizeDatabase();
 
             verify(syncStateRepository, never()).save(any(OffChainSyncState.class));
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
+        }
+
+        @Test
+        void advancesHashWhenAllFailuresArePermanent() {
+            // Permanent skips (validation rejected, non-transient DB errors) must
+            // NOT block the cursor — otherwise the sync loops forever on bad data.
+            when(syncStateRepository.findTopByOrderByIdDesc())
+                    .thenReturn(Optional.of(offChainState(OLD_HASH)));
+            when(gitService.cloneCardanoTokenRegistryGitRepository())
+                    .thenReturn(Optional.of(Path.of("/tmp/repo")));
+            when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
+
+            when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
+                    .thenReturn(List.of(Path.of("/tmp/repo/mappings/perm.json")));
+
+            Mapping mockMapping = new Mapping("perm-subject", null, null, null, null, null, null, null);
+            when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
+            when(gitService.getAllMappingDetails(any()))
+                    .thenReturn(Map.of("perm.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.PERMANENTLY_SKIPPED);
+
+            service.synchronizeDatabase();
+
+            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(tokenMetadataService, never()).insertLogo(any());
         }
     }
 
@@ -265,7 +294,8 @@ class TokenMetadataSyncServiceTest {
 
             Mapping mapping = new Mapping("subject", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mapping));
-            when(tokenMetadataService.insertMapping(any(), any(), any())).thenReturn(false);
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.PERMANENTLY_SKIPPED);
 
             service.synchronizeDatabase();
 
