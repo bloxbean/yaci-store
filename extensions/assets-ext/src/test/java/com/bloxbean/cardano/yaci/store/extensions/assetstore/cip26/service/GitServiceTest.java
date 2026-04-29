@@ -220,4 +220,98 @@ class GitServiceTest {
             assertThat(result).doesNotContainKey("token2.json");
         }
     }
+
+    @Nested
+    @DisplayName("remote-URL mismatch detection")
+    class RemoteUrlMismatch {
+
+        /**
+         * Initialise an on-disk repo at {@code <tempDir>/<projectName>} with a
+         * {@code remote.origin.url} of our choosing — simulates a leftover
+         * clone from a previous run pointing at some upstream.
+         */
+        private void writeExistingCloneWithRemote(String remoteUrl) throws Exception {
+            Path repoDir = tempDir.resolve(gitService.projectName);
+            Files.createDirectories(repoDir);
+            Git initialized = Git.init().setDirectory(repoDir.toFile()).call();
+            try {
+                org.eclipse.jgit.lib.StoredConfig config = initialized.getRepository().getConfig();
+                config.setString("remote", "origin", "url", remoteUrl);
+                config.save();
+            } finally {
+                initialized.close();
+            }
+        }
+
+        @Test
+        void readExistingRemoteUrlReturnsNullWhenFolderMissing() {
+            // gitService.projectName="test-repo" not yet on disk under tempDir.
+            assertThat(gitService.readExistingRemoteUrl()).isNull();
+        }
+
+        @Test
+        void readExistingRemoteUrlReadsTheConfiguredOriginUrl() throws Exception {
+            writeExistingCloneWithRemote("https://github.com/somebody/something.git");
+
+            assertThat(gitService.readExistingRemoteUrl())
+                    .isEqualTo("https://github.com/somebody/something.git");
+        }
+
+        @Test
+        void expectedRemoteUrlBuildsFromOrgAndProject() {
+            // setUp() set organization=test-org, projectName=test-repo
+            assertThat(gitService.expectedRemoteUrl())
+                    .isEqualTo("https://github.com/test-org/test-repo.git");
+        }
+
+        @Test
+        void reasonToFreshCloneIsForceCloneWhenFlagSet() {
+            gitService.forceClone = true;
+            assertThat(gitService.reasonToFreshClone()).isEqualTo("force-clone enabled");
+        }
+
+        @Test
+        void reasonToFreshCloneFlagsNonGitFolder() throws Exception {
+            // Make a folder that exists but isn't a git repo.
+            Files.createDirectories(tempDir.resolve(gitService.projectName));
+
+            assertThat(gitService.reasonToFreshClone())
+                    .isEqualTo("folder exists but is not a git repository");
+        }
+
+        @Test
+        void reasonToFreshCloneFlagsRemoteUrlMismatch() throws Exception {
+            // The leftover-mainnet-clone-on-a-preprod-config scenario from QA.
+            writeExistingCloneWithRemote(
+                    "https://github.com/cardano-foundation/cardano-token-registry.git");
+
+            String reason = gitService.reasonToFreshClone();
+
+            assertThat(reason).startsWith("remote URL mismatch");
+            assertThat(reason).contains(
+                    "existing='https://github.com/cardano-foundation/cardano-token-registry.git'");
+            assertThat(reason).contains(
+                    "expected='https://github.com/test-org/test-repo.git'");
+        }
+
+        @Test
+        void reasonToFreshCloneIsNullWhenRemoteMatches() throws Exception {
+            writeExistingCloneWithRemote("https://github.com/test-org/test-repo.git");
+
+            assertThat(gitService.reasonToFreshClone()).isNull();
+        }
+
+        @Test
+        void reasonToFreshCloneFlagsMissingRemoteUrl() throws Exception {
+            // Repo exists, .git/config has no `remote.origin.url` at all.
+            Path repoDir = tempDir.resolve(gitService.projectName);
+            Files.createDirectories(repoDir);
+            Git.init().setDirectory(repoDir.toFile()).call().close();
+
+            String reason = gitService.reasonToFreshClone();
+
+            assertThat(reason).startsWith("remote URL mismatch");
+            assertThat(reason).contains("existing='null'");
+        }
+    }
 }

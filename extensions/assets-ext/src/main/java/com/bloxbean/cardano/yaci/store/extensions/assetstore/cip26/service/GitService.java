@@ -14,9 +14,11 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
@@ -77,16 +79,19 @@ public class GitService {
 
     public Optional<Path> cloneCardanoTokenRegistryGitRepository() {
         File gitFolder = getGitFolder();
-
         boolean repoReady;
-        if (gitFolder.exists() && (forceClone || !isGitRepo())) {
-            log.info("exists and either force clone or not a git repo");
-            cleanup();
-            FileSystemUtils.deleteRecursively(gitFolder);
-            repoReady = cloneRepo();
-        } else if (gitFolder.exists() && isGitRepo()) {
-            log.info("exists and is git repo");
-            repoReady = openExistingRepo() && pullRebaseRepo();
+
+        if (gitFolder.exists()) {
+            String reasonToFreshClone = reasonToFreshClone();
+            if (reasonToFreshClone != null) {
+                log.info("Wiping clone at {} and re-cloning ({})", gitFolder, reasonToFreshClone);
+                cleanup();
+                FileSystemUtils.deleteRecursively(gitFolder);
+                repoReady = cloneRepo();
+            } else {
+                log.info("Existing clone at {} matches expected remote — opening", gitFolder);
+                repoReady = openExistingRepo() && pullRebaseRepo();
+            }
         } else {
             repoReady = cloneRepo();
         }
@@ -95,6 +100,59 @@ public class GitService {
             return Optional.of(getMappingsFolder());
         } else {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Determines whether the existing on-disk folder must be wiped before
+     * (re-)cloning. Returns {@code null} if the folder can be reused as-is,
+     * otherwise a short human-readable reason for the log line.
+     *
+     * <p>The remote-URL mismatch branch is the important one: if an operator
+     * switched networks (preprod ⇄ mainnet) the path on disk happens to be
+     * the same temp dir but the existing clone points at a different upstream.
+     * Reusing it would silently index the wrong network's tokens.
+     */
+    String reasonToFreshClone() {
+        if (forceClone) {
+            return "force-clone enabled";
+        }
+        if (!isGitRepo()) {
+            return "folder exists but is not a git repository";
+        }
+        String existingUrl = readExistingRemoteUrl();
+        String expectedUrl = expectedRemoteUrl();
+        if (existingUrl == null || !existingUrl.equals(expectedUrl)) {
+            return "remote URL mismatch (existing='" + existingUrl
+                    + "', expected='" + expectedUrl + "')";
+        }
+        return null;
+    }
+
+    /** URL we'd clone from for the currently-resolved organization/projectName. */
+    String expectedRemoteUrl() {
+        return String.format("https://github.com/%s/%s.git", organization, projectName);
+    }
+
+    /**
+     * Reads {@code remote.origin.url} from the git config inside the existing
+     * clone, without disturbing the {@link #git} field. Returns {@code null}
+     * if the folder isn't a readable git repo or the URL key is absent.
+     */
+    String readExistingRemoteUrl() {
+        File gitDir = getGitFolder().toPath().resolve(".git").toFile();
+        if (!gitDir.exists()) {
+            return null;
+        }
+        try (Repository repo = new FileRepositoryBuilder()
+                .setGitDir(gitDir)
+                .readEnvironment()
+                .build()) {
+            StoredConfig config = repo.getConfig();
+            return config.getString("remote", "origin", "url");
+        } catch (IOException e) {
+            log.warn("Failed to read existing remote URL at {}: {}", gitDir, e.getMessage());
+            return null;
         }
     }
 
