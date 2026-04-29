@@ -18,15 +18,30 @@ public class AssetsExtProperties {
     private Cip113 cip113 = new Cip113();
     private Query query = new Query();
 
+    /**
+     * CIP-26 GitHub registry settings.
+     *
+     * <h3>Why {@link #gitOrganization}, {@link #gitProjectName} and
+     * {@link #gitMappingsFolder} must stay {@code null} by default</h3>
+     *
+     * <p>{@link com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults}
+     * resolves these per {@code store.cardano.protocol-magic}: mainnet →
+     * {@code cardano-foundation/cardano-token-registry}, preprod →
+     * {@code input-output-hk/metadata-registry-testnet}, others → no registry.
+     * It only fills in defaults when the user-supplied values are {@code null}
+     * (or blank).
+     *
+     * <p>If we hardcoded mainnet values here, they would flow via
+     * {@link AssetsExtAutoConfiguration} into {@code AssetsExtStoreProperties}
+     * and shadow the per-network resolution — every network would end up
+     * cloning the mainnet registry. That regression was caught on preprod QA
+     * (yaci silently indexed 7929 mainnet tokens on a preprod-configured
+     * store). See {@code AssetsExtPropertiesTest} for the regression lock.
+     */
     @Getter
     @Setter
     public static final class Cip26 {
         private boolean enabled = true;
-        // Org / project / mappings-folder default to null so Cip26NetworkDefaults
-        // can resolve them per protocol-magic. Hardcoding mainnet values here would
-        // override that resolution and force every network to clone the mainnet
-        // registry — which used to be the case and broke preprod / preview /
-        // sanchonet / devkit by silently indexing mainnet data.
         @Nullable private String gitOrganization;
         @Nullable private String gitProjectName;
         @Nullable private String gitMappingsFolder;
