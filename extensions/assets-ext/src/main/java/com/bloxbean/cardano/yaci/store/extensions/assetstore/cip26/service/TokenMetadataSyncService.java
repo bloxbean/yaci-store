@@ -133,12 +133,29 @@ public class TokenMetadataSyncService {
         int permanentlySkipped = 0;
         int transientlyFailed = 0;
         int skippedNoMapping = 0;
+        int skippedFilenameMismatch = 0;
 
         for (File mappingFile : filesToProcess) {
             processed++;
             Optional<Mapping> mapping = tokenMappingService.parseMappings(mappingFile);
             if (mapping.isEmpty()) {
                 skippedNoMapping++;
+                continue;
+            }
+
+            // Filename-vs-inner-subject filter: in the upstream registries, the
+            // canonical file for a token is named after its subject. ~90% of files
+            // in the testnet registry have a filename that doesn't match the inner
+            // `subject` field (typo / spam / orphaned). Indexing those would mean
+            // last-write-wins on the same DB row by File.listFiles() order, which
+            // is filesystem-dependent and silently picks arbitrary content. By
+            // accepting only filename-matches-subject files we guarantee at most
+            // one file per subject (filenames are unique) and full determinism.
+            String filenameSubject = stripJsonExtension(mappingFile.getName());
+            if (!filenameSubject.equals(mapping.get().subject())) {
+                log.warn("Skipping '{}': filename does not match inner subject '{}'",
+                        mappingFile.getName(), mapping.get().subject());
+                skippedFilenameMismatch++;
                 continue;
             }
 
@@ -181,17 +198,26 @@ public class TokenMetadataSyncService {
             }
 
             if (processed % 500 == 0) {
-                log.info("Processing mappings: {}/{} done (inserted={}, perm-skipped={}, transient={}, no-mapping={})",
-                        processed, total, inserted, permanentlySkipped, transientlyFailed, skippedNoMapping);
+                log.info("Processing mappings: {}/{} done " +
+                                "(inserted={}, perm-skipped={}, transient={}, no-mapping={}, filename-mismatch={})",
+                        processed, total, inserted, permanentlySkipped, transientlyFailed,
+                        skippedNoMapping, skippedFilenameMismatch);
             }
         }
 
         log.info("Mapping processing complete: {}/{} processed " +
-                        "(inserted={}, perm-skipped={}, transient={}, no-mapping={}). " +
+                        "(inserted={}, perm-skipped={}, transient={}, no-mapping={}, filename-mismatch={}). " +
                         "Cursor will {} advance.",
-                processed, total, inserted, permanentlySkipped, transientlyFailed, skippedNoMapping,
+                processed, total, inserted, permanentlySkipped, transientlyFailed,
+                skippedNoMapping, skippedFilenameMismatch,
                 anyTransient.get() ? "NOT" : "");
         return anyTransient.get();
+    }
+
+    private static String stripJsonExtension(String fileName) {
+        return fileName.endsWith(".json")
+                ? fileName.substring(0, fileName.length() - ".json".length())
+                : fileName;
     }
 
     private List<File> resolveFilesToProcess(String lastHash, Optional<String> newHashOpt, Path repoPath) {

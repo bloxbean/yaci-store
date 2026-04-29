@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -144,7 +145,8 @@ class TokenMetadataSyncServiceTest {
             when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
                     .thenReturn(List.of(Path.of("/tmp/repo/mappings/test.json")));
 
-            Mapping mockMapping = new Mapping("test-subject", null, null, null, null, null, null, null);
+            // filename ("test") MUST equal inner subject — the sync now skips mismatches deterministically.
+            Mapping mockMapping = new Mapping("test", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
             when(gitService.getAllMappingDetails(any()))
                     .thenReturn(Map.of("test.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
@@ -173,7 +175,7 @@ class TokenMetadataSyncServiceTest {
             when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
                     .thenReturn(List.of(Path.of("/tmp/repo/mappings/fail.json")));
 
-            Mapping mockMapping = new Mapping("fail-subject", null, null, null, null, null, null, null);
+            Mapping mockMapping = new Mapping("fail", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
             when(gitService.getAllMappingDetails(any()))
                     .thenReturn(Map.of("fail.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
@@ -199,7 +201,7 @@ class TokenMetadataSyncServiceTest {
             when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
                     .thenReturn(List.of(Path.of("/tmp/repo/mappings/perm.json")));
 
-            Mapping mockMapping = new Mapping("perm-subject", null, null, null, null, null, null, null);
+            Mapping mockMapping = new Mapping("perm", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
             when(gitService.getAllMappingDetails(any()))
                     .thenReturn(Map.of("perm.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
@@ -277,7 +279,9 @@ class TokenMetadataSyncServiceTest {
             Files.writeString(repoDir.resolve("any.json"), "{}");
             when(gitService.getAllMappingDetails(any())).thenReturn(Map.of()); // no history resolved
 
-            Mapping mapping = new Mapping("subject", null, null, null, null, null, null, null);
+            // filename ("any") matches the inner subject so the new filename-vs-subject
+            // filter doesn't short-circuit before we hit the missing-history branch.
+            Mapping mapping = new Mapping("any", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mapping));
 
             service.synchronizeDatabase();
@@ -292,7 +296,7 @@ class TokenMetadataSyncServiceTest {
             when(gitService.getAllMappingDetails(any())).thenReturn(
                     Map.of("exists.json", new MappingUpdateDetails("a@test.com", LocalDateTime.now())));
 
-            Mapping mapping = new Mapping("subject", null, null, null, null, null, null, null);
+            Mapping mapping = new Mapping("exists", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mapping));
             when(tokenMetadataService.insertMapping(any(), any(), any()))
                     .thenReturn(InsertOutcome.PERMANENTLY_SKIPPED);
@@ -301,6 +305,36 @@ class TokenMetadataSyncServiceTest {
 
             verify(tokenMetadataService).insertMapping(any(), any(), any());
             verify(tokenMetadataService, never()).insertLogo(any());
+        }
+
+        @Test
+        void skipsFilesWhereFilenameDoesNotMatchInnerSubject() throws IOException {
+            // Real-world QA discovery: the testnet registry has many files whose
+            // filename doesn't equal the inner `subject` field (typos, spam,
+            // legacy entries). Indexing them all would mean last-write-wins by
+            // File.listFiles() order and silently swap a token's content. We
+            // skip mismatches so each subject maps to exactly one canonical file.
+            Files.writeString(repoDir.resolve("legit.json"), "{}");
+            Files.writeString(repoDir.resolve("garbage.json"), "{}");
+            when(gitService.getAllMappingDetails(any())).thenReturn(Map.of(
+                    "legit.json", new MappingUpdateDetails("a@test.com", LocalDateTime.now()),
+                    "garbage.json", new MappingUpdateDetails("a@test.com", LocalDateTime.now())));
+
+            // legit.json's inner subject matches the filename → accepted.
+            // garbage.json's inner subject claims to be "legit" too → skipped.
+            when(tokenMappingService.parseMappings(argThat(f -> f != null && f.getName().equals("legit.json"))))
+                    .thenReturn(Optional.of(new Mapping("legit", null, null, null, null, null, null, null)));
+            when(tokenMappingService.parseMappings(argThat(f -> f != null && f.getName().equals("garbage.json"))))
+                    .thenReturn(Optional.of(new Mapping("legit", null, null, null, null, null, null, null)));
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.insertLogo(any())).thenReturn(InsertOutcome.INSERTED);
+
+            service.synchronizeDatabase();
+
+            // Only the legit file's mapping made it through to insertMapping.
+            verify(tokenMetadataService, times(1)).insertMapping(any(), any(), any());
+            verify(syncStateRepository).save(any(OffChainSyncState.class));
         }
     }
 
