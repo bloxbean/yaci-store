@@ -52,6 +52,18 @@ public class Cip113Configuration {
 
     @PostConstruct
     public void init() {
+        // When CIP-113 is disabled (the default until the standard is live on
+        // mainnet), don't load anything: leaves registryNftPolicyIdSet empty so
+        // isEnabled() correctly reports false, the storage reader short-circuits
+        // every query, and no misleading "policy IDs resolved" log line fires.
+        // When the operator flips the master flag on (and restarts), the load
+        // runs and the line shows up — but only when it's actually relevant.
+        if (!assetsStoreProperties.getCip113().isEnabled()) {
+            registryNftPolicyIdSet = Set.of();
+            log.info("CIP-113 disabled (store.assets.ext.cip113.enabled=false); skipping registry NFT policy ID load");
+            return;
+        }
+
         if (hasUserOverride()) {
             registryNftPolicyIdSet = assetsStoreProperties.getCip113().getRegistryNftPolicyIds().stream()
                     .filter(id -> !id.isBlank())
@@ -62,12 +74,6 @@ public class Cip113Configuration {
 
         NetworkType network = NetworkType.fromProtocolMagic(storeProperties.getProtocolMagic());
         String networkName = network != null ? network.name() : "UNKNOWN (magic=" + storeProperties.getProtocolMagic() + ")";
-        // We deliberately do NOT log "enabled=..." here — the master
-        // store.assets.ext.cip113.enabled flag is enforced by @ConditionalOnProperty
-        // on the processor beans and isn't visible to this configuration. This line
-        // reports what THIS class is responsible for: which registry NFT policy IDs
-        // were resolved for the network. If the master flag is off, those policy
-        // IDs are irrelevant because no processor will be registered to use them.
         log.info("CIP-113 registry NFT policy IDs resolved: network={}, count={}, ids={}",
                 networkName, registryNftPolicyIdSet.size(), registryNftPolicyIdSet);
     }

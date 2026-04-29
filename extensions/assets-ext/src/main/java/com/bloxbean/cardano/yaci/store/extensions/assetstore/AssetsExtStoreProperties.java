@@ -65,6 +65,14 @@ public class AssetsExtStoreProperties {
     @NoArgsConstructor
     @Builder
     public static class Cip113 {
+        // Disabled by default — CIP-113 isn't officially live on mainnet yet.
+        // When false, Cip113Configuration skips loading the per-network policy
+        // ID file at all (no misleading "policy IDs resolved" log line, and
+        // Cip113Configuration.isEnabled() correctly reports false to the
+        // storage reader).
+        @Builder.Default
+        private boolean enabled = false;
+
         @Builder.Default
         private List<String> registryNftPolicyIds = new ArrayList<>();
     }

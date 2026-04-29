@@ -31,6 +31,7 @@ public class AssetsExtAutoConfiguration {
         cip26.setForceClone(properties.getCip26().isForceClone());
 
         AssetsExtStoreProperties.Cip113 cip113 = new AssetsExtStoreProperties.Cip113();
+        cip113.setEnabled(properties.getCip113().isEnabled());
         cip113.setRegistryNftPolicyIds(properties.getCip113().getRegistryNftPolicyIds());
 
         AssetsExtStoreProperties assetsStoreProperties = new AssetsExtStoreProperties();
