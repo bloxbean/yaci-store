@@ -15,12 +15,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("CardanoNodeConnectionHealthIndicator")
-class CardanoNodeConnectionHealthIndicatorTest {
+@DisplayName("NodeHealthIndicator")
+class NodeHealthIndicatorTest {
 
     @Mock private HealthService healthService;
 
-    @InjectMocks private CardanoNodeConnectionHealthIndicator indicator;
+    @InjectMocks private NodeHealthIndicator indicator;
 
     private static HealthStatus status(boolean alive, boolean receivingBlocks, boolean error, boolean scheduledToStop) {
         return HealthStatus.builder()

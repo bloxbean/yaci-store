@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>This is a <b>liveness-style</b> probe — it answers "is yaci-store currently
  * able to talk to a Cardano node and receive blocks". It does <b>not</b> evaluate
- * sync progress; for the readiness equivalent see {@link CardanoNodeSyncHealthIndicator}.
+ * sync progress; for the readiness equivalent see {@link NodeSyncIndicator}.
  *
  * <p>Status mapping:
  * <ul>
@@ -29,10 +29,10 @@ import org.springframework.stereotype.Component;
  * created (it is {@code @ReadOnly(false)}), so this indicator is silently
  * skipped instead of failing on a missing dependency.
  */
-@Component("cardanoNodeConnection")
+@Component("nodeHealth")
 @ConditionalOnBean(HealthService.class)
 @RequiredArgsConstructor
-public class CardanoNodeConnectionHealthIndicator implements HealthIndicator {
+public class NodeHealthIndicator implements HealthIndicator {
 
     private static final String DETAIL_SYNC_STATUS = "syncStatus";
 

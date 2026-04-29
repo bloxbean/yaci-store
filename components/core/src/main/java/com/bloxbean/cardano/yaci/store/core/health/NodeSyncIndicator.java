@@ -21,7 +21,7 @@ import java.util.Locale;
  * reports {@code OUT_OF_SERVICE} so that load balancers and Kubernetes
  * readiness probes don't route traffic to it prematurely. Connection liveness
  * (without sync progress) is reported separately by
- * {@link CardanoNodeConnectionHealthIndicator}.
+ * {@link NodeHealthIndicator}.
  *
  * <p>Sync progress is determined by {@link SyncStatusService}, which considers
  * the indexer "synced" when it is within 10 blocks of the tip.
@@ -40,10 +40,10 @@ import java.util.Locale;
  * so this indicator is silently skipped instead of failing on a missing
  * dependency.
  */
-@Component("cardanoNodeSync")
+@Component("nodeSync")
 @ConditionalOnBean(HealthService.class)
 @RequiredArgsConstructor
-public class CardanoNodeSyncHealthIndicator implements HealthIndicator {
+public class NodeSyncIndicator implements HealthIndicator {
 
     private static final String DETAIL_SYNC_STATUS = "syncStatus";
 
