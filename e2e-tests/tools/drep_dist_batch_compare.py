@@ -814,7 +814,7 @@ WITH last_reg AS (
             tx_index,
             cert_index,
             ROW_NUMBER() OVER (
-                PARTITION BY drep_hash
+                PARTITION BY drep_hash, cred_type
                 ORDER BY slot DESC, tx_index DESC, cert_index DESC
             ) AS rn
         FROM drep_registration
@@ -827,6 +827,7 @@ last_unreg AS (
     SELECT
         du.drep_id,
         du.drep_hash,
+        du.cred_type,
         du.epoch AS unregistration_epoch,
         du.slot AS unregistration_slot,
         du.tx_index AS unregistration_tx_index,
@@ -835,12 +836,13 @@ last_unreg AS (
         SELECT
             drep_id,
             drep_hash,
+            cred_type,
             epoch,
             slot,
             tx_index,
             cert_index,
             ROW_NUMBER() OVER (
-                PARTITION BY drep_hash
+                PARTITION BY drep_hash, cred_type
                 ORDER BY slot DESC, tx_index DESC, cert_index DESC
             ) AS rn
         FROM drep_registration
@@ -856,7 +858,7 @@ SELECT
     d.cert_index,
     d.type,
     d.slot,
-    lr.cred_type,
+    COALESCE(lr.cred_type, d.cred_type) AS cred_type,
     lr.registration_epoch,
     lr.registration_slot,
     lr.registration_tx_index,
@@ -869,8 +871,12 @@ SELECT
         ORDER BY d.slot DESC, d.tx_index DESC, d.cert_index DESC
     ) AS rn
 FROM drep_registration d
-LEFT JOIN last_reg lr ON d.drep_hash = lr.drep_hash
-LEFT JOIN last_unreg lu ON d.drep_hash = lu.drep_hash
+LEFT JOIN last_reg lr
+  ON d.drep_hash = lr.drep_hash
+ AND d.cred_type = lr.cred_type
+LEFT JOIN last_unreg lu
+  ON d.drep_hash = lu.drep_hash
+ AND d.cred_type = lu.cred_type
 WHERE d.epoch <= %d
 """ % (epoch, epoch, epoch)
 
@@ -1028,6 +1034,55 @@ INNER JOIN drep_registration unreg
 WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
   AND stale_del.epoch <= {pv9_max_epoch}
   AND stale_del.epoch <= {epoch}
+  AND EXISTS (
+      SELECT 1
+      FROM drep_registration reg_before_stale
+      WHERE reg_before_stale.drep_hash = stale_del.drep_hash
+        AND reg_before_stale.cred_type = stale_del.drep_type
+        AND reg_before_stale.type = 'REG_DREP_CERT'
+        AND reg_before_stale.epoch <= {epoch}
+        AND (
+            reg_before_stale.slot < stale_del.slot
+            OR (reg_before_stale.slot = stale_del.slot AND reg_before_stale.tx_index < stale_del.tx_index)
+            OR (
+                reg_before_stale.slot = stale_del.slot
+                AND reg_before_stale.tx_index = stale_del.tx_index
+                AND reg_before_stale.cert_index < stale_del.cert_index
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM drep_registration unreg_before_stale
+            WHERE unreg_before_stale.drep_hash = stale_del.drep_hash
+              AND unreg_before_stale.cred_type = stale_del.drep_type
+              AND unreg_before_stale.type = 'UNREG_DREP_CERT'
+              AND unreg_before_stale.epoch <= {epoch}
+              AND (
+                  unreg_before_stale.slot > reg_before_stale.slot
+                  OR (
+                      unreg_before_stale.slot = reg_before_stale.slot
+                      AND unreg_before_stale.tx_index > reg_before_stale.tx_index
+                  )
+                  OR (
+                      unreg_before_stale.slot = reg_before_stale.slot
+                      AND unreg_before_stale.tx_index = reg_before_stale.tx_index
+                      AND unreg_before_stale.cert_index > reg_before_stale.cert_index
+                  )
+              )
+              AND (
+                  unreg_before_stale.slot < stale_del.slot
+                  OR (
+                      unreg_before_stale.slot = stale_del.slot
+                      AND unreg_before_stale.tx_index < stale_del.tx_index
+                  )
+                  OR (
+                      unreg_before_stale.slot = stale_del.slot
+                      AND unreg_before_stale.tx_index = stale_del.tx_index
+                      AND unreg_before_stale.cert_index < stale_del.cert_index
+                  )
+              )
+        )
+  )
   AND EXISTS (
       SELECT 1
       FROM delegation_vote redel

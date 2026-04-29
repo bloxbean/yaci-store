@@ -303,6 +303,15 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertNotIn("LEFT JOIN gov_action_proposal_status", sql)
         self.assertNotIn("s.status IS NULL", sql)
 
+    def test_render_drep_status_sql_tracks_registration_by_hash_and_cred_type(self):
+        sql = tool.render_drep_status_sql(623)
+
+        self.assertIn("PARTITION BY drep_hash, cred_type", sql)
+        self.assertIn("du.cred_type", sql)
+        self.assertIn("COALESCE(lr.cred_type, d.cred_type) AS cred_type", sql)
+        self.assertIn("AND d.cred_type = lr.cred_type", sql)
+        self.assertIn("AND d.cred_type = lu.cred_type", sql)
+
     def test_render_pv9_cleared_insert_sql_matches_drep_identity_on_hash_and_type(self):
         sql = tool.render_pv9_cleared_insert_sql(
             debug_schema="drep_debug",
@@ -313,6 +322,9 @@ class SqlGenerationTest(unittest.TestCase):
 
         self.assertIn("redel.drep_hash <> stale_del.drep_hash", sql)
         self.assertIn("OR redel.drep_type <> stale_del.drep_type", sql)
+        self.assertIn("FROM drep_registration reg_before_stale", sql)
+        self.assertIn("reg_before_stale.type = 'REG_DREP_CERT'", sql)
+        self.assertIn("FROM drep_registration unreg_before_stale", sql)
 
     def test_render_invalidate_sql_targets_selected_cache_and_shadow(self):
         sql = tool.render_invalidate_sql(
