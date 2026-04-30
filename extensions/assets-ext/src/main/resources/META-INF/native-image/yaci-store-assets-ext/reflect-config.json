@@ -1,0 +1,15 @@
+[
+  { "name": "org.eclipse.jgit.lib.CoreConfig$AutoCRLF",               "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$CheckStat",              "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$EOL",                    "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$EolStreamType",          "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$HideDotFiles",           "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$LogRefUpdates",          "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$SymLinks",               "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$TrustPackedRefsStat",    "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CoreConfig$TrustLooseRefStat",      "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.diff.DiffAlgorithm$SupportedAlgorithm", "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.diff.DiffConfig$RenameDetectionType",   "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "org.eclipse.jgit.lib.CommitConfig$CleanupMode",          "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType", "allDeclaredMethods": true, "allDeclaredFields": true }
+]

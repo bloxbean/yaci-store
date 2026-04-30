@@ -109,4 +109,9 @@ project(':extensions:blockfrost:blockfrost-common').projectDir = new File('exten
 include ':extensions:blockfrost:blockfrost-transaction'
 project(':extensions:blockfrost:blockfrost-transaction').projectDir = new File('extensions/blockfrost/transaction')
 
+include ':extensions:assets-ext'
+project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
+
+include ':starters:assets-ext-spring-boot-starter'
+
 include 'e2e-tests'

@@ -27,6 +27,7 @@ dependencies {
     implementation project(':starters:blockfrost-spring-boot-starter')
 
     implementation project(':starters:admin-spring-boot-starter')
+    implementation project(':starters:assets-ext-spring-boot-starter')
     implementation project(':components:dbutils')
     implementation project(':starters:analytics-spring-boot-starter')
     implementation project(':components:admin-ui')
