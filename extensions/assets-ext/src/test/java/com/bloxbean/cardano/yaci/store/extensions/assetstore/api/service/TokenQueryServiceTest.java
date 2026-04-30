@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
@@ -76,12 +78,23 @@ class TokenQueryServiceTest {
         when(cip68StorageReader.findBySubject(eq(KNOWN_SUBJECT), any()))
                 .thenReturn(Optional.of(new FungibleTokenMetadata(null, null, null, "NUTCOIN", null, "https://cip68-url.com/nutcoin", null)));
 
-        // FLDT: CIP-26 data
+        // FLDT: CIP-26 data. The Mapping JSON is what populates the show_cips_details=true
+        // standards.cip26 envelope (signatures + sequenceNumber + value), so set it here
+        // alongside the entity's flat columns.
         TokenMetadata fldtCip26 = new TokenMetadata();
         fldtCip26.setSubject(FLDT_SUBJECT);
         fldtCip26.setName("FLDT");
         fldtCip26.setTicker("FLDT");
         fldtCip26.setUrl("https://fluidtokens.com");
+        fldtCip26.setProperties(new Mapping(
+                FLDT_SUBJECT,
+                new Item(0, "https://fluidtokens.com", List.of()),
+                new Item(0, "FLDT", List.of()),
+                new Item(0, "FLDT", List.of()),
+                null,
+                null,
+                null,
+                null));
         when(cip26StorageReader.findBySubject(FLDT_SUBJECT)).thenReturn(Optional.of(fldtCip26));
         when(cip26StorageReader.findLogoBySubject(FLDT_SUBJECT)).thenReturn(Optional.empty());
 
@@ -196,7 +209,16 @@ class TokenQueryServiceTest {
             Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), true).orElseThrow();
             assertThat(result.standards()).isNotNull();
             assertThat(result.standards().cip26()).isNotNull();
-            assertThat(result.standards().cip26().getName()).isEqualTo("FLDT");
+            // standards.cip26 now uses CF-compatible envelopes — value lives under .getName().getValue()
+            assertThat(result.standards().cip26().getName()).isNotNull();
+            assertThat(result.standards().cip26().getName().getValue()).isEqualTo("FLDT");
+            assertThat(result.standards().cip26().getName().getSignatures()).isEmpty();
+            assertThat(result.standards().cip26().getName().getSequenceNumber())
+                    .isEqualByComparingTo(java.math.BigDecimal.ZERO);
+            assertThat(result.standards().cip26().getTicker().getValue()).isEqualTo("FLDT");
+            assertThat(result.standards().cip26().getUrl().getValue()).isEqualTo("https://fluidtokens.com");
+            // additionalProperties is always {} on CF for tokens with no extra fields — match that.
+            assertThat(result.standards().cip26().getAdditionalProperties()).isEmpty();
             assertThat(result.standards().cip68()).isNotNull();
             assertThat(result.standards().cip68().name()).isEqualTo("FLDT");
         }

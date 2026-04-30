@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
@@ -147,7 +148,7 @@ public class TokenQueryService {
                             : null;
                     return new ResolvedMetadata(
                             Metadata.from(entity, logo, properties),
-                            new Standards(entity, null));
+                            new Standards(Cip26TokenMetadata.from(entity, logo), null));
                 });
     }
 
@@ -202,7 +203,7 @@ public class TokenQueryService {
                 : null;
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(entity, logo, properties),
-                new Standards(entity, null)));
+                new Standards(Cip26TokenMetadata.from(entity, logo), null)));
     }
 
     /**
