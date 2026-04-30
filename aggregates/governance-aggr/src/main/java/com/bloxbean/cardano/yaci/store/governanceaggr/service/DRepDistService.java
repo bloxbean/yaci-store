@@ -100,7 +100,9 @@ public class DRepDistService {
             }
         }
 
-        // PV9 stale-clearing applies only up to the last bootstrap epoch.
+        // The stale reverse-entry bug exists only during bootstrap/PV9. Once PV10 starts,
+        // we still need the bootstrap end epoch as an upper bound, but we must not apply
+        // this compensation to delegations created after bootstrap.
         int pv9MaxEpoch = isInBootstrapPhase ? epoch : maxBootstrapPhaseEpoch;
 
         log.info("Taking dRep stake snapshot for epoch : " + currentEpoch);
@@ -356,14 +358,20 @@ public class DRepDistService {
                 GROUP BY r.address
                 """, tableType);
 
-        // Reproduce PV9 stale reverse-index clearing and exclude addresses whose forward DRep
-        // delegation was cleared before the snapshot. PV10+ is bounded out by pv9MaxEpoch.
+        // Bootstrap/PV9 had a bug in the DRep reverse index:
+        // 1) stake address delegates to old_drep
+        // 2) stake address later re-delegates to new_drep
+        // 3) old_drep keeps a stale reverse entry for that address
+        // 4) when old_drep unregisters, ledger clears the address's forward delegation
+        // This temp table finds those addresses so the snapshot does not keep counting the
+        // "latest delegation wins" row after ledger has already cleared it. We stop at
+        // pv9MaxEpoch because the bug is only relevant during bootstrap/PV9.
         String pv9ClearedAddressesQuery = String.format("""
                 CREATE %s TABLE ss_pv9_cleared_addresses AS
                 SELECT DISTINCT stale_del.address
                 FROM delegation_vote stale_del
                 INNER JOIN drep_registration unreg
-                    -- The reverse entry belongs to the exact credential DRep lifecycle.
+                    -- Match the exact DRep lifecycle that created the stale reverse entry.
                     ON  unreg.drep_hash   = stale_del.drep_hash
                     AND unreg.cred_type   = stale_del.drep_type
                     AND unreg.type        = 'UNREG_DREP_CERT'
@@ -376,9 +384,8 @@ public class DRepDistService {
                 WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
                 AND   stale_del.epoch <= :pv9_max_epoch
                 AND   stale_del.epoch <= :epoch
-                -- A reverse entry can only exist if old_drep was registered when stale_del
-                -- was processed. In ledger this is Map.adjust on vsDReps; a delegation to an
-                -- unknown DRep in bootstrap phase does not create drepDelegs.
+                -- old_drep must have been registered when stale_del happened; otherwise ledger
+                -- would never have inserted this address into old_drep's reverse set.
                 AND EXISTS (
                     SELECT 1 FROM drep_registration reg_before_stale
                     WHERE reg_before_stale.drep_hash = stale_del.drep_hash
@@ -411,7 +418,8 @@ public class DRepDistService {
                                  AND unreg_before_stale.cert_index < stale_del.cert_index))
                     )
                 )
-                -- Later UNREG/REG cycles do not inherit stale entries from an older lifecycle.
+                -- If old_drep was already unregistered once before this UNREG, any later REG
+                -- starts a new clean lifecycle. Do not carry a stale entry across lifecycles.
                 AND NOT EXISTS (
                     SELECT 1 FROM drep_registration earlier_unreg
                     WHERE earlier_unreg.drep_hash = stale_del.drep_hash
@@ -426,9 +434,14 @@ public class DRepDistService {
                          OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index = unreg.tx_index
                              AND earlier_unreg.cert_index < unreg.cert_index))
                 )
-                -- Stake deregistration clears only the current reverse entry, not older stale ones.
+                -- A stake deregistration in the middle only matters if old_drep was still the
+                -- latest delegation right before that deregistration. In that case stake_dereg
+                -- already removed old_drep normally, so the later old_drep UNREG is not the
+                -- PV9 stale-clear event we are trying to reproduce here.
                 AND NOT EXISTS (
                     SELECT 1 FROM stake_registration stake_dereg
+                    -- Consider only stake deregistrations that happened after stale_del but
+                    -- before old_drep was unregistered.
                     WHERE stake_dereg.address = stale_del.address
                     AND   stake_dereg.type    = 'STAKE_DEREGISTRATION'
                     AND   stake_dereg.epoch  <= :epoch
@@ -442,6 +455,9 @@ public class DRepDistService {
                              AND stake_dereg.cert_index < unreg.cert_index))
                     AND EXISTS (
                         SELECT 1 FROM delegation_vote current_before_dereg
+                        -- Find the delegation that was current immediately before stake_dereg.
+                        -- If that current delegation still points to old_drep, then stake_dereg
+                        -- already removed old_drep in the normal way.
                         WHERE current_before_dereg.address   = stale_del.address
                         AND   current_before_dereg.drep_hash = stale_del.drep_hash
                         AND   current_before_dereg.drep_type = stale_del.drep_type
@@ -460,6 +476,9 @@ public class DRepDistService {
                                  AND current_before_dereg.cert_index < stake_dereg.cert_index))
                         AND NOT EXISTS (
                             SELECT 1 FROM delegation_vote later_del
+                            -- No later delegation may exist between current_before_dereg and
+                            -- stake_dereg; otherwise old_drep was not the current delegation
+                            -- at the moment of stake_dereg.
                             WHERE later_del.address = stale_del.address
                             AND   later_del.epoch  <= :epoch
                             AND (   later_del.slot > current_before_dereg.slot
@@ -477,9 +496,14 @@ public class DRepDistService {
                         )
                     )
                 )
-                -- A virtual delegation matters only when it removed old_drep as the current reverse entry.
+                -- An ABSTAIN / NO_CONFIDENCE step only matters if old_drep was the latest
+                -- delegation immediately before it, and old_drep was not added again before
+                -- UNREG. In that case the virtual delegation had already removed old_drep, so
+                -- old_drep UNREG later is not what cleared this address.
                 AND NOT EXISTS (
                     SELECT 1 FROM delegation_vote virt_del
+                    -- Consider only virtual delegations that happened after stale_del but
+                    -- before old_drep was unregistered.
                     WHERE virt_del.address   = stale_del.address
                     AND   virt_del.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
                     AND   virt_del.epoch    <= :epoch
@@ -493,6 +517,9 @@ public class DRepDistService {
                              AND virt_del.cert_index < unreg.cert_index))
                     AND EXISTS (
                         SELECT 1 FROM delegation_vote prev_del
+                        -- prev_del must be the latest delegation before virt_del, and it must
+                        -- still point to old_drep. That means virt_del actually displaced
+                        -- old_drep from the current forward delegation.
                         WHERE prev_del.address   = stale_del.address
                         AND   prev_del.drep_hash = stale_del.drep_hash
                         AND   prev_del.drep_type = stale_del.drep_type
@@ -503,6 +530,8 @@ public class DRepDistService {
                                  AND prev_del.cert_index < virt_del.cert_index))
                         AND NOT EXISTS (
                             SELECT 1 FROM delegation_vote between_del
+                            -- If any delegation exists between prev_del and virt_del, then
+                            -- prev_del was not the current delegation right before virt_del.
                             WHERE between_del.address = stale_del.address
                             AND (   between_del.slot > prev_del.slot
                                  OR (between_del.slot = prev_del.slot AND between_del.tx_index > prev_del.tx_index)
@@ -516,6 +545,8 @@ public class DRepDistService {
                     )
                     AND NOT EXISTS (
                         SELECT 1 FROM delegation_vote readd_del
+                        -- If old_drep was added again after the virtual step and before UNREG,
+                        -- then the virtual step did not permanently clear old_drep.
                         WHERE readd_del.address   = stale_del.address
                         AND   readd_del.drep_hash = stale_del.drep_hash
                         AND   readd_del.drep_type = stale_del.drep_type
@@ -530,7 +561,8 @@ public class DRepDistService {
                                  AND readd_del.cert_index < unreg.cert_index))
                     )
                 )
-                -- A delegation after old_drep UNREG is a fresh forward pointer and must stay counted.
+                -- Any delegation after old_drep UNREG is a brand-new forward pointer and must
+                -- stay counted in the snapshot.
                 AND NOT EXISTS (
                     SELECT 1 FROM delegation_vote after_del
                     WHERE after_del.address  = stale_del.address
@@ -584,7 +616,8 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
-        // Build the PV9 cleared-address set before the final distribution inserts use it.
+        // Build the list of addresses whose visible latest delegation was already cleared by
+        // ledger during bootstrap/PV9.
         start = System.currentTimeMillis();
         jdbcTemplate.update(pv9ClearedAddressesQuery, epochParam);
         jdbcTemplate.update("CREATE INDEX idx_ss_pv9_cleared_addresses ON ss_pv9_cleared_addresses(address)", Map.of());
@@ -603,9 +636,8 @@ public class DRepDistService {
                     and ds.rn = 1
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
                     and (
-                        -- Bootstrap delegations can predate DRep registration. At the PV10
-                        -- boundary, updateDRepDelegations keeps only forward delegations to
-                        -- DReps registered during bootstrap.
+                        -- During the PV9 -> PV10 transition, ledger keeps only bootstrap-era
+                        -- forward delegations that point to DReps also registered in bootstrap.
                         (rd.epoch <= :max_bootstrap_phase_epoch
                             and ds.registration_epoch <= :max_bootstrap_phase_epoch)
                         or rd.slot > ds.registration_slot
@@ -620,7 +652,7 @@ public class DRepDistService {
                             or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
                             or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
                         )
-                        -- PV9/bootstrap clears are represented by ss_pv9_cleared_addresses.
+                        -- Bootstrap-era clears are already modeled by ss_pv9_cleared_addresses.
                         or ds.unregistration_epoch <= :max_bootstrap_phase_epoch
                     )
                 )
