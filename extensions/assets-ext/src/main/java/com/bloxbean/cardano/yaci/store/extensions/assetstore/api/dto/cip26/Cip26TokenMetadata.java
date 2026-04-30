@@ -24,7 +24,6 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -164,10 +163,11 @@ public class Cip26TokenMetadata {
             }
         }
 
-        builder.updated(entity.getUpdated() != null
-                ? Date.from(entity.getUpdated().atZone(ZoneId.systemDefault()).toInstant())
-                : null);
-        builder.updatedBy(entity.getUpdatedBy());
+        // CF's preprod V2 API does not emit `updated` / `updatedBy` (the fields end up null
+        // and are suppressed by NON_NULL inclusion). Yaci has the data on the entity, but
+        // populating these would diverge from CF's wire shape — so leave them null to match.
+        // Keep the fields on the DTO so the structure stays compatible if CF ever starts
+        // emitting them.
 
         return builder.build();
     }
