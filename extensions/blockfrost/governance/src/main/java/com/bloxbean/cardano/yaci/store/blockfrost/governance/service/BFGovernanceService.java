@@ -306,7 +306,14 @@ public class BFGovernanceService {
             String[] parts = e.getKey().split("\\.");
             JsonNode node = ppu;
             for (String part : parts) { if (node == null || node.isNull()) break; node = node.get(part); }
-            if (node != null && !node.isNull()) out.set(e.getValue(), node);
+            if (node != null && !node.isNull()) {
+                // Blockfrost returns all values as strings; convert numbers accordingly
+                if (node.isNumber()) {
+                    out.put(e.getValue(), node.isIntegralNumber() ? node.asText() : node.toString());
+                } else {
+                    out.set(e.getValue(), node);
+                }
+            }
         }
         return out;
     }
