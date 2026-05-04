@@ -24,6 +24,8 @@ public class BFProposal {
     private Integer epoch;
     /** Epoch when the proposal was ratified (null if not ratified) */
     private Integer ratifiedEpoch;
+    /** Epoch when the proposal was enacted (executed) - computed from RATIFIED epoch + AdaPot progress */
+    private Integer enactedEpoch;
     /** Epoch when the proposal was expired (null if not expired) */
     private Integer expiredEpoch;
     /** gov_action_lifetime from protocol params (for expiration calculation) */

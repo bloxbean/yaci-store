@@ -39,7 +39,7 @@ public interface BFProposalMapper {
     @Mapping(target = "deposit", source = "deposit", qualifiedByName = "longToString")
     @Mapping(target = "returnAddress", source = "returnAddress")
     @Mapping(target = "ratifiedEpoch", source = "ratifiedEpoch")
-    @Mapping(target = "enactedEpoch", ignore = true)
+    @Mapping(target = "enactedEpoch", source = "enactedEpoch")
     @Mapping(target = "droppedEpoch", expression = "java(row.getExpiredEpoch() != null ? row.getExpiredEpoch() + 1 : null)")
     @Mapping(target = "expiredEpoch", source = "expiredEpoch")
     @Mapping(target = "expiration", expression = "java(row.getEpoch() != null && row.getGovActionLifetime() != null && row.getGovActionLifetime() > 0 ? row.getEpoch() + row.getGovActionLifetime() + 1 : null)")

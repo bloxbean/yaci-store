@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFProposal;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamServiceReader;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepEntity;
@@ -43,6 +44,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
+    private final LocalEpochParamServiceReader epochParamServiceReader;
 
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -165,10 +167,32 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                         // Keep the first (earliest) epoch for each status
                         result.putIfAbsent(status, epoch);
                     });
+
+            // Compute enacted_epoch: if RATIFIED at epoch X and current epoch > X+1, proposal is enacted
+            // Treasury withdrawals are distributed in the epoch after ratification (X+1)
+            Integer ratifiedEpoch = result.get("RATIFIED");
+            if (ratifiedEpoch != null) {
+                // Get current epoch from max(block.epoch)
+                Integer currentEpoch = getCurrentEpochFromBlock();
+                if (currentEpoch != null && currentEpoch > ratifiedEpoch) {
+                    result.put("ENACTED", ratifiedEpoch + 1);
+                }
+            }
         } catch (Exception e) {
-            log.debug("Could not fetch proposal status epochs for {}/{}: {}", txHash, idx, e.getMessage());
+            log.warn("Could not fetch proposal status epochs for {}/{}: {}", txHash, idx, e.getMessage());
         }
         return result;
+    }
+
+    /** Get current epoch from the block table. */
+    private Integer getCurrentEpochFromBlock() {
+        try {
+            var result = dsl.resultQuery("SELECT MAX(epoch) FROM yaci_store.block").fetchOne();
+            return result != null ? result.get(0, Integer.class) : null;
+        } catch (Exception e) {
+            log.warn("Could not get current epoch: {}", e.getMessage());
+            return null;
+        }
     }
 
     private BFProposal toProposalRow(org.jooq.Record r, int govActionLifetime) {
@@ -187,6 +211,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .anchorHash(r.get(GOV_ACTION_PROPOSAL.ANCHOR_HASH))
                 .epoch(proposalEpoch)
                 .ratifiedEpoch(statusEpochs.get("RATIFIED"))
+                .enactedEpoch(statusEpochs.get("ENACTED"))
                 .expiredEpoch(statusEpochs.get("EXPIRED"))
                 .govActionLifetime(govActionLifetime)
                 .build();
