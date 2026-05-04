@@ -621,6 +621,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     @Override
     public Optional<BFProposal> findProposalMetadata(String txHash, int certIndex) {
         int govActionLifetime = fetchGovActionLifetime();
+        // First check if anchor_url exists - if not, return empty (404)
+        var hasAnchor = dsl.selectCount()
+                .from(GOV_ACTION_PROPOSAL)
+                .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
+                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
+                .and(GOV_ACTION_PROPOSAL.ANCHOR_URL.isNotNull())
+                .fetchOne(0, int.class) > 0;
+
+        if (!hasAnchor) {
+            return Optional.empty();
+        }
+
         return dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
                 .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))

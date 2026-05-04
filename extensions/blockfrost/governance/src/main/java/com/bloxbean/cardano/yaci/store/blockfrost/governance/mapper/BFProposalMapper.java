@@ -43,6 +43,8 @@ public interface BFProposalMapper {
     @Mapping(target = "droppedEpoch", expression = "java(row.getExpiredEpoch() != null ? row.getExpiredEpoch() + 1 : null)")
     @Mapping(target = "expiredEpoch", source = "expiredEpoch")
     @Mapping(target = "expiration", expression = "java(row.getEpoch() != null && row.getGovActionLifetime() != null && row.getGovActionLifetime() > 0 ? row.getEpoch() + row.getGovActionLifetime() + 1 : null)")
+    @Mapping(target = "anchorUrl", source = "anchorUrl")
+    @Mapping(target = "anchorHash", source = "anchorHash")
     BFProposalDto toDto(BFProposal row);
 
     // ── Proposal parameters ───────────────────────────────────────────────
