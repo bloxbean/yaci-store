@@ -33,7 +33,7 @@ public interface BFDRepMapper {
     @Mapping(target = "hex", expression = "java(addCip129Prefix(row.getDrepHash(), row.getHasScript()))")
     @Mapping(target = "amount", source = "amount", qualifiedByName = "longToString")
     @Mapping(target = "active", expression = "java(!\"RETIRED\".equalsIgnoreCase(row.getStatus()))")
-    @Mapping(target = "activeEpoch", source = "activeEpoch")
+    @Mapping(target = "activeEpoch", expression = "java(\"RETIRED\".equalsIgnoreCase(row.getStatus()) ? null : row.getActiveEpoch())")
     @Mapping(target = "hasScript", source = "hasScript")
     @Mapping(target = "retired", expression = "java(\"RETIRED\".equalsIgnoreCase(row.getStatus()))")
     @Mapping(target = "expired", source = "expired")
