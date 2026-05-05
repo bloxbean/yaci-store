@@ -21,8 +21,8 @@ public class AssetsExtProperties {
     /**
      * CIP-26 GitHub registry settings.
      *
-     * <h3>Why {@link #gitOrganization}, {@link #gitProjectName} and
-     * {@link #gitMappingsFolder} must stay {@code null} by default</h3>
+     * <h2>Why {@link #gitOrganization}, {@link #gitProjectName} and
+     * {@link #gitMappingsFolder} must stay {@code null} by default</h2>
      *
      * <p>{@link com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults}
      * resolves these per {@code store.cardano.protocol-magic}: mainnet →
