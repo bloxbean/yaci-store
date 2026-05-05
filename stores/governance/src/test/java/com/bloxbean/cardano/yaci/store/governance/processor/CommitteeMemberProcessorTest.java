@@ -181,15 +181,6 @@ class CommitteeMemberProcessorTest {
         when(proposalStateClient.getLastEnactedProposal(GovActionType.NO_CONFIDENCE, 100))
                 .thenReturn(Optional.of(lastNoConfidence));
 
-        when(committeeMemberStorage.getCommitteeMembersByEpoch(100)).thenReturn(List.of(
-                CommitteeMember.builder()
-                        .credType(CredentialType.ADDR_KEYHASH)
-                        .startEpoch(80)
-                        .expiredEpoch(199)
-                        .hash("aaaaaa06fd4e8f51062dc431362369b2a43140abced8aa2ff2256d7b")
-                        .build()
-        ));
-
         committeeMemberProcessor.handlePreAdaPotJobProcessingEvent(event);
 
         Mockito.verify(committeeMemberStorage).saveAll(committeeMembersCaptor.capture());
