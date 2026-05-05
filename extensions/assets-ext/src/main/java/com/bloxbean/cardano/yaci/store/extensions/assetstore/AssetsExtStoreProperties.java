@@ -37,6 +37,9 @@ public class AssetsExtStoreProperties {
     @NoArgsConstructor
     @Builder
     public static class Cip26 {
+        // Disabled by default — the off-chain GitHub registry is a separate
+        // trust source from the chain itself. Projects that want it must opt
+        // in explicitly via store.assets.ext.cip26.enabled=true.
         @Builder.Default
         private boolean enabled = false;
 

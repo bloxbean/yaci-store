@@ -41,7 +41,11 @@ public class AssetsExtProperties {
     @Getter
     @Setter
     public static final class Cip26 {
-        private boolean enabled = true;
+        // Disabled by default. Operators must explicitly opt in via
+        // store.assets.ext.cip26.enabled=true. The off-chain GitHub registry
+        // is a separate trust source from the chain itself; defaulting it on
+        // pulled in mainnet metadata for projects that didn't ask for it.
+        private boolean enabled = false;
         @Nullable private String gitOrganization;
         @Nullable private String gitProjectName;
         @Nullable private String gitMappingsFolder;

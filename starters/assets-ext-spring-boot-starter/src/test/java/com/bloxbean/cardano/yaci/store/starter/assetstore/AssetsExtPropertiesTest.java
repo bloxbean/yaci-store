@@ -42,12 +42,21 @@ class AssetsExtPropertiesTest {
     }
 
     @Test
+    @DisplayName("CIP-26 is disabled by default — operators must opt in explicitly")
+    void cip26IsDisabledByDefault() {
+        // Team decision: the off-chain GitHub registry is a separate trust source
+        // from the chain. Default-on pulled mainnet metadata into stores that
+        // didn't ask for it. Flipping this back to true requires an equivalent
+        // discussion + release note.
+        assertThat(new AssetsExtProperties.Cip26().isEnabled()).isFalse();
+    }
+
+    @Test
     @DisplayName("non-network-specific CIP-26 defaults are unchanged")
     void cip26NonNetworkDefaultsAreSet() {
         AssetsExtProperties.Cip26 cip26 = new AssetsExtProperties.Cip26();
 
-        // These don't depend on the network and have safe sensible defaults.
-        assertThat(cip26.isEnabled()).isTrue();
+        // Defaults that apply once the operator opts in via cip26.enabled=true.
         assertThat(cip26.getGitTmpFolder()).isEqualTo("/tmp");
         assertThat(cip26.getSyncIntervalMinutes()).isEqualTo(60L);
         assertThat(cip26.isForceClone()).isFalse();
