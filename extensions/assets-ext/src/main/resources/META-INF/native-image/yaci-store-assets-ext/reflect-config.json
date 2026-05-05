@@ -11,5 +11,15 @@
   { "name": "org.eclipse.jgit.diff.DiffAlgorithm$SupportedAlgorithm", "allDeclaredMethods": true, "allDeclaredFields": true },
   { "name": "org.eclipse.jgit.diff.DiffConfig$RenameDetectionType",   "allDeclaredMethods": true, "allDeclaredFields": true },
   { "name": "org.eclipse.jgit.lib.CommitConfig$CleanupMode",          "allDeclaredMethods": true, "allDeclaredFields": true },
-  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType", "allDeclaredMethods": true, "allDeclaredFields": true }
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType", "allDeclaredMethods": true, "allDeclaredFields": true },
+
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.AnnotatedSignature",    "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.TokenMetadataProperty", "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata",    "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.NameProperty",        "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.DescriptionProperty", "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.TickerProperty",      "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.UrlProperty",         "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.DecimalsProperty",    "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellknownproperties.LogoProperty",        "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true }
 ]
