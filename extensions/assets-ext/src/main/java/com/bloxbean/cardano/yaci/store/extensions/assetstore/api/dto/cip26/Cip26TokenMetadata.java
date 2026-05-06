@@ -204,25 +204,29 @@ public class Cip26TokenMetadata {
     private static LogoProperty logoProperty(@Nullable Item itemForSignatures, String logoB64) {
         LogoProperty property = new LogoProperty();
         property.setValue(logoB64);
-        property.setSignatures(itemForSignatures != null
-                ? toSignatures(itemForSignatures.signatures())
-                : new ArrayList<>());
-        property.setSequenceNumber(itemForSignatures != null
-                ? sequenceNumberOf(itemForSignatures)
-                : BigDecimal.ZERO);
+        property.setSignatures(itemForSignatures != null ? toSignatures(itemForSignatures.signatures()) : null);
+        property.setSequenceNumber(itemForSignatures != null ? sequenceNumberOf(itemForSignatures) : null);
         return property;
     }
 
-    private static List<AnnotatedSignature> toSignatures(List<Signature> signatures) {
+    // Returns null (not an empty list) when the registry entry omits signatures, to
+    // match CF V2's wire shape ("signatures": null). yaci doesn't persist signatures,
+    // so this is the null branch for every preprod entry today.
+    @Nullable
+    private static List<AnnotatedSignature> toSignatures(@Nullable List<Signature> signatures) {
         if (signatures == null || signatures.isEmpty()) {
-            return new ArrayList<>();
+            return null;
         }
         return signatures.stream()
                 .map(s -> new AnnotatedSignature(s.signature(), s.publicKey()))
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
+    // Null pass-through when the registry entry has no sequenceNumber. Returning
+    // BigDecimal.ZERO instead would falsely advertise "version 0" — which is a valid
+    // sequenceNumber in CIP-26 — so we'd be conflating "unknown" with "first version".
+    @Nullable
     private static BigDecimal sequenceNumberOf(Item item) {
-        return item.sequenceNumber() != null ? BigDecimal.valueOf(item.sequenceNumber()) : BigDecimal.ZERO;
+        return item.sequenceNumber() != null ? BigDecimal.valueOf(item.sequenceNumber()) : null;
     }
 }

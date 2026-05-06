@@ -212,7 +212,12 @@ class TokenQueryServiceTest {
             // standards.cip26 now uses CF-compatible envelopes — value lives under .getName().getValue()
             assertThat(result.standards().cip26().getName()).isNotNull();
             assertThat(result.standards().cip26().getName().getValue()).isEqualTo("FLDT");
-            assertThat(result.standards().cip26().getName().getSignatures()).isEmpty();
+            // Mock signatures = List.of() — empty list must collapse to null on the wire
+            // (CF V2 emits "signatures": null, not []). yaci does not persist signatures.
+            assertThat(result.standards().cip26().getName().getSignatures()).isNull();
+            // Mock sequenceNumber = 0 — a real value passes through unchanged. The null-
+            // source path (sequenceNumber absent in registry) is covered by sequenceNumberOf
+            // returning null; not exercised here because every FLDT mock Item sets it.
             assertThat(result.standards().cip26().getName().getSequenceNumber())
                     .isEqualByComparingTo(java.math.BigDecimal.ZERO);
             assertThat(result.standards().cip26().getTicker().getValue()).isEqualTo("FLDT");
