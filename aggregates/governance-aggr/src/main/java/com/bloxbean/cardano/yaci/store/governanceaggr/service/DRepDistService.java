@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
@@ -643,7 +644,8 @@ public class DRepDistService {
     private boolean isPublicNetwork() {
         return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
-                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
+                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == NetworkType.SANCHONET.getProtocolMagic();
     }
 
     private Set<GovActionId> getActiveProposalsScheduledToDrop(int currentEpoch) {
