@@ -98,6 +98,132 @@ class Cip68DatumParserTest {
             assertThat(result.get().name()).isEqualTo("TestToken");
             assertThat(result.get().description()).isEqualTo("Adesc");
         }
+
+        @Test
+        void shouldExtractNftFieldsImageAndMediaType() throws Exception {
+            // CIP-68 NFT-shape datum (label 222) — exercises the image / mediaType code path.
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("KhonsuMoon #4651"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("A celestial collectible"));
+            properties.put(BytesPlutusData.of("image"), BytesPlutusData.of("ipfs://QmMain"));
+            properties.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().image()).isEqualTo("ipfs://QmMain");
+            assertThat(result.get().mediaType()).isEqualTo("image/png");
+        }
+
+        @Test
+        void shouldHandleChunkedImageUriAsListOfStrings() throws Exception {
+            // CIP-25 inheritance: image may be split into a list of byte-string chunks
+            // when the URI exceeds Cardano's 64-byte raw-string limit. The parser should
+            // concatenate them.
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("ChunkedToken"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Has a long IPFS hash"));
+
+            ListPlutusData chunks = new ListPlutusData();
+            chunks.add(BytesPlutusData.of("ipfs://QmFirstChunk"));
+            chunks.add(BytesPlutusData.of("AndSecondChunkConcat"));
+            properties.put(BytesPlutusData.of("image"), chunks);
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().image()).isEqualTo("ipfs://QmFirstChunkAndSecondChunkConcat");
+        }
+
+        @Test
+        void shouldExtractFilesArrayIntoPropertiesJson() throws Exception {
+            // files[]: list of {name, mediaType, src} maps. Ends up under
+            // properties["files"] in the JSONB column.
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("MultiMediaNft"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Has multiple files"));
+
+            MapPlutusData file1 = new MapPlutusData();
+            file1.put(BytesPlutusData.of("name"), BytesPlutusData.of("main"));
+            file1.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
+            file1.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://QmMain"));
+
+            MapPlutusData file2 = new MapPlutusData();
+            file2.put(BytesPlutusData.of("name"), BytesPlutusData.of("hires"));
+            file2.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
+            file2.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://QmHires"));
+
+            ListPlutusData filesList = new ListPlutusData();
+            filesList.add(file1);
+            filesList.add(file2);
+            properties.put(BytesPlutusData.of("files"), filesList);
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().properties()).isNotNull();
+            assertThat(result.get().properties()).containsKey("files");
+            @SuppressWarnings("unchecked")
+            java.util.List<java.util.Map<String, Object>> files =
+                    (java.util.List<java.util.Map<String, Object>>) result.get().properties().get("files");
+            assertThat(files).hasSize(2);
+            assertThat(files.get(0)).containsEntry("name", "main")
+                    .containsEntry("mediaType", "image/png")
+                    .containsEntry("src", "ipfs://QmMain");
+            assertThat(files.get(1)).containsEntry("name", "hires");
+        }
+
+        @Test
+        void shouldCaptureUnknownPropertiesUnderAdditionalProperties() throws Exception {
+            // Project-specific keys (attributes, traits) should land under
+            // properties["additional_properties"], not be silently dropped.
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("AttributeToken"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Has custom traits"));
+            properties.put(BytesPlutusData.of("rarity"), BytesPlutusData.of("legendary"));
+            properties.put(BytesPlutusData.of("level"), BigIntPlutusData.of(42));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().properties()).isNotNull();
+            assertThat(result.get().properties()).containsKey("additional_properties");
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> additional =
+                    (java.util.Map<String, Object>) result.get().properties().get("additional_properties");
+            assertThat(additional).containsEntry("rarity", "legendary");
+            assertThat(additional.get("level")).isEqualTo(java.math.BigInteger.valueOf(42));
+        }
+
+        @Test
+        void shouldReturnNullPropertiesWhenNoFilesNoAdditionalProperties() throws Exception {
+            // Pure FT-shape datum with only well-known keys → properties JSONB is null
+            // (no need to materialise an empty wrapper).
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("PureFt"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Just an FT"));
+            properties.put(BytesPlutusData.of("ticker"), BytesPlutusData.of("PFT"));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().properties()).isNull();
+        }
     }
 
     @Nested

@@ -28,8 +28,8 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
      * Uses {@code ROW_NUMBER() OVER} window function with a label filter for per-pair dedup.
      * Portable across PostgreSQL, H2, and MySQL 8+.
      * <p>
-     * For very large {@code metadata_reference_nft} tables, add the optional index
-     * {@code idx_metadata_reference_nft_policy_label} from {@code optional-indexes.sql}
+     * For very large {@code cip68_metadata} tables, add the optional index
+     * {@code idx_cip68_metadata_policy_label} from {@code optional-indexes.sql}
      * so the label-filtered scan becomes an index-only scan.
      *
      * @param concatenatedKeys list of {@code policy_id || asset_name} keys (reference-NFT asset names)
@@ -37,7 +37,7 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
      * @return one entity per matching concatenated key; pairs with no data are omitted
      */
     @Query(value = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name " +
-            "ORDER BY slot DESC) AS rn FROM metadata_reference_nft WHERE label = :label " +
+            "ORDER BY slot DESC) AS rn FROM cip68_metadata WHERE label = :label " +
             "AND CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
             nativeQuery = true)
     List<Cip68Metadata> findLatestByConcatenatedKeys(

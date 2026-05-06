@@ -3,17 +3,22 @@
 -- or use the yaci-store admin CLI tool.
 
 -- CIP-26: lookup by ticker (for findByTicker via StorageReader)
-CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_ticker ON ft_offchain_metadata(ticker);
+CREATE INDEX IF NOT EXISTS idx_cip26_metadata_ticker ON cip26_metadata(ticker);
 
 -- CIP-26: case-insensitive name search (for searchByName with ILIKE)
 -- pg_trgm extension + GIN index is best for LIKE queries on PostgreSQL:
--- CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_name_trgm ON ft_offchain_metadata USING GIN(name gin_trgm_ops);
+-- CREATE INDEX IF NOT EXISTS idx_cip26_metadata_name_trgm ON cip26_metadata USING GIN(name gin_trgm_ops);
 
 -- CIP-26: GIN index on JSONB properties (PostgreSQL only)
--- CREATE INDEX IF NOT EXISTS idx_ft_offchain_metadata_properties ON ft_offchain_metadata USING GIN(properties);
+-- CREATE INDEX IF NOT EXISTS idx_cip26_metadata_properties ON cip26_metadata USING GIN(properties);
 
--- CIP-68: label-filtered lookups by policy (for findByPolicyIdAndLabel, findLatestByPolicyIdsAndLabel)
-CREATE INDEX IF NOT EXISTS idx_metadata_reference_nft_policy_label ON metadata_reference_nft(policy_id, label, slot DESC);
+-- CIP-68: label-filtered lookups by policy (for findLatestByConcatenatedKeys; supports
+-- index-only scans of the (policy_id, label, slot DESC) prefix used by findFirst*OrderBySlotDesc
+-- and the ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name ORDER BY slot DESC) windowing).
+CREATE INDEX IF NOT EXISTS idx_cip68_metadata_policy_label ON cip68_metadata(policy_id, label, slot DESC);
 
--- CIP-113: no additional index needed — PK (policy_id, slot, tx_hash) supports backward scan
--- for findFirstByPolicyIdOrderBySlotDesc and findLatestByPolicyIds queries.
+-- CIP-68 NFT image / collection-attribute lookups via the JSONB column (PostgreSQL only):
+-- CREATE INDEX IF NOT EXISTS idx_cip68_metadata_properties ON cip68_metadata USING GIN(properties);
+
+-- CIP-113: no additional index needed — PK (key, slot, tx_hash) supports backward scan
+-- for findFirstByKeyOrderBySlotDesc and findLatestByKeys queries.
