@@ -4,7 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -49,14 +49,14 @@ public class Cip68Processor {
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 cip68TokenService.extractReferenceNft(output).ifPresent(refNftAmt -> {
-                    cip68DatumParser.parse(output.getInlineDatum()).ifPresent(metadata -> {
-                        if (!cip68TokenService.isValidMetadata(metadata)) {
+                    cip68DatumParser.parse(output.getInlineDatum()).ifPresent(parsed -> {
+                        if (!cip68TokenService.isValidMetadata(parsed)) {
                             return;
                         }
                         AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                         int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
                         entities.add(buildCip68Metadata(
-                                metadata, refNftAssetType, output.getInlineDatum(), slot, label));
+                                parsed, refNftAssetType, output.getInlineDatum(), slot, label));
                     });
                 });
             }
@@ -126,7 +126,7 @@ public class Cip68Processor {
         return null;
     }
 
-    private Cip68Metadata buildCip68Metadata(FungibleTokenMetadata metadata,
+    private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,
                                              AssetType assetType,
                                              String datum,
                                              Long slot,
@@ -136,14 +136,17 @@ public class Cip68Processor {
                 .assetName(assetType.assetName())
                 .slot(slot)
                 .label(label)
-                .name(metadata.name())
-                .description(metadata.description())
-                .ticker(metadata.ticker())
-                .url(metadata.url())
-                .decimals(metadata.decimals())
-                .logo(metadata.logo())
-                .version(metadata.version())
+                .name(parsed.name())
+                .description(parsed.description())
+                .ticker(parsed.ticker())
+                .url(parsed.url())
+                .decimals(parsed.decimals())
+                .logo(parsed.logo())
+                .image(parsed.image())
+                .mediaType(parsed.mediaType())
+                .version(parsed.version())
                 .datum(datum)
+                .properties(parsed.properties())
                 .lastSyncedAt(LocalDateTime.now())
                 .build();
     }

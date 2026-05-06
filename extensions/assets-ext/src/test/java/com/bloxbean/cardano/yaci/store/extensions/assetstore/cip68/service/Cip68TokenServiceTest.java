@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -190,19 +191,19 @@ class Cip68TokenServiceTest {
 
         @Test
         void validWhenNameAndDescriptionPresent() {
-            FungibleTokenMetadata m = new FungibleTokenMetadata(null, "desc", null, "name", null, null, null);
+            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, "name", null, null, null, null, null, null);
             assertThat(service.isValidMetadata(m)).isTrue();
         }
 
         @Test
         void invalidWhenNameMissing() {
-            FungibleTokenMetadata m = new FungibleTokenMetadata(null, "desc", null, null, null, null, null);
+            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, null, null, null, null, null, null, null);
             assertThat(service.isValidMetadata(m)).isFalse();
         }
 
         @Test
         void invalidWhenDescriptionMissing() {
-            FungibleTokenMetadata m = new FungibleTokenMetadata(null, null, null, "name", null, null, null);
+            ParsedCip68Datum m = new ParsedCip68Datum(null, null, null, "name", null, null, null, null, null, null);
             assertThat(service.isValidMetadata(m)).isFalse();
         }
     }

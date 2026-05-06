@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
@@ -31,12 +32,13 @@ public class Cip68TokenService {
     private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     /**
-     * In order to be a valid FT Token Metadata Reference datum there are some constraints (name and description must be present)
+     * Validate a CIP-68 datum. Per spec, name and description are the required fields
+     * for any of the user-token labels (222 NFT / 333 FT / 444 RFT).
      *
-     * @return true if the metadata are compliant to the FT Cip68 standard
+     * @return true if the metadata satisfies CIP-68's required-field constraint
      */
-    public boolean isValidMetadata(FungibleTokenMetadata cip68TokenMetadata) {
-        return cip68TokenMetadata.name() != null && cip68TokenMetadata.description() != null;
+    public boolean isValidMetadata(ParsedCip68Datum parsed) {
+        return parsed.name() != null && parsed.description() != null;
     }
 
     /**

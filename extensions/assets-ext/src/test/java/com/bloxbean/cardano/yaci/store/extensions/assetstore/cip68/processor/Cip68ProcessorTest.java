@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
@@ -54,8 +55,8 @@ class Cip68ProcessorTest {
         @Test
         void savesEntityWithCorrectFields() {
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
-                    6L, "A test token", "logo", "TestToken", "TST", "https://test.com", 1L);
+            ParsedCip68Datum metadata = new ParsedCip68Datum(
+                    6L, "A test token", "logo", "TestToken", "TST", "https://test.com", 1L, null, null, null);
 
             Amt refNftAmt = Amt.builder()
                     .unit(POLICY_ID + REF_NFT_ASSET_NAME)
@@ -136,8 +137,8 @@ class Cip68ProcessorTest {
         @Test
         void skipsWhenMetadataInvalid() {
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
-                    null, null, null, null, null, null, null);
+            ParsedCip68Datum metadata = new ParsedCip68Datum(
+                    null, null, null, null, null, null, null, null, null, null);
 
             Amt refNftAmt = Amt.builder()
                     .unit(POLICY_ID + REF_NFT_ASSET_NAME)
@@ -190,8 +191,8 @@ class Cip68ProcessorTest {
         void fallsBackToFtWhenNoCoMintedUserToken() {
             // Orphan reference NFT: only 000643b0 in the tx, no user-token prefix.
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
-                    6L, "Orphan", null, "Orphan", "ORPH", null, 1L);
+            ParsedCip68Datum metadata = new ParsedCip68Datum(
+                    6L, "Orphan", null, "Orphan", "ORPH", null, 1L, null, null, null);
             Amt refNftAmt = refNftAmount();
             AddressUtxo refNftUtxo = AddressUtxo.builder()
                     .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
@@ -209,8 +210,8 @@ class Cip68ProcessorTest {
         // having the given asset name; assert the saved row's label matches expected.
         private void verifyLabel(String coMintedAssetName, int expectedLabel) {
             String datum = "d8799fa34446756e6e";
-            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
-                    6L, "Test", null, "Test", "TST", null, 1L);
+            ParsedCip68Datum metadata = new ParsedCip68Datum(
+                    6L, "Test", null, "Test", "TST", null, 1L, null, null, null);
 
             Amt refNftAmt = refNftAmount();
             AddressUtxo refNftUtxo = AddressUtxo.builder()
