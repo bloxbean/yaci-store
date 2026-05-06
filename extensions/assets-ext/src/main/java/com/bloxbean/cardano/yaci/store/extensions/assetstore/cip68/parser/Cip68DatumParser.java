@@ -201,19 +201,13 @@ public class Cip68DatumParser {
      */
     private Map<String, Object> parseAdditionalProperties(MapPlutusData properties) {
         Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<PlutusData, PlutusData> e : properties.getMap().entrySet()) {
-            if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
-                continue;
-            }
-            String key = bytesToString(keyBytes.getValue());
-            if (TYPED_KEYS.contains(key)) {
-                continue;
-            }
-            Object value = unwrapPlutusValue(e.getValue());
-            if (value != null) {
-                result.put(key, value);
-            }
-        }
+        properties.getMap().entrySet().stream()
+                .filter(e -> e.getKey() instanceof BytesPlutusData)
+                .map(e -> Map.entry(
+                        bytesToString(((BytesPlutusData) e.getKey()).getValue()),
+                        unwrapPlutusValue(e.getValue())))
+                .filter(e -> !TYPED_KEYS.contains(e.getKey()) && e.getValue() != null)
+                .forEach(e -> result.put(e.getKey(), e.getValue()));
         return result;
     }
 

@@ -117,8 +117,8 @@ class Cip26MetadataValidatorTest {
 
         @Test
         void rejectsDescriptionExceedingMaxLength() {
-            // CIP-26: description max 500 chars (enforced by cf-tokens-cip26 validator;
-            // see MetadataValidationRules.MAX_DESCRIPTION_LENGTH).
+            // CIP-26 description: max 500 chars per spec; cf-tokens-cip26 enforces this
+            // via its MAX_DESCRIPTION_LENGTH constant in MetadataValidationRules.
             Cip26Metadata m = metadata(VALID_SUBJECT, "Token", "d".repeat(501));
             assertThat(validator.validate(m)).isFalse();
         }
