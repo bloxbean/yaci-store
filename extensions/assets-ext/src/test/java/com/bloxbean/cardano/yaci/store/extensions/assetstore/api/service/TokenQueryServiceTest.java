@@ -212,9 +212,11 @@ class TokenQueryServiceTest {
             // standards.cip26 now uses CF-compatible envelopes — value lives under .getName().getValue()
             assertThat(result.standards().cip26().getName()).isNotNull();
             assertThat(result.standards().cip26().getName().getValue()).isEqualTo("FLDT");
-            // Mock signatures = List.of() — empty list must collapse to null on the wire
-            // (CF V2 emits "signatures": null, not []). yaci does not persist signatures.
-            assertThat(result.standards().cip26().getName().getSignatures()).isNull();
+            // Mock signatures = List.of() — empty list passes through as []. CF preprod
+            // is inconsistent (some subjects emit null for missing JSON field, others emit
+            // [] for "signatures": []), so yaci must preserve the source distinction
+            // verbatim rather than normalising. The null-source path is not exercised here.
+            assertThat(result.standards().cip26().getName().getSignatures()).isEmpty();
             // Mock sequenceNumber = 0 — a real value passes through unchanged. The null-
             // source path (sequenceNumber absent in registry) is covered by sequenceNumberOf
             // returning null; not exercised here because every FLDT mock Item sets it.

@@ -209,12 +209,16 @@ public class Cip26TokenMetadata {
         return property;
     }
 
-    // Returns null (not an empty list) when the registry entry omits signatures, to
-    // match CF V2's wire shape ("signatures": null). yaci doesn't persist signatures,
-    // so this is the null branch for every preprod entry today.
+    // Preserves the registry source distinction CF passes through verbatim:
+    //   field absent in JSON → Jackson parses as null → emit null
+    //   "signatures": []     → Jackson parses as empty list → emit []
+    //   "signatures": [...]  → emit the mapped list
+    // Collapsing null and [] to a single value (either way) produces ~37 subject
+    // divergences against CF preprod where the inconsistency is registry-driven,
+    // not yaci's choice — the only spec-correct answer is byte-faithful pass-through.
     @Nullable
     private static List<AnnotatedSignature> toSignatures(@Nullable List<Signature> signatures) {
-        if (signatures == null || signatures.isEmpty()) {
+        if (signatures == null) {
             return null;
         }
         return signatures.stream()
